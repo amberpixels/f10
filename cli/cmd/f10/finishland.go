@@ -9,7 +9,9 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
-	"github.com/amberpixels/f10/cli/internal/lore"
+	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/trace"
 )
 
@@ -32,7 +34,7 @@ func (k landingKind) landed() bool {
 
 // A landing is what land leaves for cleanup and the report.
 type landing struct {
-	rows  []fact
+	rows  []render.Fact
 	notes []string
 	ended string     // what already happened, for an error after it
 	end   *seriesEnd // what closes the review series; nil moves the rounds unclosed
@@ -49,7 +51,7 @@ func land(ctx context.Context, w io.Writer, in finishInput, d finishDecision, er
 
 		return landing{
 			ended: p.URL + " left open",
-			rows:  []fact{taskFact(ctx, w, in.main, in.task.ID), {label: "pr", value: p.URL, url: true}},
+			rows:  []render.Fact{render.TaskFact(ctx, w, in.main, in.task.ID), {Label: "pr", Value: p.URL, URL: true}},
 			notes: []string{fmt.Sprintf("%s is left %s: nothing merged, pulled or deleted on origin",
 				p.URL, p.Status)},
 		}, nil
@@ -72,9 +74,9 @@ func landSpike(ctx context.Context, w io.Writer, in finishInput, d finishDecisio
 		return l, err
 	}
 
-	l.rows = []fact{taskFact(ctx, w, in.main, in.task.Label())}
+	l.rows = []render.Fact{render.TaskFact(ctx, w, in.main, in.task.Label())}
 	if l.kept != "" {
-		l.rows = append(l.rows, fact{label: "branch", value: l.kept})
+		l.rows = append(l.rows, render.Fact{Label: "branch", Value: l.kept})
 	}
 
 	l.notes = append(spikeNotes(ctx, in, d.name, d.def, l.kept, d.dirty), released...)
@@ -155,12 +157,12 @@ func landMerge(ctx context.Context, w io.Writer, in finishInput, d finishDecisio
 	notes = append(notes, released...)
 	l.notes = notes
 
-	l.rows = []fact{taskFact(ctx, w, in.main, in.task.Label())}
+	l.rows = []render.Fact{render.TaskFact(ctx, w, in.main, in.task.Label())}
 	if !unpushed {
-		l.rows = append(l.rows, fact{label: "pr", value: p.URL, url: true})
+		l.rows = append(l.rows, render.Fact{Label: "pr", Value: p.URL, URL: true})
 	}
 
-	l.rows = appendClosed(append(l.rows, fact{label: "merge", value: sha}), in, unpushed)
+	l.rows = appendClosed(append(l.rows, render.Fact{Label: "merge", Value: sha}), in, unpushed)
 
 	return l, nil
 }
@@ -184,7 +186,7 @@ func landPull(ctx context.Context, in finishInput, name, def string, p forge.PR)
 			)
 		}
 
-		method, note, err := in.host.mergeMethod(ctx, in.method)
+		method, note, err := in.host.MergeMethod(ctx, in.method)
 		if err != nil {
 			return forge.PR{}, nil, err
 		}
@@ -249,7 +251,7 @@ func landPull(ctx context.Context, in finishInput, name, def string, p forge.PR)
 // retargetStacked moves every open request based on branch to base. A
 // failure stops before the delete, so the request stays open for a rerun;
 // its error names the requests already moved, since no report follows it.
-func retargetStacked(ctx context.Context, h host, merged forge.PR, branch, base string) ([]string, error) {
+func retargetStacked(ctx context.Context, h hostops.Host, merged forge.PR, branch, base string) ([]string, error) {
 	stacked, err := h.StackedPRs(ctx, branch)
 	if err != nil {
 		return nil, fmt.Errorf("%s merged, but listing the requests based on %s failed, "+
@@ -332,21 +334,11 @@ func mergeBody(in finishInput, description, method string) string {
 		return ""
 	}
 
-	trailers += changeTrailer(in.task.ID, in.loreChange())
+	trailers += stack.ChangeTrailer(in.task.ID, in.loreChange())
 
 	if body := strings.TrimSpace(trace.StripState(description)); body != "" {
 		return body + "\n\n" + trailers
 	}
 
 	return trailers
-}
-
-// changeTrailer names a later series' lore change, since a squash drops the
-// branch's own trailers and Task: alone leads lore why to the first PR.
-func changeTrailer(task, change string) string {
-	if change == "" || change == task {
-		return ""
-	}
-
-	return lore.TrailerChange + ": " + change + "\n"
 }

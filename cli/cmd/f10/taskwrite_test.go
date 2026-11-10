@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -52,7 +53,8 @@ func TestTaskCommentDeclinedAndFailed(t *testing.T) {
 
 	_, _, err := runAppStdin(t, strings.NewReader("hi\n"), "-C",
 		createRepo(t, "echo 'notion: 504' >&2\nexit 1\n"), "task", "comment", "FT-12").streams()
-	if err == nil || !strings.Contains(err.Error(), "notion: 504") || !strings.Contains(err.Error(), mayPosted) {
+	if err == nil || !strings.Contains(err.Error(), "notion: 504") ||
+		!strings.Contains(err.Error(), hostops.MayPosted) {
 		t.Errorf("failed comment: err = %v, want the driver's stderr and the may-posted warning", err)
 	}
 
@@ -160,7 +162,7 @@ func TestTaskUpdateParentDeclinedAndRefused(t *testing.T) {
 // exit 3.
 func TestHostRelink(t *testing.T) {
 	f := newFakes(t)
-	gh := newHost("gh", "")
+	gh := hostops.NewHost("gh", "")
 
 	f.script("gh api repos/{owner}/{repo}/issues/12",
 		`{"id":555,"parent_issue_url":"https://api.github.com/repos/o/r/issues/3"}`)
@@ -168,12 +170,12 @@ func TestHostRelink(t *testing.T) {
 		`{}`)
 	f.script("gh api -X DELETE repos/o/r/issues/3/sub_issue -F sub_issue_id=555", `{}`)
 
-	if err := gh.relink(t.Context(), "7", "12"); err != nil ||
+	if err := gh.Relink(t.Context(), "7", "12"); err != nil ||
 		!f.called("gh api -X POST repos/{owner}/{repo}/issues/7/sub_issues") {
 		t.Errorf("relink to 7: %v", err)
 	}
 
-	if err := gh.relink(t.Context(), "", "12"); err != nil ||
+	if err := gh.Relink(t.Context(), "", "12"); err != nil ||
 		!f.called("gh api -X DELETE repos/o/r/issues/3/sub_issue -F sub_issue_id=555") {
 		t.Errorf("unlink: %v", err)
 	}
@@ -182,12 +184,12 @@ func TestHostRelink(t *testing.T) {
 
 	before := len(f.calls)
 
-	if err := gh.relink(t.Context(), "", "13"); err != nil || len(f.calls) != before+1 {
+	if err := gh.Relink(t.Context(), "", "13"); err != nil || len(f.calls) != before+1 {
 		t.Errorf("unlink with no parent: %v", err)
 	}
 
-	err := tasksFor(childTarget(t, "glab")).Relink(t.Context(), &bytes.Buffer{},
-		ref.Ref{ID: "FT-12", Number: "12"}, "7", unwrittenNothing)
+	err := hostops.TasksFor(childTarget(t, "glab")).Relink(t.Context(), &bytes.Buffer{},
+		ref.Ref{ID: "FT-12", Number: "12"}, "7", hostops.UnwrittenNothing)
 	if exitCode(err) != ui.ExitDeclined {
 		t.Errorf("glab relink: err = %v, want exit %d", err, ui.ExitDeclined)
 	}
@@ -269,16 +271,18 @@ func TestHostComment(t *testing.T) {
 		`{"url":"https://github.com/o/r/pull/8"}`,
 	)
 
-	if got, err := newHost("gh", "").CommentIssue(t.Context(), "7", "hi"); err != nil ||
+	if got, err := hostops.NewHost("gh", "").CommentIssue(t.Context(), "7", "hi"); err != nil ||
 		got != "https://github.com/o/r/issues/7#issuecomment-1" {
 		t.Errorf("gh comment = %q, %v", got, err)
 	}
 
-	if got, err := newHost("glab", "").CommentIssue(t.Context(), "7", "hi"); err != nil || got != "" {
+	if got, err := hostops.NewHost("glab", "").CommentIssue(t.Context(), "7", "hi"); err != nil || got != "" {
 		t.Errorf("glab comment = %q, %v; want no url", got, err)
 	}
 
-	if _, err := newHost("gh", "").CommentIssue(t.Context(), "8", "hi"); err == nil || f.called("gh issue comment 8") {
+	if _, err := hostops.NewHost("gh", "").
+		CommentIssue(t.Context(), "8", "hi"); err == nil ||
+		f.called("gh issue comment 8") {
 		t.Errorf("comment on a pull request: err = %v", err)
 	}
 }
@@ -302,16 +306,16 @@ func TestHostUpdate(t *testing.T) {
 
 	priorities := map[string]string{"p1": "high", "p2": "medium"}
 
-	err := newHost("gh", "").update(t.Context(), "7",
-		props{status: "Closed", priority: "high", labels: []string{"shipped"}, assignee: "ann"}, priorities)
+	err := hostops.NewHost("gh", "").Update(t.Context(), "7",
+		hostops.Props{Status: "Closed", Priority: "high", Labels: []string{"shipped"}, Assignee: "ann"}, priorities)
 	if err != nil || !f.called("gh issue close 7") {
 		t.Errorf("gh update: %v", err)
 	}
 
-	if err := newHost(
+	if err := hostops.NewHost(
 		"glab",
 		"",
-	).update(t.Context(), "7", props{status: "open", priority: "high"}, priorities); err != nil ||
+	).Update(t.Context(), "7", hostops.Props{Status: "open", Priority: "high"}, priorities); err != nil ||
 		!f.called("glab issue reopen 7") {
 		t.Errorf("glab update: %v", err)
 	}
@@ -320,17 +324,18 @@ func TestHostUpdate(t *testing.T) {
 	f.script("gh api user", `{"login":"Ann"}`)
 	f.script("gh issue edit 7 --add-assignee @me --remove-assignee bob", "")
 
-	if err := newHost("gh", "").update(t.Context(), "7", props{assignee: "@me"}, priorities); err != nil ||
+	if err := hostops.NewHost("gh", "").
+		Update(t.Context(), "7", hostops.Props{Assignee: "@me"}, priorities); err != nil ||
 		!f.called("gh issue edit 7 --add-assignee @me --remove-assignee bob") {
 		t.Errorf("gh update @me: %v", err)
 	}
 
-	for _, p := range []props{
-		{status: "In progress"},
-		{set: []string{"Sprint=7"}},
-		{priority: "urgent"},
+	for _, p := range []hostops.Props{
+		{Status: "In progress"},
+		{Set: []string{"Sprint=7"}},
+		{Priority: "urgent"},
 	} {
-		if err := newHost("gh", "").update(t.Context(), "7", p, priorities); err == nil {
+		if err := hostops.NewHost("gh", "").Update(t.Context(), "7", p, priorities); err == nil {
 			t.Errorf("%+v: accepted", p)
 		}
 	}
@@ -351,10 +356,10 @@ func TestHostCreate(t *testing.T) {
 
 	var warn bytes.Buffer
 
-	r, url, err := tasksFor(tg).Create(t.Context(), &warn, newTask{
-		doc:    "# Add it\n\nthe body\n",
-		props:  props{priority: "high", labels: []string{"draft"}},
-		parent: ref.Ref{ID: "FT-7", Number: "7"},
+	r, url, err := hostops.TasksFor(tg).Create(t.Context(), &warn, hostops.NewTask{
+		Doc:    "# Add it\n\nthe body\n",
+		Props:  hostops.Props{Priority: "high", Labels: []string{"draft"}},
+		Parent: ref.Ref{ID: "FT-7", Number: "7"},
 	})
 	if err != nil || r.ID != "FT-12" || url != "https://github.com/o/r/issues/12" || warn.Len() > 0 {
 		t.Errorf("hostCreate = %+v, %q, %v, %q", r, url, err, warn.String())
@@ -376,9 +381,9 @@ func TestHostCreateLinkFailureWarns(t *testing.T) {
 
 	var warn bytes.Buffer
 
-	r, _, err := tasksFor(
+	r, _, err := hostops.TasksFor(
 		tg,
-	).Create(t.Context(), &warn, newTask{doc: "# A\n", parent: ref.Ref{ID: "FT-7", Number: "7"}})
+	).Create(t.Context(), &warn, hostops.NewTask{Doc: "# A\n", Parent: ref.Ref{ID: "FT-7", Number: "7"}})
 	if err != nil || r.ID != "FT-12" || !strings.Contains(warn.String(), "not linked under FT-7") {
 		t.Errorf("hostCreate = %+v, %v, %q; want the id and a warning", r, err, warn.String())
 	}
@@ -391,8 +396,9 @@ func TestHostCreateRefusals(t *testing.T) {
 	f := newFakes(t)
 	tg := childTarget(t, "gh")
 
-	for _, p := range []props{{status: "closed"}, {priority: "urgent"}, {set: []string{"Kind=Bug"}}} {
-		if _, _, err := tasksFor(tg).Create(t.Context(), &bytes.Buffer{}, newTask{doc: "# A\n", props: p}); err == nil {
+	for _, p := range []hostops.Props{{Status: "closed"}, {Priority: "urgent"}, {Set: []string{"Kind=Bug"}}} {
+		if _, _, err := hostops.TasksFor(tg).
+			Create(t.Context(), &bytes.Buffer{}, hostops.NewTask{Doc: "# A\n", Props: p}); err == nil {
 			t.Errorf("%+v: no error", p)
 		}
 	}
@@ -403,8 +409,9 @@ func TestHostCreateRefusals(t *testing.T) {
 
 	f.script("gh issue create --title A --body ", "done\n")
 
-	if _, _, err := tasksFor(tg).Create(t.Context(), &bytes.Buffer{}, newTask{doc: "# A\n"}); err == nil ||
-		!strings.Contains(err.Error(), mayExist) {
+	if _, _, err := hostops.TasksFor(tg).
+		Create(t.Context(), &bytes.Buffer{}, hostops.NewTask{Doc: "# A\n"}); err == nil ||
+		!strings.Contains(err.Error(), hostops.MayExist) {
 		t.Errorf("no url printed: err = %v, want the may-exist warning", err)
 	}
 }
@@ -414,7 +421,7 @@ func TestHostCreateRefusals(t *testing.T) {
 func TestLinkParentGitLab(t *testing.T) {
 	f := newFakes(t)
 
-	if err := newHost("glab", "").LinkParent(t.Context(), "7", "12"); !errors.Is(err, forge.ErrNoIssueParent) {
+	if err := hostops.NewHost("glab", "").LinkParent(t.Context(), "7", "12"); !errors.Is(err, forge.ErrNoIssueParent) {
 		t.Errorf("linkParent = %v", err)
 	}
 

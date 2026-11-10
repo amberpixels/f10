@@ -8,8 +8,10 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasktree"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -73,9 +75,9 @@ func writeParentTree(ctx context.Context, cmd *cli.Command, t *target.Target, to
 		return writeTaskFacts(cmd, token, "", k)
 	}
 
-	kids, err := trackerFor(t).children(ctx, r)
+	kids, err := stack.TrackerFor(t).Children(ctx, r)
 	switch {
-	case errors.Is(err, errNoParentLink):
+	case errors.Is(err, hostops.ErrNoParentLink):
 		ui.Warnf(cmd.ErrWriter, "%s: %v: no subtasks to list", r.ID, err)
 	case err != nil:
 		return err
@@ -91,7 +93,7 @@ func writeParentTree(ctx context.Context, cmd *cli.Command, t *target.Target, to
 		treeOpts{head: &treeRow{ID: r.ID, Title: k.Title, URL: k.URL}, url: true},
 	)
 
-	rememberRefsFor(ctx, t, childRefs(kids)...)
+	stack.RememberRefsFor(ctx, t, stack.ChildRefs(kids)...)
 
 	return tasktree.Tree{Align: true}.Write(cmd.Writer, nodes)
 }

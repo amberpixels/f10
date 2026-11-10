@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/amberpixels/f10/cli/internal/lookaround"
+	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/tasktree"
 	"github.com/amberpixels/f10/cli/internal/textx"
 )
@@ -39,7 +40,7 @@ func renderBoard(w io.Writer, b lookaround.Board, limit int) {
 		return
 	}
 
-	links := linksOn(limit > 0)
+	links := render.LinksOn(limit > 0)
 
 	nodes := make([]tasktree.Node, len(m.Rows))
 	for i, r := range m.Rows {
@@ -261,7 +262,7 @@ func renderByPerson(w io.Writer, boards []lookaround.Board, limit int) {
 		persons = append(slices.Delete(persons, i, i+1), "")
 	}
 
-	links := linksOn(limit > 0)
+	links := render.LinksOn(limit > 0)
 	groups := make([][]tasktree.Node, len(persons))
 
 	var all []tasktree.Node
@@ -311,7 +312,7 @@ func firstLine(s string) string {
 
 // boardNode is a board line as a tree row: the title fills what the
 // terminal leaves, and the tail (PRs, who, next) follows it.
-func boardNode(r boardLine, project string, withProject bool, links *taskLinks) tasktree.Node {
+func boardNode(r boardLine, project string, withProject bool, links *render.TaskLinks) tasktree.Node {
 	faint := func(s string) string { return lipgloss.NewStyle().Faint(true).Render(s) }
 
 	var tail []string

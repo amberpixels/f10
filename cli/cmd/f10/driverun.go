@@ -12,8 +12,11 @@ import (
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
@@ -59,7 +62,7 @@ type driveConfig struct {
 // driveDeps is what the drive calls out to, which a test replaces.
 type driveDeps struct {
 	driver  *driver.Driver
-	tracker tracker
+	tracker stack.Tracker
 	title   func(ref.Ref) func(context.Context) (string, error)
 	started func(context.Context, ref.Ref) error // nil when tracker.status declares no started word
 	finish  func(ctx context.Context, w io.Writer, req driveFinish) error
@@ -71,7 +74,7 @@ type driveDeps struct {
 	// task; nil, with no host, reads none
 	pull func(ctx context.Context, branch string) (forge.PR, error)
 	// catchup is the engine the drive catches a branch up through
-	catchup *catchupEngine
+	catchup *stack.CatchupEngine
 	notify  func(context.Context, asks.Ask) error // tells the user of a new ask
 	out     io.Writer
 }
@@ -85,8 +88,8 @@ type driveState struct {
 	own    *drives.Lease            // the drive's own lease, held while it runs
 	leases map[string]*drives.Lease // each task's, by key, held while the task is unended
 
-	links      *taskLinks // prints this drive's task ids for people
-	project    string     // the name the links print task ids under, read once they load
+	links      *render.TaskLinks // prints this drive's task ids for people
+	project    string            // the name the links print task ids under, read once they load
 	inboxNotes []string
 	pullLine   string // the last line retryPull printed, or a finish's deferred note
 	ranFinish  bool   // a finish ran here, so this drive may pull main
@@ -106,7 +109,7 @@ type driveState struct {
 type driveTask struct {
 	ref      ref.Ref
 	suffix   string
-	info     taskInfo
+	info     hostops.TaskInfo
 	profile  agentctl.Profile // what the agent starts on, resolved
 	flagged  bool             // the command line chose it, over the branch's record
 	branch   string           // the task's local branch, or "" before it started
@@ -197,7 +200,7 @@ type catchupState struct {
 	lastCatchup *drives.Catchup
 	// catchupPlan is the base the drive's own catchup integrated, and
 	// catchupLeft what git showed unsettled after the agent's last turn
-	catchupPlan *catchupPlan
+	catchupPlan *stack.CatchupPlan
 	catchupLeft string
 	// toldCatchup is set once the line saying why the agent verifies was printed
 	toldCatchup bool

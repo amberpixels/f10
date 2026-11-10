@@ -12,6 +12,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -22,7 +23,7 @@ func fastTurn(t *testing.T) *driveFixture {
 	t.Helper()
 
 	fx := newDriveFixture(t, "GH-1", "judge")
-	fx.task("GH-1", taskInfo{body: "x"}, "")
+	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.expects("GH-1", "judge")

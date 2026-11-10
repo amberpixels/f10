@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/standup"
 )
@@ -79,7 +80,7 @@ func TestStandupPullsGitHub(t *testing.T) {
 	  {"number":9,"title":"theirs","state":"MERGED","url":"u9","author":{"login":"bob"},
 	   "mergedAt":"2026-10-14T10:00:00Z","mergedBy":{"login":"me"}}]`)
 
-	got, err := newHost("gh", ".").Pulls(t.Context(), "me", standupSince)
+	got, err := hostops.NewHost("gh", ".").Pulls(t.Context(), "me", standupSince)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +137,7 @@ func TestStandupPullsGitLab(t *testing.T) {
 	  {"body":"requested review from @me","system":true,"created_at":"2026-10-14T08:00:00Z","author":{"username":"bob"}},
 	  {"body":"looks good","system":false,"created_at":"2026-10-14T10:00:00Z","author":{"username":"me"}}]`)
 
-	got, err := newHost("glab", ".").Pulls(t.Context(), "me", standupSince)
+	got, err := hostops.NewHost("glab", ".").Pulls(t.Context(), "me", standupSince)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +231,7 @@ func TestCommitCI(t *testing.T) {
 	f.script("glab api projects/:fullpath/repository/commits/p3",
 		`{"last_pipeline":{"status":"failed","updated_at":"2026-10-14T11:00:00Z"}}`)
 
-	gh := newHost("gh", ".")
+	gh := hostops.NewHost("gh", ".")
 
 	ci, err := gh.CommitCI(t.Context(), "p1")
 	if err != nil || ci == nil || !ci.Red || !ci.At.Equal(standupSince.Add(10*time.Hour)) {
@@ -241,7 +242,7 @@ func TestCommitCI(t *testing.T) {
 		t.Errorf("p2 = %+v, %v; want unknown with no checks", ci, err)
 	}
 
-	if ci, err := newHost("glab", ".").CommitCI(t.Context(), "p3"); err != nil || ci == nil || !ci.Red {
+	if ci, err := hostops.NewHost("glab", ".").CommitCI(t.Context(), "p3"); err != nil || ci == nil || !ci.Red {
 		t.Errorf("p3 = %+v, %v; want a red pipeline", ci, err)
 	}
 }

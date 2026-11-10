@@ -6,6 +6,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -13,7 +14,7 @@ import (
 // resumes the drive.
 func (in *driveInput) report(runs []*driveRun, notes []string) error {
 	var (
-		rows   []fact
+		rows   []render.Fact
 		lines  []string
 		asking []string
 		code   int
@@ -26,7 +27,7 @@ func (in *driveInput) report(runs []*driveRun, notes []string) error {
 
 		switch {
 		case r.end != nil:
-			rows = append(rows, fact{label: shown, value: r.end.row})
+			rows = append(rows, render.Fact{Label: shown, Value: r.end.row})
 			lines = append(lines, r.end.lines...)
 
 			if r.end.code == ui.ExitAsk {
@@ -36,19 +37,19 @@ func (in *driveInput) report(runs []*driveRun, notes []string) error {
 			halted[id] = r.end.code == ui.ExitHalted
 			code = max(code, r.end.code)
 		case r.queued():
-			rows = append(rows, fact{label: shown, value: "queued"})
+			rows = append(rows, render.Fact{Label: shown, Value: "queued"})
 		case r.active() && r.phase == atParked:
-			rows = append(rows, fact{label: shown, value: "waiting on " + in.id(r.base.task.ref.ID)})
+			rows = append(rows, render.Fact{Label: shown, Value: "waiting on " + in.id(r.base.task.ref.ID)})
 		case r.active() && r.phase == atWaiting:
-			rows = append(rows, fact{label: shown, value: "waiting for " + in.id(r.base.task.ref.ID)})
+			rows = append(rows, render.Fact{Label: shown, Value: "waiting for " + in.id(r.base.task.ref.ID)})
 		case r.active():
-			rows = append(rows, fact{label: shown, value: "running " + r.skill})
+			rows = append(rows, render.Fact{Label: shown, Value: "running " + r.skill})
 		case halted[r.task.base]:
-			rows = append(rows, fact{label: shown, value: "halted: base " + in.id(r.task.base) + " halted"})
+			rows = append(rows, render.Fact{Label: shown, Value: "halted: base " + in.id(r.task.base) + " halted"})
 			halted[id] = true
 			code = max(code, ui.ExitHalted)
 		default:
-			rows = append(rows, fact{label: shown, value: "not reached"})
+			rows = append(rows, render.Fact{Label: shown, Value: "not reached"})
 		}
 	}
 
@@ -78,7 +79,7 @@ func (in *driveInput) report(runs []*driveRun, notes []string) error {
 		fmt.Fprintln(in.out)
 	}
 
-	if err := writeReport(in.out, rows, notes); err != nil {
+	if err := render.WriteReport(in.out, rows, notes); err != nil {
 		return err
 	}
 

@@ -14,6 +14,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/fsx"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
@@ -42,7 +43,7 @@ func newJanitorFixture(t *testing.T) *janitorFixture {
 		in: janitorInput{main: main, prefix: "GH", storage: storage.InRepo(main)},
 	}
 
-	h := newHost("gh", main)
+	h := hostops.NewHost("gh", main)
 	fx.in.host = &h
 
 	f := fx.f
@@ -630,7 +631,7 @@ func TestDeleteRemoteBranchEscapesTheName(t *testing.T) {
 	f.script("glab api -X DELETE projects/:fullpath/repository/branches/GH-1%2Fa%23b", "")
 
 	for _, name := range []string{"gh", "glab"} {
-		if err := newHost(name, "/code/repo").DeleteBranch(t.Context(), "GH-1/a#b"); err != nil {
+		if err := hostops.NewHost(name, "/code/repo").DeleteBranch(t.Context(), "GH-1/a#b"); err != nil {
 			t.Errorf("%s: %v", name, err)
 		}
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/calendar"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/storage"
@@ -149,9 +150,9 @@ func runBoardFixture(t *testing.T, fx boardFixture) lookaround.Board {
 		f.answers[sub(key)] = []shell.Result{shell.Result(res)}
 	}
 
-	h := newHost(fx.Host, root)
+	h := hostops.NewHost(fx.Host, root)
 	if fx.Repo != "" {
-		h, fx.Remote = host{Name: fx.Host, Repo: fx.Repo}, true
+		h, fx.Remote = hostops.Host{Name: fx.Host, Repo: fx.Repo}, true
 	}
 
 	in := lookaround.Inputs{
@@ -175,7 +176,7 @@ func runBoardFixture(t *testing.T, fx boardFixture) lookaround.Board {
 			return fx.Tasks, nil
 		}
 
-		rows, err := h.listIssues(ctx, "", fx.Prefix, nil, boardPage)
+		rows, err := h.ListIssues(ctx, "", fx.Prefix, nil, boardPage)
 		if err != nil {
 			return nil, err
 		}
@@ -289,7 +290,7 @@ func TestRecordBoardFixture(t *testing.T) {
 		Project: lookaround.Project{ID: "recorded", Name: filepath.Base(root), Host: "gh", Remote: true},
 		Prefix:  fx.Prefix, Since: fx.Since, Host: &h,
 		Tasks: func(ctx context.Context) ([]lookaround.Task, error) {
-			rows, err := newHost("gh", root).listIssues(ctx, "", fx.Prefix, nil, boardPage)
+			rows, err := hostops.NewHost("gh", root).ListIssues(ctx, "", fx.Prefix, nil, boardPage)
 			if err != nil {
 				return nil, err
 			}

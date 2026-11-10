@@ -8,7 +8,10 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -20,7 +23,7 @@ import (
 func (in *driveInput) readyToMerge(ctx context.Context, r *driveRun) error {
 	id, branch := r.task.ref.ID, r.o.branch
 
-	def, err := localDefault(ctx, in.main)
+	def, err := stack.LocalDefault(ctx, in.main)
 	if err != nil {
 		return halt(id, "finish", err.Error())
 	}
@@ -107,7 +110,7 @@ type driveFinish struct {
 	deferred func(string)
 }
 
-func driveFinishInput(t *target.Target, main string, h host, req driveFinish) (finishInput, error) {
+func driveFinishInput(t *target.Target, main string, h hostops.Host, req driveFinish) (finishInput, error) {
 	in := finishInputFor(t, main, h, req.task)
 
 	var err error
@@ -145,7 +148,7 @@ func (in *driveInput) runFinish(ctx context.Context, r *driveRun) driveResult {
 		pulled string
 	)
 
-	buf := &linkBuffer{links: linkTerminal(in.out)}
+	buf := &render.LinkBuffer{Links: render.LinkTerminal(in.out)}
 
 	in.finishStep(ctx, r.o.branch, branchmeta.FinishRunning, "starting")
 

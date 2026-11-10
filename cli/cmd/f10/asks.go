@@ -23,6 +23,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -157,7 +158,7 @@ func listAsks(ctx context.Context, w io.Writer, dir string, now time.Time, asJSO
 		fmt.Fprintln(w, "no open asks")
 	}
 
-	links := linksFor(w, false)
+	links := render.LinksFor(w, false)
 	loadAskLinks(ctx, links, append(slices.Clone(open), answered...))
 
 	for i, a := range open {
@@ -189,7 +190,7 @@ func listAsks(ctx context.Context, w io.Writer, dir string, now time.Time, asJSO
 	return nil
 }
 
-func printAsk(w io.Writer, links *taskLinks, a asks.Ask, now time.Time) {
+func printAsk(w io.Writer, links *render.TaskLinks, a asks.Ask, now time.Time) {
 	where := ""
 	if a.Skill != "" {
 		where = " at " + a.Skill
@@ -221,8 +222,8 @@ func askName(a asks.Ask) string {
 
 // loadAskLinks reads each ask's task urls from the ledger of the project
 // its main checkout belongs to, keyed by the ask's display project.
-func loadAskLinks(ctx context.Context, links *taskLinks, all []asks.Ask) {
-	if links == nil || !links.on {
+func loadAskLinks(ctx context.Context, links *render.TaskLinks, all []asks.Ask) {
+	if links == nil || !links.On {
 		return
 	}
 
@@ -244,7 +245,7 @@ func loadAskLinks(ctx context.Context, links *taskLinks, all []asks.Ask) {
 
 // askLink is askName with the task linked; the url the ask carries is the
 // lead's, so a bundle links its members from the ledger instead.
-func askLink(links *taskLinks, a asks.Ask) string {
+func askLink(links *render.TaskLinks, a asks.Ask) string {
 	if !strings.Contains(a.Task, ref.Separator) {
 		links.Known(a.Project, a.Task, a.URL)
 	}
@@ -398,7 +399,7 @@ func (d deliverer) deliver(ctx context.Context, w io.Writer, dir string, a asks.
 		fmt.Fprintf(w, "  recording the answer sent: %v\n", err)
 	}
 
-	fmt.Fprintf(w, "sent to %s's agent\n", askLink(linksFor(w, false), a))
+	fmt.Fprintf(w, "sent to %s's agent\n", askLink(render.LinksFor(w, false), a))
 
 	return nil
 }
@@ -450,7 +451,7 @@ func walkAsks(ctx context.Context, w io.Writer, in *bufio.Reader, dir string, d 
 		return nil
 	}
 
-	links := linksFor(w, false)
+	links := render.LinksFor(w, false)
 	loadAskLinks(ctx, links, open)
 
 	for i, a := range open {
@@ -596,14 +597,14 @@ func raiseAsk(
 ) {
 	raised, fresh, err := asks.Raise(dir, a, now)
 	if err != nil {
-		fmt.Fprintf(w, "  keeping %s's ask in the inbox: %v\n", askLink(linksFor(w, false), a), err)
+		fmt.Fprintf(w, "  keeping %s's ask in the inbox: %v\n", askLink(render.LinksFor(w, false), a), err)
 
 		return
 	}
 
 	if fresh && notify != nil {
 		if err := notify(ctx, raised); err != nil {
-			fmt.Fprintf(w, "  notifying %s's ask: %v\n", askLink(linksFor(w, false), a), err)
+			fmt.Fprintf(w, "  notifying %s's ask: %v\n", askLink(render.LinksFor(w, false), a), err)
 		}
 	}
 }

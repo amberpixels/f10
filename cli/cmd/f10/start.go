@@ -13,7 +13,9 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -127,7 +129,7 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if checksParent(mode, pick) {
-		in.children = trackerFor(t).children
+		in.children = stack.TrackerFor(t).Children
 	}
 
 	if pick == nil {
@@ -217,7 +219,7 @@ func startRef(
 	cmd *cli.Command,
 	t *target.Target,
 	token string,
-	pick *pickup,
+	pick *hostops.Pickup,
 	pr forge.PR,
 	flowName, after, base string,
 ) (ref.Ref, string, error) {
@@ -244,7 +246,7 @@ func startRef(
 		}
 
 		if r, err = t.Reference(ctx, task); err != nil {
-			return ref.Ref{}, "", fmt.Errorf("%s: %w", pick.url, err)
+			return ref.Ref{}, "", fmt.Errorf("%s: %w", pick.URL, err)
 		}
 
 		r.Bundle = nil
@@ -275,7 +277,7 @@ func startDependency(
 	t *target.Target,
 	in *startInput,
 	r ref.Ref,
-	pick *pickup,
+	pick *hostops.Pickup,
 	after, base string,
 ) error {
 	var err error
@@ -293,7 +295,7 @@ func startDependency(
 
 		in.after = afterRef.Head().ID
 	case base == "":
-		if in.after, in.notes, err = afterFromBody(ctx, trackerFor(t), in.main, r); err != nil {
+		if in.after, in.notes, err = afterFromBody(ctx, stack.TrackerFor(t), in.main, r); err != nil {
 			return err
 		}
 	}
@@ -345,7 +347,7 @@ func afterStart(ctx context.Context, cmd *cli.Command, t *target.Target, r ref.R
 // refuseNote stops a note no prompt can carry: only the prompts that stop
 // and wait are plain text, and a driven chain's arguments belong to its
 // skills.
-func refuseNote(mode string, pick *pickup, note string) error {
+func refuseNote(mode string, pick *hostops.Pickup, note string) error {
 	if note == "" || mode == modeDiscuss || (pick != nil && mode != modePlan) {
 		return nil
 	}
@@ -356,13 +358,13 @@ func refuseNote(mode string, pick *pickup, note string) error {
 
 // refuseLandedPlan stops --plan on a merged or closed PR: its diff is no
 // starting point once it landed, and going on from it is a task of its own.
-func refuseLandedPlan(mode string, pick *pickup) error {
-	if pick == nil || !pick.landed() || mode != modePlan {
+func refuseLandedPlan(mode string, pick *hostops.Pickup) error {
+	if pick == nil || !pick.Landed() || mode != modePlan {
 		return nil
 	}
 
 	return fmt.Errorf("--plan continues an open PR; %s is %s: start its task by id to go on from it",
-		pick.url, pick.state)
+		pick.URL, pick.State)
 }
 
 // refusePickupFlags stops the flags a picked-up PR has no use for: its

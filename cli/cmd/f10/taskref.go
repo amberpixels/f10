@@ -10,8 +10,10 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -21,25 +23,7 @@ import (
 // `task ref` hands them out from the ledger's task refs, which every
 // tracker read f10 makes fills, and asks the tracker only on a miss.
 
-// rememberRefs records refs as this project's; it never fails its caller.
-func rememberRefsFor(ctx context.Context, t *target.Target, refs ...ledger.TaskRef) {
-	if len(refs) == 0 {
-		return
-	}
-
-	ledger.RememberRefs(ctx, t.RefProject(ctx), refs...)
-}
-
-func rowRefs(rows []row) []ledger.TaskRef {
-	refs := make([]ledger.TaskRef, 0, len(rows))
-	for _, r := range rows {
-		refs = append(refs, ledger.TaskRef{ID: r.ID, Title: tasktitle.Clean(r.Title, r.ID), URL: r.URL})
-	}
-
-	return refs
-}
-
-func childRefs(rows []childRow) []ledger.TaskRef {
+func rowRefs(rows []hostops.Row) []ledger.TaskRef {
 	refs := make([]ledger.TaskRef, 0, len(rows))
 	for _, r := range rows {
 		refs = append(refs, ledger.TaskRef{ID: r.ID, Title: tasktitle.Clean(r.Title, r.ID), URL: r.URL})
@@ -49,15 +33,7 @@ func childRefs(rows []childRow) []ledger.TaskRef {
 }
 
 func docTitle(id, doc string) string {
-	return tasktitle.Clean(taskTitle(strings.TrimLeft(doc, " \t\r\n")), id)
-}
-
-// driverTitle strips the prefix tracker.title wrote, as the host's titles
-// come stripped.
-func driverTitleFor(t *target.Target, r ref.Ref, doc string) string {
-	title := taskTitle(strings.TrimLeft(doc, " \t\r\n"))
-
-	return tasktitle.Clean(t.Effective.TitleTemplate.Strip(title, r.ID, r.Number), r.ID)
+	return tasktitle.Clean(hostops.TaskTitle(strings.TrimLeft(doc, " \t\r\n")), id)
 }
 
 // mdLink is the task as a markdown link, brackets in the title escaped so
@@ -169,14 +145,14 @@ func taskRefsFor(t *target.Target,
 
 //nolint:lostfield // a lookup through the target, not a conversion of it
 func lookupRefFor(ctx context.Context, t *target.Target, r ref.Ref) (ledger.TaskRef, error) {
-	return tasksFor(t).Ref(ctx, r)
+	return hostops.TasksFor(t).Ref(ctx, r)
 }
 
 // linkBodyAfter links the body's `After: <id>` line to the base task, so a
 // tracker reader sees what it waits for; a base f10 cannot title stays
 // bare, since create never fails over a link.
 func linkBodyAfterFor(ctx context.Context, t *target.Target, doc string, warn io.Writer) string {
-	id := afterIn(doc)
+	id := hostops.AfterIn(doc)
 	if id == "" {
 		return doc
 	}
@@ -191,5 +167,5 @@ func linkBodyAfterFor(ctx context.Context, t *target.Target, doc string, warn io
 		return doc
 	}
 
-	return linkAfter(doc, mdLink(r.ID, k.Title, k.URL))
+	return stack.LinkAfter(doc, mdLink(r.ID, k.Title, k.URL))
 }

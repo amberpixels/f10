@@ -6,9 +6,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
 )
 
@@ -47,7 +49,7 @@ func TestAfterInReadsALink(t *testing.T) {
 		"After: [FT-109 x](https://u)":                                             "",
 		"After: [FT-109: no link]":                                                 "",
 	} {
-		if got := afterIn(body); got != want {
+		if got := hostops.AfterIn(body); got != want {
 			t.Errorf("afterIn(%q) = %q, want %q", body, got, want)
 		}
 	}
@@ -56,13 +58,13 @@ func TestAfterInReadsALink(t *testing.T) {
 func TestLinkAfter(t *testing.T) {
 	body := "Text naming After: FT-1 in prose.\n  After: FT-2\nAfter: FT-109\n\nend\n"
 
-	got := linkAfter(body, mdLink("FT-109", "Base", "https://u/109"))
+	got := stack.LinkAfter(body, mdLink("FT-109", "Base", "https://u/109"))
 	if want := "Text naming After: FT-1 in prose.\n  After: FT-2\nAfter: [FT-109: Base](https://u/109)\n\nend\n"; got != want {
 		t.Errorf("linkAfter = %q, want %q", got, want)
 	}
 
-	if afterIn(got) != "FT-109" {
-		t.Errorf("the linked body reads After: %q", afterIn(got))
+	if hostops.AfterIn(got) != "FT-109" {
+		t.Errorf("the linked body reads After: %q", hostops.AfterIn(got))
 	}
 }
 

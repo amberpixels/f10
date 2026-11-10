@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/stack"
 )
 
 // resolveTasks skips a range member the tracker does not know as a task,
@@ -31,7 +32,7 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 			return fmt.Errorf("%s is listed twice", sharedMember(tasks[i].ref, r))
 		}
 
-		info, err := in.tracker.info(ctx, r)
+		info, err := in.tracker.Info(ctx, r)
 
 		switch {
 		case err != nil && ranged:
@@ -40,11 +41,11 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 			return nil
 		case err != nil:
 			return fmt.Errorf("%s: %w", r.ID, err)
-		case info.pull && ranged:
+		case info.Pull && ranged:
 			notes = append(notes, r.ID+" skipped: a pull request, not a task")
 
 			return nil
-		case info.pull:
+		case info.Pull:
 			return fmt.Errorf("%s is a pull request, not a task", r.ID)
 		}
 
@@ -53,13 +54,13 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 			profile: in.profileFor(listed), flagged: in.profileFlagged(listed),
 		}
 
-		line, err := bundleAfter(ctx, in.tracker, r, info.body)
+		line, err := stack.BundleAfter(ctx, in.tracker, r, info.Body)
 		if err != nil {
 			return err
 		}
 
 		if line != "" {
-			base, err := in.tracker.resolve(ctx, line)
+			base, err := in.tracker.Resolve(ctx, line)
 			if err != nil {
 				return fmt.Errorf("%s's body says After: %s: %w", r.ID, line, err)
 			}
@@ -67,12 +68,12 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 			task.after = base.Head().ID
 		}
 
-		x, err := loadBranchIndex(ctx, in.main)
+		x, err := stack.LoadBranchIndex(ctx, in.main)
 		if err != nil {
 			return err
 		}
 
-		first, err := x.any(ctx, r.ID)
+		first, err := x.Any(ctx, r.ID)
 		if err != nil {
 			return err
 		}
@@ -81,11 +82,11 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 		if branched {
 			var local []string
 			if suffix == "" {
-				local = x.linked(r.ID)
+				local = x.Linked(r.ID)
 			}
 
 			if len(local) == 0 {
-				if local, err = x.under(ctx, "refs/heads/", r.ID, suffix); err != nil {
+				if local, err = x.Under(ctx, "refs/heads/", r.ID, suffix); err != nil {
 					return err
 				}
 			}
@@ -95,7 +96,7 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 			}
 		}
 
-		task.finished = finishedTask(info, in.tracker.storage, r.ID, branched)
+		task.finished = stack.FinishedTask(info, in.tracker.Storage, r.ID, branched)
 
 		if !ranged && !task.finished && !branched {
 			for _, m := range r.MemberRefs() {
@@ -128,7 +129,7 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 	for i, tok := range in.args.tasks {
 		id, suffix := ref.SplitSuffix(tok)
 
-		r, err := in.tracker.resolve(ctx, id)
+		r, err := in.tracker.Resolve(ctx, id)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -163,12 +164,12 @@ func (in *driveInput) span(ctx context.Context) (ref.Ref, ref.Ref, error) {
 	if slices.ContainsFunc(in.args.tasks, func(t string) bool { return strings.Contains(t, ref.Separator) }) {
 		return ref.Ref{}, ref.Ref{}, errors.New("a range's ends are single ids: list a bundle on its own")
 	}
-	from, err := in.tracker.resolve(ctx, in.args.tasks[0])
+	from, err := in.tracker.Resolve(ctx, in.args.tasks[0])
 	if err != nil {
 		return ref.Ref{}, ref.Ref{}, err
 	}
 
-	to, err := in.tracker.resolve(ctx, in.args.tasks[1])
+	to, err := in.tracker.Resolve(ctx, in.args.tasks[1])
 	if err != nil {
 		return ref.Ref{}, ref.Ref{}, err
 	}
@@ -214,22 +215,22 @@ func prefixOf(r ref.Ref) string {
 }
 
 func (in *driveInput) baseFinished(ctx context.Context, id string) (bool, error) {
-	base, err := in.tracker.resolve(ctx, id)
+	base, err := in.tracker.Resolve(ctx, id)
 	if err != nil {
 		return false, err
 	}
 
-	branched, err := hasTaskBranch(ctx, in.main, base.ID)
+	branched, err := stack.HasTaskBranch(ctx, in.main, base.ID)
 	if err != nil || branched {
 		return false, err
 	}
 
-	info, err := in.tracker.info(ctx, base)
+	info, err := in.tracker.Info(ctx, base)
 	if err != nil {
 		return false, fmt.Errorf("%s: %w", base.ID, err)
 	}
 
-	return finishedTask(info, in.tracker.storage, base.ID, false), nil
+	return stack.FinishedTask(info, in.tracker.Storage, base.ID, false), nil
 }
 
 func sharedMember(a, b ref.Ref) string {

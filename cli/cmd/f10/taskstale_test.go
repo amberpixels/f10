@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
@@ -27,12 +28,12 @@ func TestStaleAt(t *testing.T) {
 		{"over 3w", 22 * 24 * time.Hour, "3w", true},
 		{"undeclared", 1000 * 24 * time.Hour, "", false},
 	} {
-		if got := staleAt(now.Add(-tc.age), staleOf(tc.staleAfter), now); got != tc.want {
+		if got := hostops.StaleAt(now.Add(-tc.age), staleOf(tc.staleAfter), now); got != tc.want {
 			t.Errorf("%s: staleAt = %v, want %v", tc.name, got, tc.want)
 		}
 	}
 
-	if staleAt(time.Time{}, staleOf("10d"), now) {
+	if hostops.StaleAt(time.Time{}, staleOf("10d"), now) {
 		t.Error("no created date read as stale")
 	}
 }
@@ -109,17 +110,17 @@ func TestHostIssueCreated(t *testing.T) {
 		`{"url":"https://github.com/o/r/pull/4"}`,
 	)
 
-	at, err := newHost("gh", "/code/repo").issueCreated(t.Context(), "14")
+	at, err := hostops.NewHost("gh", "/code/repo").IssueCreated(t.Context(), "14")
 	if err != nil || at.UTC().Format(time.DateOnly) != "2026-09-21" {
 		t.Errorf("gh created = %v, %v", at, err)
 	}
 
-	at, err = newHost("glab", "/code/repo").issueCreated(t.Context(), "7")
+	at, err = hostops.NewHost("glab", "/code/repo").IssueCreated(t.Context(), "7")
 	if err != nil || at.UTC().Format(time.DateOnly) != "2026-10-01" {
 		t.Errorf("glab created = %v, %v", at, err)
 	}
 
-	if _, err := newHost("gh", "/code/repo").issueCreated(t.Context(), "4"); err == nil {
+	if _, err := hostops.NewHost("gh", "/code/repo").IssueCreated(t.Context(), "4"); err == nil {
 		t.Error("a pull request answered for an issue")
 	}
 }

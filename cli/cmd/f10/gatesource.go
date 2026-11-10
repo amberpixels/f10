@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lore"
@@ -27,7 +28,7 @@ type gateSource struct {
 	eff    *facts.Effective // the flows, the paces and the review every task resolves against
 	review facts.Review
 	store  *lore.Store
-	host   *host
+	host   *hostops.Host
 	shared string // the storage root every checkout shares
 	// driveFlows is the flow each drive record holds its tasks under, by
 	// lead id: a task the drive has not opened has no branch to record it
@@ -123,7 +124,7 @@ func (src gateSource) gatesOf(ctx context.Context, id, branch, root, storage str
 	if src.host != nil && branch != "" && src.review.Remote() {
 		h := *src.host
 		if root != "" {
-			h = h.at(root)
+			h = h.In(root)
 		}
 
 		in.remote = func(ctx context.Context) remoteState {
@@ -162,7 +163,7 @@ func (src gateSource) pipeline(ctx context.Context, name, branch, pace string) f
 	return entries.Ship()
 }
 
-func readRemote(ctx context.Context, h host, f facts.Review, branch string) remoteState {
+func readRemote(ctx context.Context, h hostops.Host, f facts.Review, branch string) remoteState {
 	ctx, cancel := context.WithTimeout(ctx, remoteTimeout)
 	defer cancel()
 

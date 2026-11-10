@@ -11,7 +11,10 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
 )
@@ -36,12 +39,12 @@ type startInput struct {
 	// flag chose it, which wins over the profile the branch recorded
 	profile        agentctl.Profile
 	profileFlagged bool
-	progress       io.Writer // where a wait in progress is reported, or nil for nowhere
-	pick           *pickup   // the PR picked up, or nil for a task started by its id
-	note           string    // the user's words after the id, for the agent before it waits, or ""
+	progress       io.Writer       // where a wait in progress is reported, or nil for nowhere
+	pick           *hostops.Pickup // the PR picked up, or nil for a task started by its id
+	note           string          // the user's words after the id, for the agent before it waits, or ""
 	// children is the task's subtasks, read to refuse a parent; nil skips the
 	// check (see checksParent)
-	children func(ctx context.Context, task ref.Ref) ([]childRow, error)
+	children func(ctx context.Context, task ref.Ref) ([]stack.ChildRow, error)
 	// started moves a task to tracker.status's started word; nil when none
 	// is declared, or for a PR picked up, whose task someone else started
 	started func(ctx context.Context, task ref.Ref) error
@@ -52,7 +55,7 @@ type startInput struct {
 // the note beneath the report can quote it.
 func titleLookup(t *target.Target, number string) func(context.Context) (string, error) {
 	return func(ctx context.Context) (string, error) {
-		return tasksFor(t).Title(ctx, ref.Ref{Number: number})
+		return hostops.TasksFor(t).Title(ctx, ref.Ref{Number: number})
 	}
 }
 
@@ -82,27 +85,27 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 		o.notes = append(o.notes, markStarted(ctx, in.started, o.task)...)
 	}
 
-	rows := []fact{taskFact(ctx, w, in.main, o.task.Label())}
+	rows := []render.Fact{render.TaskFact(ctx, w, in.main, o.task.Label())}
 	if in.pick != nil {
-		rows = append(rows, fact{label: "pr", value: in.pick.url, url: true})
+		rows = append(rows, render.Fact{Label: "pr", Value: in.pick.URL, URL: true})
 	}
 
-	rows = append(rows, fact{label: "branch", value: o.branch})
+	rows = append(rows, render.Fact{Label: "branch", Value: o.branch})
 	if o.dep != nil {
-		rows = append(rows, fact{label: "after", value: o.dep.task})
+		rows = append(rows, render.Fact{Label: "after", Value: o.dep.task})
 	}
 
 	if o.plan != "" {
-		rows = append(rows, fact{label: "plan", value: o.plan, path: true})
+		rows = append(rows, render.Fact{Label: "plan", Value: o.plan, Path: true})
 	}
 
 	if o.fresh && !o.profile.IsDefault() {
-		rows = append(rows, fact{label: "agent", value: o.profile.Short()})
+		rows = append(rows, render.Fact{Label: "agent", Value: o.profile.Short()})
 	}
 
-	return writeReport(
+	return render.WriteReport(
 		w,
-		append(rows, fact{label: "path", value: o.path}, fact{label: "workspace", value: o.ws.ID}),
+		append(rows, render.Fact{Label: "path", Value: o.path}, render.Fact{Label: "workspace", Value: o.ws.ID}),
 		o.notes,
 	)
 }
@@ -116,7 +119,7 @@ func startedMove(t *target.Target) func(context.Context, ref.Ref) error {
 	}
 
 	return func(ctx context.Context, task ref.Ref) error {
-		return tasksFor(t).Update(ctx, io.Discard, task, props{status: word})
+		return hostops.TasksFor(t).Update(ctx, io.Discard, task, hostops.Props{Status: word})
 	}
 }
 
@@ -207,7 +210,7 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 	name, base, dep, existing := settled.name, settled.base, settled.dep, settled.existing
 
 	if in.pick == nil {
-		if in.task, err = settleBundle(ctx, in.main, in.task, existing.name); err != nil {
+		if in.task, err = settleBundle(ctx, in.main, in.task, existing.Name); err != nil {
 			return openedTask{}, err
 		}
 	}
@@ -217,8 +220,8 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 	// the bare-id note explains a name this run gives; a branch that exists
 	// keeps the name it has, whatever the title would have said
 	switch {
-	case existing.name != "":
-		name = existing.name
+	case existing.Name != "":
+		name = existing.Name
 
 		if base.ref != "" {
 			notes = append(notes, ignoredBaseNote(base, dep, name))
@@ -282,7 +285,7 @@ func openWorktree(
 	name string,
 	base baseRef,
 	dep *dependency,
-	existing foundBranch,
+	existing stack.FoundBranch,
 	notes []string,
 ) (string, []string, error) {
 	wts, err := gitx.Worktrees(ctx, in.main)
@@ -294,9 +297,9 @@ func openWorktree(
 		notes = append(notes, locatePlan(dep, in.storage)...)
 	}
 
-	path := worktreeOf(wts, name)
+	path := stack.WorktreeOf(wts, name)
 
-	if in.pick != nil && !in.pick.landed() && !existing.remote {
+	if in.pick != nil && !in.pick.Landed() && !existing.Remote {
 		note, err := syncPickup(ctx, in.main, name, path != "")
 		if err != nil {
 			return "", nil, err
@@ -308,8 +311,8 @@ func openWorktree(
 	switch {
 	case path != "":
 		notes = append(notes, "reused the existing worktree")
-	case existing.name != "":
-		if existing.remote {
+	case existing.Name != "":
+		if existing.Remote {
 			if err := gitx.TrackBranch(ctx, in.main, name, false); err != nil {
 				return "", nil, err
 			}
@@ -342,7 +345,7 @@ func recordBranchFacts(
 	in startInput,
 	name string,
 	dep *dependency,
-	existing foundBranch,
+	existing stack.FoundBranch,
 	notes []string,
 ) ([]string, error) {
 	// the dependency is recorded once the branch exists, made or found: a
@@ -359,8 +362,8 @@ func recordBranchFacts(
 		}
 	}
 
-	if in.pick != nil && in.pick.landed() {
-		notes = append(notes, landedNotes(ctx, in, name, existing.name == "")...)
+	if in.pick != nil && in.pick.Landed() {
+		notes = append(notes, landedNotes(ctx, in, name, existing.Name == "")...)
 	}
 
 	if len(in.task.Riders()) > 0 {
@@ -444,7 +447,7 @@ type settledBranch struct {
 	slugNote string
 	base     baseRef
 	dep      *dependency
-	existing foundBranch
+	existing stack.FoundBranch
 }
 
 // branchFor settles the branch before anything is created. An open PR's
@@ -452,16 +455,16 @@ type settledBranch struct {
 // landed one gets the task's branch at the commit it landed as.
 func branchFor(ctx context.Context, in startInput) (settledBranch, error) {
 	switch {
-	case in.pick != nil && in.pick.landed():
+	case in.pick != nil && in.pick.Landed():
 		return landedBranchFor(ctx, in)
 	case in.pick != nil:
-		name := in.pick.branch
-		local := refSHA(ctx, in.main, "refs/heads/"+name) != ""
+		name := in.pick.Branch
+		local := stack.RefSHA(ctx, in.main, "refs/heads/"+name) != ""
 
-		return settledBranch{name: name, existing: foundBranch{name: name, remote: !local}}, nil
+		return settledBranch{name: name, existing: stack.FoundBranch{Name: name, Remote: !local}}, nil
 	}
 
-	name, slugNote, err := branchName(ctx, in.driver, in.task, in.suffix, in.title)
+	name, slugNote, err := stack.BranchName(ctx, in.driver, in.task, in.suffix, in.title)
 	if err != nil {
 		return settledBranch{}, err
 	}
@@ -471,12 +474,12 @@ func branchFor(ctx context.Context, in startInput) (settledBranch, error) {
 		return settledBranch{}, err
 	}
 
-	x, err := loadBranchIndex(ctx, in.main)
+	x, err := stack.LoadBranchIndex(ctx, in.main)
 	if err != nil {
 		return settledBranch{}, err
 	}
 
-	existing, err := x.find(ctx, name, in.task.ID, in.suffix, policyLocalOrOrigin)
+	existing, err := x.Find(ctx, name, in.task.ID, in.suffix, stack.PolicyLocalOrOrigin)
 	if err != nil {
 		return settledBranch{}, err
 	}
@@ -491,17 +494,17 @@ func branchFor(ctx context.Context, in startInput) (settledBranch, error) {
 // carries no sha: the landed commit at the default branch's tip is nothing
 // to note.
 func landedBranchFor(ctx context.Context, in startInput) (settledBranch, error) {
-	name, slugNote, err := branchName(ctx, in.driver, in.task, "", in.title)
+	name, slugNote, err := stack.BranchName(ctx, in.driver, in.task, "", in.title)
 	if err != nil {
 		return settledBranch{}, err
 	}
 
-	x, err := loadBranchIndex(ctx, in.main)
+	x, err := stack.LoadBranchIndex(ctx, in.main)
 	if err != nil {
 		return settledBranch{}, err
 	}
 
-	existing, err := x.find(ctx, name, in.task.ID, "", policyLocal)
+	existing, err := x.Find(ctx, name, in.task.ID, "", policyLocal)
 	if err != nil {
 		return settledBranch{}, err
 	}
@@ -509,7 +512,7 @@ func landedBranchFor(ctx context.Context, in startInput) (settledBranch, error) 
 	return settledBranch{
 		name:     name,
 		slugNote: slugNote,
-		base:     baseRef{ref: in.pick.sha, flag: in.pick.url + "'s landed commit"},
+		base:     baseRef{ref: in.pick.SHA, flag: in.pick.URL + "'s landed commit"},
 		existing: existing,
 	}, nil
 }
@@ -522,7 +525,7 @@ func landedBranchFor(ctx context.Context, in startInput) (settledBranch, error) 
 func landedNotes(ctx context.Context, in startInput, name string, created bool) []string {
 	if !created {
 		return []string{fmt.Sprintf("%s is %s: %s is reused at its own tip and stays watched",
-			in.pick.url, in.pick.state, name)}
+			in.pick.URL, in.pick.State, name)}
 	}
 
 	var notes []string
@@ -532,7 +535,7 @@ func landedNotes(ctx context.Context, in startInput, name string, created bool) 
 	}
 
 	return append(notes, fmt.Sprintf("%s is %s: %s is local only at %s, and the watcher leaves it alone "+
-		"(f10 watch on %s undoes that)", in.pick.url, in.pick.state, name, gitx.ShortSHA(in.pick.sha), in.task.ID))
+		"(f10 watch on %s undoes that)", in.pick.URL, in.pick.State, name, gitx.ShortSHA(in.pick.SHA), in.task.ID))
 }
 
 // shellWait reports a wait for the pane's shell to finish starting, so a

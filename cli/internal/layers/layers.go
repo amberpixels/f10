@@ -24,6 +24,9 @@ var Table = []Rule{
 	{Prefix: "internal", Rank: 0, Peers: true},
 	{Prefix: "internal/layers", Rank: 0, Peers: true},
 	{Prefix: "internal/target", Rank: 1},
+	{Prefix: "internal/render", Rank: 2, Peers: true},
+	{Prefix: "internal/hostops", Rank: 2, Peers: true},
+	{Prefix: "internal/stack", Rank: 2, Peers: true},
 	{Prefix: "cmd/f10", Rank: 9},
 	{Prefix: "cmd/f10eval", Rank: 9},
 }

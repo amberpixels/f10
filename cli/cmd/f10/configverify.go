@@ -3,13 +3,11 @@ package main
 import (
 	"cmp"
 	"context"
-	"errors"
-	"io"
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/facts"
-	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/layout"
+	"github.com/amberpixels/f10/cli/internal/stack"
 )
 
 func verifyFieldIn(fields []facts.Field) facts.Field {
@@ -57,48 +55,7 @@ const verifyRerun = "; run `f10 config verify` again right before verify runs, s
 // commits, staged and unstaged work, and untracked files, so a new file
 // counts before it is committed. Local refs only, since the load runs it.
 func verifyDiff(ctx context.Context, lay *layout.Layout) (string, []string, error) {
-	return branchDiff(ctx, lay.CheckoutRoot, cmp.Or(lay.MainRoot, lay.CheckoutRoot))
-}
-
-// branchDiff is verifyDiff for the checkout at dir, main the main checkout.
-func branchDiff(ctx context.Context, dir, main string) (string, []string, error) {
-	branch := gitx.CurrentBranch(ctx, dir)
-	if branch == "" {
-		return "", nil, errors.New("HEAD is detached")
-	}
-
-	base, err := prBase(ctx, io.Discard, main, branch)
-	if err != nil {
-		return "", nil, err
-	}
-
-	from, err := forkPoint(ctx, dir, "HEAD", base)
-	if err != nil {
-		return base, nil, err
-	}
-
-	// a rename lists both paths, and -z keeps non-ASCII paths unquoted
-	tracked, err := gitx.Exec(ctx, dir, "diff", "--name-only", "--no-renames", "-z", from)
-	if err != nil {
-		return base, nil, err
-	}
-
-	untracked, err := gitx.Exec(ctx, dir, "ls-files", "--others", "--exclude-standard", "-z")
-	if err != nil {
-		return base, nil, err
-	}
-
-	var files []string
-
-	for _, out := range []string{tracked, untracked} {
-		for f := range strings.SplitSeq(out, "\x00") {
-			if f != "" {
-				files = append(files, f)
-			}
-		}
-	}
-
-	return base, files, nil
+	return stack.BranchDiff(ctx, lay.CheckoutRoot, cmp.Or(lay.MainRoot, lay.CheckoutRoot))
 }
 
 // scopedVerifyLine is the frontmatter's verify list cut to what the diff

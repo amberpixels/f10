@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/stack"
 )
 
 // Picking up someone else's PR: nothing is local, so start checks the branch
@@ -17,23 +18,6 @@ import (
 // branch's name need not carry the id. A merged or closed request has no
 // branch worth tracking: its worktree is made at the commit it landed as, on
 // a branch named for the task, for a post-merge review.
-
-type pickup struct {
-	number string
-	url    string
-	branch string // the request's head, as the host names it
-	view   string // the f10 command that reads the request with its comments
-	diff   string
-	// sha is where a merged or closed request is checked out, "" for an open
-	// one; state says which it is, for the prompt and the report; headRef is
-	// the host's ref for a closed request's head, which no branch holds
-	sha     string
-	state   string
-	headRef string
-}
-
-// landed reports a request that merged or closed, checked out at sha.
-func (p *pickup) landed() bool { return p.sha != "" }
 
 // pullPathRE matches GitHub's `/pull/12` and GitLab's `/-/merge_requests/12`.
 var pullPathRE = regexp.MustCompile(`/(?:pull|merge_requests)/(\d+)(?:[/?#]|$)`)
@@ -108,54 +92,6 @@ func refusePull(p forge.PR) error {
 	return nil
 }
 
-// pickupOf reads the request through f10 pr, which reads one in any state on
-// either host, so the prompt is the same text on GitHub and GitLab.
-func (h host) pickupOf(number string, p forge.PR) *pickup {
-	pick := &pickup{
-		number: number,
-		url:    p.URL,
-		branch: p.Head,
-		view:   "f10 pr view --comments " + number,
-		diff:   "f10 pr diff " + number,
-	}
-
-	switch p.Status {
-	case forge.Merged:
-		pick.sha, pick.state = p.Landed, landedState(p)
-	case forge.Closed:
-		pick.sha, pick.state = p.HeadSHA, landedState(p)
-		pick.headRef = h.HeadRef(number)
-	}
-
-	return pick
-}
-
-// landedState is how a merged or closed request is named to the agent and
-// in the report: who merged it and when, or that it closed unmerged.
-func landedState(p forge.PR) string {
-	switch p.Status {
-	case forge.Merged:
-		state := "merged"
-		if by := p.MergedBy; by != "" {
-			state += " by " + by
-		}
-
-		return state + onDay(p.MergedAt)
-	case forge.Closed:
-		return "closed without a merge" + onDay(p.ClosedAt)
-	}
-
-	return ""
-}
-
-func onDay(t time.Time) string {
-	if t.IsZero() {
-		return ""
-	}
-
-	return " on " + t.UTC().Format(time.DateOnly)
-}
-
 // syncPickup fast-forwards a local branch start found only when it is behind
 // and checked out nowhere; otherwise a note says how it differs.
 func syncPickup(ctx context.Context, main, branch string, checkedOut bool) (string, error) {
@@ -190,19 +126,19 @@ func syncPickup(ctx context.Context, main, branch string, checkedOut bool) (stri
 // fetchPickup: a handover has not fetched the request's branch yet. A landed
 // request's commit must be here before its worktree is made, and a closed
 // request's head comes only through the host's own ref for it.
-func fetchPickup(ctx context.Context, main string, pick *pickup) error {
+func fetchPickup(ctx context.Context, main string, pick *hostops.Pickup) error {
 	if err := gitx.Fetch(ctx, main); err != nil {
-		return fmt.Errorf("fetching %s for %s: %w", pick.branch, pick.url, err)
+		return fmt.Errorf("fetching %s for %s: %w", pick.Branch, pick.URL, err)
 	}
 
-	if pick.headRef != "" {
-		if err := gitx.FetchRef(ctx, main, pick.headRef); err != nil {
-			return fmt.Errorf("fetching %s for %s: %w", pick.headRef, pick.url, err)
+	if pick.HeadRef != "" {
+		if err := gitx.FetchRef(ctx, main, pick.HeadRef); err != nil {
+			return fmt.Errorf("fetching %s for %s: %w", pick.HeadRef, pick.URL, err)
 		}
 	}
 
-	if pick.landed() && refSHA(ctx, main, pick.sha+"^{commit}") == "" {
-		return fmt.Errorf("%s is %s at %s, which origin does not hold after a fetch", pick.url, pick.state, pick.sha)
+	if pick.Landed() && stack.RefSHA(ctx, main, pick.SHA+"^{commit}") == "" {
+		return fmt.Errorf("%s is %s at %s, which origin does not hold after a fetch", pick.URL, pick.State, pick.SHA)
 	}
 
 	return nil

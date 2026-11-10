@@ -5,13 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"slices"
 	"strings"
 
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/driver"
-	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -21,81 +20,46 @@ import (
 // tracker that is neither answers exit 3, which a ship run reads as "report
 // the shipment locally only".
 
-// mayPosted follows every failed comment: the tracker may have taken it
-// before failing, so posting again could post it twice.
-const mayPosted = "the comment may have been posted: check the task before running comment again"
+func readProps(cmd *cli.Command) (hostops.Props, error) {
+	var p hostops.Props
 
-type props struct {
-	status, priority, assignee string
-	labels, set                []string
-}
-
-func readProps(cmd *cli.Command) (props, error) {
-	var p props
-
-	p.status = strings.TrimSpace(cmd.String("status"))
+	p.Status = strings.TrimSpace(cmd.String("status"))
 
 	if raw := cmd.String("priority"); raw != "" {
 		rank, ok := driver.PriorityRank(raw)
 		if !ok {
-			return props{}, fmt.Errorf("priority %q is not one of %s", raw, strings.Join(driver.Priorities, ", "))
+			return hostops.Props{}, fmt.Errorf(
+				"priority %q is not one of %s",
+				raw,
+				strings.Join(driver.Priorities, ", "),
+			)
 		}
 
-		p.priority = driver.Priorities[rank]
+		p.Priority = driver.Priorities[rank]
 	}
 
 	for _, l := range cmd.StringSlice("label") {
 		if l = strings.TrimSpace(l); l != "" {
-			p.labels = append(p.labels, l)
+			p.Labels = append(p.Labels, l)
 		}
 	}
 
 	if cmd.IsSet("assignee") {
-		p.assignee = strings.TrimSpace(cmd.String("assignee"))
+		p.Assignee = strings.TrimSpace(cmd.String("assignee"))
 	}
 
 	if cmd.IsSet("set") {
 		for _, kv := range cmd.StringSlice("set") {
 			key, _, ok := strings.Cut(kv, "=")
 			if !ok || strings.TrimSpace(key) == "" {
-				return props{}, fmt.Errorf("--set %q is not key=value", kv)
+				return hostops.Props{}, fmt.Errorf("--set %q is not key=value", kv)
 			}
 
-			p.set = append(p.set, kv)
+			p.Set = append(p.Set, kv)
 		}
 	}
 
 	return p, nil
-}
-
-func (p props) empty() bool {
-	return p.status == "" && p.priority == "" && p.assignee == "" && p.labels == nil && p.set == nil
-}
-
-func (p props) args() []string {
-	var args []string
-
-	if p.status != "" {
-		args = append(args, "--status", p.status)
-	}
-
-	if p.priority != "" {
-		args = append(args, "--priority", p.priority)
-	}
-
-	for _, l := range p.labels {
-		args = append(args, "--label", l)
-	}
-
-	if p.assignee != "" {
-		args = append(args, "--assignee", p.assignee)
-	}
-
-	for _, kv := range p.set {
-		args = append(args, "--set", kv)
-	}
-
-	return args
 }
 
 func runTaskComment(ctx context.Context, cmd *cli.Command) error {
@@ -114,7 +78,7 @@ func runTaskComment(ctx context.Context, cmd *cli.Command) error {
 		return errors.New("task comment reads the comment as markdown on stdin, and it was empty")
 	}
 
-	url, err := tasksFor(t).Comment(ctx, cmd.ErrWriter, r, body)
+	url, err := hostops.TasksFor(t).Comment(ctx, cmd.ErrWriter, r, body)
 	if err != nil {
 		return err
 	}
@@ -136,7 +100,7 @@ func runTaskUpdate(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	relink := cmd.IsSet("parent")
-	if p.empty() && !relink {
+	if p.Empty() && !relink {
 		return errors.New(
 			"task update needs a property to set: --status, --priority, --label, --assignee, --parent or --set",
 		)
@@ -154,8 +118,8 @@ func runTaskUpdate(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
-	if !p.empty() {
-		if err := tasksFor(t).Update(ctx, cmd.ErrWriter, r, p); err != nil {
+	if !p.Empty() {
+		if err := hostops.TasksFor(t).Update(ctx, cmd.ErrWriter, r, p); err != nil {
 			return err
 		}
 	}
@@ -165,12 +129,12 @@ func runTaskUpdate(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	// the parent goes alone, so a source declining it has dropped nothing else
-	unwritten := unwrittenNothing
-	if !p.empty() {
+	unwritten := hostops.UnwrittenNothing
+	if !p.Empty() {
 		unwritten = "the other properties were written, the parent link was not"
 	}
 
-	return tasksFor(t).Relink(ctx, cmd.ErrWriter, r, parent, unwritten)
+	return hostops.TasksFor(t).Relink(ctx, cmd.ErrWriter, r, parent, unwritten)
 }
 
 // parentNumber resolves --parent before anything is written; empty means
@@ -206,138 +170,10 @@ func writeTarget(ctx context.Context, cmd *cli.Command, verb string) (*target.Ta
 	}
 
 	if rs, ok := refusedUpFrontFor(t); ok {
-		return nil, ref.Ref{}, rs.refuseWrite(verb, unwrittenNothing)
+		return nil, ref.Ref{}, rs.RefuseWrite(verb, hostops.UnwrittenNothing)
 	}
 
 	return t, r, nil
-}
-
-// update: an issue has two states and no custom properties, so `--status`
-// takes open or closed and `--set` is refused; the labels of every other
-// priority level come off, so the issue carries one; an assignee replaces
-// the issue's, as glab's flag does; a title renamed by hand gets its prefix
-// back.
-func (h host) update(ctx context.Context, number string, p props, priorities map[string]string) error {
-	if len(p.set) > 0 {
-		return fmt.Errorf("%s issues have no custom properties for --set %s", h.Name, strings.Join(p.set, ", "))
-	}
-
-	state := ""
-
-	switch strings.ToLower(p.status) {
-	case "":
-	case "open", "opened", "reopen", "reopened":
-		state = "reopen"
-	case "closed", "close", "done":
-		state = "close"
-	default:
-		return fmt.Errorf("status %q: %s issues are open or closed", p.status, h.Name)
-	}
-
-	iss, err := h.Issue(ctx, number)
-	if err != nil {
-		return err
-	}
-
-	title := h.retitled(iss.Title, number)
-
-	add, remove := slices.Clone(p.labels), []string(nil)
-
-	if p.priority != "" {
-		label := priorityLabel(p.priority, priorities)
-		if label == "" {
-			return fmt.Errorf("priority %s: tracker.priority in project.md maps no label to it", p.priority)
-		}
-
-		add = append(add, label)
-
-		for _, name := range iss.Labels {
-			if level, ok := priorities[strings.ToLower(name)]; ok && level != p.priority {
-				remove = append(remove, name)
-			}
-		}
-	}
-
-	edit := forge.IssueEdit{
-		Title: title, AddLabels: add, RemoveLabels: remove, Assignee: p.assignee, Current: iss.Assignees,
-	}
-	if err := h.EditIssue(ctx, number, edit); err != nil {
-		return err
-	}
-
-	if state != "" {
-		if err := h.SetIssueOpen(ctx, number, state == "reopen"); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// priorityLabel takes the first label in name order when several carry the
-// level; the index is lower-cased, and the hosts match case-insensitively.
-func priorityLabel(level string, priorities map[string]string) string {
-	var names []string
-
-	for name, l := range priorities {
-		if l == level {
-			names = append(names, name)
-		}
-	}
-
-	slices.Sort(names)
-
-	if len(names) == 0 {
-		return ""
-	}
-
-	return names[0]
-}
-
-func (h host) retitled(raw, number string) string {
-	id := h.taskID(number)
-	if raw == "" || h.titles.Applied(raw, id, number) {
-		return ""
-	}
-
-	return h.titles.Render(id, number, h.titles.Strip(raw, id, number))
-}
-
-type titleChange struct{ id, number, from, to string }
-
-func (h host) titleChanges(ctx context.Context, number string) ([]titleChange, error) {
-	var found []forge.Issue
-
-	if number != "" {
-		iss, err := h.Issue(ctx, number)
-		if err != nil {
-			return nil, err
-		}
-
-		found = []forge.Issue{iss}
-	} else {
-		all, err := h.AllIssues(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		found = all
-	}
-
-	var changes []titleChange
-
-	for _, iss := range found {
-		n := iss.Number
-		if to := h.retitled(iss.Title, n); to != "" {
-			changes = append(changes, titleChange{id: h.taskID(n), number: n, from: iss.Title, to: to})
-		}
-	}
-
-	return changes, nil
-}
-
-func (h host) setTitle(ctx context.Context, number, title string) error {
-	return h.EditIssue(ctx, number, forge.IssueEdit{Title: title})
 }
 
 // runTaskRetitle leaves a title already written through tracker.title alone,
@@ -364,7 +200,7 @@ func runTaskRetitle(ctx context.Context, cmd *cli.Command) error {
 		return errors.New("retitle takes a task id or --all, not both")
 	}
 
-	h, err := hostOf(t)
+	h, err := hostops.HostOf(t)
 	if err != nil {
 		return err
 	}
@@ -379,7 +215,7 @@ func runTaskRetitle(ctx context.Context, cmd *cli.Command) error {
 		number = r.Number
 	}
 
-	changes, err := h.titleChanges(ctx, number)
+	changes, err := h.TitleChanges(ctx, number)
 	if err != nil {
 		return err
 	}
@@ -388,12 +224,12 @@ func runTaskRetitle(ctx context.Context, cmd *cli.Command) error {
 
 	for i, c := range changes {
 		if !dry {
-			if err := h.setTitle(ctx, c.number, c.to); err != nil {
-				return fmt.Errorf("retitling %s: %w (%d retitled before it)", c.id, err, i)
+			if err := h.SetTitle(ctx, c.Number, c.To); err != nil {
+				return fmt.Errorf("retitling %s: %w (%d retitled before it)", c.ID, err, i)
 			}
 		}
 
-		fmt.Fprintf(cmd.Writer, "%s  %s  ->  %s\n", c.id, c.from, c.to)
+		fmt.Fprintf(cmd.Writer, "%s  %s  ->  %s\n", c.ID, c.From, c.To)
 	}
 
 	verb := "retitled"
@@ -404,58 +240,4 @@ func runTaskRetitle(ctx context.Context, cmd *cli.Command) error {
 	ui.Warnf(cmd.ErrWriter, "%s %d issue(s)", verb, len(changes))
 
 	return nil
-}
-
-// hostCreate makes the task an issue on the host. The parent link is a second
-// write, since it needs the new number; the issue exists by then, so a failed
-// link is a warning and never a reason to create it again. An issue has no
-// named properties, so --set is refused before anything is written.
-func hostCreate(ctx context.Context, warnTo io.Writer, t *target.Target, h host, nt newTask) (ref.Ref, string, error) {
-	p := nt.props
-
-	if len(p.set) > 0 {
-		return ref.Ref{}, "", fmt.Errorf(
-			"issues on the host have no custom properties for --set %s; nothing was created",
-			strings.Join(p.set, ", "),
-		)
-	}
-
-	switch strings.ToLower(p.status) {
-	case "", "open", "opened":
-	default:
-		return ref.Ref{}, "", fmt.Errorf("status %q: a new issue is open", p.status)
-	}
-
-	labels := p.labels
-
-	if p.priority != "" {
-		label := priorityLabel(p.priority, t.Effective.PriorityLabels)
-		if label == "" {
-			return ref.Ref{}, "", fmt.Errorf(
-				"priority %s: tracker.priority in project.md maps no label to it", p.priority)
-		}
-
-		labels = append(labels, label)
-	}
-
-	_, body, _ := strings.Cut(nt.doc, "\n")
-
-	url, number, err := h.CreateIssue(ctx, taskTitle(nt.doc), strings.TrimSpace(body), labels)
-	if err != nil {
-		return ref.Ref{}, "", fmt.Errorf("%w\n%s", err, mayExist)
-	}
-
-	r, err := t.Reference(ctx, number)
-	if err != nil {
-		return ref.Ref{}, "", fmt.Errorf("%s: %w\n%s", url, err, mayExist)
-	}
-
-	if parent := nt.parent; parent.Number != "" {
-		if err := h.LinkParent(ctx, parent.Number, number); err != nil {
-			ui.Warnf(warnTo, "%s was created, but not linked under %s: %v; "+
-				"link it by hand, and `f10 task children %s` confirms it", r.ID, parent.ID, err, parent.ID)
-		}
-	}
-
-	return r, url, nil
 }

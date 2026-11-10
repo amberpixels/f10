@@ -14,6 +14,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 )
 
 // The host's side of `f10 review`: the reviews a declared reviewer left on a
@@ -52,7 +53,7 @@ type remoteReview struct {
 var errNoReview = errors.New("no review")
 
 type reviewer struct {
-	h     host
+	h     hostops.Host
 	facts facts.Review
 	pull  *forge.ReviewPR
 
@@ -62,7 +63,7 @@ type reviewer struct {
 // newReviewer reads the request number names, or the current branch's.
 //
 //nolint:lostfield // h is kept whole on the reviewer
-func newReviewer(ctx context.Context, h host, f facts.Review, number string) (*reviewer, error) {
+func newReviewer(ctx context.Context, h hostops.Host, f facts.Review, number string) (*reviewer, error) {
 	pull, err := h.OpenReviews(ctx, number)
 	if err != nil {
 		return nil, err

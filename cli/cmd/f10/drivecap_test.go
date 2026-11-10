@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -227,8 +228,8 @@ func TestCapResumeTakesOpenAgentsFirst(t *testing.T) {
 // done, then opens, and the report has both done.
 func TestDriveQueuesPastTheCap(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "GH-2", "judge", "--parallel", "1")
-	fx.task("GH-1", taskInfo{body: "first"}, "")
-	fx.task("GH-2", taskInfo{body: "second"}, "")
+	fx.task("GH-1", hostops.TaskInfo{Body: "first"}, "")
+	fx.task("GH-2", hostops.TaskInfo{Body: "second"}, "")
 	fx.f.script(worktrees,
 		porcelain(), porcelain("GH-1", "/code/repo.GH-1"), porcelain("GH-1", "/code/repo.GH-1"),
 		porcelain("GH-1", "/code/repo.GH-1", "GH-2", "/code/repo.GH-2"))
@@ -265,7 +266,7 @@ func TestDriveAskFreesTheSlot(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "GH-2", "GH-3", "judge", "--parallel", "1")
 
 	for _, id := range []string{"GH-1", "GH-2", "GH-3"} {
-		fx.task(id, taskInfo{body: id}, "")
+		fx.task(id, hostops.TaskInfo{Body: id}, "")
 	}
 
 	one, two := []string{"GH-1", "/code/repo.GH-1"}, []string{"GH-2", "/code/repo.GH-2"}

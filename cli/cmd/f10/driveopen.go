@@ -12,6 +12,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -19,7 +20,7 @@ import (
 func (in *driveInput) open(ctx context.Context, r *driveRun) error {
 	task := r.task
 
-	after, note, err := bodyAfter(ctx, in.tracker, in.main, task.ref, task.info.body)
+	after, note, err := stack.BodyAfter(ctx, in.tracker, in.main, task.ref, task.info.Body)
 	if err != nil {
 		return err
 	}

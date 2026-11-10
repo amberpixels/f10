@@ -11,6 +11,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/stack"
 )
 
 // finish runs in the order the refusals need: every refusal before anything
@@ -123,7 +125,7 @@ func decideFinish(ctx context.Context, in finishInput) (finishDecision, error) {
 			in.task.ID, cmp.Or(workspaceLabel(d.ws), name))
 	}
 
-	if d.def, err = localDefault(ctx, in.main); err != nil {
+	if d.def, err = stack.LocalDefault(ctx, in.main); err != nil {
 		return d, err
 	}
 
@@ -196,7 +198,7 @@ func decideGone(ctx context.Context, in finishInput, gone goneError) (finishDeci
 		return finishDecision{}, gone.err
 	}
 
-	def, err := localDefault(ctx, in.main)
+	def, err := stack.LocalDefault(ctx, in.main)
 	if err != nil {
 		return finishDecision{}, err
 	}
@@ -263,12 +265,12 @@ func (a *cleanupErrs) done(id, ended string) error {
 
 // appendClosed adds the riders the merge closed; a tracker that is not the
 // host closes nothing on merge.
-func appendClosed(rows []fact, in finishInput, unpushed bool) []fact {
+func appendClosed(rows []render.Fact, in finishInput, unpushed bool) []render.Fact {
 	if len(in.close) == 0 || !in.hostCloses || unpushed {
 		return rows
 	}
 
-	return append(rows, fact{label: "closed", value: strings.Join(in.close, ", ")})
+	return append(rows, render.Fact{Label: "closed", Value: strings.Join(in.close, ", ")})
 }
 
 func (in finishInput) step(action string) {
@@ -366,11 +368,11 @@ func appendNote(notes []string, note string) []string {
 func finishTarget(ctx context.Context, in finishInput) (string, string, bool, error) {
 	name, path, err := in.branch, "", error(nil)
 	if name == "" {
-		name, path, err = taskCheckout(ctx, in.main, in.driver, in.task, in.suffix)
+		name, path, err = stack.TaskCheckout(ctx, in.main, in.driver, in.task, in.suffix)
 	} else if wts, werr := gitx.Worktrees(ctx, in.main); werr != nil {
 		err = werr
 	} else {
-		path = worktreeOf(wts, name)
+		path = stack.WorktreeOf(wts, name)
 	}
 
 	switch {

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/stack"
 )
 
 // A base whose only commit is a merge of its own base's newer head, as the
@@ -20,13 +21,13 @@ func TestBaseHasCodeIgnoresMerges(t *testing.T) {
 	r.at(during, "checkout", "-q", "FT-2/b")
 	r.at(during, "merge", "-q", "--no-ff", "--no-edit", "FT-1/a")
 
-	if baseHasCode(t.Context(), r.dir, "FT-2/b", "main") {
+	if stack.BaseHasCode(t.Context(), r.dir, "FT-2/b", "main") {
 		t.Error("a merge of its own base counted as code")
 	}
 
 	r.commit(during, "b.go", "package main // b2\n", "b")
 
-	if !baseHasCode(t.Context(), r.dir, "FT-2/b", "main") {
+	if !stack.BaseHasCode(t.Context(), r.dir, "FT-2/b", "main") {
 		t.Error("a commit of its own did not count")
 	}
 }
@@ -45,14 +46,14 @@ func TestOriginBaseHasCode(t *testing.T) {
 	r.at(during, "update-ref", "refs/remotes/origin/FT-2/b", "HEAD")
 	r.at(during, "update-ref", "refs/remotes/origin/FT-1/a", "FT-1/a")
 
-	if originBaseHasCode(t.Context(), r.dir, "FT-2/b", "main") {
+	if stack.OriginBaseHasCode(t.Context(), r.dir, "FT-2/b", "main") {
 		t.Error("origin's merge of its own base counted as code")
 	}
 
 	r.commit(during, "b.go", "package main // b2\n", "b")
 	r.at(during, "update-ref", "refs/remotes/origin/FT-2/b", "HEAD")
 
-	if !originBaseHasCode(t.Context(), r.dir, "FT-2/b", "main") {
+	if !stack.OriginBaseHasCode(t.Context(), r.dir, "FT-2/b", "main") {
 		t.Error("origin's commit of its own did not count")
 	}
 }

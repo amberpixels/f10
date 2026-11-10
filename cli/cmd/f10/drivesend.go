@@ -8,6 +8,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
@@ -33,9 +34,9 @@ func (in *driveInput) send(ctx context.Context, r *driveRun, skill string) error
 
 	answeredAt, answered := in.answers.heard(id)
 
-	if skill == "catchup" && in.catchup.agentVerifies != "" && !r.toldCatchup {
+	if skill == "catchup" && in.catchup.AgentVerifies != "" && !r.toldCatchup {
 		r.toldCatchup = true
-		fmt.Fprintf(in.out, "%s catchup: %s, so the agent verifies\n", in.id(id), in.catchup.agentVerifies)
+		fmt.Fprintf(in.out, "%s catchup: %s, so the agent verifies\n", in.id(id), in.catchup.AgentVerifies)
 	}
 
 	switch {
@@ -67,7 +68,7 @@ func (in *driveInput) send(ctx context.Context, r *driveRun, skill string) error
 		if answer == "" {
 			// a catchup clears a mark but restores the ship stop it noted, so
 			// git, not the note, says whether that stop still holds
-			if at := resumeAt(skill, run); at != "" && branchUnsettled(ctx, in.main, r.o.path, r.o.branch) == "" {
+			if at := resumeAt(skill, run); at != "" && stack.BranchUnsettled(ctx, in.main, r.o.path, r.o.branch) == "" {
 				why := "stopped for a catchup, the branch is settled"
 				switch {
 				case originWait(run):

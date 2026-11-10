@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 )
 
 // promptAgentAs prompts the task's agent in the worktree at path, falling
@@ -29,10 +30,18 @@ func promptAgentAs(ctx context.Context, path, id, suffix, text string) (string, 
 // entry, turns plan-then-ship into ship alone. Driven mode takes every gap
 // on its default and fetch carries the dependency's contract, so the prompt
 // states neither; a picked-up PR is never shipped unread.
-func prompt(mode string, fl shipFlow, id string, dep *dependency, plan string, pick *pickup, note string) string {
+func prompt(
+	mode string,
+	fl shipFlow,
+	id string,
+	dep *dependency,
+	plan string,
+	pick *hostops.Pickup,
+	note string,
+) string {
 	switch {
 	case pick != nil && mode == modePlan:
-		return driven(fmt.Sprintf("/f10:plan %s continue PR %s: its diff is the starting point", id, pick.url))
+		return driven(fmt.Sprintf("/f10:plan %s continue PR %s: its diff is the starting point", id, pick.URL))
 	case pick != nil:
 		return pickupPrompt(id, plan, pick, note)
 	case mode == modeDiscuss:
@@ -78,15 +87,15 @@ func discussPrompt(id string, dep *dependency, plan, note string) string {
 
 // pickupPrompt is discussPrompt for a picked-up PR: the task, the PR's
 // state and its diff summarised, then the agent waits in its own pane.
-func pickupPrompt(id, plan string, pick *pickup, note string) string {
+func pickupPrompt(id, plan string, pick *hostops.Pickup, note string) string {
 	standing := "the PR's state (reviews, checks, open threads)"
-	if pick.landed() {
-		standing = "that the PR is " + pick.state
+	if pick.Landed() {
+		standing = "that the PR is " + pick.State
 	}
 
 	p := fmt.Sprintf("Run `f10 task read %s`, `%s` and `%s`, and summarise in a few lines what the task asks, "+
 		"%s and what its diff does, opening any image the PR links.",
-		id, pick.view, pick.diff, standing)
+		id, pick.View, pick.Diff, standing)
 
 	if plan != "" {
 		p += " A plan for it is saved at " + plan + "; read it too."

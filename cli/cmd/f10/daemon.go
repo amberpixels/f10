@@ -19,6 +19,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
 )
@@ -92,13 +93,13 @@ func runDaemonStatus(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	writeDaemonStatus(ctx, w, linksFor(w, false), rep)
+	writeDaemonStatus(ctx, w, render.LinksFor(w, false), rep)
 
 	return nil
 }
 
 // writeDaemonStatus prints what the daemon runs and watches.
-func writeDaemonStatus(ctx context.Context, w io.Writer, links *taskLinks, rep daemon.Reply) {
+func writeDaemonStatus(ctx context.Context, w io.Writer, links *render.TaskLinks, rep daemon.Reply) {
 	fmt.Fprintf(w, "pid      %d\nversion  %s\nsince    %s\ndrives   %d\nwatching %d\n", rep.PID, rep.Version,
 		rep.Started.Format(time.DateTime), len(rep.Runs), len(rep.Watches))
 
@@ -114,7 +115,7 @@ func writeDaemonStatus(ctx context.Context, w io.Writer, links *taskLinks, rep d
 			// each drive's ids resolve under its own project, since the
 			// daemon runs drives for several
 			project := ""
-			if links.on {
+			if links.On {
 				project = target.ProjectOf(ctx, r.Dir)
 			}
 
@@ -126,7 +127,7 @@ func writeDaemonStatus(ctx context.Context, w io.Writer, links *taskLinks, rep d
 			links.Load(ctx, project, ids...)
 
 			for _, t := range rec.Tasks {
-				fmt.Fprintf(w, "  %s %s\n", padRight(links.ID(project, t.ID), 6), taskStanding(t, true))
+				fmt.Fprintf(w, "  %s %s\n", render.PadRight(links.ID(project, t.ID), 6), taskStanding(t, true))
 			}
 		}
 	}

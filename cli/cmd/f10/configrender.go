@@ -10,6 +10,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/mdline"
 	"github.com/amberpixels/f10/cli/internal/projects"
+	"github.com/amberpixels/f10/cli/internal/render"
 )
 
 // headerIndent is the value column of the header block: the widest label,
@@ -172,12 +173,12 @@ func headerRow(w io.Writer, label, value string, limit int, style lipgloss.Style
 func linkedHeaderRow(w io.Writer, label, value, target string, limit int, style lipgloss.Style) {
 	faint := lipgloss.NewStyle().Faint(true)
 
-	segments := wrap(value, limit-headerIndent)
+	segments := render.Wrap(value, limit-headerIndent)
 	fmt.Fprintf(w, "%s%s\n", faint.Render(fmt.Sprintf("%-*s", headerIndent, label)),
-		hyperlink(target, style.Render(segments[0])))
+		render.Hyperlink(target, style.Render(segments[0])))
 
 	for _, s := range segments[1:] {
-		fmt.Fprintf(w, "%-*s%s\n", headerIndent, "", hyperlink(target, style.Render(s)))
+		fmt.Fprintf(w, "%-*s%s\n", headerIndent, "", render.Hyperlink(target, style.Render(s)))
 	}
 }
 
@@ -315,7 +316,7 @@ func renderPairs(w io.Writer, pairs [][2]string, page int) {
 	col := stanzaIndent + labelW + 2
 
 	for _, p := range pairs {
-		segments := wrap(p[1], page-col-stanzaRightPad)
+		segments := render.Wrap(p[1], page-col-stanzaRightPad)
 		fmt.Fprintf(w, "%-*s%-*s  %s\n", stanzaIndent, "", labelW, p[0], segments[0])
 
 		for _, s := range segments[1:] {
@@ -361,7 +362,7 @@ func renderProse(w io.Writer, value string, limit int) {
 
 		first := true
 
-		for _, seg := range wrap(line, limit-stanzaIndent-hang-stanzaRightPad) {
+		for _, seg := range render.Wrap(line, limit-stanzaIndent-hang-stanzaRightPad) {
 			indent := stanzaIndent
 			if !first {
 				indent += hang
@@ -393,28 +394,6 @@ func displayOrigins(fields []facts.Field) []string {
 	}
 
 	return origins
-}
-
-// wrap breaks text at spaces; width 0 or below disables it, and a token
-// longer than the width is hard-cut rather than overflowed.
-func wrap(text string, width int) []string {
-	if width <= 0 || len(text) <= width {
-		return []string{text}
-	}
-
-	var lines []string
-
-	for len(text) > width {
-		cut := strings.LastIndex(text[:width+1], " ")
-		if cut <= 0 {
-			cut = width
-		}
-
-		lines = append(lines, strings.TrimRight(text[:cut], " "))
-		text = strings.TrimLeft(text[cut:], " ")
-	}
-
-	return append(lines, text)
 }
 
 // styleOrigin keeps detection, declaration and defaults tellable apart at a

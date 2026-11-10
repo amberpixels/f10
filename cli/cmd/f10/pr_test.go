@@ -7,7 +7,9 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/probe"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
 )
 
@@ -60,7 +62,7 @@ func TestPRBase(t *testing.T) {
 	git(t, dir, "config", branchmeta.AfterBranch.For("feat"), "gone")
 
 	out, errOut, err := runApp(t, "-C", dir, "pr", "base").streams()
-	if err != nil || out != "main\nfound: "+foundGone+"\n" || errOut != "" {
+	if err != nil || out != "main\nfound: "+stack.FoundGone+"\n" || errOut != "" {
 		t.Errorf("gone: base = %q, %q, %v; want main and the typed found line, nothing on stderr", out, errOut, err)
 	}
 
@@ -243,7 +245,7 @@ func TestPullCommentsGitHub(t *testing.T) {
 	f.script("gh pr view 4 --json comments", `{"comments":[`+
 		`{"author":{"login":"ann"},"body":"looks good","createdAt":"2026-10-01T00:00:00Z"}]}`)
 
-	got, err := newHost("gh", t.TempDir()).PullComments(t.Context(), 4)
+	got, err := hostops.NewHost("gh", t.TempDir()).PullComments(t.Context(), 4)
 	if err != nil || len(got) != 1 || got[0].Author != "ann" || got[0].Body != "looks good" {
 		t.Errorf("PullComments = %+v, %v", got, err)
 	}

@@ -12,6 +12,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -153,26 +155,26 @@ func TestRefusePull(t *testing.T) {
 	}
 }
 
-var pickGH = &pickup{
-	number: "30",
-	url:    "https://github.com/o/r/pull/30",
-	branch: "alice/fix-login",
-	view:   "f10 pr view --comments 30",
-	diff:   "f10 pr diff 30",
+var pickGH = &hostops.Pickup{
+	Number: "30",
+	URL:    "https://github.com/o/r/pull/30",
+	Branch: "alice/fix-login",
+	View:   "f10 pr view --comments 30",
+	Diff:   "f10 pr diff 30",
 }
 
 func TestPickupOf(t *testing.T) {
-	p := forge.PR{URL: pickGH.url, Head: pickGH.branch}
-	if got := newHost("gh", "").pickupOf("30", p); *got != *pickGH {
+	p := forge.PR{URL: pickGH.URL, Head: pickGH.Branch}
+	if got := hostops.NewHost("gh", "").PickupOf("30", p); *got != *pickGH {
 		t.Errorf("pickupOf on gh = %+v", got)
 	}
 
-	gl := newHost("glab", "").pickupOf("7", forge.PR{URL: "https://gl/mr/7", Head: "b"})
-	if gl.view != "f10 pr view --comments 7" || gl.diff != "f10 pr diff 7" || gl.branch != "b" {
+	gl := hostops.NewHost("glab", "").PickupOf("7", forge.PR{URL: "https://gl/mr/7", Head: "b"})
+	if gl.View != "f10 pr view --comments 7" || gl.Diff != "f10 pr diff 7" || gl.Branch != "b" {
 		t.Errorf("pickupOf on glab = %+v", gl)
 	}
 
-	if got := newHost("gh", "").pickupOf("30", mergedPull()); *got != *pickMerged {
+	if got := hostops.NewHost("gh", "").PickupOf("30", mergedPull()); *got != *pickMerged {
 		t.Errorf("pickupOf on a merged PR = %+v, want %+v", got, pickMerged)
 	}
 
@@ -180,29 +182,29 @@ func TestPickupOf(t *testing.T) {
 	closed.Status, closed.HeadSHA = forge.Closed, "def4567"
 	closed.ClosedAt = time.Date(2026, 10, 13, 9, 0, 0, 0, time.UTC)
 
-	got := newHost("gh", "").pickupOf("30", closed)
-	if got.sha != "def4567" || got.headRef != "refs/pull/30/head" ||
-		got.state != "closed without a merge on 2026-10-13" {
+	got := hostops.NewHost("gh", "").PickupOf("30", closed)
+	if got.SHA != "def4567" || got.HeadRef != "refs/pull/30/head" ||
+		got.State != "closed without a merge on 2026-10-13" {
 		t.Errorf("pickupOf on a closed PR = %+v", got)
 	}
 
 	// glab names nobody for a squash it did itself, and keeps its MR heads under its own ref
 	glMerged := forge.PR{URL: "https://gl/mr/7", Head: "b", Status: forge.Merged, Landed: "aaa"}
-	got = newHost("glab", "").pickupOf("7", glMerged)
-	if got.sha != "aaa" || got.state != "merged" || got.headRef != "" {
+	got = hostops.NewHost("glab", "").PickupOf("7", glMerged)
+	if got.SHA != "aaa" || got.State != "merged" || got.HeadRef != "" {
 		t.Errorf("pickupOf on a merged MR = %+v", got)
 	}
 
 	glClosed := forge.PR{URL: "https://gl/mr/7", Head: "b", Status: forge.Closed, HeadSHA: "bbb"}
-	got = newHost("glab", "").pickupOf("7", glClosed)
-	if got.sha != "bbb" || got.headRef != "refs/merge-requests/7/head" {
+	got = hostops.NewHost("glab", "").PickupOf("7", glClosed)
+	if got.SHA != "bbb" || got.HeadRef != "refs/merge-requests/7/head" {
 		t.Errorf("pickupOf on a closed MR = %+v", got)
 	}
 }
 
 // mergedPull is pickGH's PR merged by alice, as gh answers for it.
 func mergedPull() forge.PR {
-	p := forge.PR{URL: pickGH.url, Head: pickGH.branch, Status: forge.Merged, HeadSHA: "def4567"}
+	p := forge.PR{URL: pickGH.URL, Head: pickGH.Branch, Status: forge.Merged, HeadSHA: "def4567"}
 	p.Landed = "abc1234abc"
 	p.MergedBy = "alice"
 	p.MergedAt = time.Date(2026, 10, 12, 15, 0, 0, 0, time.UTC)
@@ -210,14 +212,14 @@ func mergedPull() forge.PR {
 	return p
 }
 
-var pickMerged = &pickup{
-	number: "30",
-	url:    pickGH.url,
-	branch: pickGH.branch,
-	view:   pickGH.view,
-	diff:   pickGH.diff,
-	sha:    "abc1234abc",
-	state:  "merged by alice on 2026-10-12",
+var pickMerged = &hostops.Pickup{
+	Number: "30",
+	URL:    pickGH.URL,
+	Branch: pickGH.Branch,
+	View:   pickGH.View,
+	Diff:   pickGH.Diff,
+	SHA:    "abc1234abc",
+	State:  "merged by alice on 2026-10-12",
 }
 
 // A landed PR's commit is fetched before its worktree: a closed PR's head
@@ -229,7 +231,7 @@ func TestFetchPickup(t *testing.T) {
 	f.script("git rev-parse --verify --quiet def4567^{commit}", "def4567")
 
 	closed := *pickMerged
-	closed.sha, closed.state, closed.headRef = "def4567", "closed without a merge", "refs/pull/30/head"
+	closed.SHA, closed.State, closed.HeadRef = "def4567", "closed without a merge", "refs/pull/30/head"
 
 	if err := fetchPickup(t.Context(), "/code/repo", &closed); err != nil {
 		t.Fatal(err)
@@ -273,7 +275,7 @@ func TestPromptForAPickup(t *testing.T) {
 		}
 	}
 
-	want := "/f10:plan GH-1 continue PR " + pickGH.url + ": its diff is the starting point " + drivenMarker
+	want := "/f10:plan GH-1 continue PR " + pickGH.URL + ": its diff is the starting point " + drivenMarker
 	if got := prompt(modePlan, shipFlow{}, "GH-1", nil, "", pickGH, ""); got != want {
 		t.Errorf("prompt(plan) for a PR = %q, want %q", got, want)
 	}
@@ -309,7 +311,7 @@ func TestRefuseLandedPlan(t *testing.T) {
 
 	for _, c := range []struct {
 		mode string
-		pick *pickup
+		pick *hostops.Pickup
 	}{{modeDefault, pickMerged}, {modeDiscuss, pickMerged}, {modePlan, pickGH}, {modePlan, nil}} {
 		if err := refuseLandedPlan(c.mode, c.pick); err != nil {
 			t.Errorf("refuseLandedPlan(%q, %v) = %v, want nil", c.mode, c.pick, err)
@@ -382,7 +384,7 @@ func TestStartPicksUpAPR(t *testing.T) {
 		t.Errorf("a picked-up PR looked for a task branch or a base: %v", f.calls)
 	}
 
-	for _, want := range []string{"pr:", pickGH.url, "branch:", "alice/fix-login", "tracking origin/alice/fix-login"} {
+	for _, want := range []string{"pr:", pickGH.URL, "branch:", "alice/fix-login", "tracking origin/alice/fix-login"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("report missing %q:\n%s", want, out.String())
 		}
@@ -432,7 +434,7 @@ func TestStartPicksUpAMergedPR(t *testing.T) {
 	}
 
 	for _, want := range []string{
-		"pr:", pickGH.url, "branch:", "GH-1/fix-login",
+		"pr:", pickGH.URL, "branch:", "GH-1/fix-login",
 		"merged by alice on 2026-10-12: GH-1/fix-login is local only at abc1234",
 	} {
 		if !strings.Contains(out.String(), want) {
@@ -533,22 +535,22 @@ func TestFindPrefersLinksThenOrigin(t *testing.T) {
 	f.meta.Seed("other", branchmeta.Task, "GH-2")
 	f.script(refsLocal, heads("GH-1"))
 
-	got, err := indexOf(t).find(t.Context(), "GH-1", "GH-1", "", policyLocalOrOrigin)
-	if err != nil || got != (foundBranch{name: "alice/fix"}) {
+	got, err := indexOf(t).Find(t.Context(), "GH-1", "GH-1", "", stack.PolicyLocalOrOrigin)
+	if err != nil || got != (stack.FoundBranch{Name: "alice/fix"}) {
 		t.Errorf("a linked branch = %+v, %v; want alice/fix", got, err)
 	}
 
 	f.script(refsLocal, heads("GH-1", "GH-1-v2"))
 
-	got, err = indexOf(t).find(t.Context(), "GH-1-v2", "GH-1", "v2", policyLocalOrOrigin)
-	if err != nil || got.name != "GH-1-v2" {
+	got, err = indexOf(t).Find(t.Context(), "GH-1-v2", "GH-1", "v2", stack.PolicyLocalOrOrigin)
+	if err != nil || got.Name != "GH-1-v2" {
 		t.Errorf("a suffix = %+v, %v; want the link skipped", got, err)
 	}
 
 	f.meta.Seed("a", branchmeta.Task, "GH-1")
 	f.meta.Seed("b", branchmeta.Task, "gh-1")
 
-	if _, err = indexOf(t).find(t.Context(), "GH-1", "GH-1", "", policyLocalOrOrigin); err == nil {
+	if _, err = indexOf(t).Find(t.Context(), "GH-1", "GH-1", "", stack.PolicyLocalOrOrigin); err == nil {
 		t.Error("two linked branches were not an error")
 	}
 
@@ -556,21 +558,21 @@ func TestFindPrefersLinksThenOrigin(t *testing.T) {
 	f.script(refsLocal, "")
 	f.script(refsOrigin, "refs/remotes/origin/GH-1/a\nrefs/remotes/origin/GH-1/b\n")
 
-	if _, err = indexOf(t).find(t.Context(), "GH-1", "GH-1", "", policyLocalOrOrigin); err == nil {
+	if _, err = indexOf(t).Find(t.Context(), "GH-1", "GH-1", "", stack.PolicyLocalOrOrigin); err == nil {
 		t.Error("two task branches on origin were not an error")
 	}
 
 	f.script(refsOrigin, "refs/remotes/origin/GH-1/a\n")
 
-	got, err = indexOf(t).find(t.Context(), "GH-1", "GH-1", "", policyLocalOrOrigin)
-	if err != nil || got != (foundBranch{name: "GH-1/a", remote: true}) {
+	got, err = indexOf(t).Find(t.Context(), "GH-1", "GH-1", "", stack.PolicyLocalOrOrigin)
+	if err != nil || got != (stack.FoundBranch{Name: "GH-1/a", Remote: true}) {
 		t.Errorf("an origin-only branch = %+v, %v", got, err)
 	}
 
 	// a branch only origin has is checked out nowhere: nothing to forward to
 	f.script(worktrees, porcelain())
 
-	name, path, err := taskCheckout(t.Context(), "/code/repo", nil, gh1, "")
+	name, path, err := stack.TaskCheckout(t.Context(), "/code/repo", nil, gh1, "")
 	if name != "" || path != "" || err != nil {
 		t.Errorf("taskCheckout on an origin-only branch = %q, %q, %v", name, path, err)
 	}
@@ -584,16 +586,16 @@ func TestLocalPolicySkipsForeignLinksAndOrigin(t *testing.T) {
 	f.script(refsLocal, "")
 	f.script(allHeads, "refs/heads/feat/GH-1-fix\nrefs/heads/feat/GH-1-other\n")
 
-	got, err := indexOf(t).find(t.Context(), "GH-1", "GH-1", "", policyLocal)
-	if err != nil || got != (foundBranch{name: "feat/GH-1-other"}) {
+	got, err := indexOf(t).Find(t.Context(), "GH-1", "GH-1", "", policyLocal)
+	if err != nil || got != (stack.FoundBranch{Name: "feat/GH-1-other"}) {
 		t.Errorf("a name linked to another task = %+v, %v; want feat/GH-1-other alone", got, err)
 	}
 
 	f.script(allHeads, "")
 	f.script(refsOrigin, "refs/remotes/origin/GH-1/a\n")
 
-	got, err = indexOf(t).find(t.Context(), "GH-1", "GH-1", "", policyLocal)
-	if err != nil || got != (foundBranch{}) {
+	got, err = indexOf(t).Find(t.Context(), "GH-1", "GH-1", "", policyLocal)
+	if err != nil || got != (stack.FoundBranch{}) {
 		t.Errorf("an origin-only branch under the local policy = %+v, %v; want none", got, err)
 	}
 
@@ -606,11 +608,11 @@ func TestLinkedBranchCountsForAfter(t *testing.T) {
 	f := newFakes(t)
 	f.meta.Seed("alice/base", branchmeta.Task, "GH-7")
 
-	if got, err := indexOf(t).after(t.Context(), "GH-7"); err != nil || got != "alice/base" {
+	if got, err := indexOf(t).After(t.Context(), "GH-7"); err != nil || got != "alice/base" {
 		t.Errorf("after on a linked branch = %q, %v", got, err)
 	}
 
-	if ok, err := hasTaskBranch(t.Context(), "/code/repo", "GH-7"); !ok || err != nil {
+	if ok, err := stack.HasTaskBranch(t.Context(), "/code/repo", "GH-7"); !ok || err != nil {
 		t.Errorf("hasTaskBranch on a linked branch = %v, %v", ok, err)
 	}
 }
@@ -618,7 +620,7 @@ func TestLinkedBranchCountsForAfter(t *testing.T) {
 // A PR naming no task exits 3, which the start skill turns into a question;
 // --task wins over what the PR names; --task with no PR is refused.
 func TestPickedTask(t *testing.T) {
-	none := forge.PR{URL: pickGH.url, Title: "fix login", Head: pickGH.branch}
+	none := forge.PR{URL: pickGH.URL, Title: "fix login", Head: pickGH.Branch}
 
 	_, err := pickedTask("GH", true, pickGH, none, "")
 

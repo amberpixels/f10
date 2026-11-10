@@ -14,7 +14,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/trace"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -111,7 +113,7 @@ func runTraceTrailers(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if len(tasks) > 0 {
-		out += changeTrailer(tasks[0], changeOf(t.Layout.StorageRoot.Reviews(tasks[0])))
+		out += stack.ChangeTrailer(tasks[0], changeOf(t.Layout.StorageRoot.Reviews(tasks[0])))
 	}
 
 	fmt.Fprint(cmd.Writer, out)
@@ -157,7 +159,7 @@ func runTraceState(ctx context.Context, cmd *cli.Command) error {
 		return errors.New("no branch is checked out: the state block belongs to a branch's PR")
 	}
 
-	h, err := hostOf(t)
+	h, err := hostops.HostOf(t)
 	if err != nil {
 		return err
 	}

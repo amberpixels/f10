@@ -10,6 +10,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/calendar"
+	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/standup"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -131,7 +132,7 @@ func runStandup(ctx context.Context, cmd *cli.Command) error {
 		return ui.JSON(cmd.Writer, rep)
 	}
 
-	links := linksFor(cmd.Writer, false)
+	links := render.LinksFor(cmd.Writer, false)
 	loadStandupLinks(ctx, links, rep)
 
 	return renderStandup(cmd.Writer, links, rep)
@@ -139,8 +140,8 @@ func runStandup(ctx context.Context, cmd *cli.Command) error {
 
 // loadStandupLinks resolves each project's ids in its own ledger project,
 // found from its first repository, keyed by the project's name.
-func loadStandupLinks(ctx context.Context, links *taskLinks, rep standup.Standup) {
-	if links == nil || !links.on {
+func loadStandupLinks(ctx context.Context, links *render.TaskLinks, rep standup.Standup) {
+	if links == nil || !links.On {
 		return
 	}
 

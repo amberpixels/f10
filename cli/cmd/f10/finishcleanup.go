@@ -6,6 +6,7 @@ import (
 	"io"
 
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/render"
 )
 
 // cleanup archives the task's files, prints the report, then removes what
@@ -31,15 +32,15 @@ func cleanup(ctx context.Context, w io.Writer, in finishInput, d finishDecision,
 	rows := l.rows
 
 	if a.plan != "" {
-		rows = append(rows, fact{label: "plan", value: a.plan, path: true})
+		rows = append(rows, render.Fact{Label: "plan", Value: a.plan, Path: true})
 	}
 
 	if a.handoff != "" && l.hand != nil {
-		rows = append(rows, fact{label: "handoff", value: a.handoff, path: true})
+		rows = append(rows, render.Fact{Label: "handoff", Value: a.handoff, Path: true})
 	}
 
 	if a.reviews != "" {
-		rows = append(rows, fact{label: "reviews", value: a.reviews})
+		rows = append(rows, render.Fact{Label: "reviews", Value: a.reviews})
 	}
 
 	// the report is copied out before the worktree goes and moved only after
@@ -62,7 +63,7 @@ func cleanup(ctx context.Context, w io.Writer, in finishInput, d finishDecision,
 			// removing the worktree would delete the report's only copy
 			errs.keep = "the worktree and branch stay, since the spike report is not archived"
 		} else {
-			rows = append(rows, fact{label: "spike", value: spikeDst, path: true})
+			rows = append(rows, render.Fact{Label: "spike", Value: spikeDst, Path: true})
 		}
 	}
 
@@ -79,7 +80,7 @@ func cleanup(ctx context.Context, w io.Writer, in finishInput, d finishDecision,
 		notes = append(notes, fmt.Sprintf("%s is checked out in the main checkout at %s: after this report "+
 			"main switches to %s and the branch is deleted; no worktree removed, no workspace closed",
 			d.name, in.main, d.def))
-		rows = append(rows, fact{label: "path", value: d.path})
+		rows = append(rows, render.Fact{Label: "path", Value: d.path})
 	case noWorktree:
 		keepForRerun(errs, d)
 
@@ -90,19 +91,19 @@ func cleanup(ctx context.Context, w io.Writer, in finishInput, d finishDecision,
 		}
 	default:
 		if d.ws != nil {
-			rows = append(rows, fact{label: "workspace", value: d.ws.ID})
+			rows = append(rows, render.Fact{Label: "workspace", Value: d.ws.ID})
 		} else {
 			notes = append(notes, "no "+agents(in.main).Name()+" workspace shows the worktree, so nothing to close")
 		}
 
-		rows = append(rows, fact{label: "path", value: d.path})
+		rows = append(rows, render.Fact{Label: "path", Value: d.path})
 	}
 
 	if d.self {
 		notes = append(notes, "this workspace closes after this report")
 	}
 
-	if err := writeReport(w, rows, notes); err != nil {
+	if err := render.WriteReport(w, rows, notes); err != nil {
 		return err
 	}
 

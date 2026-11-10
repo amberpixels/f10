@@ -8,6 +8,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -23,7 +24,7 @@ func demoCommand() *cli.Command {
 				Name:      "open",
 				Usage:     "open the demo report in the browser",
 				ArgsUsage: "[task-id]",
-				Flags:     []cli.Flag{linkFlag()},
+				Flags:     []cli.Flag{render.LinkFlag()},
 				Action:    runDemoOpen,
 			},
 		},

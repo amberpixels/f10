@@ -1,4 +1,4 @@
-package main
+package render
 
 import (
 	"net/url"
@@ -6,15 +6,15 @@ import (
 	"strings"
 )
 
-// fileLink links a markdown path to its file:// url, its text left as the
+// FileLink links a markdown path to its file:// url, its text left as the
 // path since people copy it; other files stay plain, as only markdown has
 // a handler to open it.
-func fileLink(path string) string {
-	return hyperlink(fileURL(path), path)
+func FileLink(path string) string {
+	return Hyperlink(FileURL(path), path)
 }
 
-// fileURL is the absolute file:// url of a markdown path, else empty.
-func fileURL(path string) string {
+// FileURL is the absolute file:// url of a markdown path, else empty.
+func FileURL(path string) string {
 	if !strings.HasSuffix(path, ".md") {
 		return ""
 	}

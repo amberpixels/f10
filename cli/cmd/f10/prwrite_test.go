@@ -10,6 +10,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
@@ -28,7 +29,7 @@ func TestCommentOncePosts(t *testing.T) {
 	f.script(issueComments, `[{"body":"done","html_url":"u1","user":{"login":"someone"}}]`)
 	f.script(postTopLevel, `{"id":9,"html_url":"https://gh/c9"}`)
 
-	got, err := commentOnce(t.Context(), &bytes.Buffer{}, newHost("gh", t.TempDir()), headPR(), "", "", "done")
+	got, err := commentOnce(t.Context(), &bytes.Buffer{}, hostops.NewHost("gh", t.TempDir()), headPR(), "", "", "done")
 	if err != nil || got != "https://gh/c9" {
 		t.Errorf("commentOnce = %q, %v; want the new comment, another's same text not counting", got, err)
 	}
@@ -42,7 +43,7 @@ func TestCommentOnceFindsItsOwnPost(t *testing.T) {
 
 	var warn bytes.Buffer
 
-	got, err := commentOnce(t.Context(), &warn, newHost("gh", t.TempDir()), headPR(), "", "", "done")
+	got, err := commentOnce(t.Context(), &warn, hostops.NewHost("gh", t.TempDir()), headPR(), "", "", "done")
 	if err != nil || got != "u1" || !strings.Contains(warn.String(), "already posted") {
 		t.Errorf("commentOnce = %q, %v, %q; want the earlier post", got, err, warn.String())
 	}
@@ -61,7 +62,7 @@ func TestCommentOnceFallsBack(t *testing.T) {
 
 	var warn bytes.Buffer
 
-	got, err := commentOnce(t.Context(), &warn, newHost("gh", t.TempDir()), headPR(),
+	got, err := commentOnce(t.Context(), &warn, hostops.NewHost("gh", t.TempDir()), headPR(),
 		"https://gh/o/r/pull/4#issuecomment-5", "", "done")
 	if err != nil || got != "https://gh/c9" || !strings.Contains(warn.String(), "names no thread") {
 		t.Errorf("commentOnce = %q, %v, %q", got, err, warn.String())
@@ -77,7 +78,7 @@ func TestCommentOnceQuotesAFallback(t *testing.T) {
 	f.script(issueComments, `[]`)
 	f.script(quoted, `{"id":9,"html_url":"https://gh/c9"}`)
 
-	if _, err := commentOnce(t.Context(), &bytes.Buffer{}, newHost("gh", t.TempDir()), headPR(),
+	if _, err := commentOnce(t.Context(), &bytes.Buffer{}, hostops.NewHost("gh", t.TempDir()), headPR(),
 		"https://gh/o/r/pull/4#issuecomment-5", "The title", "done"); err != nil || !f.called(quoted) {
 		t.Errorf("commentOnce = %v; want the quote above the reply", err)
 	}
@@ -94,7 +95,7 @@ func TestStatusOnce(t *testing.T) {
 	f.script(set, `{}`)
 	f.fail("git rev-parse --verify 0123456^{commit}", shell.Result{Code: 128})
 
-	h := newHost("gh", t.TempDir())
+	h := hostops.NewHost("gh", t.TempDir())
 
 	if line, err := statusOnce(t.Context(), &bytes.Buffer{}, h, headPR(), "abcdef1", s); err != nil ||
 		line != "abcdef1 judge success" || !f.called(set) {
@@ -115,7 +116,7 @@ func TestStatusOnceLeavesTheSameAlone(t *testing.T) {
 
 	var warn bytes.Buffer
 
-	if _, err := statusOnce(t.Context(), &warn, newHost("gh", t.TempDir()), headPR(), "", s); err != nil ||
+	if _, err := statusOnce(t.Context(), &warn, hostops.NewHost("gh", t.TempDir()), headPR(), "", s); err != nil ||
 		!strings.Contains(warn.String(), "already set") || f.called("gh api -X POST") {
 		t.Errorf("statusOnce = %v, %q; want no second post", err, warn.String())
 	}
@@ -167,7 +168,7 @@ func TestStatusOnceTakesAPushAheadOfTheHead(t *testing.T) {
 	p := forge.PR{Number: 4, Status: forge.Open, URL: "u", HeadSHA: head}
 	s := forge.CommitStatus{Name: "judge", State: "success", Description: "ok"}
 
-	line, err := statusOnce(t.Context(), &bytes.Buffer{}, newHost("gh", dir), p, pushed[:7], s)
+	line, err := statusOnce(t.Context(), &bytes.Buffer{}, hostops.NewHost("gh", dir), p, pushed[:7], s)
 	if err != nil || !strings.HasPrefix(line, pushed[:7]) || !strings.Contains(posted, "statuses/"+pushed) {
 		t.Errorf("statusOnce = %q, %v, posted %q; want the pushed commit", line, err, posted)
 	}
@@ -175,7 +176,7 @@ func TestStatusOnceTakesAPushAheadOfTheHead(t *testing.T) {
 	if _, err := statusOnce(
 		t.Context(),
 		&bytes.Buffer{},
-		newHost("gh", dir),
+		hostops.NewHost("gh", dir),
 		forge.PR{HeadSHA: pushed},
 		head[:7],
 		s,
@@ -188,7 +189,7 @@ func TestMineLine(t *testing.T) {
 	f := newFakes(t)
 	f.script("gh api user", `{"login":"Me"}`, `{"login":"other"}`)
 
-	h, p := newHost("gh", t.TempDir()), forge.PR{Author: "me"}
+	h, p := hostops.NewHost("gh", t.TempDir()), forge.PR{Author: "me"}
 
 	for _, want := range []string{"mine: yes\n", "mine: no\n"} {
 		if got := mineLine(t.Context(), &bytes.Buffer{}, h, p); got != want {
@@ -201,7 +202,12 @@ func TestMineLineUnknown(t *testing.T) {
 	f := newFakes(t)
 	f.fail("gh api user", shell.Result{Code: 1, Stderr: "auth"})
 
-	if got := mineLine(t.Context(), &bytes.Buffer{}, newHost("gh", t.TempDir()), forge.PR{}); got != "mine: unknown\n" {
+	if got := mineLine(
+		t.Context(),
+		&bytes.Buffer{},
+		hostops.NewHost("gh", t.TempDir()),
+		forge.PR{},
+	); got != "mine: unknown\n" {
 		t.Errorf("mineLine = %q; a failed login read is unknown, never no", got)
 	}
 }
@@ -268,7 +274,7 @@ func TestCreatePullReadsTheURLBack(t *testing.T) {
 		`{"state":"OPEN","url":"https://gh/o/r/pull/9","number":9}`,
 	)
 
-	got, err := newHost("gh", t.TempDir()).createPull(t.Context(),
+	got, err := hostops.NewHost("gh", t.TempDir()).OpenPull(t.Context(),
 		forge.NewPull{Head: "feat", Base: "base", Title: "T", Body: "B", Labels: []string{"x"}, Draft: true})
 	if err != nil || got != "https://gh/o/r/pull/9" {
 		t.Errorf("createPull = %q, %v", got, err)

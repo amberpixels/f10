@@ -16,8 +16,11 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/textx"
@@ -205,13 +208,13 @@ func checkoutTaskID(ctx context.Context, t *target.Target) string {
 type taskStatusInput struct {
 	id      string
 	branch  string
-	root    string // the checkout holding branch
-	main    string // the main checkout, where the branch's refs and config live
-	plan    string // where the task's plan would be
-	handoff string // where the task's handoff would be
-	storage string // the storage root holding the task's verdicts and findings
-	host    *host  // nil without a host CLI: no PR row
-	agent   string // the profile the branch records, as typed; "" for the kind's default
+	root    string        // the checkout holding branch
+	main    string        // the main checkout, where the branch's refs and config live
+	plan    string        // where the task's plan would be
+	handoff string        // where the task's handoff would be
+	storage string        // the storage root holding the task's verdicts and findings
+	host    *hostops.Host // nil without a host CLI: no PR row
+	agent   string        // the profile the branch records, as typed; "" for the kind's default
 }
 
 // errNoRunToRead is a task with no branch, or a branch checked out
@@ -225,7 +228,7 @@ func taskStatusFor(ctx context.Context, t *target.Target, r ref.Ref, suffix stri
 
 	main := cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot)
 
-	name, path, err := taskCheckout(ctx, main, t.Driver(), r, suffix)
+	name, path, err := stack.TaskCheckout(ctx, main, t.Driver(), r, suffix)
 
 	switch {
 	case err != nil:
@@ -246,8 +249,8 @@ func taskStatusFor(ctx context.Context, t *target.Target, r ref.Ref, suffix stri
 		storage: t.Layout.StorageRoot.Path(),
 	}
 
-	if h, err := hostOf(t); err == nil {
-		h = h.at(path)
+	if h, err := hostops.HostOf(t); err == nil {
+		h = h.In(path)
 		in.host = &h
 	}
 
@@ -313,7 +316,7 @@ func (fb fallback) render(w io.Writer, limit int, link bool) {
 	plain := lipgloss.NewStyle()
 	faint := lipgloss.NewStyle().Faint(true)
 
-	var rows []fact
+	var rows []render.Fact
 	if fb.Shipment != nil {
 		rows = fb.Shipment.facts(link)
 	}
@@ -328,7 +331,7 @@ func (fb fallback) render(w io.Writer, limit int, link bool) {
 		rows = append(rows, runFact("pr state", fb.PRState, plain))
 	}
 
-	_ = writeFacts(w, rows, labelWidth(rows), limit)
+	_ = render.WriteFacts(w, rows, render.LabelWidth(rows), limit)
 }
 
 // writeTaskRows prints task rows as a tree, headed by parent unless the

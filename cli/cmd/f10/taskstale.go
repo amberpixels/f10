@@ -8,6 +8,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/target"
 )
@@ -61,7 +62,7 @@ func createdAtFor(ctx context.Context, t *target.Target, r ref.Ref, flag string)
 		return at, nil
 	}
 
-	return tasksFor(t).Created(ctx, r)
+	return hostops.TasksFor(t).Created(ctx, r)
 }
 
 // staleness is the line task stale prints. A proceed on the task within
@@ -74,7 +75,7 @@ func staleness(created time.Time, staleAfter facts.StaleAfter, now time.Time, ro
 		return staleFresh
 	case created.IsZero():
 		return staleUndated
-	case !staleAt(created, staleAfter, now):
+	case !hostops.StaleAt(created, staleAfter, now):
 		return staleFresh
 	}
 

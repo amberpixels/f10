@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
+	"github.com/amberpixels/f10/cli/internal/render"
 )
 
 func TestWrap(t *testing.T) {
@@ -52,7 +53,7 @@ func TestWrap(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := wrap(tc.text, tc.width)
+			got := render.Wrap(tc.text, tc.width)
 			if !slices.Equal(got, tc.want) {
 				t.Errorf("wrap(%q, %d) = %q, want %q", tc.text, tc.width, got, tc.want)
 			}

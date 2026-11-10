@@ -5,19 +5,20 @@ import (
 	"errors"
 
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // pickupFor is the PR the start argument names, or nil for a task id; a
 // bare #n the host knows as no PR is a task id.
-func pickupFor(ctx context.Context, t *target.Target, token string) (*pickup, forge.PR, error) {
+func pickupFor(ctx context.Context, t *target.Target, token string) (*hostops.Pickup, forge.PR, error) {
 	number, probe := pullToken(token)
 	if number == "" {
 		return nil, forge.PR{}, nil
 	}
 
-	h, err := hostOf(t)
+	h, err := hostops.HostOf(t)
 
 	switch {
 	case err != nil && probe:
@@ -42,13 +43,13 @@ func pickupFor(ctx context.Context, t *target.Target, token string) (*pickup, fo
 		return nil, forge.PR{}, err
 	}
 
-	return h.pickupOf(number, p), p, nil
+	return h.PickupOf(number, p), p, nil
 }
 
 // pickedTask is the task id for a picked-up PR: --task, else the one the
 // PR names. A PR naming none exits with ui.ExitDeclined, which the start skill
 // turns into a question; --task with no PR is a refusal.
-func pickedTask(prefix string, hostIssues bool, pick *pickup, pr forge.PR, task string) (string, error) {
+func pickedTask(prefix string, hostIssues bool, pick *hostops.Pickup, pr forge.PR, task string) (string, error) {
 	switch {
 	case pick == nil && task != "":
 		return "", errors.New("--task names the task of a PR: pass the PR's link or #n")
@@ -58,7 +59,7 @@ func pickedTask(prefix string, hostIssues bool, pick *pickup, pr forge.PR, task 
 
 	if task = pickupTask(prefix, hostIssues, pr); task == "" {
 		return "", ui.Exit(ui.ExitDeclined, "%s names no task in its body, title or branch %s: "+
-			"rerun with --task <ID>", pick.url, pick.branch)
+			"rerun with --task <ID>", pick.URL, pick.Branch)
 	}
 
 	return task, nil

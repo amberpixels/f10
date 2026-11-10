@@ -20,9 +20,11 @@ import (
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/herdr"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
@@ -81,7 +83,7 @@ func newFinishFixture(t *testing.T) *finishFixture {
 		main:    fx.main,
 		storage: storage.InRepo(fx.main),
 		task:    gh1,
-		host:    newHost("gh", fx.main),
+		host:    hostops.NewHost("gh", fx.main),
 		cwd:     fx.main,
 	}
 
@@ -322,7 +324,7 @@ func TestFinishSquashBodyFollowsTheKeptRider(t *testing.T) {
 // glab takes the whole message, so the title goes on top of the body.
 func TestMergePullGlabSquashMessage(t *testing.T) {
 	f := newFakes(t)
-	h := newHost("glab", t.TempDir())
+	h := hostops.NewHost("glab", t.TempDir())
 	view := "glab mr view GH-1 -F json"
 	merge := "glab mr merge GH-1 --remove-source-branch --auto-merge=false --yes --squash --squash-message Add the thing\n\nTask: GH-1\n"
 	f.script(merge, "")
@@ -356,7 +358,7 @@ func TestMergePullGhSquashSubject(t *testing.T) {
 
 	for _, c := range cases {
 		f := newFakes(t)
-		h := newHost("gh", t.TempDir())
+		h := hostops.NewHost("gh", t.TempDir())
 		f.script(c.merge, "")
 		f.script(ghView, prMerged)
 
@@ -865,7 +867,7 @@ func TestFinishRunsOnPastAFailedClose(t *testing.T) {
 // by iid before the API deletes it.
 func TestFinishRetargetsStackedMRsOnGitLab(t *testing.T) {
 	fx := newFinishFixture(t)
-	fx.in.host = newHost("glab", fx.main)
+	fx.in.host = hostops.NewHost("glab", fx.main)
 	fx.f.script(
 		"glab mr view GH-1 -F json",
 		`{"state":"merged","web_url":"https://gl/mr/4","iid":4,"target_branch":"main","squash_commit_sha":"m3rge"}`,
@@ -1165,7 +1167,7 @@ func TestFinishRemovesThroughWorktrunk(t *testing.T) {
 // auto-merge off, the source branch removed by the merge itself.
 func TestFinishOnGitLab(t *testing.T) {
 	fx := newFinishFixture(t)
-	fx.in.host = newHost("glab", fx.main)
+	fx.in.host = hostops.NewHost("glab", fx.main)
 	fx.f.script(
 		"glab mr view GH-1 -F json",
 		`{"state":"opened","web_url":"https://gl/mr/4","iid":4,"target_branch":"main"}`,
@@ -1472,7 +1474,7 @@ func TestMergeMethod(t *testing.T) {
 			f.script(ghRepo, c.repo)
 			f.script("glab repo view -F json", c.repo)
 
-			got, note, err := newHost(c.host, "/repo").mergeMethod(t.Context(), c.declared)
+			got, note, err := hostops.NewHost(c.host, "/repo").MergeMethod(t.Context(), c.declared)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -2639,7 +2641,7 @@ func TestFinishLoreGate(t *testing.T) {
 // A parent delivered through its subtasks has no branch and no plan of its
 // own: finish closes it once every subtask is closed and branchless.
 func TestFinishParentClosesWhenSubtasksAreDone(t *testing.T) {
-	fx := newParentFixture(t, childRow{ID: "GH-2", State: "closed"}, childRow{ID: "GH-3", State: "CLOSED"})
+	fx := newParentFixture(t, stack.ChildRow{ID: "GH-2", State: "closed"}, stack.ChildRow{ID: "GH-3", State: "CLOSED"})
 	fx.f.script("gh issue close 1", "")
 
 	out, err := fx.run(t)
@@ -2659,7 +2661,7 @@ func TestFinishParentClosesWhenSubtasksAreDone(t *testing.T) {
 // A subtask open, or closed with a branch left, keeps the parent open, and
 // the refusal names it; a stale tracking ref is named so it can be pruned.
 func TestFinishParentRefusesUnfinishedSubtasks(t *testing.T) {
-	fx := newParentFixture(t, childRow{ID: "GH-2", State: "open"}, childRow{ID: "GH-3", State: "closed"})
+	fx := newParentFixture(t, stack.ChildRow{ID: "GH-2", State: "open"}, stack.ChildRow{ID: "GH-3", State: "closed"})
 	fx.f.script("git for-each-ref --format=%(refname) refs/remotes/origin/GH-3 refs/remotes/origin/GH-3-* "+
 		"refs/remotes/origin/GH-3+* refs/remotes/origin/GH-3+*/*", "refs/remotes/origin/GH-3")
 
@@ -2676,9 +2678,9 @@ func TestFinishParentRefusesUnfinishedSubtasks(t *testing.T) {
 
 // No subtasks, or no parent link, keeps today's refusal.
 func TestFinishNoBranchNoSubtasksRefuses(t *testing.T) {
-	for name, kids := range map[string]func(context.Context, ref.Ref) ([]childRow, error){
-		"none":           func(context.Context, ref.Ref) ([]childRow, error) { return nil, nil },
-		"no parent link": func(context.Context, ref.Ref) ([]childRow, error) { return nil, errNoParentLink },
+	for name, kids := range map[string]func(context.Context, ref.Ref) ([]stack.ChildRow, error){
+		"none":           func(context.Context, ref.Ref) ([]stack.ChildRow, error) { return nil, nil },
+		"no parent link": func(context.Context, ref.Ref) ([]stack.ChildRow, error) { return nil, hostops.ErrNoParentLink },
 	} {
 		fx := newParentFixture(t)
 		fx.in.subtasks = kids
@@ -2691,7 +2693,7 @@ func TestFinishNoBranchNoSubtasksRefuses(t *testing.T) {
 
 // A tracker that is not the host closes nothing: the note says where to.
 func TestFinishParentOnAnotherTracker(t *testing.T) {
-	fx := newParentFixture(t, childRow{ID: "GH-2", State: "closed"})
+	fx := newParentFixture(t, stack.ChildRow{ID: "GH-2", State: "closed"})
 	fx.in.closeTask = nil
 
 	out, err := fx.run(t)
@@ -2707,13 +2709,13 @@ func TestFinishParentOnAnotherTracker(t *testing.T) {
 // An open subtask drive already counts as finished is still refused, and
 // a close the host rejects fails the finish.
 func TestFinishParentArchivedButOpenAndFailedClose(t *testing.T) {
-	fx := newParentFixture(t, childRow{ID: "GH-2", State: "open", Finished: true})
+	fx := newParentFixture(t, stack.ChildRow{ID: "GH-2", State: "open", Finished: true})
 	_, err := fx.run(t)
 	if err == nil || !strings.Contains(err.Error(), "open in the tracker though its plan is archived") {
 		t.Errorf("err = %v", err)
 	}
 
-	fx = newParentFixture(t, childRow{ID: "GH-2", State: "closed"})
+	fx = newParentFixture(t, stack.ChildRow{ID: "GH-2", State: "closed"})
 	fx.f.answers["gh issue close 1"] = []shell.Result{{Code: 1, Stderr: "boom"}}
 
 	if _, err := fx.run(t); err == nil || !strings.Contains(err.Error(), "closing GH-1") {
@@ -2724,25 +2726,25 @@ func TestFinishParentArchivedButOpenAndFailedClose(t *testing.T) {
 // Only the host's issues get a close; a declared tracker of another kind gets nil.
 func TestCloseTaskFor(t *testing.T) {
 	tg := childTarget(t, "gh")
-	if closeTaskFor(tg, newHost("gh", tg.Dir)) == nil {
+	if closeTaskFor(tg, hostops.NewHost("gh", tg.Dir)) == nil {
 		t.Error("host issues: no close")
 	}
 
 	tg.Effective.TrackerKind = facts.TrackerJira
 	tg.Effective.Facts = append(tg.Effective.Facts, facts.Fact{Key: "tracker.kind", Origin: facts.DeclaredIn("main")})
 
-	if closeTaskFor(tg, newHost("gh", tg.Dir)) != nil {
+	if closeTaskFor(tg, hostops.NewHost("gh", tg.Dir)) != nil {
 		t.Error("a Jira tracker: a close was bound")
 	}
 }
 
-func newParentFixture(t *testing.T, kids ...childRow) *finishFixture {
+func newParentFixture(t *testing.T, kids ...stack.ChildRow) *finishFixture {
 	t.Helper()
 
 	fx := newFinishFixture(t)
 	fx.f.script(refsLocal, "")
 	fx.in.storage = storage.Root(t.TempDir())
-	fx.in.subtasks = func(context.Context, ref.Ref) ([]childRow, error) { return kids, nil }
+	fx.in.subtasks = func(context.Context, ref.Ref) ([]stack.ChildRow, error) { return kids, nil }
 	fx.in.closeTask = func(ctx context.Context, r ref.Ref) error { return fx.in.host.SetIssueOpen(ctx, r.Number, false) }
 
 	for _, k := range kids {

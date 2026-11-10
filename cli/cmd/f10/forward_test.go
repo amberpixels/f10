@@ -14,6 +14,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -289,20 +290,34 @@ func TestTaskCheckout(t *testing.T) {
 	f.script(refsLocal, heads("GH-1"))
 	f.script(worktrees, porcelain("GH-1", fwdWT))
 
-	name, path, err := taskCheckout(t.Context(), fwdMain, nil, gh1, "")
+	name, path, err := stack.TaskCheckout(t.Context(), fwdMain, nil, gh1, "")
 	if err != nil || name != "GH-1" || path != fwdWT {
 		t.Errorf("taskCheckout = %q, %q, %v", name, path, err)
 	}
 
 	f.script(worktrees, porcelain())
 
-	if name, path, err = taskCheckout(t.Context(), fwdMain, nil, gh1, ""); err != nil || name != "GH-1" || path != "" {
+	if name, path, err = stack.TaskCheckout(
+		t.Context(),
+		fwdMain,
+		nil,
+		gh1,
+		"",
+	); err != nil || name != "GH-1" ||
+		path != "" {
 		t.Errorf("a branch with no worktree = %q, %q, %v", name, path, err)
 	}
 
 	f.script(refsLocal, "")
 
-	if name, path, err = taskCheckout(t.Context(), fwdMain, nil, gh1, ""); err != nil || name != "" || path != "" {
+	if name, path, err = stack.TaskCheckout(
+		t.Context(),
+		fwdMain,
+		nil,
+		gh1,
+		"",
+	); err != nil || name != "" ||
+		path != "" {
 		t.Errorf("no branch = %q, %q, %v", name, path, err)
 	}
 }

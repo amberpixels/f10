@@ -18,7 +18,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
+	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -188,7 +190,7 @@ func TestRowsFromTheLedger(t *testing.T) {
 		return "FT-" + strings.TrimPrefix(tok, "FT-")
 	}
 
-	rows := src.rowsFrom(t.Context(), []childRow{
+	rows := src.rowsFrom(t.Context(), []stack.ChildRow{
 		{ID: "FT-1", Title: "trailers"},
 		{ID: "FT-2", Title: "state block"},
 		{ID: "FT-3", Title: "look-around"},
@@ -320,8 +322,8 @@ func TestRenderRows(t *testing.T) {
 	}
 
 	line, _, _ := strings.Cut(out.String(), "\n")
-	if !strings.Contains(line, hyperlink(rows[0].URL, "FT-206")) ||
-		!strings.Contains(line, hyperlink(rows[0].PR, "\U000F062D #208 merged")) {
+	if !strings.Contains(line, render.Hyperlink(rows[0].URL, "FT-206")) ||
+		!strings.Contains(line, render.Hyperlink(rows[0].PR, "\U000F062D #208 merged")) {
 		t.Errorf("a terminal line = %q, want the id and the PR linked", line)
 	}
 
@@ -406,12 +408,12 @@ func TestStatusTaskWithNoRun(t *testing.T) {
 			}
 
 			if tc.archived {
-				tr := trackerFor(tg)
-				if err := os.MkdirAll(tr.storage.Archive(), 0o750); err != nil {
+				tr := stack.TrackerFor(tg)
+				if err := os.MkdirAll(tr.Storage.Archive(), 0o750); err != nil {
 					t.Fatal(err)
 				}
 
-				if err := os.WriteFile(filepath.Join(tr.storage.Archive(), "FT-1.md"), nil, 0o600); err != nil {
+				if err := os.WriteFile(filepath.Join(tr.Storage.Archive(), "FT-1.md"), nil, 0o600); err != nil {
 					t.Fatal(err)
 				}
 
@@ -555,7 +557,7 @@ func TestGatherReadsTheBranchRequests(t *testing.T) {
 		requests: map[string][]lookaround.PR{"FT-5": {merged, open}},
 	}
 
-	if _, f := src.gather(t.Context(), childRow{ID: "FT-5"}); f.PR != nil {
+	if _, f := src.gather(t.Context(), stack.ChildRow{ID: "FT-5"}); f.PR != nil {
 		t.Errorf("FT-5/y read request #%d of another head", f.PR.Number)
 	} else if stage, _ := stageOf(f, false); stage != stageImplementing {
 		t.Errorf("stage = %s, want implementing", stage)
@@ -563,7 +565,7 @@ func TestGatherReadsTheBranchRequests(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for range 8 {
-		wg.Go(func() { src.gather(t.Context(), childRow{ID: "FT-5", suffix: "2"}) })
+		wg.Go(func() { src.gather(t.Context(), stack.ChildRow{ID: "FT-5", Suffix: "2"}) })
 	}
 
 	wg.Wait()

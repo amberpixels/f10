@@ -10,9 +10,11 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/stack"
 )
 
 var bundle12 = ref.Ref{ID: "GH-1", Number: "1", Origin: ref.OriginExplicit, Bundle: []string{"GH-1", "GH-2"}}
@@ -20,7 +22,7 @@ var bundle12 = ref.Ref{ID: "GH-1", Number: "1", Origin: ref.OriginExplicit, Bund
 var refsRider = riderKey("refs/heads/", "GH-2")
 
 func riderKey(root, id string) string {
-	patterns := append(taskRefs(root, id), riderRefs(root, id)...)
+	patterns := append(stack.TaskRefs(root, id), stack.RiderRefs(root, id)...)
 
 	return "git for-each-ref --format=%(refname) " + strings.Join(patterns, " ")
 }
@@ -161,12 +163,12 @@ func TestLinkedFindsAnyMember(t *testing.T) {
 	f.meta.Seed("GH-1+GH-2/x", branchmeta.Riders, "GH-2 GH-3")
 
 	for _, id := range []string{"GH-1", "GH-3", "gh-2"} {
-		if got := indexOf(t).linked(id); strings.Join(got, ",") != "GH-1+GH-2/x" {
+		if got := indexOf(t).Linked(id); strings.Join(got, ",") != "GH-1+GH-2/x" {
 			t.Errorf("linked(%s) = %v, want [GH-1+GH-2/x]", id, got)
 		}
 	}
 
-	if got := indexOf(t).linked("GH-4"); got != nil {
+	if got := indexOf(t).Linked("GH-4"); got != nil {
 		t.Errorf("linked(GH-4) = %v, want none", got)
 	}
 }
@@ -176,9 +178,9 @@ func TestStartRefusesABundleWithAParent(t *testing.T) {
 	f := newFakes(t)
 	f.script(refsLocal, "")
 
-	kids := func(_ context.Context, r ref.Ref) ([]childRow, error) {
+	kids := func(_ context.Context, r ref.Ref) ([]stack.ChildRow, error) {
 		if r.ID == "GH-2" {
-			return []childRow{{ID: "GH-5"}}, nil
+			return []stack.ChildRow{{ID: "GH-5"}}, nil
 		}
 
 		return nil, nil
@@ -196,35 +198,35 @@ func TestStartRefusesABundleWithAParent(t *testing.T) {
 func TestBundleAfter(t *testing.T) {
 	bodies := map[string]string{}
 
-	trimmed := tracker{
-		resolve: func(_ context.Context, token string) (ref.Ref, error) {
+	trimmed := stack.Tracker{
+		Resolve: func(_ context.Context, token string) (ref.Ref, error) {
 			return ref.Ref{ID: strings.ToUpper(token)}, nil
 		},
-		info: func(_ context.Context, r ref.Ref) (taskInfo, error) {
+		Info: func(_ context.Context, r ref.Ref) (hostops.TaskInfo, error) {
 			body, ok := bodies[r.ID]
 			if !ok {
-				return taskInfo{}, errors.New("no such task")
+				return hostops.TaskInfo{}, errors.New("no such task")
 			}
 
-			return taskInfo{body: body}, nil
+			return hostops.TaskInfo{Body: body}, nil
 		},
 	}
 
 	bodies["GH-2"] = "After: GH-7"
 
-	line, err := bundleAfter(t.Context(), trimmed, bundle12, "After: GH-2")
+	line, err := stack.BundleAfter(t.Context(), trimmed, bundle12, "After: GH-2")
 	if err != nil || line != "GH-7" {
 		t.Errorf("bundleAfter = %q, %v; want the rider's outside base GH-7", line, err)
 	}
 
 	bodies["GH-2"] = "After: GH-8"
 
-	if _, err := bundleAfter(t.Context(), trimmed, bundle12, "After: GH-7"); err == nil ||
+	if _, err := stack.BundleAfter(t.Context(), trimmed, bundle12, "After: GH-7"); err == nil ||
 		!strings.Contains(err.Error(), "two bases") {
 		t.Errorf("err = %v, want two bases refused", err)
 	}
 
-	if line, err := bundleAfter(t.Context(), trimmed, gh1, "After: GH-7"); err != nil || line != "GH-7" {
+	if line, err := stack.BundleAfter(t.Context(), trimmed, gh1, "After: GH-7"); err != nil || line != "GH-7" {
 		t.Errorf("a single task's line = %q, %v; want its own body's", line, err)
 	}
 }

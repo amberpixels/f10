@@ -19,7 +19,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
 )
@@ -116,7 +118,7 @@ func touchStamp(stamp string, now time.Time) error {
 // without a checkout.
 type janitorInput struct {
 	main    string
-	host    *host // nil without a host CLI: only branches never pushed qualify
+	host    *hostops.Host // nil without a host CLI: only branches never pushed qualify
 	prefix  string
 	storage storage.Root
 	dry     bool
@@ -128,8 +130,8 @@ func janitorFor(t *target.Target) janitorInput {
 	main := cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot)
 	in := janitorInput{main: main, prefix: t.Effective.IDPrefix, storage: t.Layout.StorageRoot}
 
-	if h, err := hostOf(t); err == nil {
-		h = h.at(main)
+	if h, err := hostops.HostOf(t); err == nil {
+		h = h.In(main)
 		in.host = &h
 	}
 
@@ -181,7 +183,7 @@ func janitor(ctx context.Context, in janitorInput) ([]string, error) {
 
 // janitorDefault falls back to the main checkout's branch only with no origin.
 func janitorDefault(ctx context.Context, main string) (string, error) {
-	if def, err := localDefault(ctx, main); err == nil {
+	if def, err := stack.LocalDefault(ctx, main); err == nil {
 		return def, nil
 	}
 
@@ -227,7 +229,7 @@ func taskBranches(ctx context.Context, in janitorInput, def string) ([]staleBran
 		held[wt.Branch] = true
 	}
 
-	x, err := loadBranchIndex(ctx, in.main)
+	x, err := stack.LoadBranchIndex(ctx, in.main)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -246,9 +248,9 @@ func taskBranches(ctx context.Context, in janitorInput, def string) ([]staleBran
 
 		// a link with no riders still names the task, as a picked-up PR's
 		// branch may carry no id at all
-		lead, rest := x.bundle(name, in.prefix)
+		lead, rest := x.Bundle(name, in.prefix)
 		if lead == "" {
-			lead = x.record(name).Task
+			lead = x.Record(name).Task
 		}
 
 		var ids []string

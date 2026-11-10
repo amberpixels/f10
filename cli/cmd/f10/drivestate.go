@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
@@ -43,11 +44,11 @@ func (in *driveInput) readState(ctx context.Context, r *driveRun, run *state.Run
 
 	s.head, _ = gitx.Ref(ctx, in.main, "refs/heads/"+branch)
 	s.origin, _ = gitx.Ref(ctx, in.main, "refs/remotes/origin/"+branch)
-	s.mark, _ = markOn(ctx, in.main, branch)
-	s.busy = treeBusy(ctx, r.o.path)
+	s.mark, _ = stack.MarkOn(ctx, in.main, branch)
+	s.busy = stack.TreeBusy(ctx, r.o.path)
 
-	if def, err := localDefault(ctx, in.main); err == nil {
-		s.code = baseHasCode(ctx, in.main, branch, def)
+	if def, err := stack.LocalDefault(ctx, in.main); err == nil {
+		s.code = stack.BaseHasCode(ctx, in.main, branch, def)
 	}
 
 	lead := r.task.ref.Head().ID

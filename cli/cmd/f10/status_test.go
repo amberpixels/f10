@@ -13,7 +13,9 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
+	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/target"
@@ -60,7 +62,7 @@ func TestStatusFallbackReportsPlanAndPR(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h := newHost("gh", root)
+	h := hostops.NewHost("gh", root)
 	in := taskStatusInput{id: "GH-1", branch: "GH-1", root: root, plan: plan, host: &h}
 	capture := &state.Run{Capture: "running", Plan: "upcoming", Ship: "upcoming"}
 
@@ -89,7 +91,7 @@ func TestStatusFallbackLeavesOutWhatDoesNotExist(t *testing.T) {
 	f.fail(ghView, shell.Result{Code: 1, Stderr: `no pull requests found for branch "GH-1"`})
 
 	root := t.TempDir()
-	h := newHost("gh", root)
+	h := hostops.NewHost("gh", root)
 	in := taskStatusInput{id: "GH-1", branch: "GH-1", root: root, plan: filepath.Join(root, "GH-1.md"), host: &h}
 
 	ship := readShipment(t.Context(), in, nil, ledger.TaskRef{})
@@ -386,7 +388,7 @@ func TestShipmentFacts(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := writeReport(&out, s.facts(false), nil); err != nil {
+	if err := render.WriteReport(&out, s.facts(false), nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -436,7 +438,7 @@ func TestReadShipmentPRByBranch(t *testing.T) {
 	f := newFakes(t)
 	f.script(ghView, prOpen)
 
-	h := newHost("gh", t.TempDir())
+	h := hostops.NewHost("gh", t.TempDir())
 	in := taskStatusInput{id: "GH-1", branch: "GH-1", host: &h}
 	pushed := []ledger.Event{{Kind: ledger.Pushed, Task: "GH-1", Payload: ledger.NewPayload(ledger.Payload{})}}
 
@@ -489,7 +491,7 @@ func TestShipFiles(t *testing.T) {
 	s.Verdicts, s.Reviews = shipFiles(storage, "FT-1")
 
 	var out bytes.Buffer
-	if err := writeReport(&out, s.facts(false), nil); err != nil {
+	if err := render.WriteReport(&out, s.facts(false), nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -624,13 +626,13 @@ func TestWriteRunsNamesThePlanFileApart(t *testing.T) {
 
 // A long run value wraps under the value column, never under the labels.
 func TestWriteFactsWrapsUnderTheValueColumn(t *testing.T) {
-	rows := []fact{
-		{label: "url", value: "https://gh/issues/1", url: true},
+	rows := []render.Fact{
+		{Label: "url", Value: "https://gh/issues/1", URL: true},
 		runFact("note", "stop: the change patches the symptom and the cause is the retry loop", lipgloss.NewStyle()),
 	}
 
 	var out bytes.Buffer
-	if err := writeFacts(&out, rows, labelWidth(rows), 40); err != nil {
+	if err := render.WriteFacts(&out, rows, render.LabelWidth(rows), 40); err != nil {
 		t.Fatal(err)
 	}
 

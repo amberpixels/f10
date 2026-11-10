@@ -24,8 +24,10 @@ import (
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/herdr"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -283,7 +285,7 @@ var missing = shell.Result{Code: 1}
 
 // refsKey is the for-each-ref call that looks for task id's branches under root.
 func refsKey(root, id string) string {
-	return "git for-each-ref --format=%(refname) " + strings.Join(taskRefs(root, id), " ")
+	return "git for-each-ref --format=%(refname) " + strings.Join(stack.TaskRefs(root, id), " ")
 }
 
 // heads prefixes branch names the way for-each-ref prints them.
@@ -387,7 +389,7 @@ func TestBranchName(t *testing.T) {
 				f.fail("driver branch 1", c.answer)
 			}
 
-			got, note, err := branchName(t.Context(), d, gh1, c.suffix, c.title)
+			got, note, err := stack.BranchName(t.Context(), d, gh1, c.suffix, c.title)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -407,7 +409,7 @@ func TestBranchNameDriverFailure(t *testing.T) {
 	f := newFakes(t)
 	f.fail("driver branch 1", shell.Result{Code: 1, Stderr: "tracker down"})
 
-	_, _, err := branchName(t.Context(), fakeDriver(t), gh1, "", titled("unused", nil))
+	_, _, err := stack.BranchName(t.Context(), fakeDriver(t), gh1, "", titled("unused", nil))
 	if err == nil || !strings.Contains(err.Error(), "tracker down") {
 		t.Errorf("err = %v, want the driver's stderr", err)
 	}
@@ -430,12 +432,12 @@ func TestSlugify(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.title, func(t *testing.T) {
-			if got := slugify(c.title); got != c.want {
+			if got := stack.Slugify(c.title); got != c.want {
 				t.Errorf("slugify(%q) = %q, want %q", c.title, got, c.want)
 			}
 
-			if len(c.want) > slugMax {
-				t.Errorf("case expects %d characters, over the %d cut", len(c.want), slugMax)
+			if len(c.want) > stack.SlugMax {
+				t.Errorf("case expects %d characters, over the %d cut", len(c.want), stack.SlugMax)
 			}
 		})
 	}
@@ -461,25 +463,25 @@ func TestHostIssueTitle(t *testing.T) {
 	)
 
 	for name, want := range map[string]string{"gh": "Add dark mode", "glab": "Dunkelmodus"} {
-		got, err := newHost(name, "/code/repo").issueTitle(t.Context(), "1")
+		got, err := hostops.NewHost(name, "/code/repo").IssueTitle(t.Context(), "1")
 		if err != nil || got != want {
 			t.Errorf("%s title = %q, %v; want %q", name, got, err, want)
 		}
 	}
 
-	gh := newHost("gh", "/code/repo")
+	gh := hostops.NewHost("gh", "/code/repo")
 
-	if _, err := gh.issueTitle(t.Context(), "2"); err == nil || !strings.Contains(err.Error(), "no issue 2") {
+	if _, err := gh.IssueTitle(t.Context(), "2"); err == nil || !strings.Contains(err.Error(), "no issue 2") {
 		t.Errorf("err = %v, want gh's stderr", err)
 	}
 
-	if _, err := gh.issueTitle(t.Context(), "3"); err == nil || !strings.Contains(err.Error(), "no title") {
+	if _, err := gh.IssueTitle(t.Context(), "3"); err == nil || !strings.Contains(err.Error(), "no title") {
 		t.Errorf("err = %v, want no title", err)
 	}
 
 	// gh answers `issue view` for a pull request too: its title would name a
 	// branch after an unrelated PR
-	if _, err := gh.issueTitle(t.Context(), "4"); err == nil || !strings.Contains(err.Error(), "pull request") {
+	if _, err := gh.IssueTitle(t.Context(), "4"); err == nil || !strings.Contains(err.Error(), "pull request") {
 		t.Errorf("err = %v, want a pull request refused", err)
 	}
 }
@@ -492,9 +494,9 @@ func TestHostRefusesPullRequests(t *testing.T) {
 	f.script("gh issue view 35 --json number,title,state,labels,createdAt,url,body,assignees", pr)
 	f.script("glab issue view 7 -F json", `{"iid":7,"web_url":"https://gitlab.com/g/p/-/merge_requests/7"}`)
 
-	gh := newHost("gh", "/code/repo")
+	gh := hostops.NewHost("gh", "/code/repo")
 
-	if _, _, err := gh.issueDoc(
+	if _, _, err := gh.IssueDoc(
 		t.Context(),
 		"FT-35",
 		"35",
@@ -504,11 +506,11 @@ func TestHostRefusesPullRequests(t *testing.T) {
 		t.Errorf("issueDoc = %v", err)
 	}
 
-	if _, err := gh.issueURL(t.Context(), "35"); err == nil || !strings.Contains(err.Error(), "pull request") {
+	if _, err := gh.IssueURL(t.Context(), "35"); err == nil || !strings.Contains(err.Error(), "pull request") {
 		t.Errorf("issueURL = %v", err)
 	}
 
-	if _, err := newHost("glab", "/code/repo").issueURL(t.Context(), "7"); err == nil {
+	if _, err := hostops.NewHost("glab", "/code/repo").IssueURL(t.Context(), "7"); err == nil {
 		t.Error("glab merge request taken for an issue")
 	}
 }
@@ -549,10 +551,10 @@ func TestHostIssueDocLabels(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		doc, _, err := newHost(
+		doc, _, err := hostops.NewHost(
 			tt.host,
 			"/code/repo",
-		).issueDoc(t.Context(), "FT-"+tt.number, tt.number, staleOf(tt.stale))
+		).IssueDoc(t.Context(), "FT-"+tt.number, tt.number, staleOf(tt.stale))
 		if err != nil || !strings.Contains(doc, tt.want) {
 			t.Errorf("%s issueDoc(%s) = %q, %v; want a line %q", tt.host, tt.number, doc, err, tt.want)
 		}
@@ -564,7 +566,7 @@ func TestTaskBranch(t *testing.T) {
 		f := newFakes(t)
 		f.script(refsAfter, heads("GH-7/thing"))
 
-		got, err := indexOf(t).after(t.Context(), "GH-7")
+		got, err := indexOf(t).After(t.Context(), "GH-7")
 		if err != nil || got != "GH-7/thing" {
 			t.Errorf("after = %q, %v", got, err)
 		}
@@ -579,7 +581,7 @@ func TestTaskBranch(t *testing.T) {
 		f.script(refsAfter, "")
 		f.script(refsAfterO, "refs/remotes/origin/GH-7")
 
-		got, err := indexOf(t).after(t.Context(), "GH-7")
+		got, err := indexOf(t).After(t.Context(), "GH-7")
 		if err != nil || got != "origin/GH-7" {
 			t.Errorf("after = %q, %v", got, err)
 		}
@@ -590,7 +592,7 @@ func TestTaskBranch(t *testing.T) {
 		f.script(refsAfter, "")
 		f.script(refsAfterO, "")
 
-		if _, err := indexOf(t).after(t.Context(), "GH-7"); err == nil {
+		if _, err := indexOf(t).After(t.Context(), "GH-7"); err == nil {
 			t.Error("after found a branch where none exists")
 		}
 	})
@@ -600,7 +602,7 @@ func TestTaskBranch(t *testing.T) {
 		f.script(refsAfter, "")
 		f.script(allHeads, heads("main", "feat/GH-7-base"))
 
-		got, err := indexOf(t).after(t.Context(), "GH-7")
+		got, err := indexOf(t).After(t.Context(), "GH-7")
 		if err != nil || got != "feat/GH-7-base" {
 			t.Errorf("after = %q, %v", got, err)
 		}
@@ -614,7 +616,7 @@ func TestTaskBranch(t *testing.T) {
 		f := newFakes(t)
 		f.script(refsAfter, heads("GH-7", "GH-7-attempt2"))
 
-		_, err := indexOf(t).after(t.Context(), "GH-7")
+		_, err := indexOf(t).After(t.Context(), "GH-7")
 		if err == nil || !strings.Contains(err.Error(), "GH-7-attempt2") {
 			t.Errorf("err = %v, want the candidates named", err)
 		}
@@ -626,7 +628,7 @@ func TestNamedRef(t *testing.T) {
 		f := newFakes(t)
 		f.script(shaLocal, "aaa")
 
-		got, sha, err := namedRef(t.Context(), "/code/repo", "release/1.2")
+		got, sha, err := stack.NamedRef(t.Context(), "/code/repo", "release/1.2")
 		if err != nil || got != "release/1.2" || sha != "aaa" {
 			t.Errorf("namedRef = %q, %q, %v", got, sha, err)
 		}
@@ -641,7 +643,7 @@ func TestNamedRef(t *testing.T) {
 		f.fail("git rev-parse --verify --quiet refs/heads/origin/main", missing)
 		f.script("git rev-parse --verify --quiet refs/remotes/origin/main", "bbb")
 
-		got, sha, err := namedRef(t.Context(), "/code/repo", "origin/main")
+		got, sha, err := stack.NamedRef(t.Context(), "/code/repo", "origin/main")
 		if err != nil || got != "origin/main" || sha != "bbb" {
 			t.Errorf("namedRef = %q, %q, %v", got, sha, err)
 		}
@@ -653,7 +655,7 @@ func TestNamedRef(t *testing.T) {
 		f.fail(shaRemote, missing)
 		f.script(shaOrigin, "ccc")
 
-		got, sha, err := namedRef(t.Context(), "/code/repo", "release/1.2")
+		got, sha, err := stack.NamedRef(t.Context(), "/code/repo", "release/1.2")
 		if err != nil || got != "origin/release/1.2" || sha != "ccc" {
 			t.Errorf("namedRef = %q, %q, %v", got, sha, err)
 		}
@@ -665,7 +667,7 @@ func TestNamedRef(t *testing.T) {
 		f.fail(shaRemote, missing)
 		f.fail(shaOrigin, missing)
 
-		_, _, err := namedRef(t.Context(), "/code/repo", "release/1.2")
+		_, _, err := stack.NamedRef(t.Context(), "/code/repo", "release/1.2")
 		if err == nil || !strings.Contains(err.Error(), "release/1.2") {
 			t.Errorf("err = %v, want the branch named", err)
 		}
@@ -757,7 +759,7 @@ func TestExistingBranch(t *testing.T) {
 				f.meta.Seed(c.linked, branchmeta.Task, "GH-5")
 			}
 
-			got, err := indexOf(t).find(t.Context(), c.want, "GH-1", c.suffix, policyLocalOrOrigin)
+			got, err := indexOf(t).Find(t.Context(), c.want, "GH-1", c.suffix, stack.PolicyLocalOrOrigin)
 			if c.wantErr {
 				if err == nil {
 					t.Fatalf("find = %+v, want an error", got)
@@ -776,7 +778,7 @@ func TestExistingBranch(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if got.name != c.got || got.remote {
+			if got.Name != c.got || got.Remote {
 				t.Errorf("find = %+v, want %q, local", got, c.got)
 			}
 		})
@@ -878,7 +880,11 @@ func TestPromptNote(t *testing.T) {
 		t.Errorf("prompt(discuss) with a note = %q, want %q", got, want)
 	}
 
-	pick := &pickup{url: "https://github.com/o/r/pull/9", view: "f10 pr view --comments 9", diff: "f10 pr diff 9"}
+	pick := &hostops.Pickup{
+		URL:  "https://github.com/o/r/pull/9",
+		View: "f10 pr view --comments 9",
+		Diff: "f10 pr diff 9",
+	}
 	if got := prompt(modeDefault, shipFlow{}, "GH-1", nil, "", pick, "check the tests"); !strings.HasSuffix(got,
 		" Then, as the user asks: check the tests. Then stop and wait.") {
 		t.Errorf("prompt for a PR with a note = %q, want the note before the wait", got)
@@ -886,11 +892,11 @@ func TestPromptNote(t *testing.T) {
 }
 
 func TestRefuseNote(t *testing.T) {
-	pick := &pickup{url: "https://github.com/o/r/pull/9"}
+	pick := &hostops.Pickup{URL: "https://github.com/o/r/pull/9"}
 
 	for _, tc := range []struct {
 		mode   string
-		pick   *pickup
+		pick   *hostops.Pickup
 		note   string
 		refuse bool
 	}{
@@ -1845,8 +1851,8 @@ func TestStartBaseAndAfterAreExclusive(t *testing.T) {
 // more than whether the task has a branch; a started task, one whose subtasks
 // are all finished and one with none start.
 func TestStartRefusesAParent(t *testing.T) {
-	kidsOf := func(rows []childRow, err error, asked *bool) func(context.Context, ref.Ref) ([]childRow, error) {
-		return func(context.Context, ref.Ref) ([]childRow, error) {
+	kidsOf := func(rows []stack.ChildRow, err error, asked *bool) func(context.Context, ref.Ref) ([]stack.ChildRow, error) {
+		return func(context.Context, ref.Ref) ([]stack.ChildRow, error) {
 			*asked = true
 
 			return rows, err
@@ -1859,7 +1865,7 @@ func TestStartRefusesAParent(t *testing.T) {
 
 		var asked bool
 
-		rows := []childRow{{ID: "GH-2"}, {ID: "GH-3", Finished: true}, {ID: "GH-4"}}
+		rows := []stack.ChildRow{{ID: "GH-2"}, {ID: "GH-3", Finished: true}, {ID: "GH-4"}}
 		in := startInput{main: "/code/repo", storage: testStorage, task: gh1, children: kidsOf(rows, nil, &asked)}
 		err := refuseStartParent(t.Context(), in)
 
@@ -1886,12 +1892,12 @@ func TestStartRefusesAParent(t *testing.T) {
 	})
 
 	for name, tc := range map[string]struct {
-		rows []childRow
+		rows []stack.ChildRow
 		err  error
 	}{
-		"every subtask finished": {rows: []childRow{{ID: "GH-2", Finished: true}}},
-		"no subtasks":            {rows: []childRow{}},
-		"no parent link":         {err: errNoParentLink},
+		"every subtask finished": {rows: []stack.ChildRow{{ID: "GH-2", Finished: true}}},
+		"no subtasks":            {rows: []stack.ChildRow{}},
+		"no parent link":         {err: hostops.ErrNoParentLink},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newFakes(t)
@@ -1921,7 +1927,7 @@ func TestStartRefusesAParent(t *testing.T) {
 			main:     "/code/repo",
 			storage:  testStorage,
 			task:     gh1,
-			children: kidsOf([]childRow{{ID: "GH-2"}}, nil, &asked),
+			children: kidsOf([]stack.ChildRow{{ID: "GH-2"}}, nil, &asked),
 		}
 		if err := refuseStartParent(t.Context(), in); err != nil || asked {
 			t.Errorf("err = %v, asked = %v; a started task is never a parent", err, asked)
@@ -1958,10 +1964,10 @@ func TestChecksParent(t *testing.T) {
 }
 
 // indexOf loads a branch index from the records the test holds now.
-func indexOf(t *testing.T) *branchIndex {
+func indexOf(t *testing.T) *stack.BranchIndex {
 	t.Helper()
 
-	x, err := loadBranchIndex(t.Context(), "/code/repo")
+	x, err := stack.LoadBranchIndex(t.Context(), "/code/repo")
 	if err != nil {
 		t.Fatal(err)
 	}

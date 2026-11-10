@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
@@ -15,9 +16,9 @@ import (
 )
 
 // titledHost is a gh host whose project declares tracker.title.
-func titledHost() host {
-	h := newHost("gh", "")
-	h.titles, h.prefix = "{id}: {title}", "FT"
+func titledHost() hostops.Host {
+	h := hostops.NewHost("gh", "")
+	h.Titles, h.Prefix = "{id}: {title}", "FT"
 
 	return h
 }
@@ -38,28 +39,31 @@ func TestHostReadsStripTheTitle(t *testing.T) {
 
 	h := titledHost()
 
-	doc, _, err := h.issueDoc(t.Context(), "FT-12", "12", facts.StaleAfter{})
+	doc, _, err := h.IssueDoc(t.Context(), "FT-12", "12", facts.StaleAfter{})
 	if err != nil || !strings.HasPrefix(doc, "# FT-12: Drive halts\n") {
 		t.Errorf("issueDoc = %q, %v", doc, err)
 	}
 
-	if title, err := h.issueTitle(t.Context(), "12"); err != nil || title != "Drive halts" {
+	if title, err := h.IssueTitle(t.Context(), "12"); err != nil || title != "Drive halts" {
 		t.Errorf("issueTitle = %q, %v", title, err)
 	}
 
-	rows, err := h.listIssues(t.Context(), "", "FT", nil, issuePage)
+	rows, err := h.ListIssues(t.Context(), "", "FT", nil, hostops.IssuePage)
 	if err != nil || len(rows) != 2 || rows[0].Title != "Drive halts" || rows[1].Title != "Bare one" {
 		t.Errorf("listIssues = %+v, %v", rows, err)
 	}
 
 	// no template: the title stays as the host holds it
-	if title, _ := newHost("gh", "").issueTitle(t.Context(), "12"); title != "FT-12: Drive halts" {
+	if title, _ := hostops.NewHost("gh", "").IssueTitle(t.Context(), "12"); title != "FT-12: Drive halts" {
 		t.Errorf("issueTitle without a template = %q", title)
 	}
 }
 
 func TestDriverRowsStripTheTitle(t *testing.T) {
-	rows := stripTitles([]row{{ID: "FT-3", Title: "FT-3 - Ship it"}, {ID: "FT-4", Title: "Plain"}}, "{id}: {title}")
+	rows := hostops.StripTitles(
+		[]hostops.Row{{ID: "FT-3", Title: "FT-3 - Ship it"}, {ID: "FT-4", Title: "Plain"}},
+		"{id}: {title}",
+	)
 	if rows[0].Title != "Ship it" || rows[1].Title != "Plain" {
 		t.Errorf("stripTitles = %+v", rows)
 	}
@@ -74,7 +78,7 @@ func TestHostUpdateRestoresThePrefix(t *testing.T) {
 		`{"url":"https://github.com/o/r/issues/7","title":"Renamed by hand"}`)
 	f.script("gh issue edit 7 --title FT-7: Renamed by hand --add-label shipped", "")
 
-	if err := titledHost().update(t.Context(), "7", props{labels: []string{"shipped"}}, nil); err != nil ||
+	if err := titledHost().Update(t.Context(), "7", hostops.Props{Labels: []string{"shipped"}}, nil); err != nil ||
 		!f.called("gh issue edit 7 --title FT-7: Renamed by hand --add-label shipped") {
 		t.Errorf("update: %v, calls %v", err, f.calls)
 	}
@@ -83,7 +87,7 @@ func TestHostUpdateRestoresThePrefix(t *testing.T) {
 		`{"url":"https://github.com/o/r/issues/8","title":"FT-8: Fine"}`)
 	f.script("gh issue close 8", "")
 
-	if err := titledHost().update(t.Context(), "8", props{status: "closed"}, nil); err != nil ||
+	if err := titledHost().Update(t.Context(), "8", hostops.Props{Status: "closed"}, nil); err != nil ||
 		f.called("gh issue edit 8") {
 		t.Errorf("update of a prefixed title edited it: %v, calls %v", err, f.calls)
 	}
@@ -97,12 +101,12 @@ func TestTitleChangesAll(t *testing.T) {
 	list := "gh issue list --state all --json number,title --limit 100000"
 	f.script(list, `[{"number":1,"title":"FT-1: Done"},{"number":2,"title":"Bare"},{"number":3,"title":"ft-3 Lower"}]`)
 
-	changes, err := titledHost().titleChanges(t.Context(), "")
+	changes, err := titledHost().TitleChanges(t.Context(), "")
 	if err != nil || len(changes) != 2 {
 		t.Fatalf("titleChanges = %+v, %v", changes, err)
 	}
 
-	if changes[0].to != "FT-2: Bare" || changes[1].to != "FT-3: Lower" {
+	if changes[0].To != "FT-2: Bare" || changes[1].To != "FT-3: Lower" {
 		t.Errorf("changes = %+v", changes)
 	}
 
@@ -111,7 +115,7 @@ func TestTitleChangesAll(t *testing.T) {
 		`[{"number":1,"title":"FT-1: Done"},{"number":2,"title":"FT-2: Bare"},{"number":3,"title":"FT-3: Lower"}]`,
 	)
 
-	if again, err := titledHost().titleChanges(t.Context(), ""); err != nil || len(again) != 0 {
+	if again, err := titledHost().TitleChanges(t.Context(), ""); err != nil || len(again) != 0 {
 		t.Errorf("second run = %+v, %v", again, err)
 	}
 }
@@ -146,7 +150,7 @@ func TestOneIDHeading(t *testing.T) {
 		"# Drive":                       "# Drive",
 		"no heading":                    "no heading",
 	} {
-		if got := oneIDHeading(doc, r, "{id}: {title}"); got != want {
+		if got := hostops.OneIDHeading(doc, r, "{id}: {title}"); got != want {
 			t.Errorf("oneIDHeading(%q) = %q, want %q", doc, got, want)
 		}
 	}
@@ -172,7 +176,7 @@ func TestRetitleAfter(t *testing.T) {
 
 	var warn strings.Builder
 
-	retitleAfter(t.Context(), &warn, tg, r, "created")
+	hostops.RetitleAfter(t.Context(), &warn, tg, r, "created")
 
 	if !f.called("gh issue edit 12 --title FT-12: Drive") || warn.Len() != 0 {
 		t.Errorf("retitle: calls %v, warning %q", f.calls, warn.String())
@@ -180,7 +184,7 @@ func TestRetitleAfter(t *testing.T) {
 
 	f.fail("gh issue edit 12 --title FT-12: Drive", shell.Result{Code: 1, Stderr: "HTTP 502"})
 
-	retitleAfter(t.Context(), &warn, tg, r, "created")
+	hostops.RetitleAfter(t.Context(), &warn, tg, r, "created")
 
 	if !strings.Contains(warn.String(), "FT-12 was created") ||
 		!strings.Contains(warn.String(), "f10 task retitle FT-12") {

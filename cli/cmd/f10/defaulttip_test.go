@@ -3,6 +3,8 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/amberpixels/f10/cli/internal/stack"
 )
 
 // tipFixture is a repo whose main and origin/main point at the commits a
@@ -84,7 +86,7 @@ func TestDefaultTipReaders(t *testing.T) {
 				}
 			}
 
-			sha, name, err := defaultTargetOf(t.Context(), f.repo.dir, "main")
+			sha, name, err := stack.DefaultTargetOf(t.Context(), f.repo.dir, "main")
 			want := map[string]string{"main": local, "origin/main": remote}[c.target]
 
 			if err != nil || name != c.target || sha != want {

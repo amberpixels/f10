@@ -11,6 +11,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
@@ -41,7 +42,7 @@ func ghReviewer(t *testing.T, f *fakes, rf facts.Review) *reviewer {
 
 	f.script(reviewPR, prJSON)
 
-	rv, err := newReviewer(t.Context(), newHost("gh", "."), rf, "")
+	rv, err := newReviewer(t.Context(), hostops.NewHost("gh", "."), rf, "")
 	if err != nil {
 		t.Fatalf("newReviewer: %v", err)
 	}
@@ -295,7 +296,7 @@ func TestReviewGlabSpelling(t *testing.T) {
 	f.script("glab api --paginate projects/:fullpath/merge_requests/7/commits?per_page=100",
 		`[{"id":"d1","committed_date":"2026-10-06T10:00:00Z"},{"id":"d2","committed_date":"2026-10-06T12:00:00Z"}]`)
 
-	rv, err := newReviewer(t.Context(), newHost("glab", "."), stickyFacts(), "")
+	rv, err := newReviewer(t.Context(), hostops.NewHost("glab", "."), stickyFacts(), "")
 	if err != nil {
 		t.Fatalf("newReviewer: %v", err)
 	}
@@ -644,7 +645,7 @@ func glabReviewer(t *testing.T, f *fakes, rf facts.Review) *reviewer {
 	f.script("glab api --paginate projects/:fullpath/merge_requests/7/commits?per_page=100",
 		`[{"id":"d1","committed_date":"2026-10-06T10:00:00Z"},{"id":"d2","committed_date":"2026-10-06T12:00:00Z"}]`)
 
-	rv, err := newReviewer(t.Context(), newHost("glab", "."), rf, "")
+	rv, err := newReviewer(t.Context(), hostops.NewHost("glab", "."), rf, "")
 	if err != nil {
 		t.Fatalf("newReviewer: %v", err)
 	}
@@ -950,7 +951,7 @@ func TestReviewTriggerGlabSpelling(t *testing.T) {
 	rf := stickyFacts()
 	rf.Trigger, rf.TriggerHow = facts.TriggerManual, "comment `@claude` on the MR"
 
-	rv, err := newReviewer(t.Context(), newHost("glab", "."), rf, "")
+	rv, err := newReviewer(t.Context(), hostops.NewHost("glab", "."), rf, "")
 	if err != nil {
 		t.Fatalf("newReviewer: %v", err)
 	}

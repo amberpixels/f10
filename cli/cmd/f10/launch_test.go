@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 )
 
 // A fresh start hands the agent its first prompt on its command line, ahead
@@ -70,7 +71,7 @@ func TestStartTypesAPromptWithANewline(t *testing.T) {
 // never typed into the pane.
 func TestDriveLaunchesWithTheFirstSkill(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "judge")
-	fx.task("GH-1", taskInfo{body: "first"}, "")
+	fx.task("GH-1", hostops.TaskInfo{Body: "first"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.expects("GH-1", "judge")

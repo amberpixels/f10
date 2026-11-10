@@ -10,20 +10,22 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // afterFromBody reads the task's body for an After: line. A body that
 // cannot be read is a note, never a refusal: --after stays the explicit way.
-func afterFromBody(ctx context.Context, tr tracker, main string, task ref.Ref) (string, []string, error) {
-	info, err := tr.info(ctx, task)
+func afterFromBody(ctx context.Context, tr stack.Tracker, main string, task ref.Ref) (string, []string, error) {
+	info, err := tr.Info(ctx, task)
 	if err != nil {
 		return "", []string{fmt.Sprintf("no body read for %s (%v), so no After: line applies", task.ID, err)}, nil
 	}
 
-	after, note, err := bodyAfter(ctx, tr, main, task, info.body)
+	after, note, err := stack.BodyAfter(ctx, tr, main, task, info.Body)
 	if err != nil || note == "" {
 		return after, nil, err
 	}
@@ -53,7 +55,7 @@ type dependency struct {
 // checksParent reports whether start refuses a parent: a PR pickup is
 // someone else's branch, and talking an umbrella task through before
 // splitting it is what --discuss is for.
-func checksParent(mode string, pick *pickup) bool {
+func checksParent(mode string, pick *hostops.Pickup) bool {
 	return pick == nil && mode != modeDiscuss
 }
 
@@ -65,13 +67,13 @@ func refuseStartParent(ctx context.Context, in startInput) error {
 		return nil
 	}
 
-	branched, err := hasTaskBranch(ctx, in.main, in.task.ID)
+	branched, err := stack.HasTaskBranch(ctx, in.main, in.task.ID)
 	if err != nil || branched {
 		return err
 	}
 
 	for _, m := range in.task.MemberRefs() {
-		open, err := openSubtasks(ctx, tracker{children: in.children}, m)
+		open, err := openSubtasks(ctx, stack.Tracker{Children: in.children}, m)
 		if err != nil {
 			return err
 		}
@@ -89,13 +91,13 @@ func refuseStartParent(ctx context.Context, in startInput) error {
 // another branch ships or a branch reopened with other riders than typed,
 // since riders are fixed at start; a task alone takes its branch's riders.
 func settleBundle(ctx context.Context, main string, task ref.Ref, existing string) (ref.Ref, error) {
-	x, err := loadBranchIndex(ctx, main)
+	x, err := stack.LoadBranchIndex(ctx, main)
 	if err != nil {
 		return ref.Ref{}, err
 	}
 
 	if existing != "" {
-		lead, riders := x.bundle(existing, strings.TrimSuffix(prefixOf(task), "-"))
+		lead, riders := x.Bundle(existing, strings.TrimSuffix(prefixOf(task), "-"))
 
 		switch {
 		case len(task.Riders()) == 0 && len(riders) > 0 && strings.EqualFold(lead, task.ID):
@@ -112,10 +114,10 @@ func settleBundle(ctx context.Context, main string, task ref.Ref, existing strin
 	}
 
 	for _, rider := range task.Riders() {
-		branches := x.linked(rider)
+		branches := x.Linked(rider)
 
 		for _, root := range []string{"refs/heads/", "refs/remotes/origin/"} {
-			refs, err := gitx.Refs(ctx, main, append(taskRefs(root, rider), riderRefs(root, rider)...)...)
+			refs, err := gitx.Refs(ctx, main, append(stack.TaskRefs(root, rider), stack.RiderRefs(root, rider)...)...)
 			if err != nil {
 				return ref.Ref{}, err
 			}
@@ -156,22 +158,22 @@ func recordBundle(ctx context.Context, dir, branch string, task ref.Ref) error {
 func baseFor(ctx context.Context, in startInput) (baseRef, *dependency, error) {
 	switch {
 	case in.after != "":
-		x, err := loadBranchIndex(ctx, in.main)
+		x, err := stack.LoadBranchIndex(ctx, in.main)
 		if err != nil {
 			return baseRef{}, nil, err
 		}
 
-		branch, err := x.after(ctx, in.after)
+		branch, err := x.After(ctx, in.after)
 		if err != nil {
 			return baseRef{}, nil, err
 		}
 
-		base := baseRef{ref: branch, flag: "--after", sha: refSHA(ctx, in.main, branch)}
+		base := baseRef{ref: branch, flag: "--after", sha: stack.RefSHA(ctx, in.main, branch)}
 		dep := &dependency{task: in.after, branch: strings.TrimPrefix(branch, "origin/")}
 
 		return base, dep, nil
 	case in.base != "":
-		branch, sha, err := namedRef(ctx, in.main, in.base)
+		branch, sha, err := stack.NamedRef(ctx, in.main, in.base)
 		if err != nil {
 			return baseRef{}, nil, err
 		}
@@ -202,8 +204,8 @@ func sameAsDefaultNote(ctx context.Context, dir string, base baseRef, dep *depen
 		return ""
 	}
 
-	def := defaultBranch(ctx, dir)
-	if def == "" || refSHA(ctx, dir, "refs/remotes/"+def) != base.sha {
+	def := stack.DefaultBranch(ctx, dir)
+	if def == "" || stack.RefSHA(ctx, dir, "refs/remotes/"+def) != base.sha {
 		return ""
 	}
 

@@ -8,6 +8,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -83,7 +84,7 @@ func TestIssuesRefusesADeclaredNonHostTracker(t *testing.T) {
 		},
 	}
 
-	_, err := tasksFor(notion).Title(t.Context(), ref.Ref{Number: "7"})
+	_, err := hostops.TasksFor(notion).Title(t.Context(), ref.Ref{Number: "7"})
 	if err == nil || !strings.Contains(err.Error(), "Notion") ||
 		!strings.Contains(err.Error(), filepath.Join(root, "driver")) {
 		t.Errorf("Title() = %v, want the Notion refusal naming the driver path", err)
@@ -98,8 +99,8 @@ func TestIssuesRefusesADeclaredNonHostTracker(t *testing.T) {
 		},
 	}
 
-	if _, ok := tasksFor(github).(hostSource); !ok {
-		t.Errorf("a GitHub tracker = %T, want its host", tasksFor(github))
+	if _, ok := hostops.TasksFor(github).(hostops.HostSource); !ok {
+		t.Errorf("a GitHub tracker = %T, want its host", hostops.TasksFor(github))
 	}
 }
 
@@ -126,7 +127,7 @@ func TestDeclinedVerbOnNonHostTracker(t *testing.T) {
 	f.fail("driver list", shell.Result{Code: driver.ExitUnsupported})
 	f.fail("driver search index", shell.Result{Code: driver.ExitUnsupported})
 
-	_, listErr := taskRows(t.Context(), tg, issuePage)
+	_, listErr := taskRows(t.Context(), tg, hostops.IssuePage)
 	_, searchErr := searchRows(t.Context(), tg, "index")
 
 	for verb, err := range map[string]error{"list": listErr, "search": searchErr} {
@@ -152,15 +153,15 @@ func TestDeclinedVerbRefusalNamesTheNeed(t *testing.T) {
 		driver.VerbRead, driver.VerbURL, driver.VerbIndex, driver.VerbList, driver.VerbSearch, driver.VerbBranch,
 	}
 	for _, verb := range verbs {
-		err := refusedSource{t: tg, d: tg.Driver()}.refuse(verb)
+		err := hostops.RefusedSource{Target: tg, Driver: tg.Driver()}.Refuse(verb)
 		if err == nil || !strings.Contains(err.Error(), path) || !strings.Contains(err.Error(), "`"+verb+"`") ||
-			!strings.Contains(err.Error(), verbNeeds[verb]) {
+			!strings.Contains(err.Error(), hostops.VerbNeeds[verb]) {
 			t.Errorf("refuse(%s) = %v, want the driver path, the verb and what needs it", verb, err)
 		}
 	}
 
-	if !strings.Contains(verbNeeds[driver.VerbList], "`f10 task open --print` and the board's next rows") {
-		t.Errorf("list need = %q", verbNeeds[driver.VerbList])
+	if !strings.Contains(hostops.VerbNeeds[driver.VerbList], "`f10 task open --print` and the board's next rows") {
+		t.Errorf("list need = %q", hostops.VerbNeeds[driver.VerbList])
 	}
 
 	if _, err := titleLookup(tg, "7")(t.Context()); err == nil || strings.Contains(err.Error(), "none was found") {
@@ -180,7 +181,7 @@ func TestDeclinedVerbOnHostTrackerFallsBack(t *testing.T) {
 		`[{"number":7,"title":"host issue","state":"OPEN","url":"https://github.com/o/r/issues/7","labels":[]}]`,
 	)
 
-	if rows, err := taskRows(t.Context(), tg, issuePage); err != nil || len(rows) != 1 || rows[0].ID != "FT-7" {
+	if rows, err := taskRows(t.Context(), tg, hostops.IssuePage); err != nil || len(rows) != 1 || rows[0].ID != "FT-7" {
 		t.Errorf("fallback = %+v, %v; want the host issue", rows, err)
 	}
 }

@@ -9,7 +9,9 @@ import (
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
@@ -48,7 +50,7 @@ func dropRows(rows []taskRow, drop func(taskRow) bool) []taskRow {
 // launchKids is the session's launches as rows, nested under their bases
 // as a parent's children are. A finished task is left out, and so is the
 // session run's own task, which may be the parent the launches split.
-func launchKids(ctx context.Context, warn io.Writer, t *target.Target, sid string) []childRow {
+func launchKids(ctx context.Context, warn io.Writer, t *target.Target, sid string) []stack.ChildRow {
 	launches, err := state.Launches(state.Dir(), sid)
 	if err != nil {
 		ui.Warnf(warn, "reading this session's launches: %v", err)
@@ -81,12 +83,12 @@ func launchKids(ctx context.Context, warn io.Writer, t *target.Target, sid strin
 	}
 
 	var (
-		kids []childRow
+		kids []stack.ChildRow
 		refs []ref.Ref
 	)
 
 	main := cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot)
-	root := trackerFor(t).storage
+	root := stack.TrackerFor(t).Storage
 	bases := map[string]string{} // siblings share a base: resolve it once
 
 	for _, tok := range tokens {
@@ -98,18 +100,18 @@ func launchKids(ctx context.Context, warn io.Writer, t *target.Target, sid strin
 		}
 
 		r = r.Head()
-		k := childRow{ID: r.ID, suffix: suffix, queued: tok.queued, phase: tok.phase}
+		k := stack.ChildRow{ID: r.ID, Suffix: suffix, Queued: tok.queued, Phase: tok.phase}
 
 		if slices.ContainsFunc(
 			kids,
-			func(o childRow) bool { return o.ID == k.ID && strings.EqualFold(o.suffix, k.suffix) },
+			func(o stack.ChildRow) bool { return o.ID == k.ID && strings.EqualFold(o.Suffix, k.Suffix) },
 		) {
 			continue
 		}
 
 		// a finished task reads nothing further: its row would only drop
-		branched, err := hasTaskBranch(ctx, main, r.ID)
-		if err == nil && (tok.started && !branched || finishedTask(taskInfo{}, root, r.ID, branched)) {
+		branched, err := stack.HasTaskBranch(ctx, main, r.ID)
+		if err == nil && (tok.started && !branched || stack.FinishedTask(hostops.TaskInfo{}, root, r.ID, branched)) {
 			continue
 		}
 
@@ -126,7 +128,7 @@ func launchKids(ctx context.Context, warn io.Writer, t *target.Target, sid strin
 		kids[i].Title, kids[i].URL = tasktitle.Clean(known[kids[i].ID].Title, kids[i].ID), known[kids[i].ID].URL
 	}
 
-	return childTree(kids)
+	return stack.ChildTree(kids)
 }
 
 // launchBase is the base a launched task waits on, as an id: its branch's
@@ -141,9 +143,9 @@ func launchBase(
 ) string {
 	base := recorded
 	if branched {
-		if x, err := loadBranchIndex(ctx, main); err == nil {
-			if b, err := x.find(ctx, "", id, suffix, policyLocal); err == nil && b.name != "" {
-				base = cmp.Or(branchAfter(ctx, main, b.name), base)
+		if x, err := stack.LoadBranchIndex(ctx, main); err == nil {
+			if b, err := x.Find(ctx, "", id, suffix, policyLocal); err == nil && b.Name != "" {
+				base = cmp.Or(branchAfter(ctx, main, b.Name), base)
 			}
 		}
 	}
@@ -160,8 +162,8 @@ func launchBase(
 	if r, err := t.Reference(ctx, base); err == nil {
 		out = r.Head().ID
 
-		has, err := hasTaskBranch(ctx, main, out)
-		if err != nil || finishedTask(taskInfo{}, trackerFor(t).storage, out, has) {
+		has, err := stack.HasTaskBranch(ctx, main, out)
+		if err != nil || stack.FinishedTask(hostops.TaskInfo{}, stack.TrackerFor(t).Storage, out, has) {
 			out = ""
 		}
 	}

@@ -6,7 +6,9 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -32,7 +34,7 @@ func TestUnsettledWhenGitCannotRead(t *testing.T) {
 
 			r := &driveRun{o: openedTask{branch: "GH-1", path: "/code/repo.GH-1"}}
 
-			if got := branchUnsettled(
+			if got := stack.BranchUnsettled(
 				t.Context(),
 				fx.in.main,
 				r.o.path,
@@ -51,7 +53,7 @@ func TestUnsettledWhenGitCannotRead(t *testing.T) {
 // read: a wrong "not pushed" or "not an ancestor" would pick the wrong push.
 func TestDriveHaltsFinishWhenGitCannotRead(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "finish")
-	fx.task("GH-1", taskInfo{body: "x"}, heads("GH-1"))
+	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, heads("GH-1"))
 	fx.f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.f.script(headRef, "origin/main")

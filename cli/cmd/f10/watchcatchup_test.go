@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
@@ -48,11 +49,16 @@ func scriptTarget(fx *janitorFixture) {
 
 // watchEngine is the watcher's engine with git's integration scripted: a
 // rebase onto origin/main at m2, stopped on a conflict when stopped says so.
-func watchEngine(stopped bool) *catchupEngine {
-	return &catchupEngine{
-		agentVerifies: "the watcher leaves verify to the agent",
-		integrate: func(context.Context, catchupInput, func(catchupPlan) []string) (catchupPlan, bool, error) {
-			return catchupPlan{branch: "GH-1/x", base: "origin/main", sha: "m2", method: methodRebase}, stopped, nil
+func watchEngine(stopped bool) *stack.CatchupEngine {
+	return &stack.CatchupEngine{
+		AgentVerifies: "the watcher leaves verify to the agent",
+		Integrate: func(context.Context, stack.CatchupInput, func(stack.CatchupPlan) []string) (stack.CatchupPlan, bool, error) {
+			return stack.CatchupPlan{
+				Branch: "GH-1/x",
+				Base:   "origin/main",
+				SHA:    "m2",
+				Method: stack.MethodRebase,
+			}, stopped, nil
 		},
 	}
 }

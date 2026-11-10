@@ -6,6 +6,10 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/stack"
 )
 
 // A goneError is a checkout a finish that stopped halfway left: no branch,
@@ -26,7 +30,7 @@ func finishBranchless(ctx context.Context, w io.Writer, in finishInput, gone gon
 		return finishParent(ctx, w, in, gone)
 	}
 
-	if err := writeReport(w, []fact{taskFact(ctx, w, in.main, in.task.Label())},
+	if err := render.WriteReport(w, []render.Fact{render.TaskFact(ctx, w, in.main, in.task.Label())},
 		[]string{in.task.ID + " has no branch and its plan is archived: already finished"}); err != nil {
 		return err
 	}
@@ -45,7 +49,7 @@ func finishParent(ctx context.Context, w io.Writer, in finishInput, gone goneErr
 	}
 
 	kids, err := in.subtasks(ctx, in.task)
-	if errors.Is(err, errNoParentLink) || (err == nil && len(kids) == 0) {
+	if errors.Is(err, hostops.ErrNoParentLink) || (err == nil && len(kids) == 0) {
 		return gone.err
 	}
 
@@ -73,12 +77,12 @@ func finishParent(ctx context.Context, w io.Writer, in finishInput, gone goneErr
 
 		// a tracking ref the host deleted but this clone never pruned counts too,
 		// so the ref is named for the user to prune
-		x, err := loadBranchIndex(ctx, in.main)
+		x, err := stack.LoadBranchIndex(ctx, in.main)
 		if err != nil {
 			return err
 		}
 
-		branch, err := x.any(ctx, k.ID)
+		branch, err := x.Any(ctx, k.ID)
 		if err != nil {
 			return err
 		}
@@ -105,7 +109,11 @@ func finishParent(ctx context.Context, w io.Writer, in finishInput, gone goneErr
 		}
 	}
 
-	if err := writeReport(w, []fact{taskFact(ctx, w, in.main, in.task.Label())}, []string{note}); err != nil {
+	if err := render.WriteReport(
+		w,
+		[]render.Fact{render.TaskFact(ctx, w, in.main, in.task.Label())},
+		[]string{note},
+	); err != nil {
 		return err
 	}
 

@@ -18,6 +18,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -190,8 +192,8 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) (err error) {
 // the daemon runs writes to a log, so it links nothing.
 func (in *driveInput) loadLinks(ctx context.Context, tasks []driveTask) {
 	if in.links == nil {
-		in.links = linksFor(in.out, false)
-		if in.links.on {
+		in.links = render.LinksFor(in.out, false)
+		if in.links.On {
 			in.project = target.ProjectOf(ctx, in.main)
 		}
 	}
@@ -323,25 +325,12 @@ func (in *driveInput) released(ctx context.Context, b *driveRun) bool {
 		return false
 	}
 
-	def, err := localDefault(ctx, in.main)
+	def, err := stack.LocalDefault(ctx, in.main)
 	if err != nil {
 		return false
 	}
 
-	return baseHasCode(ctx, in.main, b.o.branch, def)
-}
-
-// createdAt is the commit branch was created at, from its oldest reflog
-// entry, or "" once the reflog no longer reaches back to the creation.
-func createdAt(ctx context.Context, dir, branch string) string {
-	lines := strings.Split(gitx.Out(ctx, dir, "reflog", "show", "--format=%H %gs", "refs/heads/"+branch), "\n")
-
-	sha, subject, _ := strings.Cut(lines[len(lines)-1], " ")
-	if !strings.HasPrefix(subject, "branch: Created from") {
-		return ""
-	}
-
-	return sha
+	return stack.BaseHasCode(ctx, in.main, b.o.branch, def)
 }
 
 // markMoved marks a running dependent whose base branch moved past it, read
@@ -432,7 +421,7 @@ func (in *driveInput) markBehind(ctx context.Context, r *driveRun) error {
 		return nil
 	}
 
-	if err := in.view().fetch.fetch(ctx, in.main); err != nil {
+	if err := in.view().fetch.Fetch(ctx, in.main); err != nil {
 		return skip("fetching origin", err)
 	}
 
@@ -442,7 +431,7 @@ func (in *driveInput) markBehind(ctx context.Context, r *driveRun) error {
 	}
 
 	// a base gone from everywhere is nobody's aim until finish releases the dependent
-	if aim.sha == "" {
+	if aim.SHA == "" {
 		return nil
 	}
 
@@ -455,7 +444,7 @@ func (in *driveInput) markBehind(ctx context.Context, r *driveRun) error {
 		return nil
 	}
 
-	has, err := gitx.IsAncestor(ctx, in.main, aim.sha, "refs/heads/"+branch)
+	has, err := gitx.IsAncestor(ctx, in.main, aim.SHA, "refs/heads/"+branch)
 	if err != nil {
 		return skip("reading "+branch, err)
 	}
@@ -471,16 +460,16 @@ func (in *driveInput) markBehind(ctx context.Context, r *driveRun) error {
 			if st, err := readTarget(ctx, in.main, aim, pr.Base, "", ""); err == nil && st.retargeted {
 				return fmt.Errorf("%s targets %s, not %s, which %s was started on: retarget it back, "+
 					"or catch it up by hand with /f10:catchup in %s", pr.URL, pr.Base,
-					strings.TrimPrefix(aim.name, "origin/"), branch, r.o.path)
+					strings.TrimPrefix(aim.Name, "origin/"), branch, r.o.path)
 			}
 		}
 	}
 
-	if err := branchmeta.Set(ctx, in.main, branch, aim.key, aim.value); err != nil {
-		return fmt.Errorf("marking %s behind %s: %w", branch, aim.name, err)
+	if err := branchmeta.Set(ctx, in.main, branch, aim.Key, aim.Value); err != nil {
+		return fmt.Errorf("marking %s behind %s: %w", branch, aim.Name, err)
 	}
 
-	fmt.Fprintf(in.out, "%s: %s moved past %s, catching up before the next skill\n", in.id(id), aim.name, branch)
+	fmt.Fprintf(in.out, "%s: %s moved past %s, catching up before the next skill\n", in.id(id), aim.Name, branch)
 
 	return nil
 }

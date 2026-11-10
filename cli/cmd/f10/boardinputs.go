@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -138,7 +139,7 @@ func boardInputs(
 		if t.Driver() == nil {
 			in.Tasks = nil
 		}
-	} else if h, err := hostOf(t); err != nil {
+	} else if h, err := hostops.HostOf(t); err != nil {
 		in.HostError = err.Error()
 	} else {
 		in.Host = &h.Host
@@ -182,7 +183,7 @@ func boardInputs(
 // repoInputs binds the collectors to a repository with no checkout: its host
 // alone, no driver, no priority labels, nothing local, as --remote reads.
 func repoInputs(r repoRef, warn io.Writer, since time.Time) lookaround.Inputs {
-	h := host{Name: r.CLI, Repo: r.repo()}
+	h := hostops.Host{Name: r.CLI, Repo: r.repo()}
 
 	return lookaround.Inputs{
 		Project: lookaround.Project{ID: r.id(), Name: r.name(), Host: r.CLI, Remote: true},
@@ -190,7 +191,7 @@ func repoInputs(r repoRef, warn io.Writer, since time.Time) lookaround.Inputs {
 		Since:   since,
 		Host:    &h.Host,
 		Tasks: func(ctx context.Context) ([]lookaround.Task, error) {
-			rows, err := h.listIssues(ctx, "", r.Prefix, nil, boardPage)
+			rows, err := h.ListIssues(ctx, "", r.Prefix, nil, boardPage)
 			if err != nil {
 				return nil, err
 			}
@@ -202,11 +203,11 @@ func repoInputs(r repoRef, warn io.Writer, since time.Time) lookaround.Inputs {
 
 // boardTasks is tracker rows in the board's shape, the base in the project's
 // id format since a driver may send the bare number.
-func boardTasks(rows []row, prefix string) []lookaround.Task {
+func boardTasks(rows []hostops.Row, prefix string) []lookaround.Task {
 	out := make([]lookaround.Task, 0, len(rows))
 
 	for _, r := range rows {
-		after := cmp.Or(r.After, afterIn(r.Body))
+		after := cmp.Or(r.After, hostops.AfterIn(r.Body))
 		if id := ref.Match(prefix, after); id != "" {
 			after = id
 		} else if prefix != "" && after != "" && strings.Trim(after, "0123456789") == "" {

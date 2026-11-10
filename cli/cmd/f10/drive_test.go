@@ -20,9 +20,11 @@ import (
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
@@ -35,7 +37,7 @@ import (
 type driveFixture struct {
 	f      *fakes
 	in     *driveInput
-	infos  map[string]taskInfo
+	infos  map[string]hostops.TaskInfo
 	clock  time.Time
 	sleeps int
 	onTick map[int]func()
@@ -47,7 +49,7 @@ func newDriveFixture(t *testing.T, args ...string) *driveFixture {
 
 	fx := &driveFixture{
 		f:      newFakes(t),
-		infos:  map[string]taskInfo{},
+		infos:  map[string]hostops.TaskInfo{},
 		clock:  time.Unix(1_800_000_000, 0),
 		onTick: map[int]func(){},
 	}
@@ -97,19 +99,19 @@ func newDriveFixture(t *testing.T, args ...string) *driveFixture {
 		sequence: func(shipFlow) []string { return chain },
 		stateDir: t.TempDir(),
 		ttl:      state.DefaultTTL,
-		tracker: tracker{
-			resolve: func(ctx context.Context, tok string) (ref.Ref, error) {
+		tracker: stack.Tracker{
+			Resolve: func(ctx context.Context, tok string) (ref.Ref, error) {
 				return ref.Lookup{Prefix: "GH"}.Find(ctx, tok)
 			},
-			info: func(_ context.Context, r ref.Ref) (taskInfo, error) {
+			Info: func(_ context.Context, r ref.Ref) (hostops.TaskInfo, error) {
 				info, ok := fx.infos[r.ID]
 				if !ok {
-					return taskInfo{}, errors.New("no such issue")
+					return hostops.TaskInfo{}, errors.New("no such issue")
 				}
 
 				return info, nil
 			},
-			storage: storage.Root(t.TempDir()),
+			Storage: storage.Root(t.TempDir()),
 		},
 		now: func() time.Time { return fx.clock },
 		sleep: func(_ context.Context, d time.Duration) error {
@@ -142,15 +144,21 @@ func newDriveFixture(t *testing.T, args ...string) *driveFixture {
 
 // proseCatchup is the engine for a project whose verify is prose: git's
 // integration scripted clean onto main at main0, verify left to the agent.
-func proseCatchup() *catchupEngine {
-	plan := catchupPlan{branch: "GH-1", base: "main", sha: "main0", found: foundDefault, method: methodRebase}
+func proseCatchup() *stack.CatchupEngine {
+	plan := stack.CatchupPlan{
+		Branch: "GH-1",
+		Base:   "main",
+		SHA:    "main0",
+		Found:  stack.FoundDefault,
+		Method: stack.MethodRebase,
+	}
 
-	return &catchupEngine{
-		agentVerifies: "the Verify heading is prose, not commands",
-		integrate: func(context.Context, catchupInput, func(catchupPlan) []string) (catchupPlan, bool, error) {
+	return &stack.CatchupEngine{
+		AgentVerifies: "the Verify heading is prose, not commands",
+		Integrate: func(context.Context, stack.CatchupInput, func(stack.CatchupPlan) []string) (stack.CatchupPlan, bool, error) {
 			return plan, false, nil
 		},
-		base: func(context.Context, catchupInput) (catchupPlan, error) { return plan, nil },
+		Base: func(context.Context, stack.CatchupInput) (stack.CatchupPlan, error) { return plan, nil },
 	}
 }
 
@@ -158,7 +166,7 @@ func proseCatchup() *catchupEngine {
 // integration: verify, left to the agent.
 func catchupTurn(id string) string {
 	return "herdr agent prompt " + agentOf(id) + " " +
-		steered("/f10:catchup --driven", proseCatchup().cleanSteering("main"))
+		steered("/f10:catchup --driven", proseCatchup().CleanSteering("main"))
 }
 
 // oneAttempt halts a task on its first failed attempt, for a test whose
@@ -181,7 +189,7 @@ func (fx *driveFixture) drive(t *testing.T) error {
 // task scripts a task the tracker knows: its branch lookups answering
 // heads (empty for a task not started), and nothing recorded on a branch
 // named after it.
-func (fx *driveFixture) task(id string, info taskInfo, branches string) {
+func (fx *driveFixture) task(id string, info hostops.TaskInfo, branches string) {
 	fx.infos[id] = info
 	fx.f.script(refsKey("refs/heads/", id), branches)
 	fx.f.script(refsKey("refs/remotes/origin/", id), "")
@@ -314,8 +322,8 @@ func listing(agents ...string) string {
 // prompted before either finishes a skill, and the report has a row per task.
 func TestDriveRunsIndependentTasksTogether(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "GH-2", "judge", "ship")
-	fx.task("GH-1", taskInfo{body: "first"}, "")
-	fx.task("GH-2", taskInfo{body: "second"}, "")
+	fx.task("GH-1", hostops.TaskInfo{Body: "first"}, "")
+	fx.task("GH-2", hostops.TaskInfo{Body: "second"}, "")
 	fx.f.script(worktrees,
 		porcelain(),
 		porcelain("GH-1", "/code/repo.GH-1"),
@@ -362,7 +370,7 @@ func TestDriveRunsIndependentTasksTogether(t *testing.T) {
 // A task drive opens fresh moves to its started status, as start's does.
 func TestDriveMarksStarted(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "judge")
-	fx.task("GH-1", taskInfo{body: "first"}, "")
+	fx.task("GH-1", hostops.TaskInfo{Body: "first"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.expects("GH-1", "judge")
@@ -427,8 +435,8 @@ func TestDriveStartsAgentsOnTheirModels(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			fx := newDriveFixture(t, c.args...)
-			fx.task("GH-1", taskInfo{body: "first"}, "")
-			fx.task("GH-2", taskInfo{body: "second"}, "")
+			fx.task("GH-1", hostops.TaskInfo{Body: "first"}, "")
+			fx.task("GH-2", hostops.TaskInfo{Body: "second"}, "")
 			fx.f.script(worktrees,
 				porcelain(),
 				porcelain("GH-1", "/code/repo.GH-1"),
@@ -494,7 +502,7 @@ func (fx *driveFixture) assertOrder(t *testing.T, want []string, prefixes ...str
 // question, and the command that answers it.
 func TestDriveExitsOnAnAsk(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "judge")
-	fx.task("GH-1", taskInfo{body: "x"}, "")
+	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, "")
 	fx.f.meta.Seed("GH-1", branchmeta.Chain, "judge") // an older drive's
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
@@ -535,7 +543,7 @@ func TestDriveExitsOnAnAsk(t *testing.T) {
 // the agent as plain text, and the skill finishes.
 func TestDriveResumesWithTheAnswer(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "judge", "--answer", "1. proceed")
-	fx.task("GH-1", taskInfo{body: "x"}, heads("GH-1"))
+	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, heads("GH-1"))
 	fx.f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
 	fx.f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1",
 		`{"result":{"workspace":{"workspace_id":"ws:GH-1"},"root_pane":{"pane_id":"pane:1"},"already_open":true}}`)
@@ -572,7 +580,7 @@ const catchupNext = "run /f10:catchup --driven in the worktree, then rerun the d
 
 // adoptsGH1 scripts the rerun's open of GH-1's worktree, its agent found.
 func (fx *driveFixture) adoptsGH1() {
-	fx.task("GH-1", taskInfo{body: "x"}, heads("GH-1"))
+	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, heads("GH-1"))
 	fx.f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
 	fx.f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1",
 		`{"result":{"workspace":{"workspace_id":"ws:GH-1"},"root_pane":{"pane_id":"pane:1"},"already_open":true}}`)
@@ -956,7 +964,7 @@ func TestDriveCatchesUpAGuardStopWhileAnotherTaskAsks(t *testing.T) {
 
 			fx := newDriveFixture(t, "GH-1", "GH-2", "ship")
 			fx.adoptsGH1()
-			fx.task("GH-2", taskInfo{body: "second"}, heads("GH-2"))
+			fx.task("GH-2", hostops.TaskInfo{Body: "second"}, heads("GH-2"))
 			fx.f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1", "GH-2", "/code/repo.GH-2"))
 			fx.f.script(
 				"herdr worktree open --cwd /code/repo --path /code/repo.GH-2 --label GH-2",
@@ -1295,8 +1303,8 @@ func TestDriveAnswersASettledCatchupStop(t *testing.T) {
 func TestDriveHaltsOnAJudgeStop(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "GH-2", "judge")
 	fx.in.root = t.TempDir()
-	fx.task("GH-1", taskInfo{body: "x"}, "")
-	fx.task("GH-2", taskInfo{body: "After: GH-1"}, "")
+	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, "")
+	fx.task("GH-2", hostops.TaskInfo{Body: "After: GH-1"}, "")
 	fx.f.script(headRef, "origin/main") // GH-1 has no commit, so GH-2 waits
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
@@ -1337,7 +1345,7 @@ func TestDriveHaltsOnAJudgeStop(t *testing.T) {
 // stopped without reporting: the drive halts naming the workspace.
 func TestDriveHaltsOnAnAgentThatStoppedWithoutReporting(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "ship")
-	fx.task("GH-1", taskInfo{body: "x"}, "")
+	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("ship", "GH-1", nil, shipFlow{}, false), "{}")
@@ -1384,8 +1392,8 @@ func TestDriveHaltsOnAnAgentThatStoppedWithoutReporting(t *testing.T) {
 // chain.
 func TestDriveSkipsFinishedAndResumesFromTheBranch(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "GH-2", "judge", "ship", "finish")
-	fx.task("GH-1", taskInfo{body: "x", closed: true}, "")
-	fx.task("GH-2", taskInfo{body: "y\nAfter: GH-1"}, heads("GH-2"))
+	fx.task("GH-1", hostops.TaskInfo{Body: "x", Closed: true}, "")
+	fx.task("GH-2", hostops.TaskInfo{Body: "y\nAfter: GH-1"}, heads("GH-2"))
 	fx.f.meta.Seed("GH-2", branchmeta.Drive, "judge")
 	fx.f.script(worktrees, porcelain("GH-2", "/code/repo.GH-2"))
 	fx.f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-2 --label GH-2",
@@ -1445,7 +1453,7 @@ func TestDriveTakesASavedPlanAsPlanned(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "plan", "judge")
 	fx.in.storage = storage.Root(t.TempDir())
 	writePlan(t, fx.in.storage.Plan("GH-1"))
-	fx.task("GH-1", taskInfo{body: "first"}, "")
+	fx.task("GH-1", hostops.TaskInfo{Body: "first"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	// the shared storage root sits outside the worktree, so the agent may write there
@@ -1499,9 +1507,9 @@ func TestDrivePositionCountsTheWorktreesPlan(t *testing.T) {
 // number the tracker does not know, is skipped with a note.
 func TestDriveRangeSkipsWhatIsNotATask(t *testing.T) {
 	fx := newDriveFixture(t, "GH-3", "--", "GH-6")
-	fx.task("GH-3", taskInfo{body: "a"}, "")
-	fx.infos["GH-4"] = taskInfo{pull: true}
-	fx.task("GH-6", taskInfo{body: "c"}, "")
+	fx.task("GH-3", hostops.TaskInfo{Body: "a"}, "")
+	fx.infos["GH-4"] = hostops.TaskInfo{Pull: true}
+	fx.task("GH-6", hostops.TaskInfo{Body: "c"}, "")
 
 	tasks, notes, err := fx.in.resolveTasks(t.Context())
 	if err != nil {
@@ -1521,7 +1529,7 @@ func TestDriveRangeSkipsWhatIsNotATask(t *testing.T) {
 // A listed id that is a pull request is an error, not a skip.
 func TestDriveRefusesAListedPullRequest(t *testing.T) {
 	fx := newDriveFixture(t, "GH-4")
-	fx.infos["GH-4"] = taskInfo{pull: true}
+	fx.infos["GH-4"] = hostops.TaskInfo{Pull: true}
 
 	if _, _, err := fx.in.resolveTasks(t.Context()); err == nil || !strings.Contains(err.Error(), "pull request") {
 		t.Errorf("err = %v", err)
@@ -1552,8 +1560,8 @@ func TestDriveGraph(t *testing.T) {
 
 	t.Run("base later in the list runs first", func(t *testing.T) {
 		fx := newDriveFixture(t, "GH-2", "GH-1")
-		fx.task("GH-2", taskInfo{body: "x\nAfter: GH-1\n"}, "")
-		fx.task("GH-1", taskInfo{body: "y"}, "")
+		fx.task("GH-2", hostops.TaskInfo{Body: "x\nAfter: GH-1\n"}, "")
+		fx.task("GH-1", hostops.TaskInfo{Body: "y"}, "")
 
 		ids, err := graph(t, fx)
 		if err != nil || strings.Join(ids, " ") != "GH-1 GH-2" {
@@ -1563,11 +1571,11 @@ func TestDriveGraph(t *testing.T) {
 
 	t.Run("waves", func(t *testing.T) {
 		fx := newDriveFixture(t, "GH-15", "GH-14", "GH-13", "GH-12", "GH-11")
-		fx.task("GH-11", taskInfo{body: "root"}, "")
-		fx.task("GH-12", taskInfo{body: "After: GH-11"}, "")
-		fx.task("GH-13", taskInfo{body: "After: GH-11"}, "")
-		fx.task("GH-14", taskInfo{body: "After: GH-11"}, "")
-		fx.task("GH-15", taskInfo{body: "After: GH-13"}, "")
+		fx.task("GH-11", hostops.TaskInfo{Body: "root"}, "")
+		fx.task("GH-12", hostops.TaskInfo{Body: "After: GH-11"}, "")
+		fx.task("GH-13", hostops.TaskInfo{Body: "After: GH-11"}, "")
+		fx.task("GH-14", hostops.TaskInfo{Body: "After: GH-11"}, "")
+		fx.task("GH-15", hostops.TaskInfo{Body: "After: GH-13"}, "")
 
 		ids, err := graph(t, fx)
 		if err != nil || strings.Join(ids, " ") != "GH-11 GH-14 GH-13 GH-15 GH-12" {
@@ -1577,9 +1585,9 @@ func TestDriveGraph(t *testing.T) {
 
 	t.Run("the branch's record beats the body", func(t *testing.T) {
 		fx := newDriveFixture(t, "GH-1", "GH-2", "GH-3")
-		fx.task("GH-1", taskInfo{body: "a"}, "")
-		fx.task("GH-2", taskInfo{body: "b"}, "")
-		fx.task("GH-3", taskInfo{body: "After: GH-1"}, heads("GH-3"))
+		fx.task("GH-1", hostops.TaskInfo{Body: "a"}, "")
+		fx.task("GH-2", hostops.TaskInfo{Body: "b"}, "")
+		fx.task("GH-3", hostops.TaskInfo{Body: "After: GH-1"}, heads("GH-3"))
 		fx.f.meta.Seed("GH-3", branchmeta.After, "GH-2")
 
 		tasks, _, err := fx.in.resolveTasks(t.Context())
@@ -1599,9 +1607,9 @@ func TestDriveGraph(t *testing.T) {
 
 	t.Run("a cycle", func(t *testing.T) {
 		fx := newDriveFixture(t, "GH-1", "GH-2", "GH-3")
-		fx.task("GH-1", taskInfo{body: "After: GH-2"}, "")
-		fx.task("GH-2", taskInfo{body: "After: GH-1"}, "")
-		fx.task("GH-3", taskInfo{body: "free"}, "")
+		fx.task("GH-1", hostops.TaskInfo{Body: "After: GH-2"}, "")
+		fx.task("GH-2", hostops.TaskInfo{Body: "After: GH-1"}, "")
+		fx.task("GH-3", hostops.TaskInfo{Body: "free"}, "")
 
 		_, err := graph(t, fx)
 		if err == nil || !strings.Contains(err.Error(), "circle: GH-1 after GH-2, GH-2 after GH-1") {
@@ -1611,8 +1619,8 @@ func TestDriveGraph(t *testing.T) {
 
 	t.Run("base outside the list, not finished", func(t *testing.T) {
 		fx := newDriveFixture(t, "GH-2")
-		fx.task("GH-2", taskInfo{body: "After: GH-9"}, "")
-		fx.task("GH-9", taskInfo{body: "open"}, "")
+		fx.task("GH-2", hostops.TaskInfo{Body: "After: GH-9"}, "")
+		fx.task("GH-9", hostops.TaskInfo{Body: "open"}, "")
 
 		err := fx.drive(t)
 		if err == nil || !strings.Contains(err.Error(), "not in the list and not finished") {
@@ -1626,8 +1634,8 @@ func TestDriveGraph(t *testing.T) {
 
 	t.Run("base outside the list, finished", func(t *testing.T) {
 		fx := newDriveFixture(t, "GH-2")
-		fx.task("GH-2", taskInfo{body: "After: GH-9"}, "")
-		fx.task("GH-9", taskInfo{closed: true}, "")
+		fx.task("GH-2", hostops.TaskInfo{Body: "After: GH-9"}, "")
+		fx.task("GH-9", hostops.TaskInfo{Closed: true}, "")
 
 		if _, err := graph(t, fx); err != nil {
 			t.Errorf("a finished base was refused: %v", err)
@@ -1638,11 +1646,11 @@ func TestDriveGraph(t *testing.T) {
 // A listed parent with unfinished subtasks is refused before anything is
 // created; a task with none, a started one and a range member pass.
 func TestDriveRefusesAParent(t *testing.T) {
-	withChildren := func(fx *driveFixture, kids map[string][]childRow) {
-		fx.in.tracker.children = func(_ context.Context, r ref.Ref) ([]childRow, error) {
+	withChildren := func(fx *driveFixture, kids map[string][]stack.ChildRow) {
+		fx.in.tracker.Children = func(_ context.Context, r ref.Ref) ([]stack.ChildRow, error) {
 			k, ok := kids[r.ID]
 			if !ok {
-				return nil, errNoParentLink
+				return nil, hostops.ErrNoParentLink
 			}
 
 			return k, nil
@@ -1651,8 +1659,11 @@ func TestDriveRefusesAParent(t *testing.T) {
 
 	t.Run("a parent with open subtasks", func(t *testing.T) {
 		fx := newDriveFixture(t, "GH-1")
-		fx.task("GH-1", taskInfo{body: "the parent"}, "")
-		withChildren(fx, map[string][]childRow{"GH-1": {{ID: "GH-2"}, {ID: "GH-3", Finished: true}, {ID: "GH-4"}}})
+		fx.task("GH-1", hostops.TaskInfo{Body: "the parent"}, "")
+		withChildren(
+			fx,
+			map[string][]stack.ChildRow{"GH-1": {{ID: "GH-2"}, {ID: "GH-3", Finished: true}, {ID: "GH-4"}}},
+		)
 
 		err := fx.drive(t)
 		if err == nil || !strings.Contains(err.Error(), "GH-1 is a parent of GH-2, GH-4") {
@@ -1664,14 +1675,14 @@ func TestDriveRefusesAParent(t *testing.T) {
 		}
 	})
 
-	for name, kids := range map[string][]childRow{
+	for name, kids := range map[string][]stack.ChildRow{
 		"every subtask finished": {{ID: "GH-2", Finished: true}},
 		"no subtasks":            {},
 	} {
 		t.Run(name, func(t *testing.T) {
 			fx := newDriveFixture(t, "GH-1")
-			fx.task("GH-1", taskInfo{body: "free"}, "")
-			withChildren(fx, map[string][]childRow{"GH-1": kids})
+			fx.task("GH-1", hostops.TaskInfo{Body: "free"}, "")
+			withChildren(fx, map[string][]stack.ChildRow{"GH-1": kids})
 
 			if _, _, err := fx.in.resolveTasks(t.Context()); err != nil {
 				t.Errorf("refused: %v", err)
@@ -1681,7 +1692,7 @@ func TestDriveRefusesAParent(t *testing.T) {
 
 	t.Run("no parent link", func(t *testing.T) {
 		fx := newDriveFixture(t, "GH-1")
-		fx.task("GH-1", taskInfo{body: "free"}, "")
+		fx.task("GH-1", hostops.TaskInfo{Body: "free"}, "")
 		withChildren(fx, nil)
 
 		if _, _, err := fx.in.resolveTasks(t.Context()); err != nil {
@@ -1691,8 +1702,8 @@ func TestDriveRefusesAParent(t *testing.T) {
 
 	t.Run("a started task is not asked", func(t *testing.T) {
 		fx := newDriveFixture(t, "GH-1")
-		fx.task("GH-1", taskInfo{body: "free"}, "refs/heads/GH-1/work")
-		fx.in.tracker.children = func(context.Context, ref.Ref) ([]childRow, error) {
+		fx.task("GH-1", hostops.TaskInfo{Body: "free"}, "refs/heads/GH-1/work")
+		fx.in.tracker.Children = func(context.Context, ref.Ref) ([]stack.ChildRow, error) {
 			t.Error("children asked for a started task")
 
 			return nil, nil
@@ -1705,9 +1716,9 @@ func TestDriveRefusesAParent(t *testing.T) {
 
 	t.Run("a range member is not asked", func(t *testing.T) {
 		fx := newDriveFixture(t, "GH-1", "--", "GH-2")
-		fx.task("GH-1", taskInfo{body: "free"}, "")
-		fx.task("GH-2", taskInfo{body: "free"}, "")
-		fx.in.tracker.children = func(context.Context, ref.Ref) ([]childRow, error) {
+		fx.task("GH-1", hostops.TaskInfo{Body: "free"}, "")
+		fx.task("GH-2", hostops.TaskInfo{Body: "free"}, "")
+		fx.in.tracker.Children = func(context.Context, ref.Ref) ([]stack.ChildRow, error) {
 			t.Error("children asked for a range member")
 
 			return nil, nil
@@ -1898,7 +1909,7 @@ func TestAfterIn(t *testing.T) {
 	}
 
 	for body, want := range cases {
-		if got := afterIn(body); got != want {
+		if got := hostops.AfterIn(body); got != want {
 			t.Errorf("afterIn(%q) = %q, want %q", body, got, want)
 		}
 	}
@@ -1910,28 +1921,28 @@ func TestBodyAfter(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1")
 	tr := fx.in.tracker
 
-	fx.task("GH-7", taskInfo{body: "base"}, heads("GH-7/base"))
+	fx.task("GH-7", hostops.TaskInfo{Body: "base"}, heads("GH-7/base"))
 
-	after, note, err := bodyAfter(t.Context(), tr, "/code/repo", gh1, "After: GH-7")
+	after, note, err := stack.BodyAfter(t.Context(), tr, "/code/repo", gh1, "After: GH-7")
 	if err != nil || after != "GH-7" || !strings.Contains(note, "from the task body") {
 		t.Errorf("branched base = %q, %q, %v", after, note, err)
 	}
 
-	fx.task("GH-8", taskInfo{closed: true}, "")
+	fx.task("GH-8", hostops.TaskInfo{Closed: true}, "")
 
-	after, note, err = bodyAfter(t.Context(), tr, "/code/repo", gh1, "After: GH-8")
+	after, note, err = stack.BodyAfter(t.Context(), tr, "/code/repo", gh1, "After: GH-8")
 	if err != nil || after != "" || !strings.Contains(note, "finished") {
 		t.Errorf("finished base = %q, %q, %v", after, note, err)
 	}
 
-	fx.task("GH-9", taskInfo{body: "open"}, "")
+	fx.task("GH-9", hostops.TaskInfo{Body: "open"}, "")
 
-	if _, _, err := bodyAfter(t.Context(), tr, "/code/repo", gh1, "After: GH-9"); err == nil ||
+	if _, _, err := stack.BodyAfter(t.Context(), tr, "/code/repo", gh1, "After: GH-9"); err == nil ||
 		!strings.Contains(err.Error(), "start GH-9 first") {
 		t.Errorf("unstarted base: err = %v", err)
 	}
 
-	if after, note, err := bodyAfter(
+	if after, note, err := stack.BodyAfter(
 		t.Context(),
 		tr,
 		"/code/repo",
@@ -1972,7 +1983,7 @@ func TestFinishedTask(t *testing.T) {
 				writePlan(t, root.Plan("GH-1"))
 			}
 
-			if got := finishedTask(taskInfo{closed: c.closed}, root, "GH-1", c.branched); got != c.want {
+			if got := stack.FinishedTask(hostops.TaskInfo{Closed: c.closed}, root, "GH-1", c.branched); got != c.want {
 				t.Errorf("finishedTask = %v, want %v", got, c.want)
 			}
 		})
@@ -1995,11 +2006,11 @@ func wave(t *testing.T, args ...string) *driveFixture {
 	t.Helper()
 
 	fx := newDriveFixture(t, args...)
-	fx.task("GH-11", taskInfo{body: "root"}, "")
-	fx.task("GH-12", taskInfo{body: "After: GH-11"}, "")
-	fx.task("GH-13", taskInfo{body: "After: GH-11"}, "")
-	fx.task("GH-14", taskInfo{body: "After: GH-11"}, "")
-	fx.task("GH-15", taskInfo{body: "After: GH-13"}, "")
+	fx.task("GH-11", hostops.TaskInfo{Body: "root"}, "")
+	fx.task("GH-12", hostops.TaskInfo{Body: "After: GH-11"}, "")
+	fx.task("GH-13", hostops.TaskInfo{Body: "After: GH-11"}, "")
+	fx.task("GH-14", hostops.TaskInfo{Body: "After: GH-11"}, "")
+	fx.task("GH-15", hostops.TaskInfo{Body: "After: GH-13"}, "")
 
 	var pairs []string
 
@@ -2018,7 +2029,7 @@ func wave(t *testing.T, args ...string) *driveFixture {
 	fx.in.finish = func(_ context.Context, _ io.Writer, req driveFinish) error {
 		task := req.task
 		fx.f.calls = append(fx.f.calls, "finish "+task.ID)
-		fx.infos[task.ID] = taskInfo{closed: true}
+		fx.infos[task.ID] = hostops.TaskInfo{Closed: true}
 
 		return nil
 	}
@@ -2078,7 +2089,7 @@ func TestDriveRunsTheGraphInWaves(t *testing.T) {
 func TestDriveScopesAStopToItsDependents(t *testing.T) {
 	ids := []string{"GH-12", "GH-13", "GH-14", "GH-15"}
 	fx := wave(t, "GH-11", "GH-12", "GH-13", "GH-14", "GH-15", "judge", "ship")
-	fx.infos["GH-11"] = taskInfo{closed: true}
+	fx.infos["GH-11"] = hostops.TaskInfo{Closed: true}
 
 	fx.f.script(wsList,
 		unopened, all("idle", ids...), unopened, all("idle", ids...), // the three opens and looks
@@ -2121,8 +2132,8 @@ func TestDriveCatchesADependentUpAfterFinish(t *testing.T) {
 		t.Run(fmt.Sprintf("clean=%v", clean), func(t *testing.T) {
 			fx := newDriveFixture(t, "GH-1", "GH-2", "judge", "finish")
 			fx.oneAttempt(t)
-			fx.task("GH-1", taskInfo{body: "base"}, "")
-			fx.task("GH-2", taskInfo{body: "dependent"}, heads("GH-2"))
+			fx.task("GH-1", hostops.TaskInfo{Body: "base"}, "")
+			fx.task("GH-2", hostops.TaskInfo{Body: "dependent"}, heads("GH-2"))
 			fx.f.meta.Seed("GH-2", branchmeta.After, "GH-1")
 			fx.f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1", "GH-2", "/code/repo.GH-2"))
 			fx.opens("GH-1", "ws:GH-1", "pane:1")
@@ -2137,7 +2148,7 @@ func TestDriveCatchesADependentUpAfterFinish(t *testing.T) {
 			fx.in.finish = func(_ context.Context, _ io.Writer, req driveFinish) error {
 				task := req.task
 				fx.f.calls = append(fx.f.calls, "finish "+task.ID)
-				fx.infos[task.ID] = taskInfo{closed: true}
+				fx.infos[task.ID] = hostops.TaskInfo{Closed: true}
 
 				if task.ID == "GH-1" {
 					after := ""
@@ -2224,7 +2235,7 @@ func TestDriveCatchesUpAConflictingPullBeforeFinish(t *testing.T) {
 				fx.oneAttempt(t)
 			}
 
-			fx.task("GH-1", taskInfo{body: "x"}, heads("GH-1"))
+			fx.task("GH-1", hostops.TaskInfo{Body: "x"}, heads("GH-1"))
 			fx.f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
 			fx.opens("GH-1", "ws:GH-1", "pane:1")
 			fx.f.script("git fetch origin", "")
@@ -2395,7 +2406,7 @@ func TestDriveCatchesUpAPushedBranchWhenItsTargetMoves(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			fx := newDriveFixture(t, "GH-1", "ship", "finish")
-			fx.task("GH-1", taskInfo{body: "x"}, heads("GH-1"))
+			fx.task("GH-1", hostops.TaskInfo{Body: "x"}, heads("GH-1"))
 			fx.f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
 			fx.opens("GH-1", "ws:GH-1", "pane:1")
 			fx.expects("GH-1", "ship")
@@ -2633,8 +2644,8 @@ func TestDriveCollectsEveryAskAndTakesKeyedAnswers(t *testing.T) {
 
 	t.Run("ask", func(t *testing.T) {
 		fx := setup(t, "GH-1", "GH-2", "judge")
-		fx.task("GH-1", taskInfo{body: "a"}, "")
-		fx.task("GH-2", taskInfo{body: "b"}, "")
+		fx.task("GH-1", hostops.TaskInfo{Body: "a"}, "")
+		fx.task("GH-2", hostops.TaskInfo{Body: "b"}, "")
 		fx.opens("GH-1", "ws:GH-1", "pane:1")
 		fx.opens("GH-2", "ws:GH-2", "pane:2")
 		fx.expects("GH-1", "judge")
@@ -2664,8 +2675,8 @@ func TestDriveCollectsEveryAskAndTakesKeyedAnswers(t *testing.T) {
 
 	t.Run("resume", func(t *testing.T) {
 		fx := setup(t, "GH-1", "GH-2", "judge", "--answer", "GH-1=1. proceed", "--answer", "gh-2=1. no")
-		fx.task("GH-1", taskInfo{body: "a"}, heads("GH-1"))
-		fx.task("GH-2", taskInfo{body: "b"}, heads("GH-2"))
+		fx.task("GH-1", hostops.TaskInfo{Body: "a"}, heads("GH-1"))
+		fx.task("GH-2", hostops.TaskInfo{Body: "b"}, heads("GH-2"))
 
 		for _, id := range ids {
 			fx.f.script("herdr worktree open --cwd /code/repo --path /code/repo."+id+" --label "+id,
@@ -2697,7 +2708,7 @@ func TestDriveCollectsEveryAskAndTakesKeyedAnswers(t *testing.T) {
 
 	t.Run("two bare answers", func(t *testing.T) {
 		fx := setup(t, "GH-1", "--answer", "yes", "--answer", "no")
-		fx.task("GH-1", taskInfo{body: "a"}, "")
+		fx.task("GH-1", hostops.TaskInfo{Body: "a"}, "")
 
 		if err := fx.drive(t); err == nil || !strings.Contains(err.Error(), "key each one") {
 			t.Errorf("err = %v", err)
@@ -2729,7 +2740,7 @@ func (fx *driveFixture) staleRun(t *testing.T, ship, leaf string) {
 // existing scripts a started GH-1: its branch and worktree, and nothing
 // recorded on the branch.
 func (fx *driveFixture) existing() {
-	fx.task("GH-1", taskInfo{body: "x"}, heads("GH-1"))
+	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, heads("GH-1"))
 	fx.f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
 }
 
@@ -2862,7 +2873,7 @@ func TestDrivePrintsAHaltWhenItHappens(t *testing.T) {
 // window is out, instead of being polled until the drive ends.
 func TestDriveBoundsTheWaitForAnAgent(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "judge")
-	fx.task("GH-1", taskInfo{body: "x"}, "")
+	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, shipFlow{}, false), "{}")
@@ -2978,7 +2989,7 @@ func TestDriveFinishInputTakesTheSettings(t *testing.T) {
 	bundle := ref.Ref{ID: "DM-2", Number: "2", Bundle: []string{"DM-1", "DM-2"}}
 	req := driveFinish{task: bundle, suffix: "b", branch: "DM-1-b", pr: finishMerge}
 
-	in, err := driveFinishInput(tg, repo, newHost("gh", repo), req)
+	in, err := driveFinishInput(tg, repo, hostops.NewHost("gh", repo), req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3018,8 +3029,8 @@ func chained(t *testing.T, args ...string) *driveFixture {
 	t.Helper()
 
 	fx := newDriveFixture(t, args...)
-	fx.task("GH-1", taskInfo{body: "base"}, "")
-	fx.task("GH-2", taskInfo{body: "dependent"}, heads("GH-2"))
+	fx.task("GH-1", hostops.TaskInfo{Body: "base"}, "")
+	fx.task("GH-2", hostops.TaskInfo{Body: "dependent"}, heads("GH-2"))
 	fx.f.meta.Seed("GH-2", branchmeta.After, "GH-1")
 	fx.f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1", "GH-2", "/code/repo.GH-2"))
 	fx.f.script(headRef, "origin/main")
@@ -3238,7 +3249,7 @@ func TestDriveFinishesABranchNeverPushed(t *testing.T) {
 				fx.oneAttempt(t)
 			}
 
-			fx.task("GH-1", taskInfo{body: "x"}, heads("GH-1"))
+			fx.task("GH-1", hostops.TaskInfo{Body: "x"}, heads("GH-1"))
 			fx.f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
 			fx.opens("GH-1", "ws:GH-1", "pane:1")
 			fx.f.script(headRef, "origin/main")
@@ -3324,8 +3335,8 @@ func spikeDrive(t *testing.T, args ...string) *driveFixture {
 		fx.expects(id, "ship")
 	}
 
-	fx.task("GH-1", taskInfo{body: "a question"}, "")
-	fx.task("GH-2", taskInfo{body: "After: GH-1"}, "")
+	fx.task("GH-1", hostops.TaskInfo{Body: "a question"}, "")
+	fx.task("GH-2", hostops.TaskInfo{Body: "After: GH-1"}, "")
 	fx.f.script(worktrees, porcelain(pairs...))
 
 	// the ship turn writes the report
@@ -3334,7 +3345,7 @@ func spikeDrive(t *testing.T, args ...string) *driveFixture {
 	fx.in.finish = func(_ context.Context, _ io.Writer, req driveFinish) error {
 		task := req.task
 		fx.f.calls = append(fx.f.calls, "finish "+task.ID)
-		fx.infos[task.ID] = taskInfo{closed: true}
+		fx.infos[task.ID] = hostops.TaskInfo{Closed: true}
 
 		return nil
 	}
@@ -3433,7 +3444,7 @@ func TestDriveRecordsFinishProgress(t *testing.T) {
 	fx.in.finish = func(_ context.Context, _ io.Writer, req driveFinish) error {
 		task := req.task
 		req.progress("merging #9")
-		fx.infos[task.ID] = taskInfo{closed: true}
+		fx.infos[task.ID] = hostops.TaskInfo{Closed: true}
 
 		return nil
 	}
@@ -3918,7 +3929,7 @@ func TestDriveMarksNoParkedTask(t *testing.T) {
 // nothing here will ever give that base code.
 func TestDriveHaltsAShipWaitingOnABaseOutsideIt(t *testing.T) {
 	fx := newDriveFixture(t, "GH-2", "ship")
-	fx.task("GH-2", taskInfo{body: "x"}, "")
+	fx.task("GH-2", hostops.TaskInfo{Body: "x"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-2", "/code/repo.GH-2"))
 	fx.opens("GH-2", "ws:GH-2", "pane:1")
 	fx.f.script("herdr agent prompt "+agentOf("GH-2")+" "+skillPrompt("ship", "GH-2", nil, shipFlow{}, false), "{}")
@@ -4135,8 +4146,8 @@ func TestDriveEndStopsARunningVerify(t *testing.T) {
 	r := &driveRun{phase: atRunning, o: openedTask{branch: "GH-1"}}
 
 	log := filepath.Join(t.TempDir(), "verify.log")
-	r.job = startVerifyJob(t.Context(), func(ctx context.Context) (verifyRun, error) {
-		return runVerify(ctx, t.TempDir(), []string{"sleep 30"}, log)
+	r.job = startVerifyJob(t.Context(), func(ctx context.Context) (stack.VerifyRun, error) {
+		return stack.RunVerify(ctx, t.TempDir(), []string{"sleep 30"}, log)
 	})
 
 	fx.in.end(t.Context(), r, driveResult{row: "cancelled", code: ui.ExitHalted, drives: true})
@@ -4158,8 +4169,8 @@ func TestLeaveRunsHaltsAVerifyBeforeReturning(t *testing.T) {
 	r := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-1"}}}
 
 	log := filepath.Join(t.TempDir(), "verify.log")
-	r.job = startVerifyJob(t.Context(), func(ctx context.Context) (verifyRun, error) {
-		return runVerify(ctx, t.TempDir(), []string{"sleep 30"}, log)
+	r.job = startVerifyJob(t.Context(), func(ctx context.Context) (stack.VerifyRun, error) {
+		return stack.RunVerify(ctx, t.TempDir(), []string{"sleep 30"}, log)
 	})
 
 	fx.in.leaveRuns(t.Context(), []*driveRun{r})

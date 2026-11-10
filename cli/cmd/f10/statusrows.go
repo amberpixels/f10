@@ -16,9 +16,12 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
@@ -139,7 +142,7 @@ type rowSource struct {
 	// resolve is a reference as typed, in the project's id format; nil
 	// takes it as written
 	resolve func(token string) string
-	host    *host
+	host    *hostops.Host
 	// driven holds every task id a running drive lists, bundle riders too
 	driven map[string]bool
 	// gates reads a task's gates; nil reads none
@@ -162,7 +165,7 @@ func (src rowSource) idOf(token string) string {
 // rowsFrom builds a row per child from one host read of every child's
 // requests, the local reads for each running beside the others', then
 // decides the stages with each base's before its dependents'.
-func (src rowSource) rowsFrom(ctx context.Context, kids []childRow) []taskRow {
+func (src rowSource) rowsFrom(ctx context.Context, kids []stack.ChildRow) []taskRow {
 	facts := make([]lookaround.TaskFacts, len(kids))
 	rows := make([]taskRow, len(kids))
 	src.requests = src.readRequests(ctx, kids)
@@ -196,7 +199,7 @@ func (src rowSource) rowsFrom(ctx context.Context, kids []childRow) []taskRow {
 
 // readRequests is every child's requests by upper-cased id, one host query
 // for all of them. A failed read leaves each row to the url the ledger kept.
-func (src rowSource) readRequests(ctx context.Context, kids []childRow) map[string][]lookaround.PR {
+func (src rowSource) readRequests(ctx context.Context, kids []stack.ChildRow) map[string][]lookaround.PR {
 	if src.host == nil || len(kids) == 0 {
 		return nil
 	}
@@ -224,11 +227,11 @@ func (src rowSource) readRequests(ctx context.Context, kids []childRow) map[stri
 // gather reads one task's facts: the live run in its checkout, else the
 // ledger's last claim, the requests naming it (its branch's where it has
 // one), and the base its branch records, else the tracker's.
-func (src rowSource) gather(ctx context.Context, k childRow) (taskRow, lookaround.TaskFacts) {
+func (src rowSource) gather(ctx context.Context, k stack.ChildRow) (taskRow, lookaround.TaskFacts) {
 	row := taskRow{ID: k.ID, Title: k.Title, URL: k.URL, Depth: k.Depth, After: k.After}
 	f := lookaround.TaskFacts{
-		Queued:     k.queued,
-		DrivePhase: k.phase,
+		Queued:     k.Queued,
+		DrivePhase: k.Phase,
 		Driven:     src.driven[strings.ToUpper(k.ID)],
 	}
 
@@ -238,7 +241,7 @@ func (src rowSource) gather(ctx context.Context, k childRow) (taskRow, lookaroun
 
 	branch, root := "", ""
 	if src.checkout != nil {
-		branch, root = src.checkout(ctx, k.ID, k.suffix)
+		branch, root = src.checkout(ctx, k.ID, k.Suffix)
 	}
 
 	if root != "" {
@@ -344,7 +347,7 @@ func renderRows(w io.Writer, rows []taskRow, v rowView) error {
 		tree.Head = v.parent + "  " + stageCounts(rows)
 	}
 
-	links := linksOn(v.term)
+	links := render.LinksOn(v.term)
 
 	faint := lipgloss.NewStyle().Faint(true)
 	if v.term {
@@ -392,7 +395,7 @@ func (row *taskRow) cells(v rowView, withGates bool, faint lipgloss.Style) ([]ta
 
 		cells[0].Render = func(s string) string { return stage.Render(s) }
 		cells[1].Render = func(s string) string { return faint.Render(s) }
-		cells[len(cells)-1].Render = func(s string) string { return hyperlink(pr, s) }
+		cells[len(cells)-1].Render = func(s string) string { return render.Hyperlink(pr, s) }
 	}
 
 	notes := make([]tasktree.Note, 0, 3)
@@ -517,7 +520,7 @@ func pullNumber(url string) string {
 // parentRows is `status <id>` for a parent: its children, closed ones
 // included, as rows. errNoParentLink, or no rows, is not a parent.
 func (rd *statusReader) parentRows(ctx context.Context, r ref.Ref) ([]taskRow, error) {
-	kids, err := trackerFor(rd.t).allChildren(ctx, r)
+	kids, err := stack.TrackerFor(rd.t).AllChildren(ctx, r)
 	if err != nil || len(kids) == 0 {
 		return nil, err
 	}
@@ -528,23 +531,23 @@ func (rd *statusReader) parentRows(ctx context.Context, r ref.Ref) ([]taskRow, e
 // finishedRow is `status <id>` for a task with no branch left: one done
 // row when the ledger, the tracker or the plan archive says it finished.
 func (rd *statusReader) finishedRow(ctx context.Context, r ref.Ref) *taskRow {
-	tr := trackerFor(rd.t)
-	info, _ := tr.info(ctx, r) // an unreachable tracker leaves the ledger and the archive
+	tr := stack.TrackerFor(rd.t)
+	info, _ := tr.Info(ctx, r) // an unreachable tracker leaves the ledger and the archive
 
 	lt := lookaround.FoldLedger(rd.ledger(ctx), r.ID, rd.idOf(ctx))
 
 	// a ledger finish counts only while no live plan says the task came back
-	if !finishedTask(info, tr.storage, r.ID, false) && (!lt.Finished || tr.storage.PlanLive(r.ID)) {
+	if !stack.FinishedTask(info, tr.Storage, r.ID, false) && (!lt.Finished || tr.Storage.PlanLive(r.ID)) {
 		return nil
 	}
 
-	k := childRow{ID: r.ID, Finished: true}
-	if title, err := tasksFor(rd.t).Title(ctx, r); err == nil {
+	k := stack.ChildRow{ID: r.ID, Finished: true}
+	if title, err := hostops.TasksFor(rd.t).Title(ctx, r); err == nil {
 		k.Title = title
-		rememberRefsFor(ctx, rd.t, ledger.TaskRef{ID: r.ID, Title: tasktitle.Clean(k.Title, r.ID)})
+		stack.RememberRefsFor(ctx, rd.t, ledger.TaskRef{ID: r.ID, Title: tasktitle.Clean(k.Title, r.ID)})
 	}
 
-	rows := rd.rows(ctx).rowsFrom(ctx, []childRow{k})
+	rows := rd.rows(ctx).rowsFrom(ctx, []stack.ChildRow{k})
 	rows[0].full = true
 
 	return &rows[0]

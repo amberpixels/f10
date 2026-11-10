@@ -6,12 +6,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/standup"
 )
 
 // renderStandup is the report for a terminal. --json is the contract; this
 // is a glance at it.
-func renderStandup(w io.Writer, links *taskLinks, s standup.Standup) error {
+func renderStandup(w io.Writer, links *render.TaskLinks, s standup.Standup) error {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "since %s", s.Since.Local().Format("2006-01-02 15:04"))
@@ -66,7 +67,7 @@ func repoNames(p standup.Project) string {
 	return " (" + strings.Join(names, ", ") + ")"
 }
 
-func renderProject(b *strings.Builder, links *taskLinks, p standup.Project) {
+func renderProject(b *strings.Builder, links *render.TaskLinks, p standup.Project) {
 	// a number names a PR only within its repository
 	label := func(repo string, n int) string {
 		if len(p.Repos) > 1 {
@@ -92,7 +93,7 @@ func renderProject(b *strings.Builder, links *taskLinks, p standup.Project) {
 		fmt.Fprintf(
 			b,
 			"%s %-12s %s%s\n",
-			padRight(links.ID(p.Name, t.ID), 10),
+			render.PadRight(links.ID(p.Name, t.ID), 10),
 			t.State,
 			prList(t.PRs, label),
 			commitCount(t.PRs, t.Commits),

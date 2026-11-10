@@ -11,6 +11,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
+	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
@@ -49,16 +51,16 @@ type reviewPath struct {
 // facts is the block's rows in the ship report's order, empty ones left out.
 // link puts a terminal link on the file paths; --plain passes false, since
 // writeReport links a path fact on any terminal.
-func (s *shipment) facts(link bool) []fact {
-	rows := []fact{
-		{label: "task", value: s.Task},
-		{label: "title", value: s.Title},
-		{label: "url", value: s.URL, url: true},
-		{label: "branch", value: s.Branch},
-		{label: "pr", value: s.PR, url: true},
-		{label: "commit", value: s.Commit},
-		{label: "plan", value: s.Plan, path: link},
-		{label: "handoff", value: s.Handoff, path: link},
+func (s *shipment) facts(link bool) []render.Fact {
+	rows := []render.Fact{
+		{Label: "task", Value: s.Task},
+		{Label: "title", Value: s.Title},
+		{Label: "url", Value: s.URL, URL: true},
+		{Label: "branch", Value: s.Branch},
+		{Label: "pr", Value: s.PR, URL: true},
+		{Label: "commit", Value: s.Commit},
+		{Label: "plan", Value: s.Plan, Path: link},
+		{Label: "handoff", Value: s.Handoff, Path: link},
 	}
 
 	// a subject judged twice takes each file's number, so every label names one file
@@ -73,14 +75,14 @@ func (s *shipment) facts(link bool) []fact {
 			label += " " + strings.TrimSuffix(filepath.Base(v.Path), ".md")
 		}
 
-		rows = append(rows, fact{label: label, value: v.Path, path: link})
+		rows = append(rows, render.Fact{Label: label, Value: v.Path, Path: link})
 	}
 
 	for _, r := range s.Reviews {
-		rows = append(rows, fact{label: "review " + r.Round, value: r.Path, path: link})
+		rows = append(rows, render.Fact{Label: "review " + r.Round, Value: r.Path, Path: link})
 	}
 
-	return slices.DeleteFunc(rows, func(f fact) bool { return f.value == "" })
+	return slices.DeleteFunc(rows, func(f render.Fact) bool { return f.Value == "" })
 }
 
 // readShipment fills the shipment from the ledger's task ref and PR, git and
@@ -110,7 +112,7 @@ func readShipment(ctx context.Context, in taskStatusInput, events []ledger.Event
 	}
 
 	if in.main != "" && in.branch != "" {
-		if def, err := localDefault(ctx, in.main); err == nil && baseHasCode(ctx, in.main, in.branch, def) {
+		if def, err := stack.LocalDefault(ctx, in.main); err == nil && stack.BaseHasCode(ctx, in.main, in.branch, def) {
 			s.Commit = gitx.Out(ctx, in.main, "rev-parse", "--short", "refs/heads/"+in.branch)
 		}
 	}

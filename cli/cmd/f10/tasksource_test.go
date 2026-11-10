@@ -9,6 +9,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -182,12 +183,12 @@ func TestTasksPicksTheSource(t *testing.T) {
 		cli    string
 		want   string
 	}{
-		{false, facts.TrackerGitHub, "gh", "main.hostSource"},
-		{false, facts.TrackerGitHub, "", "main.refusedSource"},
-		{false, facts.TrackerNotion, "gh", "main.refusedSource"},
-		{true, facts.TrackerGitHub, "gh", "main.fallbackSource main.hostSource"},
-		{true, facts.TrackerGitHub, "", "main.fallbackSource main.refusedSource"},
-		{true, facts.TrackerNotion, "gh", "main.fallbackSource main.refusedSource"},
+		{false, facts.TrackerGitHub, "gh", "hostops.HostSource"},
+		{false, facts.TrackerGitHub, "", "hostops.RefusedSource"},
+		{false, facts.TrackerNotion, "gh", "hostops.RefusedSource"},
+		{true, facts.TrackerGitHub, "gh", "hostops.FallbackSource hostops.HostSource"},
+		{true, facts.TrackerGitHub, "", "hostops.FallbackSource hostops.RefusedSource"},
+		{true, facts.TrackerNotion, "gh", "hostops.FallbackSource hostops.RefusedSource"},
 	} {
 		name := fmt.Sprintf("driver %v, %s, cli %q", tc.driver, tc.kind, tc.cli)
 		t.Run(name, func(t *testing.T) {
@@ -198,11 +199,11 @@ func TestTasksPicksTheSource(t *testing.T) {
 				writeDriver(t, tg.Layout.StorageRoot.Path())
 			}
 
-			src := tasksFor(tg)
+			src := hostops.TasksFor(tg)
 			got := fmt.Sprintf("%T", src)
 
-			if f, ok := src.(fallbackSource); ok {
-				got += fmt.Sprintf(" %T", f.rest)
+			if f, ok := src.(hostops.FallbackSource); ok {
+				got += fmt.Sprintf(" %T", f.Rest)
 			}
 
 			if got != tc.want {
@@ -221,7 +222,12 @@ func TestFallbackOnlyOnUnsupported(t *testing.T) {
 
 	f.fail("driver list", shell.Result{Code: 1, Stderr: "tracker down"})
 
-	if _, err := taskRows(t.Context(), tg, issuePage); err == nil || !strings.Contains(err.Error(), "tracker down") {
+	if _, err := taskRows(
+		t.Context(),
+		tg,
+		hostops.IssuePage,
+	); err == nil ||
+		!strings.Contains(err.Error(), "tracker down") {
 		t.Errorf("err = %v, want the driver's failure", err)
 	}
 

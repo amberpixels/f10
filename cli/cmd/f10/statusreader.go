@@ -12,9 +12,12 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -40,7 +43,7 @@ type statusReader struct {
 	now     time.Time
 	main    string // where the branch config and the ledger's project live
 	live    []*state.Run
-	host    *host // nil without a host CLI
+	host    *hostops.Host // nil without a host CLI
 	resolve func(token string) string
 
 	eventsOnce sync.Once
@@ -58,7 +61,11 @@ func newStatusReader(t *target.Target, now time.Time) (*statusReader, error) {
 	}
 
 	return &statusReader{
-		t: t, now: now, main: cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot), live: live, host: optionalHostOf(t),
+		t:    t,
+		now:  now,
+		main: cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot),
+		live: live,
+		host: hostops.OptionalHostOf(t),
 	}, nil
 }
 
@@ -125,7 +132,7 @@ func (rd *statusReader) rows(ctx context.Context) rowSource {
 				return "", ""
 			}
 
-			name, root, err := taskCheckout(ctx, rd.main, rd.t.Driver(), r, suffix)
+			name, root, err := stack.TaskCheckout(ctx, rd.main, rd.t.Driver(), r, suffix)
 			if err != nil {
 				return "", ""
 			}
@@ -158,7 +165,7 @@ func (rd *statusReader) task(ctx context.Context, v statusView, token string, gu
 		switch {
 		case cerr == nil && len(rows) > 0:
 			return rd.printRows(v, rows, r.ID)
-		case cerr != nil && !errors.Is(cerr, errNoParentLink):
+		case cerr != nil && !errors.Is(cerr, hostops.ErrNoParentLink):
 			ui.Warnf(v.warn, "reading the subtasks: %v", cerr)
 		}
 
@@ -181,7 +188,7 @@ func (rd *statusReader) task(ctx context.Context, v statusView, token string, gu
 			return statusPrinted{printed: true}, ui.JSON(v.w, fb)
 		}
 
-		fb.render(v.w, ui.Width(v.w), linksFor(v.w, v.plain).on)
+		fb.render(v.w, ui.Width(v.w), render.LinksFor(v.w, v.plain).On)
 
 		return statusPrinted{printed: true}, nil
 	}

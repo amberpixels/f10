@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/amberpixels/f10/cli/internal/render"
 )
 
 func TestFileLink(t *testing.T) {
@@ -19,9 +21,9 @@ func TestFileLink(t *testing.T) {
 		{"plans/FT-1.md", "file://" + filepath.Join(cwd, "plans", "FT-1.md")},
 		{"/tmp/my plans/FT-1.md", "file:///tmp/my%20plans/FT-1.md"},
 	} {
-		m := linkSpan.FindStringSubmatch(fileLink(c.path))
+		m := linkSpan.FindStringSubmatch(render.FileLink(c.path))
 		if m == nil {
-			t.Fatalf("%s: no link in %q", c.path, fileLink(c.path))
+			t.Fatalf("%s: no link in %q", c.path, render.FileLink(c.path))
 		}
 
 		if m[1] != c.target || m[2] != c.path {
@@ -29,23 +31,23 @@ func TestFileLink(t *testing.T) {
 		}
 	}
 
-	if got := fileLink("/tmp/reviews/FT-1"); got != "/tmp/reviews/FT-1" {
+	if got := render.FileLink("/tmp/reviews/FT-1"); got != "/tmp/reviews/FT-1" {
 		t.Errorf("a non-markdown path linked: %q", got)
 	}
 }
 
 func TestWriteReportLinksPaths(t *testing.T) {
-	rows := []fact{
-		{label: "pr", value: "https://github.com/o/r/pull/1", url: true},
-		{label: "plan", value: "/tmp/plans/archive/FT-1.1.md", path: true},
-		{label: "reviews", value: "/tmp/reviews/FT-1"},
+	rows := []render.Fact{
+		{Label: "pr", Value: "https://github.com/o/r/pull/1", URL: true},
+		{Label: "plan", Value: "/tmp/plans/archive/FT-1.1.md", Path: true},
+		{Label: "reviews", Value: "/tmp/reviews/FT-1"},
 	}
 
 	var plain bytes.Buffer
 
 	withTerminal(t, false)
 
-	if err := writeReport(&plain, rows, nil); err != nil {
+	if err := render.WriteReport(&plain, rows, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -60,7 +62,7 @@ func TestWriteReportLinksPaths(t *testing.T) {
 
 	withTerminal(t, true)
 
-	if err := writeReport(&term, rows, nil); err != nil {
+	if err := render.WriteReport(&term, rows, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -103,20 +105,20 @@ func TestStatusFallbackLinksPlan(t *testing.T) {
 func withTerminal(t *testing.T, on bool) {
 	t.Helper()
 
-	prev := linkTerminal
-	t.Cleanup(func() { linkTerminal = prev })
+	prev := render.LinkTerminal
+	t.Cleanup(func() { render.LinkTerminal = prev })
 
-	linkTerminal = func(io.Writer) bool { return on }
+	render.LinkTerminal = func(io.Writer) bool { return on }
 }
 
 // A drive copies finish's report out of a buffer, which links as the drive's
 // own writer would.
 func TestLinkBufferLinksAsItsWriter(t *testing.T) {
-	rows := []fact{{label: "plan", value: "/tmp/plans/FT-1.md", path: true}}
+	rows := []render.Fact{{Label: "plan", Value: "/tmp/plans/FT-1.md", Path: true}}
 
 	for _, on := range []bool{true, false} {
-		buf := &linkBuffer{links: on}
-		if err := writeReport(buf, rows, nil); err != nil {
+		buf := &render.LinkBuffer{Links: on}
+		if err := render.WriteReport(buf, rows, nil); err != nil {
 			t.Fatal(err)
 		}
 

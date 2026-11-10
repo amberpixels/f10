@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/textx"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -35,7 +36,16 @@ func writeRuns(v statusView, runs []*state.Run, gates [][]gate, head *shipment, 
 	limit := ui.Width(v.w)
 
 	if head != nil {
-		return writeRunsUnder(v.w, head.facts(linksFor(v.w, v.plain).on), runs, gates, showRoot, agent, now, limit)
+		return writeRunsUnder(
+			v.w,
+			head.facts(render.LinksFor(v.w, v.plain).On),
+			runs,
+			gates,
+			showRoot,
+			agent,
+			now,
+			limit,
+		)
 	}
 
 	for i, r := range runs {
@@ -52,10 +62,10 @@ func writeRuns(v statusView, runs []*state.Run, gates [][]gate, head *shipment, 
 // writeRunsUnder prints the facts head and each run's rows as one table, every
 // value in one column, so a yaml fence colors the block as one mapping. The
 // first run goes on under the head; each later one follows a blank line.
-func writeRunsUnder(w io.Writer, head []fact, runs []*state.Run, gates [][]gate, showRoot bool, agent string,
+func writeRunsUnder(w io.Writer, head []render.Fact, runs []*state.Run, gates [][]gate, showRoot bool, agent string,
 	now time.Time, limit int,
 ) error {
-	blocks := make([][]fact, max(1, len(runs)))
+	blocks := make([][]render.Fact, max(1, len(runs)))
 	for i, r := range runs {
 		blocks[i] = runFacts(r, runView{gates: gates[i], showRoot: showRoot, agent: agent, now: now, headed: true})
 	}
@@ -64,8 +74,8 @@ func writeRunsUnder(w io.Writer, head []fact, runs []*state.Run, gates [][]gate,
 	head = slices.Clone(head)
 	if len(runs) > 0 {
 		for i := range head {
-			if head[i].label == "plan" {
-				head[i].label = "plan file"
+			if head[i].Label == "plan" {
+				head[i].Label = "plan file"
 			}
 		}
 	}
@@ -74,7 +84,7 @@ func writeRunsUnder(w io.Writer, head []fact, runs []*state.Run, gates [][]gate,
 
 	width := 0
 	for _, b := range blocks {
-		width = max(width, labelWidth(b))
+		width = max(width, render.LabelWidth(b))
 	}
 
 	for i, b := range blocks {
@@ -82,7 +92,7 @@ func writeRunsUnder(w io.Writer, head []fact, runs []*state.Run, gates [][]gate,
 			fmt.Fprintln(w)
 		}
 
-		if err := writeFacts(w, b, width, limit); err != nil {
+		if err := render.WriteFacts(w, b, width, limit); err != nil {
 			return err
 		}
 	}
@@ -127,17 +137,17 @@ type runView struct {
 // without a facts head, `f10 state show` included, prints through it.
 func runRows(w io.Writer, r *state.Run, v runView) {
 	for _, f := range runFacts(r, v) {
-		headerRow(w, f.label, f.value, v.limit, f.style)
+		headerRow(w, f.Label, f.Value, v.limit, f.Style)
 	}
 }
 
 // runFacts is a run's rows as data, each styled by its status, the task's
 // gates under ship when it has them.
-func runFacts(r *state.Run, v runView) []fact {
+func runFacts(r *state.Run, v runView) []render.Fact {
 	plain := lipgloss.NewStyle()
 	faint := lipgloss.NewStyle().Faint(true)
 
-	var rows []fact
+	var rows []render.Fact
 
 	add := func(label, value string, style lipgloss.Style) {
 		rows = append(rows, runFact(label, value, style))
@@ -188,8 +198,8 @@ func runFacts(r *state.Run, v runView) []fact {
 	return rows
 }
 
-func runFact(label, value string, style lipgloss.Style) fact {
-	return fact{label: label, value: value, run: true, style: style}
+func runFact(label, value string, style lipgloss.Style) render.Fact {
+	return render.Fact{Label: label, Value: value, Run: true, Style: style}
 }
 
 // statusStyle is the badge's palette: shape first, color second, so the

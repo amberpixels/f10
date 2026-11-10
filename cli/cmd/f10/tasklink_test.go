@@ -18,6 +18,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/layers"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/standup"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasktree"
@@ -36,10 +37,10 @@ func withLinks(t *testing.T, on bool) {
 
 	t.Setenv(ledger.PathEnv, filepath.Join(t.TempDir(), "f10.db"))
 
-	prevTerm, prevProject := linkTerminal, target.ProjectOf
-	t.Cleanup(func() { linkTerminal, target.ProjectOf = prevTerm, prevProject })
+	prevTerm, prevProject := render.LinkTerminal, target.ProjectOf
+	t.Cleanup(func() { render.LinkTerminal, target.ProjectOf = prevTerm, prevProject })
 
-	linkTerminal = func(io.Writer) bool { return on }
+	render.LinkTerminal = func(io.Writer) bool { return on }
 	target.ProjectOf = func(context.Context, string) string { return linkProject }
 
 	ledger.RememberRefs(t.Context(), linkProject,
@@ -81,7 +82,7 @@ func requireLinked(t *testing.T, out string, ids ...string) {
 func TestTaskLinksID(t *testing.T) {
 	withLinks(t, true)
 
-	l := linksFor(io.Discard, false)
+	l := render.LinksFor(io.Discard, false)
 	l.Load(t.Context(), linkProject, "FT-1+FT-2", "FT-9")
 
 	if got := l.ID(linkProject, "FT-9"); got != "FT-9" {
@@ -89,7 +90,7 @@ func TestTaskLinksID(t *testing.T) {
 	}
 
 	if got, want := l.ID(linkProject, "FT-1+FT-2"),
-		hyperlink(issueURL("FT-1"), "FT-1")+"+"+hyperlink(issueURL("FT-2"), "FT-2"); got != want {
+		render.Hyperlink(issueURL("FT-1"), "FT-1")+"+"+render.Hyperlink(issueURL("FT-2"), "FT-2"); got != want {
 		t.Errorf("bundle = %q, want %q", got, want)
 	}
 
@@ -97,11 +98,11 @@ func TestTaskLinksID(t *testing.T) {
 		t.Errorf("an id under another project = %q", got)
 	}
 
-	if got := linksFor(io.Discard, true); got.on {
+	if got := render.LinksFor(io.Discard, true); got.On {
 		t.Error("--plain links")
 	}
 
-	var none *taskLinks
+	var none *render.TaskLinks
 	if none.ID(linkProject, "FT-1") != "FT-1" {
 		t.Error("a nil taskLinks links")
 	}
@@ -113,7 +114,7 @@ func TestTaskLinksOffReadsNothing(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "f10.db")
 	t.Setenv(ledger.PathEnv, path)
 
-	linksOn(false).Load(t.Context(), linkProject, "FT-1")
+	render.LinksOn(false).Load(t.Context(), linkProject, "FT-1")
 
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Errorf("the ledger was touched: %v", err)
@@ -121,7 +122,11 @@ func TestTaskLinksOffReadsNothing(t *testing.T) {
 }
 
 func TestPadRightCountsVisibleText(t *testing.T) {
-	if got := padRight(hyperlink("https://x", "FT-1"), 6); visibleWidth(got) != 6 || !strings.HasSuffix(got, "  ") {
+	if got := render.PadRight(
+		render.Hyperlink("https://x", "FT-1"),
+		6,
+	); render.VisibleWidth(got) != 6 ||
+		!strings.HasSuffix(got, "  ") {
 		t.Errorf("padRight = %q", got)
 	}
 }
@@ -130,9 +135,9 @@ func TestPadRightCountsVisibleText(t *testing.T) {
 // terminal, and prints no escape code anywhere else. A new renderer of task
 // ids gets a row here.
 func TestTaskIDsPrintThroughLinks(t *testing.T) {
-	type render func(t *testing.T, on bool) string
+	type renderer func(t *testing.T, on bool) string
 
-	cases := map[string]render{
+	cases := map[string]renderer{
 		"drive list": func(t *testing.T, _ bool) string {
 			root := t.TempDir()
 			if err := drives.Create(root, &drives.Record{
@@ -143,7 +148,15 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 			}
 
 			var out bytes.Buffer
-			if err := driveList(t.Context(), &out, linksFor(&out, false), linkProject, root, false, nil); err != nil {
+			if err := driveList(
+				t.Context(),
+				&out,
+				render.LinksFor(&out, false),
+				linkProject,
+				root,
+				false,
+				nil,
+			); err != nil {
 				t.Fatal(err)
 			}
 
@@ -159,7 +172,7 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 			}
 
 			var out bytes.Buffer
-			writeDaemonStatus(t.Context(), &out, linksFor(&out, false),
+			writeDaemonStatus(t.Context(), &out, render.LinksFor(&out, false),
 				daemon.Reply{Runs: []daemon.Run{{Root: root, Dir: "/x", Drive: 1}}})
 
 			return out.String()
@@ -189,7 +202,7 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 
 			var out bytes.Buffer
 
-			links := linksFor(&out, false)
+			links := render.LinksFor(&out, false)
 			loadStandupLinks(t.Context(), links, rep)
 
 			if err := renderStandup(&out, links, rep); err != nil {
@@ -200,7 +213,11 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 		},
 		"start and finish report": func(t *testing.T, _ bool) string {
 			var out bytes.Buffer
-			if err := writeReport(&out, []fact{taskFact(t.Context(), &out, "/x", "FT-1+FT-2")}, nil); err != nil {
+			if err := render.WriteReport(
+				&out,
+				[]render.Fact{render.TaskFact(t.Context(), &out, "/x", "FT-1+FT-2")},
+				nil,
+			); err != nil {
 				t.Fatal(err)
 			}
 
@@ -258,7 +275,7 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 				limit = 120
 			}
 
-			links := linksOn(limit > 0)
+			links := render.LinksOn(limit > 0)
 
 			nodes := make([]tasktree.Node, len(lines))
 			for i, l := range lines {
@@ -300,12 +317,13 @@ var plainIDPrint = regexp.MustCompile(
 // (relative to the module root) and a piece of the line, so they stay plain
 // on purpose.
 var machineRead = map[string]string{
-	"cmd/f10/host.go":        `"# %s: %s\n\n"`,                // the task as markdown, for an agent
-	"cmd/f10/reviewround.go": `"  %s %s - %s\n"`,              // a declined round, read by the review step
-	"cmd/f10/review.go":      `"%s  %s  %s\n"`,                // review pick, parsed
-	"cmd/f10/pr.go":          `"task: %s\n"`,                  // pr view, parsed
-	"cmd/f10/taskref.go":     `"%s: %v"`,                      // a warning on stderr
-	"cmd/f10/taskreport.go":  `"%s: %v: no subtasks to list"`, // a warning on stderr
+	"internal/hostops/host.go": `"# %s: %s\n\n"`,                // the task as markdown, for an agent
+	"cmd/f10/taskwrite.go":     `"%s  %s  ->  %s\n"`,            // retitle's change list, plain since it was written
+	"cmd/f10/reviewround.go":   `"  %s %s - %s\n"`,              // a declined round, read by the review step
+	"cmd/f10/review.go":        `"%s  %s  %s\n"`,                // review pick, parsed
+	"cmd/f10/pr.go":            `"task: %s\n"`,                  // pr view, parsed
+	"cmd/f10/taskref.go":       `"%s: %v"`,                      // a warning on stderr
+	"cmd/f10/taskreport.go":    `"%s: %v: no subtasks to list"`, // a warning on stderr
 }
 
 // commandSources are the non-test files of the command tree: cmd/f10 and

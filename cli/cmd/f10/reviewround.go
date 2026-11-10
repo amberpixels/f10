@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/findings"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -113,7 +114,7 @@ type roundSeries struct {
 func seriesOf(ctx context.Context, t *target.Target, s prSubject, dir string, warn io.Writer) (roundSeries, error) {
 	series := roundSeries{pr: "none"}
 
-	h, hostErr := hostOf(t)
+	h, hostErr := hostops.HostOf(t)
 	if s.number > 0 {
 		series.pr = "#" + strconv.Itoa(s.number)
 		if hostErr == nil {
@@ -189,7 +190,14 @@ func alreadyMerged(ctx context.Context, dir, base string) bool {
 // the series, since a wrongly closed one archives findings resolve still
 // needs. A round naming no PR ends when HEAD cannot reach its reviewed sha,
 // and one recording neither stays.
-func seriesClosed(ctx context.Context, dir string, f *findings.File, h host, hostErr error, warn io.Writer) bool {
+func seriesClosed(
+	ctx context.Context,
+	dir string,
+	f *findings.File,
+	h hostops.Host,
+	hostErr error,
+	warn io.Writer,
+) bool {
 	if n := strings.TrimLeft(f.PR, "#!"); digits(n) {
 		if hostErr != nil {
 			ui.Warnf(warn, "cannot read %s (%v), so its series of rounds goes on", f.PR, hostErr)

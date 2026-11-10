@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/layout"
+	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -182,9 +183,9 @@ func report(w io.Writer, path, excluded string, d *facts.Draft) {
 
 // wroteLink is the file:// url of the written project.md, on a terminal only.
 func wroteLink(w io.Writer, path string) string {
-	if !linkTerminal(w) {
+	if !render.LinkTerminal(w) {
 		return ""
 	}
 
-	return fileURL(path)
+	return render.FileURL(path)
 }

@@ -1,4 +1,4 @@
-package main
+package stack
 
 import (
 	"context"
@@ -13,8 +13,8 @@ import (
 type tipPolicy int
 
 const (
-	// divergeFail refuses: a local landing would fold one side's commits into the other.
-	divergeFail tipPolicy = iota
+	// DivergeFail refuses: a local landing would fold one side's commits into the other.
+	DivergeFail tipPolicy = iota
 	// divergeOrigin takes origin's copy, which is what the host will merge onto.
 	divergeOrigin
 	// originFirst takes origin's copy whenever it exists, so unpushed local
@@ -22,10 +22,10 @@ const (
 	originFirst
 )
 
-// defaultTip is the default branch's tip to work from, and its name (def or
+// DefaultTip is the default branch's tip to work from, and its name (def or
 // origin/<def>). One side missing gives the other; otherwise a side that
 // holds the other wins, and divergence goes by policy.
-func defaultTip(ctx context.Context, dir, def string, policy tipPolicy) (string, string, error) {
+func DefaultTip(ctx context.Context, dir, def string, policy tipPolicy) (string, string, error) {
 	local, err := gitx.Ref(ctx, dir, "refs/heads/"+def)
 	if err != nil {
 		return "", "", fmt.Errorf("reading %s: %w", def, err)
@@ -54,7 +54,7 @@ func defaultTip(ctx context.Context, dir, def string, policy tipPolicy) (string,
 	}
 
 	// behind and diverged both read origin's copy unless divergence must fail
-	if policy != divergeFail {
+	if policy != DivergeFail {
 		return remote, origin, nil
 	}
 

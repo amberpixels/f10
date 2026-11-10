@@ -9,6 +9,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/target"
 )
@@ -30,7 +31,7 @@ func planCommand() *cli.Command {
 				Name:      "open",
 				Usage:     "open the plan in your editor",
 				ArgsUsage: "[task-id]",
-				Flags:     []cli.Flag{linkFlag()},
+				Flags:     []cli.Flag{render.LinkFlag()},
 				Action:    runPlanOpen,
 			},
 		},
@@ -48,7 +49,7 @@ func runPlanRead(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("reading %s: %w", path, err)
 	}
 
-	return writeDoc(ctx, cmd.Writer, t.Dir, string(data))
+	return render.WriteDoc(ctx, cmd.Writer, t.Dir, string(data))
 }
 
 func runPlanOpen(ctx context.Context, cmd *cli.Command) error {
@@ -58,8 +59,8 @@ func runPlanOpen(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if cmd.Bool("link") {
-		if linkTerminal(cmd.Writer) {
-			path = fileLink(path)
+		if render.LinkTerminal(cmd.Writer) {
+			path = render.FileLink(path)
 		}
 
 		_, err := fmt.Fprintln(cmd.Writer, path)

@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/standup"
 	"github.com/amberpixels/f10/cli/internal/target"
 )
@@ -38,7 +39,7 @@ func collectTarget(ctx context.Context, t *target.Target, since time.Time) (stan
 		Upkeep: t.Effective.UpkeepPaths,
 	}
 
-	if h := optionalHostOf(t); h != nil {
+	if h := hostops.OptionalHostOf(t); h != nil {
 		src.Host = &h.Host
 	}
 

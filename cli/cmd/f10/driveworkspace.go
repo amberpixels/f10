@@ -5,12 +5,12 @@ import (
 	"fmt"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
-	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
-func (in *driveInput) prTarget(ctx context.Context, r *driveRun) (prTarget, error) {
-	return prTargetOf(ctx, in.main, r.o.branch)
+func (in *driveInput) prTarget(ctx context.Context, r *driveRun) (stack.PRTarget, error) {
+	return stack.PRTargetOf(ctx, in.main, r.o.branch)
 }
 
 // look reads the workspace by the id open settled on, since a checkout can
@@ -55,7 +55,7 @@ func workspaceName(ws *agentctl.Workspace) string {
 type tickView struct {
 	wss    []agentctl.Workspace // nil before the first tick's look
 	live   []*state.Run
-	fetch  fetchOnce
+	fetch  stack.FetchOnce
 	opened map[*driveRun]bool // the tasks opened since the look, which it does not show
 }
 
@@ -104,25 +104,6 @@ func (in *driveInput) runNow(path string) (*state.Run, error) {
 // before the drive opened the task.
 func (in *driveInput) stallCheck(r *driveRun) stallCheck {
 	return stallCheck{stateDir: in.stateDir, ttl: in.ttl, now: r.sentAt, since: r.freshAt}
-}
-
-// A fetchOnce fetches origin at most once, a tick's or a watcher pass's:
-// every worktree shares the main checkout's remote refs, so one fetch serves
-// them all. A failed fetch is not kept, so the next caller tries again.
-type fetchOnce struct{ done bool }
-
-func (f *fetchOnce) fetch(ctx context.Context, dir string) error {
-	if f.done {
-		return nil
-	}
-
-	if err := gitx.Fetch(ctx, dir); err != nil {
-		return err
-	}
-
-	f.done = true
-
-	return nil
 }
 
 // view is this tick's look, or before the first tick an empty one that

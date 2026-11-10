@@ -9,16 +9,17 @@ import (
 	"slices"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/driver"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/images"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
-	"github.com/amberpixels/f10/cli/internal/tasktitle"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -91,7 +92,7 @@ func taskCommand() *cli.Command {
 				Name:      "open",
 				Usage:     "open the task in the browser; with no task id, the task list",
 				ArgsUsage: "[task-id]",
-				Flags:     []cli.Flag{linkFlag(), printFlag()},
+				Flags:     []cli.Flag{render.LinkFlag(), render.PrintFlag()},
 				Action:    runTaskOpen,
 			},
 			{
@@ -213,7 +214,7 @@ func runTaskRead(ctx context.Context, cmd *cli.Command) error {
 		docs = append(docs, strings.TrimRight(doc, "\n"))
 	}
 
-	return writeDoc(ctx, cmd.Writer, t.Dir, strings.Join(docs, "\n\n---\n\n"))
+	return render.WriteDoc(ctx, cmd.Writer, t.Dir, strings.Join(docs, "\n\n---\n\n"))
 }
 
 // runTaskCurrent names the task a bare skill call stands for, by the cascade
@@ -243,34 +244,12 @@ func fetchFallback(err error) error {
 
 // readDoc feeds the ledger's task refs, so a later ref costs no tracker call.
 func readDoc(ctx context.Context, t *target.Target, r ref.Ref) (string, error) {
-	doc, k, err := tasksFor(t).Read(ctx, r)
+	doc, k, err := hostops.TasksFor(t).Read(ctx, r)
 	if err == nil {
-		rememberRefsFor(ctx, t, k)
+		stack.RememberRefsFor(ctx, t, k)
 	}
 
 	return doc, err
-}
-
-// oneIDHeading collapses `# <id>: <id>: <title>`, the id a driver adds over
-// the one tracker.title wrote, to one id.
-func oneIDHeading(doc string, r ref.Ref, titles tasktitle.Template) string {
-	first, rest, _ := strings.Cut(doc, "\n")
-
-	heading, ok := strings.CutPrefix(first, "# ")
-	if !ok {
-		return doc
-	}
-
-	once := titles.Strip(heading, r.ID, r.Number)
-	if twice := titles.Strip(once, r.ID, r.Number); once != heading && twice != once {
-		first = "# " + r.ID + ": " + twice
-	}
-
-	if rest == "" && !strings.Contains(doc, "\n") {
-		return first
-	}
-
-	return first + "\n" + rest
 }
 
 // withImages ends doc with a footer naming its downloaded images. A dir
@@ -306,7 +285,7 @@ func imagesDirFor(ctx context.Context, t *target.Target, id string) string {
 // where a private repo's attachments sit. It is read once; a failed read
 // leaves the request bare, so its error names the image.
 func githubAuth(ctx context.Context, t *target.Target) func(*http.Request) {
-	h, err := hostOf(t)
+	h, err := hostops.HostOf(t)
 	if err != nil {
 		return nil
 	}
@@ -356,7 +335,7 @@ func runTaskOpen(ctx context.Context, cmd *cli.Command) error {
 			return err
 		}
 
-		return follow(ctx, cmd.Writer, t.Dir, url, cmd.Bool("link"))
+		return render.Follow(ctx, cmd.Writer, t.Dir, url, cmd.Bool("link"))
 	}
 
 	r, err := t.Reference(ctx, cmd.Args().First())
@@ -364,20 +343,20 @@ func runTaskOpen(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	url, err := tasksFor(t).URL(ctx, r)
+	url, err := hostops.TasksFor(t).URL(ctx, r)
 	if err != nil {
 		return err
 	}
 
-	return follow(ctx, cmd.Writer, t.Dir, url, cmd.Bool("link"))
+	return render.Follow(ctx, cmd.Writer, t.Dir, url, cmd.Bool("link"))
 }
 
 func taskListURL(ctx context.Context, t *target.Target) (string, error) {
-	return tasksFor(t).Index(ctx)
+	return hostops.TasksFor(t).Index(ctx)
 }
 
 func writeTaskList(ctx context.Context, t *target.Target, w, warn io.Writer) error {
-	rows, err := taskRows(ctx, t, issuePage)
+	rows, err := taskRows(ctx, t, hostops.IssuePage)
 	if err != nil {
 		return err
 	}
@@ -385,9 +364,9 @@ func writeTaskList(ctx context.Context, t *target.Target, w, warn io.Writer) err
 	return writeRows(w, rankRows(settlePriorities(rows, warn)), "no open tasks")
 }
 
-func taskRows(ctx context.Context, t *target.Target, limit int) ([]row, error) {
-	rows, err := tasksFor(t).List(ctx, limit)
-	rememberRefsFor(ctx, t, rowRefs(rows)...)
+func taskRows(ctx context.Context, t *target.Target, limit int) ([]hostops.Row, error) {
+	rows, err := hostops.TasksFor(t).List(ctx, limit)
+	stack.RememberRefsFor(ctx, t, rowRefs(rows)...)
 
 	return rows, err
 }
@@ -412,23 +391,9 @@ func runTaskSearch(ctx context.Context, cmd *cli.Command) error {
 	return writeRows(cmd.Writer, settlePriorities(rows, cmd.ErrWriter), "no matches")
 }
 
-// A row holds the fields f10 relies on; a driver may carry more, which f10
-// neither requires nor reads.
-type row struct {
-	ID       string    `json:"id"`
-	Title    string    `json:"title"`
-	Status   string    `json:"status,omitempty"`
-	URL      string    `json:"url,omitempty"`
-	Priority string    `json:"priority,omitempty"`
-	After    string    `json:"after,omitempty"`    // the base its body's After: line names, where the source gives one
-	Body     string    `json:"body,omitempty"`     // read for its After: line; never printed
-	Assignee string    `json:"assignee,omitempty"` // the tracker's assignee, where the source gives one
-	Created  time.Time `json:"created,omitzero"`
-}
-
 // settlePriorities warns once per distinct unknown value: a driver emitting
 // its tracker's own word does so on every row of the page.
-func settlePriorities(rows []row, warn io.Writer) []row {
+func settlePriorities(rows []hostops.Row, warn io.Writer) []hostops.Row {
 	var (
 		unknown []string
 		count   = map[string]int{}
@@ -462,8 +427,8 @@ func settlePriorities(rows []row, warn io.Writer) []row {
 }
 
 // rankRows is stable, so the tracker's order holds inside a level.
-func rankRows(rows []row) []row {
-	rank := func(r row) int {
+func rankRows(rows []hostops.Row) []hostops.Row {
+	rank := func(r hostops.Row) int {
 		if i, ok := driver.PriorityRank(r.Priority); ok {
 			return i
 		}
@@ -471,32 +436,22 @@ func rankRows(rows []row) []row {
 		return len(driver.Priorities)
 	}
 
-	slices.SortStableFunc(rows, func(a, b row) int { return rank(a) - rank(b) })
+	slices.SortStableFunc(rows, func(a, b hostops.Row) int { return rank(a) - rank(b) })
 
 	return rows
 }
 
-func searchRows(ctx context.Context, t *target.Target, query string) ([]row, error) {
-	rows, err := tasksFor(t).Search(ctx, query)
-	rememberRefsFor(ctx, t, rowRefs(rows)...)
+func searchRows(ctx context.Context, t *target.Target, query string) ([]hostops.Row, error) {
+	rows, err := hostops.TasksFor(t).Search(ctx, query)
+	stack.RememberRefsFor(ctx, t, rowRefs(rows)...)
 
 	return rows, err
-}
-
-// stripTitles is for driver rows; the host's come stripped from listIssues.
-func stripTitles(rows []row, titles tasktitle.Template) []row {
-	for i, r := range rows {
-		n := strings.TrimPrefix(r.ID[strings.LastIndexByte(r.ID, '-')+1:], "#")
-		rows[i].Title = titles.Strip(r.Title, r.ID, n)
-	}
-
-	return rows
 }
 
 // writeRows applies the rule reading a task does: a terminal gets a table,
 // anything else the JSON. f10 never picks a winner among rows: choosing is
 // fzf's job in a shell and the agent's in a turn.
-func writeRows(w io.Writer, rows []row, none string) error {
+func writeRows(w io.Writer, rows []hostops.Row, none string) error {
 	if !ui.IsTerminal(w) {
 		for i := range rows {
 			rows[i].Body = ""
@@ -518,18 +473,18 @@ func writeRows(w io.Writer, rows []row, none string) error {
 		priorityW = max(priorityW, len(r.Priority))
 	}
 
-	links := linksOn(true)
+	links := render.LinksOn(true)
 
 	for _, r := range rows {
 		// ↗ marks a row that opens, as in the report blocks; it is one cell wide
 		marker := "  "
 		if r.URL != "" {
-			marker = hyperlink(r.URL, "↗") + " "
+			marker = render.Hyperlink(r.URL, "↗") + " "
 		}
 
 		links.Known("", r.ID, r.URL)
-		shown := padRight(links.ID("", r.ID), idW)
-		title := hyperlink(r.URL, r.Title)
+		shown := render.PadRight(links.ID("", r.ID), idW)
+		title := render.Hyperlink(r.URL, r.Title)
 
 		priority := ""
 		if priorityW > 0 {
@@ -553,10 +508,6 @@ func writeRows(w io.Writer, rows []row, none string) error {
 	return nil
 }
 
-// mayExist follows every failed create but a driver's exit 4: the driver may
-// have made the task before failing, so running create again could make it twice.
-const mayExist = "the task may exist already: check the tracker before running create again"
-
 // runTaskCreate sends the task on stdin to the driver's create, else makes it
 // an issue on the host. f10 never retries it, since a failed write is an
 // unknown outcome.
@@ -568,7 +519,7 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 
 	// nowhere to create answers exit 3 before stdin or any check, so capture falls back
 	if rs, ok := refusedUpFrontFor(t); ok {
-		return rs.refuseCreate()
+		return rs.RefuseCreate()
 	}
 
 	in, err := io.ReadAll(cmd.Reader)
@@ -578,7 +529,7 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 
 	// the contract puts the title on the first line, so leading blanks go
 	doc := strings.TrimLeft(string(in), " \t\r\n")
-	if taskTitle(doc) == "" {
+	if hostops.TaskTitle(doc) == "" {
 		return errors.New("task create reads the task as markdown on stdin, `# <title>` on its first line")
 	}
 
@@ -589,116 +540,38 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	r, url, err := tasksFor(t).Create(ctx, cmd.ErrWriter, nt)
+	r, url, err := hostops.TasksFor(t).Create(ctx, cmd.ErrWriter, nt)
 	if err != nil {
 		return err
 	}
 
 	// the number exists only now, so the template goes on in a second write
-	retitleAfter(ctx, cmd.ErrWriter, t, r, "created")
+	hostops.RetitleAfter(ctx, cmd.ErrWriter, t, r, "created")
 
 	// the url too, so naming the new task costs no tracker call
-	rememberRefsFor(ctx, t, ledger.TaskRef{ID: r.ID, Title: docTitle(r.ID, doc), URL: url})
+	stack.RememberRefsFor(ctx, t, ledger.TaskRef{ID: r.ID, Title: docTitle(r.ID, doc), URL: url})
 
 	_, err = fmt.Fprintln(cmd.Writer, r.ID)
 
 	return err
 }
 
-// driverCreate returns the new task and its url, "" when the driver gives
-// none; a declined create is driver.ErrUnsupported, unwrapped.
-func driverCreate(
-	ctx context.Context, warnTo io.Writer, t *target.Target, d *driver.Driver, doc string, args []string,
-) (ref.Ref, string, error) {
-	out, warn, err := d.RunInput(ctx, doc, driver.VerbCreate, args...)
-	if errors.Is(err, driver.ErrUnsupported) {
-		return ref.Ref{}, "", err
-	}
-
-	// the driver rejected the input before writing, so running it again is safe
-	if errors.Is(err, driver.ErrNotWritten) {
-		return ref.Ref{}, "", err
-	}
-
-	if err != nil {
-		return ref.Ref{}, "", fmt.Errorf("%w\n%s", err, mayExist)
-	}
-
-	if warn != "" {
-		fmt.Fprintln(warnTo, warn)
-	}
-
-	// the driver may print the number or the prefixed id; f10 prints the id
-	line := strings.TrimSpace(out)
-	if line == "" || strings.ContainsAny(line, " \t\n"+ref.Separator) {
-		return ref.Ref{}, "", fmt.Errorf("driver create printed %q, not one task id\n%s", out, mayExist)
-	}
-
-	r, err := t.Reference(ctx, line)
-	if err != nil {
-		return ref.Ref{}, "", fmt.Errorf("driver create printed %q: %w\n%s", line, err, mayExist)
-	}
-
-	url, _ := d.Run(ctx, driver.VerbURL, r.Number)
-
-	return r, strings.TrimSpace(url), nil
-}
-
-// retitleAfter writes tracker.title onto an issue just written, since the
-// template needs the number and a driver has no title verb; the write
-// stands, so a failure is a warning.
-func retitleAfter(ctx context.Context, warnTo io.Writer, t *target.Target, r ref.Ref, verb string) {
-	if t.Effective.TitleTemplate == "" || !t.HostIssues() {
-		return
-	}
-
-	if err := retitleOne(ctx, t, r.Number); err != nil {
-		ui.Warnf(warnTo, "%s was %s, but its title was not written through tracker.title: %v; "+
-			"run `f10 task retitle %s`", r.ID, verb, err, r.ID)
-	}
-}
-
-func retitleOne(ctx context.Context, t *target.Target, number string) error {
-	h, err := hostOf(t)
-	if err != nil {
-		return err
-	}
-
-	changes, err := h.titleChanges(ctx, number)
-	if err != nil || len(changes) == 0 {
-		return err
-	}
-
-	return h.setTitle(ctx, number, changes[0].to)
-}
-
-func taskTitle(doc string) string {
-	line, _, _ := strings.Cut(doc, "\n")
-
-	title, ok := strings.CutPrefix(strings.TrimSpace(line), "# ")
-	if !ok {
-		return ""
-	}
-
-	return strings.TrimSpace(title)
-}
-
 // readNewTask reads the properties and resolves the parent and the body's
 // After: base once, before any source sees them.
-func readNewTask(ctx context.Context, t *target.Target, cmd *cli.Command, doc string) (newTask, error) {
+func readNewTask(ctx context.Context, t *target.Target, cmd *cli.Command, doc string) (hostops.NewTask, error) {
 	p, err := readProps(cmd)
 	if err != nil {
-		return newTask{}, err
+		return hostops.NewTask{}, err
 	}
 
-	nt := newTask{doc: doc, props: p}
+	nt := hostops.NewTask{Doc: doc, Props: p}
 
 	for _, link := range []struct {
 		flag, id string
 		to       *ref.Ref
 	}{
-		{"--parent", cmd.String("parent"), &nt.parent},
-		{"--after", afterIn(doc), &nt.after},
+		{"--parent", cmd.String("parent"), &nt.Parent},
+		{"--after", hostops.AfterIn(doc), &nt.After},
 	} {
 		if strings.TrimSpace(link.id) == "" {
 			continue
@@ -706,7 +579,7 @@ func readNewTask(ctx context.Context, t *target.Target, cmd *cli.Command, doc st
 
 		r, err := t.Reference(ctx, link.id)
 		if err != nil {
-			return newTask{}, fmt.Errorf("%s %s: %w", link.flag, link.id, err)
+			return hostops.NewTask{}, fmt.Errorf("%s %s: %w", link.flag, link.id, err)
 		}
 
 		*link.to = r

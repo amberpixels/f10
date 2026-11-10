@@ -13,7 +13,10 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
@@ -385,7 +388,7 @@ func (in *driveInput) resumeLine() string {
 func driveList(
 	ctx context.Context,
 	w io.Writer,
-	links *taskLinks,
+	links *render.TaskLinks,
 	project, root string,
 	all bool,
 	finished func(row string) bool,
@@ -469,7 +472,7 @@ func driveList(
 // unfinished, since a wrong yes hides a halt.
 func rowFinishedFor(ctx context.Context, t *target.Target) func(string) bool {
 	main := cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot)
-	tr := trackerFor(t)
+	tr := stack.TrackerFor(t)
 	seen := map[string]bool{} // a task several records list is checked once
 
 	return func(row string) bool {
@@ -486,10 +489,10 @@ func rowFinishedFor(ctx context.Context, t *target.Target) func(string) bool {
 		}
 
 		head := r.Head()
-		seen[id] = finishedLazily(tr.storage, head.ID,
-			func() (bool, error) { return hasTaskBranch(ctx, main, head.ID) },
-			func() taskInfo {
-				info, _ := tr.info(ctx, head) // an unread tracker leaves the archive to decide
+		seen[id] = finishedLazily(tr.Storage, head.ID,
+			func() (bool, error) { return stack.HasTaskBranch(ctx, main, head.ID) },
+			func() hostops.TaskInfo {
+				info, _ := tr.Info(ctx, head) // an unread tracker leaves the archive to decide
 
 				return info
 			})
@@ -500,17 +503,17 @@ func rowFinishedFor(ctx context.Context, t *target.Target) func(string) bool {
 
 // finishedLazily is finishedTask with its reads made lazily: the tracker is
 // asked only when no branch, live plan or archived plan already decides.
-func finishedLazily(root storage.Root, id string, branched func() (bool, error), info func() taskInfo) bool {
+func finishedLazily(root storage.Root, id string, branched func() (bool, error), info func() hostops.TaskInfo) bool {
 	if b, err := branched(); err != nil || b {
 		return false
 	}
 
-	var ti taskInfo
+	var ti hostops.TaskInfo
 	if !root.PlanLive(id) && !root.PlanArchived(id) {
 		ti = info()
 	}
 
-	return finishedTask(ti, root, id, false)
+	return stack.FinishedTask(ti, root, id, false)
 }
 
 func taskStanding(t drives.Task, running bool) string {

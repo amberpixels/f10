@@ -17,7 +17,10 @@ import (
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/target"
 )
@@ -97,7 +100,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 			return driveList(
 				ctx,
 				cmd.Writer,
-				linksFor(cmd.Writer, false),
+				render.LinksFor(cmd.Writer, false),
 				t.RefProject(ctx),
 				t.Layout.StorageRoot.Path(),
 				a.all,
@@ -166,7 +169,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 
 	main := cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot)
 	drv := t.Driver()
-	h, hostErr := hostOf(t)
+	h, hostErr := hostops.HostOf(t)
 
 	if fl.finishes() && hostErr != nil {
 		return fmt.Errorf("finish is on (the pace's finish), and finish merges through the host: %w", hostErr)
@@ -201,7 +204,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		defaultParallel: defaultParallel(),
 		pull:            pullOf,
 		driver:          drv,
-		tracker:         trackerFor(t),
+		tracker:         stack.TrackerFor(t),
 		title:           func(r ref.Ref) func(context.Context) (string, error) { return titleLookup(t, r.Number) },
 		started:         startedMove(t),
 		record:          recordAt,
@@ -220,7 +223,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	in.daemonRun = os.Getenv(daemon.ResumeEnv) != ""
 
 	spec, why := verifySpecOf(t.Effective)
-	in.catchup = newCatchupEngine(catchupPolicy(t.Effective), spec, why, t.Effective.Traces, main)
+	in.catchup = stack.NewCatchupEngine(stack.CatchupPolicy(t.Effective), spec, why, t.Effective.Traces, main)
 
 	if drain != nil {
 		go func() {

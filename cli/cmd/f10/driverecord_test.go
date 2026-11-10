@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -25,7 +26,7 @@ import (
 func TestDriveSkipsATaskAnotherDriveOwns(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "judge")
 	fx.in.root = t.TempDir()
-	fx.task("GH-1", taskInfo{body: "x"}, "")
+	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, "")
 
 	// bouncing off the lease says nothing about the owner's task
 	fx.in.record = func(_ context.Context, _ string, e ledger.Event) { t.Errorf("recorded %+v", e) }
@@ -59,7 +60,7 @@ func TestDriveRecordIsPickedUpByTheSameCommand(t *testing.T) {
 
 	fx := newDriveFixture(t, "GH-1", "judge")
 	fx.in.root = root
-	fx.task("GH-1", taskInfo{body: "x"}, "")
+	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, shipFlow{}, false), "{}")
@@ -90,7 +91,7 @@ func TestDriveRecordIsPickedUpByTheSameCommand(t *testing.T) {
 
 	fx = newDriveFixture(t, "GH-1", "judge", "--answer", "1. proceed")
 	fx.in.root = root
-	fx.task("GH-1", taskInfo{body: "x"}, heads("GH-1"))
+	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, heads("GH-1"))
 	fx.f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
 	fx.f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1",
 		`{"result":{"workspace":{"workspace_id":"ws:GH-1"},"root_pane":{"pane_id":"pane:1"},"already_open":true}}`)
@@ -138,7 +139,7 @@ func TestDriveRecordIsPickedUpByTheSameCommand(t *testing.T) {
 func TestDriveDropsUnusedAnswers(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "judge", "--answer", "GH-1=1. proceed")
 	fx.in.root = t.TempDir()
-	fx.task("GH-1", taskInfo{body: "x"}, "")
+	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.expects("GH-1", "judge")
@@ -245,7 +246,7 @@ func answerTasks(ids ...string) []driveTask {
 // drive stopped mid-ship: the skill is counted done, not prompted again.
 func TestDriveSkipsAPromptTheAgentAlreadyFinished(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "plan", "ship")
-	fx.task("GH-1", taskInfo{body: "x"}, "")
+	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.expects("GH-1", "plan")
@@ -275,7 +276,7 @@ func TestDriveSkipsAPromptTheAgentAlreadyFinished(t *testing.T) {
 func TestDriveStopsWhenCancelled(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "judge", "ship")
 	fx.in.root = t.TempDir()
-	fx.task("GH-1", taskInfo{body: "x"}, "")
+	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.expects("GH-1", "judge")
@@ -605,7 +606,7 @@ func TestFinishedLazily(t *testing.T) {
 			asked := false
 			got := finishedLazily(root, "GH-1",
 				func() (bool, error) { return c.branched, nil },
-				func() taskInfo { asked = true; return taskInfo{closed: c.closed} })
+				func() hostops.TaskInfo { asked = true; return hostops.TaskInfo{Closed: c.closed} })
 
 			if got != c.want || asked != c.wantInfo {
 				t.Errorf("finishedLazily = %v, tracker asked %v; want %v, %v", got, asked, c.want, c.wantInfo)

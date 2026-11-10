@@ -22,6 +22,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
@@ -127,8 +130,8 @@ func runWatch(ctx context.Context, cmd *cli.Command) error {
 
 	slices.Sort(ids)
 
-	links, project := linksFor(w, false), ""
-	if links.on {
+	links, project := render.LinksFor(w, false), ""
+	if links.On {
 		project = t.RefProject(ctx)
 	}
 
@@ -175,7 +178,7 @@ func runWatchToggle(ctx context.Context, cmd *cli.Command, on bool) error {
 	r = r.Head()
 	main := cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot)
 
-	name, _, err := taskCheckout(ctx, main, t.Driver(), r, "")
+	name, _, err := stack.TaskCheckout(ctx, main, t.Driver(), r, "")
 	if err != nil {
 		return err
 	}
@@ -187,7 +190,7 @@ func runWatchToggle(ctx context.Context, cmd *cli.Command, on bool) error {
 	if on {
 		_ = branchmeta.Unset(ctx, main, name, branchmeta.Watch) // absent is fine
 
-		fmt.Fprintf(cmd.Writer, "%s is watched again\n", taskFact(ctx, cmd.Writer, main, r.ID).value)
+		fmt.Fprintf(cmd.Writer, "%s is watched again\n", render.TaskFact(ctx, cmd.Writer, main, r.ID).Value)
 
 		return nil
 	}
@@ -227,8 +230,13 @@ func runWatchPass(ctx context.Context, cmd *cli.Command, t *target.Target) error
 		catchup:  t.Effective.WatchCatchup,
 		storage:  t.Layout.StorageRoot,
 		// a pass stays short, so verify is always the agent's turn
-		engine: newCatchupEngine(catchupPolicy(t.Effective), verifySpec{}, "the watcher leaves verify to the agent",
-			t.Effective.Traces, main),
+		engine: stack.NewCatchupEngine(
+			stack.CatchupPolicy(t.Effective),
+			stack.VerifySpec{},
+			"the watcher leaves verify to the agent",
+			t.Effective.Traces,
+			main,
+		),
 	}
 
 	if b := reachableAgents(main); b != nil {
@@ -334,7 +342,7 @@ type watchInput struct {
 	prompt  func(ctx context.Context, task watchedTask, text string) error
 	// engine integrates a catchup; storage names the task's review series
 	// for a catchup merge's trailers
-	engine  *catchupEngine
+	engine  *stack.CatchupEngine
 	storage storage.Root
 }
 
@@ -362,11 +370,11 @@ type watchedTask struct {
 	listed     bool            // the workspaces were listed, so "" is no workspace
 	ws         string          // its workspace, for a message
 	// what a catchup needs, read after the pass's fetch under watch_catchup
-	fetched   bool     // origin was fetched and the fields below read
-	originSHA string   // origin's tip; "" when origin lacks the branch
-	target    prTarget // what git says its request targets
-	targetErr error    // the target, or origin's tip, could not be read
-	busy      string   // why its worktree cannot take a catchup, or ""
+	fetched   bool           // origin was fetched and the fields below read
+	originSHA string         // origin's tip; "" when origin lacks the branch
+	target    stack.PRTarget // what git says its request targets
+	targetErr error          // the target, or origin's tip, could not be read
+	busy      string         // why its worktree cannot take a catchup, or ""
 }
 
 type watchReport struct {
@@ -729,7 +737,7 @@ func collectWatched(ctx context.Context, in watchInput) ([]watchedTask, int, err
 	var tasks []watchedTask
 
 	for _, b := range branches {
-		path := worktreeOf(wts, b.name)
+		path := stack.WorktreeOf(wts, b.name)
 		if !held[b.name] || path == "" || gitx.SamePath(path, in.main) {
 			continue
 		}
@@ -786,7 +794,7 @@ func watcherFinish(ctx context.Context, w io.Writer, t *target.Target, main, roo
 		return err
 	}
 
-	h, err := hostOf(t)
+	h, err := hostops.HostOf(t)
 	if err != nil {
 		return err
 	}
@@ -940,8 +948,8 @@ func (in watchInput) readTargets(ctx context.Context, tasks []watchedTask, store
 			continue
 		}
 
-		t.target, t.targetErr = prTargetOf(ctx, in.main, t.branch)
-		t.busy = treeBusy(ctx, t.path)
+		t.target, t.targetErr = stack.PRTargetOf(ctx, in.main, t.branch)
+		t.busy = stack.TreeBusy(ctx, t.path)
 	}
 }
 
@@ -977,8 +985,14 @@ func (in watchInput) settleCatchup(
 		return nil
 	}
 
-	tree, err := in.engine.left(ctx, in.main, task.path, task.branch, catchupPlan{base: rec.Base, sha: rec.Target})
-	reason := tree.left()
+	tree, err := in.engine.Left(
+		ctx,
+		in.main,
+		task.path,
+		task.branch,
+		stack.CatchupPlan{Base: rec.Base, SHA: rec.Target},
+	)
+	reason := tree.Left()
 	if err != nil {
 		reason = err.Error()
 	}
@@ -1062,7 +1076,7 @@ func (in watchInput) failedAt(ctx context.Context, task watchedTask, rec *drives
 		return
 	}
 
-	rec.Fingerprint = drives.Fingerprint(rec.Target, conflictWay(conflicts), "")
+	rec.Fingerprint = drives.Fingerprint(rec.Target, stack.ConflictWay(conflicts), "")
 }
 
 // pushFailed is told once per cause, the record kept so the next pass retries.
@@ -1084,7 +1098,7 @@ func (in watchInput) sendCatchup(
 	ctx context.Context, task watchedTask, failed *drives.Catchup, store map[string]watchReport,
 ) *watchReport {
 	pr, aim := task.pr, task.target
-	if pr == nil || pr.Status != forge.Open || task.originSHA == "" || aim.sha == "" {
+	if pr == nil || pr.Status != forge.Open || task.originSHA == "" || aim.SHA == "" {
 		return nil
 	}
 
@@ -1093,13 +1107,13 @@ func (in watchInput) sendCatchup(
 			Kind: watchBehind,
 			Text: text,
 			Next: "/f10:catchup in " + task.path,
-			Key:  watchBehind + " " + aim.sha + " " + reason,
+			Key:  watchBehind + " " + aim.SHA + " " + reason,
 		}
 	}
 
 	st, err := readTarget(ctx, in.main, aim, pr.Base, task.localSHA, task.originSHA)
 
-	switch base := strings.TrimPrefix(aim.name, "origin/"); {
+	switch base := strings.TrimPrefix(aim.Name, "origin/"); {
 	case err != nil:
 		in.warnf("%s skipped this pass: %v", task.id, err)
 
@@ -1115,13 +1129,13 @@ func (in watchInput) sendCatchup(
 		// a worktree behind origin would rebase a stale branch; one ahead of
 		// it holds work the request has not seen
 		return behind("diverged", fmt.Sprintf("%s moved past %s, whose tip is not origin's: not caught up",
-			aim.name, task.branch))
+			aim.Name, task.branch))
 	}
 
 	// a mark already on the branch (a finish that landed its base, a ship guard
 	// stopped on a conflict, a failed watcher catchup) is a catchup owed that
 	// nobody else sends: set again below
-	has, err := gitx.IsAncestor(ctx, in.main, aim.sha, "refs/heads/"+task.branch)
+	has, err := gitx.IsAncestor(ctx, in.main, aim.SHA, "refs/heads/"+task.branch)
 
 	switch {
 	case err != nil:
@@ -1134,7 +1148,7 @@ func (in watchInput) sendCatchup(
 
 	if task.ws == "" || in.prompt == nil {
 		return behind("no agent", fmt.Sprintf("%s moved past %s, and no agent is in its workspace to catch it up",
-			aim.name, task.branch))
+			aim.Name, task.branch))
 	}
 
 	if task.busy != "" {
@@ -1142,14 +1156,14 @@ func (in watchInput) sendCatchup(
 	}
 
 	if failed != nil {
-		conflicts, err := gitx.Conflicts(ctx, task.path, aim.sha, "HEAD")
+		conflicts, err := gitx.Conflicts(ctx, task.path, aim.SHA, "HEAD")
 		if err != nil {
 			in.warnf("%s skipped this pass, reading what %s conflicts on: %v", task.id, task.branch, err)
 
 			return nil
 		}
 
-		if drives.Fingerprint(aim.sha, conflictWay(conflicts), "") == failed.Fingerprint {
+		if drives.Fingerprint(aim.SHA, stack.ConflictWay(conflicts), "") == failed.Fingerprint {
 			return nil
 		}
 	}
@@ -1180,23 +1194,23 @@ func (in watchInput) integrate(
 ) *watchReport {
 	aim := task.target
 
-	if err := branchmeta.Set(ctx, in.main, task.branch, aim.key, aim.value); err != nil {
-		in.warnf("%s skipped this pass, marking %s behind %s: %v", task.id, task.branch, aim.name, err)
+	if err := branchmeta.Set(ctx, in.main, task.branch, aim.Key, aim.Value); err != nil {
+		in.warnf("%s skipped this pass, marking %s behind %s: %v", task.id, task.branch, aim.Name, err)
 
 		return nil
 	}
 
-	unmark := func() { _ = branchmeta.Unset(ctx, in.main, task.branch, aim.key) } // nobody will clear it
+	unmark := func() { _ = branchmeta.Unset(ctx, in.main, task.branch, aim.Key) } // nobody will clear it
 
 	// readTargets fetched origin for this pass
-	rec, err := catchupRecord(
+	rec, err := stack.CatchupRecord(
 		ctx,
 		in.main,
 		task.path,
 		task.branch,
-		aim.key,
+		aim.Key,
 		in.now(),
-		&fetchOnce{done: task.fetched},
+		&stack.FetchOnce{Done: task.fetched},
 	)
 	if err != nil {
 		unmark()
@@ -1205,54 +1219,54 @@ func (in watchInput) integrate(
 		return nil
 	}
 
-	rec.Base = aim.name
+	rec.Base = aim.Name
 
 	tasks := []string{task.id}
 
 	// the review series is read only for a merge, the one method with a message
-	message := func(p catchupPlan) []string {
-		return in.engine.message(tasks, changeOf(in.storage.Reviews(task.id)))(p)
+	message := func(p stack.CatchupPlan) []string {
+		return in.engine.Message(tasks, changeOf(in.storage.Reviews(task.id)))(p)
 	}
 
-	p, stopped, err := in.engine.integrate(ctx, in.engine.input(in.main, task.path), message)
+	p, stopped, err := in.engine.Integrate(ctx, in.engine.Input(in.main, task.path), message)
 	if err != nil {
 		unmark()
 
 		return behind("integrate", fmt.Sprintf("%s moved past %s, and catching it up failed: %v",
-			aim.name, task.branch, err))
+			aim.Name, task.branch, err))
 	}
 
-	if !stopped && (p.method == methodNone || p.method == methodSkip) {
+	if !stopped && (p.Method == stack.MethodNone || p.Method == stack.MethodSkip) {
 		unmark()
 
 		return nil
 	}
 
-	steering := in.engine.cleanSteering(cmp.Or(p.base, aim.name))
+	steering := in.engine.CleanSteering(cmp.Or(p.Base, aim.Name))
 	if stopped {
 		paths, _ := gitx.Unmerged(ctx, task.path)
-		steering = in.engine.conflictSteering(p, task.branch, "the watcher", paths)
+		steering = in.engine.ConflictSteering(p, task.branch, "the watcher", paths)
 	}
 
 	if err := in.prompt(ctx, task, steered(driven("/f10:catchup")+" && "+watchClause(rec.Head), steering)); err != nil {
-		in.undo(ctx, task, rec.Head, stopped, p.method)
+		in.undo(ctx, task, rec.Head, stopped, p.Method)
 		unmark()
 
 		if errors.Is(err, agentctl.ErrAgentNotFound) {
 			return behind("no agent", fmt.Sprintf("%s moved past %s, and its agent was not found to catch it up",
-				aim.name, task.branch))
+				aim.Name, task.branch))
 		}
 
 		return behind("prompt", fmt.Sprintf("%s moved past %s, and prompting its agent failed: %v",
-			aim.name, task.branch, err))
+			aim.Name, task.branch, err))
 	}
 
 	setCatchup(store, task.id, rec)
 
 	return &watchReport{
 		Kind: watchCatchup,
-		Text: fmt.Sprintf("catching %s up with %s, which moved past it", task.branch, aim.name),
-		Key:  watchCatchup + " sent " + aim.sha + " " + rec.Head,
+		Text: fmt.Sprintf("catching %s up with %s, which moved past it", task.branch, aim.Name),
+		Key:  watchCatchup + " sent " + aim.SHA + " " + rec.Head,
 	}
 }
 
@@ -1263,7 +1277,7 @@ func (in watchInput) undo(ctx context.Context, task watchedTask, head string, st
 
 	if stopped {
 		args = []string{"rebase", "--abort"}
-		if method == methodMerge {
+		if method == stack.MethodMerge {
 			args = []string{"merge", "--abort"}
 		}
 	}
@@ -1291,5 +1305,5 @@ func (in watchInput) worktreeBusy(ctx context.Context, task watchedTask) bool {
 		}
 	}
 
-	return treeBusy(ctx, task.path) != ""
+	return stack.TreeBusy(ctx, task.path) != ""
 }

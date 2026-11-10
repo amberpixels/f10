@@ -15,9 +15,11 @@ import (
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -100,7 +102,7 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	h, err := hostOf(t)
+	h, err := hostops.HostOf(t)
 	if err != nil {
 		return err
 	}
@@ -200,7 +202,7 @@ type finishInput struct {
 	change string // the lore change this merge closes; finish fills it from the task's series
 	suffix string
 	branch string // a bare call's own branch, "" to look it up by task and suffix
-	host   host
+	host   hostops.Host
 	method string // the merge method project.md declares, "" for none
 	traces bool   // traces: on; the squash or merge commit's body ends in the task's trailers
 	// hostCloses: a merge's closing keyword closes the task (target.hostCloses)
@@ -229,7 +231,7 @@ type finishInput struct {
 	deferred func(string)
 	// subtasks is every subtask, closed ones kept, for a parent with no branch;
 	// nil, like errNoParentLink, is a tracker with no parent link
-	subtasks func(context.Context, ref.Ref) ([]childRow, error)
+	subtasks func(context.Context, ref.Ref) ([]stack.ChildRow, error)
 	// closeTask closes a parent its subtasks delivered; nil where the tracker is
 	// not the host, which f10 has no "done" word for
 	closeTask func(context.Context, ref.Ref) error
@@ -248,7 +250,7 @@ type finishFlags struct {
 // finishInputFor fills what comes from the task and the project's settings,
 // so the command, the drive and the watcher all take the same ones; each
 // caller then sets only its own fields.
-func finishInputFor(t *target.Target, main string, h host, task ref.Ref) finishInput {
+func finishInputFor(t *target.Target, main string, h hostops.Host, task ref.Ref) finishInput {
 	task = task.Head()
 
 	return finishInput{
@@ -256,7 +258,7 @@ func finishInputFor(t *target.Target, main string, h host, task ref.Ref) finishI
 		root:       t.Layout.StorageRoot.Path(),
 		driver:     t.Driver(),
 		task:       task,
-		host:       h.at(main),
+		host:       h.In(main),
 		method:     t.Effective.MergeMethod,
 		traces:     t.Effective.Traces,
 		hostCloses: t.HostCloses(),
@@ -264,13 +266,13 @@ func finishInputFor(t *target.Target, main string, h host, task ref.Ref) finishI
 		gate:       t.Effective.LoreGate,
 		storage:    t.Layout.StorageRoot,
 		title:      titleLookup(t, task.Number),
-		subtasks:   trackerFor(t).allChildren,
-		closeTask:  closeTaskFor(t, h.at(main)),
+		subtasks:   stack.TrackerFor(t).AllChildren,
+		closeTask:  closeTaskFor(t, h.In(main)),
 	}
 }
 
 // closeTaskFor closes the task on the host only where the host is the tracker.
-func closeTaskFor(t *target.Target, h host) func(context.Context, ref.Ref) error {
+func closeTaskFor(t *target.Target, h hostops.Host) func(context.Context, ref.Ref) error {
 	if !t.HostCloses() {
 		return nil
 	}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/stack"
 )
 
 // A task's worktree goes through worktrunk when `wt` is on PATH, so a
@@ -19,16 +20,6 @@ func worktrunk() bool {
 	return shell.Has("wt")
 }
 
-func worktreeOf(wts []gitx.Worktree, branch string) string {
-	for _, wt := range wts {
-		if wt.Branch == branch {
-			return wt.Path
-		}
-	}
-
-	return ""
-}
-
 // checkout reads the new worktree's path back from git, never predicted.
 func checkout(ctx context.Context, main, branch, base string, create bool) (string, error) {
 	if worktrunk() {
@@ -37,7 +28,7 @@ func checkout(ctx context.Context, main, branch, base string, create bool) (stri
 		}
 	} else {
 		if create && base == "" {
-			base = defaultBranch(ctx, main)
+			base = stack.DefaultBranch(ctx, main)
 		}
 
 		if err := gitx.AddWorktree(ctx, main, siblingPath(main, branch), branch, base, create); err != nil {
@@ -50,7 +41,7 @@ func checkout(ctx context.Context, main, branch, base string, create bool) (stri
 		return "", err
 	}
 
-	path := worktreeOf(wts, branch)
+	path := stack.WorktreeOf(wts, branch)
 	if path == "" {
 		return "", fmt.Errorf("no worktree for %s after creating it", branch)
 	}

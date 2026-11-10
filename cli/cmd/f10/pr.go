@@ -12,6 +12,9 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -27,7 +30,7 @@ func prCommand() *cli.Command {
 				Name:      "open",
 				Usage:     "open the PR/MR in the browser: a number is a PR/MR, a task id its PR/MR; with none, the list",
 				ArgsUsage: "[number | task-id]",
-				Flags:     []cli.Flag{linkFlag(), printFlag()},
+				Flags:     []cli.Flag{render.LinkFlag(), render.PrintFlag()},
 				Action:    runPROpen,
 			},
 			{
@@ -155,7 +158,7 @@ func runPRBase(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	if cmd.Bool("origin") && refSHA(ctx, s.main, "refs/remotes/origin/"+base) == "" {
+	if cmd.Bool("origin") && stack.RefSHA(ctx, s.main, "refs/remotes/origin/"+base) == "" {
 		return fmt.Errorf("the base %s is not on origin: push it first", base)
 	}
 
@@ -163,13 +166,13 @@ func runPRBase(ctx context.Context, cmd *cli.Command) error {
 
 	if s.target == "" {
 		// the same found: value pr catchup prints, so both steps key off one word
-		after, sha, err := recordedBase(ctx, s.main, s.branch)
+		after, sha, err := stack.RecordedBase(ctx, s.main, s.branch)
 		if err != nil {
 			return err
 		}
 
 		if after != "" && sha == "" {
-			out += "found: " + foundGone + "\n"
+			out += "found: " + stack.FoundGone + "\n"
 		}
 	}
 
@@ -198,7 +201,7 @@ func runPRDiff(ctx context.Context, cmd *cli.Command) error {
 	var out string
 
 	if s.number > 0 && !s.here {
-		h, err := hostOf(t)
+		h, err := hostops.HostOf(t)
 		if err != nil {
 			return err
 		}
@@ -248,7 +251,7 @@ func runPRDiff(ctx context.Context, cmd *cli.Command) error {
 				"%s merged into %s shows nothing new (%s), so the diff is from where it forked",
 				s.branch, base, why)
 
-			from, err := forkPoint(ctx, dir, head, base)
+			from, err := stack.ForkPoint(ctx, dir, head, base)
 			if err != nil {
 				return err
 			}
@@ -322,7 +325,7 @@ func runPRView(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	h, err := hostOf(t)
+	h, err := hostops.HostOf(t)
 	if err != nil {
 		return err
 	}
@@ -369,7 +372,7 @@ func runPROpen(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	h, err := hostOf(t)
+	h, err := hostops.HostOf(t)
 	if err != nil {
 		return err
 	}
@@ -393,7 +396,7 @@ func runPROpen(ctx context.Context, cmd *cli.Command) error {
 
 	switch {
 	case number == "" && cmd.Bool("print"):
-		rows, err := h.pullRows(ctx)
+		rows, err := h.PullRows(ctx)
 		if err != nil {
 			return err
 		}
@@ -405,13 +408,13 @@ func runPROpen(ctx context.Context, cmd *cli.Command) error {
 			return err
 		}
 
-		return follow(ctx, cmd.Writer, h.Dir, url, cmd.Bool("link"))
+		return render.Follow(ctx, cmd.Writer, h.Dir, url, cmd.Bool("link"))
 	case cmd.Bool("print"):
 		return h.ShowPR(ctx, number, false)
 	}
 
 	if cmd.Bool("link") {
-		url, err := h.prURL(ctx, number)
+		url, err := h.PRURL(ctx, number)
 		if err != nil {
 			return err
 		}
@@ -422,32 +425,4 @@ func runPROpen(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	return h.ShowPR(ctx, number, true)
-}
-
-// pullRows is the first page of open requests, newest first.
-func (h host) pullRows(ctx context.Context) ([]row, error) {
-	found, err := h.OpenPRs(ctx, 30)
-	if err != nil {
-		return nil, err
-	}
-
-	rows := make([]row, 0, len(found))
-	for _, p := range found {
-		rows = append(rows, row{ID: h.Sigil() + strconv.Itoa(p.Number), Title: p.Title, Status: p.Status, URL: p.URL})
-	}
-
-	return rows, nil
-}
-
-func (h host) prURL(ctx context.Context, number string) (string, error) {
-	p, err := h.PR(ctx, number)
-	if err != nil {
-		return "", err
-	}
-
-	if p.URL == "" {
-		return "", fmt.Errorf("%s returned no url for %s%s", h.Name, h.Sigil(), number)
-	}
-
-	return p.URL, nil
 }

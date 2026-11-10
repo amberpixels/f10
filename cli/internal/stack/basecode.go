@@ -1,4 +1,4 @@
-package main
+package stack
 
 import (
 	"context"
@@ -7,18 +7,18 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
-// baseHasCode reports a non-merge commit on a base task's branch past the
+// BaseHasCode reports a non-merge commit on a base task's branch past the
 // default branch, its own recorded base and its creation commit: a merge is a
 // catchup's, never code. The drive and ship's guard both decide by it, on
 // local refs, so a branch never pushed counts.
-func baseHasCode(ctx context.Context, main, branch, def string) bool {
+func BaseHasCode(ctx context.Context, main, branch, def string) bool {
 	return hasCodeAt(ctx, main, "refs/heads/"+branch, branch, def, createdAt(ctx, main, branch))
 }
 
-// originBaseHasCode is baseHasCode for a base only origin holds: with no
+// OriginBaseHasCode is baseHasCode for a base only origin holds: with no
 // reflog there is no creation commit, so the base's own base is read on
 // origin too.
-func originBaseHasCode(ctx context.Context, main, branch, def string) bool {
+func OriginBaseHasCode(ctx context.Context, main, branch, def string) bool {
 	return hasCodeAt(ctx, main, "refs/remotes/origin/"+branch, branch, def, "")
 }
 

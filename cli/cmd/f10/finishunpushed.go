@@ -10,6 +10,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/stack"
 )
 
 // neverPushed proves a branch has no request, no copy on origin and no
@@ -59,7 +60,7 @@ func landingBase(ctx context.Context, dir, def string) (string, error) {
 		return "", fmt.Errorf("cannot read %s here", def)
 	}
 
-	sha, _, err := defaultTip(ctx, dir, def, divergeFail)
+	sha, _, err := stack.DefaultTip(ctx, dir, def, stack.DivergeFail)
 
 	return sha, err
 }
@@ -110,7 +111,7 @@ func landUnpushed(ctx context.Context, in finishInput, branch, def string) (stri
 		return base, append(notes, branch+" was already in "+def, note), nil
 	}
 
-	method, note, err := in.host.mergeMethod(ctx, in.method)
+	method, note, err := in.host.MergeMethod(ctx, in.method)
 	if err != nil {
 		return "", nil, err
 	}

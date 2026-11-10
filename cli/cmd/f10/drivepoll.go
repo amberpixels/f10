@@ -7,6 +7,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -32,7 +33,7 @@ func stalled(
 // running: up to verifyLimit, the longest a catchup's verify may take, so a
 // job whose notification never comes still ends in a stall.
 func backgroundPending(bg, now time.Time) bool {
-	return !bg.IsZero() && now.Sub(bg) < verifyLimit
+	return !bg.IsZero() && now.Sub(bg) < stack.VerifyLimit
 }
 
 // backgroundAt is when the run's session last launched background work its
@@ -236,7 +237,7 @@ func (in *driveInput) marked(ctx context.Context, r *driveRun) bool {
 }
 
 func (in *driveInput) mark(ctx context.Context, r *driveRun) (branchmeta.Key, error) {
-	return markOn(ctx, in.main, r.o.branch)
+	return stack.MarkOn(ctx, in.main, r.o.branch)
 }
 
 // verdict reads a stopped run: an ask goes to the user, anything else is the

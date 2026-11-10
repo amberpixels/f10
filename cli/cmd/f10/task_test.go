@@ -15,6 +15,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/images"
 	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/shell"
@@ -116,7 +117,7 @@ func TestListURLs(t *testing.T) {
 		{"gh", "https://github.com/o/r/issues", "https://github.com/o/r/pulls"},
 		{"glab", "https://gitlab.example.com/g/r/-/issues", "https://gitlab.example.com/g/r/-/merge_requests"},
 	} {
-		h := newHost(tc.cli, "")
+		h := hostops.NewHost(tc.cli, "")
 
 		if got, err := h.IssuesURL(t.Context()); err != nil || got != tc.issues {
 			t.Errorf("%s issues = %q, %v; want %q", tc.cli, got, err, tc.issues)
@@ -162,7 +163,7 @@ func TestTaskRows(t *testing.T) {
 			`"body":"Some text.\n\nAfter: 12\n"}]`,
 	)
 
-	rows, err := taskRows(t.Context(), tg, issuePage)
+	rows, err := taskRows(t.Context(), tg, hostops.IssuePage)
 	if err != nil || len(rows) != 1 || rows[0].ID != "FT-9" || rows[0].Priority != "high" {
 		t.Errorf("driver list = %+v, %v", rows, err)
 	}
@@ -186,14 +187,14 @@ func TestTaskRows(t *testing.T) {
 			`{"number":9,"title":"two labels","state":"OPEN","url":"https://github.com/o/r/issues/9","labels":[{"name":"p1"},{"name":"P3"}]}]`,
 	)
 
-	rows, err = taskRows(t.Context(), tg, issuePage)
+	rows, err = taskRows(t.Context(), tg, hostops.IssuePage)
 	if err != nil || len(rows) != 3 || rows[0].ID != "FT-7" || rows[0].Status != "OPEN" || rows[0].Priority != "" {
 		t.Errorf("fallback without a map = %+v, %v", rows, err)
 	}
 
 	tg.Effective.PriorityLabels = map[string]string{"p1": "high", "p3": "low"}
 
-	rows, err = taskRows(t.Context(), tg, issuePage)
+	rows, err = taskRows(t.Context(), tg, hostops.IssuePage)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +228,7 @@ func TestWriteTaskListRanksAndWarns(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var rows []row
+	var rows []hostops.Row
 	if err := json.Unmarshal(out.Bytes(), &rows); err != nil {
 		t.Fatalf("%v\n%s", err, out.String())
 	}
@@ -275,7 +276,7 @@ func TestWriteTaskListRanksAndWarns(t *testing.T) {
 func TestSettleAndRankPriorities(t *testing.T) {
 	var warn bytes.Buffer
 
-	rows := settlePriorities([]row{
+	rows := settlePriorities([]hostops.Row{
 		{ID: "a"},
 		{ID: "b", Priority: "Highest"},
 		{ID: "c", Priority: " LOW "},
@@ -312,7 +313,7 @@ func TestWriteRowsJSONPriority(t *testing.T) {
 	var out bytes.Buffer
 	if err := writeRows(
 		&out,
-		[]row{{ID: "FT-1", Title: "a", Priority: "high"}, {ID: "FT-2", Title: "b"}},
+		[]hostops.Row{{ID: "FT-1", Title: "a", Priority: "high"}, {ID: "FT-2", Title: "b"}},
 		"none",
 	); err != nil {
 		t.Fatal(err)
@@ -336,7 +337,7 @@ func TestPullRows(t *testing.T) {
 		{"gh", "#113", "https://github.com/o/r/pull/113"},
 		{"glab", "!4", "https://gitlab.example.com/g/r/-/merge_requests/4"},
 	} {
-		rows, err := newHost(tc.cli, "").pullRows(t.Context())
+		rows, err := hostops.NewHost(tc.cli, "").PullRows(t.Context())
 		if err != nil || len(rows) != 1 || rows[0].ID != tc.id || rows[0].Status != forge.Open ||
 			rows[0].URL != tc.url {
 			t.Errorf("%s rows = %+v, %v", tc.cli, rows, err)
@@ -521,7 +522,7 @@ func TestTaskCreateFailureMayExist(t *testing.T) {
 		"echo created it\n": "not one task id",
 	} {
 		_, _, err := runAppStdin(t, strings.NewReader("# A\n"), "-C", createRepo(t, script), "task", "create").streams()
-		if err == nil || !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), mayExist) {
+		if err == nil || !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), hostops.MayExist) {
 			t.Errorf("%q: err = %v, want %q and the may-exist warning", script, err, want)
 		}
 	}
@@ -535,7 +536,7 @@ func TestTaskCreateNotWrittenDropsMayExist(t *testing.T) {
 	_, _, err := runAppStdin(t, strings.NewReader("# A\n"), "-C", createRepo(t, script), "task", "create",
 		"--label", "bug").streams()
 	if err == nil || !strings.Contains(err.Error(), `is not an option of "Tags"`) ||
-		strings.Contains(err.Error(), mayExist) {
+		strings.Contains(err.Error(), hostops.MayExist) {
 		t.Errorf("err = %v, want the driver's stderr and no may-exist warning", err)
 	}
 }
@@ -645,7 +646,7 @@ func TestTaskCreateOnHostIssuesRefusesSet(t *testing.T) {
 		_, _, err := runAppStdin(t, strings.NewReader("# A\n"), "-C", repo, "task", "create", "--set",
 			"Kind=Bug").streams()
 		if err == nil || !strings.Contains(err.Error(), "nothing was created") ||
-			strings.Contains(err.Error(), mayExist) {
+			strings.Contains(err.Error(), hostops.MayExist) {
 			t.Errorf("%s: err = %v, want a refusal saying nothing was created", name, err)
 		}
 

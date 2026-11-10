@@ -9,6 +9,8 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -105,7 +107,7 @@ func remoteReviewer(ctx context.Context, cmd *cli.Command) (*reviewer, error) {
 		return nil, err
 	}
 
-	h, err := hostOf(t)
+	h, err := hostops.HostOf(t)
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +268,7 @@ func writeReview(ctx context.Context, cmd *cli.Command, rv *reviewer, r remoteRe
 		return ui.JSON(cmd.Writer, r)
 	}
 
-	return writeDoc(ctx, cmd.Writer, rv.h.Dir, reviewDoc(r))
+	return render.WriteDoc(ctx, cmd.Writer, rv.h.Dir, reviewDoc(r))
 }
 
 func reviewDoc(r remoteReview) string {

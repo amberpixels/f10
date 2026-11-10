@@ -16,6 +16,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -101,7 +103,7 @@ type forwardInput struct {
 
 // forward: every refusal comes before the one thing that leaves this process.
 func forward(ctx context.Context, w io.Writer, in forwardInput) error {
-	name, path, err := taskCheckout(ctx, in.main, in.driver, in.task, in.suffix)
+	name, path, err := stack.TaskCheckout(ctx, in.main, in.driver, in.task, in.suffix)
 	if err != nil {
 		return err
 	}
@@ -136,10 +138,10 @@ func forward(ctx context.Context, w io.Writer, in forwardInput) error {
 		return err
 	}
 
-	return writeReport(w, []fact{
-		taskFact(ctx, w, in.main, in.task.ID),
-		{label: "workspace", value: ws.ID},
-		{label: "sent", value: text},
+	return render.WriteReport(w, []render.Fact{
+		render.TaskFact(ctx, w, in.main, in.task.ID),
+		{Label: "workspace", Value: ws.ID},
+		{Label: "sent", Value: text},
 	}, appendNote(nil, note))
 }
 

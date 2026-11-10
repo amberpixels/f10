@@ -8,7 +8,9 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/fsx"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
@@ -206,7 +208,7 @@ func TestFinishedTaskBySpikeReport(t *testing.T) {
 	root := storage.Root(t.TempDir())
 	writePlan(t, filepath.Join(root.Archive(), "GH-1.spike.md"))
 
-	if !finishedTask(taskInfo{}, root, "GH-1", false) {
+	if !stack.FinishedTask(hostops.TaskInfo{}, root, "GH-1", false) {
 		t.Error("an archived spike report did not count")
 	}
 }

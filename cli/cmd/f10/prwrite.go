@@ -14,6 +14,8 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/textx"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -24,37 +26,37 @@ const statusLimit = 140
 
 // openPull is the subject's open request, read whole, for a command that
 // writes to it: a merged or closed one, or none, is refused by name.
-func openPull(ctx context.Context, cmd *cli.Command) (host, forge.PR, error) {
+func openPull(ctx context.Context, cmd *cli.Command) (hostops.Host, forge.PR, error) {
 	t, err := target.For(ctx, cmd)
 	if err != nil {
-		return host{}, forge.PR{}, err
+		return hostops.Host{}, forge.PR{}, err
 	}
 
 	s, err := resolvePRSubject(ctx, t, cmd.Args().First())
 	if err != nil {
-		return host{}, forge.PR{}, err
+		return hostops.Host{}, forge.PR{}, err
 	}
 
 	if s.lookupErr != nil {
-		return host{}, forge.PR{}, s.lookupErr
+		return hostops.Host{}, forge.PR{}, s.lookupErr
 	}
 
 	if s.number == 0 {
-		return host{}, forge.PR{}, fmt.Errorf("no open PR for %s", s.branch)
+		return hostops.Host{}, forge.PR{}, fmt.Errorf("no open PR for %s", s.branch)
 	}
 
-	h, err := hostOf(t)
+	h, err := hostops.HostOf(t)
 	if err != nil {
-		return host{}, forge.PR{}, err
+		return hostops.Host{}, forge.PR{}, err
 	}
 
 	p, err := h.PR(ctx, strconv.Itoa(s.number))
 	if err != nil {
-		return host{}, forge.PR{}, err
+		return hostops.Host{}, forge.PR{}, err
 	}
 
 	if err := requireOpen(p); err != nil {
-		return host{}, forge.PR{}, err
+		return hostops.Host{}, forge.PR{}, err
 	}
 
 	return h, p, nil
@@ -141,7 +143,7 @@ func runPRCreate(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if s.number > 0 {
-		h, err := hostOf(t)
+		h, err := hostops.HostOf(t)
 		if err != nil {
 			return err
 		}
@@ -162,15 +164,15 @@ func runPRCreate(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	if refSHA(ctx, s.main, "refs/remotes/origin/"+base) == "" {
+	if stack.RefSHA(ctx, s.main, "refs/remotes/origin/"+base) == "" {
 		return fmt.Errorf("the base %s is not on origin: push it first", base)
 	}
 
-	if head := refSHA(
+	if head := stack.RefSHA(
 		ctx,
 		t.Layout.CheckoutRoot,
 		"HEAD",
-	); refSHA(
+	); stack.RefSHA(
 		ctx,
 		s.main,
 		"refs/remotes/origin/"+s.branch,
@@ -178,12 +180,12 @@ func runPRCreate(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("origin does not have %s at HEAD: run `git push -u origin %s` first", s.branch, s.branch)
 	}
 
-	h, err := hostOf(t)
+	h, err := hostops.HostOf(t)
 	if err != nil {
 		return err
 	}
 
-	url, err := h.createPull(ctx, forge.NewPull{
+	url, err := h.OpenPull(ctx, forge.NewPull{
 		Head: s.branch, Base: base, Title: cmd.String("title"), Body: body,
 		Labels: cmd.StringSlice("label"), Assignees: cmd.StringSlice("assignee"), Draft: cmd.Bool("draft"),
 	})
@@ -194,21 +196,6 @@ func runPRCreate(ctx context.Context, cmd *cli.Command) error {
 	_, err = fmt.Fprintln(cmd.Writer, url)
 
 	return err
-}
-
-// createPull reads the url back from the host, since neither CLI prints it in
-// a form worth parsing.
-func (h host) createPull(ctx context.Context, n forge.NewPull) (string, error) {
-	if err := h.CreatePull(ctx, n); err != nil {
-		return "", err
-	}
-
-	p, err := h.PR(ctx, n.Head)
-	if err != nil {
-		return "", fmt.Errorf("opened, but reading it back failed: %w", err)
-	}
-
-	return p.URL, nil
 }
 
 func runPRComment(ctx context.Context, cmd *cli.Command) error {
@@ -240,7 +227,13 @@ func runPRComment(ctx context.Context, cmd *cli.Command) error {
 // commentOnce never posts the same text twice where it lands: a retry after
 // a post whose answer was lost finds it and returns its url instead. quote
 // heads a reply that fell back to the top level, which no thread places.
-func commentOnce(ctx context.Context, warn io.Writer, h host, p forge.PR, replyTo, quote, body string) (string, error) {
+func commentOnce(
+	ctx context.Context,
+	warn io.Writer,
+	h hostops.Host,
+	p forge.PR,
+	replyTo, quote, body string,
+) (string, error) {
 	number, _ := strconv.Atoi(strconv.Itoa(p.Number))
 
 	var thread string
@@ -316,7 +309,7 @@ func runPRStatus(ctx context.Context, cmd *cli.Command) error {
 func statusOnce(
 	ctx context.Context,
 	warn io.Writer,
-	h host,
+	h hostops.Host,
 	p forge.PR,
 	sha string,
 	s forge.CommitStatus,
@@ -360,7 +353,7 @@ func statusOnce(
 // mineLine says whether the signed-in user opened p. A failed login read is
 // unknown, never no, so a step guarding someone else's PR stops on it; the
 // view itself goes on, since explain and demo need none of it.
-func mineLine(ctx context.Context, warn io.Writer, h host, p forge.PR) string {
+func mineLine(ctx context.Context, warn io.Writer, h hostops.Host, p forge.PR) string {
 	login, err := h.Login(ctx)
 
 	switch {

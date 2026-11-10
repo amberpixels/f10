@@ -12,9 +12,10 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
-	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // A prSubject is the change a step reads: a branch, where it is checked
@@ -58,7 +59,7 @@ func resolvePRSubject(ctx context.Context, t *target.Target, token string) (prSu
 
 	switch n := pullNumberOf(token); {
 	case n > 0:
-		h, err := hostOf(t)
+		h, err := hostops.HostOf(t)
 		if err != nil {
 			return s, err
 		}
@@ -73,7 +74,7 @@ func resolvePRSubject(ctx context.Context, t *target.Target, token string) (prSu
 		}
 
 		s.number, s.target, withPull = n, p.Base, false
-		s.remote = refSHA(ctx, s.main, "refs/heads/"+s.branch) == ""
+		s.remote = stack.RefSHA(ctx, s.main, "refs/heads/"+s.branch) == ""
 		s.task = branchTask(ctx, t, s.main, s.branch)
 	case token == "":
 		if s.branch = gitx.CurrentBranch(ctx, t.Dir); s.branch == "" {
@@ -94,22 +95,22 @@ func resolvePRSubject(ctx context.Context, t *target.Target, token string) (prSu
 
 		// origin too, unlike taskCheckout: a branch pushed from another
 		// machine is only on origin, and still names the change
-		want, _, err := branchName(ctx, t.Driver(), r, "", nil)
+		want, _, err := stack.BranchName(ctx, t.Driver(), r, "", nil)
 		if err != nil {
 			return s, err
 		}
 
-		x, err := loadBranchIndex(ctx, s.main)
+		x, err := stack.LoadBranchIndex(ctx, s.main)
 		if err != nil {
 			return s, err
 		}
 
-		found, err := x.find(ctx, want, r.ID, "", policyLocalOrOrigin)
+		found, err := x.Find(ctx, want, r.ID, "", stack.PolicyLocalOrOrigin)
 		if err != nil {
 			return s, err
 		}
 
-		if found.name == "" {
+		if found.Name == "" {
 			// a finished task's branch is deleted; its last request still
 			// holds the change, which explain and judge read after the merge
 			p, err := lastPullOf(ctx, t, want)
@@ -126,7 +127,7 @@ func resolvePRSubject(ctx context.Context, t *target.Target, token string) (prSu
 			return s, nil
 		}
 
-		s.branch, s.remote = found.name, found.remote
+		s.branch, s.remote = found.Name, found.Remote
 	}
 
 	if !s.remote {
@@ -135,7 +136,7 @@ func resolvePRSubject(ctx context.Context, t *target.Target, token string) (prSu
 			return s, err
 		}
 
-		s.path = worktreeOf(wts, s.branch)
+		s.path = stack.WorktreeOf(wts, s.branch)
 		s.here = s.path != "" && gitx.SamePath(s.path, t.Layout.CheckoutRoot)
 	}
 
@@ -184,14 +185,14 @@ func (s prSubject) base(ctx context.Context, warn io.Writer) (string, error) {
 		return s.target, nil
 	}
 
-	return prBase(ctx, warn, s.main, s.branch)
+	return stack.PRBase(ctx, warn, s.main, s.branch)
 }
 
 // openPullOf is the newest open request whose head is branch, or 0: a merged
 // or closed one is history, not the change's request. A checkout with no
 // host CLI has no requests, and still diffs.
 func openPullOf(ctx context.Context, t *target.Target, branch string) (forge.PR, error) {
-	h, err := hostOf(t)
+	h, err := hostops.HostOf(t)
 	if err != nil {
 		return forge.PR{}, nil //nolint:nilerr // no host is no request
 	}
@@ -213,7 +214,7 @@ func openPullOf(ctx context.Context, t *target.Target, branch string) (forge.PR,
 // lastPullOf is the newest request of any state whose head is branch, or 0;
 // a checkout with no host CLI has none.
 func lastPullOf(ctx context.Context, t *target.Target, branch string) (forge.PR, error) {
-	h, err := hostOf(t)
+	h, err := hostops.HostOf(t)
 	if err != nil {
 		return forge.PR{}, nil //nolint:nilerr // no host is no request
 	}
@@ -226,72 +227,6 @@ func lastPullOf(ctx context.Context, t *target.Target, branch string) (forge.PR,
 	return prs[0], nil
 }
 
-// prBase is the branch the subject's request targets or would target. A
-// recorded base found nowhere was finished and deleted, so its code is on
-// the default branch; that is said on warn. prTargetOf keeps "found nowhere"
-// as its own answer, which drive and the watcher wait on.
-func prBase(ctx context.Context, warn io.Writer, main, branch string) (string, error) {
-	after, sha, err := recordedBase(ctx, main, branch)
-	if err != nil {
-		return "", err
-	}
-
-	if after != "" && sha != "" {
-		return after, nil
-	}
-
-	def, err := localDefault(ctx, main)
-	if err != nil {
-		return "", err
-	}
-
-	if after != "" {
-		ui.Warnf(warn, "the recorded base %s is gone locally and on origin, so the base is %s", after, def)
-	}
-
-	return def, nil
-}
-
-// forkPoint is where the subject's branch left its base: the newer of the
-// merge bases with the local and origin copies, so neither unpushed commits
-// of the base nor origin moving ahead read as this change.
-func forkPoint(ctx context.Context, dir, head, base string) (string, error) {
-	var points []string
-
-	for _, r := range []string{"refs/heads/" + base, "refs/remotes/origin/" + base} {
-		if refSHA(ctx, dir, r) == "" {
-			continue
-		}
-
-		mb, err := gitx.MergeBase(ctx, dir, head, r)
-		if err != nil {
-			return "", err
-		}
-
-		if mb != "" {
-			points = append(points, mb)
-		}
-	}
-
-	switch len(points) {
-	case 0:
-		return "", fmt.Errorf("%s shares no history with %s, locally or on origin", head, base)
-	case 1:
-		return points[0], nil
-	}
-
-	older, err := gitx.IsAncestor(ctx, dir, points[0], points[1])
-	if err != nil {
-		return "", err
-	}
-
-	if older {
-		return points[1], nil
-	}
-
-	return points[0], nil
-}
-
 // mergedTree is head merged in memory into the newer of base's local and
 // origin refs, and that ref. Diffed against the ref it holds only what main
 // lacks, which a merge base misses once the branch's earlier PR was squashed.
@@ -300,7 +235,7 @@ func mergedTree(ctx context.Context, dir, head, base string) (string, string, er
 
 	for _, r := range []string{"refs/heads/" + base, "refs/remotes/origin/" + base} {
 		switch {
-		case refSHA(ctx, dir, r) == "":
+		case stack.RefSHA(ctx, dir, r) == "":
 		case into == "":
 			into = r
 		default:

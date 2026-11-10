@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/stack"
 )
 
 // FT-422's catchup: the agent started go test in the background at
@@ -23,7 +24,7 @@ func TestStalledReadsBackgroundWorkAsWorking(t *testing.T) {
 	}{
 		"background go test pending":  {bg: launched, now: look},
 		"no background work":          {now: look, want: true},
-		"background past verifyLimit": {bg: launched, now: launched.Add(verifyLimit), want: true},
+		"background past verifyLimit": {bg: launched, now: launched.Add(stack.VerifyLimit), want: true},
 	}
 
 	for name, tc := range cases {
