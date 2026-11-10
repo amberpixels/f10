@@ -822,7 +822,7 @@ func TestDriveFlows(t *testing.T) {
 	}
 	defer lease.Release()
 
-	got := driveFlows(root)
+	got := driveFlows(drives.Active(root))
 	want := map[string]driveFlow{
 		"FT-1": {name: "prose", running: true},
 		"FT-2": {name: "prose", running: true},

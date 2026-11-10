@@ -84,13 +84,15 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 func bareStatus(ctx context.Context, v statusView, dir string, scoped bool, sid string, all bool) (bool, error) {
 	now := time.Now()
 
+	// the listing below reads the reader's runs when the guesses built one
+	var rd *statusReader
+
 	// the session run's task before the checkout's, the reverse of ref.Lookup,
 	// since the run is what status reports; in a checkout naming no task the
 	// launches come first, as the session run's task would hide them
 	if !all && !scoped {
 		if t, err := targetAt(ctx, dir, false, "status"); err == nil {
-			rd, err := newStatusReader(t, now)
-			if err != nil {
+			if rd, err = newStatusReader(t, now); err != nil {
 				return false, err
 			}
 
@@ -129,7 +131,7 @@ func bareStatus(ctx context.Context, v statusView, dir string, scoped bool, sid 
 
 		runs = []*state.Run{r}
 	default:
-		live, err := state.List(state.Dir(), now, state.TTL())
+		live, err := liveRuns(rd, now)
 		if err != nil {
 			return false, err
 		}
@@ -158,6 +160,15 @@ func bareStatus(ctx context.Context, v statusView, dir string, scoped bool, sid 
 	asks := slices.ContainsFunc(runs, func(r *state.Run) bool { return r.Ask != "" })
 
 	return asks, writeRuns(v, runs, make([][]gate, len(runs)), nil, showRoot, "", now)
+}
+
+// liveRuns is the reader's runs, else a fresh read of the state dir.
+func liveRuns(rd *statusReader, now time.Time) ([]*state.Run, error) {
+	if rd != nil {
+		return rd.live, nil
+	}
+
+	return state.List(state.Dir(), now, state.TTL())
 }
 
 // sessionTaskID is the task the session's run names, "" for none.

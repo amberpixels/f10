@@ -487,7 +487,8 @@ Each judge verdict and each review findings file gets a row of its own after `pl
 Verdicts from before the open series are an earlier PR's and stay out, as the judge gate drops them.
 `--json` carries the same files as `verdicts` (`subject`, `path`) and `reviews` (`round`, `path`).
 `--json` also carries the whole block as a `shipment` object, on each run entry (repeated per run, as `agent` is) and on the no-run block: `task`, `title`, `url`, `branch`, `pr`, `pr_state` (only when the host was asked), `commit`, `plan`, `handoff`, `verdicts` and `reviews`, each left out when empty except `task`.
-The flat `verdicts`, `reviews`, `plan`, `pr` and `pr_state` keys stay beside it, so a reader written before the object sees no change.
+The flat keys a reader written before the object relies on stay beside it: `verdicts` and `reviews` on a run entry, and those plus `plan`, `pr` and `pr_state` on the no-run block.
+A run entry's own `plan` key is the plan phase's status, not the plan file.
 The run's step rows follow it after a blank line, and `--plain` prints the same block.
 
 `f10 status <id>` lists the task's **gates** under the `ship` row, while the run is going and after it finished, and the one `done` row of a task with no branch left prints them as lines under it:

@@ -88,7 +88,7 @@ func TestDrivenTasks(t *testing.T) {
 		t.Cleanup(lease.Release)
 	}
 
-	got := drivenTasks(root)
+	got := drivenTasks(drives.Active(root))
 	want := map[string]bool{"FT-2": true, "FT-3": true}
 
 	if len(got) != len(want) || !got["FT-2"] || !got["FT-3"] {
@@ -333,21 +333,30 @@ func TestRenderFinishedRow(t *testing.T) {
 	statusGolden(t, "finished", out.String())
 }
 
-// A task with no run to read: a parent lists its children, and anything
-// else keeps the error, a failed children read warned about; a guessed
-// token asks the tracker nothing and prints nothing.
+// A task with a checkout is read there and never asks for children; with no
+// run to read, a parent lists its children, a finished task its done row, and
+// anything else keeps the error, a failed children read warned about; a
+// guessed token asks the tracker nothing and prints nothing.
 func TestStatusTaskWithNoRun(t *testing.T) {
-	const subIssues = "gh api --paginate repos/{owner}/{repo}/issues/1/sub_issues"
+	const (
+		subIssues = "gh api --paginate repos/{owner}/{repo}/issues/1/sub_issues"
+		issueView = "gh issue view 1 --json number,title,state,labels,createdAt,url,body,assignees"
+	)
 
 	for _, tc := range []struct {
-		name    string
-		kids    string
-		fail    bool
-		guessed bool
-		printed bool
-		err     error
-		warned  bool
+		name     string
+		kids     string
+		fail     bool
+		guessed  bool
+		checkout bool // FT-1's branch is checked out in a worktree
+		archived bool // FT-1's plan is archived: finished
+		printed  bool
+		stage    string // the one row printed, for a finished task
+		err      error
+		warned   bool
 	}{
+		{name: "has a checkout", checkout: true, printed: true},
+		{name: "finished", kids: "[]", archived: true, printed: true, stage: stageDone},
 		{name: "parent", kids: `[{"number":2,"title":"kid","state":"open","html_url":"https://x/2","body":"","labels":[]}]`, printed: true},
 		{name: "host down", fail: true, err: errNoRunToRead, warned: true},
 		{name: "guessed", guessed: true, err: errNoRunToRead},
@@ -357,7 +366,28 @@ func TestStatusTaskWithNoRun(t *testing.T) {
 			t.Setenv("F10_STATE_DIR", t.TempDir())
 
 			tg := childTarget(t, "gh")
-			scriptNoBranch(f, "FT-1", "FT-2")
+			scriptNoBranch(f, "FT-2")
+
+			if tc.checkout {
+				f.script(refsKey("refs/heads/", "FT-1"), heads("FT-1/x"))
+				f.script(worktrees, porcelain("FT-1/x", "/code/repo.FT-1"))
+				f.absent = append(f.absent, "gh pr ", "git symbolic-ref ")
+			} else {
+				scriptNoBranch(f, "FT-1")
+			}
+
+			if tc.archived {
+				tr := tg.tracker()
+				if err := os.MkdirAll(tr.storage.Archive(), 0o750); err != nil {
+					t.Fatal(err)
+				}
+
+				if err := os.WriteFile(filepath.Join(tr.storage.Archive(), "FT-1.md"), nil, 0o600); err != nil {
+					t.Fatal(err)
+				}
+
+				f.fail(issueView, shell.Result{Code: 1, Stderr: "HTTP 502"})
+			}
 			f.absent = append(
 				f.absent,
 				"git rev-parse --show-toplevel",
@@ -372,8 +402,7 @@ func TestStatusTaskWithNoRun(t *testing.T) {
 			switch {
 			case tc.fail:
 				f.fail(subIssues, shell.Result{Code: 1, Stderr: "HTTP 502"})
-				f.fail("gh issue view 1 --json number,title,state,labels,createdAt,url,body,assignees",
-					shell.Result{Code: 1, Stderr: "HTTP 502"})
+				f.fail(issueView, shell.Result{Code: 1, Stderr: "HTTP 502"})
 			case tc.kids != "":
 				f.script(subIssues, tc.kids)
 			}
@@ -398,8 +427,19 @@ func TestStatusTaskWithNoRun(t *testing.T) {
 				t.Errorf("warned = %q, want a warning %v", warn.String(), tc.warned)
 			}
 
-			if tc.guessed && f.called(subIssues) {
-				t.Error("a guessed token asked the tracker for children")
+			if (tc.guessed || tc.checkout) && f.called(subIssues) {
+				t.Error("the tracker was asked for children")
+			}
+
+			if tc.stage != "" {
+				var rows []taskRow
+				if err := json.Unmarshal(
+					out.Bytes(),
+					&rows,
+				); err != nil || len(rows) != 1 ||
+					rows[0].Stage != tc.stage {
+					t.Errorf("rows = %+v (%v), want one %s row:\n%s", rows, err, tc.stage, out.String())
+				}
 			}
 		})
 	}

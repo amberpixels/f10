@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -45,8 +46,8 @@ type statusReader struct {
 	events     []ledger.Event
 	gatesOnce  sync.Once
 	gates      gateSource
-	drivenOnce sync.Once
-	driven     map[string]bool
+	drivesOnce sync.Once
+	active     []drives.Live // the drive records, read once for both the rows and the gates
 }
 
 func newStatusReader(t *target, now time.Time) (*statusReader, error) {
@@ -83,17 +84,17 @@ func (rd *statusReader) gateSource(ctx context.Context) gateSource {
 			host:   rd.host,
 			shared: rd.t.lay.StorageRoot.Path(),
 		}
-		rd.gates.driveFlows = driveFlows(rd.gates.shared)
+		rd.gates.driveFlows = driveFlows(rd.drives())
 	})
 
 	return rd.gates
 }
 
-// drives is every task a running drive lists.
-func (rd *statusReader) drives() map[string]bool {
-	rd.drivenOnce.Do(func() { rd.driven = drivenTasks(rd.t.lay.StorageRoot.Path()) })
+// drives is the drive records neither cancelled nor done.
+func (rd *statusReader) drives() []drives.Live {
+	rd.drivesOnce.Do(func() { rd.active = drives.Active(rd.t.lay.StorageRoot.Path()) })
 
-	return rd.driven
+	return rd.active
 }
 
 // idOf turns a reference as typed into an id, read once per call.
@@ -133,7 +134,7 @@ func (rd *statusReader) rows(ctx context.Context) rowSource {
 		},
 		resolve: rd.idOf(ctx),
 		host:    rd.host,
-		driven:  rd.drives(),
+		driven:  drivenTasks(rd.drives()),
 		gates:   rd.gatesOf,
 	}
 }

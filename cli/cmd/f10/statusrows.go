@@ -590,10 +590,10 @@ func (rd *statusReader) finishedRow(ctx context.Context, r ref.Ref) *taskRow {
 // drivenTasks is every task a drive lists while its driver runs, by id,
 // each bundle member on its own. A stopped drive holds nothing until it
 // resumes, as its queue does not.
-func drivenTasks(root string) map[string]bool {
+func drivenTasks(active []drives.Live) map[string]bool {
 	out := map[string]bool{}
 
-	for _, d := range drives.Active(root) {
+	for _, d := range active {
 		if !d.Running {
 			continue
 		}
