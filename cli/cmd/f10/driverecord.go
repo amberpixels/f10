@@ -85,8 +85,8 @@ func healFinished(root string, rec *drives.Record, finished func(string) bool) {
 	}
 }
 
-// recordArgs is the command line a record is matched on: --answer, --every,
-// --parallel and --resume dropped, since none of them names another drive.
+// recordArgs is the command line a record is matched on: the flags that only
+// tune a drive dropped, since none of them names another drive.
 func recordArgs(argv []string) []string {
 	var out []string
 
@@ -94,13 +94,12 @@ func recordArgs(argv []string) []string {
 		tok := strings.TrimSpace(argv[i])
 		name, _, inline := strings.Cut(tok, "=")
 
-		switch {
-		case tok == "":
+		if tok == "" {
 			continue
-		case tok == "--foreground":
-			continue
-		case name == "--answer" || name == "--every" || name == "--parallel" || name == "--resume":
-			if !inline {
+		}
+
+		if f, ok := driveFlagNamed(name); ok && f.tunes {
+			if f.value != "" && !inline {
 				i++
 			}
 
@@ -270,12 +269,7 @@ func (in *driveInput) saveTask(r *driveRun, change func(*drives.Task)) {
 
 func (in *driveInput) savePending(taken *drives.Answer) {
 	in.save(func(rec *drives.Record) {
-		rec.Answers = map[string]string{}
-		if in.answer != "" {
-			rec.Answers[""] = in.answer
-		}
-
-		maps.Copy(rec.Answers, in.answers)
+		rec.Answers = in.answers.pending()
 
 		if taken != nil {
 			rec.Answered = append(rec.Answered, *taken)

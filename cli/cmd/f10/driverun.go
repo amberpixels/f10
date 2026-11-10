@@ -54,8 +54,7 @@ type driveInput struct {
 	// catchup is the engine the drive catches a branch up through
 	catchup *catchupEngine
 
-	answer   string                      // a bare --answer, until the first task stopped on a question takes it
-	answers  map[string]string           // --answer ID=text, by task id, until that task takes it
+	answers  answerBook                  // --answer and the inbox's answers, until a task takes each
 	profiles map[string]agentctl.Profile // each profile as typed, resolved over the layers; "" is the map's default
 
 	rec    *drives.Record           // this drive's record; nil with no root
@@ -75,9 +74,6 @@ type driveInput struct {
 	links   *taskLinks
 	project string
 
-	// answeredIn is when a task's ask was answered where the agent heard
-	// it: the drive follows that turn instead of sending the skill again
-	answeredIn map[string]time.Time
 	inboxNotes []string
 	pullLine   string // the last line retryPull printed, or a finish's deferred note
 	ranFinish  bool   // a finish ran here, so this drive may pull main

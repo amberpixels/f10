@@ -33,8 +33,7 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 	in.saveTask(r, func(t *drives.Task) { t.Skill, t.Outcome = skill, nil })
 	in.keepCatchup(r)
 
-	answeredAt, answered := in.answeredIn[id]
-	delete(in.answeredIn, id)
+	answeredAt, answered := in.answers.heard(id)
 
 	if skill == "catchup" && in.catchup.agentVerifies != "" && !r.toldCatchup {
 		r.toldCatchup = true

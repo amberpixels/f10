@@ -214,8 +214,8 @@ func TestOpenRecordReplacesABareAnswerHoldingEquals(t *testing.T) {
 		t.Errorf("answers = %q, want %q", in.args.answers, want)
 	}
 
-	if err := in.takeAnswers(tasks); err != nil || in.answer != "use x=1" {
-		t.Errorf("takeAnswers = %v, answer %q", err, in.answer)
+	if err := in.takeAnswers(tasks); err != nil || in.answers.bare != "use x=1" {
+		t.Errorf("takeAnswers = %v, answer %q", err, in.answers.bare)
 	}
 }
 

@@ -2885,7 +2885,7 @@ func TestDriveFinishAsksForSomeoneElsesPR(t *testing.T) {
 	var got []string
 
 	in := &driveInput{
-		answers: map[string]string{},
+		answers: newAnswerBook(),
 		finish: func(_ context.Context, _ io.Writer, req driveFinish) error {
 			got = append(got, req.pr)
 			if req.pr == "" {
@@ -2903,20 +2903,20 @@ func TestDriveFinishAsksForSomeoneElsesPR(t *testing.T) {
 		t.Fatalf("runFinish on someone else's PR = %+v, want an ask", res)
 	}
 
-	in.answers["GH-1"] = "1. local"
+	in.answers.give(answer{task: "GH-1", text: "1. local"})
 
 	if res = in.runFinish(t.Context(), io.Discard, run); res.code != 0 {
 		t.Fatalf("runFinish answered local = %+v, want finished", res)
 	}
 
 	// a bare answer that is no finish choice belongs to some agent's question
-	in.answer = "1. yes"
+	in.answers.give(answer{text: "1. yes"})
 
-	if res = in.runFinish(t.Context(), io.Discard, run); res.code != ui.ExitAsk || in.answer != "1. yes" {
-		t.Errorf("a bare non-choice answer = %+v, left %q; want it left for an agent", res, in.answer)
+	if res = in.runFinish(t.Context(), io.Discard, run); res.code != ui.ExitAsk || in.answers.bare != "1. yes" {
+		t.Errorf("a bare non-choice answer = %+v, left %q; want it left for an agent", res, in.answers.bare)
 	}
 
-	in.answers["GH-1"] = "maybe"
+	in.answers.give(answer{task: "GH-1", text: "maybe"})
 
 	if res = in.runFinish(t.Context(), io.Discard, run); res.code != ui.ExitHalted {
 		t.Errorf("a keyed answer that is no choice = %+v, want a halt", res)
@@ -2934,7 +2934,7 @@ func TestDriveFinishPassesTheRunsBranch(t *testing.T) {
 
 	in := &driveInput{
 		main:    t.TempDir(),
-		answers: map[string]string{},
+		answers: newAnswerBook(),
 		now:     time.Now,
 		finish: func(_ context.Context, _ io.Writer, req driveFinish) error {
 			got = req
@@ -4024,7 +4024,7 @@ func TestDriveFinishWithADeferredPullIsFinished(t *testing.T) {
 	const note = "main not pulled: the local main has commits origin/main lacks"
 
 	in := &driveInput{
-		answers: map[string]string{},
+		answers: newAnswerBook(),
 		now:     time.Now,
 		root:    t.TempDir(),
 		finish: func(_ context.Context, _ io.Writer, req driveFinish) error {

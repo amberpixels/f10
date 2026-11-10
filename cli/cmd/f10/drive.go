@@ -27,11 +27,9 @@ import (
 // an agent pays a round trip and a slice of context per check.
 func driveCommand() *cli.Command {
 	return &cli.Command{
-		Name:  "drive",
-		Usage: "run a list of tasks through a flow, each once its base has a commit, stopping once an agent asks and nothing else can move",
-		ArgsUsage: "<id>[:profile]... | <id> -- <id>  [--flow NAME | --local] [--pace NAME] " +
-			"[--agent PROFILE | --model MODEL] [--parallel N] [--answer [ID=]TEXT ...] [--every DURATION] [--foreground]\n" +
-			"   f10 drive --resume N [--parallel N] [--answer [ID=]TEXT ...] | list [--all] | cancel N",
+		Name:      "drive",
+		Usage:     "run a list of tasks through a flow, each once its base has a commit, stopping once an agent asks and nothing else can move",
+		ArgsUsage: driveUsage(),
 		Description: "Each task runs the default flow, or the one --flow or --local names (f10 flow lists them): " +
 			"plan when the flow has a plan entry and the task no plan file, then ship, " +
 			"then finish unless the pace's finish is off. A rerun keeps the flow a task's branch records.\n" +

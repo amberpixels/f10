@@ -58,19 +58,19 @@ func (in *driveInput) report(w io.Writer, runs []*driveRun, notes []string) erro
 		lines = append(lines, "answer with: "+in.resumeLine()+answerFlags(asking))
 	}
 
-	if in.answer != "" {
+	if in.answers.bare != "" {
 		notes = append(notes, "--answer went unused: no task was stopped on a question")
 	}
 
 	for _, r := range runs {
-		if _, left := in.answers[r.task.ref.ID]; left {
+		if _, left := in.answers.keyed(r.task.ref.ID); left {
 			notes = append(notes, "--answer for "+r.task.ref.ID+" went unused: it was not stopped on a question")
 		}
 	}
 
 	// an answer reported unused is dropped, so a resume never sends it to a
 	// question nobody saw; only one a stopped drive never reached is kept
-	in.answer, in.answers = "", map[string]string{}
+	in.answers.clear()
 	in.savePending(nil)
 
 	notes = append(notes, lines...)
