@@ -976,7 +976,8 @@ func (in watchInput) settleCatchup(
 		return nil
 	}
 
-	reason, err := in.engine.left(ctx, in.main, task.path, task.branch, catchupPlan{base: rec.Base, sha: rec.Target})
+	tree, err := in.engine.left(ctx, in.main, task.path, task.branch, catchupPlan{base: rec.Base, sha: rec.Target})
+	reason := tree.left()
 	if err != nil {
 		reason = err.Error()
 	}
@@ -1186,7 +1187,16 @@ func (in watchInput) integrate(
 
 	unmark := func() { _ = branchmeta.Unset(ctx, in.main, task.branch, target.key) } // nobody will clear it
 
-	rec, err := catchupRecord(ctx, in.main, task.path, task.branch, target.key, in.now())
+	// readTargets fetched origin for this pass
+	rec, err := catchupRecord(
+		ctx,
+		in.main,
+		task.path,
+		task.branch,
+		target.key,
+		in.now(),
+		&fetchOnce{done: task.fetched},
+	)
 	if err != nil {
 		unmark()
 		in.warnf("%s skipped this pass: %v", task.id, err)

@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"io"
 	"slices"
 	"strconv"
 	"strings"
@@ -155,26 +154,34 @@ func (s taskState) shipped() bool {
 
 // reconcile moves the task past every skill whose evidence is in,
 // recording each as drive does a reported one, and says how many it passed.
-func (in *driveInput) reconcile(ctx context.Context, w io.Writer, r *driveRun, s taskState) (int, error) {
+func (in *driveInput) reconcile(ctx context.Context, r *driveRun, s taskState) (int, error) {
 	passed := 0
 
 	for skills := in.skills(r); r.pos < len(skills) && s.has(skills[r.pos]); {
 		skill := skills[r.pos]
-		if err := branchmeta.Set(ctx, in.main, r.o.branch, branchmeta.Drive, skill); err != nil {
-			return passed, fmt.Errorf("recording %s done: %w", skill, err)
+		if err := in.advance(ctx, r, skill); err != nil {
+			return passed, err
 		}
 
-		fmt.Fprintf(w, "%s %s: done (from the branch)\n", in.id(r.task.ref.ID), skill)
+		fmt.Fprintf(in.out, "%s %s: done (from the branch)\n", in.id(r.task.ref.ID), skill)
 
-		r.pos++
 		passed++
 	}
 
-	if passed > 0 {
-		in.clearAttempts(r)
+	return passed, nil
+}
+
+// advance records skill done on the branch and moves the task to its next
+// skill; the task moved, so the attempt count starts over.
+func (in *driveInput) advance(ctx context.Context, r *driveRun, skill string) error {
+	if err := branchmeta.Set(ctx, in.main, r.o.branch, branchmeta.Drive, skill); err != nil {
+		return fmt.Errorf("recording %s done: %w", skill, err)
 	}
 
-	return passed, nil
+	r.pos++
+	in.clearAttempts(r)
+
+	return nil
 }
 
 // An attempt is one failure of an action, with the state it left.
@@ -189,20 +196,19 @@ type attempt struct {
 // starts the count over, since the task moved.
 func (in *driveInput) attempt(
 	ctx context.Context,
-	w io.Writer,
 	r *driveRun,
 	action string,
 	halt driveResult,
-) *driveResult {
+) error {
 	run, _ := in.run(r.o.path) // a run the state dir cannot give leaves the run out
 
-	return in.attemptAt(w, r, action, in.readState(ctx, r, r.current(run)).fingerprint(), halt)
+	return in.attemptAt(r, action, in.readState(ctx, r, r.current(run)).fingerprint(), halt)
 }
 
 // attemptAt is attempt with the state to compare given: a catchup's is the
 // conflict it left, since a catchup that merges moves the head without
 // progress, and the reason it gives changes wording between catchups.
-func (in *driveInput) attemptAt(w io.Writer, r *driveRun, action, fp string, halt driveResult) *driveResult {
+func (in *driveInput) attemptAt(r *driveRun, action, fp string, halt driveResult) error {
 	reason := halt.reason
 	restarted := false
 
@@ -217,11 +223,11 @@ func (in *driveInput) attemptAt(w io.Writer, r *driveRun, action, fp string, hal
 		// the count is of failures in a row with nothing changed, never of
 		// turns, so a restart says why it reads 1 again
 		if restarted {
-			fmt.Fprintf(w, "%s %s: failed again, but the task moved since the last failure, "+
+			fmt.Fprintf(in.out, "%s %s: failed again, but the task moved since the last failure, "+
 				"so the count starts over at 1 of %d, trying again: %s\n",
 				in.id(r.task.ref.ID), action, attemptLimit, reason)
 		} else {
-			fmt.Fprintf(w, "%s %s: failed, %d of %d in a row with nothing changed, trying again: %s\n",
+			fmt.Fprintf(in.out, "%s %s: failed, %d of %d in a row with nothing changed, trying again: %s\n",
 				in.id(r.task.ref.ID), action, len(r.attempts), attemptLimit, reason)
 		}
 
@@ -248,19 +254,19 @@ func (in *driveInput) attemptAt(w io.Writer, r *driveRun, action, fp string, hal
 
 	res.attempts = slices.Clone(r.attempts)
 
-	return &res
+	return endWith(res)
 }
 
 // failed is a turn that ended without doing its action: the next poll sends
 // the action again, or the task halts on the limit with halt.
-func (in *driveInput) failed(ctx context.Context, w io.Writer, r *driveRun, halt driveResult) {
-	if res := in.attempt(ctx, w, r, r.skill, halt); res != nil {
-		in.end(ctx, w, r, *res)
-
-		return
+func (in *driveInput) failed(ctx context.Context, r *driveRun, halt driveResult) error {
+	if err := in.attempt(ctx, r, r.skill, halt); err != nil {
+		return err
 	}
 
-	r.resend = true
+	in.enter(r, atRetrying)
+
+	return nil
 }
 
 // clearAttempts starts the count over: the task moved.
@@ -273,7 +279,6 @@ func (*driveInput) clearAttempts(r *driveRun) {
 // attempt of the action in flight, or with retry false, halt at once.
 func (in *driveInput) settle(
 	ctx context.Context,
-	w io.Writer,
 	r *driveRun,
 	run *state.Run,
 	halt driveResult,
@@ -281,27 +286,23 @@ func (in *driveInput) settle(
 ) error {
 	// git, not the turn, says whether the drive's own catchup settled
 	if r.skill == "catchup" {
-		return in.catchupSettled(ctx, w, r, retry)
+		return in.catchupSettled(ctx, r, retry)
 	}
 
 	if r.skill != "catchup" {
-		passed, err := in.reconcile(ctx, w, r, in.readState(ctx, r, run))
+		passed, err := in.reconcile(ctx, r, in.readState(ctx, r, run))
 		if err != nil {
 			return err
 		}
 
 		if passed > 0 {
-			return in.next(ctx, w, r)
+			return in.next(ctx, r)
 		}
 	}
 
 	if !retry {
-		in.end(ctx, w, r, halt)
-
-		return nil
+		return endWith(halt)
 	}
 
-	in.failed(ctx, w, r, halt)
-
-	return nil
+	return in.failed(ctx, r, halt)
 }

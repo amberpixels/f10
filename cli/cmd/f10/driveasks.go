@@ -36,8 +36,6 @@ func (in *driveInput) raise(ctx context.Context, r *driveRun, skill, text string
 // that turn; any other joins the answers as an --answer would. The inbox's
 // answer came first, so an --answer for the same task goes unused.
 func (in *driveInput) takeInbox(tasks []driveTask) {
-	in.answeredIn = map[string]time.Time{}
-
 	if in.asksDir == "" || in.root == "" {
 		return
 	}
@@ -55,17 +53,17 @@ func (in *driveInput) takeInbox(tasks []driveTask) {
 
 		id := tasks[i].ref.ID
 
-		if given, ok := in.answers[id]; ok && given != a.Answer {
+		if given, ok := in.answers.keyed(id); ok && given.text != a.Answer {
 			in.inboxNotes = append(in.inboxNotes, fmt.Sprintf("--answer for %s went unused: %s answered it %s at %s",
 				id, id, asks.Way(a.By), a.AnsweredAt.Local().Format("15:04")))
 		}
 
+		from := heardInbox
 		if a.DeliveredAt.IsZero() || a.Skill == "finish" {
-			in.answers[id] = a.Answer
-		} else {
-			delete(in.answers, id)
-			in.answeredIn[id] = a.AnsweredAt
+			from = fromInbox
 		}
+
+		in.answers.give(answer{task: id, text: a.Answer, from: from, at: a.AnsweredAt})
 
 		in.taken(a.Key())
 	}
@@ -138,20 +136,20 @@ func closeDriveAsks(dir, root string, n int, now time.Time) {
 }
 
 func (in *driveInput) takeAnswers(tasks []driveTask) error {
-	in.answer, in.answers = "", map[string]string{}
+	in.answers = newAnswerBook()
 
 	for _, a := range in.args.answers {
 		if id, text, ok := keyedAnswer(a, tasks); ok {
-			in.answers[id] = text
+			in.answers.give(answer{task: id, text: text, from: fromFlag})
 
 			continue
 		}
 
-		if in.answer != "" {
+		if in.answers.bare != "" {
 			return errors.New("several --answer values name no task: key each one, --answer GH-1=\"1. …\"")
 		}
 
-		in.answer = a
+		in.answers.give(answer{text: a, from: fromFlag})
 	}
 
 	return nil
@@ -189,8 +187,7 @@ func answerFlags(asking []string) string {
 // finishAnswer takes a bare answer only when it is merge or local, so one
 // meant for an agent's question stays there.
 func (in *driveInput) finishAnswer(id string) (string, error) {
-	if a, ok := in.answers[id]; ok {
-		delete(in.answers, id)
+	if a, ok := in.answers.takeKeyed(id); ok {
 		in.took(id, "finish", a)
 
 		if c := finishChoice(a); c != "" {
@@ -200,8 +197,8 @@ func (in *driveInput) finishAnswer(id string) (string, error) {
 		return "", fmt.Errorf("the answer to finish is %q: answer %s or %s", a, finishLeaveOpen, finishMerge)
 	}
 
-	if c := finishChoice(in.answer); c != "" {
-		in.answer = ""
+	if c := finishChoice(in.answers.bare); c != "" {
+		in.answers.bare = ""
 		in.took(id, "finish", c)
 
 		return c, nil
@@ -221,15 +218,4 @@ func finishChoice(answer string) string {
 	return ""
 }
 
-func (in *driveInput) takeAnswer(id string) string {
-	if a, ok := in.answers[id]; ok {
-		delete(in.answers, id)
-
-		return a
-	}
-
-	a := in.answer
-	in.answer = ""
-
-	return a
-}
+func (in *driveInput) takeAnswer(id string) string { return in.answers.take(id) }

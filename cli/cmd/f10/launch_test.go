@@ -159,7 +159,9 @@ func TestDriveRetriesEnterOnceForATypedSend(t *testing.T) {
 	t.Cleanup(func() { enterRetry = prev })
 
 	now := time.Now()
-	in := &driveInput{now: func() time.Time { return now }}
+	in := &driveInput{
+		now: func() time.Time { return now },
+	}
 
 	typed := &driveRun{task: driveTask{ref: gh1}, skill: "ship", sentAt: now.Add(-11 * time.Second), typed: sentText}
 	typed.o.path = fwdWT
@@ -169,10 +171,12 @@ func TestDriveRetriesEnterOnceForATypedSend(t *testing.T) {
 
 	var out bytes.Buffer
 
+	in.out = &out
+
 	for range 2 {
-		in.retryEnter(t.Context(), &out, typed)
-		in.retryEnter(t.Context(), &out, launched)
-		in.retryEnter(t.Context(), &out, recent)
+		in.retryEnter(t.Context(), typed)
+		in.retryEnter(t.Context(), launched)
+		in.retryEnter(t.Context(), recent)
 	}
 
 	if len(m.enters) != 1 || !bytes.Contains(out.Bytes(), []byte("Enter resent")) {

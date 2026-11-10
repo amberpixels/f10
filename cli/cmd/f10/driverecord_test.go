@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -172,7 +173,11 @@ func TestOpenRecordKeepsAnswersNotTaken(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	in := &driveInput{root: root, argv: []string{"GH-1", "GH-2", "--answer", "GH-2=2. maybe"}, now: time.Now}
+	in := &driveInput{
+		root: root,
+		argv: []string{"GH-1", "GH-2", "--answer", "GH-2=2. maybe"},
+		now:  time.Now,
+	}
 	in.args.answers = []string{"GH-2=2. maybe"}
 
 	if err := in.openRecord(answerTasks("GH-1", "GH-2")); err != nil {
@@ -185,7 +190,11 @@ func TestOpenRecordKeepsAnswersNotTaken(t *testing.T) {
 	}
 
 	// the drive's own lease is held: a second drive on the record refuses
-	second := &driveInput{root: root, argv: []string{"GH-1", "GH-2"}, now: time.Now}
+	second := &driveInput{
+		root: root,
+		argv: []string{"GH-1", "GH-2"},
+		now:  time.Now,
+	}
 	if err := second.openRecord(nil); err == nil || !strings.Contains(err.Error(), "drive 1 is running") {
 		t.Errorf("second openRecord = %v", err)
 	}
@@ -201,7 +210,11 @@ func TestOpenRecordReplacesABareAnswerHoldingEquals(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	in := &driveInput{root: root, argv: []string{"GH-1", "--answer", "use x=1"}, now: time.Now}
+	in := &driveInput{
+		root: root,
+		argv: []string{"GH-1", "--answer", "use x=1"},
+		now:  time.Now,
+	}
 	in.args.answers = []string{"use x=1"}
 
 	tasks := answerTasks("GH-1")
@@ -214,8 +227,8 @@ func TestOpenRecordReplacesABareAnswerHoldingEquals(t *testing.T) {
 		t.Errorf("answers = %q, want %q", in.args.answers, want)
 	}
 
-	if err := in.takeAnswers(tasks); err != nil || in.answer != "use x=1" {
-		t.Errorf("takeAnswers = %v, answer %q", err, in.answer)
+	if err := in.takeAnswers(tasks); err != nil || in.answers.bare != "use x=1" {
+		t.Errorf("takeAnswers = %v, answer %q", err, in.answers.bare)
 	}
 }
 
@@ -437,7 +450,13 @@ func TestOpenRecordRecordsTheLaunch(t *testing.T) {
 	root, stateDir := t.TempDir(), t.TempDir()
 
 	open := func(session string, change func(*driveInput)) *driveInput {
-		in := &driveInput{root: root, stateDir: stateDir, session: session, argv: []string{"GH-1"}, now: time.Now}
+		in := &driveInput{
+			root:     root,
+			stateDir: stateDir,
+			session:  session,
+			argv:     []string{"GH-1"},
+			now:      time.Now,
+		}
 		if change != nil {
 			change(in)
 		}
@@ -486,8 +505,12 @@ func TestOpenRecordKeepsTheCap(t *testing.T) {
 
 	open := func(argv []string, parallel int) *driveInput {
 		in := &driveInput{
-			root: root, stateDir: t.TempDir(), argv: argv, now: time.Now, defaultParallel: 6,
-			args: driveArgs{parallel: parallel},
+			root:            root,
+			stateDir:        t.TempDir(),
+			argv:            argv,
+			defaultParallel: 6,
+			args:            driveArgs{parallel: parallel},
+			now:             time.Now,
 		}
 		if err := in.openRecord(nil); err != nil {
 			t.Fatal(err)
@@ -535,6 +558,24 @@ func TestTaskStandingQueued(t *testing.T) {
 	}
 }
 
+// A task its running drive parked, or holds at finish, stands waiting, not
+// running the skill it last had in flight.
+func TestTaskStandingWaiting(t *testing.T) {
+	parked := drives.Task{Skill: "ship", Phase: drives.PhaseParked}
+	if got := taskStanding(parked, true); got != "waiting on its base" {
+		t.Errorf("a parked task stands %q", got)
+	}
+
+	held := drives.Task{Skill: "finish", Phase: drives.PhaseWaiting}
+	if got := taskStanding(held, true); got != "waiting to finish after its base" {
+		t.Errorf("a finish held for its base stands %q", got)
+	}
+
+	if got := taskStanding(parked, false); got != "stopped at ship" {
+		t.Errorf("a parked task in a stopped drive stands %q", got)
+	}
+}
+
 // drive list decides a row by finishedTask, asking the tracker only when the
 // branch and the plans dir leave it open.
 func TestFinishedLazily(t *testing.T) {
@@ -571,4 +612,52 @@ func TestFinishedLazily(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The record names where a task stands as its phase moves: held by the cap,
+// running, parked on its base, waiting at finish, ended; queued is kept
+// beside the phase for readers that know only it.
+func TestRecordFollowsThePhase(t *testing.T) {
+	root := t.TempDir()
+
+	rec := &drives.Record{Args: []string{"GH-1"}, Tasks: []drives.Task{{ID: "GH-1"}}}
+	if err := drives.Create(root, rec); err != nil {
+		t.Fatal(err)
+	}
+
+	in := &driveInput{
+		root: root,
+		out:  io.Discard,
+		rec:  rec,
+	}
+	r := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-1"}}}
+
+	want := func(phase string, queued bool) {
+		t.Helper()
+
+		got, err := drives.Read(root, rec.Number)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if task := got.Tasks[0]; task.Phase != phase || task.Queued != queued {
+			t.Errorf("task = %+v, want phase %q queued %v", task, phase, queued)
+		}
+	}
+
+	in.queue(r)
+	want(drives.PhaseQueued, true)
+
+	in.unqueue(r)
+	in.enter(r, atRunning)
+	want(drives.PhaseRunning, false)
+
+	in.enter(r, atParked)
+	want(drives.PhaseParked, false)
+
+	in.enter(r, atWaiting)
+	want(drives.PhaseWaiting, false)
+
+	in.end(t.Context(), r, driveResult{row: "done: ship"})
+	want(drives.PhaseEnded, false)
 }

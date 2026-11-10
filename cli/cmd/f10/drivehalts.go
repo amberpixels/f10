@@ -3,15 +3,13 @@ package main
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
-	"io"
-	"slices"
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ledger"
-	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -26,18 +24,18 @@ func (in *driveInput) leaveRuns(ctx context.Context, runs []*driveRun) {
 			in.parkFinish(ctx, r)
 		}
 
-		if r.verifying != nil {
-			r.verifying.halt()
+		if r.job != nil {
+			r.job.halt()
 		}
 	}
 }
 
-func (in *driveInput) end(ctx context.Context, w io.Writer, r *driveRun, res driveResult) {
-	r.end, r.queued = &res, false
+func (in *driveInput) end(ctx context.Context, r *driveRun, res driveResult) {
+	r.end = &res
 
 	// a cancelled or halted run takes its catchup's verify with it
-	if r.verifying != nil {
-		r.verifying.stop()
+	if r.job != nil {
+		r.job.stop()
 	}
 
 	// a finished task's branch took the record with it
@@ -46,7 +44,10 @@ func (in *driveInput) end(ctx context.Context, w io.Writer, r *driveRun, res dri
 	}
 
 	in.saveTask(r, func(t *drives.Task) {
-		t.Skill, t.Queued, t.Outcome = "", false, &drives.Outcome{Row: res.row, Code: res.code}
+		t.Skill, t.Queued, t.Phase, t.Outcome = "", false, drives.PhaseEnded, &drives.Outcome{
+			Row:  res.row,
+			Code: res.code,
+		}
 	})
 	// an asking task stays leased until the drive exits, since the drive
 	// runs on and resumes for its answer; another drive must not claim it
@@ -65,13 +66,13 @@ func (in *driveInput) end(ctx context.Context, w io.Writer, r *driveRun, res dri
 	// a finished task's lines are its handoff, which finish's report just
 	// printed; they wait for the drive's report
 	if len(res.lines) == 0 || res.row == rowFinished {
-		fmt.Fprintf(w, "%s: %s\n", in.id(r.task.ref.ID), res.row)
+		fmt.Fprintf(in.out, "%s: %s\n", in.id(r.task.ref.ID), res.row)
 
 		return
 	}
 
 	for _, l := range res.lines {
-		fmt.Fprintln(w, l)
+		fmt.Fprintln(in.out, l)
 	}
 }
 
@@ -124,17 +125,6 @@ func recordAt(ctx context.Context, dir string, e ledger.Event) {
 	ledger.Record(e)
 }
 
-// blockedRun reports a phase of run stopped blocked: a decision, never breakage.
-func blockedRun(run *state.Run) bool {
-	return slices.ContainsFunc(state.Phases, func(p string) bool { return run.Status(p) == "blocked" })
-}
-
-// guardStop reports the stop ship's catchup guard left, by the kind it
-// recorded: failed or partial, marked as the guard's.
-func guardStop(run *state.Run) bool {
-	return run.Stop == state.StopGuard && (run.Ship == "failed" || run.Ship == "partial")
-}
-
 // baseHead is the base branch's head, "none" for no branch, or why git
 // could not read it.
 func (in *driveInput) baseHead(ctx context.Context, b *driveRun) (string, string) {
@@ -146,18 +136,33 @@ func (in *driveInput) baseHead(ctx context.Context, b *driveRun) (string, string
 	return cmp.Or(head, "none"), ""
 }
 
-// awaitsDecision is a stop a catchup must not run over: a question or a
-// blocked decision, not one a catchup leaves in place (heldStop).
-func awaitsDecision(run *state.Run) bool {
-	return run != nil && stoppedRun(run) && !heldStop(run) && (run.Ask != "" || blockedRun(run))
+// A taskEndError carries a task's end up its path instead of applying it
+// where it was found; onTask applies it at each per-task entry of the tick.
+type taskEndError struct{ res driveResult }
+
+func (e *taskEndError) Error() string { return e.res.row + ": " + e.res.reason }
+
+func endWith(res driveResult) error { return &taskEndError{res: res} }
+
+// halt ends the task halted at skill for reason.
+func halt(id, skill, reason string) error { return endWith(halted(id, skill, reason)) }
+
+// endOf is the end err carries, if it is one.
+func endOf(err error) (driveResult, bool) {
+	if e, ok := errors.AsType[*taskEndError](err); ok {
+		return e.res, true
+	}
+
+	return driveResult{}, false
 }
 
-// heldStop is a ship stop a catchup leaves in place: the guard's, or a
-// ship parked on its base, which resumes once the catchup ends clean.
-func heldStop(run *state.Run) bool { return guardStop(run) || run.Wait != "" }
+// onTask applies an end r's path returned; any other error goes on up.
+func (in *driveInput) onTask(ctx context.Context, r *driveRun, err error) error {
+	if res, ok := endOf(err); ok {
+		in.end(ctx, r, res)
 
-func stoppedRun(r *state.Run) bool {
-	_, stopped := r.StoppedPhase()
+		return nil
+	}
 
-	return stopped
+	return err
 }

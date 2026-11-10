@@ -27,11 +27,9 @@ import (
 // an agent pays a round trip and a slice of context per check.
 func driveCommand() *cli.Command {
 	return &cli.Command{
-		Name:  "drive",
-		Usage: "run a list of tasks through a flow, each once its base has a commit, stopping once an agent asks and nothing else can move",
-		ArgsUsage: "<id>[:profile]... | <id> -- <id>  [--flow NAME | --local] [--pace NAME] " +
-			"[--agent PROFILE | --model MODEL] [--parallel N] [--answer [ID=]TEXT ...] [--every DURATION] [--foreground]\n" +
-			"   f10 drive --resume N [--parallel N] [--answer [ID=]TEXT ...] | list [--all] | cancel N",
+		Name:      "drive",
+		Usage:     "run a list of tasks through a flow, each once its base has a commit, stopping once an agent asks and nothing else can move",
+		ArgsUsage: driveUsage(),
 		Description: "Each task runs the default flow, or the one --flow or --local names (f10 flow lists them): " +
 			"plan when the flow has a plan entry and the task no plan file, then ship, " +
 			"then finish unless the pace's finish is off. A rerun keeps the flow a task's branch records.\n" +
@@ -180,10 +178,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 
 	in := &driveInput{
 		main:    main,
-		pull:    pullOf,
 		root:    t.lay.StorageRoot.Path(),
-		driver:  drv,
-		tracker: t.tracker(),
 		args:    a,
 		argv:    argv,
 		flow:    fl,
@@ -195,12 +190,20 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 
 			return run.flowAt(p, fl.recorded())
 		},
-		storage:  t.lay.StorageRoot,
-		settings: claudeSettingsPath(),
-		layers:   layers,
-		title:    func(r ref.Ref) func(context.Context) (string, error) { return titleLookup(t, r.Number) },
-		started:  startedMove(t),
-		record:   recordAt,
+		storage:         t.lay.StorageRoot,
+		settings:        claudeSettingsPath(),
+		layers:          layers,
+		stateDir:        state.Dir(),
+		session:         state.Session(),
+		ttl:             state.TTL(),
+		asksDir:         asks.Dir(),
+		defaultParallel: defaultParallel(),
+		pull:            pullOf,
+		driver:          drv,
+		tracker:         t.tracker(),
+		title:           func(r ref.Ref) func(context.Context) (string, error) { return titleLookup(t, r.Number) },
+		started:         startedMove(t),
+		record:          recordAt,
 		finish: func(ctx context.Context, w io.Writer, req driveFinish) error {
 			fin, err := driveFinishInput(t, main, h, req)
 			if err != nil {
@@ -209,14 +212,8 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 
 			return finish(ctx, w, fin)
 		},
-		stateDir: state.Dir(),
-		session:  state.Session(),
-		ttl:      state.TTL(),
-		now:      time.Now,
-		asksDir:  asks.Dir(),
-		notify:   askNotifier,
-
-		defaultParallel: defaultParallel(),
+		now:    time.Now,
+		notify: askNotifier,
 	}
 	in.sleep = in.wake
 	in.daemonRun = os.Getenv(daemon.ResumeEnv) != ""

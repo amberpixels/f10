@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/gitx"
@@ -17,36 +16,28 @@ import (
 // A pushed branch is tried as origin's copy against origin's default branch,
 // since the host merges that; one origin lacks against the local default,
 // since finish merges it here.
-func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun) *driveResult {
+func (in *driveInput) readyToMerge(ctx context.Context, r *driveRun) error {
 	id, branch := r.task.ref.ID, r.o.branch
 
 	def, err := localDefault(ctx, in.main)
 	if err != nil {
-		res := halted(id, "finish", err.Error())
-
-		return &res
+		return halt(id, "finish", err.Error())
 	}
 
 	if _, err := gitx.Exec(ctx, r.o.path, "fetch", "origin"); err != nil {
-		res := halted(id, "finish", err.Error())
-
-		return &res
+		return halt(id, "finish", err.Error())
 	}
 
 	pushed, err := gitx.Ref(ctx, r.o.path, "origin/"+branch)
 	if err != nil {
-		res := halted(id, "finish", err.Error())
-
-		return &res
+		return halt(id, "finish", err.Error())
 	}
 
 	base, head := "origin/"+def, pushed
 
 	if pushed == "" {
 		if base, err = landingBase(ctx, in.main, def); err != nil {
-			res := halted(id, "finish", err.Error())
-
-			return &res
+			return halt(id, "finish", err.Error())
 		}
 
 		head = "refs/heads/" + branch
@@ -56,9 +47,7 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 	// "not an ancestor" would pick the lease and rewrite origin's branch
 	clean, err := gitx.MergesCleanly(ctx, r.o.path, base, head)
 	if err != nil {
-		res := halted(id, "finish", err.Error())
-
-		return &res
+		return halt(id, "finish", err.Error())
 	}
 
 	if clean {
@@ -68,9 +57,7 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 	caughtUp := false
 	if pushed != "" {
 		if caughtUp, err = gitx.IsAncestor(ctx, r.o.path, base, "HEAD"); err != nil {
-			res := halted(id, "finish", err.Error())
-
-			return &res
+			return halt(id, "finish", err.Error())
 		}
 	}
 
@@ -78,28 +65,24 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 	// catchup left and what the push would send, so HEAD is what is tried
 	if !caughtUp && pushed != "" && r.lastCatchup != nil {
 		if caughtUp, err = gitx.MergesCleanly(ctx, r.o.path, base, "HEAD"); err != nil {
-			res := halted(id, "finish", err.Error())
-
-			return &res
+			return halt(id, "finish", err.Error())
 		}
 	}
 
 	if caughtUp {
-		return in.pushAfterCatchup(ctx, w, r, "finish", base)
+		return in.pushAfterCatchup(ctx, r, "finish", base)
 	}
 
-	if res := in.conflictAttempt(ctx, w, r, "finish", branchmeta.Landed); res != nil {
-		return res
+	if err := in.conflictAttempt(ctx, r, "finish", branchmeta.Landed); err != nil {
+		return err
 	}
 
 	if err := branchmeta.Set(ctx, in.main, branch, branchmeta.Landed, def); err != nil {
-		res := halted(id, "finish", fmt.Sprintf("marking %s landed on %s: %v", branch, def, err))
-
-		return &res
+		return halt(id, "finish", fmt.Sprintf("marking %s landed on %s: %v", branch, def, err))
 	}
 
-	fmt.Fprintf(w, "%s finish: %s conflicts with %s, catching up first\n", in.id(id), branch, base)
-	in.finishStep(ctx, w, branch, branchmeta.FinishQueued, "catching up with "+base)
+	fmt.Fprintf(in.out, "%s finish: %s conflicts with %s, catching up first\n", in.id(id), branch, base)
+	in.finishStep(ctx, branch, branchmeta.FinishQueued, "catching up with "+base)
 
 	return nil
 }
@@ -144,7 +127,7 @@ func driveFinishInput(t *target, main string, h host, req driveFinish) (finishIn
 
 // runFinish runs finish in process; its refusals halt the task, except a PR
 // someone else opened, which asks.
-func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) driveResult {
+func (in *driveInput) runFinish(ctx context.Context, r *driveRun) driveResult {
 	task, id := r.task, r.task.ref.ID
 
 	pr, err := in.finishAnswer(id)
@@ -152,7 +135,7 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) d
 		return halted(id, "finish", err.Error())
 	}
 
-	fmt.Fprintf(w, "%s finish: running\n", in.id(id))
+	fmt.Fprintf(in.out, "%s finish: running\n", in.id(id))
 
 	in.ranFinish = true
 
@@ -161,9 +144,9 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) d
 		pulled string
 	)
 
-	buf := &linkBuffer{links: linkTerminal(w)}
+	buf := &linkBuffer{links: linkTerminal(in.out)}
 
-	in.finishStep(ctx, w, r.o.branch, branchmeta.FinishRunning, "starting")
+	in.finishStep(ctx, r.o.branch, branchmeta.FinishRunning, "starting")
 
 	err = in.finish(ctx, buf, driveFinish{
 		task:   task.ref,
@@ -171,7 +154,7 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) d
 		branch: r.o.branch,
 		pr:     pr,
 		progress: func(action string) {
-			in.finishStep(ctx, w, r.o.branch, branchmeta.FinishRunning, action)
+			in.finishStep(ctx, r.o.branch, branchmeta.FinishRunning, action)
 		},
 		handoff:  func(lines []string) { hand = lines },
 		deferred: func(note string) { pulled, in.pullLine = note, note },
@@ -179,7 +162,7 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) d
 
 	sc := bufio.NewScanner(buf)
 	for sc.Scan() {
-		fmt.Fprintf(w, "  %s\n", sc.Text())
+		fmt.Fprintf(in.out, "  %s\n", sc.Text())
 	}
 
 	if fp := (foreignPullError{}); errors.As(err, &fp) {
@@ -213,7 +196,7 @@ func (in *driveInput) runFinish(ctx context.Context, w io.Writer, r *driveRun) d
 // retryPull retries a pull a finish deferred, once a tick, in a drive that
 // ran a finish, since pulling is an act; a line already printed is not
 // printed again, so a diverged main is said once.
-func (in *driveInput) retryPull(ctx context.Context, w io.Writer) {
+func (in *driveInput) retryPull(ctx context.Context) {
 	if !in.ranFinish {
 		return
 	}
@@ -224,19 +207,19 @@ func (in *driveInput) retryPull(ctx context.Context, w io.Writer) {
 	}
 
 	in.pullLine = line
-	fmt.Fprintln(w, line)
+	fmt.Fprintln(in.out, line)
 }
 
 // finishStep records finish's progress on the branch for status; a failed
 // write is a line, never a halt, since the record is only a view.
-func (in *driveInput) finishStep(ctx context.Context, w io.Writer, branch, st, action string) {
+func (in *driveInput) finishStep(ctx context.Context, branch, st, action string) {
 	if branch == "" {
 		return
 	}
 
 	rec := branchmeta.DriveFinish{State: st, Action: action}
 	if err := branchmeta.Set(ctx, in.main, branch, branchmeta.Finish, rec.Format()); err != nil {
-		fmt.Fprintf(w, "  recording finish's progress on %s: %v\n", branch, err)
+		fmt.Fprintf(in.out, "  recording finish's progress on %s: %v\n", branch, err)
 	}
 }
 
@@ -244,7 +227,7 @@ func (in *driveInput) finishStep(ctx context.Context, w io.Writer, branch, st, a
 // stops short of finish: status reads the record as "drive finishes this
 // branch", so it stays, and never claims a finish running with no drive.
 func (in *driveInput) parkFinish(ctx context.Context, r *driveRun) {
-	if !r.opened || !r.finishes {
+	if !r.opened() || !r.finishes {
 		return
 	}
 

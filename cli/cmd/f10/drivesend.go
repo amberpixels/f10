@@ -3,20 +3,16 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
-	"slices"
 	"strings"
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
-	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drives"
-	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
 // send runs one element in the task's agent; the poll reads how it ends.
-func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill string) error {
+func (in *driveInput) send(ctx context.Context, r *driveRun, skill string) error {
 	id := r.task.ref.ID
 
 	ws, run, err := in.look(ctx, r)
@@ -25,8 +21,7 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 	}
 
 	run = r.current(run)
-	r.skill, r.sentAt, r.begun, r.idleSince, r.attached = skill, in.now(), false, time.Time{}, false
-	r.typed, r.enterRetried = "", false
+	r.turn = turn{skill: skill, sentAt: in.now(), retry: r.retry}
 
 	// a skill after the catchup may push the branch itself
 	if c := r.lastCatchup; c != nil && skill != "catchup" {
@@ -36,12 +31,11 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 	in.saveTask(r, func(t *drives.Task) { t.Skill, t.Outcome = skill, nil })
 	in.keepCatchup(r)
 
-	answeredAt, answered := in.answeredIn[id]
-	delete(in.answeredIn, id)
+	answeredAt, answered := in.answers.heard(id)
 
 	if skill == "catchup" && in.catchup.agentVerifies != "" && !r.toldCatchup {
 		r.toldCatchup = true
-		fmt.Fprintf(w, "%s catchup: %s, so the agent verifies\n", in.id(id), in.catchup.agentVerifies)
+		fmt.Fprintf(in.out, "%s catchup: %s, so the agent verifies\n", in.id(id), in.catchup.agentVerifies)
 	}
 
 	switch {
@@ -53,21 +47,21 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 			r.sentAt = p.At.Truncate(time.Second)
 		}
 
-		fmt.Fprintf(w, "%s %s: attached to the turn in progress\n", in.id(id), skill)
+		fmt.Fprintf(in.out, "%s %s: attached to the turn in progress\n", in.id(id), skill)
 	case answered:
 		// the agent heard the answer where it was given: its turn began
 		// then, and the prompt mark the hook wrote just before the claim
 		// may fall in the second before
 		r.sentAt = answeredAt.Add(-time.Second).Truncate(time.Second)
 
-		fmt.Fprintf(w, "%s %s: answered outside this drive, following the turn\n", in.id(id), skill)
+		fmt.Fprintf(in.out, "%s %s: answered outside this drive, following the turn\n", in.id(id), skill)
 	case skill == "catchup" && !awaitsDecision(run):
 		// git integrates and verify runs here; the agent gets only what they
 		// could not settle, a resend included
-		return in.catchupHere(ctx, w, r, ws, run)
+		return in.catchupHere(ctx, r, ws, run)
 	case r.retry:
 		// an attempt failed: the action goes again, whatever the run says
-		return in.prompt(ctx, w, r, ws, skill, "")
+		return in.prompt(ctx, r, ws, skill, "")
 	case run != nil && stoppedRun(run):
 		answer := in.takeAnswer(id)
 		if answer == "" {
@@ -82,14 +76,12 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 					why = "its base has code now"
 				}
 
-				fmt.Fprintf(w, "%s %s: %s: %s\n", in.id(id), skill, why, resumeShown(run, at))
+				fmt.Fprintf(in.out, "%s %s: %s: %s\n", in.id(id), skill, why, resumeShown(run, at))
 
-				return in.prompt(ctx, w, r, ws, skill, at)
+				return in.prompt(ctx, r, ws, skill, at)
 			}
 
-			in.end(ctx, w, r, in.verdict(r.task, skill, run))
-
-			return nil
+			return endWith(in.verdict(r.task, skill, run))
 		}
 
 		// closed before the prompt, so the pane hook does not read the
@@ -101,20 +93,18 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 		}
 
 		in.took(id, skill, answer)
-		fmt.Fprintf(w, "%s %s: answer sent\n", in.id(id), skill)
+		fmt.Fprintf(in.out, "%s %s: answer sent\n", in.id(id), skill)
 	case run != nil && phaseDone(run, skill):
 		// the agent got there before a drive that stopped could see it
-		fmt.Fprintf(w, "%s %s: already done\n", in.id(id), skill)
+		fmt.Fprintf(in.out, "%s %s: already done\n", in.id(id), skill)
 
-		if err := branchmeta.Set(ctx, in.main, r.o.branch, branchmeta.Drive, skill); err != nil {
-			return fmt.Errorf("recording %s done: %w", skill, err)
+		if err := in.advance(ctx, r, skill); err != nil {
+			return err
 		}
 
-		r.pos++
-
-		return in.next(ctx, w, r)
+		return in.next(ctx, r)
 	default:
-		return in.prompt(ctx, w, r, ws, skill, "")
+		return in.prompt(ctx, r, ws, skill, "")
 	}
 
 	return nil
@@ -124,7 +114,6 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 // unless the agent idles on a run still running.
 func (in *driveInput) prompt(
 	ctx context.Context,
-	w io.Writer,
 	r *driveRun,
 	ws *agentctl.Workspace,
 	skill, steering string,
@@ -135,11 +124,13 @@ func (in *driveInput) prompt(
 
 	// an idle agent on a run still running waits on something in its pane,
 	// a permission dialog among others: text typed there could answer it
-	fwd := forwardInput{stateDir: in.stateDir, ttl: in.ttl, now: r.sentAt, since: r.freshAt}
-	if err := refuseStalled(fwd, ws, agentctl.AgentName(id, r.task.suffix, r.o.path), r.o.path); err != nil {
-		in.end(ctx, w, r, halted(id, skill, err.Error()))
-
-		return nil
+	if err := refuseStalled(
+		in.stallCheck(r),
+		ws,
+		agentctl.AgentName(id, r.task.suffix, r.o.path),
+		r.o.path,
+	); err != nil {
+		return halt(id, skill, err.Error())
 	}
 
 	p := steered(skillPrompt(skill, r.task.ref.Label(), r.o.dep, r.flow, r.finishes), steering)
@@ -147,7 +138,7 @@ func (in *driveInput) prompt(
 		return err
 	}
 
-	fmt.Fprintf(w, "%s %s: sent\n", in.id(id), skill)
+	fmt.Fprintf(in.out, "%s %s: sent\n", in.id(id), skill)
 
 	return nil
 }
@@ -170,7 +161,7 @@ func (in *driveInput) deliver(ctx context.Context, r *driveRun, text string) err
 // retryEnter checks, once and enterRetry after a typed send, that the text
 // left the agent's input box, pressing Enter again if it did not. A failed
 // check is printed, and the start window still decides.
-func (in *driveInput) retryEnter(ctx context.Context, w io.Writer, r *driveRun) {
+func (in *driveInput) retryEnter(ctx context.Context, r *driveRun) {
 	if r.typed == "" || r.enterRetried || in.now().Sub(r.sentAt) < enterRetry {
 		return
 	}
@@ -178,52 +169,8 @@ func (in *driveInput) retryEnter(ctx context.Context, w io.Writer, r *driveRun) 
 	r.enterRetried = true
 
 	if note := retryEnter(ctx, agents(r.o.path), r.typedTo, r.typed); note != "" {
-		fmt.Fprintf(w, "%s %s: %s\n", in.id(r.task.ref.ID), r.skill, note)
+		fmt.Fprintf(in.out, "%s %s: %s\n", in.id(r.task.ref.ID), r.skill, note)
 	}
-}
-
-// resumeAt is the steering that resumes a ship the catchup guard stopped,
-// or one parked on its base, naming its place when the flow names the entry
-// twice; a failed catchup keeps the place of the entry it guarded, which is
-// where ship resumes.
-func resumeAt(skill string, run *state.Run) string {
-	if skill != "ship" || run.Ask != "" || !state.Stopped(run.Ship) {
-		return ""
-	}
-
-	entry := run.Leaf
-
-	switch {
-	case run.Wait != "":
-		// a ship parked on its base resumes at the entry that found it empty
-	case entry == "catchup" && run.At > 0 && run.At <= len(run.Pipeline):
-		entry = run.Pipeline[run.At-1]
-	case !strings.Contains(run.Next, "/f10:catchup"):
-		return ""
-	}
-
-	step := flow.Parse(entry).Step
-	if !slices.Contains(flow.Guarded, step) || !slices.Contains(run.Pipeline, entry) {
-		return ""
-	}
-
-	s := "resume at " + entry
-	twice := slices.Contains(run.Pipeline[slices.Index(run.Pipeline, entry)+1:], entry)
-	if run.At > 0 && twice {
-		s += fmt.Sprintf(" (entry %d)", run.At)
-	}
-
-	return s
-}
-
-// resumeShown is resumeAt's steering as a person reads it: the resumed
-// entry by its label, when the flow gives it one.
-func resumeShown(run *state.Run, at string) string {
-	if label := run.LabelAt(run.At); label != "" {
-		return "resume at " + label
-	}
-
-	return at
 }
 
 // steered puts steering after the skill's subject, before any chained

@@ -175,7 +175,11 @@ func TestDriveKeepsTheRecordedPace(t *testing.T) {
 		f := newFakes(t)
 		f.meta.Seed("GH-1", branchmeta.Pace, tc.recorded)
 
-		in := &driveInput{main: "/code/repo", args: driveArgs{pace: tc.flag}, paced: paced}
+		in := &driveInput{
+			main:  "/code/repo",
+			args:  driveArgs{pace: tc.flag},
+			paced: paced,
+		}
 
 		fl, note, err := in.keepPace(t.Context(), "GH-1", shipFlow{pace: tc.run})
 		if err != nil || fl.pace != tc.want || !strings.Contains(note, tc.note) ||
