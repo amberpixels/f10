@@ -18,8 +18,6 @@ import (
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
-// driveInput is everything drive needs once the target is settled, so the
-// flow can be tested without a checkout, a clock or a wait.
 // driveInput is one drive: what its command line and project settled, what
 // it calls out to, and what the run changes as it goes.
 type driveInput struct {
@@ -54,7 +52,6 @@ type driveConfig struct {
 	// daemonRun is a drive a daemon runs that restarts it: an answer that
 	// came after it stopped looking ends it ExitResume for that restart
 	daemonRun bool
-	project   string // the name this drive's task ids print under
 	// defaultParallel is the cap on tasks running a skill at once with none given
 	defaultParallel int
 }
@@ -89,6 +86,7 @@ type driveState struct {
 	leases map[string]*drives.Lease // each task's, by key, held while the task is unended
 
 	links      *taskLinks // prints this drive's task ids for people
+	project    string     // the name the links print task ids under, read once they load
 	inboxNotes []string
 	pullLine   string // the last line retryPull printed, or a finish's deferred note
 	ranFinish  bool   // a finish ran here, so this drive may pull main

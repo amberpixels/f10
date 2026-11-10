@@ -518,6 +518,10 @@ func taskStanding(t drives.Task, running bool) string {
 		return t.Outcome.Row
 	case running && t.Queued:
 		return "queued"
+	case running && t.Phase == drives.PhaseParked:
+		return "waiting on its base"
+	case running && t.Phase == drives.PhaseWaiting:
+		return "waiting to finish after its base"
 	case running && t.Skill != "":
 		return "running " + t.Skill
 	case t.Skill != "":

@@ -227,9 +227,6 @@ func (in *driveInput) position(ctx context.Context, o openedTask, skills []strin
 // and a branch that conflicts is marked landed and caught up first.
 func (in *driveInput) next(ctx context.Context, r *driveRun) error {
 	wasWaiting, held := r.phase == atWaiting, r.holdsSlot()
-	if wasWaiting {
-		in.enter(r, atRunning)
-	}
 
 	spike, err := in.spikeDone(ctx, r)
 	if err != nil {
@@ -289,6 +286,12 @@ func (in *driveInput) next(ctx context.Context, r *driveRun) error {
 		in.enter(r, atWaiting)
 
 		return nil
+	}
+
+	// a finish still waiting stays waiting above, so the record never reads
+	// running between two polls
+	if wasWaiting {
+		in.enter(r, atRunning)
 	}
 
 	// finish runs here and sends no skill; anything else held back by the

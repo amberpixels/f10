@@ -558,6 +558,24 @@ func TestTaskStandingQueued(t *testing.T) {
 	}
 }
 
+// A task its running drive parked, or holds at finish, stands waiting, not
+// running the skill it last had in flight.
+func TestTaskStandingWaiting(t *testing.T) {
+	parked := drives.Task{Skill: "ship", Phase: drives.PhaseParked}
+	if got := taskStanding(parked, true); got != "waiting on its base" {
+		t.Errorf("a parked task stands %q", got)
+	}
+
+	held := drives.Task{Skill: "finish", Phase: drives.PhaseWaiting}
+	if got := taskStanding(held, true); got != "waiting to finish after its base" {
+		t.Errorf("a finish held for its base stands %q", got)
+	}
+
+	if got := taskStanding(parked, false); got != "stopped at ship" {
+		t.Errorf("a parked task in a stopped drive stands %q", got)
+	}
+}
+
 // drive list decides a row by finishedTask, asking the tracker only when the
 // branch and the plans dir leave it open.
 func TestFinishedLazily(t *testing.T) {
