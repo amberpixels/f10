@@ -571,9 +571,9 @@ func TestWriteRunsUnderTheShipment(t *testing.T) {
 // A gate row's label is indented and its text may hold a colon of its own;
 // the label still ends at the first colon, its value in the head's column.
 func TestWriteRunsGatesShareTheColumn(t *testing.T) {
-	r := &state.Run{Task: "GH-1", Capture: "prior", Plan: "running", Ship: "pending"}
+	r := &state.Run{Task: "GH-1", Capture: "prior", Plan: "running", Ship: "upcoming"}
 	head := shipment{task: "GH-1", branch: "GH-1/some-branch"}
-	gates := []gate{{Step: "judge", Judged: "plan", State: "pending"}}
+	gates := []gate{{Step: "judge", Judged: "plan", State: "upcoming"}}
 
 	var out bytes.Buffer
 
@@ -585,8 +585,8 @@ func TestWriteRunsGatesShareTheColumn(t *testing.T) {
 	}
 
 	got := out.String()
-	if !strings.Contains(got, "\n  judge:    plan: pending\n") {
-		t.Errorf("the gate row is not `  judge: plan: pending` in the column:\n%s", got)
+	if !strings.Contains(got, "\n  judge:    plan: upcoming\n") {
+		t.Errorf("the gate row is not `  judge: plan: upcoming` in the column:\n%s", got)
 	}
 
 	assertOneColumn(t, got)
