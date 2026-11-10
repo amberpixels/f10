@@ -289,3 +289,27 @@ func TestCatchupAttemptsCountTheFingerprint(t *testing.T) {
 		t.Fatalf("the third same fingerprint in a row did not halt: %+v\n%s", res, out.String())
 	}
 }
+
+// The retry line counts failures in a row with nothing changed, and says so
+// when a moved state starts that count over, so two lines reading "1 of 3"
+// never look like one failure printed twice.
+func TestAttemptLinesSayWhatTheyCount(t *testing.T) {
+	in := &driveInput{now: func() time.Time { return time.Unix(1_800_000_000, 0) }}
+	r := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-1"}}}
+
+	var out bytes.Buffer
+
+	for _, fp := range []string{"a", "b", "b"} {
+		if res := in.attemptAt(&out, r, "ship", fp, driveResult{reason: "pr: base not on origin"}); res != nil {
+			t.Fatalf("halted early: %+v", res)
+		}
+	}
+
+	want := "GH-1 ship: failed, 1 of 3 in a row with nothing changed, trying again: pr: base not on origin\n" +
+		"GH-1 ship: failed again, but the task moved since the last failure, so the count starts over " +
+		"at 1 of 3, trying again: pr: base not on origin\n" +
+		"GH-1 ship: failed, 2 of 3 in a row with nothing changed, trying again: pr: base not on origin\n"
+	if got := out.String(); got != want {
+		t.Errorf("lines =\n%s\nwant\n%s", got, want)
+	}
+}

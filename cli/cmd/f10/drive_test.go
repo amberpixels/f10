@@ -3583,12 +3583,19 @@ func TestDriveInterruptParksFinishRecord(t *testing.T) {
 // driven ship's stop at implement with no ask.
 func (fx *driveFixture) writeWait(t *testing.T) {
 	t.Helper()
+	fx.writeWaitAt(t, "implement", "its branch has no code yet")
+}
+
+// writeWaitAt records GH-2's ship parked on GH-1 at leaf, why saying what
+// the base lacks.
+func (fx *driveFixture) writeWaitAt(t *testing.T, leaf, why string) {
+	t.Helper()
 
 	body := fmt.Sprintf(
-		"v 1\ntask GH-2\nroot /code/repo.GH-2\ncapture prior\nplan done\nship blocked\nleaf implement\n"+
-			"pipeline judge → implement → cleanup → pr\nnote waiting on GH-1: its branch has no code yet\n"+
+		"v 1\ntask GH-2\nroot /code/repo.GH-2\ncapture prior\nplan done\nship blocked\nleaf %s\n"+
+			"pipeline judge → implement → cleanup → pr\nnote waiting on GH-1: %s\n"+
 			"wait GH-1\nupdated %d\n",
-		fx.clock.Unix(),
+		leaf, why, fx.clock.Unix(),
 	)
 
 	if err := os.WriteFile(filepath.Join(fx.in.stateDir, "s-GH-2.state"), []byte(body), 0o644); err != nil {
@@ -3653,6 +3660,195 @@ func TestDriveParksAShipOnItsBasesCode(t *testing.T) {
 
 	if entries, _ := os.ReadDir(fx.in.asksDir); len(entries) > 0 {
 		t.Errorf("a parked ship raised an ask: %v", entries)
+	}
+}
+
+// A ship that stops before pr on a base origin lacks parks with no attempt
+// and no ask, though the base has code, and goes again at pr once the base's
+// branch is on origin.
+func TestDriveParksAShipOnItsBaseUntilOriginHasIt(t *testing.T) {
+	fx := chained(t, "GH-1", "GH-2", "ship")
+	fx.expects("GH-1", "ship")
+	fx.expects("GH-2", "ship")
+	fx.f.script("herdr agent prompt "+agentOf("GH-2")+" "+
+		steered(skillPrompt("ship", "GH-2", nil, shipFlow{}, false), "resume at pr"), "{}")
+	fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", "")
+	fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
+	fx.f.script("git status --porcelain", "")
+	fx.in.asksDir = t.TempDir()
+
+	fx.f.script(wsList,
+		unopened, all("idle", "GH-1"),
+		unopened, all("idle", "GH-1", "GH-2"),
+		all("working", "GH-1", "GH-2"),
+		listing("GH-1", "working", "GH-2", "idle"), // GH-2 parks
+		listing("GH-1", "working", "GH-2", "idle"), // GH-1 still not on origin
+		listing("GH-1", "working", "GH-2", "idle"), // GH-1 pushed
+		listing("GH-1", "working", "GH-2", "idle"), // the look before the resend
+		all("working", "GH-1", "GH-2"),
+		all("idle", "GH-1", "GH-2"))
+	fx.onTick[2] = func() { fx.writeWaitAt(t, "pr", "its branch is not on origin yet") }
+	fx.onTick[4] = func() { fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", "o1") }
+	fx.onTick[5] = func() {
+		fx.writeRunFor(t, "GH-1", "done", "", "", "")
+		fx.writeRunFor(t, "GH-2", "done", "", "", "")
+	}
+
+	if err := fx.drive(t); err != nil {
+		t.Fatalf("%v\n%s", err, fx.out.String())
+	}
+
+	fx.assertOrder(t, []string{
+		agentOf("GH-1") + " /f10:ship",
+		agentOf("GH-2") + " /f10:ship",
+		agentOf("GH-2") + " /f10:ship GH-2 resume at pr",
+	}, "herdr agent prompt")
+
+	out := fx.out.String()
+	for _, want := range []string{
+		"GH-2 ship: waiting on GH-1 for origin",
+		"GH-2 ship: its base is on origin now: resume at pr",
+		"GH-2:    done: ship",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output lacks %q:\n%s", want, out)
+		}
+	}
+
+	if strings.Count(out, "resume at pr") != 1 || strings.Contains(out, "trying again") {
+		t.Errorf("the origin wait resent early or counted an attempt:\n%s", out)
+	}
+
+	if entries, _ := os.ReadDir(fx.in.asksDir); len(entries) > 0 {
+		t.Errorf("a parked ship raised an ask: %v", entries)
+	}
+}
+
+// A base that finishes while its dependent waits for origin releases it:
+// ship goes again at pr, which then targets the default branch.
+func TestDriveResendsAnOriginWaitOnceItsBaseFinished(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1")
+	b := &driveRun{opened: true, o: openedTask{branch: "GH-1"}, task: driveTask{ref: ref.Ref{ID: "GH-1"}}}
+	r := &driveRun{opened: true, base: b, o: openedTask{branch: "GH-2"}, task: driveTask{ref: ref.Ref{ID: "GH-2"}}}
+	fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", "")
+
+	run := &state.Run{Ship: "blocked", Leaf: "pr", Wait: "GH-1"}
+	if !originWait(run) || originWait(&state.Run{Ship: "blocked", Leaf: "implement", Wait: "GH-1"}) {
+		t.Fatal("originWait reads the wrong leaf")
+	}
+
+	r.parkedOrigin = true
+	if fx.in.baseReady(t.Context(), r) {
+		t.Fatal("a base origin lacks read as ready")
+	}
+
+	b.end = &driveResult{row: "done: ship"}
+	if !fx.in.baseReady(t.Context(), r) {
+		t.Error("a finished base did not release the origin wait")
+	}
+}
+
+// A ship that stops before pr while origin already holds the base (the push
+// landed between its look and the drive's read) is sent again at once.
+func TestDriveResendsAnOriginWaitTheBasePushedFirst(t *testing.T) {
+	fx := chained(t, "GH-1", "GH-2", "ship")
+	fx.expects("GH-1", "ship")
+	fx.expects("GH-2", "ship")
+	fx.f.script("herdr agent prompt "+agentOf("GH-2")+" "+
+		steered(skillPrompt("ship", "GH-2", nil, shipFlow{}, false), "resume at pr"), "{}")
+	fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
+	fx.f.script("git status --porcelain", "")
+
+	fx.f.script(wsList,
+		unopened, all("idle", "GH-1"),
+		unopened, all("idle", "GH-1", "GH-2"),
+		all("working", "GH-1", "GH-2"),
+		listing("GH-1", "working", "GH-2", "idle"), // GH-2's stop
+		listing("GH-1", "working", "GH-2", "idle"), // the look before the resend
+		all("working", "GH-1", "GH-2"),
+		all("idle", "GH-1", "GH-2"))
+	fx.onTick[2] = func() {
+		fx.writeWaitAt(t, "pr", "its branch is not on origin yet")
+		fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", "o1")
+	}
+	fx.onTick[4] = func() {
+		fx.writeRunFor(t, "GH-1", "done", "", "", "")
+		fx.writeRunFor(t, "GH-2", "done", "", "", "")
+	}
+
+	if err := fx.drive(t); err != nil {
+		t.Fatalf("%v\n%s", err, fx.out.String())
+	}
+
+	out := fx.out.String()
+	if strings.Count(out, "resume at pr") != 1 || strings.Contains(out, "waiting on GH-1 for origin") {
+		t.Errorf("ship was not sent again at once:\n%s", out)
+	}
+}
+
+// The origin wait's resends are bounded: the same origin sha stopping pr
+// again, or a base done in this drive stopping it twice, halts the task.
+func TestDriveHaltsAnOriginWaitThatStopsAgain(t *testing.T) {
+	cases := map[string]struct {
+		waitHead, origin, reason string
+		through                  bool
+	}{
+		"same origin sha": {
+			waitHead: "origin o1", origin: "o1",
+			reason: "its pr step found GH-1 not on origin though origin/GH-1 is at o1",
+		},
+		"base done, unpushed": {
+			waitHead: "through", through: true,
+			reason: "GH-1 ended in this drive, yet its pr step still found GH-1 not on origin",
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			fx := newDriveFixture(t, "GH-2", "ship")
+			b := &driveRun{opened: true, o: openedTask{branch: "GH-1"}, task: driveTask{ref: ref.Ref{ID: "GH-1"}}}
+			if tc.through {
+				b.end = &driveResult{row: "done: ship"}
+			}
+
+			r := &driveRun{
+				opened: true, base: b, skill: "ship", waitHead: tc.waitHead,
+				o:    openedTask{branch: "GH-2", path: "/code/repo.GH-2"},
+				task: driveTask{ref: ref.Ref{ID: "GH-2"}},
+			}
+			fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", tc.origin)
+
+			if err := fx.in.parkForOrigin(t.Context(), io.Discard, r); err != nil {
+				t.Fatal(err)
+			}
+
+			if r.end == nil || r.end.code != ui.ExitHalted || r.end.reason != tc.reason {
+				t.Errorf("end = %+v, want a halt: %s", r.end, tc.reason)
+			}
+		})
+	}
+}
+
+// A drive resumed onto a ship already stopped for origin holds it: the stop
+// alone does not read as a base ready to resend to.
+func TestDriveHoldsAResumedOriginWait(t *testing.T) {
+	fx := newDriveFixture(t, "GH-2", "ship")
+	b := &driveRun{opened: true, o: openedTask{branch: "GH-1"}, task: driveTask{ref: ref.Ref{ID: "GH-1"}}}
+	r := &driveRun{
+		opened: true, base: b,
+		o:    openedTask{branch: "GH-2", path: "/code/repo.GH-2"},
+		task: driveTask{ref: ref.Ref{ID: "GH-2"}},
+	}
+	fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", "")
+	fx.writeWaitAt(t, "pr", "its branch is not on origin yet")
+
+	var out bytes.Buffer
+	if err := fx.in.next(t.Context(), &out, r); err != nil {
+		t.Fatal(err)
+	}
+
+	if !r.parked || !r.parkedOrigin || !strings.Contains(out.String(), "GH-2 ship: waiting on GH-1 for origin") {
+		t.Errorf("parked = %v, origin = %v, output = %s", r.parked, r.parkedOrigin, out.String())
 	}
 }
 

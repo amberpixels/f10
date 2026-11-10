@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -245,9 +246,17 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 		return nil
 	}
 
+	// a drive resumed onto a ship stopped before pr waits for origin, not code
+	if skill == "ship" && r.base != nil && !r.parked {
+		if run, _ := in.run(r.o.path); originWait(run) {
+			r.parkedOrigin = true
+		}
+	}
+
 	if skill != "finish" && r.base != nil && !in.baseReady(ctx, r) {
 		if !r.parked {
-			fmt.Fprintf(w, "%s %s: waiting on %s for code\n", in.id(r.task.ref.ID), skill, in.id(r.base.task.ref.ID))
+			fmt.Fprintf(w, "%s %s: waiting on %s for %s\n",
+				in.id(r.task.ref.ID), skill, in.id(r.base.task.ref.ID), r.waitsFor())
 		}
 
 		r.parked = true
@@ -255,7 +264,7 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 		return nil
 	}
 
-	r.parked, r.parkedHead = false, ""
+	r.parked, r.parkedHead, r.parkedOrigin = false, "", false
 
 	if skill == "finish" && r.base != nil && !r.base.through() {
 		if !wasWaiting {
@@ -355,8 +364,13 @@ func (in *driveInput) closeAfterShip(ctx context.Context, w io.Writer, r *driveR
 }
 
 // baseReady reports the base's code there for a skill: released, and
-// for a ship that parked itself, moved past the head it found empty.
+// for a ship that parked itself, moved past the head it found empty. A ship
+// parked before pr needs the base's branch on origin instead, or the base done.
 func (in *driveInput) baseReady(ctx context.Context, r *driveRun) bool {
+	if r.parkedOrigin {
+		return r.base.through() || in.onOrigin(ctx, r.base)
+	}
+
 	if !in.released(ctx, r.base) {
 		return false
 	}
@@ -375,6 +389,10 @@ func (in *driveInput) baseReady(ctx context.Context, r *driveRun) bool {
 // committed between the ship's look and this read gets ship sent at once.
 func (in *driveInput) park(ctx context.Context, w io.Writer, r *driveRun, run *state.Run) error {
 	b := r.base
+	if b != nil && originWait(run) {
+		return in.parkForOrigin(ctx, w, r)
+	}
+
 	if b == nil || b.through() {
 		in.end(ctx, w, r, in.verdict(r.task, r.skill, run))
 
@@ -399,6 +417,92 @@ func (in *driveInput) park(ctx context.Context, w io.Writer, r *driveRun, run *s
 	fmt.Fprintf(w, "%s ship: waiting on %s for code\n", in.id(r.task.ref.ID), in.id(b.task.ref.ID))
 
 	return nil
+}
+
+// parkForOrigin holds a ship that stopped before pr on a base origin lacks
+// until the base is pushed or done. A base already there gets ship sent at
+// once; the same origin sha stopping it twice ends it, so the two never loop.
+func (in *driveInput) parkForOrigin(ctx context.Context, w io.Writer, r *driveRun) error {
+	b := r.base
+	r.parkedOrigin = true
+
+	// a base done in this drive is resent to once: a finish deleted its branch
+	// and pr then targets the default branch, while a base that ended unpushed
+	// stops pr the same way again, and nothing here will push it
+	if b.through() {
+		if r.waitHead == "through" {
+			in.end(ctx, w, r, halted(r.task.ref.ID, r.skill,
+				fmt.Sprintf("%s ended in this drive, yet its pr step still found %s not on origin",
+					in.id(b.task.ref.ID), b.o.branch)))
+
+			return nil
+		}
+
+		r.waitHead = "through"
+
+		return in.next(ctx, w, r)
+	}
+
+	sha, why := in.originHead(ctx, b)
+	if why != "" {
+		in.end(ctx, w, r, halted(r.task.ref.ID, r.skill, why))
+
+		return nil
+	}
+
+	if sha != "" {
+		if r.waitHead == "origin "+sha {
+			why = fmt.Sprintf("its pr step found %s not on origin though origin/%s is at %s",
+				b.o.branch, b.o.branch, sha)
+			in.end(ctx, w, r, halted(r.task.ref.ID, r.skill, why))
+
+			return nil
+		}
+
+		r.waitHead = "origin " + sha
+
+		return in.next(ctx, w, r)
+	}
+
+	r.parked, r.parkedHead = true, ""
+
+	fmt.Fprintf(w, "%s ship: waiting on %s for origin\n", in.id(r.task.ref.ID), in.id(b.task.ref.ID))
+
+	return nil
+}
+
+// onOrigin reports b's branch on origin, read as f10 pr base --origin reads
+// it: the base's own push from its worktree updates this shared ref.
+func (in *driveInput) onOrigin(ctx context.Context, b *driveRun) bool {
+	sha, why := in.originHead(ctx, b)
+
+	return why == "" && sha != ""
+}
+
+// originHead is origin's copy of b's branch, "" when origin lacks it, and why
+// when git cannot say.
+func (in *driveInput) originHead(ctx context.Context, b *driveRun) (string, string) {
+	sha, err := gitx.Ref(ctx, in.main, "refs/remotes/origin/"+b.o.branch)
+	if err != nil {
+		return "", "reading origin/" + b.o.branch + ": " + err.Error()
+	}
+
+	return sha, ""
+}
+
+// originWait is a ship stopped before pr on a base origin lacks: a wait whose
+// leaf is a pr entry, where the implement guard's wait is on the base's code.
+func originWait(run *state.Run) bool {
+	return run != nil && run.Wait != "" && state.Stopped(run.Ship) && flow.Parse(run.Leaf).Step == "pr"
+}
+
+// waitsFor names what a parked task waits on its base for.
+func (r *driveRun) waitsFor() string {
+	if r.parkedOrigin {
+		return "origin"
+	}
+
+	return "code"
 }
 
 // baseHalted ends a dependent whose base halted after releasing it, at the

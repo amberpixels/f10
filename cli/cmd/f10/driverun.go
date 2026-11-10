@@ -161,6 +161,9 @@ type driveRun struct {
 	// a commit after it sends ship again, never the same empty base.
 	parked     bool
 	parkedHead string
+	// parkedOrigin is set while a ship that stopped before pr waits for its
+	// base's branch on origin, which the PR targets, not for its code
+	parkedOrigin bool
 	// waitHead is the base head the last park read, so a base that
 	// committed before the drive saw the stop is sent once, never looped
 	waitHead string

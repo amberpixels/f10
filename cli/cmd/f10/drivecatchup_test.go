@@ -778,7 +778,7 @@ func TestDriveWaitsOutACatchupParkedOnBackgroundWork(t *testing.T) {
 	err := fx.drive(t)
 	out := fx.out.String()
 
-	if err != nil || strings.Contains(out, "attempt 1 of") ||
+	if err != nil || strings.Contains(out, "trying again") ||
 		!strings.Contains(out, "caught up with main, verify green") || !strings.Contains(out, "GH-1:    done: ship") {
 		t.Errorf("err = %v\n%s", err, out)
 	}

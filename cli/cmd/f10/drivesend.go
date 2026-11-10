@@ -75,7 +75,10 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 			// git, not the note, says whether that stop still holds
 			if at := resumeAt(skill, run); at != "" && branchUnsettled(ctx, in.main, r.o.path, r.o.branch) == "" {
 				why := "stopped for a catchup, the branch is settled"
-				if run.Wait != "" {
+				switch {
+				case originWait(run):
+					why = "its base is on origin now"
+				case run.Wait != "":
 					why = "its base has code now"
 				}
 
