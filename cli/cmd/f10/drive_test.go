@@ -3847,7 +3847,8 @@ func TestDriveHoldsAResumedOriginWait(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if r.phase != atParked || !r.parkedOrigin || !strings.Contains(out.String(), "GH-2 ship: waiting on GH-1 for origin") {
+	if r.phase != atParked || !r.parkedOrigin ||
+		!strings.Contains(out.String(), "GH-2 ship: waiting on GH-1 for origin") {
 		t.Errorf("phase = %v, origin = %v, output = %s", r.phase, r.parkedOrigin, out.String())
 	}
 }
