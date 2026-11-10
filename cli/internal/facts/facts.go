@@ -245,7 +245,7 @@ func Build(lay *layout.Layout, pb *probe.Probes, userDir string) *Effective {
 		}
 
 		if name == "Verify" && field.Origin.Kind == OriginDetected {
-			eff.VerifyCommands, _ = detectedVerify(pb.Verify)
+			eff.VerifyCommands = detectedCommands(pb.Verify)
 		}
 
 		eff.Fields = append(eff.Fields, field)
@@ -419,6 +419,19 @@ func detectedVerify(signals []probe.Signal) ([]string, bool) {
 	}
 
 	return values, judgment
+}
+
+// detectedCommands is the commands of the signals verify runs from, one per
+// element, as the drive runs them.
+func detectedCommands(signals []probe.Signal) []string {
+	picked, _ := probe.VerifyPicked(signals)
+
+	var cmds []string
+	for _, s := range picked {
+		cmds = append(cmds, s.Commands...)
+	}
+
+	return cmds
 }
 
 func detectedList(name string, signals []probe.Signal) Field {

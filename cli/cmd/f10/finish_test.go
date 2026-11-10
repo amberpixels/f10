@@ -1227,6 +1227,19 @@ func TestFinishRefusesWithoutBranchOrWorktree(t *testing.T) {
 	}
 }
 
+// A host that does not answer for a branch with no worktree is reported as
+// that, not as a branch start never made: its PR may have merged.
+func TestFinishNamesAHostFailureWithoutWorktree(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.f.script(worktrees, porcelain())
+	fx.f.fail(ghView, shell.Result{Code: 1, Stderr: "HTTP 502: Bad Gateway"})
+
+	_, err := fx.run(t)
+	if err == nil || !strings.Contains(err.Error(), "reading the PR of") || !strings.Contains(err.Error(), "502") {
+		t.Errorf("err = %v", err)
+	}
+}
+
 // A finish that stopped after removing the worktree is rerun to the end:
 // the PR merged, so the rest is cleaned up and only the branch deleted.
 func TestFinishMergedWithoutWorktree(t *testing.T) {

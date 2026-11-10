@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -445,6 +446,50 @@ func TestDriveHaltsARedVerifyNoTurnFixes(t *testing.T) {
 	}
 }
 
+// A red verify still halts on its third red when every other turn leaves the
+// tree unsettled: what a turn left counts apart from the red, so the two
+// taking turns do not start each other's count over.
+func TestDriveHaltsARedVerifyBetweenUnsettledTurns(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1", "ship")
+	fx.adoptsGH1()
+	reds := []string{"just test", "just test", "just test"}
+	fx.binaryCatchup(t, &binaryCatchupFake{stops: []bool{false}, reds: reds}, t.TempDir())
+	fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
+
+	for _, p := range []string{
+		"/f10:catchup main came in cleanly and verify is red: `just test` failed, its output is in " +
+			filepath.Join(fx.in.Root, "catchup", "GH-1.log") +
+			": fix it by the branch's intent, verify, and commit the fix --driven",
+		"/f10:catchup the last catchup turn left it unsettled: 1 uncommitted paths in /code/repo.GH-1" +
+			": settle it in place, keeping both sides, and commit --driven",
+	} {
+		fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+p, "{}")
+	}
+
+	turns := 0
+	fx.agent(t, func(string) {
+		turns++
+
+		fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
+		fx.reports(t, fx.clock)
+
+		// each fix turn leaves a path uncommitted, and the turn after commits it
+		if turns%2 == 1 {
+			fx.f.script("git status --porcelain", " M a.go")
+		} else {
+			fx.f.script("git status --porcelain", "")
+		}
+	})
+
+	err := fx.drive(t)
+	out := fx.out.String()
+
+	if exitCode(err) != ui.ExitHalted || !strings.Contains(out, "attempt 3 at") ||
+		!strings.Contains(out, "verify is red after the catchup: just test failed") {
+		t.Errorf("err = %v\n%s", err, out)
+	}
+}
+
 // An idle agent on a run still running halts the catchup before git moves.
 func TestDriveHaltsACatchupUnderAStalledAgent(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "ship")
@@ -843,6 +888,48 @@ func TestDriveRefusesARetargetedPullRequest(t *testing.T) {
 
 			if err == nil || !strings.Contains(err.Error(), "https://gh/pr/9 targets feature, not main") || marked {
 				t.Errorf("err = %v, marked %v", err, marked)
+			}
+		})
+	}
+}
+
+// A host that does not answer leaves the retarget unknown, so the drive sets
+// no mark this poll: a catchup of a PR retargeted meanwhile would carry
+// another branch's commits into it. A branch with no PR is marked as before.
+func TestDriveMarksNothingBehindAnUnreadPullRequest(t *testing.T) {
+	for name, tc := range map[string]struct {
+		err    error
+		marked bool
+	}{
+		"the host fails": {err: errors.New("HTTP 502"), marked: false},
+		"no PR":          {err: forge.ErrNotFound, marked: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			fx := newDriveFixture(t, "GH-1", "ship")
+			fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", "p1")
+			fx.f.script("git fetch origin", "")
+			fx.f.script("git rev-parse -q --verify refs/remotes/origin/main", "m2")
+			fx.f.fail("git merge-base --is-ancestor m2 main0", shell.Result{Code: 1})
+			fx.f.fail("git merge-base --is-ancestor m2 refs/heads/GH-1", shell.Result{Code: 1})
+			fx.f.script("set branch.GH-1."+string(branchmeta.Landed)+" main", "")
+			fx.in.Pull = func(context.Context, string) (forge.PR, error) { return forge.PR{}, tc.err }
+
+			r := &drive.DriveRun{
+				Task: drive.DriveTask{Ref: ref.Ref{ID: "GH-1"}},
+				O:    start.OpenedTask{Branch: "GH-1", Path: "/code/repo.GH-1"},
+			}
+			err := fx.in.MarkBehind(t.Context(), r)
+			marked := fx.f.called("set branch.GH-1." + string(branchmeta.Landed))
+
+			if err != nil || marked != tc.marked {
+				t.Fatalf("err = %v, marked %v, want %v\n%s", err, marked, tc.marked, fx.out.String())
+			}
+
+			if skipped := strings.Contains(
+				fx.out.String(),
+				"skipped the target check, reading the PR of GH-1",
+			); skipped == tc.marked {
+				t.Errorf("skip line printed = %v\n%s", skipped, fx.out.String())
 			}
 		})
 	}

@@ -196,7 +196,12 @@ func decideFinish(ctx context.Context, in FinishInput) (finishDecision, error) {
 // anything else keeps the refusal, which guards branches start never made.
 func decideGone(ctx context.Context, in FinishInput, gone goneError) (finishDecision, error) {
 	p, err := in.Host.PR(ctx, gone.branch)
-	if err != nil || p.Status != forge.Merged {
+
+	switch {
+	case err != nil && !errors.Is(err, forge.ErrNotFound):
+		// a host that did not answer is not a branch start never made
+		return finishDecision{}, fmt.Errorf("reading the PR of %s, which has no worktree here: %w", gone.branch, err)
+	case err != nil || p.Status != forge.Merged:
 		return finishDecision{}, gone.err
 	}
 

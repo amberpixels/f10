@@ -686,6 +686,7 @@ A cancelled record is never picked up again: the same command line starts a new 
    Three failures in a row of one action, with nothing changed between them (the branch, origin's copy, the marks, a merge or rebase in progress, the plan file, the PR, the review rounds and change verdicts, the run's phases), halt the task with the last reason and a line per attempt; the halt and its attempts go to the ledger.
    A failure after which any of those moved starts the count over, and so does a step that goes through.
    A catchup's attempts compare the conflict it leaves instead, because a catchup that merges moves the branch every time; a clean catchup does not clear them, only the entry it guarded going through does.
+   A catchup turn that leaves the tree unsettled is counted apart from them, so a red verify and an unsettled turn that take turns do not start each other's count over.
    A halted task halts every task that waits on it: one not started yet never starts, and one already running halts before its next skill, its work left on its branch.
    Every other task runs on, and the driver exits **5** once nothing can move.
    The count lives in the running drive only, so a rerun or a resumed drive starts it over.

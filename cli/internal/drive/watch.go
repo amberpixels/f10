@@ -217,8 +217,7 @@ func (in WatchInput) ReadTargets(ctx context.Context, tasks []WatchedTask, store
 	var want []int
 
 	for i, t := range tasks {
-		if t.Owner != "" || t.Off || t.HostErr != nil || !t.Listed || t.Agent == agentctl.StatusWorking ||
-			WaitingOnAsk(t.Run) {
+		if t.Owner != "" || t.Off || t.HostErr != nil || !t.Listed || in.atWork(t) || WaitingOnAsk(t.Run) {
 			continue
 		}
 
@@ -300,8 +299,15 @@ func (in WatchInput) handedBack(ctx context.Context, branch string) bool {
 	return v == "false"
 }
 
+// atWork reports an agent that is working, or idle only because its turn
+// ended on background work (a verify it will come back to), as the drive
+// reads it: a catchup is neither sent to it nor settled under it.
+func (in WatchInput) atWork(t WatchedTask) bool {
+	return t.Agent == agentctl.StatusWorking || backgroundPending(t.Background, in.Now())
+}
+
 func (in WatchInput) catchupStep(ctx context.Context, task WatchedTask, store map[string]WatchReport) *WatchReport {
-	if !task.fetched || task.Agent == agentctl.StatusWorking || WaitingOnAsk(task.Run) {
+	if !task.fetched || in.atWork(task) || WaitingOnAsk(task.Run) {
 		return nil
 	}
 
@@ -666,9 +672,9 @@ type WatchedTask struct {
 	HostErr  error      // the host did not answer for its request this pass
 	LocalSHA string     // the branch's tip
 	Run      *state.Run // the newest run reported from its worktree
-	// background is when run's session launched background work still
+	// Background is when run's session launched background work still
 	// pending, the zero time for none
-	background time.Time
+	Background time.Time
 	Agent      agentctl.Status // "" with no workspace, or no listing
 	Listed     bool            // the workspaces were listed, so "" is no workspace
 	Ws         string          // its workspace, for a message
@@ -814,7 +820,7 @@ func DecideWatch(t WatchedTask, mode string, now time.Time) (*WatchReport, bool)
 	updated := run.Updated.UTC().Format(time.RFC3339)
 
 	for _, phase := range []string{"ship", "plan"} {
-		if Stalled(t.Agent, run, phase, time.Time{}, now.Sub(run.Updated), watchStallGrace, t.background, now) {
+		if Stalled(t.Agent, run, phase, time.Time{}, now.Sub(run.Updated), watchStallGrace, t.Background, now) {
 			return &WatchReport{
 				Kind: WatchStalled,
 				Text: fmt.Sprintf("agent idle while its run says %s %s", phase, run.PhaseText(phase)),
@@ -924,7 +930,7 @@ func CollectWatched(ctx context.Context, in WatchInput) ([]WatchedTask, int, err
 
 		if runs := statusview.InRoot(live, path); len(runs) > 0 {
 			task.Run = runs[0]
-			task.background = backgroundAt(in.StateDir, task.Run)
+			task.Background = backgroundAt(in.StateDir, task.Run)
 		}
 
 		if ws := finish.WorkspaceAt(wss, path); ws != nil {

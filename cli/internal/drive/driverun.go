@@ -202,6 +202,8 @@ type DriveRun struct {
 	ParkedOrigin bool
 	// attempts are the failures in a row of the action in flight
 	attempts []attempt
+	// leftAttempts are the catchup turns in a row that left the tree unsettled
+	leftAttempts []attempt
 	// Job is the verify the drive runs after its own catchup, polled in
 	// place of the agent while the phase is verifying
 	Job *verifyJob

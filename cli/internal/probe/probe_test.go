@@ -3,6 +3,7 @@ package probe
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"testing"
 	"time"
@@ -105,12 +106,14 @@ func TestVerifySignals(t *testing.T) {
 			name: "justfile with both recipes",
 			files: map[string]string{"justfile": "mod cli\nset shell := [\"bash\"]\n\n# lint it\n" +
 				"[group('qa')]\nlint: cli::lint\n    shellcheck x\n\n@test *args:\n    go test\n"},
-			want: []Signal{{Value: "just lint / just test", Evidence: "justfile"}},
+			want: []Signal{
+				{Value: "just lint / just test", Commands: []string{"just lint", "just test"}, Evidence: "justfile"},
+			},
 		},
 		{
 			name:  "justfile with one, a parameter default kept",
 			files: map[string]string{"justfile": "test pkg=\"./...\":\n    go test {{pkg}}\nlint := \"x\"\n"},
-			want:  []Signal{{Value: "just test", Evidence: "justfile"}},
+			want:  []Signal{{Value: "just test", Commands: []string{"just test"}, Evidence: "justfile"}},
 		},
 		{
 			name:  "justfile with neither is a judgment, the stack unused",
@@ -127,7 +130,9 @@ func TestVerifySignals(t *testing.T) {
 		{
 			name:  "justfile check recipe counts as lint",
 			files: map[string]string{"justfile": "test:\n    go test\ncheck:\n    golangci-lint run\n"},
-			want:  []Signal{{Value: "just test / just check", Evidence: "justfile"}},
+			want: []Signal{
+				{Value: "just test / just check", Commands: []string{"just test", "just check"}, Evidence: "justfile"},
+			},
 		},
 		{
 			name: "Makefile targets, several on one line",
@@ -135,7 +140,9 @@ func TestVerifySignals(t *testing.T) {
 				"Makefile": ".PHONY: test check\nCC := gcc\nURL = http://x\n" +
 					"TAG ?= lint:latest\nX += lint:y\nY != echo lint:z\ntest check: deps\n\tgo test\n",
 			},
-			want: []Signal{{Value: "make test / make check", Evidence: "Makefile"}},
+			want: []Signal{
+				{Value: "make test / make check", Commands: []string{"make test", "make check"}, Evidence: "Makefile"},
+			},
 		},
 		{
 			name:  "no build file, Go stack",
@@ -169,7 +176,7 @@ func TestVerifySignals(t *testing.T) {
 				writeFile(t, filepath.Join(dir, name), body)
 			}
 
-			if got := verifySignals(dir, tc.stack); !slices.Equal(got, tc.want) {
+			if got := verifySignals(dir, tc.stack); !reflect.DeepEqual(got, tc.want) {
 				t.Errorf("verifySignals = %+v, want %+v", got, tc.want)
 			}
 		})

@@ -458,10 +458,20 @@ func (in *DriveInput) MarkBehind(ctx context.Context, r *DriveRun) error {
 	}
 
 	// a PR retargeted by hand: a catchup with git's base would carry another
-	// branch's commits into it
+	// branch's commits into it, so a base that cannot be read marks nothing
 	if in.Pull != nil {
-		if pr, err := in.Pull(ctx, branch); err == nil && pr.Status == forge.Open {
-			if st, err := stack.ReadTarget(ctx, in.Main, aim, pr.Base, "", ""); err == nil && st.Retargeted {
+		pr, err := in.Pull(ctx, branch)
+		if err != nil && !errors.Is(err, forge.ErrNotFound) {
+			return skip("reading the PR of "+branch, err)
+		}
+
+		if err == nil && pr.Status == forge.Open {
+			st, err := stack.ReadTarget(ctx, in.Main, aim, pr.Base, "", "")
+			if err != nil {
+				return skip("reading what "+pr.URL+" targets", err)
+			}
+
+			if st.Retargeted {
 				return fmt.Errorf("%s targets %s, not %s, which %s was started on: retarget it back, "+
 					"or catch it up by hand with /f10:catchup in %s", pr.URL, pr.Base,
 					strings.TrimPrefix(aim.Name, "origin/"), branch, r.O.Path)

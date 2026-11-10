@@ -341,6 +341,11 @@ func TestWatchSettlesASentCatchup(t *testing.T) {
 			fx.f.script("git rev-parse -q --verify HEAD", "p1")
 		}},
 		"agent still working": {task: func(w *drive.WatchedTask) { w.Agent = agentctl.StatusWorking }, kept: true},
+		// the turn ended on a background verify: the mark is still set, and the
+		// catchup is not failed under an agent that will come back to it
+		"agent on background work": {script: func(fx *janitorFixture) {
+			fx.f.meta.Seed("GH-1/x", branchmeta.Landed, "main")
+		}, task: func(w *drive.WatchedTask) { w.Background = watchNow.Add(-time.Minute) }, kept: true},
 		"mark still set": {script: func(fx *janitorFixture) {
 			fx.f.meta.Seed("GH-1/x", branchmeta.Landed, "main")
 		}, kind: drive.WatchCatchup, kept: true, failed: true},
