@@ -68,8 +68,8 @@ func TestStatusFallbackReportsPlanAndPR(t *testing.T) {
 		"none for GH-1 in " + root,
 		"- · capture running",
 		plan,
-		"pr:    ↗ https://gh/pr/9",
-		"pr state        open",
+		"pr:        ↗ https://gh/pr/9",
+		"pr state:    open",
 	} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("output lacks %q:\n%s", want, out.String())
@@ -90,6 +90,7 @@ func TestStatusFallbackLeavesOutWhatDoesNotExist(t *testing.T) {
 
 	var out bytes.Buffer
 	fb.render(&out, 0, false)
+	assertOneColumn(t, out.String())
 
 	for _, absent := range []string{"agent", "plan", "pr"} {
 		if strings.Contains(out.String(), absent) {
@@ -554,12 +555,64 @@ func TestWriteRunsUnderTheShipment(t *testing.T) {
 	}
 
 	got := out.String()
-	if !strings.HasPrefix(got, "task:    GH-1\nurl:   ↗ https://gh/issues/1\n\n") {
-		t.Errorf("output does not open with the block:\n%s", got)
+	if !strings.HasPrefix(got, "task:       GH-1\nurl:      ↗ https://gh/issues/1\ncapture:    prior\n") {
+		t.Errorf("the run rows do not go on under the block:\n%s", got)
 	}
 
 	if strings.Count(got, "GH-1") != 1 {
 		t.Errorf("the task prints more than once:\n%s", got)
+	}
+
+	assertOneColumn(t, got)
+}
+
+// A gate row's label is indented and its text may hold a colon of its own;
+// the label still ends at the first colon, its value in the head's column.
+func TestWriteRunsGatesShareTheColumn(t *testing.T) {
+	r := &state.Run{Task: "GH-1", Capture: "prior", Plan: "running", Ship: "pending"}
+	head := shipment{task: "GH-1", branch: "GH-1/some-branch"}
+	gates := []gate{{Step: "judge", Judged: "plan", State: "pending"}}
+
+	var out bytes.Buffer
+
+	cmd := statusCommand()
+	cmd.Writer = &out
+
+	if err := writeRuns(cmd, []*state.Run{r}, [][]gate{gates}, &head, true, "", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+
+	got := out.String()
+	if !strings.Contains(got, "\n  judge:    plan: pending\n") {
+		t.Errorf("the gate row is not `  judge: plan: pending` in the column:\n%s", got)
+	}
+
+	assertOneColumn(t, got)
+}
+
+// assertOneColumn fails unless every line is `label: value` with its value,
+// past the marker cell, at one column.
+func assertOneColumn(t *testing.T, out string) {
+	t.Helper()
+
+	col := -1
+
+	for line := range strings.Lines(strings.TrimRight(out, "\n")) {
+		label, rest, ok := strings.Cut(strings.TrimSuffix(line, "\n"), ":")
+		if !ok || strings.TrimSpace(label) == "" {
+			t.Errorf("line is not `label: value`: %q\n%s", line, out)
+
+			continue
+		}
+
+		lead := len([]rune(rest)) - len([]rune(strings.TrimLeft(rest, " ↗")))
+		at := len([]rune(label)) + 1 + lead
+
+		if col == -1 {
+			col = at
+		} else if at != col {
+			t.Errorf("value of %q starts at column %d, want %d:\n%s", strings.TrimSpace(label), at, col, out)
+		}
 	}
 }
 
