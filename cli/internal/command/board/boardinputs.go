@@ -99,7 +99,7 @@ func collectBoards(
 	for i, e := range entries {
 		switch {
 		case e.Err != nil:
-			p := lookaround.Project{ID: e.Id, Name: filepath.Base(e.Main), Checkout: e.Main}
+			p := lookaround.Project{ID: e.ID, Name: filepath.Base(e.Main), Checkout: e.Main}
 			boards[i] = lookaround.Unreachable(p, e.Err, now, w, view)
 		case stateView:
 			boards[i] = lookaround.Derive(*facts[i], now, w.Since)
@@ -195,7 +195,7 @@ func repoInputs(r scope.RepoRef, warn io.Writer, since time.Time) lookaround.Inp
 	h := hostops.Host{Name: r.CLI, Repo: r.Repo()}
 
 	return lookaround.Inputs{
-		Project: lookaround.Project{ID: r.Id(), Name: r.Name(), Host: r.CLI, Remote: true},
+		Project: lookaround.Project{ID: r.ID(), Name: r.Name(), Host: r.CLI, Remote: true},
 		Prefix:  r.Prefix,
 		Since:   since,
 		Host:    &h.Host,

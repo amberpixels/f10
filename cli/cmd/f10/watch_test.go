@@ -112,7 +112,7 @@ func TestDecideWatch(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			c.task.Id = "FT-1"
+			c.task.ID = "FT-1"
 
 			rep, act := drive.DecideWatch(c.task, c.mode, watchNow)
 
@@ -127,7 +127,7 @@ func TestDecideWatch(t *testing.T) {
 		})
 	}
 
-	rep, _ := drive.DecideWatch(drive.WatchedTask{Id: "FT-1", Run: blocked}, "report", watchNow)
+	rep, _ := drive.DecideWatch(drive.WatchedTask{ID: "FT-1", Run: blocked}, "report", watchNow)
 	if rep.Ask != blocked.Ask || rep.Text != "ship blocked at judge: rethink" {
 		t.Errorf("blocked report = %+v", rep)
 	}
@@ -146,7 +146,7 @@ func TestReconcileReportsOnce(t *testing.T) {
 	store := map[string]drive.WatchReport{"FT-9": {Kind: drive.WatchStalled, Key: "x", At: now}}
 
 	blocked := &state.Run{Ship: "blocked", Updated: now}
-	tasks := []drive.WatchedTask{{Id: "FT-1", Run: blocked}}
+	tasks := []drive.WatchedTask{{ID: "FT-1", Run: blocked}}
 
 	in.Reconcile(t.Context(), tasks, store)
 	in.Reconcile(t.Context(), tasks, store)
@@ -175,8 +175,8 @@ func TestReconcileNeverRetellsAFact(t *testing.T) {
 	in := drive.WatchInput{Mode: "report", Now: func() time.Time { return watchNow }, Out: &out}
 	store := map[string]drive.WatchReport{}
 
-	merged := drive.WatchedTask{Id: "FT-1", Pr: mergedPR(), LocalSHA: "abc"}
-	ahead := drive.WatchedTask{Id: "FT-1", Pr: mergedPR(), LocalSHA: "def"}
+	merged := drive.WatchedTask{ID: "FT-1", Pr: mergedPR(), LocalSHA: "abc"}
+	ahead := drive.WatchedTask{ID: "FT-1", Pr: mergedPR(), LocalSHA: "def"}
 
 	for _, task := range []drive.WatchedTask{merged, ahead, merged, ahead} {
 		in.Reconcile(t.Context(), []drive.WatchedTask{task}, store)
@@ -190,7 +190,7 @@ func TestReconcileNeverRetellsAFact(t *testing.T) {
 // Under finish, a merged task is finished and reported as such; a refusal
 // is a report naming it, and a lease someone took meanwhile is none.
 func TestReconcileFinishes(t *testing.T) {
-	task := drive.WatchedTask{Id: "FT-1", Pr: mergedPR(), LocalSHA: "abc", Agent: agentctl.StatusIdle, Listed: true}
+	task := drive.WatchedTask{ID: "FT-1", Pr: mergedPR(), LocalSHA: "abc", Agent: agentctl.StatusIdle, Listed: true}
 
 	for _, c := range []struct {
 		err  error
@@ -295,7 +295,7 @@ func TestCollectWatched(t *testing.T) {
 		t.Errorf("local task branches = %d, want 3: origin's GH-4 does not count", local)
 	}
 
-	if len(tasks) != 3 || tasks[0].Id != "GH-1" || tasks[1].Id != "GH-2" || tasks[2].Id != "GH-3" {
+	if len(tasks) != 3 || tasks[0].ID != "GH-1" || tasks[1].ID != "GH-2" || tasks[2].ID != "GH-3" {
 		t.Fatalf("tasks = %+v, want GH-1, GH-2 and GH-3, the worktrees", tasks)
 	}
 
@@ -322,7 +322,7 @@ func (failingAgents) Workspaces(context.Context) ([]agentctl.Workspace, error) {
 // Under the lease, the watcher finishes only with the branch still at the
 // PR's head and an agent it can see is not working, or no workspace.
 func TestRecheckFinish(t *testing.T) {
-	task := drive.WatchedTask{Id: "GH-1", Branch: "GH-1/x", Path: "/code/repo.GH-1", Pr: mergedPR()}
+	task := drive.WatchedTask{ID: "GH-1", Branch: "GH-1/x", Path: "/code/repo.GH-1", Pr: mergedPR()}
 	at := func(st agentctl.Status) *memAgents {
 		return &memAgents{workspaces: []agentctl.Workspace{{ID: "ws:9", Label: "GH-1", Path: task.Path, Status: st}}}
 	}
@@ -369,7 +369,7 @@ func TestHostTrouble(t *testing.T) {
 
 	in := drive.WatchInput{Mode: "report", Now: func() time.Time { return watchNow }, Out: &out}
 	store := map[string]drive.WatchReport{}
-	tasks := []drive.WatchedTask{{Id: "FT-1", HostErr: errors.New("gh: HTTP 401")}, {Id: "FT-2"}}
+	tasks := []drive.WatchedTask{{ID: "FT-1", HostErr: errors.New("gh: HTTP 401")}, {ID: "FT-2"}}
 
 	in.HostTrouble(tasks, store)
 	in.HostTrouble(tasks, store)

@@ -745,6 +745,8 @@ Everything in `bin/` is on the Bash tool's `PATH`, so prose names these scripts 
 
 `cli/` is the lookaround binary.
 It is its own Go module, `github.com/amberpixels/f10/cli`, with `cmd/f10` as its main package.
+`cmd/f10` only wires the command tree: each command is a package under `internal/command`, over the services and domain packages in `internal/`.
+`internal/layers` ranks every package, and its test fails on an import from a lower rank to a higher one, or between two commands of the same rank.
 It stays in this repo because its parity tests run the scripts in `bin/`.
 
 ```bash

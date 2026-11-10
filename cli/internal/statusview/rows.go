@@ -425,7 +425,7 @@ func RenderRows(w io.Writer, rows []TaskRow, v RowView) error {
 
 	nodes := hostops.SubtaskNodes(tr, hostops.TreeOpts{
 		TitleBelow: true,
-		Id: func(i int) tasktree.Cell {
+		ID: func(i int) tasktree.Cell {
 			c := tasktree.Cell{Text: stateGlyph(rows[i].Stage) + " " + rows[i].ID}
 			if v.Term {
 				glyph, id := stateGlyph(rows[i].Stage), links.ID("", rows[i].ID)

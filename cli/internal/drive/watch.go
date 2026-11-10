@@ -133,7 +133,7 @@ func (in WatchInput) HostTrouble(tasks []WatchedTask, store map[string]WatchRepo
 
 	for _, t := range tasks {
 		if t.HostErr != nil {
-			ids, cause = append(ids, t.Id), cmp.Or(cause, t.HostErr)
+			ids, cause = append(ids, t.ID), cmp.Or(cause, t.HostErr)
 		}
 	}
 
@@ -163,10 +163,10 @@ func (in WatchInput) Reconcile(ctx context.Context, tasks []WatchedTask, store m
 	seen := map[string]bool{}
 
 	for _, task := range tasks {
-		seen[task.Id] = true
+		seen[task.ID] = true
 
 		if in.Catchup {
-			in.Tell(store, task.Id, now, in.catchupStep(ctx, task, store))
+			in.Tell(store, task.ID, now, in.catchupStep(ctx, task, store))
 		}
 
 		rep, act := DecideWatch(task, in.Mode, now)
@@ -175,7 +175,7 @@ func (in WatchInput) Reconcile(ctx context.Context, tasks []WatchedTask, store m
 			rep = in.finishReport(ctx, task)
 		}
 
-		in.Tell(store, task.Id, now, rep)
+		in.Tell(store, task.ID, now, rep)
 	}
 
 	for id, r := range store {
@@ -222,7 +222,7 @@ func (in WatchInput) ReadTargets(ctx context.Context, tasks []WatchedTask, store
 			continue
 		}
 
-		rec := store[t.Id].Catchup
+		rec := store[t.ID].Catchup
 		if rec == nil && (t.Pr == nil || t.Pr.Status != forge.Open) {
 			continue
 		}
@@ -273,7 +273,7 @@ func (in WatchInput) finishReport(ctx context.Context, task WatchedTask) *WatchR
 		return &WatchReport{
 			Kind: WatchRefused,
 			Text: url + " merged, and finishing it was refused: " + err.Error(),
-			Next: "f10 finish " + task.Id,
+			Next: "f10 finish " + task.ID,
 			Key:  WatchRefused + " " + url, // a refusal's text may vary between passes
 		}
 	}
@@ -306,12 +306,12 @@ func (in WatchInput) catchupStep(ctx context.Context, task WatchedTask, store ma
 	}
 
 	if task.targetErr != nil {
-		in.warnf("%s skipped this pass, reading what %s targets: %v", task.Id, task.Branch, task.targetErr)
+		in.warnf("%s skipped this pass, reading what %s targets: %v", task.ID, task.Branch, task.targetErr)
 
 		return nil
 	}
 
-	rec := store[task.Id].Catchup
+	rec := store[task.ID].Catchup
 	if rec != nil && !rec.Failed {
 		return in.settleCatchup(ctx, task, rec, store)
 	}
@@ -327,7 +327,7 @@ func (in WatchInput) settleCatchup(
 	ctx context.Context, task WatchedTask, rec *drives.Catchup, store map[string]WatchReport,
 ) *WatchReport {
 	if task.Pr == nil || task.Pr.Status != forge.Open {
-		setCatchup(store, task.Id, nil) // its request is gone: nothing to keep current
+		setCatchup(store, task.ID, nil) // its request is gone: nothing to keep current
 
 		return nil
 	}
@@ -356,10 +356,10 @@ func (in WatchInput) settleCatchup(
 		}
 	}
 
-	lease, err := drives.AcquireAs(in.Root, task.Id, drives.Holder{Watch: true})
+	lease, err := drives.AcquireAs(in.Root, task.ID, drives.Holder{Watch: true})
 
 	if held := (drives.HeldError{}); errors.As(err, &held) {
-		setCatchup(store, task.Id, nil) // whoever holds it pushes
+		setCatchup(store, task.ID, nil) // whoever holds it pushes
 
 		return nil
 	}
@@ -400,7 +400,7 @@ func (in WatchInput) settleCatchup(
 		return in.pushFailed(task, rec, err)
 	}
 
-	setCatchup(store, task.Id, nil)
+	setCatchup(store, task.ID, nil)
 
 	if how == "" {
 		return nil // nothing to push, or nowhere to push it
@@ -418,7 +418,7 @@ func (in WatchInput) settleCatchup(
 func (in WatchInput) failedAt(ctx context.Context, task WatchedTask, rec *drives.Catchup) {
 	conflicts, err := gitx.Conflicts(ctx, task.Path, rec.Target, "HEAD")
 	if err != nil {
-		in.warnf("%s: reading what %s conflicts on: %v", task.Id, task.Branch, err)
+		in.warnf("%s: reading what %s conflicts on: %v", task.ID, task.Branch, err)
 
 		return
 	}
@@ -462,7 +462,7 @@ func (in WatchInput) sendCatchup(
 
 	switch base := strings.TrimPrefix(aim.Name, "origin/"); {
 	case err != nil:
-		in.warnf("%s skipped this pass: %v", task.Id, err)
+		in.warnf("%s skipped this pass: %v", task.ID, err)
 
 		return nil
 	case st.UnpushedBase:
@@ -486,7 +486,7 @@ func (in WatchInput) sendCatchup(
 
 	switch {
 	case err != nil:
-		in.warnf("%s skipped this pass, reading %s: %v", task.Id, task.Branch, err)
+		in.warnf("%s skipped this pass, reading %s: %v", task.ID, task.Branch, err)
 
 		return nil
 	case has:
@@ -505,7 +505,7 @@ func (in WatchInput) sendCatchup(
 	if failed != nil {
 		conflicts, err := gitx.Conflicts(ctx, task.Path, aim.SHA, "HEAD")
 		if err != nil {
-			in.warnf("%s skipped this pass, reading what %s conflicts on: %v", task.Id, task.Branch, err)
+			in.warnf("%s skipped this pass, reading what %s conflicts on: %v", task.ID, task.Branch, err)
 
 			return nil
 		}
@@ -515,10 +515,10 @@ func (in WatchInput) sendCatchup(
 		}
 	}
 
-	lease, err := drives.AcquireAs(in.Root, task.Id, drives.Holder{Watch: true})
+	lease, err := drives.AcquireAs(in.Root, task.ID, drives.Holder{Watch: true})
 	if err != nil {
 		if held := (drives.HeldError{}); !errors.As(err, &held) {
-			in.warnf("%s skipped this pass: %v", task.Id, err)
+			in.warnf("%s skipped this pass: %v", task.ID, err)
 		}
 
 		return nil
@@ -542,7 +542,7 @@ func (in WatchInput) integrate(
 	aim := task.target
 
 	if err := branchmeta.Set(ctx, in.Main, task.Branch, aim.Key, aim.Value); err != nil {
-		in.warnf("%s skipped this pass, marking %s behind %s: %v", task.Id, task.Branch, aim.Name, err)
+		in.warnf("%s skipped this pass, marking %s behind %s: %v", task.ID, task.Branch, aim.Name, err)
 
 		return nil
 	}
@@ -561,18 +561,18 @@ func (in WatchInput) integrate(
 	)
 	if err != nil {
 		unmark()
-		in.warnf("%s skipped this pass: %v", task.Id, err)
+		in.warnf("%s skipped this pass: %v", task.ID, err)
 
 		return nil
 	}
 
 	rec.Base = aim.Name
 
-	tasks := []string{task.Id}
+	tasks := []string{task.ID}
 
 	// the review series is read only for a merge, the one method with a message
 	message := func(p stack.CatchupPlan) []string {
-		return in.Engine.Message(tasks, archive.ChangeOf(in.Storage.Reviews(task.Id)))(p)
+		return in.Engine.Message(tasks, archive.ChangeOf(in.Storage.Reviews(task.ID)))(p)
 	}
 
 	p, stopped, err := in.Engine.Integrate(ctx, in.Engine.Input(in.Main, task.Path), message)
@@ -612,7 +612,7 @@ func (in WatchInput) integrate(
 			aim.Name, task.Branch, err))
 	}
 
-	setCatchup(store, task.Id, rec)
+	setCatchup(store, task.ID, rec)
 
 	return &WatchReport{
 		Kind: WatchCatchup,
@@ -634,7 +634,7 @@ func (in WatchInput) undo(ctx context.Context, task WatchedTask, head string, st
 	}
 
 	if _, err := gitx.Exec(ctx, task.Path, args...); err != nil {
-		in.warnf("%s: putting %s back at %s: %v", task.Id, task.Branch, gitx.ShortSHA(head), err)
+		in.warnf("%s: putting %s back at %s: %v", task.ID, task.Branch, gitx.ShortSHA(head), err)
 	}
 }
 
@@ -657,7 +657,7 @@ func (in WatchInput) worktreeBusy(ctx context.Context, task WatchedTask) bool {
 
 // A WatchedTask is what one pass knows about a task with a worktree.
 type WatchedTask struct {
-	Id       string // the lead
+	ID       string // the lead
 	Branch   string
 	Path     string
 	Owner    string     // who holds its lease; "" for nobody
@@ -781,7 +781,7 @@ func DecideWatch(t WatchedTask, mode string, now time.Time) (*WatchReport, bool)
 				return &WatchReport{
 					Kind: WatchMerged,
 					Text: p.URL + " merged, and " + t.Branch + " has commits it lacks",
-					Next: "look at " + t.Path + " before f10 finish " + t.Id,
+					Next: "look at " + t.Path + " before f10 finish " + t.ID,
 					Key:  WatchMerged + " " + p.URL + " " + t.LocalSHA,
 				}, false
 			}
@@ -793,14 +793,14 @@ func DecideWatch(t WatchedTask, mode string, now time.Time) (*WatchReport, bool)
 			return &WatchReport{
 				Kind: WatchMerged,
 				Text: p.URL + " merged",
-				Next: "f10 finish " + t.Id,
+				Next: "f10 finish " + t.ID,
 				Key:  WatchMerged + " " + p.URL,
 			}, act
 		case forge.Closed:
 			return &WatchReport{
 				Kind: WatchClosed,
 				Text: p.URL + " closed without a merge",
-				Next: "f10 finish " + t.Id + " --local, or reopen it",
+				Next: "f10 finish " + t.ID + " --local, or reopen it",
 				Key:  WatchClosed + " " + p.URL,
 			}, false
 		}
@@ -904,9 +904,9 @@ func CollectWatched(ctx context.Context, in WatchInput) ([]WatchedTask, int, err
 			continue
 		}
 
-		task := WatchedTask{Id: b.Ids[0], Branch: b.Name, Path: path, LocalSHA: b.LocalSHA, Listed: listed}
+		task := WatchedTask{ID: b.Ids[0], Branch: b.Name, Path: path, LocalSHA: b.LocalSHA, Listed: listed}
 
-		if h, ok := drives.Probe(in.Root, task.Id); ok {
+		if h, ok := drives.Probe(in.Root, task.ID); ok {
 			task.Owner = h.String()
 		} else {
 			task.Off = in.handedBack(ctx, b.Name)
@@ -941,7 +941,7 @@ func CollectWatched(ctx context.Context, in WatchInput) ([]WatchedTask, int, err
 // merged request. It writes no drive finish record: the board would read
 // the watcher as a drive.
 func WatcherFinish(ctx context.Context, w io.Writer, t *target.Target, main, root string, task WatchedTask) error {
-	lease, err := drives.AcquireAs(root, task.Id, drives.Holder{Watch: true})
+	lease, err := drives.AcquireAs(root, task.ID, drives.Holder{Watch: true})
 	if err != nil {
 		return err
 	}
@@ -951,7 +951,7 @@ func WatcherFinish(ctx context.Context, w io.Writer, t *target.Target, main, roo
 		return err
 	}
 
-	r, err := t.Reference(ctx, task.Id)
+	r, err := t.Reference(ctx, task.ID)
 	if err != nil {
 		return err
 	}
@@ -978,7 +978,7 @@ func WatcherFinish(ctx context.Context, w io.Writer, t *target.Target, main, roo
 	}
 
 	if err == nil {
-		RecordAt(ctx, main, finish.FinishedEvent(task.Id, "watch", time.Now()))
+		RecordAt(ctx, main, finish.FinishedEvent(task.ID, "watch", time.Now()))
 	}
 
 	return err

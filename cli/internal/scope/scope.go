@@ -36,7 +36,7 @@ type RepoRef struct {
 	Prefix string // the task id prefix its ids are read with
 }
 
-func (r RepoRef) Id() string { return r.Host + "/" + r.Path }
+func (r RepoRef) ID() string { return r.Host + "/" + r.Path }
 
 func (r RepoRef) Name() string { return path.Base(r.Path) }
 
@@ -161,7 +161,7 @@ func Scoped(cmd *cli.Command) bool {
 type ScopeEntry struct {
 	Dir    string
 	Main   string // the main checkout, for a board of a checkout that would not bind
-	Id     string // its project id, the normalised remote
+	ID     string // its project id, the normalised remote
 	Target *target.Target
 	Repo   *RepoRef
 	Err    error
@@ -190,8 +190,8 @@ func BindScope(ctx context.Context, items []scopeItem, cmdName string) []ScopeEn
 
 		roots[main] = true
 
-		e := ScopeEntry{Dir: it.Dir, Main: main, Id: ledger.Where(ctx, main).Project}
-		ids[e.Id] = true
+		e := ScopeEntry{Dir: it.Dir, Main: main, ID: ledger.Where(ctx, main).Project}
+		ids[e.ID] = true
 
 		if e.Target, e.Err = target.At(ctx, it.Dir, true, cmdName); e.Err != nil {
 			e.Err = fmt.Errorf("%s: %w", it.Dir, e.Err)
@@ -201,11 +201,11 @@ func BindScope(ctx context.Context, items []scopeItem, cmdName string) []ScopeEn
 	}
 
 	for i, it := range items {
-		if it.Repo == nil || ids[it.Repo.Id()] {
+		if it.Repo == nil || ids[it.Repo.ID()] {
 			continue
 		}
 
-		ids[it.Repo.Id()] = true
+		ids[it.Repo.ID()] = true
 		entries[i], keep[i] = ScopeEntry{Repo: it.Repo}, true
 	}
 
@@ -243,7 +243,7 @@ func StandupTargets(ctx context.Context, cmd *cli.Command) ([]*target.Target, er
 		switch {
 		case e.Repo != nil:
 			return nil, fmt.Errorf("%s: a repository with no checkout has no git history to read; f10 board reads it",
-				e.Repo.Id())
+				e.Repo.ID())
 		case e.Err != nil:
 			return nil, e.Err
 		}

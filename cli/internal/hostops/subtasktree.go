@@ -16,9 +16,9 @@ type TreeOpts struct {
 	// TitleBelow puts the title on the line under the row, not in a cell
 	TitleBelow bool
 	// Url adds a `↗ <url>` cell after the title
-	Url bool
+	URL bool
 	// Id replaces row i's id cell; nil prints the id as is
-	Id func(i int) tasktree.Cell
+	ID func(i int) tasktree.Cell
 	// Extra is row i's cells after the title and url, and the notes under it
 	Extra func(i int) ([]tasktree.Cell, []tasktree.Note)
 }
@@ -26,8 +26,8 @@ type TreeOpts struct {
 // node is one row as a node; i < 0 is the head, which takes no hooks.
 func (o TreeOpts) node(r TreeRow, depth, i int) tasktree.Node {
 	n := tasktree.Node{Depth: depth, Cells: []tasktree.Cell{{Text: r.ID}}}
-	if o.Id != nil && i >= 0 {
-		n.Cells[0] = o.Id(i)
+	if o.ID != nil && i >= 0 {
+		n.Cells[0] = o.ID(i)
 	}
 
 	if o.TitleBelow {
@@ -36,7 +36,7 @@ func (o TreeOpts) node(r TreeRow, depth, i int) tasktree.Node {
 		n.Cells = append(n.Cells, tasktree.Cell{Text: r.Title})
 	}
 
-	if o.Url && r.URL != "" {
+	if o.URL && r.URL != "" {
 		n.Cells = append(n.Cells, tasktree.Cell{Text: "↗ " + r.URL})
 	}
 

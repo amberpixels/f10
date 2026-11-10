@@ -402,9 +402,9 @@ func runWatchPass(ctx context.Context, cmd *cli.Command, t *target.Target) error
 	if b := worktree.ReachableAgents(main); b != nil {
 		in.Agents = b
 		in.Prompt = func(ctx context.Context, task drive.WatchedTask, text string) error {
-			note, err := launch.PromptChecked(ctx, task.Path, task.Id, "", text)
+			note, err := launch.PromptChecked(ctx, task.Path, task.ID, "", text)
 			if note != "" {
-				in.Warn(task.Id + ": " + note)
+				in.Warn(task.ID + ": " + note)
 			}
 
 			return err

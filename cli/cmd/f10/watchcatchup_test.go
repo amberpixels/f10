@@ -21,7 +21,7 @@ import (
 // undrivenTask is an undriven task with an open PR on main, its agent idle.
 func undrivenTask() drive.WatchedTask {
 	return drive.WatchedTask{
-		Id: "GH-1", Branch: "GH-1/x", Path: "/code/repo.GH-1", LocalSHA: "p1",
+		ID: "GH-1", Branch: "GH-1/x", Path: "/code/repo.GH-1", LocalSHA: "p1",
 		Pr:    &forge.PR{URL: "https://gh/pr/9", Status: forge.Open, Base: "main"},
 		Agent: agentctl.StatusIdle, Listed: true, Ws: "ws-1",
 	}

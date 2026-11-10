@@ -163,7 +163,7 @@ func TestBoardGroupsMixRepositories(t *testing.T) {
 	}
 
 	if len(items) != 2 || items[0].Dir != filepath.Join(root, "acme-api") || items[1].Repo == nil ||
-		items[1].Repo.Id() != "github.com/acme/widgets" || items[1].Repo.CLI != "gh" || items[1].Repo.Prefix != "WID" {
+		items[1].Repo.ID() != "github.com/acme/widgets" || items[1].Repo.CLI != "gh" || items[1].Repo.Prefix != "WID" {
 		t.Errorf("items = %+v", items)
 	}
 
@@ -212,7 +212,7 @@ func TestBoardRepos(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		got = append(got, ref.CLI+" "+ref.Id()+" "+ref.Prefix+" "+ref.Repo())
+		got = append(got, ref.CLI+" "+ref.ID()+" "+ref.Prefix+" "+ref.Repo())
 	}
 
 	want := "gh github.com/acme/widgets WID acme/widgets|glab gitlab.com/acme/sub/widgets WID acme/sub/widgets|" +

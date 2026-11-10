@@ -2959,7 +2959,7 @@ func TestDriveFinishAsksForSomeoneElsesPR(t *testing.T) {
 		Finish: func(_ context.Context, _ io.Writer, req drive.DriveFinish) error {
 			got = append(got, req.Pr)
 			if req.Pr == "" {
-				return finish.ForeignPullError{Url: "https://gh/pr/9", Author: "alice"}
+				return finish.ForeignPullError{URL: "https://gh/pr/9", Author: "alice"}
 			}
 
 			return nil

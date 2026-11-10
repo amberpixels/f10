@@ -172,7 +172,7 @@ func (in *DriveInput) RunFinish(ctx context.Context, r *DriveRun) DriveResult {
 	}
 
 	if fp := (finish.ForeignPullError{}); errors.As(err, &fp) {
-		ask := fmt.Sprintf("1. %s was opened by %s: [%s | %s]", fp.Url, fp.Author, FinishLeaveOpen, FinishMerge)
+		ask := fmt.Sprintf("1. %s was opened by %s: [%s | %s]", fp.URL, fp.Author, FinishLeaveOpen, FinishMerge)
 
 		return DriveResult{
 			Row:   "asked at finish",

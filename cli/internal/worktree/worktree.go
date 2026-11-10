@@ -1,5 +1,6 @@
-// Package worktree is a task's checkout: where its worktree goes, how it is
-// made and removed, and the names and pull tokens that point at one.
+// Package worktree is a task's checkout and the backend hosting its agent:
+// where the worktree goes, how it is made and removed, and the names and pull
+// tokens that point at one.
 package worktree
 
 import (

@@ -334,7 +334,7 @@ func (in FinishInput) leaveOpen(ctx context.Context, p forge.PR) (bool, error) {
 	}
 
 	if !strings.EqualFold(author, me) {
-		return false, ForeignPullError{Url: p.URL, Author: author}
+		return false, ForeignPullError{URL: p.URL, Author: author}
 	}
 
 	return false, nil

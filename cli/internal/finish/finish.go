@@ -66,13 +66,13 @@ func Lease(root, id string) (*drives.Lease, error) {
 
 // A ForeignPullError is a refusal: nothing changed, the choice is the user's.
 type ForeignPullError struct {
-	Url    string
+	URL    string
 	Author string
 }
 
 func (e ForeignPullError) Error() string {
 	return fmt.Sprintf("%s was opened by %s: pass --merge to merge it, "+
-		"or --local to clean up here and leave it open", e.Url, e.Author)
+		"or --local to clean up here and leave it open", e.URL, e.Author)
 }
 
 // FinishInput is everything finish needs once the target is settled, so
