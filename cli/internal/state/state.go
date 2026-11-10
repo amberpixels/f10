@@ -238,11 +238,11 @@ func Load(path string) (*Run, error) {
 		case "skill":
 			r.Skill = value
 		case "capture":
-			r.Capture = legacyStatus(cmp.Or(value, Upcoming))
+			r.Capture = LegacyStatus(cmp.Or(value, Upcoming))
 		case "plan":
-			r.Plan = legacyStatus(cmp.Or(value, Upcoming))
+			r.Plan = LegacyStatus(cmp.Or(value, Upcoming))
 		case "ship":
-			r.Ship = legacyStatus(cmp.Or(value, Upcoming))
+			r.Ship = LegacyStatus(cmp.Or(value, Upcoming))
 		case "leaf":
 			r.Leaf = value
 		case "at":

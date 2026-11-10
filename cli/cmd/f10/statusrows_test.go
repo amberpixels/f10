@@ -406,7 +406,7 @@ func TestRowStepNamesDriveFinish(t *testing.T) {
 	plain.finish(f)
 
 	if plain.Step != "ship" {
-		t.Errorf("a upcoming finish changed the step to %q", plain.Step)
+		t.Errorf("an upcoming finish changed the step to %q", plain.Step)
 	}
 }
 

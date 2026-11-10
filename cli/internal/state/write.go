@@ -34,9 +34,9 @@ type UsageError struct{ msg string }
 
 func (e *UsageError) Error() string { return e.msg }
 
-// legacyStatus reads the name a not-reached phase had before it was Upcoming,
-// still held by older run files and said by older callers.
-func legacyStatus(status string) string {
+// LegacyStatus reads the name a not-reached phase had before it was Upcoming,
+// still held by older run files, ledger claims and older callers.
+func LegacyStatus(status string) string {
 	if status == "pending" {
 		return Upcoming
 	}
@@ -298,7 +298,7 @@ func (r *Run) Set(phase, status, leaf string) error {
 		return usagef("unknown phase '%s' (want: %s)", phase, strings.Join(Phases, " "))
 	}
 
-	status = legacyStatus(status)
+	status = LegacyStatus(status)
 	if !slices.Contains(Statuses, status) {
 		return usagef("unknown status '%s'", status)
 	}
