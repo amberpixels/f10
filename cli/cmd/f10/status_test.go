@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -588,6 +590,57 @@ func TestWriteRunsGatesShareTheColumn(t *testing.T) {
 	}
 
 	assertOneColumn(t, got)
+}
+
+// A planned task's file row and its plan phase row never share a key.
+func TestWriteRunsNamesThePlanFileApart(t *testing.T) {
+	r := &state.Run{Task: "GH-1", Capture: "prior", Plan: "done", Ship: "running"}
+	head := shipment{task: "GH-1", plan: "/work/.f10/plans/GH-1.md"}
+
+	var out bytes.Buffer
+
+	cmd := statusCommand()
+	cmd.Writer = &out
+
+	if err := writeRuns(cmd, []*state.Run{r}, [][]gate{nil}, &head, false, "", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+
+	got := out.String()
+	if !strings.Contains(got, "plan file:  ") || strings.Count(got, "\nplan:") != 1 {
+		t.Errorf("want one `plan file:` row and one `plan:` row:\n%s", got)
+	}
+
+	assertOneColumn(t, got)
+}
+
+// A long run value wraps under the value column, never under the labels.
+func TestWriteFactsWrapsUnderTheValueColumn(t *testing.T) {
+	rows := []fact{
+		{label: "url", value: "https://gh/issues/1", url: true},
+		runFact("note", "stop: the change patches the symptom and the cause is the retry loop", lipgloss.NewStyle()),
+	}
+
+	var out bytes.Buffer
+	if err := writeFacts(&out, rows, labelWidth(rows), 40); err != nil {
+		t.Fatal(err)
+	}
+
+	lines := strings.Split(strings.TrimRight(out.String(), "\n"), "\n")
+	if len(lines) < 3 {
+		t.Fatalf("the note did not wrap at 40 columns:\n%s", out.String())
+	}
+
+	col := strings.Index(lines[1], "stop:")
+	for _, l := range lines[2:] {
+		if len(l)-len(strings.TrimLeft(l, " ")) != col {
+			t.Errorf("continuation %q does not start at column %d:\n%s", l, col, out.String())
+		}
+
+		if len(l) > 40 {
+			t.Errorf("continuation %q runs past 40 columns", l)
+		}
+	}
 }
 
 // assertOneColumn fails unless every line is `label: value` with its value,

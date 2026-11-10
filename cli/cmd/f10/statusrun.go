@@ -66,6 +66,16 @@ func writeRunsUnder(w io.Writer, head []fact, runs []*state.Run, gates [][]gate,
 		blocks[i] = runRows(r, gates[i], showRoot, agent, now)
 	}
 
+	// the plan phase row takes the key `plan`, so the plan file's row names itself
+	head = slices.Clone(head)
+	if len(runs) > 0 {
+		for i := range head {
+			if head[i].label == "plan" {
+				head[i].label = "plan file"
+			}
+		}
+	}
+
 	blocks[0] = slices.Concat(head, blocks[0])
 
 	width := 0

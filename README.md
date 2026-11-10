@@ -386,14 +386,14 @@ A run that stopped adds the step it stopped at, so `◉ ● 󰜺 judge` reads as
 `f10 status` shows the task, the reason and what unblocks it:
 
 ```
-task      GH-26
-url       https://github.com/amberpixels/f10/issues/26
-capture   prior
-plan      done
-ship      blocked at judge
-note      stop: the change patches the symptom, the cause is the retry loop in sync.go
-next      move the retry into the client and re-run /f10:ship GH-26
-updated   4m ago
+task:       GH-26
+url:      ↗ https://github.com/amberpixels/f10/issues/26
+capture:    prior
+plan:       done
+ship:       blocked at judge
+note:       stop: the change patches the symptom, the cause is the retry loop in sync.go
+next:       move the retry into the client and re-run /f10:ship GH-26
+updated:    4m ago
 ```
 
 Bare `f10 status` reads the current task the same way `f10 status <id>` does, gates included.
