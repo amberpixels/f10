@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -18,23 +19,35 @@ func TestModuleFollowsTheTable(t *testing.T) {
 
 	statSources(t)
 
-	out, err := exec.CommandContext(t.Context(), "go", "list", "-f",
-		"{{.ImportPath}} {{join .Imports \" \"}}", module+"...").Output()
-	if err != nil {
-		t.Fatalf("go list: %v", err)
-	}
-
 	imports := map[string][]string{}
 
-	sc := bufio.NewScanner(bytes.NewReader(out))
-	for sc.Scan() {
-		fields := strings.Fields(sc.Text())
-		from := strings.TrimPrefix(fields[0], module)
-		imports[from] = nil
+	// a test's imports couple packages too, and the unix-only and other
+	// files differ in what they import, so both platforms are read
+	for _, goos := range []string{"", "windows"} {
+		cmd := exec.CommandContext(t.Context(), "go", "list", "-f",
+			`{{.ImportPath}} {{join .Imports " "}} {{join .TestImports " "}} {{join .XTestImports " "}}`, module+"...")
+		if goos != "" {
+			cmd.Env = append(os.Environ(), "GOOS="+goos)
+		}
 
-		for _, imp := range fields[1:] {
-			if to, ok := strings.CutPrefix(imp, module); ok {
-				imports[from] = append(imports[from], to)
+		out, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("go list (GOOS=%s): %v", goos, err)
+		}
+
+		sc := bufio.NewScanner(bytes.NewReader(out))
+		for sc.Scan() {
+			fields := strings.Fields(sc.Text())
+			from := strings.TrimPrefix(fields[0], module)
+
+			if _, ok := imports[from]; !ok {
+				imports[from] = nil
+			}
+
+			for _, imp := range fields[1:] {
+				if to, ok := strings.CutPrefix(imp, module); ok && !slices.Contains(imports[from], to) {
+					imports[from] = append(imports[from], to)
+				}
 			}
 		}
 	}
@@ -50,7 +63,9 @@ func TestCheckReportsAReverseImport(t *testing.T) {
 	table := []Rule{
 		{Prefix: "internal", Rank: 0, Peers: true},
 		{Prefix: "internal/svc", Rank: 2},
-		{Prefix: "internal/command", Rank: 3},
+		{Prefix: "internal/command", Rank: 2, Exact: true},
+		{Prefix: "internal/command/a", Rank: 3},
+		{Prefix: "internal/command/b", Rank: 3},
 		{Prefix: "cmd/app", Rank: 9},
 	}
 	imports := map[string][]string{
@@ -61,12 +76,16 @@ func TestCheckReportsAReverseImport(t *testing.T) {
 		"internal/gitx":      {"internal/fsx"},
 		"internal/fsx":       nil,
 		"other/unranked":     nil,
+		"internal/command":   nil,
+		// a command nobody ranked, which the broad internal rule would cover
+		"internal/command/c": {"internal/gitx"},
 	}
 
 	got := Check(imports, table)
 
 	want := []string{
 		"internal/command/b imports internal/command/a: peers of rank 3 import each other; move the shared piece down instead",
+		"internal/command/c: no rank in the layers table",
 		"internal/svc imports internal/command/a: rank 2 imports rank 3; move the shared piece down instead",
 		"other/unranked: no rank in the layers table",
 	}

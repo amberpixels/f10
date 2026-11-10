@@ -12,11 +12,14 @@ import (
 
 // A Rule ranks every package at or below Prefix, a path relative to the
 // module root. Peers lets packages of that rank import each other, which the
-// domain packages need and Go's own cycle check keeps acyclic.
+// domain packages need and Go's own cycle check keeps acyclic. Exact ranks
+// Prefix alone, and every package below it then needs a rule of its own, so
+// a new one is never ranked by a broader rule by accident.
 type Rule struct {
 	Prefix string
 	Rank   int
 	Peers  bool
+	Exact  bool
 }
 
 // Table ranks the module, inner to outer; the longest matching prefix wins.
@@ -36,7 +39,7 @@ var Table = []Rule{
 	{Prefix: "internal/driverec", Rank: 2, Peers: true},
 	{Prefix: "internal/asknotify", Rank: 2, Peers: true},
 	{Prefix: "internal/statusview", Rank: 2, Peers: true},
-	{Prefix: "internal/command", Rank: 2, Peers: true},
+	{Prefix: "internal/command", Rank: 2, Peers: true, Exact: true},
 
 	// leaf commands: nothing but services below them
 	{Prefix: "internal/command/trace", Rank: 3},
@@ -91,7 +94,7 @@ func Check(imports map[string][]string, table []Rule) []Violation {
 
 	for from, tos := range imports {
 		fr, ok := RankOf(from, table)
-		if !ok {
+		if !ok || underExact(from, fr, table) {
 			out = append(out, Violation{From: from, Why: "no rank in the layers table"})
 
 			continue
@@ -131,10 +134,22 @@ func RankOf(pkg string, table []Rule) (Rule, bool) {
 	)
 
 	for _, r := range table {
-		if (pkg == r.Prefix || strings.HasPrefix(pkg, r.Prefix+"/")) && (!found || len(r.Prefix) > len(best.Prefix)) {
+		under := !r.Exact && strings.HasPrefix(pkg, r.Prefix+"/")
+		if (pkg == r.Prefix || under) && (!found || len(r.Prefix) > len(best.Prefix)) {
 			best, found = r, true
 		}
 	}
 
 	return best, found
+}
+
+// underExact says pkg lies below an Exact rule while a broader rule ranked it.
+func underExact(pkg string, ranked Rule, table []Rule) bool {
+	for _, r := range table {
+		if r.Exact && strings.HasPrefix(pkg, r.Prefix+"/") && len(ranked.Prefix) < len(r.Prefix) {
+			return true
+		}
+	}
+
+	return false
 }
