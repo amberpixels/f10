@@ -334,7 +334,7 @@ func (in *driveInput) verified(ctx context.Context, w io.Writer, r *driveRun, jo
 // landed, so a rebase would push over them. Ahead of origin is the drive's
 // own unpushed work, and fine.
 func (in *driveInput) recordCatchup(ctx context.Context, r *driveRun, key branchmeta.Key) error {
-	rec, err := catchupRecord(ctx, in.main, r.o.path, r.o.branch, key, in.now())
+	rec, err := catchupRecord(ctx, in.main, r.o.path, r.o.branch, key, in.now(), &in.view().fetch)
 	if err != nil {
 		return err
 	}

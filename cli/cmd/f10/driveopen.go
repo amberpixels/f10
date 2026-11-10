@@ -95,6 +95,7 @@ func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error 
 	}
 
 	r.o, r.pos, r.flow, r.finishes = o, pos, fl, finishes
+	in.view().justOpened(r)
 	in.enter(r, atRunning)
 	if o.fresh {
 		r.freshAt = in.now().Truncate(time.Second) // the state file keeps whole seconds

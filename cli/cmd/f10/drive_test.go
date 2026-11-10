@@ -854,17 +854,17 @@ func TestDriveSettlesAShipGuardConflict(t *testing.T) {
 			// the first catchup is recorded against main0, a.go conflicting one way
 			fx.f.fail(conflicts+"main0 HEAD", shell.Result{Code: 1, Stdout: aOneWay})
 
-			// the ship's turn, then the catchup's, then the resumed ship's,
-			// then a second catchup's and a second resume's
+			// the open and the first send, then each turn working and at its
+			// end; a send after a turn reads the tick's look
 			idle, working := listing("GH-1", "idle"), listing("GH-1", "working")
-			fx.f.script(wsList, unopened, idle, working, idle, idle, working, idle, idle, working, idle,
-				idle, working, idle, idle, working, idle, idle, working, idle, idle, working, idle)
+			fx.f.script(wsList, unopened, idle, working, idle, working, idle, working, idle,
+				working, idle, working, idle, working, idle, working, idle)
 			tick := 2
 
 			if tc.rerun {
 				fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
 				fx.f.meta.Seed("GH-1", branchmeta.Landed, "main")
-				fx.f.script(wsList, unopened, idle, working, idle, idle, working, idle)
+				fx.f.script(wsList, unopened, idle, working, idle, working, idle)
 				tick = 0
 			} else {
 				ship := skillPrompt("ship", "GH-1", nil, shipFlow{}, false)
@@ -2365,25 +2365,25 @@ func TestDriveCatchesUpAPushedBranchWhenItsTargetMoves(t *testing.T) {
 		pushFail bool
 		moved    bool   // someone pushed to the branch while the catchup ran
 		mark     string // the mark the boundary sets
-		fetches  int    // git fetch origin calls: the boundary before ship, the catchup's send, after it, the push, finish
+		fetches  int    // git fetch origin calls: the tick's one before ship (the boundary and the catchup's send), after it, the push, finish
 		halt     string
 		next     string // the halt's next line, "next: rerun the drive" when ""
 	}{
-		"origin/main moved":      {pushed: "p1", mark: landed, fetches: 5},
+		"origin/main moved":      {pushed: "p1", mark: landed, fetches: 4},
 		"never pushed":           {fetches: 1},
 		"already an ancestor":    {pushed: "p1", ancestor: true, fetches: 2},
-		"already marked":         {pushed: "p1", marked: true, fetches: 5},
+		"already marked":         {pushed: "p1", marked: true, fetches: 4},
 		"fetch fails":            {pushed: "p1", fetch: shell.Result{Code: 128, Stderr: "no route"}, fetches: 2},
-		"an unlisted base moved": {pushed: "p1", after: "GH-9", mark: moved, fetches: 5},
+		"an unlisted base moved": {pushed: "p1", after: "GH-9", mark: moved, fetches: 4},
 		"an unlisted base moved, not on origin": {
-			pushed: "p1", after: "GH-9", unpushed: true, mark: moved, fetches: 5,
+			pushed: "p1", after: "GH-9", unpushed: true, mark: moved, fetches: 4,
 		},
 		"push rejected": {
-			pushed: "p1", mark: landed, pushFail: true, fetches: 3,
+			pushed: "p1", mark: landed, pushFail: true, fetches: 2,
 			halt: "GH-1 halted at catchup: pushing GH-1, caught up with main: ",
 		},
 		"origin moved during the catchup": {
-			pushed: "p1", mark: landed, moved: true, fetches: 3,
+			pushed: "p1", mark: landed, moved: true, fetches: 2,
 			halt: "GH-1 halted at catchup: GH-1 caught up with main, and origin/GH-1 moved meanwhile",
 			next: "next: bring origin/GH-1 into /code/repo.GH-1, then /f10:catchup there",
 		},
@@ -3149,12 +3149,9 @@ func TestDriveCatchesADependentUpWhenItsBaseMoves(t *testing.T) {
 		unopened, all("idle", "GH-1", "GH-2"),
 		all("working", "GH-1", "GH-2"),
 		listing("GH-1", "idle", "GH-2", "working"), // GH-1's judge ends: it is idle, and its branch moved
-		listing("GH-1", "idle", "GH-2", "working"), // the look before GH-1's ship
 		listing("GH-1", "working", "GH-2", "idle"), // GH-2's judge ends
-		listing("GH-1", "working", "GH-2", "idle"), // the look before its catchup
 		all("working", "GH-1", "GH-2"),
 		listing("GH-1", "working", "GH-2", "idle"), // the catchup ends
-		listing("GH-1", "working", "GH-2", "idle"), // the look before GH-2's ship
 		listing("GH-1", "idle", "GH-2", "working"),
 		all("idle", "GH-1", "GH-2"))
 

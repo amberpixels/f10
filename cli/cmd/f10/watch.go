@@ -1187,7 +1187,8 @@ func (in watchInput) integrate(
 
 	unmark := func() { _ = branchmeta.Unset(ctx, in.main, task.branch, target.key) } // nobody will clear it
 
-	rec, err := catchupRecord(ctx, in.main, task.path, task.branch, target.key, in.now())
+	// readTargets fetched origin for this pass
+	rec, err := catchupRecord(ctx, in.main, task.path, task.branch, target.key, in.now(), &fetchOnce{done: task.fetched})
 	if err != nil {
 		unmark()
 		in.warnf("%s skipped this pass: %v", task.id, err)

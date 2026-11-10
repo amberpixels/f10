@@ -152,19 +152,20 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) (err error) {
 
 		in.retryPull(ctx, w)
 
-		wss, live, err := in.lookAll(ctx)
+		view, err := in.lookAll(ctx)
 		if err != nil {
 			return err
 		}
 
-		in.wss = wss
+		in.tick, in.wss = view, view.wss
+		wss := view.wss
 
 		for _, r := range runs {
 			if !r.active() {
 				continue
 			}
 
-			if err := in.onTask(ctx, w, r, in.poll(ctx, w, r, wss, live)); err != nil {
+			if err := in.onTask(ctx, w, r, in.poll(ctx, w, r)); err != nil {
 				return fmt.Errorf("%s: %w", r.task.ref.ID, err)
 			}
 		}
@@ -430,7 +431,7 @@ func (in *driveInput) markBehind(ctx context.Context, w io.Writer, r *driveRun) 
 		return nil
 	}
 
-	if _, err := gitx.Exec(ctx, in.main, "fetch", "origin"); err != nil {
+	if err := in.view().fetch.fetch(ctx, in.main); err != nil {
 		return skip("fetching origin", err)
 	}
 

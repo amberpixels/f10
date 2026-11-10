@@ -390,7 +390,7 @@ func (t treeState) left() string {
 // from. A read git cannot answer fails: a record made up would halt a
 // healthy task, or loop on a doomed one.
 func catchupRecord(
-	ctx context.Context, main, dir, branch string, key branchmeta.Key, now time.Time,
+	ctx context.Context, main, dir, branch string, key branchmeta.Key, now time.Time, fetched *fetchOnce,
 ) (*drives.Catchup, error) {
 	target, base, err := catchupTarget(ctx, main, branch, key)
 	if err != nil {
@@ -407,7 +407,7 @@ func catchupRecord(
 		return nil, err
 	}
 
-	origin, err := originTip(ctx, dir, branch)
+	origin, err := originTip(ctx, dir, branch, fetched)
 	if err != nil {
 		return nil, err
 	}
@@ -455,7 +455,7 @@ func conflictPaths(conflicts []gitx.Conflict) string {
 
 // originTip is origin's copy of the branch, fetched first when origin has
 // it, since a mark set earlier may follow no fetch at all.
-func originTip(ctx context.Context, dir, branch string) (string, error) {
+func originTip(ctx context.Context, dir, branch string, fetched *fetchOnce) (string, error) {
 	tracking := "refs/remotes/origin/" + branch
 
 	pushed, err := gitx.Ref(ctx, dir, tracking)
@@ -463,7 +463,7 @@ func originTip(ctx context.Context, dir, branch string) (string, error) {
 		return pushed, err
 	}
 
-	if _, err := gitx.Exec(ctx, dir, "fetch", "origin"); err != nil {
+	if err := fetched.fetch(ctx, dir); err != nil {
 		return "", fmt.Errorf("fetching origin before catching %s up: %w", branch, err)
 	}
 

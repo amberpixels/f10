@@ -83,6 +83,7 @@ type driveInput struct {
 	parallel        int
 	defaultParallel int
 	wss             []agentctl.Workspace // the last look's workspaces, for the cap's working check
+	tick            *tickView            // this tick's look; before the first, one with no workspaces
 
 	draining atomic.Bool // set by SIGUSR1: stop at the next tick, ending no task
 	launched bool        // a session typed this drive: not a --resume, not an --answer relay

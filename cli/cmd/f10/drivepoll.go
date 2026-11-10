@@ -63,8 +63,6 @@ func (in *driveInput) poll(
 	ctx context.Context,
 	w io.Writer,
 	r *driveRun,
-	wss []agentctl.Workspace,
-	live []*state.Run,
 ) error {
 	id, skill := r.task.ref.ID, r.skill
 
@@ -88,15 +86,13 @@ func (in *driveInput) poll(
 		return in.send(ctx, w, r, r.skill)
 	}
 
-	ws := workspaceByID(wss, r.o.ws.ID)
+	ws := workspaceByID(in.view().wss, r.o.ws.ID)
 	if ws == nil {
 		return in.workspaceGone(r)
 	}
 
-	var run *state.Run
-	if runs := inRoot(live, r.o.path); len(runs) > 0 {
-		run = r.current(runs[0])
-	}
+	run, _ := in.run(r.o.path)
+	run = r.current(run)
 
 	now := in.now()
 	since := r.sentAt.Truncate(time.Second) // the state file keeps whole seconds
