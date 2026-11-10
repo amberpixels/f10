@@ -169,9 +169,9 @@ func (in *driveInput) keepPace(
 	}
 
 	switch {
-	case in.args.pace != "":
-		if recorded != in.args.pace {
-			if err := branchmeta.Set(ctx, in.main, branch, branchmeta.Pace, in.args.pace); err != nil {
+	case in.args.Pace != "":
+		if recorded != in.args.Pace {
+			if err := branchmeta.Set(ctx, in.main, branch, branchmeta.Pace, in.args.Pace); err != nil {
 				return runplan.ShipFlow{}, "", fmt.Errorf("recording the pace: %w", err)
 			}
 		}

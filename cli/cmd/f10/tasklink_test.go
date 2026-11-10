@@ -20,6 +20,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/standup"
+	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasktree"
 )
@@ -255,11 +256,11 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 		"status": func(t *testing.T, on bool) string {
 			var out bytes.Buffer
 
-			rows := []taskRow{
-				{ID: "FT-1", URL: issueURL("FT-1"), Stage: stageDone},
+			rows := []statusview.TaskRow{
+				{ID: "FT-1", URL: issueURL("FT-1"), Stage: statusview.StageDone},
 				{ID: "FT-2", URL: issueURL("FT-2")},
 			}
-			if err := renderRows(&out, rows, rowView{term: on, plain: !on}); err != nil {
+			if err := statusview.RenderRows(&out, rows, statusview.RowView{Term: on, Plain: !on}); err != nil {
 				t.Fatal(err)
 			}
 
@@ -317,13 +318,13 @@ var plainIDPrint = regexp.MustCompile(
 // (relative to the module root) and a piece of the line, so they stay plain
 // on purpose.
 var machineRead = map[string]string{
-	"internal/hostops/host.go": `"# %s: %s\n\n"`,                // the task as markdown, for an agent
-	"cmd/f10/taskwrite.go":     `"%s  %s  ->  %s\n"`,            // retitle's change list, plain since it was written
-	"cmd/f10/reviewround.go":   `"  %s %s - %s\n"`,              // a declined round, read by the review step
-	"cmd/f10/review.go":        `"%s  %s  %s\n"`,                // review pick, parsed
-	"cmd/f10/pr.go":            `"task: %s\n"`,                  // pr view, parsed
-	"cmd/f10/taskref.go":       `"%s: %v"`,                      // a warning on stderr
-	"cmd/f10/taskreport.go":    `"%s: %v: no subtasks to list"`, // a warning on stderr
+	"internal/hostops/host.go":    `"# %s: %s\n\n"`,                // the task as markdown, for an agent
+	"cmd/f10/taskwrite.go":        `"%s  %s  ->  %s\n"`,            // retitle's change list, plain since it was written
+	"cmd/f10/reviewround.go":      `"  %s %s - %s\n"`,              // a declined round, read by the review step
+	"cmd/f10/review.go":           `"%s  %s  %s\n"`,                // review pick, parsed
+	"cmd/f10/pr.go":               `"task: %s\n"`,                  // pr view, parsed
+	"internal/statusview/refs.go": `"%s: %v"`,                      // a warning on stderr
+	"cmd/f10/taskreport.go":       `"%s: %v: no subtasks to list"`, // a warning on stderr
 }
 
 // commandSources are the non-test files of the command tree: cmd/f10 and
@@ -368,6 +369,16 @@ func commandSources(t *testing.T) []string {
 // new print of a bare task id in any file, which must go through taskLinks or
 // be listed in machineRead.
 func TestNoPlainTaskIDPrints(t *testing.T) {
+	used := map[string]bool{}
+
+	t.Cleanup(func() {
+		for f := range machineRead {
+			if !used[f] {
+				t.Errorf("machineRead names %s, but no print there matches it: move the entry with its line", f)
+			}
+		}
+	})
+
 	for _, f := range commandSources(t) {
 		src, err := os.ReadFile(filepath.Join("..", "..", f))
 		if err != nil {
@@ -380,6 +391,8 @@ func TestNoPlainTaskIDPrints(t *testing.T) {
 			}
 
 			if allowed, ok := machineRead[f]; ok && strings.Contains(line, allowed) {
+				used[f] = true
+
 				continue
 			}
 

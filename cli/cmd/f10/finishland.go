@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/trace"
 )
 
@@ -121,7 +122,7 @@ func landMerge(ctx context.Context, w io.Writer, in finishInput, d finishDecisio
 			return landing{}, err
 		}
 	} else {
-		in.step("merging " + pullNumber(p.URL))
+		in.step("merging " + statusview.PullNumber(p.URL))
 
 		if p, notes, err = landPull(ctx, in, name, def, p); err != nil {
 			return landing{}, err
@@ -145,7 +146,7 @@ func landMerge(ctx context.Context, w io.Writer, in finishInput, d finishDecisio
 
 	l.end = &archive.SeriesEnd{Pr: "none", Head: sha}
 	if !unpushed {
-		l.end.Pr = pullNumber(p.URL)
+		l.end.Pr = statusview.PullNumber(p.URL)
 	}
 
 	notes = appendNote(notes, d.loreNote)
@@ -301,7 +302,7 @@ func putLastState(ctx context.Context, in finishInput, branch, body string) (str
 		Step:   "finish",
 		Task:   in.task.ID,
 		Riders: in.task.Riders(),
-		After:  branchAfter(ctx, in.main, branch),
+		After:  statusview.BranchAfter(ctx, in.main, branch),
 	})
 	if err != nil || out == body {
 		return body, err

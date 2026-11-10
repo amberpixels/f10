@@ -20,6 +20,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/daemon"
+	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
@@ -28,6 +29,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/worktree"
@@ -618,7 +620,7 @@ func decideWatch(t watchedTask, mode string, now time.Time) (*watchReport, bool)
 		}
 	}
 
-	if !stoppedRun(run) && run.Ship != "done" {
+	if !driverec.StoppedRun(run) && run.Ship != "done" {
 		return nil, false
 	}
 
@@ -716,7 +718,7 @@ func collectWatched(ctx context.Context, in watchInput) ([]watchedTask, int, err
 			task.pr, task.hostErr = j.request(ctx, b)
 		}
 
-		if runs := inRoot(live, path); len(runs) > 0 {
+		if runs := statusview.InRoot(live, path); len(runs) > 0 {
 			task.run = runs[0]
 			task.background = backgroundAt(in.stateDir, task.run)
 		}

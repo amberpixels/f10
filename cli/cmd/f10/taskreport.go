@@ -12,6 +12,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasktree"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -39,7 +40,7 @@ func runTaskReport(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
-	known := taskRefsFor(t, ctx, refs, true, false, cmd.ErrWriter)
+	known := statusview.TaskRefsFor(t, ctx, refs, true, false, cmd.ErrWriter)
 
 	if cmd.Bool("children") {
 		return writeParentTree(ctx, cmd, t, tokens[0], refs[0], known[refs[0].ID])

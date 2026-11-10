@@ -134,7 +134,7 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) (err error) {
 	defer in.leaveRuns(context.WithoutCancel(ctx), runs)
 
 	for !stopping(runs) {
-		if err := in.sleep(ctx, in.args.every); err != nil {
+		if err := in.sleep(ctx, in.args.Every); err != nil {
 			return err
 		}
 
@@ -223,9 +223,9 @@ func (in *driveInput) id(id string) string {
 func (in *driveInput) resolveProfiles() {
 	in.profiles = map[string]agentctl.Profile{}
 
-	base := in.layers.With(in.args.agent, runplan.AgentFlagOrigin)
+	base := in.layers.With(in.args.Agent, runplan.AgentFlagOrigin)
 
-	for _, raw := range append([]string{""}, in.args.profiles...) {
+	for _, raw := range append([]string{""}, in.args.Profiles...) {
 		if _, done := in.profiles[raw]; done {
 			continue
 		}
@@ -243,8 +243,8 @@ func (in *driveInput) resolveProfiles() {
 // else the run-wide one over the map's default. A range's tasks have no
 // index of their own, i < 0.
 func (in *driveInput) profileFor(i int) agentctl.Profile {
-	if i >= 0 && i < len(in.args.profiles) && in.args.profiles[i] != "" {
-		return in.profiles[in.args.profiles[i]]
+	if i >= 0 && i < len(in.args.Profiles) && in.args.Profiles[i] != "" {
+		return in.profiles[in.args.Profiles[i]]
 	}
 
 	return in.profiles[""]
@@ -253,7 +253,7 @@ func (in *driveInput) profileFor(i int) agentctl.Profile {
 // profileFlagged says the command line chose the task's profile, so a
 // rerun does not keep the one its branch recorded.
 func (in *driveInput) profileFlagged(i int) bool {
-	return in.args.agent != "" || i >= 0 && i < len(in.args.profiles) && in.args.profiles[i] != ""
+	return in.args.Agent != "" || i >= 0 && i < len(in.args.Profiles) && in.args.Profiles[i] != ""
 }
 
 // stopping reports whether the drive ends: no task is active, or one asks

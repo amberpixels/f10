@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"maps"
 	"strings"
 
 	"github.com/urfave/cli/v3"
@@ -14,9 +13,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
-	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // Text that leaves the machine names another task by its title and url.
@@ -60,7 +59,7 @@ func runTaskRef(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
-	known := taskRefsFor(t, ctx, refs, md, cmd.Bool("fresh"), cmd.ErrWriter)
+	known := statusview.TaskRefsFor(t, ctx, refs, md, cmd.Bool("fresh"), cmd.ErrWriter)
 
 	for i, token := range tokens {
 		if _, err := fmt.Fprintln(cmd.Writer, refLine(token, refs[i].ID, known[refs[i].ID], md)); err != nil {
@@ -84,61 +83,6 @@ func refLine(token, id string, k ledger.TaskRef, md bool) string {
 	return id + " (" + k.Title + ")"
 }
 
-// taskRefs asks the tracker only for a task the ledger lacks (or lacks a
-// url for, with md), or for every task with fresh; a tracker that cannot
-// answer leaves the task out, with a note on warn.
-func taskRefsFor(t *target.Target,
-	ctx context.Context,
-	refs []ref.Ref,
-	md, fresh bool,
-	warn io.Writer,
-) map[string]ledger.TaskRef {
-	project := t.RefProject(ctx)
-
-	var ids []string
-
-	for _, r := range refs {
-		if r.ID != "" {
-			ids = append(ids, r.ID)
-		}
-	}
-
-	known := map[string]ledger.TaskRef{}
-	if !fresh && project != "" {
-		maps.Copy(known, ledger.LookupRefs(ctx, project, ids))
-	}
-
-	var read []ledger.TaskRef
-
-	for _, r := range refs {
-		if k, ok := known[r.ID]; r.ID == "" || (ok && k.Title != "" && (!md || k.URL != "")) {
-			continue
-		}
-
-		k, err := lookupRefFor(ctx, t, r)
-		if err != nil {
-			ui.Warnf(warn, "%s: %v", r.ID, err)
-			delete(known, r.ID)
-
-			continue
-		}
-
-		known[r.ID] = k
-		read = append(read, k)
-	}
-
-	if project != "" {
-		ledger.RememberRefs(ctx, project, read...)
-	}
-
-	return known
-}
-
-//nolint:lostfield // a lookup through the target, not a conversion of it
-func lookupRefFor(ctx context.Context, t *target.Target, r ref.Ref) (ledger.TaskRef, error) {
-	return hostops.TasksFor(t).Ref(ctx, r)
-}
-
 // linkBodyAfter links the body's `After: <id>` line to the base task, so a
 // tracker reader sees what it waits for; a base f10 cannot title stays
 // bare, since create never fails over a link.
@@ -153,7 +97,7 @@ func linkBodyAfterFor(ctx context.Context, t *target.Target, doc string, warn io
 		return doc
 	}
 
-	k := taskRefsFor(t, ctx, []ref.Ref{r}, true, false, warn)[r.ID]
+	k := statusview.TaskRefsFor(t, ctx, []ref.Ref{r}, true, false, warn)[r.ID]
 	if k.Title == "" || k.URL == "" {
 		return doc
 	}

@@ -20,6 +20,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -263,7 +264,7 @@ func finishInputFor(t *target.Target, main string, h hostops.Host, task ref.Ref)
 		method:     t.Effective.MergeMethod,
 		traces:     t.Effective.Traces,
 		hostCloses: t.HostCloses(),
-		loreStore:  &lore.Store{Root: loreRootFor(t)},
+		loreStore:  &lore.Store{Root: statusview.LoreRootFor(t)},
 		gate:       t.Effective.LoreGate,
 		storage:    t.Layout.StorageRoot,
 		title:      worktree.TitleLookup(t, task.Number),

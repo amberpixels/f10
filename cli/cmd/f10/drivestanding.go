@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
@@ -24,18 +25,12 @@ func guardStop(run *state.Run) bool {
 // awaitsDecision is a stop a catchup must not run over: a question or a
 // blocked decision, not one a catchup leaves in place (heldStop).
 func awaitsDecision(run *state.Run) bool {
-	return run != nil && stoppedRun(run) && !heldStop(run) && (run.Ask != "" || blockedRun(run))
+	return run != nil && driverec.StoppedRun(run) && !heldStop(run) && (run.Ask != "" || blockedRun(run))
 }
 
 // heldStop is a ship stop a catchup leaves in place: the guard's, or a
 // ship parked on its base, which resumes once the catchup ends clean.
 func heldStop(run *state.Run) bool { return guardStop(run) || run.Wait != "" }
-
-func stoppedRun(r *state.Run) bool {
-	_, stopped := r.StoppedPhase()
-
-	return stopped
-}
 
 // phaseRunning reports run's plan or ship phase still running: the two
 // phases a turn owns, so the turn has not reported its end.

@@ -16,6 +16,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/observe"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/target"
 )
 
@@ -99,5 +100,5 @@ func hookStatusText(ctx context.Context, session string) (string, bool) {
 		return "f10: " + err.Error(), false
 	}
 
-	return statusText(ctx, dir, session)
+	return statusview.StatusText(ctx, dir, session)
 }

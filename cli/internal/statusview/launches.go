@@ -1,4 +1,4 @@
-package main
+package statusview
 
 import (
 	"cmp"
@@ -18,14 +18,14 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
-// launchesHead heads the tree of what this session launched.
-const launchesHead = "launched here"
+// LaunchesHead heads the tree of what this session launched.
+const LaunchesHead = "launched here"
 
-// dropRows leaves out the rows drop picks, in tree order: what hung under a
+// DropRows leaves out the rows drop picks, in tree order: what hung under a
 // dropped row moves up to its level.
-func dropRows(rows []taskRow, drop func(taskRow) bool) []taskRow {
+func DropRows(rows []TaskRow, drop func(TaskRow) bool) []TaskRow {
 	var (
-		out []taskRow
+		out []TaskRow
 		cut []int // the depths of the dropped rows above this one
 	)
 
@@ -123,7 +123,7 @@ func launchKids(ctx context.Context, warn io.Writer, t *target.Target, sid strin
 	// titles from the ledger, the tracker only on a miss: the typed status
 	// answers inside a hook with a short timeout, and a row with no title
 	// still reads, so a failed lookup says nothing
-	known := taskRefsFor(t, ctx, refs, false, false, io.Discard)
+	known := TaskRefsFor(t, ctx, refs, false, false, io.Discard)
 	for i := range kids {
 		kids[i].Title, kids[i].URL = tasktitle.Clean(known[kids[i].ID].Title, kids[i].ID), known[kids[i].ID].URL
 	}
@@ -145,7 +145,7 @@ func launchBase(
 	if branched {
 		if x, err := stack.LoadBranchIndex(ctx, main); err == nil {
 			if b, err := x.Find(ctx, "", id, suffix, stack.PolicyLocal); err == nil && b.Name != "" {
-				base = cmp.Or(branchAfter(ctx, main, b.Name), base)
+				base = cmp.Or(BranchAfter(ctx, main, b.Name), base)
 			}
 		}
 	}

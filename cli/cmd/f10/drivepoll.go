@@ -7,6 +7,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -147,7 +148,7 @@ func (in *driveInput) poll(
 		r.skill, skill = "catchup", "catchup"
 	}
 
-	if recent && stoppedRun(run) {
+	if recent && driverec.StoppedRun(run) {
 		switch {
 		case skill == "ship" && run.Wait != "":
 			return in.park(ctx, r, run)

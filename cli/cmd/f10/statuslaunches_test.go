@@ -14,6 +14,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/target"
 )
 
@@ -93,12 +94,12 @@ func (fx launchFixture) status(t *testing.T, args ...string) string {
 	return runApp(t, append([]string{"status"}, args...)...).must(t)
 }
 
-func (fx launchFixture) rows(t *testing.T) []taskRow {
+func (fx launchFixture) rows(t *testing.T) []statusview.TaskRow {
 	t.Helper()
 
 	out := fx.status(t, "--json")
 
-	var rows []taskRow
+	var rows []statusview.TaskRow
 	if err := json.Unmarshal([]byte(out), &rows); err != nil {
 		t.Fatalf("not a row list: %v\n%s", err, out)
 	}
@@ -106,7 +107,7 @@ func (fx launchFixture) rows(t *testing.T) []taskRow {
 	return rows
 }
 
-func rowIDs(rows []taskRow) string {
+func rowIDs(rows []statusview.TaskRow) string {
 	ids := make([]string, len(rows))
 	for i, r := range rows {
 		ids[i] = r.ID + ":" + r.Stage
@@ -142,7 +143,7 @@ func TestBareStatusListsTheSessionLaunches(t *testing.T) {
 	if plain := fx.status(
 		t,
 		"--plain",
-	); !strings.HasPrefix(plain, launchesHead) ||
+	); !strings.HasPrefix(plain, statusview.LaunchesHead) ||
 		!strings.Contains(plain, "Refactor?") {
 		t.Errorf("plain tree:\n%s", plain)
 	}
@@ -288,16 +289,16 @@ func TestBareStatusIgnoresAFinishedBase(t *testing.T) {
 
 // Dropping a row moves what hung under it up to its level.
 func TestDropRowsLiftsTheDroppedRowsChildren(t *testing.T) {
-	rows := []taskRow{
-		{ID: "A", Depth: 0, Stage: stageDone},
+	rows := []statusview.TaskRow{
+		{ID: "A", Depth: 0, Stage: statusview.StageDone},
 		{ID: "B", Depth: 1},
-		{ID: "C", Depth: 2, Stage: stageDone},
+		{ID: "C", Depth: 2, Stage: statusview.StageDone},
 		{ID: "D", Depth: 3},
 		{ID: "E", Depth: 1},
 		{ID: "F", Depth: 0},
 	}
 
-	got := dropRows(rows, func(r taskRow) bool { return r.Stage == stageDone })
+	got := statusview.DropRows(rows, func(r statusview.TaskRow) bool { return r.Stage == statusview.StageDone })
 
 	var b strings.Builder
 	for _, r := range got {
@@ -373,7 +374,7 @@ func TestHookStatusTextReportsAsks(t *testing.T) {
 	fx.launch(t, state.LaunchStart, "DM-1")
 
 	text, asks := hookStatusText(t.Context(), "sess-1")
-	if asks || !strings.HasPrefix(text, launchesHead) {
+	if asks || !strings.HasPrefix(text, statusview.LaunchesHead) {
 		t.Errorf("no ask: asks = %v, text:\n%s", asks, text)
 	}
 
@@ -414,12 +415,12 @@ func TestBareStatusUnopenedTaskTakesTheDrivesFlow(t *testing.T) {
 
 	for _, row := range rows {
 		for _, g := range row.Gates {
-			if g.Step == "judge" && g.State != gateOff || g.Local != nil {
+			if g.Step == "judge" && g.State != statusview.GateOff || g.Local != nil {
 				t.Errorf("%s: gate %+v is the default flow's, not prose's", row.ID, g)
 			}
 		}
 
-		if gc := row.gateColumn(); gc != "" {
+		if gc := row.GateColumn(); gc != "" {
 			t.Errorf("%s: gate column = %q, want none", row.ID, gc)
 		}
 	}

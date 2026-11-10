@@ -13,6 +13,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/lookaround"
 	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/tasktree"
 	"github.com/amberpixels/f10/cli/internal/textx"
 )
@@ -129,7 +130,7 @@ func renderSummary(w io.Writer, boards []lookaround.Board, now time.Time, limit 
 		case failed != "":
 			parts = append(
 				parts,
-				red.Render("failed")+"  "+faint.Render(cutError(firstLine(failed), limit, limit-nameW-10)),
+				red.Render("failed")+"  "+faint.Render(cutError(statusview.FirstLine(failed), limit, limit-nameW-10)),
 			)
 		case b.View == lookaround.ViewFeed:
 			parts = append(parts, feedCounts(b, faint)...)
@@ -151,7 +152,7 @@ func renderSummary(w io.Writer, boards []lookaround.Board, now time.Time, limit 
 						red.Render(
 							s.Name+" failed",
 						)+"  "+faint.Render(
-							cutError(firstLine(s.Error), limit, limit-nameW-40),
+							cutError(statusview.FirstLine(s.Error), limit, limit-nameW-40),
 						),
 					)
 				}
@@ -304,12 +305,6 @@ func cutError(s string, limit, n int) string {
 	return textx.Cut(s, max(n, 10))
 }
 
-func firstLine(s string) string {
-	line, _, _ := strings.Cut(s, "\n")
-
-	return line
-}
-
 // boardNode is a board line as a tree row: the title fills what the
 // terminal leaves, and the tail (PRs, who, next) follows it.
 func boardNode(r boardLine, project string, withProject bool, links *render.TaskLinks) tasktree.Node {
@@ -354,7 +349,7 @@ func boardNode(r boardLine, project string, withProject bool, links *render.Task
 
 	cells = append(cells,
 		tasktree.Cell{Text: r.Key, Render: func(string) string { return links.ID(project, r.Key) }},
-		tasktree.Cell{Text: r.Stage, Render: func(s string) string { return stageStyle(r.Stage).Render(s) }},
+		tasktree.Cell{Text: r.Stage, Render: func(s string) string { return statusview.StageStyle(r.Stage).Render(s) }},
 		tasktree.Cell{Text: from, Render: faint},
 		tasktree.Cell{Text: r.Title, Fill: true},
 		tasktree.Cell{Text: strings.Join(tail, "  "), Render: faint},
@@ -384,42 +379,4 @@ func rowURL(r lookaround.Row) string {
 	}
 
 	return ""
-}
-
-// stageStyle is the one palette on both stage vocabularies, status's and
-// the board's, by how much a stage needs you: done green, asking, halted or
-// blocked red, implementing yellow, reviewing orange, planning blue, idle dim.
-func stageStyle(stage string) lipgloss.Style {
-	s := lipgloss.NewStyle()
-
-	switch stage {
-	case stageDone, lookaround.GroupFinished:
-		return s.Foreground(lipgloss.Color("2"))
-	case stageShipped:
-		return s.Faint(true).Foreground(lipgloss.Color("2"))
-	case lookaround.StageReady:
-		return s.Bold(true).Foreground(lipgloss.Color("2"))
-	case stageAsking, stageHalted, lookaround.StageAsksWaiting, lookaround.StageBlocked:
-		return s.Bold(true).Foreground(lipgloss.Color("1"))
-	case "abandoned":
-		return s.Foreground(lipgloss.Color("1"))
-	case stageImplementing:
-		return s.Foreground(lipgloss.Color("3"))
-	case stageReviewing, stageResolving, lookaround.StageInReview, lookaround.StagePROpen:
-		return s.Foreground(lipgloss.Color("208"))
-	case stagePlanning, stageJudging:
-		return s.Foreground(lipgloss.Color("4"))
-	case stagePlanned:
-		return s.Faint(true).Foreground(lipgloss.Color("4"))
-	case lookaround.StageMergedUnfinished:
-		return s.Bold(true).Foreground(lipgloss.Color("6"))
-	case lookaround.GroupStarted:
-		return s.Bold(true).Foreground(lipgloss.Color("4"))
-	case lookaround.GroupUpdated:
-		return s.Bold(true).Foreground(lipgloss.Color("3"))
-	case lookaround.GroupReviewed:
-		return s.Bold(true).Foreground(lipgloss.Color("5"))
-	default:
-		return s.Faint(true)
-	}
 }

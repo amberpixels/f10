@@ -35,6 +35,7 @@ var Table = []Rule{
 	{Prefix: "internal/launch", Rank: 2, Peers: true},
 	{Prefix: "internal/driverec", Rank: 2, Peers: true},
 	{Prefix: "internal/asknotify", Rank: 2, Peers: true},
+	{Prefix: "internal/statusview", Rank: 2, Peers: true},
 	{Prefix: "cmd/f10", Rank: 9},
 	{Prefix: "cmd/f10eval", Rank: 9},
 }

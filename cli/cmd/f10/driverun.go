@@ -10,6 +10,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/asks"
 	"github.com/amberpixels/f10/cli/internal/driver"
+	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/hostops"
@@ -35,7 +36,7 @@ type driveInput struct {
 type driveConfig struct {
 	main string
 	root string // the storage root as a path for per-run state: the record, the leases, the asks; "" keeps none
-	args driveArgs
+	args driverec.DriveArgs
 	argv []string // the command line as given, for the resume command
 	// sequence is the skills a task on fl goes through; nil is driveSkills,
 	// read off the flow, and a test runs the machinery on any skill

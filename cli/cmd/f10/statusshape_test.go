@@ -14,6 +14,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/statusview"
 )
 
 // objectKeys is the sorted top-level keys of one JSON object.
@@ -75,7 +76,7 @@ func TestStatusTaskJSONShape(t *testing.T) {
 	}
 
 	var entry struct {
-		Shipment shipment `json:"shipment"`
+		Shipment statusview.Shipment `json:"shipment"`
 	}
 	if err := json.Unmarshal(runs[0], &entry); err != nil {
 		t.Fatal(err)
@@ -161,7 +162,7 @@ func TestStateShowPrintsTheRunBlock(t *testing.T) {
 	}
 
 	var want bytes.Buffer
-	runRows(&want, saved, runView{showRoot: true, now: time.Now()})
+	statusview.RunRows(&want, saved, statusview.RunView{ShowRoot: true, Now: time.Now()})
 
 	// the saved run's updated time differs by the save; compare the rest
 	cut := func(s string) string { before, _, _ := strings.Cut(s, "updated"); return before }

@@ -12,12 +12,12 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/archive"
-	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/trace"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -202,7 +202,7 @@ func runTraceState(ctx context.Context, cmd *cli.Command) error {
 
 	u := trace.Update{
 		Step:  cmd.String("step"),
-		After: branchAfter(ctx, t.Dir, branch),
+		After: statusview.BranchAfter(ctx, t.Dir, branch),
 		Round: countFlag(cmd, "round"),
 		Open:  countFlag(cmd, "open"),
 		Asks:  countFlag(cmd, "asks"),
@@ -274,10 +274,6 @@ func countFlag(cmd *cli.Command, name string) *int {
 	n := cmd.Int(name)
 
 	return &n
-}
-
-func branchAfter(ctx context.Context, dir, branch string) string {
-	return branchmeta.Out(ctx, dir, branch, branchmeta.After)
 }
 
 // reviewCounts reads the three review flags: all or none, since a Review:

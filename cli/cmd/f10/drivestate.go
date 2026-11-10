@@ -55,7 +55,7 @@ func (in *driveInput) readState(ctx context.Context, r *driveRun, run *state.Run
 	s.plan = r.o.plan != "" || fsx.Exists(in.storage.Plan(lead))
 
 	o := readOutcomes(nil, in.storage.Path(), lead)
-	s.reviews, s.changeJudged = len(o.local)+len(o.remote), o.changeJudge != nil
+	s.reviews, s.changeJudged = len(o.Local)+len(o.Remote), o.ChangeJudge != nil
 
 	if in.pull != nil && s.origin != "" {
 		if p, err := in.pull(ctx, branch); err == nil && p.Status == "open" {

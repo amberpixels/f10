@@ -16,10 +16,10 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/gitx"
-	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/reviews"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -168,7 +168,7 @@ func loreFor(ctx context.Context, cmd *cli.Command) (*loreEnv, error) {
 			return nil, err
 		}
 
-		root = loreRootFor(t)
+		root = statusview.LoreRootFor(t)
 	}
 
 	return &loreEnv{
@@ -176,14 +176,6 @@ func loreFor(ctx context.Context, cmd *cli.Command) (*loreEnv, error) {
 		cwd:   cwd,
 		top:   top,
 	}, nil
-}
-
-func loreRootFor(t *target.Target) string {
-	if t.Effective.Lore == "committed" {
-		return filepath.Join(t.Layout.CheckoutRoot, ".lore")
-	}
-
-	return localLoreRoot(t.Layout)
 }
 
 // loreNote names each missing kind, so a change that reached finish without a
@@ -221,11 +213,6 @@ func loreNote(store *lore.Store, change string) string {
 	}
 
 	return "lore: " + strings.Join(parts, ", ")
-}
-
-// localLoreRoot is the lore dir every checkout shares.
-func localLoreRoot(lay *layout.Layout) string {
-	return lay.StorageRoot.Lore()
 }
 
 // repoPath is the repo-relative, slash-separated form anchors use.
@@ -397,7 +384,7 @@ func runLoreShow(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	series := loreSeries(changes, change)
+	series := statusview.LoreSeries(changes, change)
 	all := []lore.Entry{}
 
 	for i, c := range series {
@@ -430,30 +417,6 @@ func runLoreShow(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	return nil
-}
-
-// loreSeries is the changes a show of id reads: every <id>.<n> newest first,
-// then id itself; a change named with its number, or a task with one PR,
-// is that change alone.
-func loreSeries(changes []string, id string) []string {
-	var later []int
-
-	for _, c := range changes {
-		rest, ok := strings.CutPrefix(c, id+".")
-		if n, err := strconv.Atoi(rest); ok && err == nil && n > 1 {
-			later = append(later, n)
-		}
-	}
-
-	slices.Sort(later)
-	slices.Reverse(later)
-
-	out := make([]string, 0, len(later)+1)
-	for _, n := range later {
-		out = append(out, id+"."+strconv.Itoa(n))
-	}
-
-	return append(out, id)
 }
 
 // runLoreChange archives a series whose PR merged without finish first, as

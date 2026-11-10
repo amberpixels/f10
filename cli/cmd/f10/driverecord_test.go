@@ -184,15 +184,15 @@ func TestOpenRecordKeepsAnswersNotTaken(t *testing.T) {
 		argv: []string{"GH-1", "GH-2", "--answer", "GH-2=2. maybe"},
 		now:  time.Now,
 	}
-	in.args.answers = []string{"GH-2=2. maybe"}
+	in.args.Answers = []string{"GH-2=2. maybe"}
 
 	if err := in.openRecord(answerTasks("GH-1", "GH-2")); err != nil {
 		t.Fatal(err)
 	}
 	defer in.releaseAll()
 
-	if want := []string{"GH-1=1. yes", "GH-2=2. maybe"}; !slices.Equal(in.args.answers, want) {
-		t.Errorf("answers = %q, want %q", in.args.answers, want)
+	if want := []string{"GH-1=1. yes", "GH-2=2. maybe"}; !slices.Equal(in.args.Answers, want) {
+		t.Errorf("answers = %q, want %q", in.args.Answers, want)
 	}
 
 	// the drive's own lease is held: a second drive on the record refuses
@@ -221,7 +221,7 @@ func TestOpenRecordReplacesABareAnswerHoldingEquals(t *testing.T) {
 		argv: []string{"GH-1", "--answer", "use x=1"},
 		now:  time.Now,
 	}
-	in.args.answers = []string{"use x=1"}
+	in.args.Answers = []string{"use x=1"}
 
 	tasks := answerTasks("GH-1")
 	if err := in.openRecord(tasks); err != nil {
@@ -229,8 +229,8 @@ func TestOpenRecordReplacesABareAnswerHoldingEquals(t *testing.T) {
 	}
 	defer in.releaseAll()
 
-	if want := []string{"use x=1"}; !slices.Equal(in.args.answers, want) {
-		t.Errorf("answers = %q, want %q", in.args.answers, want)
+	if want := []string{"use x=1"}; !slices.Equal(in.args.Answers, want) {
+		t.Errorf("answers = %q, want %q", in.args.Answers, want)
 	}
 
 	if err := in.takeAnswers(tasks); err != nil || in.answers.bare != "use x=1" {
@@ -404,24 +404,27 @@ func TestDriveListLeavesARunningDrive(t *testing.T) {
 func TestParseDriveSubcommands(t *testing.T) {
 	cases := []struct {
 		args []string
-		want driveArgs
+		want driverec.DriveArgs
 		err  string
 	}{
-		{args: []string{"list"}, want: driveArgs{list: true}},
-		{args: []string{"list", "--all"}, want: driveArgs{list: true, all: true}},
+		{args: []string{"list"}, want: driverec.DriveArgs{List: true}},
+		{args: []string{"list", "--all"}, want: driverec.DriveArgs{List: true, All: true}},
 		{args: []string{"list", "GH-1"}, err: "only --all"},
-		{args: []string{"cancel", "3"}, want: driveArgs{cancel: 3}},
+		{args: []string{"cancel", "3"}, want: driverec.DriveArgs{Cancel: 3}},
 		{args: []string{"cancel"}, err: "one drive number"},
 		{args: []string{"cancel", "x"}, err: "not a drive number"},
-		{args: []string{"--resume", "2", "--answer", "1. yes"}, want: driveArgs{
-			resume: 2, answers: []string{"1. yes"}, every: defaultEvery,
+		{args: []string{"--resume", "2", "--answer", "1. yes"}, want: driverec.DriveArgs{
+			Resume: 2, Answers: []string{"1. yes"}, Every: driverec.DefaultEvery,
 		}},
 		{args: []string{"--resume=2", "GH-1"}, err: "takes only --answer, --every and --parallel"},
-		{args: []string{"--resume", "2", "--parallel=3"}, want: driveArgs{resume: 2, parallel: 3, every: defaultEvery}},
+		{
+			args: []string{"--resume", "2", "--parallel=3"},
+			want: driverec.DriveArgs{Resume: 2, Parallel: 3, Every: driverec.DefaultEvery},
+		},
 	}
 
 	for _, c := range cases {
-		got, err := parseDriveArgs(c.args)
+		got, err := driverec.ParseDriveArgs(c.args)
 
 		switch {
 		case c.err != "":
@@ -430,8 +433,8 @@ func TestParseDriveSubcommands(t *testing.T) {
 			}
 		case err != nil:
 			t.Errorf("%q: %v", c.args, err)
-		case got.list != c.want.list || got.all != c.want.all || got.cancel != c.want.cancel ||
-			got.resume != c.want.resume || got.parallel != c.want.parallel || !slices.Equal(got.answers, c.want.answers):
+		case got.List != c.want.List || got.All != c.want.All || got.Cancel != c.want.Cancel ||
+			got.Resume != c.want.Resume || got.Parallel != c.want.Parallel || !slices.Equal(got.Answers, c.want.Answers):
 			t.Errorf("%q = %+v, want %+v", c.args, got, c.want)
 		}
 	}
@@ -488,8 +491,8 @@ func TestOpenRecordRecordsTheLaunch(t *testing.T) {
 		t.Errorf("a rerun rewrote the record's session to %q", in.rec.Session)
 	}
 
-	open("sess-3", func(in *driveInput) { in.args.resume = 1 })
-	open("sess-4", func(in *driveInput) { in.args.answers = []string{"1. yes"} })
+	open("sess-3", func(in *driveInput) { in.args.Resume = 1 })
+	open("sess-4", func(in *driveInput) { in.args.Answers = []string{"1. yes"} })
 
 	for session, want := range map[string]string{"sess-1": "drive 1\n", "sess-2": "drive 1\n", "sess-3": "", "sess-4": ""} {
 		b, err := os.ReadFile(state.LaunchesPath(stateDir, session))
@@ -515,7 +518,7 @@ func TestOpenRecordKeepsTheCap(t *testing.T) {
 			stateDir:        t.TempDir(),
 			argv:            argv,
 			defaultParallel: 6,
-			args:            driveArgs{parallel: parallel},
+			args:            driverec.DriveArgs{Parallel: parallel},
 			now:             time.Now,
 		}
 		if err := in.openRecord(nil); err != nil {

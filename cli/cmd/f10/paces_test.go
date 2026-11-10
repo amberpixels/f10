@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/launch"
@@ -179,7 +180,7 @@ func TestDriveKeepsTheRecordedPace(t *testing.T) {
 
 		in := &driveInput{
 			main:  "/code/repo",
-			args:  driveArgs{pace: tc.flag},
+			args:  driverec.DriveArgs{Pace: tc.flag},
 			paced: paced,
 		}
 
@@ -192,12 +193,12 @@ func TestDriveKeepsTheRecordedPace(t *testing.T) {
 }
 
 func TestDriveTakesPace(t *testing.T) {
-	a, err := parseDriveArgs([]string{"GH-1", "--pace", "Fast"})
-	if err != nil || a.pace != "fast" {
+	a, err := driverec.ParseDriveArgs([]string{"GH-1", "--pace", "Fast"})
+	if err != nil || a.Pace != "fast" {
 		t.Errorf("--pace = %+v, %v", a, err)
 	}
 
-	if _, err := parseDriveArgs([]string{"GH-1", "--pace", "fast", "--pace=slow"}); err == nil {
+	if _, err := driverec.ParseDriveArgs([]string{"GH-1", "--pace", "fast", "--pace=slow"}); err == nil {
 		t.Error("two paces were taken")
 	}
 }

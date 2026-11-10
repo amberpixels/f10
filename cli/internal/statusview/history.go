@@ -1,4 +1,4 @@
-package main
+package statusview
 
 import (
 	"fmt"
@@ -15,9 +15,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/timing"
 )
 
-// reviewRound counts one findings file. Ask is a finding still waiting on
+// ReviewRound counts one findings file. Ask is a finding still waiting on
 // a verdict: an `ask`, or none written yet.
-type reviewRound struct {
+type ReviewRound struct {
 	Round   string `json:"round"`
 	Found   int    `json:"found"`
 	Fixed   int    `json:"fixed"`
@@ -25,21 +25,21 @@ type reviewRound struct {
 	Ask     int    `json:"ask"`
 }
 
-// fileOutcomes reads the task's findings and verdict files: a round is the
+// FileOutcomes reads the task's findings and verdict files: a round is the
 // remote half's when its reviewer is not local (a file both halves wrote
 // counts once each), and a verdict goes by its subject: task, plan or change.
 // Verdict files written before since are dropped: the judge writes them per
 // task, so an earlier PR's verdicts share the directory.
-func fileOutcomes(storageRoot, task string, since time.Time) outcomes {
-	var o outcomes
+func FileOutcomes(storageRoot, task string, since time.Time) Outcomes {
+	var o Outcomes
 
 	for _, rf := range reviewRounds(storageRoot, task) {
 		if rf.remote {
-			o.remote, o.remoteAt = append(o.remote, rf.round), rf.at
-			o.remoteRaised += rf.raised
+			o.Remote, o.RemoteAt = append(o.Remote, rf.round), rf.at
+			o.RemoteRaised += rf.raised
 		} else {
-			o.local, o.localAt = append(o.local, rf.round), rf.at
-			o.localRaised += rf.raised
+			o.Local, o.LocalAt = append(o.Local, rf.round), rf.at
+			o.LocalRaised += rf.raised
 		}
 	}
 
@@ -50,21 +50,21 @@ func fileOutcomes(storageRoot, task string, since time.Time) outcomes {
 
 		switch v.Judged {
 		case "task":
-			o.taskJudge, o.taskAt = &v.Outcome, v.At
+			o.TaskJudge, o.taskAt = &v.Outcome, v.At
 		case "plan":
-			o.planJudge, o.planAt = &v.Outcome, v.At
+			o.PlanJudge, o.planAt = &v.Outcome, v.At
 		default:
-			o.changeJudge, o.changeAt = &v.Outcome, v.At
+			o.ChangeJudge, o.changeAt = &v.Outcome, v.At
 		}
 	}
 
 	return o
 }
 
-// shipSteps is the steps the session's last ship run claimed before until.
+// ShipSteps is the steps the session's last ship run claimed before until.
 // Only a phase skill begins a run, so resolve or catchup mid-pipeline does
 // not end it; a step claimed again right after itself is one entry.
-func shipSteps(events []ledger.Event, session string, until time.Time) []string {
+func ShipSteps(events []ledger.Event, session string, until time.Time) []string {
 	var steps []string
 
 	inShip := false
@@ -105,7 +105,7 @@ func shipSteps(events []ledger.Event, session string, until time.Time) []string 
 // roundFile is one half of a findings file: its counts, whether it is the
 // remote half, and when the file was last written.
 type roundFile struct {
-	round  reviewRound
+	round  ReviewRound
 	raised int // findings new in this round, a prior one reopened not counted
 	remote bool
 	at     time.Time
@@ -140,7 +140,7 @@ func reviewRounds(storageRoot, task string) []roundFile {
 			}
 
 			rounds = append(rounds, roundFile{
-				round: reviewRound{
+				round: ReviewRound{
 					Round: f.Round, Found: t.Found, Fixed: t.Fixed, Skipped: t.Skipped, Ask: t.Open,
 				},
 				raised: t.Raised,
@@ -155,7 +155,7 @@ func reviewRounds(storageRoot, task string) []roundFile {
 
 // reviewText is one round's counts, or each round's, named, when there are
 // several.
-func reviewText(rounds []reviewRound) string {
+func reviewText(rounds []ReviewRound) string {
 	if len(rounds) == 1 {
 		return roundText(rounds[0])
 	}
@@ -168,7 +168,7 @@ func reviewText(rounds []reviewRound) string {
 	return strings.Join(parts, "; ")
 }
 
-func roundText(r reviewRound) string {
+func roundText(r ReviewRound) string {
 	if r.Found == 0 {
 		return "clean"
 	}

@@ -139,7 +139,7 @@ func closeDriveAsks(dir, root string, n int, now time.Time) {
 func (in *driveInput) takeAnswers(tasks []driveTask) error {
 	in.answers = newAnswerBook()
 
-	for _, a := range in.args.answers {
+	for _, a := range in.args.Answers {
 		if id, text, ok := keyedAnswer(a, tasks); ok {
 			in.answers.give(answer{task: id, text: text, from: fromFlag})
 

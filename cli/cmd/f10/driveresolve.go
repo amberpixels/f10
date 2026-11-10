@@ -112,7 +112,7 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 		return nil
 	}
 
-	if in.args.span {
+	if in.args.Span {
 		from, to, err := in.span(ctx)
 		if err != nil {
 			return nil, nil, err
@@ -127,7 +127,7 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 		return tasks, notes, nil
 	}
 
-	for i, tok := range in.args.tasks {
+	for i, tok := range in.args.Tasks {
 		id, suffix := ref.SplitSuffix(tok)
 
 		r, err := in.tracker.Resolve(ctx, id)
@@ -162,15 +162,15 @@ func (in *driveInput) refuseParent(ctx context.Context, r ref.Ref) error {
 }
 
 func (in *driveInput) span(ctx context.Context) (ref.Ref, ref.Ref, error) {
-	if slices.ContainsFunc(in.args.tasks, func(t string) bool { return strings.Contains(t, ref.Separator) }) {
+	if slices.ContainsFunc(in.args.Tasks, func(t string) bool { return strings.Contains(t, ref.Separator) }) {
 		return ref.Ref{}, ref.Ref{}, errors.New("a range's ends are single ids: list a bundle on its own")
 	}
-	from, err := in.tracker.Resolve(ctx, in.args.tasks[0])
+	from, err := in.tracker.Resolve(ctx, in.args.Tasks[0])
 	if err != nil {
 		return ref.Ref{}, ref.Ref{}, err
 	}
 
-	to, err := in.tracker.Resolve(ctx, in.args.tasks[1])
+	to, err := in.tracker.Resolve(ctx, in.args.Tasks[1])
 	if err != nil {
 		return ref.Ref{}, ref.Ref{}, err
 	}

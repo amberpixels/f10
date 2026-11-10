@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/stack"
@@ -65,7 +66,7 @@ func (in *driveInput) send(ctx context.Context, r *driveRun, skill string) error
 	case r.retry:
 		// an attempt failed: the action goes again, whatever the run says
 		return in.prompt(ctx, r, ws, skill, "")
-	case run != nil && stoppedRun(run):
+	case run != nil && driverec.StoppedRun(run):
 		answer := in.takeAnswer(id)
 		if answer == "" {
 			// a catchup clears a mark but restores the ship stop it noted, so

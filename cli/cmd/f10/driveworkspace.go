@@ -7,6 +7,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
@@ -86,7 +87,7 @@ func (in *driveInput) run(path string) (*state.Run, error) {
 		return in.runNow(path)
 	}
 
-	if runs := inRoot(in.view().live, path); len(runs) > 0 {
+	if runs := statusview.InRoot(in.view().live, path); len(runs) > 0 {
 		return runs[0], nil
 	}
 
@@ -99,7 +100,7 @@ func (in *driveInput) runNow(path string) (*state.Run, error) {
 		return nil, err
 	}
 
-	if runs := inRoot(live, path); len(runs) > 0 {
+	if runs := statusview.InRoot(live, path); len(runs) > 0 {
 		return runs[0], nil
 	}
 

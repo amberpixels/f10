@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/statusview"
 )
 
 func TestFileLink(t *testing.T) {
@@ -78,16 +79,16 @@ func TestWriteReportLinksPaths(t *testing.T) {
 
 // The plan row sits in the facts block, which links it once and never wraps.
 func TestStatusFallbackLinksPlan(t *testing.T) {
-	fb := taskFallback(
-		taskStatusInput{id: "GH-1", root: "/tmp"},
+	fb := statusview.TaskFallback(
+		statusview.TaskStatusInput{ID: "GH-1", Root: "/tmp"},
 		nil,
-		shipment{Task: "GH-1", Plan: "/tmp/.f10/plans/GH-1.md"},
+		statusview.Shipment{Task: "GH-1", Plan: "/tmp/.f10/plans/GH-1.md"},
 	)
 
 	withTerminal(t, true)
 
 	var out bytes.Buffer
-	fb.render(&out, 30, true)
+	fb.Render(&out, 30, true)
 
 	spans := linkSpan.FindAllStringSubmatch(out.String(), -1)
 	if len(spans) != 1 || spans[0][1] != "file:///tmp/.f10/plans/GH-1.md" {
@@ -95,7 +96,7 @@ func TestStatusFallbackLinksPlan(t *testing.T) {
 	}
 
 	out.Reset()
-	fb.render(&out, 0, false)
+	fb.Render(&out, 0, false)
 
 	if strings.Contains(out.String(), "\x1b]8;;") {
 		t.Errorf("unlinked render carries a link:\n%q", out.String())

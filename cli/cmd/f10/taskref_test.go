@@ -11,6 +11,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/target"
 )
 
@@ -97,7 +98,7 @@ func TestTaskRefsLedgerThenTracker(t *testing.T) {
 
 	var warn strings.Builder
 
-	got := taskRefsFor(tg, t.Context(), refs, true, false, &warn)
+	got := statusview.TaskRefsFor(tg, t.Context(), refs, true, false, &warn)
 	if got["FT-109"].Title != "Base task" || got["FT-132"].URL != "https://github.com/o/r/issues/132" {
 		t.Errorf("refs = %+v", got)
 	}
@@ -108,7 +109,7 @@ func TestTaskRefsLedgerThenTracker(t *testing.T) {
 
 	f.calls = nil
 
-	got = taskRefsFor(tg, t.Context(), refs[:2], true, false, &warn)
+	got = statusview.TaskRefsFor(tg, t.Context(), refs[:2], true, false, &warn)
 	if len(f.calls) != 0 || got["FT-132"].Title != "Second" {
 		t.Errorf("second lookup called %v, refs %+v", f.calls, got)
 	}
@@ -118,7 +119,7 @@ func TestTaskRefsLedgerThenTracker(t *testing.T) {
 		`{"title":"Renamed","url":"https://github.com/o/r/issues/109"}`,
 	)
 
-	if got := taskRefsFor(tg, t.Context(), refs[:1], false, true, &warn); got["FT-109"].Title != "Renamed" {
+	if got := statusview.TaskRefsFor(tg, t.Context(), refs[:1], false, true, &warn); got["FT-109"].Title != "Renamed" {
 		t.Errorf("fresh = %+v", got)
 	}
 

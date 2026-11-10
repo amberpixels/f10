@@ -186,7 +186,7 @@ func runDaemonLogs(ctx context.Context, cmd *cli.Command) error {
 	path := daemon.LogPath(dir)
 
 	if arg := cmd.Args().First(); arg != "" {
-		n, err := driveNumber(arg)
+		n, err := driverec.DriveNumber(arg)
 		if err != nil {
 			return err
 		}
@@ -224,7 +224,7 @@ func runDaemonLogs(ctx context.Context, cmd *cli.Command) error {
 	return err
 }
 
-func driveThroughDaemon(ctx context.Context, w io.Writer, t *target.Target, argv []string, a driveArgs) error {
+func driveThroughDaemon(ctx context.Context, w io.Writer, t *target.Target, argv []string, a driverec.DriveArgs) error {
 	dir, ver := daemon.RunDir(), buildinfo.Version()
 
 	cwd, err := os.Getwd()
@@ -242,14 +242,14 @@ func driveThroughDaemon(ctx context.Context, w io.Writer, t *target.Target, argv
 
 	// a rerun may attach to the drive still running, which reads its cap
 	// from the record each tick
-	if a.parallel > 0 {
+	if a.Parallel > 0 {
 		setDriveParallel(w, t.Layout.StorageRoot.Path(), argv, a)
 	}
 
 	// a drive given answers starts its own process, so the answers reach it
-	if len(a.answers) == 0 {
-		req.Resume = a.resume
-		if a.resume == 0 {
+	if len(a.Answers) == 0 {
+		req.Resume = a.Resume
+		if a.Resume == 0 {
 			req.Key = drives.Key(recordArgs(argv))
 		}
 	}
@@ -265,23 +265,23 @@ func driveThroughDaemon(ctx context.Context, w io.Writer, t *target.Target, argv
 
 // setDriveParallel writes a given --parallel into the record --resume names
 // or this command line picks up; with none, the new drive records it itself.
-func setDriveParallel(w io.Writer, root string, argv []string, a driveArgs) {
+func setDriveParallel(w io.Writer, root string, argv []string, a driverec.DriveArgs) {
 	var (
 		rec *drives.Record
 		err error
 	)
 
-	if a.resume > 0 {
-		rec, err = drives.Read(root, a.resume)
+	if a.Resume > 0 {
+		rec, err = drives.Read(root, a.Resume)
 	} else {
 		rec, err = drives.Find(root, recordArgs(argv))
 	}
 
-	if err != nil || rec == nil || rec.Parallel == a.parallel {
+	if err != nil || rec == nil || rec.Parallel == a.Parallel {
 		return
 	}
 
-	if _, err := drives.Update(root, rec.Number, func(r *drives.Record) { r.Parallel = a.parallel }); err != nil {
+	if _, err := drives.Update(root, rec.Number, func(r *drives.Record) { r.Parallel = a.Parallel }); err != nil {
 		fmt.Fprintf(w, "  recording drive %d's --parallel: %v\n", rec.Number, err)
 	}
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -233,17 +234,17 @@ func TestBundleAfter(t *testing.T) {
 }
 
 func TestDriveParsesABundle(t *testing.T) {
-	a, err := parseDriveArgs(strings.Fields("GH-1+GH-2:opus GH-3"))
+	a, err := driverec.ParseDriveArgs(strings.Fields("GH-1+GH-2:opus GH-3"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if strings.Join(a.tasks, " ") != "GH-1+GH-2 GH-3" || a.profiles[0] != "opus" {
-		t.Errorf("tasks %v profiles %v, want the bundle whole with its profile", a.tasks, a.profiles)
+	if strings.Join(a.Tasks, " ") != "GH-1+GH-2 GH-3" || a.Profiles[0] != "opus" {
+		t.Errorf("tasks %v profiles %v, want the bundle whole with its profile", a.Tasks, a.Profiles)
 	}
 
 	in := &driveInput{
-		args: driveArgs{tasks: []string{"GH-1+GH-2", "GH-5"}, span: true},
+		args: driverec.DriveArgs{Tasks: []string{"GH-1+GH-2", "GH-5"}, Span: true},
 	}
 	if _, _, err := in.span(t.Context()); err == nil {
 		t.Error("a bundle as a range end was taken")

@@ -25,10 +25,10 @@ type ChildRow struct {
 	Finished bool     `json:"finished"`
 	Depth    int      `json:"depth"`
 
-	Number int
-	Suffix string // a launched start's worktree suffix: the checkout read is that one
-	Queued bool   // a drive's cap holds it back
-	Phase  string // where its drive's record says it stands, a drives.Phase name
+	Number int    `json:"-"`
+	Suffix string `json:"-"` // a launched start's worktree suffix: the checkout read is that one
+	Queued bool   `json:"-"` // a drive's cap holds it back
+	Phase  string `json:"-"` // where its drive's record says it stands, a drives.Phase name
 }
 
 // RawChildrenFor is the task's subtasks as the tracker holds them;

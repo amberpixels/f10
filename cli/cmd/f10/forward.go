@@ -19,6 +19,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 	"github.com/amberpixels/f10/cli/internal/worktree"
@@ -180,7 +181,7 @@ func refuseStalled(in stallCheck, ws *agentctl.Workspace, agent, root string) er
 		return err
 	}
 
-	for _, r := range inRoot(live, root) {
+	for _, r := range statusview.InRoot(live, root) {
 		if r.Updated.Before(in.since) {
 			continue
 		}

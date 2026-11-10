@@ -63,8 +63,8 @@ func recordArgs(argv []string) []string {
 			continue
 		}
 
-		if f, ok := driveFlagNamed(name); ok && f.tunes {
-			if f.value != "" && !inline {
+		if f, ok := driverec.DriveFlagNamed(name); ok && f.Tunes {
+			if f.Value != "" && !inline {
 				i++
 			}
 
@@ -80,20 +80,20 @@ func recordArgs(argv []string) []string {
 // openRecord folds the record's kept answers under the ones given now; a
 // root of "" keeps no record.
 func (in *driveInput) openRecord(tasks []driveTask) error {
-	in.parallel = cmp.Or(in.args.parallel, in.defaultParallel)
+	in.parallel = cmp.Or(in.args.Parallel, in.defaultParallel)
 
 	if in.root == "" {
 		return nil
 	}
 
 	// before the kept answers join the ones given now
-	in.launched = in.args.resume == 0 && len(in.args.answers) == 0
+	in.launched = in.args.Resume == 0 && len(in.args.Answers) == 0
 
 	var err error
 
 	switch {
-	case in.args.resume > 0:
-		in.rec, err = drives.Read(in.root, in.args.resume)
+	case in.args.Resume > 0:
+		in.rec, err = drives.Read(in.root, in.args.Resume)
 		if err == nil && in.rec.Cancelled != nil {
 			err = fmt.Errorf("drive %d was cancelled: run the same command without --resume to start a new one",
 				in.rec.Number)
@@ -110,16 +110,16 @@ func (in *driveInput) openRecord(tasks []driveTask) error {
 		in.rec = &drives.Record{
 			Created:  in.now(),
 			Args:     recordArgs(in.argv),
-			Flow:     in.args.flow,
-			Agent:    in.args.agent,
+			Flow:     in.args.Flow,
+			Agent:    in.args.Agent,
 			Session:  in.session,
 			Parallel: in.parallel,
 		}
 
 		for i, t := range tasks {
 			profile := ""
-			if i < len(in.args.profiles) {
-				profile = in.args.profiles[i]
+			if i < len(in.args.Profiles) {
+				profile = in.args.Profiles[i]
 			}
 
 			in.rec.Tasks = append(in.rec.Tasks, drives.Task{
@@ -145,7 +145,7 @@ func (in *driveInput) openRecord(tasks []driveTask) error {
 	in.own = own
 
 	// the drive keeps the cap it started with, unless this run passes one
-	in.parallel = cmp.Or(in.args.parallel, in.rec.Parallel, in.defaultParallel)
+	in.parallel = cmp.Or(in.args.Parallel, in.rec.Parallel, in.defaultParallel)
 	if in.rec.Parallel != in.parallel {
 		in.save(func(rec *drives.Record) { rec.Parallel = in.parallel })
 	}
@@ -157,7 +157,7 @@ func (in *driveInput) openRecord(tasks []driveTask) error {
 	for _, key := range slices.Sorted(maps.Keys(in.rec.Answers)) {
 		text := in.rec.Answers[key]
 		if key == "" {
-			if !slices.ContainsFunc(in.args.answers, func(a string) bool {
+			if !slices.ContainsFunc(in.args.Answers, func(a string) bool {
 				_, _, keyed := keyedAnswer(a, tasks)
 
 				return !keyed
@@ -168,7 +168,7 @@ func (in *driveInput) openRecord(tasks []driveTask) error {
 			continue
 		}
 
-		if !slices.ContainsFunc(in.args.answers, func(a string) bool {
+		if !slices.ContainsFunc(in.args.Answers, func(a string) bool {
 			id, _, keyed := keyedAnswer(a, tasks)
 
 			return keyed && strings.EqualFold(id, key)
@@ -177,7 +177,7 @@ func (in *driveInput) openRecord(tasks []driveTask) error {
 		}
 	}
 
-	in.args.answers = append(kept, in.args.answers...)
+	in.args.Answers = append(kept, in.args.Answers...)
 
 	return nil
 }

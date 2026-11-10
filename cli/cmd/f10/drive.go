@@ -16,6 +16,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/asknotify"
 	"github.com/amberpixels/f10/cli/internal/asks"
 	"github.com/amberpixels/f10/cli/internal/daemon"
+	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/hostops"
@@ -65,9 +66,7 @@ func driveCommand() *cli.Command {
 }
 
 const (
-	// defaultEvery is the fallback look: a run-state write wakes a drive
-	// sooner (drivewait.go)
-	defaultEvery = 30 * time.Second
+
 	// promptSettle is how old a prompt mark must be before an idle agent
 	// beside it reads as a turn that ended, not one Herdr has yet to show
 	promptSettle = 5 * time.Second
@@ -88,41 +87,41 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		return cli.ShowSubcommandHelp(cmd)
 	}
 
-	a, err := parseDriveArgs(argv)
+	a, err := driverec.ParseDriveArgs(argv)
 	if err != nil {
 		return err
 	}
 
-	if a.list || a.cancel > 0 {
+	if a.List || a.Cancel > 0 {
 		t, err := target.For(ctx, cmd)
 		if err != nil {
 			return err
 		}
 
-		if a.list {
+		if a.List {
 			return driveList(
 				ctx,
 				cmd.Writer,
 				render.LinksFor(cmd.Writer, false),
 				t.RefProject(ctx),
 				t.Layout.StorageRoot.Path(),
-				a.all,
+				a.All,
 				rowFinishedFor(ctx, t),
 			)
 		}
 
-		if err := driveCancel(cmd.Writer, t.Layout.StorageRoot.Path(), a.cancel, time.Now()); err != nil {
+		if err := driveCancel(cmd.Writer, t.Layout.StorageRoot.Path(), a.Cancel, time.Now()); err != nil {
 			return err
 		}
 
-		closeDriveAsks(asks.Dir(), t.Layout.StorageRoot.Path(), a.cancel, time.Now())
+		closeDriveAsks(asks.Dir(), t.Layout.StorageRoot.Path(), a.Cancel, time.Now())
 
 		return nil
 	}
 
 	// the daemon may drain this drive before it opens anything: the signal
 	// waits in the channel until the loop exists to take it
-	drain, unwatch := watchDrain(a.fore)
+	drain, unwatch := watchDrain(a.Fore)
 	defer unwatch()
 
 	if err := worktree.Agents("").Available(); err != nil {
@@ -135,34 +134,34 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	// the drive outlives this process unless asked to run in it
-	if !a.fore && daemon.Supported {
+	if !a.Fore && daemon.Supported {
 		return driveThroughDaemon(ctx, cmd.Writer, t, argv, a)
 	}
 
 	// a resume runs the record's own command line, with the answers and
 	// --every given now
-	if a.resume > 0 {
-		rec, err := drives.Read(t.Layout.StorageRoot.Path(), a.resume)
+	if a.Resume > 0 {
+		rec, err := drives.Read(t.Layout.StorageRoot.Path(), a.Resume)
 		if err != nil {
 			return err
 		}
 
 		given := a
-		if a, err = parseDriveArgs(rec.Args); err != nil {
+		if a, err = driverec.ParseDriveArgs(rec.Args); err != nil {
 			return fmt.Errorf("drive %d: %w", rec.Number, err)
 		}
 
-		a.resume, a.answers, a.every, a.fore = given.resume, given.answers, given.every, given.fore
-		a.parallel = given.parallel
+		a.Resume, a.Answers, a.Every, a.Fore = given.Resume, given.Answers, given.Every, given.Fore
+		a.Parallel = given.Parallel
 		argv = rec.Args
 	}
 
-	run, err := runplan.ResolveRun(ctx, t.Effective, runplan.RunInput{Pace: a.pace})
+	run, err := runplan.ResolveRun(ctx, t.Effective, runplan.RunInput{Pace: a.Pace})
 	if err != nil {
 		return err
 	}
 
-	fl, err := run.Flow(a.flow)
+	fl, err := run.Flow(a.Flow)
 	if err != nil {
 		return err
 	}

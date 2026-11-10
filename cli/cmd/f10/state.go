@@ -14,6 +14,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/asks"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -77,10 +78,10 @@ func stateCommand() *cli.Command {
 						return err
 					}
 
-					runRows(
+					statusview.RunRows(
 						cmd.Writer,
 						r,
-						runView{showRoot: r.Root != "", now: time.Now(), limit: ui.Width(cmd.Writer)},
+						statusview.RunView{ShowRoot: r.Root != "", Now: time.Now(), Limit: ui.Width(cmd.Writer)},
 					)
 
 					return nil

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/daemon"
+	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -37,7 +38,7 @@ func fastTurn(t *testing.T) *driveFixture {
 func TestDriveSeesATurnBetweenTwoLooks(t *testing.T) {
 	fx := fastTurn(t)
 	fx.onTick[1] = func() {
-		at := fx.clock.Add(-defaultEvery + time.Second)
+		at := fx.clock.Add(-driverec.DefaultEvery + time.Second)
 		if err := state.MarkPrompt(fx.in.stateDir, "s-1", "/code/repo.GH-1", at); err != nil {
 			t.Fatal(err)
 		}
@@ -156,8 +157,8 @@ func TestRecordArgsDropsForeground(t *testing.T) {
 		t.Errorf("recordArgs = %v", got)
 	}
 
-	a, err := parseDriveArgs([]string{"GH-1", "--foreground"})
-	if err != nil || !a.fore {
+	a, err := driverec.ParseDriveArgs([]string{"GH-1", "--foreground"})
+	if err != nil || !a.Fore {
 		t.Errorf("parse = %+v, %v", a, err)
 	}
 }

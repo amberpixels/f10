@@ -43,7 +43,7 @@ type RemoteReview struct {
 	// Host is the review as the host keeps it, which every write goes back
 	// through; its Stored is the text an ack edits, since Body folds an
 	// inline review's comments in and writing that back would copy them
-	Host forge.Note
+	Host forge.Note `json:"-"`
 }
 
 // ErrNoReview is pick finding nothing to return: no review by the reviewer,
