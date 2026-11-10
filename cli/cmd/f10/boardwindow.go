@@ -2,14 +2,11 @@ package main
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
-	"github.com/amberpixels/years"
-
+	"github.com/amberpixels/f10/cli/internal/calendar"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
-	"github.com/amberpixels/f10/cli/internal/standup"
 )
 
 // A boardSpan is the window the argument named, or for the feed's default
@@ -31,17 +28,11 @@ func (s boardSpan) from() time.Time {
 
 const boardStateWindow = 7 * 24 * time.Hour
 
-// fixedClock is years' clock read at the board's now, so every span is
-// cut from the same instant the board reports.
-type fixedClock struct{ t time.Time }
-
-func (c fixedClock) Now() time.Time { return c.t }
-
-// resolveBoardSpan goes through years, which owns every calendar rule.
+// resolveBoardSpan goes through calendar, which owns every calendar rule.
 // Working days are read only when the default or `last-workday` needs them;
 // the state view takes a start alone, seven days back without a window.
 func resolveBoardSpan(
-	arg string, state bool, now time.Time, workdays func() (standup.Workdays, error),
+	arg string, state bool, now time.Time, workdays func() (calendar.Workdays, error),
 ) (boardSpan, error) {
 	arg = strings.TrimSpace(arg)
 
@@ -49,31 +40,23 @@ func resolveBoardSpan(
 		return boardSpan{named: &lookaround.Window{Since: now.Add(-boardStateWindow)}}, nil
 	}
 
-	opts := append(slices.Clone(years.GetParserDefaults()),
-		years.WithLocation(now.Location()), years.WithWeekStart(time.Monday), years.WithCustomClock(fixedClock{now}))
+	// a broken standup.md is its own error, not a window misspelled
+	var workdaysErr error
 
-	if arg == "" || arg == "last-workday" {
+	read := func() (calendar.Workdays, error) {
 		w, err := workdays()
-		if err != nil {
-			return boardSpan{}, err
-		}
+		workdaysErr = err
 
-		var days []time.Weekday
-
-		for d, on := range w {
-			if on {
-				days = append(days, time.Weekday(d))
-			}
-		}
-
-		opts = append(opts, years.WithWorkdays(days...))
+		return w, err
 	}
 
-	p := years.NewParser(opts...)
-
 	window := func(name string) (lookaround.Window, error) {
-		period, err := p.JustParsePeriod(name)
+		period, err := calendar.Parse(name, now, calendar.Windows, read)
 		if err != nil {
+			if workdaysErr != nil {
+				return lookaround.Window{}, workdaysErr
+			}
+
 			return lookaround.Window{}, fmt.Errorf(
 				"window %q: want today, yesterday, last-workday, this-week, last-week, a date or a time", name)
 		}

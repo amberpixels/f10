@@ -110,7 +110,6 @@ func boardInputs(ctx context.Context, t *target, warn io.Writer, since time.Time
 		Project: lookaround.Project{ID: place.Project, Name: t.lay.Project, Remote: remote},
 		Prefix:  t.eff.IDPrefix,
 		Since:   since,
-		Remote:  remote,
 	}
 
 	if !remote {
@@ -127,7 +126,7 @@ func boardInputs(ctx context.Context, t *target, warn io.Writer, since time.Time
 	}
 
 	if t.pb.RemoteURL == "" {
-		in.LocalOnly, in.Project.LocalOnly = true, true
+		in.Project.LocalOnly = true
 
 		if t.driver() == nil {
 			in.Tasks = nil
@@ -182,7 +181,6 @@ func repoInputs(r repoRef, warn io.Writer, since time.Time) lookaround.Inputs {
 		Project: lookaround.Project{ID: r.id(), Name: r.name(), Host: r.CLI, Remote: true},
 		Prefix:  r.Prefix,
 		Since:   since,
-		Remote:  true,
 		Host:    &h.Host,
 		Tasks: func(ctx context.Context) ([]lookaround.Task, error) {
 			rows, err := h.listIssues(ctx, "", r.Prefix, nil, boardPage)

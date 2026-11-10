@@ -74,8 +74,8 @@ func renderSources(w io.Writer, b lookaround.Board, project string) {
 		switch n.Status {
 		case "skipped":
 			fmt.Fprintln(w, lead+faint.Render(n.Name+"  skipped"))
-		case localOnly:
-			fmt.Fprintln(w, lead+faint.Render(localOnly))
+		case lookaround.NoteLocalOnly:
+			fmt.Fprintln(w, lead+faint.Render(lookaround.NoteLocalOnly))
 		default:
 			fmt.Fprintln(w, lead+red.Render(n.Name+"  failed")+"  "+faint.Render(n.Error))
 		}
@@ -158,7 +158,7 @@ func renderSummary(w io.Writer, boards []lookaround.Board, now time.Time, limit 
 		}
 
 		if b.Project.LocalOnly {
-			parts = append(parts, faint.Render(localOnly))
+			parts = append(parts, faint.Render(lookaround.NoteLocalOnly))
 		}
 
 		fmt.Fprintf(w, "%-*s  %s\n", nameW, b.Project.Name, strings.Join(parts, "  "))

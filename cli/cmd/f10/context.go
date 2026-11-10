@@ -173,6 +173,17 @@ func (t *target) idOf(ctx context.Context) func(string) string {
 	}
 }
 
+// optionalHost is the host, or nil for a checkout with no host CLI: a
+// reader that works without one skips it rather than failing.
+func (t *target) optionalHost() *host {
+	h, err := t.host()
+	if err != nil {
+		return nil
+	}
+
+	return &h
+}
+
 // host is the CLI the probe settled on; a wrong guess opens the wrong site,
 // so "unknown" refuses rather than picking.
 func (t *target) host() (host, error) {

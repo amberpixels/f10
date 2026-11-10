@@ -56,13 +56,9 @@ func newStatusReader(t *target, now time.Time) (*statusReader, error) {
 		return nil, err
 	}
 
-	rd := &statusReader{t: t, now: now, main: cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot), live: live}
-
-	if h, err := t.host(); err == nil {
-		rd.host = &h
-	}
-
-	return rd, nil
+	return &statusReader{
+		t: t, now: now, main: cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot), live: live, host: t.optionalHost(),
+	}, nil
 }
 
 // ledger is the project's events. A ledger that is missing or will not

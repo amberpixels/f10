@@ -200,3 +200,20 @@ func TestStatsTakesTheCheckoutAndABareNumber(t *testing.T) {
 		t.Errorf("stats -C %s 1 found no DM-1:\n%s", repo, out)
 	}
 }
+
+// --since takes a count of days or weeks and nothing else.
+func TestStatsCutoff(t *testing.T) {
+	now := time.Date(2026, 10, 14, 9, 0, 0, 0, time.UTC)
+
+	for arg, want := range map[string]time.Time{"30d": now.AddDate(0, 0, -30), "2w": now.AddDate(0, 0, -14)} {
+		if got, err := statsCutoff(arg, now); err != nil || !got.Equal(want) {
+			t.Errorf("statsCutoff(%q) = %v, %v, want %v", arg, got, err, want)
+		}
+	}
+
+	for _, bad := range []string{"", "0d", "3651d", "2026-10-01", "yesterday", "12h", "3mo", "x"} {
+		if _, err := statsCutoff(bad, now); err == nil {
+			t.Errorf("statsCutoff(%q) took it", bad)
+		}
+	}
+}

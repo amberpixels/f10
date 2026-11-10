@@ -13,6 +13,7 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/amberpixels/f10/cli/internal/calendar"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/projects"
@@ -166,22 +167,22 @@ func readBoardConfig() (boardConfig, string, error) {
 var weekdays = map[string]int{"sun": 0, "mon": 1, "tue": 2, "wed": 3, "thu": 4, "fri": 5, "sat": 6}
 
 // readWorkdays is Monday to Friday when standup.md is missing or does not say.
-func readWorkdays() (standup.Workdays, error) {
+func readWorkdays() (calendar.Workdays, error) {
 	cfg, path, err := readStandupConfig()
 	if err != nil {
-		return standup.Workdays{}, err
+		return calendar.Workdays{}, err
 	}
 
 	if cfg.Workdays == nil {
-		return standup.DefaultWorkdays(), nil
+		return calendar.DefaultWorkdays(), nil
 	}
 
-	var w standup.Workdays
+	var w calendar.Workdays
 
 	for _, name := range cfg.Workdays {
 		d, ok := weekdays[strings.ToLower(strings.TrimSpace(name))]
 		if !ok {
-			return standup.Workdays{}, fmt.Errorf(
+			return calendar.Workdays{}, fmt.Errorf(
 				"%s: workdays: %q is not a day (mon, tue, wed, thu, fri, sat, sun)",
 				path,
 				name,
@@ -191,8 +192,8 @@ func readWorkdays() (standup.Workdays, error) {
 		w[d] = true
 	}
 
-	if w == (standup.Workdays{}) {
-		return standup.Workdays{}, fmt.Errorf("%s: workdays names no day", path)
+	if w == (calendar.Workdays{}) {
+		return calendar.Workdays{}, fmt.Errorf("%s: workdays names no day", path)
 	}
 
 	return w, nil

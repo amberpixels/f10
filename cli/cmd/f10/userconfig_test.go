@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/calendar"
 	"github.com/amberpixels/f10/cli/internal/standup"
 )
 
@@ -87,7 +88,7 @@ func TestReadWorkdays(t *testing.T) {
 			continue
 		}
 
-		var want standup.Workdays
+		var want calendar.Workdays
 		for _, d := range c.want {
 			want[d] = true
 		}
@@ -99,7 +100,7 @@ func TestReadWorkdays(t *testing.T) {
 
 	isolateEnv(t)
 
-	if got, err := readWorkdays(); err != nil || got != standup.DefaultWorkdays() {
+	if got, err := readWorkdays(); err != nil || got != calendar.DefaultWorkdays() {
 		t.Errorf("no file: %v, %v, want Monday to Friday", got, err)
 	}
 }
@@ -177,7 +178,7 @@ func TestStandupFallsBackToTheLastWorkingDay(t *testing.T) {
 	dir := r.dir
 
 	now := time.Now()
-	day := standup.LastWorkingDay(now, standup.DefaultWorkdays(), nil)
+	day := calendar.LastActiveWorkday(now, calendar.DefaultWorkdays(), nil)
 	worked := day.Add(10 * time.Hour)
 
 	r.at(worked.Format(time.RFC3339), "commit", "-q", "--allow-empty", "-m", "work")
