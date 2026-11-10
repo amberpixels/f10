@@ -16,7 +16,11 @@ import (
 func TestOnTaskAppliesAReturnedEnd(t *testing.T) {
 	var out bytes.Buffer
 
-	in := &driveInput{out: &out}
+	in := &driveInput{
+		driveDeps: driveDeps{
+			out: &out,
+		},
+	}
 	r := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-1"}}, phase: atRunning}
 
 	wrapped := fmt.Errorf("sending: %w", halt("GH-1", "ship", "no agent"))

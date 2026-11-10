@@ -89,44 +89,48 @@ func newDriveFixture(t *testing.T, args ...string) *driveFixture {
 	}
 
 	fx.in = &driveInput{
-		main:    "/code/repo",
-		storage: testStorage,
-		tracker: tracker{
-			resolve: func(ctx context.Context, tok string) (ref.Ref, error) {
-				return ref.Lookup{Prefix: "GH"}.Find(ctx, tok)
+		driveConfig: driveConfig{
+			main:     "/code/repo",
+			storage:  testStorage,
+			args:     a,
+			argv:     args,
+			sequence: func(shipFlow) []string { return chain },
+			stateDir: t.TempDir(),
+			ttl:      state.DefaultTTL,
+		},
+		driveDeps: driveDeps{
+			tracker: tracker{
+				resolve: func(ctx context.Context, tok string) (ref.Ref, error) {
+					return ref.Lookup{Prefix: "GH"}.Find(ctx, tok)
+				},
+				info: func(_ context.Context, r ref.Ref) (taskInfo, error) {
+					info, ok := fx.infos[r.ID]
+					if !ok {
+						return taskInfo{}, errors.New("no such issue")
+					}
+
+					return info, nil
+				},
+				storage: storage.Root(t.TempDir()),
 			},
-			info: func(_ context.Context, r ref.Ref) (taskInfo, error) {
-				info, ok := fx.infos[r.ID]
-				if !ok {
-					return taskInfo{}, errors.New("no such issue")
+			now: func() time.Time { return fx.clock },
+			sleep: func(_ context.Context, d time.Duration) error {
+				fx.sleeps++
+				fx.clock = fx.clock.Add(d)
+
+				if hook := fx.onTick[fx.sleeps]; hook != nil {
+					hook()
 				}
 
-				return info, nil
+				return nil
 			},
-			storage: storage.Root(t.TempDir()),
-		},
-		args:     a,
-		argv:     args,
-		sequence: func(shipFlow) []string { return chain },
-		stateDir: t.TempDir(),
-		ttl:      state.DefaultTTL,
-		now:      func() time.Time { return fx.clock },
-		sleep: func(_ context.Context, d time.Duration) error {
-			fx.sleeps++
-			fx.clock = fx.clock.Add(d)
+			finish: func(context.Context, io.Writer, driveFinish) error {
+				t.Fatal("finish ran although the chain has none")
 
-			if hook := fx.onTick[fx.sleeps]; hook != nil {
-				hook()
-			}
-
-			return nil
+				return nil
+			},
+			catchup: proseCatchup(),
 		},
-		finish: func(context.Context, io.Writer, driveFinish) error {
-			t.Fatal("finish ran although the chain has none")
-
-			return nil
-		},
-		catchup: proseCatchup(),
 	}
 
 	// what the engine reads after an agent's catchup turn: the base held,
@@ -2885,14 +2889,18 @@ func TestDriveFinishAsksForSomeoneElsesPR(t *testing.T) {
 	var got []string
 
 	in := &driveInput{
-		answers: newAnswerBook(),
-		finish: func(_ context.Context, _ io.Writer, req driveFinish) error {
-			got = append(got, req.pr)
-			if req.pr == "" {
-				return foreignPullError{url: "https://gh/pr/9", author: "alice"}
-			}
+		driveDeps: driveDeps{
+			finish: func(_ context.Context, _ io.Writer, req driveFinish) error {
+				got = append(got, req.pr)
+				if req.pr == "" {
+					return foreignPullError{url: "https://gh/pr/9", author: "alice"}
+				}
 
-			return nil
+				return nil
+			},
+		},
+		driveState: driveState{
+			answers: newAnswerBook(),
 		},
 	}
 
@@ -2933,13 +2941,19 @@ func TestDriveFinishPassesTheRunsBranch(t *testing.T) {
 	var got driveFinish
 
 	in := &driveInput{
-		main:    t.TempDir(),
-		answers: newAnswerBook(),
-		now:     time.Now,
-		finish: func(_ context.Context, _ io.Writer, req driveFinish) error {
-			got = req
+		driveConfig: driveConfig{
+			main: t.TempDir(),
+		},
+		driveDeps: driveDeps{
+			now: time.Now,
+			finish: func(_ context.Context, _ io.Writer, req driveFinish) error {
+				got = req
 
-			return nil
+				return nil
+			},
+		},
+		driveState: driveState{
+			answers: newAnswerBook(),
 		},
 	}
 
@@ -4021,13 +4035,19 @@ func TestDriveFinishWithADeferredPullIsFinished(t *testing.T) {
 	const note = "main not pulled: the local main has commits origin/main lacks"
 
 	in := &driveInput{
-		answers: newAnswerBook(),
-		now:     time.Now,
-		root:    t.TempDir(),
-		finish: func(_ context.Context, _ io.Writer, req driveFinish) error {
-			req.deferred(note)
+		driveConfig: driveConfig{
+			root: t.TempDir(),
+		},
+		driveDeps: driveDeps{
+			now: time.Now,
+			finish: func(_ context.Context, _ io.Writer, req driveFinish) error {
+				req.deferred(note)
 
-			return nil
+				return nil
+			},
+		},
+		driveState: driveState{
+			answers: newAnswerBook(),
 		},
 	}
 
@@ -4062,7 +4082,12 @@ func TestDriveRetriesADeferredPull(t *testing.T) {
 	f.script(curBr, "main")
 	f.fail("git pull --ff-only", shell.Result{Code: 1, Stderr: "fatal: Not possible to fast-forward, aborting."})
 
-	in := &driveInput{main: main, root: root}
+	in := &driveInput{
+		driveConfig: driveConfig{
+			main: main,
+			root: root,
+		},
+	}
 
 	var out bytes.Buffer
 

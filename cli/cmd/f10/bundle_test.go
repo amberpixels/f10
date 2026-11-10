@@ -239,7 +239,11 @@ func TestDriveParsesABundle(t *testing.T) {
 		t.Errorf("tasks %v profiles %v, want the bundle whole with its profile", a.tasks, a.profiles)
 	}
 
-	in := &driveInput{args: driveArgs{tasks: []string{"GH-1+GH-2", "GH-5"}, span: true}}
+	in := &driveInput{
+		driveConfig: driveConfig{
+			args: driveArgs{tasks: []string{"GH-1+GH-2", "GH-5"}, span: true},
+		},
+	}
 	if _, _, err := in.span(t.Context()); err == nil {
 		t.Error("a bundle as a range end was taken")
 	}

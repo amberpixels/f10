@@ -69,7 +69,14 @@ func pass(in *driveInput, g *openGate) {
 // FT-349's first acceptance run: with --parallel 4, ten independent tasks
 // never have more than four on a skill at once, and all ten finish.
 func TestCapHoldsTenTasksToFour(t *testing.T) {
-	in := &driveInput{parallel: 4, out: io.Discard}
+	in := &driveInput{
+		driveDeps: driveDeps{
+			out: io.Discard,
+		},
+		driveState: driveState{
+			parallel: 4,
+		},
+	}
 	in.runs = capRuns(10)
 
 	for tick := range 20 {
@@ -100,7 +107,14 @@ func TestCapHoldsTenTasksToFour(t *testing.T) {
 // The second acceptance run: a task parked on an ask frees its slot, and
 // the next queued task opens on the same pass.
 func TestCapAskFreesTheSlot(t *testing.T) {
-	in := &driveInput{parallel: 2, out: io.Discard}
+	in := &driveInput{
+		driveDeps: driveDeps{
+			out: io.Discard,
+		},
+		driveState: driveState{
+			parallel: 2,
+		},
+	}
 	in.runs = capRuns(4)
 
 	pass(in, liveGate(in))
@@ -124,7 +138,14 @@ func TestCapAskFreesTheSlot(t *testing.T) {
 // An open task that gave its slot up, parked or queued, sends its next
 // skill only once a slot is free, unless its agent is already mid-turn.
 func TestCapSlotFree(t *testing.T) {
-	in := &driveInput{parallel: 1, out: io.Discard}
+	in := &driveInput{
+		driveDeps: driveDeps{
+			out: io.Discard,
+		},
+		driveState: driveState{
+			parallel: 1,
+		},
+	}
 	in.runs = capRuns(2)
 	openRun(in.runs[0])
 	openRun(in.runs[1])
@@ -157,7 +178,14 @@ func TestCapSlotFree(t *testing.T) {
 // Asks keep their agents open, so once they fill twice the cap no new task
 // opens, though no task is on a skill.
 func TestCapOpenCeiling(t *testing.T) {
-	in := &driveInput{parallel: 1, out: io.Discard}
+	in := &driveInput{
+		driveDeps: driveDeps{
+			out: io.Discard,
+		},
+		driveState: driveState{
+			parallel: 1,
+		},
+	}
 	in.runs = capRuns(3)
 
 	for _, r := range in.runs[:2] {
@@ -183,7 +211,14 @@ func TestCapOpenCeiling(t *testing.T) {
 // After a resume, a task whose agent an earlier run left open goes ahead of
 // a fresh one: it adds no session, and a turn still running opens past the cap.
 func TestCapResumeTakesOpenAgentsFirst(t *testing.T) {
-	in := &driveInput{parallel: 1, out: io.Discard}
+	in := &driveInput{
+		driveDeps: driveDeps{
+			out: io.Discard,
+		},
+		driveState: driveState{
+			parallel: 1,
+		},
+	}
 	in.runs = capRuns(3)
 	in.runs[1].task.branch = "GH-2"
 	in.runs[2].task.branch = "GH-3"

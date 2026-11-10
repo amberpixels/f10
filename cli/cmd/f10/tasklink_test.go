@@ -206,7 +206,11 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 		"drive report": func(t *testing.T, _ bool) string {
 			var out bytes.Buffer
 
-			in := &driveInput{answers: newAnswerBook()}
+			in := &driveInput{
+				driveState: driveState{
+					answers: newAnswerBook(),
+				},
+			}
 			in.loadLinks(t.Context(), &out, []driveTask{{ref: ref.Ref{ID: "FT-1"}}, {ref: ref.Ref{ID: "FT-2"}}})
 
 			runs := []*driveRun{

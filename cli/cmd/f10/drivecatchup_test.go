@@ -591,7 +591,14 @@ func TestIntegrateBranchThenNothingLeft(t *testing.T) {
 		t.Fatalf("integrate = %+v, %v, %v", p, stopped, err)
 	}
 
-	d := &driveInput{main: r.dir, catchup: &catchupEngine{policy: in, base: resolveCatchup}}
+	d := &driveInput{
+		driveConfig: driveConfig{
+			main: r.dir,
+		},
+		driveDeps: driveDeps{
+			catchup: &catchupEngine{policy: in, base: resolveCatchup},
+		},
+	}
 	run := &driveRun{o: openedTask{branch: "FT-1/a", path: r.dir}}
 
 	if tree, err := d.catchupLeft(t.Context(), run); err != nil || tree.left() != "" {
@@ -619,7 +626,14 @@ func TestCatchupLeftNamesAMarker(t *testing.T) {
 	r.commit(during, "a.go", "<<<<<<< HEAD\nx\n", "a marker committed")
 
 	in := r.input("")
-	d := &driveInput{main: r.dir, catchup: &catchupEngine{policy: in, base: resolveCatchup}}
+	d := &driveInput{
+		driveConfig: driveConfig{
+			main: r.dir,
+		},
+		driveDeps: driveDeps{
+			catchup: &catchupEngine{policy: in, base: resolveCatchup},
+		},
+	}
 	run := &driveRun{o: openedTask{branch: "FT-1/a", path: r.dir}}
 
 	if _, _, err := integrateBranch(t.Context(), in, func(catchupPlan) []string { return nil }); err != nil {

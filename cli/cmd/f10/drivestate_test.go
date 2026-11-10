@@ -257,7 +257,11 @@ func TestTaskStateShipped(t *testing.T) {
 // moves the head every time without settling anything, so the third with the
 // same fingerprint halts, and a moved target or a new conflict starts over.
 func TestCatchupAttemptsCountTheFingerprint(t *testing.T) {
-	in := &driveInput{now: func() time.Time { return time.Unix(1_800_000_000, 0) }}
+	in := &driveInput{
+		driveDeps: driveDeps{
+			now: func() time.Time { return time.Unix(1_800_000_000, 0) },
+		},
+	}
 	r := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-1"}}, o: openedTask{path: "/code/repo.GH-1"}}
 
 	var out bytes.Buffer

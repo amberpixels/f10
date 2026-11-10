@@ -177,44 +177,47 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	in := &driveInput{
-		main:    main,
-		pull:    pullOf,
-		root:    t.lay.StorageRoot.Path(),
-		driver:  drv,
-		tracker: t.tracker(),
-		args:    a,
-		argv:    argv,
-		flow:    fl,
-		resolve: run.flow,
-		paced: func(fl shipFlow, p string) (shipFlow, error) {
-			if fl.byArea {
-				return run.flowAt(p, "")
-			}
+		driveConfig: driveConfig{
+			main:    main,
+			root:    t.lay.StorageRoot.Path(),
+			args:    a,
+			argv:    argv,
+			flow:    fl,
+			resolve: run.flow,
+			paced: func(fl shipFlow, p string) (shipFlow, error) {
+				if fl.byArea {
+					return run.flowAt(p, "")
+				}
 
-			return run.flowAt(p, fl.recorded())
+				return run.flowAt(p, fl.recorded())
+			},
+			storage:         t.lay.StorageRoot,
+			settings:        claudeSettingsPath(),
+			layers:          layers,
+			stateDir:        state.Dir(),
+			session:         state.Session(),
+			ttl:             state.TTL(),
+			asksDir:         asks.Dir(),
+			defaultParallel: defaultParallel(),
 		},
-		storage:  t.lay.StorageRoot,
-		settings: claudeSettingsPath(),
-		layers:   layers,
-		title:    func(r ref.Ref) func(context.Context) (string, error) { return titleLookup(t, r.Number) },
-		started:  startedMove(t),
-		record:   recordAt,
-		finish: func(ctx context.Context, w io.Writer, req driveFinish) error {
-			fin, err := driveFinishInput(t, main, h, req)
-			if err != nil {
-				return err
-			}
+		driveDeps: driveDeps{
+			pull:    pullOf,
+			driver:  drv,
+			tracker: t.tracker(),
+			title:   func(r ref.Ref) func(context.Context) (string, error) { return titleLookup(t, r.Number) },
+			started: startedMove(t),
+			record:  recordAt,
+			finish: func(ctx context.Context, w io.Writer, req driveFinish) error {
+				fin, err := driveFinishInput(t, main, h, req)
+				if err != nil {
+					return err
+				}
 
-			return finish(ctx, w, fin)
+				return finish(ctx, w, fin)
+			},
+			now:    time.Now,
+			notify: askNotifier,
 		},
-		stateDir: state.Dir(),
-		session:  state.Session(),
-		ttl:      state.TTL(),
-		now:      time.Now,
-		asksDir:  asks.Dir(),
-		notify:   askNotifier,
-
-		defaultParallel: defaultParallel(),
 	}
 	in.sleep = in.wake
 	in.daemonRun = os.Getenv(daemon.ResumeEnv) != ""

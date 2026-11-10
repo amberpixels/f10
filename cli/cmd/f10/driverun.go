@@ -20,13 +20,21 @@ import (
 
 // driveInput is everything drive needs once the target is settled, so the
 // flow can be tested without a checkout, a clock or a wait.
+// driveInput is one drive: what its command line and project settled, what
+// it calls out to, and what the run changes as it goes.
 type driveInput struct {
-	main    string
-	root    string // the storage root as a path for per-run state: the record, the leases, the asks; "" keeps none
-	driver  *driver.Driver
-	tracker tracker
-	args    driveArgs
-	argv    []string // the command line as given, for the resume command
+	driveConfig
+	driveDeps
+	driveState
+}
+
+// driveConfig is what the command line, the project and the flow settle
+// before the drive starts; nothing changes it after.
+type driveConfig struct {
+	main string
+	root string // the storage root as a path for per-run state: the record, the leases, the asks; "" keeps none
+	args driveArgs
+	argv []string // the command line as given, for the resume command
 	// sequence is the skills a task on fl goes through; nil is driveSkills,
 	// read off the flow, and a test runs the machinery on any skill
 	sequence func(fl shipFlow) []string
@@ -38,14 +46,28 @@ type driveInput struct {
 	storage  storage.Root // the same root, for task files: plans, findings, verdicts
 	settings string       // claude's settings file, which names the model a bad --model falls back to
 	layers   agentMap     // the user's and the project's agents map; nil for none
-	title    func(ref.Ref) func(context.Context) (string, error)
-	started  func(context.Context, ref.Ref) error // nil when tracker.status declares no started word
-	finish   func(ctx context.Context, w io.Writer, req driveFinish) error
 	stateDir string
 	session  string // the session that typed the command, inherited through the daemon's environment
 	ttl      time.Duration
-	now      func() time.Time
-	sleep    func(context.Context, time.Duration) error
+	// asksDir is the inbox an ask goes to and answers come from; "" keeps none
+	asksDir string
+	// daemonRun is a drive a daemon runs that restarts it: an answer that
+	// came after it stopped looking ends it ExitResume for that restart
+	daemonRun bool
+	project   string // the name this drive's task ids print under
+	// defaultParallel is the cap on tasks running a skill at once with none given
+	defaultParallel int
+}
+
+// driveDeps is what the drive calls out to, which a test replaces.
+type driveDeps struct {
+	driver  *driver.Driver
+	tracker tracker
+	title   func(ref.Ref) func(context.Context) (string, error)
+	started func(context.Context, ref.Ref) error // nil when tracker.status declares no started word
+	finish  func(ctx context.Context, w io.Writer, req driveFinish) error
+	now     func() time.Time
+	sleep   func(context.Context, time.Duration) error
 	// record puts an event in the ledger, placed in dir; nil records nothing
 	record func(ctx context.Context, dir string, e ledger.Event)
 	// pull reads a branch's PR on the host when the drive reconciles a
@@ -53,7 +75,12 @@ type driveInput struct {
 	pull func(ctx context.Context, branch string) (forge.PR, error)
 	// catchup is the engine the drive catches a branch up through
 	catchup *catchupEngine
+	notify  func(context.Context, asks.Ask) error // tells the user of a new ask
+	out     io.Writer
+}
 
+// driveState is what the run changes as it goes.
+type driveState struct {
 	answers  answerBook                  // --answer and the inbox's answers, until a task takes each
 	profiles map[string]agentctl.Profile // each profile as typed, resolved over the layers; "" is the map's default
 
@@ -61,34 +88,20 @@ type driveInput struct {
 	own    *drives.Lease            // the drive's own lease, held while it runs
 	leases map[string]*drives.Lease // each task's, by key, held while the task is unended
 
-	// asksDir is the inbox an ask goes to and answers come from; "" keeps
-	// none. notify tells the user of a new ask.
-	asksDir string
-	notify  func(context.Context, asks.Ask) error
-
-	// daemonRun is a drive a daemon runs that restarts it: an answer that
-	// came after it stopped looking ends it ExitResume for that restart
-	daemonRun bool
-
-	// links prints this drive's task ids for people, under project
-	links   *taskLinks
-	project string
-
+	links      *taskLinks // prints this drive's task ids for people
 	inboxNotes []string
 	pullLine   string // the last line retryPull printed, or a finish's deferred note
 	ranFinish  bool   // a finish ran here, so this drive may pull main
 
 	// parallel caps the tasks running a skill at once, and twice it the
-	// agents open; 0 caps nothing. defaultParallel is the cap with none given.
-	parallel        int
-	defaultParallel int
-	wss             []agentctl.Workspace // the last look's workspaces, for the cap's working check
-	tick            *tickView            // this tick's look; before the first, one with no workspaces
+	// agents open; 0 caps nothing
+	parallel int
+	wss      []agentctl.Workspace // the last look's workspaces, for the cap's working check
+	tick     *tickView            // this tick's look; before the first, one with no workspaces
 
 	draining atomic.Bool // set by SIGUSR1: stop at the next tick, ending no task
 	launched bool        // a session typed this drive: not a --resume, not an --answer relay
 	runs     []*driveRun
-	out      io.Writer
 }
 
 // A driveTask is one task of the list, as the validation pass found it.

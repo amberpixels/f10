@@ -159,7 +159,11 @@ func TestDriveRetriesEnterOnceForATypedSend(t *testing.T) {
 	t.Cleanup(func() { enterRetry = prev })
 
 	now := time.Now()
-	in := &driveInput{now: func() time.Time { return now }}
+	in := &driveInput{
+		driveDeps: driveDeps{
+			now: func() time.Time { return now },
+		},
+	}
 
 	typed := &driveRun{task: driveTask{ref: gh1}, skill: "ship", sentAt: now.Add(-11 * time.Second), typed: sentText}
 	typed.o.path = fwdWT
