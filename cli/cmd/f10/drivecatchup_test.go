@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,8 +10,11 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -43,7 +47,7 @@ func (fx *driveFixture) binaryCatchup(t *testing.T, b *binaryCatchupFake, rebase
 
 	plan := catchupPlan{branch: "GH-1", base: "main", sha: "main0", found: foundDefault, method: methodRebase}
 
-	fx.in.catchup = &binaryCatchup{
+	fx.in.catchup = &catchupEngine{
 		integrate: func(context.Context, catchupInput, func(catchupPlan) []string) (catchupPlan, bool, error) {
 			b.mu.Lock()
 			defer b.mu.Unlock()
@@ -465,6 +469,7 @@ func TestDriveNeverForcePushesARewriteItDidNotMake(t *testing.T) {
 	fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", "p1")
 	fx.f.script("git fetch origin", "")
 	fx.f.fail("git merge-base --is-ancestor p1 HEAD", shell.Result{Code: 1})
+	fx.f.script("git merge-base --is-ancestor p1 refs/heads/GH-1", "")
 	fx.f.script("git merge-base --is-ancestor main0 refs/remotes/origin/main", "")
 	fx.f.script(wsList, unopened, listing("GH-1", "idle"))
 
@@ -478,6 +483,35 @@ func TestDriveNeverForcePushesARewriteItDidNotMake(t *testing.T) {
 
 	if fx.f.called("git push") {
 		t.Errorf("pushed a rewrite the drive did not make: %q", fx.f.calls)
+	}
+}
+
+// A branch origin is ahead of (a commit pushed to the PR, not yet in the
+// worktree) is never caught up: the lease is read after that commit landed,
+// so a rebase would push over it. The task halts naming the fix.
+func TestDriveRefusesACatchupBehindOrigin(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1", "ship")
+	fx.adoptsGH1()
+	b := &binaryCatchupFake{stops: []bool{false}}
+	fx.binaryCatchup(t, b, t.TempDir())
+	fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
+
+	fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", "p2")
+	fx.f.script("git fetch origin", "")
+	fx.f.fail("git merge-base --is-ancestor p2 refs/heads/GH-1", shell.Result{Code: 1})
+	fx.f.script(wsList, unopened, listing("GH-1", "idle"))
+
+	err := fx.drive(t)
+	out := fx.out.String()
+
+	if exitCode(err) != ui.ExitHalted ||
+		!strings.Contains(out, "origin/GH-1 has commits GH-1 lacks") ||
+		!strings.Contains(out, "bring origin/GH-1 into /code/repo.GH-1") {
+		t.Errorf("err = %v\n%s", err, out)
+	}
+
+	if b.integrals != 0 || fx.f.called("git push") {
+		t.Errorf("integrated %d times, calls %q", b.integrals, fx.f.calls)
 	}
 }
 
@@ -556,7 +590,7 @@ func TestIntegrateBranchThenNothingLeft(t *testing.T) {
 		t.Fatalf("integrate = %+v, %v, %v", p, stopped, err)
 	}
 
-	d := &driveInput{main: r.dir, catchup: &binaryCatchup{policy: in, base: resolveCatchup}}
+	d := &driveInput{main: r.dir, catchup: &catchupEngine{policy: in, base: resolveCatchup}}
 	run := &driveRun{o: openedTask{branch: "FT-1/a", path: r.dir}}
 
 	if left, err := d.catchupLeft(t.Context(), run); err != nil || left != "" {
@@ -583,7 +617,7 @@ func TestCatchupLeftNamesAMarker(t *testing.T) {
 	r.commit(during, "a.go", "<<<<<<< HEAD\nx\n", "a marker committed")
 
 	in := r.input("")
-	d := &driveInput{main: r.dir, catchup: &binaryCatchup{policy: in, base: resolveCatchup}}
+	d := &driveInput{main: r.dir, catchup: &catchupEngine{policy: in, base: resolveCatchup}}
 	run := &driveRun{o: openedTask{branch: "FT-1/a", path: r.dir}}
 
 	if _, _, err := integrateBranch(t.Context(), in, func(catchupPlan) []string { return nil }); err != nil {
@@ -751,5 +785,78 @@ func TestDriveWaitsOutACatchupParkedOnBackgroundWork(t *testing.T) {
 
 	if waited < 6 {
 		t.Errorf("the turn reported after %d looks, want the drive to wait 6", waited)
+	}
+}
+
+// A pull request retargeted by hand is not caught up at the boundary: a
+// catchup with git's base would carry another branch's commits into it, so
+// the drive halts naming the fix and sets no mark.
+func TestDriveRefusesARetargetedPullRequest(t *testing.T) {
+	for name, base := range map[string]string{"retargeted": "feature", "on its base": "main"} {
+		t.Run(name, func(t *testing.T) {
+			fx := newDriveFixture(t, "GH-1", "ship")
+			fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", "p1")
+			fx.f.script("git fetch origin", "")
+			fx.f.script("git rev-parse -q --verify refs/remotes/origin/main", "m2")
+			fx.f.fail("git merge-base --is-ancestor m2 main0", shell.Result{Code: 1})
+			fx.f.fail("git merge-base --is-ancestor m2 refs/heads/GH-1", shell.Result{Code: 1})
+			fx.f.script("set branch.GH-1."+string(branchmeta.Landed)+" main", "")
+			fx.in.pull = func(context.Context, string) (forge.PR, error) {
+				return forge.PR{URL: "https://gh/pr/9", Status: forge.Open, Base: base}, nil
+			}
+
+			r := &driveRun{
+				task: driveTask{ref: ref.Ref{ID: "GH-1"}},
+				o:    openedTask{branch: "GH-1", path: "/code/repo.GH-1"},
+			}
+			err := fx.in.markBehind(t.Context(), io.Discard, r)
+			marked := fx.f.called("set branch.GH-1." + string(branchmeta.Landed))
+
+			if base == "main" {
+				if err != nil || !marked {
+					t.Fatalf("err = %v, marked %v: a PR on its base was not marked behind", err, marked)
+				}
+
+				return
+			}
+
+			if err == nil || !strings.Contains(err.Error(), "https://gh/pr/9 targets feature, not main") || marked {
+				t.Errorf("err = %v, marked %v", err, marked)
+			}
+		})
+	}
+}
+
+// The catchup record outlives the drive's process: kept on the drive record
+// as it changes, and read back for the task when the drive resumes.
+func TestDriveKeepsTheCatchupRecordForAResume(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1", "ship")
+	fx.in.root = t.TempDir()
+	fx.in.rec = &drives.Record{Args: []string{"GH-1"}, Tasks: []drives.Task{{ID: "GH-1"}}}
+
+	if err := drives.Create(fx.in.root, fx.in.rec); err != nil {
+		t.Fatal(err)
+	}
+
+	task := driveTask{ref: ref.Ref{ID: "GH-1"}}
+	r := &driveRun{task: task, lastCatchup: &drives.Catchup{Target: "m2", Origin: "p1", Base: "main", Integrated: true}}
+	fx.in.keepCatchup(r)
+
+	back, err := drives.Read(fx.in.root, fx.in.rec.Number)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fx.in.rec = back
+
+	got := fx.in.savedCatchup(task)
+	if got == nil || *got != *r.lastCatchup {
+		t.Fatalf("resumed with %+v, want %+v", got, r.lastCatchup)
+	}
+
+	// a copy: a change on the resumed run is written only through keepCatchup
+	got.Spent = true
+	if fx.in.rec.Task("GH-1").Catchup.Spent {
+		t.Error("the resumed record shares the drive record's copy")
 	}
 }

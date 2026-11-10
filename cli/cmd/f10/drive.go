@@ -221,16 +221,8 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	in.sleep = in.wake
 	in.daemonRun = os.Getenv(daemon.ResumeEnv) != ""
 
-	if spec, why := verifySpecOf(t.eff); why == "" {
-		in.catchup = newBinaryCatchup(catchupInput{
-			catchup:        t.eff.Catchup,
-			stacked:        t.eff.CatchupStacked,
-			catchupDefault: factDefault(t.eff, "catchup"),
-			stackedDefault: factDefault(t.eff, "catchup_stacked"),
-		}, spec, t.eff.Traces, main)
-	} else {
-		in.catchupWhy = why
-	}
+	spec, why := verifySpecOf(t.eff)
+	in.catchup = newCatchupEngine(catchupPolicy(t.eff), spec, why, t.eff.Traces, main)
 
 	if drain != nil {
 		go func() {

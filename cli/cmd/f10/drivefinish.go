@@ -85,26 +85,11 @@ func (in *driveInput) readyToMerge(ctx context.Context, w io.Writer, r *driveRun
 	}
 
 	if caughtUp {
-		if err := in.pushCaughtUp(ctx, w, r, "finish", pushed, base); err != nil {
-			res := pushHalted(id, "finish", err)
-
-			return &res
-		}
-
-		return nil
+		return in.pushAfterCatchup(ctx, w, r, "finish", base)
 	}
 
-	reason, conflict, err := in.conflictAgain(ctx, r, branchmeta.Landed)
-
-	switch {
-	case err != nil:
-		res := halted(id, "finish", err.Error())
-
-		return &res
-	case reason != "":
-		if res := in.catchupAttempt(w, r, "finish", reason, conflict); res != nil {
-			return res
-		}
+	if res := in.conflictAttempt(ctx, w, r, "finish", branchmeta.Landed); res != nil {
+		return res
 	}
 
 	if err := branchmeta.Set(ctx, in.main, branch, branchmeta.Landed, def); err != nil {

@@ -62,6 +62,9 @@ type Run struct {
 	// Wait is the base task a driven ship stopped for, its branch without
 	// code yet: a drive parks the task and sends ship again once it has some
 	Wait string `json:"wait,omitempty"`
+	// Stop is the kind of stop a ship left, StopGuard for its catchup guard,
+	// so a drive need not guess it from the stop's shape
+	Stop string `json:"stop,omitempty"`
 	// Done is the phaseless step (catchup) whose report is out, DoneAt when;
 	// a reader compares DoneAt, since any later write moves Updated alone
 	Done    string    `json:"done,omitempty"`
@@ -261,6 +264,8 @@ func Load(path string) (*Run, error) {
 			r.Ask = value
 		case "wait":
 			r.Wait = value
+		case "stop":
+			r.Stop = value
 		case "done":
 			r.Done = value
 		case "done_at":

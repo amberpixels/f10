@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -23,7 +24,7 @@ func TestDriveCatchesUpAShipTypedByHand(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "plan", "ship")
 	fx.adoptsGH1()
 
-	catchup := "herdr agent prompt " + agentOf("GH-1") + " /f10:catchup --driven"
+	catchup := catchupTurn("GH-1")
 	resume := "herdr agent prompt " + agentOf("GH-1") + " /f10:ship GH-1 resume at pr (entry 4) --driven"
 
 	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("plan", "GH-1", nil, shipFlow{}, false), "{}")
@@ -251,39 +252,40 @@ func TestTaskStateShipped(t *testing.T) {
 	}
 }
 
-// A catchup's attempts compare the conflict it left, not the branch or the
-// reason's wording: a catchup that merges moves the head every time without
-// settling anything, so the third with the same conflict halts, and a new
-// conflict starts over.
-func TestCatchupAttemptsCountTheConflict(t *testing.T) {
+// A catchup's attempts compare its fingerprint (target, conflict, red
+// command), not the branch or the reason's wording: a catchup that merges
+// moves the head every time without settling anything, so the third with the
+// same fingerprint halts, and a moved target or a new conflict starts over.
+func TestCatchupAttemptsCountTheFingerprint(t *testing.T) {
 	in := &driveInput{now: func() time.Time { return time.Unix(1_800_000_000, 0) }}
 	r := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-1"}}, o: openedTask{path: "/code/repo.GH-1"}}
 
 	var out bytes.Buffer
 
-	same := "GH-1 still conflicts with main after a catchup: the same files conflict with main the same way again: a.go"
+	attempt := func(fp string) *driveResult {
+		return in.attemptAt(&out, r, "catchup", fp, halted("GH-1", "ship", "GH-1 still conflicts with main"))
+	}
+
+	same := drives.Fingerprint("m1", "a.go", "")
 	for i := range 2 {
-		if res := in.catchupAttempt(&out, r, "ship", same, "a.go"); res != nil {
+		if res := attempt(same); res != nil {
 			t.Fatalf("attempt %d halted: %+v", i+1, res)
 		}
 	}
 
-	if res := in.catchupAttempt(&out, r, "ship", "a new conflict: b.go", "b.go"); res != nil {
-		t.Fatalf("a new conflict halted: %+v", res)
-	}
-
-	for i := range 2 {
-		if res := in.catchupAttempt(&out, r, "ship", same, "a.go"); res != nil {
-			t.Fatalf("attempt %d after the new conflict halted: %+v", i+1, res)
+	for _, moved := range []string{drives.Fingerprint("m2", "a.go", ""), drives.Fingerprint("m1", "b.go", "")} {
+		if res := attempt(moved); res != nil {
+			t.Fatalf("a moved fingerprint halted: %+v", res)
 		}
 	}
 
-	res := in.catchupAttempt(&out, r, "ship", same, "a.go")
-	if res == nil || res.code != ui.ExitHalted || len(res.attempts) != 3 {
-		t.Fatalf("the third same conflict in a row did not halt: %+v\n%s", res, out.String())
+	for i := range 2 {
+		if res := attempt(same); res != nil {
+			t.Fatalf("attempt %d after the moved one halted: %+v", i+1, res)
+		}
 	}
 
-	if last := res.lines[len(res.lines)-1]; !strings.HasPrefix(last, "next: settle it with /f10:catchup") {
-		t.Errorf("halt lines = %q", res.lines)
+	if res := attempt(same); res == nil || res.code != ui.ExitHalted || len(res.attempts) != 3 {
+		t.Fatalf("the third same fingerprint in a row did not halt: %+v\n%s", res, out.String())
 	}
 }
