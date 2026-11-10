@@ -156,68 +156,24 @@ func listOrNone(paths []string) string {
 	return strings.Join(paths, ", ")
 }
 
-// left says what keeps the branch from being caught up with p, "" for
-// nothing: an operation in progress, uncommitted paths, the base not in the
-// branch, a conflict marker left in a path the branch changes, or, when the
-// agent verifies, a mark still set (its verify is not green).
-func (e *catchupEngine) left(ctx context.Context, main, dir, branch string, p catchupPlan) (string, error) {
-	op, err := gitx.InProgress(ctx, dir)
-	if err != nil {
-		return "", err
+// left reads what keeps the branch from being caught up with p (treeState's
+// left), and when the agent verifies, whether a mark is still set.
+func (e *catchupEngine) left(ctx context.Context, main, dir, branch string, p catchupPlan) (treeState, error) {
+	t, err := readTree(ctx, dir)
+	if err != nil || t.busy() != "" {
+		return t, err
 	}
 
-	if op.Kind != "" {
-		at := ""
-		if op.Kind == "rebase" && op.Total > 0 {
-			at = fmt.Sprintf(" at commit %d of %d", op.Done, op.Total)
-		}
-
-		return fmt.Sprintf("a %s is still in progress in %s%s", op.Kind, dir, at), nil
-	}
-
-	dirty, err := gitx.Status(ctx, dir)
-	if err != nil {
-		return "", err
-	}
-
-	if len(dirty) > 0 {
-		return fmt.Sprintf("%d uncommitted paths in %s", len(dirty), dir), nil
-	}
-
-	held, err := gitx.IsAncestor(ctx, dir, p.sha, "HEAD")
-	if err != nil {
-		return "", err
-	}
-
-	if !held {
-		return fmt.Sprintf("%s%s%s (%s)", branch, notHeld, p.base, gitx.ShortSHA(p.sha)), nil
-	}
-
-	markers, err := gitx.Markers(ctx, dir, p.sha)
-	if err != nil {
-		return "", err
-	}
-
-	if len(markers) > 0 {
-		return "conflict markers left in " + strings.Join(markers, ", "), nil
+	if err := t.readBase(ctx, branch, p); err != nil || !t.held || len(t.markers) > 0 {
+		return t, err
 	}
 
 	if e.agentVerifies != "" {
-		key, err := markOn(ctx, main, branch)
-		if err != nil {
-			return "", err
-		}
-
-		if key != "" {
-			return "the branch is still marked " + string(key) + ", so verify did not go green", nil
-		}
+		t.marked, err = markOn(ctx, main, branch)
 	}
 
-	return "", nil
+	return t, err
 }
-
-// notHeld marks left's reason for a branch that lost its base.
-const notHeld = " does not hold "
 
 // clearMarks unsets the catchup marks once the base is in and verify is
 // green, and records the base the branch now stands on, as the step does.
@@ -329,22 +285,102 @@ func branchUnsettled(ctx context.Context, main, dir, branch string) string {
 }
 
 func treeBusy(ctx context.Context, dir string) string {
-	op, err := gitx.InProgress(ctx, dir)
-
-	switch {
-	case err != nil:
-		return fmt.Sprintf("could not tell whether a merge or rebase is in progress in %s: %v", dir, err)
-	case op.Kind != "":
-		return fmt.Sprintf("a %s is still in progress in %s", op.Kind, dir)
+	t, err := readTree(ctx, dir)
+	if err != nil {
+		return err.Error()
 	}
 
-	dirty, err := gitx.Status(ctx, dir)
+	return t.busy()
+}
 
+// errOpUnread is a read of a worktree that could not tell whether a merge or
+// rebase is in progress there.
+var errOpUnread = errors.New("could not tell whether a merge or rebase is in progress")
+
+// A treeState is what git shows of a worktree a catchup acts on: an
+// operation in progress and the uncommitted paths, and once readBase ran,
+// whether the branch holds the base and the conflict markers left past it.
+type treeState struct {
+	dir     string
+	op      gitx.Operation
+	dirty   int
+	branch  string
+	base    catchupPlan
+	held    bool
+	markers []string
+	marked  branchmeta.Key // a catchup mark still set, read only when the agent verifies
+}
+
+// readTree reads the operation in progress and the uncommitted paths in dir.
+func readTree(ctx context.Context, dir string) (treeState, error) {
+	t := treeState{dir: dir}
+
+	op, err := gitx.InProgress(ctx, dir)
+	if err != nil {
+		return t, fmt.Errorf("%w in %s: %w", errOpUnread, dir, err)
+	}
+
+	t.op = op
+
+	dirty, err := gitx.Status(ctx, dir)
+	if err != nil {
+		return t, err
+	}
+
+	t.dirty = len(dirty)
+
+	return t, nil
+}
+
+// readBase reads whether branch holds p, and if it does, the conflict
+// markers left in the paths it changes past p.
+func (t *treeState) readBase(ctx context.Context, branch string, p catchupPlan) error {
+	t.branch, t.base = branch, p
+
+	held, err := gitx.IsAncestor(ctx, t.dir, p.sha, "HEAD")
+	if err != nil || !held {
+		return err
+	}
+
+	t.held = true
+
+	t.markers, err = gitx.Markers(ctx, t.dir, p.sha)
+
+	return err
+}
+
+// busy says what keeps a catchup from starting, "" for nothing.
+func (t treeState) busy() string {
 	switch {
-	case err != nil:
-		return err.Error()
-	case len(dirty) > 0:
-		return fmt.Sprintf("%d uncommitted paths in %s", len(dirty), dir)
+	case t.op.Kind != "":
+		return fmt.Sprintf("a %s is still in progress in %s", t.op.Kind, t.dir)
+	case t.dirty > 0:
+		return fmt.Sprintf("%d uncommitted paths in %s", t.dirty, t.dir)
+	}
+
+	return ""
+}
+
+// baseLost reports a branch that no longer holds the base readBase read.
+func (t treeState) baseLost() bool {
+	return t.base.sha != "" && t.op.Kind == "" && t.dirty == 0 && !t.held
+}
+
+// left says what keeps the branch from being caught up, "" for nothing: an
+// operation in progress (a rebase with its place), uncommitted paths, the
+// base not in the branch, a conflict marker, or a mark still set.
+func (t treeState) left() string {
+	switch {
+	case t.op.Kind == "rebase" && t.op.Total > 0:
+		return fmt.Sprintf("%s at commit %d of %d", t.busy(), t.op.Done, t.op.Total)
+	case t.busy() != "":
+		return t.busy()
+	case t.baseLost():
+		return fmt.Sprintf("%s does not hold %s (%s)", t.branch, t.base.base, gitx.ShortSHA(t.base.sha))
+	case len(t.markers) > 0:
+		return "conflict markers left in " + strings.Join(t.markers, ", ")
+	case t.marked != "":
+		return "the branch is still marked " + string(t.marked) + ", so verify did not go green"
 	}
 
 	return ""

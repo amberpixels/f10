@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
@@ -37,13 +36,13 @@ func (in *driveInput) catchupHere(
 		return halt(id, "catchup", err.Error())
 	}
 
-	op, err := gitx.InProgress(ctx, dir)
-	if err != nil {
+	tree, err := readTree(ctx, dir)
+	if errors.Is(err, errOpUnread) {
 		return halt(id, "catchup", err.Error())
 	}
 
-	if op.Kind != "" {
-		return in.catchupPrompt(ctx, w, r, ws, in.inProgressSteering(ctx, r, op))
+	if tree.op.Kind != "" {
+		return in.catchupPrompt(ctx, w, r, ws, in.inProgressSteering(ctx, r, tree.op))
 	}
 
 	// what the last turn left (markers, uncommitted paths) goes back to the
@@ -55,8 +54,8 @@ func (in *driveInput) catchupHere(
 			": settle it in place, keeping both sides, and commit"+in.catchup.verifyClause())
 	}
 
-	if dirty, err := gitx.Status(ctx, dir); err != nil || len(dirty) > 0 {
-		reason := fmt.Sprintf("%d uncommitted paths in %s", len(dirty), dir)
+	if err != nil || tree.dirty > 0 {
+		reason := tree.busy()
 		if err != nil {
 			reason = err.Error()
 		}
@@ -187,7 +186,8 @@ func (in *driveInput) startVerify(ctx context.Context, r *driveRun) {
 func (in *driveInput) catchupSettled(ctx context.Context, w io.Writer, r *driveRun, retry bool) error {
 	id, dir := r.task.ref.ID, r.o.path
 
-	reason, err := in.catchupLeft(ctx, r)
+	tree, err := in.catchupLeft(ctx, r)
+	reason := tree.left()
 
 	switch {
 	case err != nil:
@@ -197,7 +197,7 @@ func (in *driveInput) catchupSettled(ctx context.Context, w io.Writer, r *driveR
 	case reason != "":
 		// a branch that lost its base is integrated again by the drive, by the
 		// declared method; anything else goes back to the agent
-		if !strings.Contains(reason, notHeld) {
+		if !tree.baseLost() {
 			r.catchupLeft = reason
 		}
 
@@ -237,10 +237,10 @@ func (in *driveInput) catchupStalled(
 
 // catchupLeft is the engine's read of what keeps the branch from being
 // caught up with the base this catchup brought in.
-func (in *driveInput) catchupLeft(ctx context.Context, r *driveRun) (string, error) {
+func (in *driveInput) catchupLeft(ctx context.Context, r *driveRun) (treeState, error) {
 	p, err := in.catchupBase(ctx, r)
 	if err != nil {
-		return "", err
+		return treeState{}, err
 	}
 
 	return in.catchup.left(ctx, in.main, r.o.path, r.o.branch, p)
@@ -302,8 +302,8 @@ func (in *driveInput) verified(ctx context.Context, w io.Writer, r *driveRun, jo
 	}
 
 	// the agent may have committed since verify started, so git is read again
-	reason, err := in.catchupLeft(ctx, r)
-	if err == nil && reason != "" {
+	tree, err := in.catchupLeft(ctx, r)
+	if reason := tree.left(); err == nil && reason != "" {
 		r.catchupLeft = reason
 		err = fmt.Errorf("the catchup did not end clean: %s", reason)
 	}

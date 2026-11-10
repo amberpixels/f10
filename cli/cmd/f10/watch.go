@@ -976,7 +976,8 @@ func (in watchInput) settleCatchup(
 		return nil
 	}
 
-	reason, err := in.engine.left(ctx, in.main, task.path, task.branch, catchupPlan{base: rec.Base, sha: rec.Target})
+	tree, err := in.engine.left(ctx, in.main, task.path, task.branch, catchupPlan{base: rec.Base, sha: rec.Target})
+	reason := tree.left()
 	if err != nil {
 		reason = err.Error()
 	}
