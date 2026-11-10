@@ -36,6 +36,9 @@ Any commit this step makes follows `conventions/context.md` → Commits, with `-
    There is one exception.
    A `found: f10-after-branch gone` line under the branch means the base task finished and its branch was deleted, so its code is already in the default branch.
    In that case, run `git config --unset` on both `f10-after` and `f10-after-branch`, and open against the default branch the command printed.
+   **Driven**, a base not on origin is a wait, not a failure, because the base's own flow pushes it or its finish retargets this PR.
+   Run `f10-state.sh set ship blocked pr; f10-state.sh wait <base-id>; f10-state.sh note "waiting on <base-id>: its branch is not on origin yet" "rerun ship once <base-id> is pushed or finished; f10 drive does it by itself"`, then report.
+   `<base-id>` is the branch's `f10-after` config, the base task's id.
 5. **Draft the title and body.**
    Opening and refreshing draft them the same way.
    - Write the draft to a temp file outside the repo.

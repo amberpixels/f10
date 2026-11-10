@@ -204,16 +204,26 @@ func (in *driveInput) attempt(
 // progress, and the reason it gives changes wording between catchups.
 func (in *driveInput) attemptAt(w io.Writer, r *driveRun, action, fp string, halt driveResult) *driveResult {
 	reason := halt.reason
+	restarted := false
 
 	if n := len(r.attempts); n > 0 && (r.attempts[n-1].Action != action || r.attempts[n-1].State != fp) {
+		restarted = r.attempts[n-1].Action == action
 		r.attempts = nil
 	}
 
 	r.attempts = append(r.attempts, attempt{Action: action, State: fp, Reason: reason, At: in.now()})
 
 	if len(r.attempts) < attemptLimit {
-		fmt.Fprintf(w, "%s %s: attempt %d of %d failed, trying again: %s\n",
-			in.id(r.task.ref.ID), action, len(r.attempts), attemptLimit, reason)
+		// the count is of failures in a row with nothing changed, never of
+		// turns, so a restart says why it reads 1 again
+		if restarted {
+			fmt.Fprintf(w, "%s %s: failed again, but the task moved since the last failure, "+
+				"so the count starts over at 1 of %d, trying again: %s\n",
+				in.id(r.task.ref.ID), action, attemptLimit, reason)
+		} else {
+			fmt.Fprintf(w, "%s %s: failed, %d of %d in a row with nothing changed, trying again: %s\n",
+				in.id(r.task.ref.ID), action, len(r.attempts), attemptLimit, reason)
+		}
 
 		return nil
 	}

@@ -47,8 +47,8 @@ Four kinds of open question never become an ask:
 
 - **A gap.** A driven run takes every gap on its default and lists the open ones in its report (`conventions/gaps.md`).
 - **A conflict.** A driven catchup settles every conflict by the task's intent and writes each choice down (the **catchup** step's Driven paragraph).
-- **A base with no code.** Ship stops with `f10-state.sh wait <base-id>` and asks nothing.
-  `f10 drive` sends ship again once the base commits (`skills/ship/SKILL.md` → the catchup guard).
+- **A base with no code, or not on origin before `pr`.** Ship stops with `f10-state.sh wait <base-id>` and asks nothing.
+  `f10 drive` sends ship again once the base commits, or for a stop at `pr`, once the base's branch is on origin or the base has finished (`skills/ship/SKILL.md` → the catchup guard, `steps/pr.md` point 4).
 - **A stale task's verdict** (`steps/fetch.md` point 1).
   The run ends blocked and names the verdict file.
   The user decides either by sending `anyway`, as `f10 drive --answer <id> anyway` or typed in this pane, or by closing the task.

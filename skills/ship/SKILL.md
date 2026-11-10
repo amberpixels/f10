@@ -88,6 +88,9 @@ Catchup is never a flow entry.
   `f10 drive` holds the task as `waiting on <base-id>` and sends ship again, `resume at implement`, once the base commits; other tasks keep moving.
 - **Before every `pr` entry**, the first and each refresh: `f10 pr catchup --guard pr` first, which fetches and checks ancestry; only when its `method` is `merge`, `rebase` or `onto`, commit what the tree holds as the pr step would (`conventions/context.md` → Commits, `--step implement`) and integrate, so the push carries it.
   `skip` or `none` leaves the commit to pr and its adapter.
+  A base not yet on origin stops the run in the pr step (its point 4).
+  In a driven run, that stop is a wait.
+  `f10 drive` holds that task as `waiting on <base-id>` until the base is on origin or has finished, then sends ship again, `resume at pr`.
 - **Before a change judge** (a `judge` after `implement`; the plan judge has no code): with uncommitted work in the tree (implement leaves its work uncommitted, so `implement judge pr` always has some), skip it in one line: that judge sees the branch on its old base, and a later `pr` entry's guard, when the flow has one, brings the base in before the code leaves.
   After a `pr` entry, push the integration, never forcing, so the PR head is the code judged and the judge's status lands on it.
 
