@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/urfave/cli/v3"
@@ -12,7 +11,7 @@ import (
 
 // report exits with an ask over a halt, since answering the ask is what
 // resumes the drive.
-func (in *driveInput) report(w io.Writer, runs []*driveRun, notes []string) error {
+func (in *driveInput) report(runs []*driveRun, notes []string) error {
 	var (
 		rows   []fact
 		lines  []string
@@ -76,10 +75,10 @@ func (in *driveInput) report(w io.Writer, runs []*driveRun, notes []string) erro
 	notes = append(notes, lines...)
 
 	if len(rows) > 0 {
-		fmt.Fprintln(w)
+		fmt.Fprintln(in.out)
 	}
 
-	if err := writeReport(w, rows, notes); err != nil {
+	if err := writeReport(in.out, rows, notes); err != nil {
 		return err
 	}
 

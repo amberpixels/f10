@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
@@ -61,14 +60,13 @@ func idleWhile(run *state.Run, skill string) string {
 // either, since a turn parked on a background task reads idle too.
 func (in *driveInput) poll(
 	ctx context.Context,
-	w io.Writer,
 	r *driveRun,
 ) error {
 	id, skill := r.task.ref.ID, r.skill
 
 	switch r.phase {
 	case atWaiting, atParked, atQueued:
-		return in.next(ctx, w, r)
+		return in.next(ctx, r)
 	case atVerifying:
 		job := r.job
 		if !job.finished() {
@@ -78,12 +76,13 @@ func (in *driveInput) poll(
 		r.job = nil
 		in.enter(r, atRunning)
 
-		return in.verified(ctx, w, r, job)
+		return in.verified(ctx, r, job)
 	case atRetrying:
 		in.enter(r, atRunning)
 		r.retry = true
 
-		return in.send(ctx, w, r, r.skill)
+		return in.send(ctx, r, r.skill)
+	case atPending, atHeld, atRunning:
 	}
 
 	ws := workspaceByID(in.view().wss, r.o.ws.ID)
@@ -127,11 +126,11 @@ func (in *driveInput) poll(
 	}
 
 	if !r.begun && !recent {
-		in.retryEnter(ctx, w, r)
+		in.retryEnter(ctx, r)
 
 		if now.Sub(r.sentAt) > startWindow {
 			// a prompt never taken may sit under a startup dialog, so it is not typed again
-			return in.settle(ctx, w, r, run, halted(id, skill, fmt.Sprintf(
+			return in.settle(ctx, r, run, halted(id, skill, fmt.Sprintf(
 				"the agent in workspace %s did not take the prompt within %s", workspaceName(ws), startWindow)), false)
 		}
 
@@ -142,7 +141,7 @@ func (in *driveInput) poll(
 
 	// catchup has no phase, so only its done signal names the turn as one
 	if r.attached && skill != "catchup" && run != nil && run.Done == "catchup" && run.DoneAt.After(since) {
-		fmt.Fprintf(w, "%s %s: the turn was a catchup\n", in.id(id), skill)
+		fmt.Fprintf(in.out, "%s %s: the turn was a catchup\n", in.id(id), skill)
 
 		r.skill, skill = "catchup", "catchup"
 	}
@@ -150,20 +149,20 @@ func (in *driveInput) poll(
 	if recent && stoppedRun(run) {
 		switch {
 		case skill == "ship" && run.Wait != "":
-			return in.park(ctx, w, r, run)
+			return in.park(ctx, r, run)
 		case skill == "catchup" && heldStop(run):
 			// a catchup that stopped and then ended clean restores the stop it
 			// found, so git says how it ended
 		case skill == "ship" && guardStop(run) && resumeAt(skill, run) != "" && in.marked(ctx, r):
 			// the stop the guard leaves names the catchup ship resumes from; a
 			// mark on a ship that failed elsewhere is the watcher's, not the guard's
-			if err := in.guardAgain(ctx, w, r); err != nil {
+			if err := in.guardAgain(ctx, r); err != nil {
 				return err
 			}
 
-			fmt.Fprintf(w, "%s ship: the catchup guard conflicted, catching up\n", in.id(id))
+			fmt.Fprintf(in.out, "%s ship: the catchup guard conflicted, catching up\n", in.id(id))
 
-			return in.next(ctx, w, r)
+			return in.next(ctx, r)
 		case run.Ask != "" || blockedRun(run):
 			// blocked is a decision, a judge's stop or a stale task's verdict:
 			// sending the skill again would roll it again
@@ -171,7 +170,7 @@ func (in *driveInput) poll(
 		default:
 			// the run may be a turn the drive did not send, as a ship typed by
 			// hand while it followed plan: the branch says how far it got
-			return in.settle(ctx, w, r, run, in.verdict(r.task, skill, run), true)
+			return in.settle(ctx, r, run, in.verdict(r.task, skill, run), true)
 		}
 	}
 
@@ -194,38 +193,38 @@ func (in *driveInput) poll(
 				workspaceName(ws), idleWhile(run, skill)))
 
 			if skill == "catchup" {
-				return in.catchupStalled(ctx, w, r, run, halt)
+				return in.catchupStalled(ctx, r, run, halt)
 			}
 
-			return in.settle(ctx, w, r, run, halt, false)
+			return in.settle(ctx, r, run, halt, false)
 		}
 
 		return nil
 	}
 
-	fmt.Fprintf(w, "%s %s: done\n", in.id(id), skill)
+	fmt.Fprintf(in.out, "%s %s: done\n", in.id(id), skill)
 
 	if skill == "catchup" {
-		return in.catchupSettled(ctx, w, r, true)
+		return in.catchupSettled(ctx, r, true)
 	}
 
 	if err := in.advance(ctx, r, skill); err != nil {
 		return err
 	}
 
-	return in.next(ctx, w, r)
+	return in.next(ctx, r)
 }
 
 // guardAgain halts a ship whose guard conflicted the same way three times
 // after the drive's catchups, or nil to catch up again; a mark git cannot
 // read is left to next, which halts.
-func (in *driveInput) guardAgain(ctx context.Context, w io.Writer, r *driveRun) error {
+func (in *driveInput) guardAgain(ctx context.Context, r *driveRun) error {
 	key, err := in.mark(ctx, r)
 	if err != nil || key == "" {
-		return nil
+		return nil //nolint:nilerr // next reads the mark again and halts on it
 	}
 
-	return in.conflictAttempt(ctx, w, r, "ship", key)
+	return in.conflictAttempt(ctx, r, "ship", key)
 }
 
 // marked counts a mark git cannot read as marked: the catchup it sends

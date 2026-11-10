@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"io"
 	"runtime"
 	"slices"
 
@@ -48,7 +47,7 @@ func (in *driveInput) busy(except *driveRun) int {
 	return n
 }
 
-func (in *driveInput) queue(w io.Writer, r *driveRun) {
+func (in *driveInput) queue(r *driveRun) {
 	if r.queued() {
 		return
 	}
@@ -59,7 +58,7 @@ func (in *driveInput) queue(w io.Writer, r *driveRun) {
 	}
 
 	in.enter(r, held)
-	fmt.Fprintf(w, "%s: queued, %d running\n", in.id(r.task.ref.ID), in.busy(r))
+	fmt.Fprintf(in.out, "%s: queued, %d running\n", in.id(r.task.ref.ID), in.busy(r))
 }
 
 // unqueue releases r from the cap: an opened task runs its next skill, one
@@ -70,6 +69,7 @@ func (in *driveInput) unqueue(r *driveRun) {
 		in.enter(r, atPending)
 	case atQueued:
 		in.enter(r, atRunning)
+	case atPending, atRunning, atVerifying, atRetrying, atParked, atWaiting:
 	}
 }
 

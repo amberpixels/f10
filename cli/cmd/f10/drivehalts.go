@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/drives"
@@ -31,7 +30,7 @@ func (in *driveInput) leaveRuns(ctx context.Context, runs []*driveRun) {
 	}
 }
 
-func (in *driveInput) end(ctx context.Context, w io.Writer, r *driveRun, res driveResult) {
+func (in *driveInput) end(ctx context.Context, r *driveRun, res driveResult) {
 	r.end = &res
 
 	// a cancelled or halted run takes its catchup's verify with it
@@ -45,7 +44,10 @@ func (in *driveInput) end(ctx context.Context, w io.Writer, r *driveRun, res dri
 	}
 
 	in.saveTask(r, func(t *drives.Task) {
-		t.Skill, t.Queued, t.Phase, t.Outcome = "", false, drives.PhaseEnded, &drives.Outcome{Row: res.row, Code: res.code}
+		t.Skill, t.Queued, t.Phase, t.Outcome = "", false, drives.PhaseEnded, &drives.Outcome{
+			Row:  res.row,
+			Code: res.code,
+		}
 	})
 	// an asking task stays leased until the drive exits, since the drive
 	// runs on and resumes for its answer; another drive must not claim it
@@ -64,13 +66,13 @@ func (in *driveInput) end(ctx context.Context, w io.Writer, r *driveRun, res dri
 	// a finished task's lines are its handoff, which finish's report just
 	// printed; they wait for the drive's report
 	if len(res.lines) == 0 || res.row == rowFinished {
-		fmt.Fprintf(w, "%s: %s\n", in.id(r.task.ref.ID), res.row)
+		fmt.Fprintf(in.out, "%s: %s\n", in.id(r.task.ref.ID), res.row)
 
 		return
 	}
 
 	for _, l := range res.lines {
-		fmt.Fprintln(w, l)
+		fmt.Fprintln(in.out, l)
 	}
 }
 
@@ -134,21 +136,20 @@ func (in *driveInput) baseHead(ctx context.Context, b *driveRun) (string, string
 	return cmp.Or(head, "none"), ""
 }
 
-// A taskEnd is a task's end returned up its path instead of applied where it
+// A taskEndError is a task's end returned up its path instead of applied where it
 // was found; onTask, at each per-task entry of the tick, applies it.
-type taskEnd struct{ res driveResult }
+type taskEndError struct{ res driveResult }
 
-func (e *taskEnd) Error() string { return e.res.row + ": " + e.res.reason }
+func (e *taskEndError) Error() string { return e.res.row + ": " + e.res.reason }
 
-func endWith(res driveResult) error { return &taskEnd{res: res} }
+func endWith(res driveResult) error { return &taskEndError{res: res} }
 
 // halt ends the task halted at skill for reason.
 func halt(id, skill, reason string) error { return endWith(halted(id, skill, reason)) }
 
 // endOf is the end err carries, if it is one.
 func endOf(err error) (driveResult, bool) {
-	var e *taskEnd
-	if errors.As(err, &e) {
+	if e, ok := errors.AsType[*taskEndError](err); ok {
 		return e.res, true
 	}
 
@@ -156,9 +157,9 @@ func endOf(err error) (driveResult, bool) {
 }
 
 // onTask applies an end r's path returned; any other error goes on up.
-func (in *driveInput) onTask(ctx context.Context, w io.Writer, r *driveRun, err error) error {
+func (in *driveInput) onTask(ctx context.Context, r *driveRun, err error) error {
 	if res, ok := endOf(err); ok {
-		in.end(ctx, w, r, res)
+		in.end(ctx, r, res)
 
 		return nil
 	}

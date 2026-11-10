@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"strings"
 	"time"
 
@@ -13,7 +12,7 @@ import (
 )
 
 // send runs one element in the task's agent; the poll reads how it ends.
-func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill string) error {
+func (in *driveInput) send(ctx context.Context, r *driveRun, skill string) error {
 	id := r.task.ref.ID
 
 	ws, run, err := in.look(ctx, r)
@@ -36,7 +35,7 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 
 	if skill == "catchup" && in.catchup.agentVerifies != "" && !r.toldCatchup {
 		r.toldCatchup = true
-		fmt.Fprintf(w, "%s catchup: %s, so the agent verifies\n", in.id(id), in.catchup.agentVerifies)
+		fmt.Fprintf(in.out, "%s catchup: %s, so the agent verifies\n", in.id(id), in.catchup.agentVerifies)
 	}
 
 	switch {
@@ -48,21 +47,21 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 			r.sentAt = p.At.Truncate(time.Second)
 		}
 
-		fmt.Fprintf(w, "%s %s: attached to the turn in progress\n", in.id(id), skill)
+		fmt.Fprintf(in.out, "%s %s: attached to the turn in progress\n", in.id(id), skill)
 	case answered:
 		// the agent heard the answer where it was given: its turn began
 		// then, and the prompt mark the hook wrote just before the claim
 		// may fall in the second before
 		r.sentAt = answeredAt.Add(-time.Second).Truncate(time.Second)
 
-		fmt.Fprintf(w, "%s %s: answered outside this drive, following the turn\n", in.id(id), skill)
+		fmt.Fprintf(in.out, "%s %s: answered outside this drive, following the turn\n", in.id(id), skill)
 	case skill == "catchup" && !awaitsDecision(run):
 		// git integrates and verify runs here; the agent gets only what they
 		// could not settle, a resend included
-		return in.catchupHere(ctx, w, r, ws, run)
+		return in.catchupHere(ctx, r, ws, run)
 	case r.retry:
 		// an attempt failed: the action goes again, whatever the run says
-		return in.prompt(ctx, w, r, ws, skill, "")
+		return in.prompt(ctx, r, ws, skill, "")
 	case run != nil && stoppedRun(run):
 		answer := in.takeAnswer(id)
 		if answer == "" {
@@ -77,9 +76,9 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 					why = "its base has code now"
 				}
 
-				fmt.Fprintf(w, "%s %s: %s: %s\n", in.id(id), skill, why, resumeShown(run, at))
+				fmt.Fprintf(in.out, "%s %s: %s: %s\n", in.id(id), skill, why, resumeShown(run, at))
 
-				return in.prompt(ctx, w, r, ws, skill, at)
+				return in.prompt(ctx, r, ws, skill, at)
 			}
 
 			return endWith(in.verdict(r.task, skill, run))
@@ -94,18 +93,18 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 		}
 
 		in.took(id, skill, answer)
-		fmt.Fprintf(w, "%s %s: answer sent\n", in.id(id), skill)
+		fmt.Fprintf(in.out, "%s %s: answer sent\n", in.id(id), skill)
 	case run != nil && phaseDone(run, skill):
 		// the agent got there before a drive that stopped could see it
-		fmt.Fprintf(w, "%s %s: already done\n", in.id(id), skill)
+		fmt.Fprintf(in.out, "%s %s: already done\n", in.id(id), skill)
 
 		if err := in.advance(ctx, r, skill); err != nil {
 			return err
 		}
 
-		return in.next(ctx, w, r)
+		return in.next(ctx, r)
 	default:
-		return in.prompt(ctx, w, r, ws, skill, "")
+		return in.prompt(ctx, r, ws, skill, "")
 	}
 
 	return nil
@@ -115,7 +114,6 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 // unless the agent idles on a run still running.
 func (in *driveInput) prompt(
 	ctx context.Context,
-	w io.Writer,
 	r *driveRun,
 	ws *agentctl.Workspace,
 	skill, steering string,
@@ -126,7 +124,12 @@ func (in *driveInput) prompt(
 
 	// an idle agent on a run still running waits on something in its pane,
 	// a permission dialog among others: text typed there could answer it
-	if err := refuseStalled(in.stallCheck(r), ws, agentctl.AgentName(id, r.task.suffix, r.o.path), r.o.path); err != nil {
+	if err := refuseStalled(
+		in.stallCheck(r),
+		ws,
+		agentctl.AgentName(id, r.task.suffix, r.o.path),
+		r.o.path,
+	); err != nil {
 		return halt(id, skill, err.Error())
 	}
 
@@ -135,7 +138,7 @@ func (in *driveInput) prompt(
 		return err
 	}
 
-	fmt.Fprintf(w, "%s %s: sent\n", in.id(id), skill)
+	fmt.Fprintf(in.out, "%s %s: sent\n", in.id(id), skill)
 
 	return nil
 }
@@ -158,7 +161,7 @@ func (in *driveInput) deliver(ctx context.Context, r *driveRun, text string) err
 // retryEnter checks, once and enterRetry after a typed send, that the text
 // left the agent's input box, pressing Enter again if it did not. A failed
 // check is printed, and the start window still decides.
-func (in *driveInput) retryEnter(ctx context.Context, w io.Writer, r *driveRun) {
+func (in *driveInput) retryEnter(ctx context.Context, r *driveRun) {
 	if r.typed == "" || r.enterRetried || in.now().Sub(r.sentAt) < enterRetry {
 		return
 	}
@@ -166,7 +169,7 @@ func (in *driveInput) retryEnter(ctx context.Context, w io.Writer, r *driveRun) 
 	r.enterRetried = true
 
 	if note := retryEnter(ctx, agents(r.o.path), r.typedTo, r.typed); note != "" {
-		fmt.Fprintf(w, "%s %s: %s\n", in.id(r.task.ref.ID), r.skill, note)
+		fmt.Fprintf(in.out, "%s %s: %s\n", in.id(r.task.ref.ID), r.skill, note)
 	}
 }
 

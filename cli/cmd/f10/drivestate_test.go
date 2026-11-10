@@ -258,16 +258,16 @@ func TestTaskStateShipped(t *testing.T) {
 // same fingerprint halts, and a moved target or a new conflict starts over.
 func TestCatchupAttemptsCountTheFingerprint(t *testing.T) {
 	in := &driveInput{
-		driveDeps: driveDeps{
-			now: func() time.Time { return time.Unix(1_800_000_000, 0) },
-		},
+		now: func() time.Time { return time.Unix(1_800_000_000, 0) },
 	}
 	r := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-1"}}, o: openedTask{path: "/code/repo.GH-1"}}
 
 	var out bytes.Buffer
 
+	in.out = &out
+
 	attempt := func(fp string) *driveResult {
-		res, ok := endOf(in.attemptAt(&out, r, "catchup", fp, halted("GH-1", "ship", "GH-1 still conflicts with main")))
+		res, ok := endOf(in.attemptAt(r, "catchup", fp, halted("GH-1", "ship", "GH-1 still conflicts with main")))
 		if !ok {
 			return nil
 		}
@@ -308,8 +308,10 @@ func TestAttemptLinesSayWhatTheyCount(t *testing.T) {
 
 	var out bytes.Buffer
 
+	in.out = &out
+
 	for _, fp := range []string{"a", "b", "b"} {
-		if res := in.attemptAt(&out, r, "ship", fp, driveResult{reason: "pr: base not on origin"}); res != nil {
+		if res := in.attemptAt(r, "ship", fp, driveResult{reason: "pr: base not on origin"}); res != nil {
 			t.Fatalf("halted early: %+v", res)
 		}
 	}

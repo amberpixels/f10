@@ -207,17 +207,16 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 			var out bytes.Buffer
 
 			in := &driveInput{
-				driveState: driveState{
-					answers: newAnswerBook(),
-				},
+				out:     &out,
+				answers: newAnswerBook(),
 			}
-			in.loadLinks(t.Context(), &out, []driveTask{{ref: ref.Ref{ID: "FT-1"}}, {ref: ref.Ref{ID: "FT-2"}}})
+			in.loadLinks(t.Context(), []driveTask{{ref: ref.Ref{ID: "FT-1"}}, {ref: ref.Ref{ID: "FT-2"}}})
 
 			runs := []*driveRun{
 				{task: driveTask{ref: ref.Ref{ID: "FT-1"}}, phase: atHeld},
 				{task: driveTask{ref: ref.Ref{ID: "FT-2"}}},
 			}
-			if err := in.report(&out, runs, nil); err != nil {
+			if err := in.report(runs, nil); err != nil {
 				t.Fatal(err)
 			}
 
@@ -226,10 +225,10 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 		"drive progress": func(t *testing.T, _ bool) string {
 			var out bytes.Buffer
 
-			in := &driveInput{}
-			in.loadLinks(t.Context(), &out, []driveTask{{ref: ref.Ref{ID: "FT-1"}}, {ref: ref.Ref{ID: "FT-2"}}})
-			in.queue(&out, &driveRun{task: driveTask{ref: ref.Ref{ID: "FT-1"}}})
-			in.queue(&out, &driveRun{task: driveTask{ref: ref.Ref{ID: "FT-2"}}})
+			in := &driveInput{out: &out}
+			in.loadLinks(t.Context(), []driveTask{{ref: ref.Ref{ID: "FT-1"}}, {ref: ref.Ref{ID: "FT-2"}}})
+			in.queue(&driveRun{task: driveTask{ref: ref.Ref{ID: "FT-1"}}})
+			in.queue(&driveRun{task: driveTask{ref: ref.Ref{ID: "FT-2"}}})
 
 			return out.String()
 		},

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -592,12 +591,8 @@ func TestIntegrateBranchThenNothingLeft(t *testing.T) {
 	}
 
 	d := &driveInput{
-		driveConfig: driveConfig{
-			main: r.dir,
-		},
-		driveDeps: driveDeps{
-			catchup: &catchupEngine{policy: in, base: resolveCatchup},
-		},
+		main:    r.dir,
+		catchup: &catchupEngine{policy: in, base: resolveCatchup},
 	}
 	run := &driveRun{o: openedTask{branch: "FT-1/a", path: r.dir}}
 
@@ -627,12 +622,8 @@ func TestCatchupLeftNamesAMarker(t *testing.T) {
 
 	in := r.input("")
 	d := &driveInput{
-		driveConfig: driveConfig{
-			main: r.dir,
-		},
-		driveDeps: driveDeps{
-			catchup: &catchupEngine{policy: in, base: resolveCatchup},
-		},
+		main:    r.dir,
+		catchup: &catchupEngine{policy: in, base: resolveCatchup},
 	}
 	run := &driveRun{o: openedTask{branch: "FT-1/a", path: r.dir}}
 
@@ -826,7 +817,7 @@ func TestDriveRefusesARetargetedPullRequest(t *testing.T) {
 				task: driveTask{ref: ref.Ref{ID: "GH-1"}},
 				o:    openedTask{branch: "GH-1", path: "/code/repo.GH-1"},
 			}
-			err := fx.in.markBehind(t.Context(), io.Discard, r)
+			err := fx.in.markBehind(t.Context(), r)
 			marked := fx.f.called("set branch.GH-1." + string(branchmeta.Landed))
 
 			if base == "main" {
@@ -878,7 +869,7 @@ func TestDriveKeepsTheCatchupRecordForAResume(t *testing.T) {
 	}
 }
 
-// readTree and readBase are the one read of a worktree a catchup acts on:
+// readTree and withBase are the one read of a worktree a catchup acts on:
 // each state reads as the wording drive and the watcher print for it.
 func TestReadTree(t *testing.T) {
 	cases := map[string]struct {
@@ -924,7 +915,7 @@ func TestReadTree(t *testing.T) {
 
 			tree, err := readTree(t.Context(), r.dir)
 			if err == nil && tree.busy() == "" {
-				err = tree.readBase(t.Context(), "FT-1/a", catchupPlan{base: "main", sha: r.sha("main")})
+				tree, err = tree.withBase(t.Context(), "FT-1/a", catchupPlan{base: "main", sha: r.sha("main")})
 			}
 
 			if err != nil {

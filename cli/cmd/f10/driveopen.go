@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"io"
 	"slices"
 	"strings"
 	"time"
@@ -17,7 +16,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
-func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error {
+func (in *driveInput) open(ctx context.Context, r *driveRun) error {
 	task := r.task
 
 	after, note, err := bodyAfter(ctx, in.tracker, in.main, task.ref, task.info.body)
@@ -40,14 +39,22 @@ func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error 
 		title:          title,
 		profile:        task.profile,
 		profileFlagged: task.flagged,
-		progress:       w,
+		progress:       in.out,
 		flowKept:       true,
 	})
 	if err != nil {
 		return err
 	}
 
-	fmt.Fprintf(w, "%s: branch %s at %s, workspace %s%s\n", in.id(task.ref.ID), o.branch, o.path, o.ws.ID, onProfile(o))
+	fmt.Fprintf(
+		in.out,
+		"%s: branch %s at %s, workspace %s%s\n",
+		in.id(task.ref.ID),
+		o.branch,
+		o.path,
+		o.ws.ID,
+		onProfile(o),
+	)
 
 	if o.fresh {
 		o.notes = append(o.notes, markStarted(ctx, in.started, o.task)...)
@@ -77,7 +84,7 @@ func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error 
 
 	finishes := slices.Contains(skills, "finish")
 	if finishes {
-		in.finishStep(ctx, w, o.branch, branchmeta.FinishQueued, "")
+		in.finishStep(ctx, o.branch, branchmeta.FinishQueued, "")
 	} else {
 		_ = branchmeta.Unset(ctx, in.main, o.branch, branchmeta.Finish) // absent is fine
 	}
@@ -86,7 +93,7 @@ func (in *driveInput) open(ctx context.Context, w io.Writer, r *driveRun) error 
 	_ = branchmeta.Unset(ctx, in.main, o.branch, branchmeta.Chain) // absent is fine
 
 	for _, n := range appendNote(o.notes, note) {
-		fmt.Fprintf(w, "  %s\n", n)
+		fmt.Fprintf(in.out, "  %s\n", n)
 	}
 
 	pos, err := in.position(ctx, o, skills)
@@ -218,7 +225,7 @@ func (in *driveInput) position(ctx context.Context, o openedTask, skills []strin
 // next sends the task its next element. A branch marked landed or moved is
 // caught up before any skill, finish included; finish waits for the base,
 // and a branch that conflicts is marked landed and caught up first.
-func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error {
+func (in *driveInput) next(ctx context.Context, r *driveRun) error {
 	wasWaiting, held := r.phase == atWaiting, r.holdsSlot()
 	if wasWaiting {
 		in.enter(r, atRunning)
@@ -230,7 +237,7 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 	}
 
 	if spike && !r.finishes {
-		in.closeAfterShip(ctx, w, r)
+		in.closeAfterShip(ctx, r)
 	}
 
 	skills := in.skills(r)
@@ -253,7 +260,7 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 
 	if skill != "finish" && r.base != nil && !in.baseReady(ctx, r) {
 		if r.phase != atParked {
-			fmt.Fprintf(w, "%s %s: waiting on %s for %s\n",
+			fmt.Fprintf(in.out, "%s %s: waiting on %s for %s\n",
 				in.id(r.task.ref.ID), skill, in.id(r.base.task.ref.ID), r.waitsFor())
 		}
 
@@ -270,8 +277,13 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 
 	if skill == "finish" && r.base != nil && !r.base.through() {
 		if !wasWaiting {
-			fmt.Fprintf(w, "%s finish: waiting for %s to finish\n", in.id(r.task.ref.ID), in.id(r.base.task.ref.ID))
-			in.finishStep(ctx, w, r.o.branch, branchmeta.FinishQueued, "waiting for "+r.base.task.ref.ID)
+			fmt.Fprintf(
+				in.out,
+				"%s finish: waiting for %s to finish\n",
+				in.id(r.task.ref.ID),
+				in.id(r.base.task.ref.ID),
+			)
+			in.finishStep(ctx, r.o.branch, branchmeta.FinishQueued, "waiting for "+r.base.task.ref.ID)
 		}
 
 		in.enter(r, atWaiting)
@@ -282,7 +294,7 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 	// finish runs here and sends no skill; anything else held back by the
 	// cap retries each poll
 	if skill != "finish" && !held && !in.slotFree(r) {
-		in.queue(w, r)
+		in.queue(r)
 
 		return nil
 	}
@@ -291,20 +303,20 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 
 	// a spike merges nothing, so it needs no catchup and no clean merge
 	if skill == "finish" && spike {
-		return endWith(in.runFinish(ctx, w, r))
+		return endWith(in.runFinish(ctx, r))
 	}
 
 	// finish tries the merge itself and catches up only a conflict, under
 	// the progress rule, so a clean PR merges as it stands
 	if skill != "finish" {
-		if err := in.markBehind(ctx, w, r); err != nil {
+		if err := in.markBehind(ctx, r); err != nil {
 			return halt(r.task.ref.ID, skill, err.Error())
 		}
 	}
 
 	key, err := in.mark(ctx, r)
 	if err == nil && skill == "finish" && key == "" {
-		if err := in.readyToMerge(ctx, w, r); err != nil {
+		if err := in.readyToMerge(ctx, r); err != nil {
 			return err
 		}
 
@@ -323,10 +335,10 @@ func (in *driveInput) next(ctx context.Context, w io.Writer, r *driveRun) error 
 			return halt(r.task.ref.ID, skill, err.Error())
 		}
 	case skill == "finish":
-		return endWith(in.runFinish(ctx, w, r))
+		return endWith(in.runFinish(ctx, r))
 	}
 
-	return in.send(ctx, w, r, skill)
+	return in.send(ctx, r, skill)
 }
 
 // spikeDone: a spike report on a branch never pushed closes without a merge;
@@ -348,9 +360,9 @@ func (in *driveInput) spikeDone(ctx context.Context, r *driveRun) (bool, error) 
 // closeAfterShip has drive finish a spike its pace does not finish: a spike
 // close merges nothing, which the pace's finish gates, and a spike left open
 // keeps its dependents on an empty base. status reads the finish record.
-func (in *driveInput) closeAfterShip(ctx context.Context, w io.Writer, r *driveRun) {
+func (in *driveInput) closeAfterShip(ctx context.Context, r *driveRun) {
 	r.finishes = true
-	in.finishStep(ctx, w, r.o.branch, branchmeta.FinishQueued, "")
+	in.finishStep(ctx, r.o.branch, branchmeta.FinishQueued, "")
 }
 
 // baseReady reports the base's code there for a skill: released, and
@@ -377,10 +389,10 @@ func (in *driveInput) baseReady(ctx context.Context, r *driveRun) bool {
 // park holds a ship that stopped on a base without code until the base
 // commits, or ends it when nothing in this drive ever will. A base that
 // committed between the ship's look and this read gets ship sent at once.
-func (in *driveInput) park(ctx context.Context, w io.Writer, r *driveRun, run *state.Run) error {
+func (in *driveInput) park(ctx context.Context, r *driveRun, run *state.Run) error {
 	b := r.base
 	if b != nil && originWait(run) {
-		return in.parkForOrigin(ctx, w, r)
+		return in.parkForOrigin(ctx, r)
 	}
 
 	if b == nil || b.through() {
@@ -395,13 +407,13 @@ func (in *driveInput) park(ctx context.Context, w io.Writer, r *driveRun, run *s
 	if head != r.waitHead && in.released(ctx, b) {
 		r.waitHead = head
 
-		return in.next(ctx, w, r)
+		return in.next(ctx, r)
 	}
 
 	r.parkedHead, r.waitHead = head, head
 	in.enter(r, atParked)
 
-	fmt.Fprintf(w, "%s ship: waiting on %s for code\n", in.id(r.task.ref.ID), in.id(b.task.ref.ID))
+	fmt.Fprintf(in.out, "%s ship: waiting on %s for code\n", in.id(r.task.ref.ID), in.id(b.task.ref.ID))
 
 	return nil
 }
@@ -409,7 +421,7 @@ func (in *driveInput) park(ctx context.Context, w io.Writer, r *driveRun, run *s
 // parkForOrigin holds a ship that stopped before pr on a base origin lacks
 // until the base is pushed or done. A base already there gets ship sent at
 // once; the same origin sha stopping it twice ends it, so the two never loop.
-func (in *driveInput) parkForOrigin(ctx context.Context, w io.Writer, r *driveRun) error {
+func (in *driveInput) parkForOrigin(ctx context.Context, r *driveRun) error {
 	b := r.base
 	r.parkedOrigin = true
 
@@ -418,43 +430,37 @@ func (in *driveInput) parkForOrigin(ctx context.Context, w io.Writer, r *driveRu
 	// stops pr the same way again, and nothing here will push it
 	if b.through() {
 		if r.waitHead == "through" {
-			in.end(ctx, w, r, halted(r.task.ref.ID, r.skill,
+			return halt(r.task.ref.ID, r.skill,
 				fmt.Sprintf("%s ended in this drive, yet its pr step still found %s not on origin",
-					in.id(b.task.ref.ID), b.o.branch)))
-
-			return nil
+					in.id(b.task.ref.ID), b.o.branch))
 		}
 
 		r.waitHead = "through"
 
-		return in.next(ctx, w, r)
+		return in.next(ctx, r)
 	}
 
 	sha, why := in.originHead(ctx, b)
 	if why != "" {
-		in.end(ctx, w, r, halted(r.task.ref.ID, r.skill, why))
-
-		return nil
+		return halt(r.task.ref.ID, r.skill, why)
 	}
 
 	if sha != "" {
 		if r.waitHead == "origin "+sha {
 			why = fmt.Sprintf("its pr step found %s not on origin though origin/%s is at %s",
 				b.o.branch, b.o.branch, sha)
-			in.end(ctx, w, r, halted(r.task.ref.ID, r.skill, why))
-
-			return nil
+			return halt(r.task.ref.ID, r.skill, why)
 		}
 
 		r.waitHead = "origin " + sha
 
-		return in.next(ctx, w, r)
+		return in.next(ctx, r)
 	}
 
 	r.parkedHead = ""
 	in.enter(r, atParked)
 
-	fmt.Fprintf(w, "%s ship: waiting on %s for origin\n", in.id(r.task.ref.ID), in.id(b.task.ref.ID))
+	fmt.Fprintf(in.out, "%s ship: waiting on %s for origin\n", in.id(r.task.ref.ID), in.id(b.task.ref.ID))
 
 	return nil
 }

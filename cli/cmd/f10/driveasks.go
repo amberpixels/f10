@@ -140,7 +140,7 @@ func (in *driveInput) takeAnswers(tasks []driveTask) error {
 
 	for _, a := range in.args.answers {
 		if id, text, ok := keyedAnswer(a, tasks); ok {
-			in.answers.give(answer{task: id, text: text})
+			in.answers.give(answer{task: id, text: text, from: fromFlag})
 
 			continue
 		}
@@ -149,7 +149,7 @@ func (in *driveInput) takeAnswers(tasks []driveTask) error {
 			return errors.New("several --answer values name no task: key each one, --answer GH-1=\"1. …\"")
 		}
 
-		in.answers.give(answer{text: a})
+		in.answers.give(answer{text: a, from: fromFlag})
 	}
 
 	return nil

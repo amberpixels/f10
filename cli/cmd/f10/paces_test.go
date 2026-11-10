@@ -176,11 +176,9 @@ func TestDriveKeepsTheRecordedPace(t *testing.T) {
 		f.meta.Seed("GH-1", branchmeta.Pace, tc.recorded)
 
 		in := &driveInput{
-			driveConfig: driveConfig{
-				main:  "/code/repo",
-				args:  driveArgs{pace: tc.flag},
-				paced: paced,
-			},
+			main:  "/code/repo",
+			args:  driveArgs{pace: tc.flag},
+			paced: paced,
 		}
 
 		fl, note, err := in.keepPace(t.Context(), "GH-1", shipFlow{pace: tc.run})

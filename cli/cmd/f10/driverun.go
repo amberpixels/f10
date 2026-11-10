@@ -141,6 +141,9 @@ type driveResult struct {
 // base has a commit, then active with one skill in flight or waiting at
 // finish for its base, then ended with its row.
 type driveRun struct {
+	turn
+	catchupState
+
 	task     driveTask
 	base     *driveRun // the listed base, or nil for none or one outside the list
 	o        openedTask
@@ -165,9 +168,6 @@ type driveRun struct {
 	// job is the verify the drive runs after its own catchup, polled in
 	// place of the agent while the phase is verifying
 	job *verifyJob
-
-	turn
-	catchupState
 }
 
 // A turn is the skill in flight and what the poll has seen of it; each send
@@ -222,6 +222,8 @@ const (
 // recorded is the phase as the drive record names it.
 func (p runPhase) recorded() string {
 	switch p {
+	case atPending:
+		return drives.PhasePending
 	case atHeld, atQueued:
 		return drives.PhaseQueued
 	case atRunning:

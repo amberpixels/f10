@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 
@@ -22,7 +21,6 @@ import (
 // and anything else is integrated here.
 func (in *driveInput) catchupHere(
 	ctx context.Context,
-	w io.Writer,
 	r *driveRun,
 	ws *agentctl.Workspace,
 	run *state.Run,
@@ -41,7 +39,7 @@ func (in *driveInput) catchupHere(
 	}
 
 	if tree.op.Kind != "" {
-		return in.catchupPrompt(ctx, w, r, ws, in.inProgressSteering(ctx, r, tree.op))
+		return in.catchupPrompt(ctx, r, ws, in.inProgressSteering(ctx, r, tree.op))
 	}
 
 	// what the last turn left (markers, uncommitted paths) goes back to the
@@ -49,7 +47,7 @@ func (in *driveInput) catchupHere(
 	if left := r.catchupLeft; left != "" {
 		r.catchupLeft = ""
 
-		return in.catchupPrompt(ctx, w, r, ws, "the last catchup turn left it unsettled: "+left+
+		return in.catchupPrompt(ctx, r, ws, "the last catchup turn left it unsettled: "+left+
 			": settle it in place, keeping both sides, and commit"+in.catchup.verifyClause())
 	}
 
@@ -59,7 +57,7 @@ func (in *driveInput) catchupHere(
 			reason = err.Error()
 		}
 
-		return in.failed(ctx, w, r, catchupHalt(r, "the catchup cannot start: "+reason))
+		return in.failed(ctx, r, catchupHalt(r, "the catchup cannot start: "+reason))
 	}
 
 	ci := in.catchup.input(in.main, dir)
@@ -68,7 +66,11 @@ func (in *driveInput) catchupHere(
 	tasks := r.task.ref.Members()
 	p, stopped, err := in.catchup.integrate(ctx, ci, in.catchup.message(tasks, changeOf(in.storage.Reviews(tasks[0]))))
 	if err != nil {
-		return in.failed(ctx, w, r, catchupHalt(r, "catching up: "+err.Error())) //nolint:nilerr // a failed integration is the task's attempt, not the drive's error
+		return in.failed(
+			ctx,
+			r,
+			catchupHalt(r, "catching up: "+err.Error()),
+		)
 	}
 
 	if c := r.lastCatchup; c != nil {
@@ -88,7 +90,7 @@ func (in *driveInput) catchupHere(
 	if stopped {
 		paths, _ := gitx.Unmerged(ctx, dir)
 
-		return in.catchupPrompt(ctx, w, r, ws, in.catchup.conflictSteering(p, r.o.branch, "the drive", paths))
+		return in.catchupPrompt(ctx, r, ws, in.catchup.conflictSteering(p, r.o.branch, "the drive", paths))
 	}
 
 	if p.method == methodNone || p.method == methodSkip {
@@ -100,9 +102,9 @@ func (in *driveInput) catchupHere(
 		// a marked branch that already holds its base may be a drive drained
 		// between its integration and verify, so it verifies before the marks clear
 		if key == "" {
-			fmt.Fprintf(w, "%s catchup: %s already holds %s\n", in.id(id), r.o.branch, cmp.Or(p.base, "its base"))
+			fmt.Fprintf(in.out, "%s catchup: %s already holds %s\n", in.id(id), r.o.branch, cmp.Or(p.base, "its base"))
 
-			return in.next(ctx, w, r)
+			return in.next(ctx, r)
 		}
 
 		// a rewrite no catchup on record made predates the origin read, so
@@ -122,12 +124,12 @@ func (in *driveInput) catchupHere(
 	}
 
 	if in.catchup.agentVerifies != "" {
-		fmt.Fprintf(w, "%s catchup: %s %s %s, the agent verifies\n", in.id(id), r.o.branch, how, p.base)
+		fmt.Fprintf(in.out, "%s catchup: %s %s %s, the agent verifies\n", in.id(id), r.o.branch, how, p.base)
 
-		return in.catchupPrompt(ctx, w, r, ws, in.catchup.cleanSteering(p.base))
+		return in.catchupPrompt(ctx, r, ws, in.catchup.cleanSteering(p.base))
 	}
 
-	fmt.Fprintf(w, "%s catchup: %s %s %s, verifying\n", in.id(id), r.o.branch, how, p.base)
+	fmt.Fprintf(in.out, "%s catchup: %s %s %s, verifying\n", in.id(id), r.o.branch, how, p.base)
 	in.startVerify(ctx, r)
 
 	return nil
@@ -151,14 +153,13 @@ func (in *driveInput) inProgressSteering(ctx context.Context, r *driveRun, op gi
 // catchup in flight.
 func (in *driveInput) catchupPrompt(
 	ctx context.Context,
-	w io.Writer,
 	r *driveRun,
 	ws *agentctl.Workspace,
 	steering string,
 ) error {
 	r.turn = turn{skill: r.skill, sentAt: in.now(), retry: r.retry}
 
-	return in.prompt(ctx, w, r, ws, "catchup", steering)
+	return in.prompt(ctx, r, ws, "catchup", steering)
 }
 
 // catchupHalt is the end a catchup that fails its last attempt gives.
@@ -182,7 +183,7 @@ func (in *driveInput) startVerify(ctx context.Context, r *driveRun) {
 // catchup, and verifies if it did; anything left is a failed attempt, whose
 // resend prompts again naming what is left, or with retry false (a prompt
 // the agent never took, maybe under a dialog typing could answer) a halt.
-func (in *driveInput) catchupSettled(ctx context.Context, w io.Writer, r *driveRun, retry bool) error {
+func (in *driveInput) catchupSettled(ctx context.Context, r *driveRun, retry bool) error {
 	id, dir := r.task.ref.ID, r.o.path
 
 	tree, err := in.catchupLeft(ctx, r)
@@ -190,7 +191,7 @@ func (in *driveInput) catchupSettled(ctx context.Context, w io.Writer, r *driveR
 
 	switch {
 	case err != nil:
-		return in.failed(ctx, w, r, catchupHalt(r, err.Error()))
+		return in.failed(ctx, r, catchupHalt(r, err.Error()))
 	case reason != "" && !retry:
 		return endWith(catchupHalt(r, "the catchup did not end clean: "+reason))
 	case reason != "":
@@ -200,14 +201,14 @@ func (in *driveInput) catchupSettled(ctx context.Context, w io.Writer, r *driveR
 			r.catchupLeft = reason
 		}
 
-		return in.failed(ctx, w, r, catchupHalt(r, "the catchup did not end clean: "+reason))
+		return in.failed(ctx, r, catchupHalt(r, "the catchup did not end clean: "+reason))
 	case in.catchup.agentVerifies != "":
 		// the agent verified and cleared the marks, so it is green as it stands
-		fmt.Fprintf(w, "%s catchup: %s settled, verified by the agent\n", in.id(id), dir)
+		fmt.Fprintf(in.out, "%s catchup: %s settled, verified by the agent\n", in.id(id), dir)
 
-		return in.verified(ctx, w, r, &verifyJob{})
+		return in.verified(ctx, r, &verifyJob{})
 	default:
-		fmt.Fprintf(w, "%s catchup: %s settled, verifying\n", in.id(id), dir)
+		fmt.Fprintf(in.out, "%s catchup: %s settled, verifying\n", in.id(id), dir)
 		in.startVerify(ctx, r)
 	}
 
@@ -220,7 +221,6 @@ func (in *driveInput) catchupSettled(ctx context.Context, w io.Writer, r *driveR
 // the prompt again could answer it.
 func (in *driveInput) catchupStalled(
 	ctx context.Context,
-	w io.Writer,
 	r *driveRun,
 	run *state.Run,
 	halt driveResult,
@@ -231,7 +231,7 @@ func (in *driveInput) catchupStalled(
 		}
 	}
 
-	return in.catchupSettled(ctx, w, r, true)
+	return in.catchupSettled(ctx, r, true)
 }
 
 // catchupLeft is the engine's read of what keeps the branch from being
@@ -264,20 +264,24 @@ func (in *driveInput) catchupBase(ctx context.Context, r *driveRun) (catchupPlan
 
 // verified acts on the verify the drive ran: green clears the marks, pushes
 // and moves on; red prompts the agent to fix it by the branch's intent.
-func (in *driveInput) verified(ctx context.Context, w io.Writer, r *driveRun, job *verifyJob) error {
+func (in *driveInput) verified(ctx context.Context, r *driveRun, job *verifyJob) error {
 	id := r.task.ref.ID
 
 	if job.err != nil {
-		return in.failed(ctx, w, r, catchupHalt(r, "running verify: "+job.err.Error())) //nolint:nilerr // a verify that could not run is the task's attempt
+		return in.failed(
+			ctx,
+			r,
+			catchupHalt(r, "running verify: "+job.err.Error()),
+		)
 	}
 
 	p, err := in.catchupBase(ctx, r)
 	if err != nil {
-		return in.failed(ctx, w, r, catchupHalt(r, err.Error()))
+		return in.failed(ctx, r, catchupHalt(r, err.Error()))
 	}
 
 	if job.res.failed != "" {
-		fmt.Fprintf(w, "%s catchup: verify is red: %s\n", in.id(id), job.res.failed)
+		fmt.Fprintf(in.out, "%s catchup: verify is red: %s\n", in.id(id), job.res.failed)
 
 		// a red the agent cannot fix counts like any failed catchup: the same
 		// command red on the same target three times halts
@@ -286,7 +290,7 @@ func (in *driveInput) verified(ctx context.Context, w io.Writer, r *driveRun, jo
 			"verify is red after the catchup: "+job.res.failed+" failed, its output is in "+job.res.log,
 		)
 
-		if err := in.attemptAt(w, r, "catchup", drives.Fingerprint(p.sha, "", job.res.failed), halt); err != nil {
+		if err := in.attemptAt(r, "catchup", drives.Fingerprint(p.sha, "", job.res.failed), halt); err != nil {
 			return err
 		}
 
@@ -295,7 +299,7 @@ func (in *driveInput) verified(ctx context.Context, w io.Writer, r *driveRun, jo
 			return err
 		}
 
-		return in.catchupPrompt(ctx, w, r, ws, fmt.Sprintf(
+		return in.catchupPrompt(ctx, r, ws, fmt.Sprintf(
 			"%s came in cleanly and verify is red: `%s` failed, its output is in %s: fix it by the branch's "+
 				"intent, verify, and commit the fix", p.base, job.res.failed, job.res.log))
 	}
@@ -308,7 +312,7 @@ func (in *driveInput) verified(ctx context.Context, w io.Writer, r *driveRun, jo
 	}
 
 	if err != nil {
-		return in.failed(ctx, w, r, catchupHalt(r, err.Error()))
+		return in.failed(ctx, r, catchupHalt(r, err.Error()))
 	}
 
 	r.catchupPlan = nil
@@ -319,13 +323,13 @@ func (in *driveInput) verified(ctx context.Context, w io.Writer, r *driveRun, jo
 
 	// the count clears once the entry the catchup guarded goes through, so a
 	// conflict that comes back each time still reaches the limit
-	fmt.Fprintf(w, "%s catchup: %s caught up with %s, verify green\n", in.id(id), r.o.branch, p.base)
+	fmt.Fprintf(in.out, "%s catchup: %s caught up with %s, verify green\n", in.id(id), r.o.branch, p.base)
 
-	if err := in.pushAfterCatchup(ctx, w, r, "catchup", ""); err != nil {
+	if err := in.pushAfterCatchup(ctx, r, "catchup", ""); err != nil {
 		return err
 	}
 
-	return in.next(ctx, w, r)
+	return in.next(ctx, r)
 }
 
 // recordCatchup notes what the catchup about to go out starts from, kept on
@@ -376,7 +380,7 @@ func (in *driveInput) keepCatchup(r *driveRun) {
 // by its fingerprint: the same conflict with the same target three times
 // in a row halts. Nil means catch up again.
 func (in *driveInput) conflictAttempt(
-	ctx context.Context, w io.Writer, r *driveRun, skill string, key branchmeta.Key,
+	ctx context.Context, r *driveRun, skill string, key branchmeta.Key,
 ) error {
 	c := r.lastCatchup
 	if c == nil {
@@ -393,7 +397,7 @@ func (in *driveInput) conflictAttempt(
 		reason += ": " + paths
 	}
 
-	err = in.attemptAt(w, r, "catchup", fp, halted(r.task.ref.ID, skill, reason))
+	err = in.attemptAt(r, "catchup", fp, halted(r.task.ref.ID, skill, reason))
 	if res, ok := endOf(err); ok {
 		res.lines = append(res.lines, "next: settle it with /f10:catchup in "+r.o.path+", then rerun the drive")
 
@@ -407,7 +411,7 @@ func (in *driveInput) conflictAttempt(
 // push and says so, naming base, else the record's; a refused or failed
 // push halts.
 func (in *driveInput) pushAfterCatchup(
-	ctx context.Context, w io.Writer, r *driveRun, skill, base string,
+	ctx context.Context, r *driveRun, skill, base string,
 ) error {
 	id, branch := r.task.ref.ID, r.o.branch
 
@@ -422,14 +426,14 @@ func (in *driveInput) pushAfterCatchup(
 
 	switch {
 	case errors.Is(err, errBaseNotPushed):
-		fmt.Fprintf(w, "%s %s: %s caught up with %s, not pushed: %s is not on origin yet\n",
+		fmt.Fprintf(in.out, "%s %s: %s caught up with %s, not pushed: %s is not on origin yet\n",
 			in.id(id), skill, branch, base, base)
 
 		return nil
 	case err != nil:
 		return endWith(pushHalted(id, skill, err))
 	case how != "":
-		fmt.Fprintf(w, "%s %s: %s caught up with %s, %s\n", in.id(id), skill, branch, base, how)
+		fmt.Fprintf(in.out, "%s %s: %s caught up with %s, %s\n", in.id(id), skill, branch, base, how)
 	}
 
 	return nil

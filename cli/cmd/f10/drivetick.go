@@ -25,7 +25,7 @@ import (
 // passed validation.
 func drive(ctx context.Context, w io.Writer, in *driveInput) (err error) {
 	in.out, in.leases = w, map[string]*drives.Lease{}
-	in.resolveProfiles(w)
+	in.resolveProfiles()
 
 	tasks, notes, err := in.resolveTasks(ctx)
 	if err != nil {
@@ -82,7 +82,7 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) (err error) {
 		}
 	}
 
-	in.loadLinks(ctx, w, tasks)
+	in.loadLinks(ctx, tasks)
 
 	runs := make([]*driveRun, 0, len(order))
 	byID := map[string]*driveRun{}
@@ -90,7 +90,7 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) (err error) {
 	for _, i := range order {
 		r := &driveRun{task: tasks[i], lastCatchup: in.savedCatchup(tasks[i])}
 		if r.task.finished {
-			in.end(ctx, w, r, driveResult{row: rowAlreadyFinished})
+			in.end(ctx, r, driveResult{row: rowAlreadyFinished})
 		}
 
 		runs = append(runs, r)
@@ -117,11 +117,11 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) (err error) {
 		}
 
 		if why, ok := in.lease(r); !ok {
-			in.end(ctx, w, r, driveResult{row: why, code: ui.ExitHalted, drives: true})
+			in.end(ctx, r, driveResult{row: why, code: ui.ExitHalted, drives: true})
 		}
 	}
 
-	if err := in.startRunnable(ctx, w, runs, nil); err != nil {
+	if err := in.startRunnable(ctx, runs, nil); err != nil {
 		return err
 	}
 
@@ -143,14 +143,14 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) (err error) {
 		if in.rec != nil && in.rec.Cancelled != nil {
 			for _, r := range runs {
 				if r.end == nil {
-					in.end(ctx, w, r, driveResult{row: "cancelled", code: ui.ExitHalted, drives: true})
+					in.end(ctx, r, driveResult{row: "cancelled", code: ui.ExitHalted, drives: true})
 				}
 			}
 
 			break
 		}
 
-		in.retryPull(ctx, w)
+		in.retryPull(ctx)
 
 		view, err := in.lookAll(ctx)
 		if err != nil {
@@ -165,31 +165,31 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) (err error) {
 				continue
 			}
 
-			if err := in.onTask(ctx, w, r, in.poll(ctx, w, r)); err != nil {
+			if err := in.onTask(ctx, r, in.poll(ctx, r)); err != nil {
 				return fmt.Errorf("%s: %w", r.task.ref.ID, err)
 			}
 		}
 
-		if err := in.markMoved(ctx, w, runs, wss); err != nil {
+		if err := in.markMoved(ctx, runs, wss); err != nil {
 			return err
 		}
 
-		if err := in.startRunnable(ctx, w, runs, wss); err != nil {
+		if err := in.startRunnable(ctx, runs, wss); err != nil {
 			return err
 		}
 	}
 
 	// a task read for the first time during the drive is in the ledger now
-	in.loadLinks(ctx, w, tasks)
+	in.loadLinks(ctx, tasks)
 
-	return in.report(w, runs, append(notes, in.inboxNotes...))
+	return in.report(runs, append(notes, in.inboxNotes...))
 }
 
 // loadLinks reads the urls of the drive's tasks and their bases; a drive
 // the daemon runs writes to a log, so it links nothing.
-func (in *driveInput) loadLinks(ctx context.Context, w io.Writer, tasks []driveTask) {
+func (in *driveInput) loadLinks(ctx context.Context, tasks []driveTask) {
 	if in.links == nil {
-		in.links = linksFor(w, false)
+		in.links = linksFor(in.out, false)
 		if in.links.on {
 			in.project = projectOf(ctx, in.main)
 		}
@@ -214,7 +214,7 @@ func (in *driveInput) id(id string) string {
 // resolveProfiles resolves each named profile once over the layers (the
 // run-wide flag, then a task's own, each as the map's default, the map's own
 // under "") and says what it corrected or fell back on before anything opens.
-func (in *driveInput) resolveProfiles(w io.Writer) {
+func (in *driveInput) resolveProfiles() {
 	in.profiles = map[string]agentctl.Profile{}
 
 	base := in.layers.with(in.args.agent, agentFlagOrigin)
@@ -228,7 +228,7 @@ func (in *driveInput) resolveProfiles(w io.Writer) {
 		in.profiles[raw] = r.Profile
 
 		for _, line := range r.lines(in.settings) {
-			fmt.Fprintln(w, line)
+			fmt.Fprintln(in.out, line)
 		}
 	}
 }
@@ -270,7 +270,6 @@ func stopping(runs []*driveRun) bool {
 // queue; wss is the tick's look, nil before the first.
 func (in *driveInput) startRunnable(
 	ctx context.Context,
-	w io.Writer,
 	runs []*driveRun,
 	wss []agentctl.Workspace,
 ) error {
@@ -289,14 +288,14 @@ func (in *driveInput) startRunnable(
 		}
 
 		if !gate.admit(in, r) {
-			in.queue(w, r)
+			in.queue(r)
 
 			continue
 		}
 
 		in.unqueue(r)
 
-		if err := in.onTask(ctx, w, r, in.open(ctx, w, r)); err != nil {
+		if err := in.onTask(ctx, r, in.open(ctx, r)); err != nil {
 			return fmt.Errorf("%s: %w", r.task.ref.ID, err)
 		}
 
@@ -304,7 +303,7 @@ func (in *driveInput) startRunnable(
 			continue
 		}
 
-		if err := in.onTask(ctx, w, r, in.next(ctx, w, r)); err != nil {
+		if err := in.onTask(ctx, r, in.next(ctx, r)); err != nil {
 			return fmt.Errorf("%s: %w", r.task.ref.ID, err)
 		}
 	}
@@ -347,13 +346,14 @@ func createdAt(ctx context.Context, dir, branch string) string {
 // markMoved marks a running dependent whose base branch moved past it, read
 // while the base agent is not mid-turn, so its next boundary catches up; a
 // catchup in flight clears the mark itself, and a finished base is landed's.
-func (in *driveInput) markMoved(ctx context.Context, w io.Writer, runs []*driveRun, wss []agentctl.Workspace) error {
+func (in *driveInput) markMoved(ctx context.Context, runs []*driveRun, wss []agentctl.Workspace) error {
 	for _, r := range runs {
 		b := r.base
 		// a parked ship's own guard brings the base in when it resumes, and
 		// so does one the cap queued after parking; an attached turn may be
 		// a catchup, which a mark mid-turn would halt
-		if !r.active() || r.phase == atParked || r.queued() || r.skill == "catchup" || r.attached || b == nil || !b.opened() {
+		if !r.active() || r.phase == atParked || r.queued() || r.skill == "catchup" || r.attached || b == nil ||
+			!b.opened() {
 			continue
 		}
 
@@ -367,7 +367,7 @@ func (in *driveInput) markMoved(ctx context.Context, w io.Writer, runs []*driveR
 		// poll reads again, and a wrong "moved" would send a catchup
 		head, err := gitx.Ref(ctx, in.main, "refs/heads/"+b.o.branch)
 		if err != nil {
-			fmt.Fprintf(w, "%s: skipped this poll, reading %s: %v\n", in.id(r.task.ref.ID), b.o.branch, err)
+			fmt.Fprintf(in.out, "%s: skipped this poll, reading %s: %v\n", in.id(r.task.ref.ID), b.o.branch, err)
 
 			continue
 		}
@@ -378,7 +378,7 @@ func (in *driveInput) markMoved(ctx context.Context, w io.Writer, runs []*driveR
 
 		if has, err := gitx.IsAncestor(ctx, in.main, head, "refs/heads/"+r.o.branch); has || err != nil {
 			if err != nil {
-				fmt.Fprintf(w, "%s: skipped this poll, reading %s: %v\n", in.id(r.task.ref.ID), r.o.branch, err)
+				fmt.Fprintf(in.out, "%s: skipped this poll, reading %s: %v\n", in.id(r.task.ref.ID), r.o.branch, err)
 			}
 
 			continue
@@ -386,7 +386,7 @@ func (in *driveInput) markMoved(ctx context.Context, w io.Writer, runs []*driveR
 
 		marked, err := branchmeta.Get(ctx, in.main, r.o.branch, branchmeta.Moved)
 		if err != nil {
-			fmt.Fprintf(w, "%s: skipped this poll, reading %s: %v\n",
+			fmt.Fprintf(in.out, "%s: skipped this poll, reading %s: %v\n",
 				in.id(r.task.ref.ID), branchmeta.Moved.For(r.o.branch), err)
 
 			continue
@@ -400,7 +400,7 @@ func (in *driveInput) markMoved(ctx context.Context, w io.Writer, runs []*driveR
 			return fmt.Errorf("%s: marking %s moved: %w", r.task.ref.ID, b.o.branch, err)
 		}
 
-		fmt.Fprintf(w, "%s: base %s moved, catching up before the next skill\n", in.id(r.task.ref.ID), b.o.branch)
+		fmt.Fprintf(in.out, "%s: base %s moved, catching up before the next skill\n", in.id(r.task.ref.ID), b.o.branch)
 	}
 
 	return nil
@@ -409,7 +409,7 @@ func (in *driveInput) markMoved(ctx context.Context, w io.Writer, runs []*driveR
 // markBehind marks a pushed branch whose pull request's target moved past it,
 // at the boundary before its next skill, so the open PR never sits behind; a
 // listed base still in flight is markMoved's, and finish has readyToMerge.
-func (in *driveInput) markBehind(ctx context.Context, w io.Writer, r *driveRun) error {
+func (in *driveInput) markBehind(ctx context.Context, r *driveRun) error {
 	id, branch := r.task.ref.ID, r.o.branch
 
 	if r.base != nil && !r.base.through() {
@@ -417,7 +417,7 @@ func (in *driveInput) markBehind(ctx context.Context, w io.Writer, r *driveRun) 
 	}
 
 	skip := func(what string, err error) error {
-		fmt.Fprintf(w, "%s: skipped the target check, %s: %v\n", in.id(id), what, err)
+		fmt.Fprintf(in.out, "%s: skipped the target check, %s: %v\n", in.id(id), what, err)
 
 		return nil
 	}
@@ -479,7 +479,7 @@ func (in *driveInput) markBehind(ctx context.Context, w io.Writer, r *driveRun) 
 		return fmt.Errorf("marking %s behind %s: %w", branch, target.name, err)
 	}
 
-	fmt.Fprintf(w, "%s: %s moved past %s, catching up before the next skill\n", in.id(id), target.name, branch)
+	fmt.Fprintf(in.out, "%s: %s moved past %s, catching up before the next skill\n", in.id(id), target.name, branch)
 
 	return nil
 }

@@ -164,7 +164,7 @@ func (e *catchupEngine) left(ctx context.Context, main, dir, branch string, p ca
 		return t, err
 	}
 
-	if err := t.readBase(ctx, branch, p); err != nil || !t.held || len(t.markers) > 0 {
+	if t, err = t.withBase(ctx, branch, p); err != nil || !t.held || len(t.markers) > 0 {
 		return t, err
 	}
 
@@ -298,7 +298,7 @@ func treeBusy(ctx context.Context, dir string) string {
 var errOpUnread = errors.New("could not tell whether a merge or rebase is in progress")
 
 // A treeState is what git shows of a worktree a catchup acts on: an
-// operation in progress and the uncommitted paths, and once readBase ran,
+// operation in progress and the uncommitted paths, and once withBase ran,
 // whether the branch holds the base and the conflict markers left past it.
 type treeState struct {
 	dir     string
@@ -332,21 +332,20 @@ func readTree(ctx context.Context, dir string) (treeState, error) {
 	return t, nil
 }
 
-// readBase reads whether branch holds p, and if it does, the conflict
-// markers left in the paths it changes past p.
-func (t *treeState) readBase(ctx context.Context, branch string, p catchupPlan) error {
+// withBase is t with whether branch holds p read, and if it does, the
+// conflict markers left in the paths it changes past p.
+func (t treeState) withBase(ctx context.Context, branch string, p catchupPlan) (treeState, error) {
 	t.branch, t.base = branch, p
 
 	held, err := gitx.IsAncestor(ctx, t.dir, p.sha, "HEAD")
 	if err != nil || !held {
-		return err
+		return t, err
 	}
 
 	t.held = true
-
 	t.markers, err = gitx.Markers(ctx, t.dir, p.sha)
 
-	return err
+	return t, err
 }
 
 // busy says what keeps a catchup from starting, "" for nothing.
@@ -361,7 +360,7 @@ func (t treeState) busy() string {
 	return ""
 }
 
-// baseLost reports a branch that no longer holds the base readBase read.
+// baseLost reports a branch that no longer holds the base withBase read.
 func (t treeState) baseLost() bool {
 	return t.base.sha != "" && t.op.Kind == "" && t.dirty == 0 && !t.held
 }

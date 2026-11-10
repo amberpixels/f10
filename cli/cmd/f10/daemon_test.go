@@ -104,9 +104,7 @@ func TestWakeReturnsOnAWrite(t *testing.T) {
 	t.Cleanup(func() { wakeStep = time.Second })
 
 	in := &driveInput{
-		driveConfig: driveConfig{
-			stateDir: t.TempDir(),
-		},
+		stateDir: t.TempDir(),
 	}
 	in.runs = []*driveRun{{phase: atRunning, o: openedTask{path: "/code/repo.GH-1"}}}
 

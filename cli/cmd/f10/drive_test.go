@@ -89,49 +89,47 @@ func newDriveFixture(t *testing.T, args ...string) *driveFixture {
 	}
 
 	fx.in = &driveInput{
-		driveConfig: driveConfig{
-			main:     "/code/repo",
-			storage:  testStorage,
-			args:     a,
-			argv:     args,
-			sequence: func(shipFlow) []string { return chain },
-			stateDir: t.TempDir(),
-			ttl:      state.DefaultTTL,
-		},
-		driveDeps: driveDeps{
-			tracker: tracker{
-				resolve: func(ctx context.Context, tok string) (ref.Ref, error) {
-					return ref.Lookup{Prefix: "GH"}.Find(ctx, tok)
-				},
-				info: func(_ context.Context, r ref.Ref) (taskInfo, error) {
-					info, ok := fx.infos[r.ID]
-					if !ok {
-						return taskInfo{}, errors.New("no such issue")
-					}
-
-					return info, nil
-				},
-				storage: storage.Root(t.TempDir()),
+		main:     "/code/repo",
+		storage:  testStorage,
+		args:     a,
+		argv:     args,
+		sequence: func(shipFlow) []string { return chain },
+		stateDir: t.TempDir(),
+		ttl:      state.DefaultTTL,
+		tracker: tracker{
+			resolve: func(ctx context.Context, tok string) (ref.Ref, error) {
+				return ref.Lookup{Prefix: "GH"}.Find(ctx, tok)
 			},
-			now: func() time.Time { return fx.clock },
-			sleep: func(_ context.Context, d time.Duration) error {
-				fx.sleeps++
-				fx.clock = fx.clock.Add(d)
-
-				if hook := fx.onTick[fx.sleeps]; hook != nil {
-					hook()
+			info: func(_ context.Context, r ref.Ref) (taskInfo, error) {
+				info, ok := fx.infos[r.ID]
+				if !ok {
+					return taskInfo{}, errors.New("no such issue")
 				}
 
-				return nil
+				return info, nil
 			},
-			finish: func(context.Context, io.Writer, driveFinish) error {
-				t.Fatal("finish ran although the chain has none")
-
-				return nil
-			},
-			catchup: proseCatchup(),
+			storage: storage.Root(t.TempDir()),
 		},
+		now: func() time.Time { return fx.clock },
+		sleep: func(_ context.Context, d time.Duration) error {
+			fx.sleeps++
+			fx.clock = fx.clock.Add(d)
+
+			if hook := fx.onTick[fx.sleeps]; hook != nil {
+				hook()
+			}
+
+			return nil
+		},
+		finish: func(context.Context, io.Writer, driveFinish) error {
+			t.Fatal("finish ran although the chain has none")
+
+			return nil
+		},
+		catchup: proseCatchup(),
 	}
+
+	fx.in.out = &fx.out
 
 	// what the engine reads after an agent's catchup turn: the base held,
 	// no conflict marker left
@@ -2889,44 +2887,41 @@ func TestDriveFinishAsksForSomeoneElsesPR(t *testing.T) {
 	var got []string
 
 	in := &driveInput{
-		driveDeps: driveDeps{
-			finish: func(_ context.Context, _ io.Writer, req driveFinish) error {
-				got = append(got, req.pr)
-				if req.pr == "" {
-					return foreignPullError{url: "https://gh/pr/9", author: "alice"}
-				}
+		finish: func(_ context.Context, _ io.Writer, req driveFinish) error {
+			got = append(got, req.pr)
+			if req.pr == "" {
+				return foreignPullError{url: "https://gh/pr/9", author: "alice"}
+			}
 
-				return nil
-			},
+			return nil
 		},
-		driveState: driveState{
-			answers: newAnswerBook(),
-		},
+		answers: newAnswerBook(),
 	}
+	in.out = io.Discard
 
 	run := &driveRun{task: driveTask{ref: gh1}}
 
-	res := in.runFinish(t.Context(), io.Discard, run)
+	res := in.runFinish(t.Context(), run)
 	if res.code != ui.ExitAsk || len(res.lines) != 1 || !strings.Contains(res.lines[0], "[local | merge]") {
 		t.Fatalf("runFinish on someone else's PR = %+v, want an ask", res)
 	}
 
 	in.answers.give(answer{task: "GH-1", text: "1. local"})
 
-	if res = in.runFinish(t.Context(), io.Discard, run); res.code != 0 {
+	if res = in.runFinish(t.Context(), run); res.code != 0 {
 		t.Fatalf("runFinish answered local = %+v, want finished", res)
 	}
 
 	// a bare answer that is no finish choice belongs to some agent's question
 	in.answers.give(answer{text: "1. yes"})
 
-	if res = in.runFinish(t.Context(), io.Discard, run); res.code != ui.ExitAsk || in.answers.bare != "1. yes" {
+	if res = in.runFinish(t.Context(), run); res.code != ui.ExitAsk || in.answers.bare != "1. yes" {
 		t.Errorf("a bare non-choice answer = %+v, left %q; want it left for an agent", res, in.answers.bare)
 	}
 
 	in.answers.give(answer{task: "GH-1", text: "maybe"})
 
-	if res = in.runFinish(t.Context(), io.Discard, run); res.code != ui.ExitHalted {
+	if res = in.runFinish(t.Context(), run); res.code != ui.ExitHalted {
 		t.Errorf("a keyed answer that is no choice = %+v, want a halt", res)
 	}
 
@@ -2941,25 +2936,20 @@ func TestDriveFinishPassesTheRunsBranch(t *testing.T) {
 	var got driveFinish
 
 	in := &driveInput{
-		driveConfig: driveConfig{
-			main: t.TempDir(),
-		},
-		driveDeps: driveDeps{
-			now: time.Now,
-			finish: func(_ context.Context, _ io.Writer, req driveFinish) error {
-				got = req
+		main: t.TempDir(),
+		now:  time.Now,
+		finish: func(_ context.Context, _ io.Writer, req driveFinish) error {
+			got = req
 
-				return nil
-			},
+			return nil
 		},
-		driveState: driveState{
-			answers: newAnswerBook(),
-		},
+		answers: newAnswerBook(),
 	}
+	in.out = io.Discard
 
 	run := &driveRun{task: driveTask{ref: gh1, suffix: "b"}, o: openedTask{branch: "GH-1-b"}}
 
-	if res := in.runFinish(t.Context(), io.Discard, run); res.code != 0 {
+	if res := in.runFinish(t.Context(), run); res.code != 0 {
 		t.Fatalf("runFinish = %+v, want finished", res)
 	}
 
@@ -3495,7 +3485,7 @@ func TestDriveEndParksFinishRecord(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1")
 	r := &driveRun{phase: atRunning, finishes: true, o: openedTask{branch: "GH-1"}}
 
-	fx.in.end(t.Context(), &fx.out, r, driveResult{row: "asked at finish", code: ui.ExitAsk})
+	fx.in.end(t.Context(), r, driveResult{row: "asked at finish", code: ui.ExitAsk})
 
 	if !fx.f.meta.Wrote("GH-1", branchmeta.Finish, branchmeta.FinishQueued) {
 		t.Errorf("an ask did not park the finish record; calls: %v", fx.f.calls)
@@ -3506,7 +3496,7 @@ func TestDriveEndParksFinishRecord(t *testing.T) {
 	}
 
 	fx.f.calls = nil
-	fx.in.end(t.Context(), &fx.out, r, driveResult{row: "finished"})
+	fx.in.end(t.Context(), r, driveResult{row: "finished"})
 
 	if fx.f.called("set branch.GH-1." + string(branchmeta.Finish)) {
 		t.Error("a finished task's record was written again")
@@ -3638,7 +3628,6 @@ func TestDriveParksAShipOnItsBasesCode(t *testing.T) {
 		listing("GH-1", "working", "GH-2", "idle"), // GH-2 parks
 		listing("GH-1", "working", "GH-2", "idle"), // GH-1 still without code
 		listing("GH-1", "working", "GH-2", "idle"), // GH-1 committed
-		listing("GH-1", "working", "GH-2", "idle"), // the look before the resend
 		all("working", "GH-1", "GH-2"),
 		all("idle", "GH-1", "GH-2"))
 	fx.onTick[2] = func() { fx.writeWait(t) }
@@ -3695,7 +3684,6 @@ func TestDriveParksAShipOnItsBaseUntilOriginHasIt(t *testing.T) {
 		listing("GH-1", "working", "GH-2", "idle"), // GH-2 parks
 		listing("GH-1", "working", "GH-2", "idle"), // GH-1 still not on origin
 		listing("GH-1", "working", "GH-2", "idle"), // GH-1 pushed
-		listing("GH-1", "working", "GH-2", "idle"), // the look before the resend
 		all("working", "GH-1", "GH-2"),
 		all("idle", "GH-1", "GH-2"))
 	fx.onTick[2] = func() { fx.writeWaitAt(t, "pr", "its branch is not on origin yet") }
@@ -3775,7 +3763,6 @@ func TestDriveResendsAnOriginWaitTheBasePushedFirst(t *testing.T) {
 		unopened, all("idle", "GH-1", "GH-2"),
 		all("working", "GH-1", "GH-2"),
 		listing("GH-1", "working", "GH-2", "idle"), // GH-2's stop
-		listing("GH-1", "working", "GH-2", "idle"), // the look before the resend
 		all("working", "GH-1", "GH-2"),
 		all("idle", "GH-1", "GH-2"))
 	fx.onTick[2] = func() {
@@ -3829,7 +3816,7 @@ func TestDriveHaltsAnOriginWaitThatStopsAgain(t *testing.T) {
 			}
 			fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", tc.origin)
 
-			if err := fx.in.parkForOrigin(t.Context(), io.Discard, r); err != nil {
+			if err := fx.in.onTask(t.Context(), r, fx.in.parkForOrigin(t.Context(), r)); err != nil {
 				t.Fatal(err)
 			}
 
@@ -3854,7 +3841,9 @@ func TestDriveHoldsAResumedOriginWait(t *testing.T) {
 	fx.writeWaitAt(t, "pr", "its branch is not on origin yet")
 
 	var out bytes.Buffer
-	if err := fx.in.next(t.Context(), &out, r); err != nil {
+
+	fx.in.out = &out
+	if err := fx.in.next(t.Context(), r); err != nil {
 		t.Fatal(err)
 	}
 
@@ -3881,7 +3870,6 @@ func TestDriveResendsAShipWhoseBaseCommittedFirst(t *testing.T) {
 		unopened, all("idle", "GH-1", "GH-2"),
 		all("working", "GH-1", "GH-2"),
 		listing("GH-1", "working", "GH-2", "idle"), // GH-2's stop
-		listing("GH-1", "working", "GH-2", "idle"), // the look before the resend
 		all("working", "GH-1", "GH-2"),
 		listing("GH-1", "working", "GH-2", "idle"), // the same head stops it again
 		all("idle", "GH-1", "GH-2"))
@@ -3911,7 +3899,7 @@ func TestDriveMarksNoParkedTask(t *testing.T) {
 	b := &driveRun{phase: atRunning, o: openedTask{branch: "GH-1"}}
 	r := &driveRun{phase: atParked, base: b, o: openedTask{branch: "GH-2"}}
 
-	if err := fx.in.markMoved(t.Context(), io.Discard, []*driveRun{b, r}, nil); err != nil {
+	if err := fx.in.markMoved(t.Context(), []*driveRun{b, r}, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -4035,21 +4023,16 @@ func TestDriveFinishWithADeferredPullIsFinished(t *testing.T) {
 	const note = "main not pulled: the local main has commits origin/main lacks"
 
 	in := &driveInput{
-		driveConfig: driveConfig{
-			root: t.TempDir(),
-		},
-		driveDeps: driveDeps{
-			now: time.Now,
-			finish: func(_ context.Context, _ io.Writer, req driveFinish) error {
-				req.deferred(note)
+		root: t.TempDir(),
+		now:  time.Now,
+		finish: func(_ context.Context, _ io.Writer, req driveFinish) error {
+			req.deferred(note)
 
-				return nil
-			},
+			return nil
 		},
-		driveState: driveState{
-			answers: newAnswerBook(),
-		},
+		answers: newAnswerBook(),
 	}
+	in.out = io.Discard
 
 	if in.pullLine != "" {
 		t.Fatal("pullLine set before any finish")
@@ -4062,7 +4045,7 @@ func TestDriveFinishWithADeferredPullIsFinished(t *testing.T) {
 		}
 	}()
 
-	res := in.runFinish(t.Context(), io.Discard, &driveRun{task: driveTask{ref: gh1}})
+	res := in.runFinish(t.Context(), &driveRun{task: driveTask{ref: gh1}})
 	if res.row != rowFinished || res.code != 0 || len(res.lines) != 1 ||
 		!strings.Contains(res.lines[0], "GH-1 finished; main not pulled") {
 		t.Errorf("runFinish = %+v, want finished with the note", res)
@@ -4083,24 +4066,23 @@ func TestDriveRetriesADeferredPull(t *testing.T) {
 	f.fail("git pull --ff-only", shell.Result{Code: 1, Stderr: "fatal: Not possible to fast-forward, aborting."})
 
 	in := &driveInput{
-		driveConfig: driveConfig{
-			main: main,
-			root: root,
-		},
+		main: main,
+		root: root,
 	}
-
 	var out bytes.Buffer
 
+	in.out = &out
+
 	// a drive that ran no finish never pulls main
-	in.retryPull(t.Context(), &out)
+	in.retryPull(t.Context())
 
 	if f.called("git pull") {
 		t.Fatal("a drive that ran no finish pulled main")
 	}
 
 	in.ranFinish = true
-	in.retryPull(t.Context(), &out)
-	in.retryPull(t.Context(), &out)
+	in.retryPull(t.Context())
+	in.retryPull(t.Context())
 
 	if n := strings.Count(out.String(), "main not pulled"); n != 1 {
 		t.Errorf("a diverged main was said %d times:\n%s", n, out.String())
@@ -4110,7 +4092,7 @@ func TestDriveRetriesADeferredPull(t *testing.T) {
 	f.script("git merge-base --is-ancestor m3rge main", "")
 	out.Reset()
 
-	in.retryPull(t.Context(), &out)
+	in.retryPull(t.Context())
 
 	if !strings.Contains(out.String(), "pulled main up to m3rge") {
 		t.Errorf("retry after the pull lands:\n%s", out.String())
@@ -4155,7 +4137,7 @@ func TestDriveEndStopsARunningVerify(t *testing.T) {
 		return runVerify(ctx, t.TempDir(), []string{"sleep 30"}, log)
 	})
 
-	fx.in.end(t.Context(), &fx.out, r, driveResult{row: "cancelled", code: ui.ExitHalted, drives: true})
+	fx.in.end(t.Context(), r, driveResult{row: "cancelled", code: ui.ExitHalted, drives: true})
 
 	select {
 	case <-r.job.done:

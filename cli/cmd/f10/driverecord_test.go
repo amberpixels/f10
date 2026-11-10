@@ -174,13 +174,9 @@ func TestOpenRecordKeepsAnswersNotTaken(t *testing.T) {
 	}
 
 	in := &driveInput{
-		driveConfig: driveConfig{
-			root: root,
-			argv: []string{"GH-1", "GH-2", "--answer", "GH-2=2. maybe"},
-		},
-		driveDeps: driveDeps{
-			now: time.Now,
-		},
+		root: root,
+		argv: []string{"GH-1", "GH-2", "--answer", "GH-2=2. maybe"},
+		now:  time.Now,
 	}
 	in.args.answers = []string{"GH-2=2. maybe"}
 
@@ -195,13 +191,9 @@ func TestOpenRecordKeepsAnswersNotTaken(t *testing.T) {
 
 	// the drive's own lease is held: a second drive on the record refuses
 	second := &driveInput{
-		driveConfig: driveConfig{
-			root: root,
-			argv: []string{"GH-1", "GH-2"},
-		},
-		driveDeps: driveDeps{
-			now: time.Now,
-		},
+		root: root,
+		argv: []string{"GH-1", "GH-2"},
+		now:  time.Now,
 	}
 	if err := second.openRecord(nil); err == nil || !strings.Contains(err.Error(), "drive 1 is running") {
 		t.Errorf("second openRecord = %v", err)
@@ -219,13 +211,9 @@ func TestOpenRecordReplacesABareAnswerHoldingEquals(t *testing.T) {
 	}
 
 	in := &driveInput{
-		driveConfig: driveConfig{
-			root: root,
-			argv: []string{"GH-1", "--answer", "use x=1"},
-		},
-		driveDeps: driveDeps{
-			now: time.Now,
-		},
+		root: root,
+		argv: []string{"GH-1", "--answer", "use x=1"},
+		now:  time.Now,
 	}
 	in.args.answers = []string{"use x=1"}
 
@@ -463,15 +451,11 @@ func TestOpenRecordRecordsTheLaunch(t *testing.T) {
 
 	open := func(session string, change func(*driveInput)) *driveInput {
 		in := &driveInput{
-			driveConfig: driveConfig{
-				root:     root,
-				stateDir: stateDir,
-				session:  session,
-				argv:     []string{"GH-1"},
-			},
-			driveDeps: driveDeps{
-				now: time.Now,
-			},
+			root:     root,
+			stateDir: stateDir,
+			session:  session,
+			argv:     []string{"GH-1"},
+			now:      time.Now,
 		}
 		if change != nil {
 			change(in)
@@ -521,16 +505,12 @@ func TestOpenRecordKeepsTheCap(t *testing.T) {
 
 	open := func(argv []string, parallel int) *driveInput {
 		in := &driveInput{
-			driveConfig: driveConfig{
-				root:            root,
-				stateDir:        t.TempDir(),
-				argv:            argv,
-				defaultParallel: 6,
-				args:            driveArgs{parallel: parallel},
-			},
-			driveDeps: driveDeps{
-				now: time.Now,
-			},
+			root:            root,
+			stateDir:        t.TempDir(),
+			argv:            argv,
+			defaultParallel: 6,
+			args:            driveArgs{parallel: parallel},
+			now:             time.Now,
 		}
 		if err := in.openRecord(nil); err != nil {
 			t.Fatal(err)
@@ -628,15 +608,9 @@ func TestRecordFollowsThePhase(t *testing.T) {
 	}
 
 	in := &driveInput{
-		driveConfig: driveConfig{
-			root: root,
-		},
-		driveDeps: driveDeps{
-			out: io.Discard,
-		},
-		driveState: driveState{
-			rec: rec,
-		},
+		root: root,
+		out:  io.Discard,
+		rec:  rec,
 	}
 	r := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-1"}}}
 
@@ -653,7 +627,7 @@ func TestRecordFollowsThePhase(t *testing.T) {
 		}
 	}
 
-	in.queue(io.Discard, r)
+	in.queue(r)
 	want(drives.PhaseQueued, true)
 
 	in.unqueue(r)
@@ -666,6 +640,6 @@ func TestRecordFollowsThePhase(t *testing.T) {
 	in.enter(r, atWaiting)
 	want(drives.PhaseWaiting, false)
 
-	in.end(t.Context(), io.Discard, r, driveResult{row: "done: ship"})
+	in.end(t.Context(), r, driveResult{row: "done: ship"})
 	want(drives.PhaseEnded, false)
 }

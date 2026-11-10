@@ -56,7 +56,7 @@ func pass(in *driveInput, g *openGate) {
 		}
 
 		if !g.admit(in, r) {
-			in.queue(io.Discard, r)
+			in.queue(r)
 
 			continue
 		}
@@ -70,12 +70,8 @@ func pass(in *driveInput, g *openGate) {
 // never have more than four on a skill at once, and all ten finish.
 func TestCapHoldsTenTasksToFour(t *testing.T) {
 	in := &driveInput{
-		driveDeps: driveDeps{
-			out: io.Discard,
-		},
-		driveState: driveState{
-			parallel: 4,
-		},
+		out:      io.Discard,
+		parallel: 4,
 	}
 	in.runs = capRuns(10)
 
@@ -108,12 +104,8 @@ func TestCapHoldsTenTasksToFour(t *testing.T) {
 // the next queued task opens on the same pass.
 func TestCapAskFreesTheSlot(t *testing.T) {
 	in := &driveInput{
-		driveDeps: driveDeps{
-			out: io.Discard,
-		},
-		driveState: driveState{
-			parallel: 2,
-		},
+		out:      io.Discard,
+		parallel: 2,
 	}
 	in.runs = capRuns(4)
 
@@ -139,12 +131,8 @@ func TestCapAskFreesTheSlot(t *testing.T) {
 // skill only once a slot is free, unless its agent is already mid-turn.
 func TestCapSlotFree(t *testing.T) {
 	in := &driveInput{
-		driveDeps: driveDeps{
-			out: io.Discard,
-		},
-		driveState: driveState{
-			parallel: 1,
-		},
+		out:      io.Discard,
+		parallel: 1,
 	}
 	in.runs = capRuns(2)
 	openRun(in.runs[0])
@@ -179,12 +167,8 @@ func TestCapSlotFree(t *testing.T) {
 // opens, though no task is on a skill.
 func TestCapOpenCeiling(t *testing.T) {
 	in := &driveInput{
-		driveDeps: driveDeps{
-			out: io.Discard,
-		},
-		driveState: driveState{
-			parallel: 1,
-		},
+		out:      io.Discard,
+		parallel: 1,
 	}
 	in.runs = capRuns(3)
 
@@ -212,12 +196,8 @@ func TestCapOpenCeiling(t *testing.T) {
 // a fresh one: it adds no session, and a turn still running opens past the cap.
 func TestCapResumeTakesOpenAgentsFirst(t *testing.T) {
 	in := &driveInput{
-		driveDeps: driveDeps{
-			out: io.Discard,
-		},
-		driveState: driveState{
-			parallel: 1,
-		},
+		out:      io.Discard,
+		parallel: 1,
 	}
 	in.runs = capRuns(3)
 	in.runs[1].task.branch = "GH-2"
