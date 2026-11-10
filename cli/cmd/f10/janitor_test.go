@@ -11,9 +11,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/fsx"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
@@ -23,7 +26,7 @@ import (
 // records a dependent. Each test scripts its branches and requests.
 type janitorFixture struct {
 	f  *fakes
-	in janitorInput
+	in finish.JanitorInput
 }
 
 const (
@@ -39,11 +42,11 @@ func newJanitorFixture(t *testing.T) *janitorFixture {
 	main := t.TempDir()
 	fx := &janitorFixture{
 		f:  newFakes(t),
-		in: janitorInput{main: main, prefix: "GH", storage: storage.InRepo(main)},
+		in: finish.JanitorInput{Main: main, Prefix: "GH", Storage: storage.InRepo(main)},
 	}
 
-	h := newHost("gh", main)
-	fx.in.host = &h
+	h := hostops.NewHost("gh", main)
+	fx.in.Host = &h
 
 	f := fx.f
 	f.script(headRef, "origin/main")
@@ -100,7 +103,7 @@ func (fx *janitorFixture) request(branch, state, sha, author string) {
 func (fx *janitorFixture) plan(t *testing.T) string {
 	t.Helper()
 
-	p := filepath.Join(fx.in.storage.Plans(), "GH-1.md")
+	p := filepath.Join(fx.in.Storage.Plans(), "GH-1.md")
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +118,7 @@ func (fx *janitorFixture) plan(t *testing.T) string {
 func (fx *janitorFixture) run(t *testing.T) string {
 	t.Helper()
 
-	lines, err := janitor(t.Context(), fx.in)
+	lines, err := finish.Janitor(t.Context(), fx.in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,9 +133,9 @@ func TestJanitorRemovesAMergedBranch(t *testing.T) {
 	fx.branches(t, [3]string{"GH-1/x", "abc", "abc"})
 	fx.request("GH-1/x", "MERGED", "abc", "me")
 	plan := fx.plan(t)
-	reviews := filepath.Join(fx.in.main, ".f10", "reviews")
+	reviews := filepath.Join(fx.in.Main, ".f10", "reviews")
 	writeFile(t, filepath.Join(reviews, "GH-1", "1.md"), "task: GH-1\nround: 1\n")
-	handoff := taskHandoff(fx.in.storage, "GH-1")
+	handoff := archive.TaskHandoff(fx.in.Storage, "GH-1")
 	writeFile(t, handoff, "---\nhead: abc\n---\nNothing to do after merge.\n")
 
 	out := fx.run(t)
@@ -155,7 +158,7 @@ func TestJanitorRemovesAMergedBranch(t *testing.T) {
 		}
 	}
 
-	if fsx.Exists(plan) || !fsx.Exists(filepath.Join(fx.in.storage.Plans(), "archive", "GH-1.md")) {
+	if fsx.Exists(plan) || !fsx.Exists(filepath.Join(fx.in.Storage.Plans(), "archive", "GH-1.md")) {
 		t.Errorf("plan not archived:\n%s", out)
 	}
 
@@ -217,7 +220,7 @@ func TestJanitorKeepsABranchAheadOfItsRequest(t *testing.T) {
 			t.Errorf("tips %v: out = %q", c.tips, out)
 		}
 
-		if !fsx.Exists(filepath.Join(fx.in.storage.Plans(), "GH-1.md")) {
+		if !fsx.Exists(filepath.Join(fx.in.Storage.Plans(), "GH-1.md")) {
 			t.Errorf("tips %v: plan moved", c.tips)
 		}
 	}
@@ -366,7 +369,7 @@ func TestJanitorIgnoresBranchesWithoutATask(t *testing.T) {
 // default branch goes.
 func TestJanitorWithoutAHost(t *testing.T) {
 	fx := newJanitorFixture(t)
-	fx.in.host = nil
+	fx.in.Host = nil
 	fx.branches(t, [3]string{"GH-1/x", "abc", ""}, [3]string{"GH-2/y", "def", ""}, [3]string{"GH-3/z", "ghi", "ghi"})
 	fx.f.script("git config --get branch.GH-1/x.merge", "")
 	fx.f.script("git config --get branch.GH-2/y.merge", "")
@@ -390,13 +393,13 @@ func TestJanitorWithoutAHost(t *testing.T) {
 // A dry run says what would go and changes nothing.
 func TestJanitorDryRun(t *testing.T) {
 	fx := newJanitorFixture(t)
-	fx.in.dry = true
+	fx.in.Dry = true
 	fx.branches(t, [3]string{"GH-1/x", "abc", "abc"})
 	fx.request("GH-1/x", "MERGED", "abc", "me")
 	plan := fx.plan(t)
-	reviews := filepath.Join(fx.in.main, ".f10", "reviews", "GH-1")
+	reviews := filepath.Join(fx.in.Main, ".f10", "reviews", "GH-1")
 	writeFile(t, filepath.Join(reviews, "1.md"), "task: GH-1\nround: 1\n")
-	handoff := taskHandoff(fx.in.storage, "GH-1")
+	handoff := archive.TaskHandoff(fx.in.Storage, "GH-1")
 	writeFile(t, handoff, "---\nhead: abc\n---\nNothing to do after merge.\n")
 
 	out := fx.run(t)
@@ -437,22 +440,22 @@ func TestJanitorKeepsThePlanOfATaskStillOpen(t *testing.T) {
 }
 
 func TestJanitorDue(t *testing.T) {
-	stamp := filepath.Join(t.TempDir(), janitorStamp)
+	stamp := filepath.Join(t.TempDir(), finish.JanitorStamp)
 	now := time.Now()
 
-	if !janitorDue(stamp, now) {
+	if !finish.JanitorDue(stamp, now) {
 		t.Error("no stamp: not due")
 	}
 
-	if err := touchStamp(stamp, now.Add(-time.Hour)); err != nil {
+	if err := finish.TouchStamp(stamp, now.Add(-time.Hour)); err != nil {
 		t.Fatal(err)
 	}
 
-	if janitorDue(stamp, now) {
+	if finish.JanitorDue(stamp, now) {
 		t.Error("an hour-old stamp: due")
 	}
 
-	if !janitorDue(stamp, now.Add(janitorEvery)) {
+	if !finish.JanitorDue(stamp, now.Add(finish.JanitorEvery)) {
 		t.Error("a stamp past the interval: not due")
 	}
 }
@@ -460,7 +463,7 @@ func TestJanitorDue(t *testing.T) {
 // After start or finish, a fresh stamp skips the janitor; a due one runs it, and its
 // failure is a warning with the stamp moved, never an error.
 func TestSweepIfDue(t *testing.T) {
-	stamp := filepath.Join(t.TempDir(), "f10", janitorStamp)
+	stamp := filepath.Join(t.TempDir(), "f10", finish.JanitorStamp)
 	now := time.Now()
 
 	var runs int
@@ -473,10 +476,10 @@ func TestSweepIfDue(t *testing.T) {
 
 	var out bytes.Buffer
 
-	sweepIfDue(t.Context(), &out, stamp, now, run)
+	finish.SweepIfDue(t.Context(), &out, stamp, now, run)
 
-	if runs != 1 || janitorDue(stamp, now) {
-		t.Fatalf("runs = %d, due after the run = %v", runs, janitorDue(stamp, now))
+	if runs != 1 || finish.JanitorDue(stamp, now) {
+		t.Fatalf("runs = %d, due after the run = %v", runs, finish.JanitorDue(stamp, now))
 	}
 
 	want := []string{"janitor: removed GH-1/x", "janitor: warning: gh did not answer"}
@@ -484,7 +487,7 @@ func TestSweepIfDue(t *testing.T) {
 		t.Errorf("out = %q", got)
 	}
 
-	sweepIfDue(t.Context(), &out, stamp, now.Add(time.Minute), run)
+	finish.SweepIfDue(t.Context(), &out, stamp, now.Add(time.Minute), run)
 
 	if runs != 1 {
 		t.Error("a fresh stamp ran the janitor again")
@@ -500,7 +503,7 @@ func TestJanitorKeepsAPlanWrittenAfterTheRequestEnded(t *testing.T) {
 		`"closedAt":"2026-01-01T00:00:00Z","author":{"login":"me"}}]`)
 	plan := fx.plan(t)
 
-	images := filepath.Join(fx.in.main, ".f10", "images", "GH-1")
+	images := filepath.Join(fx.in.Main, ".f10", "images", "GH-1")
 	if err := os.MkdirAll(images, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -524,8 +527,8 @@ func TestJanitorReadsRecordedRiders(t *testing.T) {
 	fx.f.meta.Seed("GH-1/x", branchmeta.Task, "GH-1")
 	fx.f.meta.Seed("GH-1/x", branchmeta.Riders, "GH-2")
 
-	rider := filepath.Join(fx.in.storage.Plans(), "GH-2.md")
-	if err := os.MkdirAll(fx.in.storage.Plans(), 0o755); err != nil {
+	rider := filepath.Join(fx.in.Storage.Plans(), "GH-2.md")
+	if err := os.MkdirAll(fx.in.Storage.Plans(), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -561,14 +564,14 @@ func TestJanitorArchivesARidersPlan(t *testing.T) {
 	fx.request("GH-1+GH-2/x", "MERGED", "abc", "me")
 	fx.plan(t)
 
-	rider := filepath.Join(fx.in.storage.Plans(), "GH-2.md")
+	rider := filepath.Join(fx.in.Storage.Plans(), "GH-2.md")
 	if err := os.WriteFile(rider, []byte("plan"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	out := fx.run(t)
 
-	if fsx.Exists(rider) || !fsx.Exists(filepath.Join(fx.in.storage.Plans(), "archive", "GH-2.md")) {
+	if fsx.Exists(rider) || !fsx.Exists(filepath.Join(fx.in.Storage.Plans(), "archive", "GH-2.md")) {
 		t.Errorf("rider's plan not archived:\n%s", out)
 	}
 }
@@ -630,7 +633,7 @@ func TestDeleteRemoteBranchEscapesTheName(t *testing.T) {
 	f.script("glab api -X DELETE projects/:fullpath/repository/branches/GH-1%2Fa%23b", "")
 
 	for _, name := range []string{"gh", "glab"} {
-		if err := newHost(name, "/code/repo").DeleteBranch(t.Context(), "GH-1/a#b"); err != nil {
+		if err := hostops.NewHost(name, "/code/repo").DeleteBranch(t.Context(), "GH-1/a#b"); err != nil {
 			t.Errorf("%s: %v", name, err)
 		}
 	}
@@ -664,12 +667,12 @@ func TestJanitorArchivesTheRestWhenThePlanCannotMove(t *testing.T) {
 	fx.branches(t, [3]string{"GH-1/x", "abc", "abc"})
 	fx.request("GH-1/x", "MERGED", "abc", "me")
 	plan := fx.plan(t)
-	writeFile(t, filepath.Join(fx.in.storage.Plans(), "archive"), "")
-	reviews := filepath.Join(fx.in.main, ".f10", "reviews")
+	writeFile(t, filepath.Join(fx.in.Storage.Plans(), "archive"), "")
+	reviews := filepath.Join(fx.in.Main, ".f10", "reviews")
 	writeFile(t, filepath.Join(reviews, "GH-1", "1.md"), "task: GH-1\nround: 1\n")
-	handoff := taskHandoff(fx.in.storage, "GH-1")
+	handoff := archive.TaskHandoff(fx.in.Storage, "GH-1")
 	writeFile(t, handoff, "---\nhead: abc\n---\nNothing to do after merge.\n")
-	image := filepath.Join(fx.in.storage.Images("GH-1"), "1.png")
+	image := filepath.Join(fx.in.Storage.Images("GH-1"), "1.png")
 	writeFile(t, image, "png")
 
 	out := fx.run(t)

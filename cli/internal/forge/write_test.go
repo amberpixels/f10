@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/amberpixels/f10/cli/internal/seam"
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
@@ -22,8 +23,7 @@ func TestEditPullGLab(t *testing.T) {
 func TestEditPullGitHubBodyFile(t *testing.T) {
 	var file string
 
-	prev := shell.Capture
-	shell.Capture = func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
+	seam.Swap(t, &shell.Capture, func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
 		if got := name + " " + strings.Join(args[:3], " "); got != "gh pr edit 4" || args[3] != "--body-file" {
 			t.Fatalf("call = %s %v", name, args)
 		}
@@ -35,9 +35,7 @@ func TestEditPullGitHubBodyFile(t *testing.T) {
 		}
 
 		return shell.Result{}, nil
-	}
-
-	t.Cleanup(func() { shell.Capture = prev })
+	})
 
 	if err := (Host{Name: "gh"}).EditPull(t.Context(), "4", "", "the body"); err != nil {
 		t.Fatal(err)

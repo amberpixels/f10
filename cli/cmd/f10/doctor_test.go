@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
 	"github.com/amberpixels/f10/cli/internal/doctor"
 	"github.com/amberpixels/f10/cli/internal/facts"
 )
@@ -65,7 +66,7 @@ func TestDoctorReportsABrokenUserFile(t *testing.T) {
 	t.Setenv("CLAUDECODE", "")
 
 	user := filepath.Join(home, ".f10")
-	t.Setenv(userDirEnv, user)
+	t.Setenv(configcmd.UserDirEnv, user)
 
 	if err := os.MkdirAll(user, 0o750); err != nil {
 		t.Fatal(err)

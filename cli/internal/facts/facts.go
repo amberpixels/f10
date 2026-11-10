@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/flow"
-	"github.com/amberpixels/f10/cli/internal/frontmatter"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/taskid"
@@ -185,7 +184,7 @@ func Build(lay *layout.Layout, pb *probe.Probes, userDir string) *Effective {
 			continue
 		}
 
-		block, body, ok := frontmatter.Split(data)
+		block, body, ok := layout.SplitFrontmatter(data)
 		if ok {
 			d, err := decodeDeclared(block)
 			if err != nil {

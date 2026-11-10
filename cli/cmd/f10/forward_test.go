@@ -13,7 +13,10 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	startcmd "github.com/amberpixels/f10/cli/internal/command/start"
+	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -23,7 +26,7 @@ import (
 // The state dir is empty until a test writes a run into it.
 type forwardFixture struct {
 	f  *fakes
-	in forwardInput
+	in startcmd.ForwardInput
 }
 
 const (
@@ -36,14 +39,14 @@ func newForwardFixture(t *testing.T) *forwardFixture {
 	t.Helper()
 
 	fx := &forwardFixture{f: newFakes(t)}
-	fx.in = forwardInput{
-		main:     fwdMain,
-		here:     fwdMain,
-		task:     gh1,
-		text:     fwdText,
-		stateDir: t.TempDir(),
-		ttl:      state.DefaultTTL,
-		now:      time.Now(),
+	fx.in = startcmd.ForwardInput{
+		Main:     fwdMain,
+		Here:     fwdMain,
+		Task:     gh1,
+		Text:     fwdText,
+		StateDir: t.TempDir(),
+		Ttl:      state.DefaultTTL,
+		Now:      time.Now(),
 	}
 
 	fx.f.script(refsLocal, heads("GH-1"))
@@ -64,9 +67,9 @@ func (fx *forwardFixture) run(t *testing.T, ship, leaf string) {
 	t.Helper()
 
 	body := "v 1\ntask GH-1\nroot " + fwdWT + "\ncapture prior\nplan done\nship " + ship + "\nleaf " + leaf +
-		"\nupdated " + strconv.FormatInt(fx.in.now.Unix(), 10) + "\n"
+		"\nupdated " + strconv.FormatInt(fx.in.Now.Unix(), 10) + "\n"
 
-	if err := os.WriteFile(filepath.Join(fx.in.stateDir, "remote.state"), []byte(body), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(fx.in.StateDir, "remote.state"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -76,7 +79,7 @@ func (fx *forwardFixture) forward(t *testing.T) (string, error) {
 
 	var out bytes.Buffer
 
-	err := forward(t.Context(), &out, fx.in)
+	err := startcmd.Forward(t.Context(), &out, fx.in)
 
 	return out.String(), err
 }
@@ -129,8 +132,8 @@ func TestForwardReachesAnAgentByItsBareName(t *testing.T) {
 // agent the suffix named.
 func TestForwardSendsPlainTextUnmarked(t *testing.T) {
 	fx := newForwardFixture(t)
-	fx.in.suffix = "v2"
-	fx.in.text = "1. no 2. client"
+	fx.in.Suffix = "v2"
+	fx.in.Text = "1. no 2. client"
 	fx.f.script(refsLocal, heads("GH-1-v2"))
 	fx.f.script(worktrees, porcelain("GH-1-v2", fwdWT))
 	fx.f.script("herdr agent prompt "+agentctl.AgentName("GH-1", "v2", fwdWT)+" 1. no 2. client", "{}")
@@ -168,7 +171,7 @@ func TestForwardDeclinesWhenTheTaskIsHere(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			fx := newForwardFixture(t)
-			fx.in.here = c.here
+			fx.in.Here = c.here
 			fx.f.script(refsLocal, c.refs)
 			fx.f.script(worktrees, c.wts)
 
@@ -199,7 +202,7 @@ func TestForwardOutsideHerdr(t *testing.T) {
 	}
 
 	fx = newForwardFixture(t)
-	fx.in.here = fwdWT
+	fx.in.Here = fwdWT
 
 	if _, err := fx.forward(t); exitCode(err) != ui.ExitDeclined {
 		t.Errorf("err = %v, want exit %d without Herdr", err, ui.ExitDeclined)
@@ -248,7 +251,7 @@ func TestForwardSendsToAnIdleAgentThatIsBlocked(t *testing.T) {
 	fx := newForwardFixture(t)
 	fx.f.script(wsList, fx.workspaces("idle"))
 	fx.run(t, "blocked", "implement")
-	fx.in.text = "1. no"
+	fx.in.Text = "1. no"
 	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" 1. no", "{}")
 
 	if _, err := fx.forward(t); err != nil {
@@ -276,7 +279,7 @@ func TestDriven(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		if got := driven(c.text); got != c.want {
+		if got := launch.Driven(c.text); got != c.want {
 			t.Errorf("driven(%q) = %q, want %q", c.text, got, c.want)
 		}
 	}
@@ -289,20 +292,34 @@ func TestTaskCheckout(t *testing.T) {
 	f.script(refsLocal, heads("GH-1"))
 	f.script(worktrees, porcelain("GH-1", fwdWT))
 
-	name, path, err := taskCheckout(t.Context(), fwdMain, nil, gh1, "")
+	name, path, err := stack.TaskCheckout(t.Context(), fwdMain, nil, gh1, "")
 	if err != nil || name != "GH-1" || path != fwdWT {
 		t.Errorf("taskCheckout = %q, %q, %v", name, path, err)
 	}
 
 	f.script(worktrees, porcelain())
 
-	if name, path, err = taskCheckout(t.Context(), fwdMain, nil, gh1, ""); err != nil || name != "GH-1" || path != "" {
+	if name, path, err = stack.TaskCheckout(
+		t.Context(),
+		fwdMain,
+		nil,
+		gh1,
+		"",
+	); err != nil || name != "GH-1" ||
+		path != "" {
 		t.Errorf("a branch with no worktree = %q, %q, %v", name, path, err)
 	}
 
 	f.script(refsLocal, "")
 
-	if name, path, err = taskCheckout(t.Context(), fwdMain, nil, gh1, ""); err != nil || name != "" || path != "" {
+	if name, path, err = stack.TaskCheckout(
+		t.Context(),
+		fwdMain,
+		nil,
+		gh1,
+		"",
+	); err != nil || name != "" ||
+		path != "" {
 		t.Errorf("no branch = %q, %q, %v", name, path, err)
 	}
 }

@@ -6,6 +6,9 @@ import (
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/amberpixels/f10/cli/internal/archive"
+	"github.com/amberpixels/f10/cli/internal/statusview"
 )
 
 // The edge fixture's off-vocabulary verdicts (`asked`, `ask+reply`) count as
@@ -22,14 +25,14 @@ func TestReviewRoundsOnTheEdgeFixture(t *testing.T) {
 		writeFile(t, filepath.Join(root, "reviews", "FT-1", name), string(raw))
 	}
 
-	o := fileOutcomes(root, "FT-1", time.Time{})
+	o := statusview.FileOutcomes(root, "FT-1", time.Time{})
 
-	want := []reviewRound{
+	want := []statusview.ReviewRound{
 		{Round: "1", Found: 6, Fixed: 1, Skipped: 1, Ask: 3},
 		{Round: "2", Found: 4, Fixed: 1, Skipped: 1, Ask: 1},
 	}
-	if !slices.Equal(o.local, want) || o.localRaised != 7 {
-		t.Errorf("local = %+v raised %d, want %+v raised 7", o.local, o.localRaised, want)
+	if !slices.Equal(o.Local, want) || o.LocalRaised != 7 {
+		t.Errorf("local = %+v raised %d, want %+v raised 7", o.Local, o.LocalRaised, want)
 	}
 }
 
@@ -46,8 +49,8 @@ func TestJudgeFilesOrderAndSkips(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "notes.md"), "task: FT-1\nverdict: stop\n")
 
 	var got []string
-	for _, v := range judgeFiles(root, "FT-1") {
-		got = append(got, filepath.Base(v.path)+" "+v.judged)
+	for _, v := range archive.JudgeFiles(root, "FT-1") {
+		got = append(got, filepath.Base(v.Path)+" "+v.Judged)
 	}
 
 	if want := []string{"9.md plan", "10.md change"}; !slices.Equal(got, want) {

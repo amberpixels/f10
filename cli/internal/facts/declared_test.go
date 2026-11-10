@@ -13,6 +13,8 @@ import (
 )
 
 func TestDecodeDeclared(t *testing.T) {
+	t.Parallel()
+
 	d, err := decodeDeclared([]byte(
 		"merge_method: squash\n" +
 			"flows:\n  default: plan → implement → pr\n  local: [implement, commit]\n" +
@@ -79,6 +81,8 @@ func buildWith(t *testing.T, main, worktree string) *Effective {
 }
 
 func TestBuildFrontmatter(t *testing.T) {
+	t.Parallel()
+
 	eff := buildWith(t, "---\n"+
 		"visibility: public\ntracker: {kind: gitlab, id: AB-###}\nmerge_method: rebase\ncatchup: merge\ncatchup_stacked: rebase\n"+
 		"flows: {default: plan implement pr, local: [implement, commit]}\nwatch_catchup: on\n"+
@@ -109,6 +113,8 @@ func TestBuildFrontmatter(t *testing.T) {
 
 // A key a later layer sets wins outright; one it leaves alone keeps main's.
 func TestBuildFrontmatterLayersKeyByKey(t *testing.T) {
+	t.Parallel()
+
 	eff := buildWith(t,
 		"---\nmerge_method: squash\nflows: {local: [implement, commit]}\n---\n",
 		"---\nmerge_method: rebase\n---\n")
@@ -123,6 +129,8 @@ func TestBuildFrontmatterLayersKeyByKey(t *testing.T) {
 }
 
 func TestBuildTrackerNameInCode(t *testing.T) {
+	t.Parallel()
+
 	eff := buildWith(t, "---\ntracker:\n  kind: github\n---\n"+
 		"## Tracker\n\n- **Create** - invoke the `create-notion-task` skill\n", "")
 	if eff.TrackerKind != TrackerGitHub || len(eff.Problems) != 0 {
@@ -131,6 +139,8 @@ func TestBuildTrackerNameInCode(t *testing.T) {
 }
 
 func TestBuildFrontmatterErrors(t *testing.T) {
+	t.Parallel()
+
 	eff := buildWith(t, "---\nmerge_method: fast\nshipping: yes\n---\n", "")
 	if !strings.Contains(eff.Errors(), "shipping") {
 		t.Errorf("errors = %q", eff.Errors())
@@ -140,6 +150,8 @@ func TestBuildFrontmatterErrors(t *testing.T) {
 // standup.upkeep extends the default upkeep paths; a glob standup cannot
 // read stops the commands like any value outside its vocabulary.
 func TestStandupUpkeep(t *testing.T) {
+	t.Parallel()
+
 	eff := buildWith(t, "---\nstandup:\n  upkeep: [db/schema.rb, \"api/**/*.gen.ts\"]\n---\n# demo\n", "")
 
 	if len(eff.Problems) > 0 {
@@ -170,6 +182,8 @@ func TestStandupUpkeep(t *testing.T) {
 // replaces the list whole, and an entry with no command or a glob standup
 // cannot read stops the commands.
 func TestVerifyList(t *testing.T) {
+	t.Parallel()
+
 	eff := buildWith(t, "---\nverify:\n  - run: just lint\n    paths: [cli/**]\n  - run: just test\n---\n# demo\n", "")
 
 	if len(eff.Problems) > 0 {
@@ -218,6 +232,8 @@ func TestVerifyList(t *testing.T) {
 // traces is off unless declared, takes only on or off, and a later layer's
 // value wins with its origin.
 func TestTraces(t *testing.T) {
+	t.Parallel()
+
 	none := buildWith(t, "# demo\n", "")
 	if f := tracesFact(t, none); none.Traces || f.Value != "off" || f.Origin.Kind != OriginDefault {
 		t.Errorf("undeclared = %v, %+v", none.Traces, f)
@@ -258,6 +274,8 @@ func factFor(t *testing.T, eff *Effective, key string) Fact {
 
 // lore is local unless declared and takes only local or committed.
 func TestLore(t *testing.T) {
+	t.Parallel()
+
 	none := buildWith(t, "# demo\n", "")
 	if f := factFor(t, none, "lore"); none.Lore != "local" || f.Origin.Kind != OriginDefault {
 		t.Errorf("undeclared = %q, %+v", none.Lore, f)
@@ -282,6 +300,8 @@ func TestLore(t *testing.T) {
 // tracker.priority: a level outside the vocabulary or a label under two
 // levels is an error; an empty level is not.
 func TestTrackerPriority(t *testing.T) {
+	t.Parallel()
+
 	eff := buildWith(t, "---\ntracker:\n  kind: github\n  id: FT-###\n  priority:\n"+
 		"    low: P3\n    high: [P1, \"priority:high\"]\n    medium: []\n---\n# demo\n", "")
 
@@ -339,6 +359,8 @@ func TestTrackerPriority(t *testing.T) {
 // flows, and report_back on unless declared off; a worktree's area map
 // replaces main's whole and may name main's flows.
 func TestBuildReportBackFacts(t *testing.T) {
+	t.Parallel()
+
 	eff := buildWith(t, "---\n"+
 		"tracker: {kind: notion, id: MR-###, status: {started: In progress, shipped: Published}}\n"+
 		"flows: {default: implement publish, engine: implement cleanup pr}\n"+
@@ -388,6 +410,8 @@ func TestBuildReportBackFacts(t *testing.T) {
 // catchup: off turns ship's guard off; the Hosting & PR prose sets
 // nothing, and an unknown method is still an error.
 func TestCatchupOff(t *testing.T) {
+	t.Parallel()
+
 	if eff := buildWith(t, "---\ncatchup: off\n---\n", ""); eff.Catchup != "off" || eff.Errors() != "" {
 		t.Errorf("catchup %q, errors %q", eff.Catchup, eff.Errors())
 	}
@@ -404,6 +428,8 @@ func TestCatchupOff(t *testing.T) {
 // catchup_stacked picks the method for a base that is another task's
 // branch: merge unless declared, rebase on request, nothing else.
 func TestCatchupStacked(t *testing.T) {
+	t.Parallel()
+
 	none := buildWith(t, "# demo\n", "")
 	if f := factFor(t, none, "catchup_stacked"); none.CatchupStacked != "merge" || f.Origin.Kind != OriginDefault {
 		t.Errorf("default = %q (%s), want merge by default", none.CatchupStacked, f.Origin)
@@ -420,6 +446,8 @@ func TestCatchupStacked(t *testing.T) {
 }
 
 func TestStaleAfter(t *testing.T) {
+	t.Parallel()
+
 	none := buildWith(t, "# demo\n", "")
 	if f := factFor(
 		t,
@@ -461,6 +489,8 @@ func TestStaleAfter(t *testing.T) {
 }
 
 func TestDriverTimeout(t *testing.T) {
+	t.Parallel()
+
 	none := buildWith(t, "# demo\n", "")
 	if f := factFor(
 		t,
@@ -507,6 +537,8 @@ func TestDriverTimeout(t *testing.T) {
 // tracker.title is read into the effective template and shown as a fact; a
 // template with no {title} is an error and leaves titles bare.
 func TestTrackerTitle(t *testing.T) {
+	t.Parallel()
+
 	eff := buildWith(t, "---\ntracker: {id: FT-###, title: \"{id}: {title}\"}\n---\n", "")
 	if eff.TitleTemplate != "{id}: {title}" {
 		t.Errorf("TitleTemplate = %q", eff.TitleTemplate)
@@ -527,6 +559,8 @@ func TestTrackerTitle(t *testing.T) {
 }
 
 func TestDriveEnv(t *testing.T) {
+	t.Parallel()
+
 	eff := buildWith(t, "---\ndrive_env: [ZIG, AWS_PROFILE]\n---\n", "")
 	if !slices.Equal(eff.DriveEnv, []string{"ZIG", "AWS_PROFILE"}) || eff.Errors() != "" {
 		t.Errorf("drive_env %v, errors %q", eff.DriveEnv, eff.Errors())
@@ -542,6 +576,8 @@ func TestDriveEnv(t *testing.T) {
 }
 
 func TestWatch(t *testing.T) {
+	t.Parallel()
+
 	if eff := buildWith(t, "", ""); eff.Watch != "finish" {
 		t.Errorf("default watch = %q, want finish", eff.Watch)
 	}
@@ -562,6 +598,8 @@ func TestWatch(t *testing.T) {
 
 // watch_catchup is off unless declared, and takes only on or off.
 func TestWatchCatchup(t *testing.T) {
+	t.Parallel()
+
 	none := buildWith(t, "", "")
 	if f := factFor(t, none, "watch_catchup"); none.WatchCatchup || f.Origin.Kind != OriginDefault {
 		t.Errorf("undeclared = %v, %+v", none.WatchCatchup, f)
@@ -580,6 +618,8 @@ func TestWatchCatchup(t *testing.T) {
 
 // lore_gate warns unless declared and takes only warn or block.
 func TestLoreGate(t *testing.T) {
+	t.Parallel()
+
 	none := buildWith(t, "# demo\n", "")
 	if f := factFor(t, none, "lore_gate"); none.LoreGate != "warn" || f.Origin.Kind != OriginDefault {
 		t.Errorf("undeclared = %q, %+v", none.LoreGate, f)
@@ -602,6 +642,8 @@ func TestLoreGate(t *testing.T) {
 }
 
 func TestAgents(t *testing.T) {
+	t.Parallel()
+
 	eff := buildWith(t, "---\nflows:\n  default: plan judge implement cleanup pr review:local judge pr\n"+
 		"agents:\n  default: opus:high\n  review: opus:high\n  cleanup: sonnet:low\n  plan.bug: opus:medium\n---\n",
 		"---\nagents:\n  cleanup: haiku:low\n  judge: opus:max\n---\n")
@@ -658,6 +700,8 @@ func TestAgents(t *testing.T) {
 // Every single-word key is in the scalar registry, since check, merge,
 // scaffold and resolve only see the keys it lists.
 func TestScalarKeysCoverDeclared(t *testing.T) {
+	t.Parallel()
+
 	for f := range reflect.TypeFor[Declared]().Fields() {
 		if f.Type.Kind() != reflect.String {
 			continue

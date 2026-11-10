@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/calendar"
+	boardcmd "github.com/amberpixels/f10/cli/internal/command/board"
 )
 
 // Every named window is years' span at the board's now; the default is
@@ -40,44 +41,44 @@ func TestResolveBoardSpan(t *testing.T) {
 		{"2026-10-20", monFri, day(20), day(21), "2026-10-20"},
 		{"2026-10-20T10:00:00Z", monFri, day(20).Add(10 * time.Hour), time.Time{}, "since 2026-10-20T10:00:00Z"},
 	} {
-		span, err := resolveBoardSpan(c.arg, false, monday, c.workdays)
-		if err != nil || span.named == nil {
+		span, err := boardcmd.ResolveBoardSpan(c.arg, false, monday, c.workdays)
+		if err != nil || span.Named == nil {
 			t.Errorf("%s: %+v, %v", c.arg, span, err)
 
 			continue
 		}
 
-		if w := *span.named; !w.Since.Equal(c.since) || !w.End.Equal(c.end) || w.Chosen != c.chosen {
+		if w := *span.Named; !w.Since.Equal(c.since) || !w.End.Equal(c.end) || w.Chosen != c.chosen {
 			t.Errorf("%s = %+v, want %v to %v as %q", c.arg, w, c.since, c.end, c.chosen)
 		}
 	}
 
-	span, err := resolveBoardSpan("", false, monday, monFri)
-	if err != nil || span.named != nil || !span.today.Since.Equal(day(26)) || !span.lastWorkday.Since.Equal(day(23)) ||
-		!span.from().Equal(day(23)) {
+	span, err := boardcmd.ResolveBoardSpan("", false, monday, monFri)
+	if err != nil || span.Named != nil || !span.Today.Since.Equal(day(26)) || !span.LastWorkday.Since.Equal(day(23)) ||
+		!span.From().Equal(day(23)) {
 		t.Errorf("default = %+v, %v", span, err)
 	}
 
-	if span, _ := resolveBoardSpan("", true, monday, monFri); span.named == nil ||
-		!span.named.Since.Equal(monday.Add(-boardStateWindow)) {
+	if span, _ := boardcmd.ResolveBoardSpan("", true, monday, monFri); span.Named == nil ||
+		!span.Named.Since.Equal(monday.Add(-boardcmd.BoardStateWindow)) {
 		t.Errorf("state default = %+v", span)
 	}
 
-	if span, _ := resolveBoardSpan("yesterday", true, monday, monFri); span.named == nil ||
-		!span.named.Since.Equal(day(25)) || !span.named.End.IsZero() {
+	if span, _ := boardcmd.ResolveBoardSpan("yesterday", true, monday, monFri); span.Named == nil ||
+		!span.Named.Since.Equal(day(25)) || !span.Named.End.IsZero() {
 		t.Errorf("state yesterday = %+v", span)
 	}
 
 	broken := func() (calendar.Workdays, error) { return calendar.Workdays{}, errors.New("standup.md: bad") }
-	if _, err := resolveBoardSpan("today", false, monday, broken); err != nil {
+	if _, err := boardcmd.ResolveBoardSpan("today", false, monday, broken); err != nil {
 		t.Errorf("a named window read the working days: %v", err)
 	}
 
-	if _, err := resolveBoardSpan("", false, monday, broken); err == nil {
+	if _, err := boardcmd.ResolveBoardSpan("", false, monday, broken); err == nil {
 		t.Error("the default ignored a broken standup.md")
 	}
 
-	if _, err := resolveBoardSpan("someday", false, monday, monFri); err == nil ||
+	if _, err := boardcmd.ResolveBoardSpan("someday", false, monday, monFri); err == nil ||
 		!strings.Contains(err.Error(), "last-workday") {
 		t.Errorf("someday: %v, want the windows named", err)
 	}

@@ -10,12 +10,15 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/drive"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -45,10 +48,16 @@ func (b *binaryCatchupFake) next(list []bool, n int) bool {
 func (fx *driveFixture) binaryCatchup(t *testing.T, b *binaryCatchupFake, rebaseDir string) {
 	t.Helper()
 
-	plan := catchupPlan{branch: "GH-1", base: "main", sha: "main0", found: foundDefault, method: methodRebase}
+	plan := stack.CatchupPlan{
+		Branch: "GH-1",
+		Base:   "main",
+		SHA:    "main0",
+		Found:  stack.FoundDefault,
+		Method: stack.MethodRebase,
+	}
 
-	fx.in.catchup = &catchupEngine{
-		integrate: func(context.Context, catchupInput, func(catchupPlan) []string) (catchupPlan, bool, error) {
+	fx.in.Catchup = &stack.CatchupEngine{
+		Integrate: func(context.Context, stack.CatchupInput, func(stack.CatchupPlan) []string) (stack.CatchupPlan, bool, error) {
 			b.mu.Lock()
 			defer b.mu.Unlock()
 
@@ -61,12 +70,12 @@ func (fx *driveFixture) binaryCatchup(t *testing.T, b *binaryCatchupFake, rebase
 
 			p := plan
 			if b.method != "" {
-				p.method = b.method
+				p.Method = b.method
 			}
 
 			return p, stopped, nil
 		},
-		verify: func(_ context.Context, _, log string) (verifyRun, error) {
+		Verify: func(_ context.Context, _, log string) (stack.VerifyRun, error) {
 			b.mu.Lock()
 			defer b.mu.Unlock()
 
@@ -78,20 +87,20 @@ func (fx *driveFixture) binaryCatchup(t *testing.T, b *binaryCatchupFake, rebase
 			b.verifies++
 
 			if red != "" {
-				return verifyRun{failed: red, log: log}, nil
+				return stack.VerifyRun{Failed: red, Log: log}, nil
 			}
 
-			return verifyRun{}, nil
+			return stack.VerifyRun{}, nil
 		},
-		base: func(context.Context, catchupInput) (catchupPlan, error) {
+		Base: func(context.Context, stack.CatchupInput) (stack.CatchupPlan, error) {
 			p := plan
-			p.method = methodNone
+			p.Method = stack.MethodNone
 
 			return p, nil
 		},
 	}
 
-	fx.in.root = t.TempDir()
+	fx.in.Root = t.TempDir()
 
 	fx.f.script("git rev-parse --git-path rebase-merge", filepath.Join(rebaseDir, "rebase-merge"))
 	fx.f.script("git rev-parse --git-path rebase-apply", filepath.Join(rebaseDir, "rebase-apply"))
@@ -380,7 +389,7 @@ func TestDrivePromptsTheAgentOnRedVerify(t *testing.T) {
 	fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
 
 	red := "/f10:catchup main came in cleanly and verify is red: `just test` failed, its output is in " +
-		filepath.Join(fx.in.root, "catchup", "GH-1.log") +
+		filepath.Join(fx.in.Root, "catchup", "GH-1.log") +
 		": fix it by the branch's intent, verify, and commit the fix --driven"
 
 	for _, p := range []string{red, resumeGH1} {
@@ -419,7 +428,7 @@ func TestDriveHaltsARedVerifyNoTurnFixes(t *testing.T) {
 	fx.binaryCatchup(t, &binaryCatchupFake{stops: []bool{false}, reds: reds}, t.TempDir())
 	fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
 	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" /f10:catchup main came in cleanly and verify is red: "+
-		"`just test` failed, its output is in "+filepath.Join(fx.in.root, "catchup", "GH-1.log")+
+		"`just test` failed, its output is in "+filepath.Join(fx.in.Root, "catchup", "GH-1.log")+
 		": fix it by the branch's intent, verify, and commit the fix --driven", "{}")
 
 	fx.agent(t, func(string) {
@@ -463,7 +472,7 @@ func TestDriveHaltsACatchupUnderAStalledAgent(t *testing.T) {
 func TestDriveNeverForcePushesARewriteItDidNotMake(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "ship")
 	fx.adoptsGH1()
-	fx.binaryCatchup(t, &binaryCatchupFake{stops: []bool{false}, method: methodNone}, t.TempDir())
+	fx.binaryCatchup(t, &binaryCatchupFake{stops: []bool{false}, method: stack.MethodNone}, t.TempDir())
 	fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
 
 	fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", "p1")
@@ -543,13 +552,13 @@ func TestVerifySpecOf(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			spec, why := verifySpecOf(tc.eff)
+			spec, why := drive.VerifySpecOf(tc.eff)
 			if (why == "") != tc.ok {
 				t.Fatalf("runnable = %v (%q), want %v", why == "", why, tc.ok)
 			}
 
-			if tc.cmds != nil && strings.Join(spec.cmds, "|") != strings.Join(tc.cmds, "|") {
-				t.Errorf("commands = %q, want %q", spec.cmds, tc.cmds)
+			if tc.cmds != nil && strings.Join(spec.Cmds, "|") != strings.Join(tc.cmds, "|") {
+				t.Errorf("commands = %q, want %q", spec.Cmds, tc.cmds)
 			}
 		})
 	}
@@ -559,8 +568,8 @@ func TestRunVerifyStopsAtTheFirstRedAndLogsIt(t *testing.T) {
 	dir := t.TempDir()
 	log := filepath.Join(dir, "logs", "v.log")
 
-	res, err := runVerify(t.Context(), dir, []string{"true", "echo broke; exit 3", "touch never"}, log)
-	if err != nil || res.failed != "echo broke; exit 3" || res.log != log {
+	res, err := stack.RunVerify(t.Context(), dir, []string{"true", "echo broke; exit 3", "touch never"}, log)
+	if err != nil || res.Failed != "echo broke; exit 3" || res.Log != log {
 		t.Fatalf("run = %+v, %v", res, err)
 	}
 
@@ -572,7 +581,7 @@ func TestRunVerifyStopsAtTheFirstRedAndLogsIt(t *testing.T) {
 		t.Error("a command after the red one ran")
 	}
 
-	if res, err := runVerify(t.Context(), dir, []string{"true"}, log); err != nil || res.failed != "" {
+	if res, err := stack.RunVerify(t.Context(), dir, []string{"true"}, log); err != nil || res.Failed != "" {
 		t.Errorf("green run = %+v, %v", res, err)
 	}
 }
@@ -585,28 +594,28 @@ func TestIntegrateBranchThenNothingLeft(t *testing.T) {
 
 	in := r.input("")
 
-	p, stopped, err := integrateBranch(t.Context(), in, func(catchupPlan) []string { return nil })
-	if err != nil || stopped || p.method != methodRebase {
+	p, stopped, err := stack.IntegrateBranch(t.Context(), in, func(stack.CatchupPlan) []string { return nil })
+	if err != nil || stopped || p.Method != stack.MethodRebase {
 		t.Fatalf("integrate = %+v, %v, %v", p, stopped, err)
 	}
 
-	d := &driveInput{
-		main:    r.dir,
-		catchup: &catchupEngine{policy: in, base: resolveCatchup},
+	d := &drive.DriveInput{
+		Main:    r.dir,
+		Catchup: &stack.CatchupEngine{Policy: in, Base: stack.ResolveCatchup},
 	}
-	run := &driveRun{o: openedTask{branch: "FT-1/a", path: r.dir}}
+	run := &drive.DriveRun{O: start.OpenedTask{Branch: "FT-1/a", Path: r.dir}}
 
-	if tree, err := d.catchupLeft(t.Context(), run); err != nil || tree.left() != "" {
-		left := tree.left()
+	if tree, err := d.CatchupLeft(t.Context(), run); err != nil || tree.Left() != "" {
+		left := tree.Left()
 		t.Fatalf("left = %q, %v, want nothing", left, err)
 	}
 
-	base, err := d.catchupBase(t.Context(), run)
+	base, err := d.CatchupBase(t.Context(), run)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := clearMarks(t.Context(), r.dir, "FT-1/a", base); err != nil {
+	if err := stack.ClearMarks(t.Context(), r.dir, "FT-1/a", base); err != nil {
 		t.Fatal(err)
 	}
 
@@ -621,18 +630,22 @@ func TestCatchupLeftNamesAMarker(t *testing.T) {
 	r.commit(during, "a.go", "<<<<<<< HEAD\nx\n", "a marker committed")
 
 	in := r.input("")
-	d := &driveInput{
-		main:    r.dir,
-		catchup: &catchupEngine{policy: in, base: resolveCatchup},
+	d := &drive.DriveInput{
+		Main:    r.dir,
+		Catchup: &stack.CatchupEngine{Policy: in, Base: stack.ResolveCatchup},
 	}
-	run := &driveRun{o: openedTask{branch: "FT-1/a", path: r.dir}}
+	run := &drive.DriveRun{O: start.OpenedTask{Branch: "FT-1/a", Path: r.dir}}
 
-	if _, _, err := integrateBranch(t.Context(), in, func(catchupPlan) []string { return nil }); err != nil {
+	if _, _, err := stack.IntegrateBranch(
+		t.Context(),
+		in,
+		func(stack.CatchupPlan) []string { return nil },
+	); err != nil {
 		t.Fatal(err)
 	}
 
-	if tree, err := d.catchupLeft(t.Context(), run); err != nil || !strings.Contains(tree.left(), "a.go") {
-		left := tree.left()
+	if tree, err := d.CatchupLeft(t.Context(), run); err != nil || !strings.Contains(tree.Left(), "a.go") {
+		left := tree.Left()
 		t.Errorf("left = %q, %v, want the marker in a.go", left, err)
 	}
 }
@@ -695,7 +708,7 @@ func TestDriveSendsAStalledCatchupBack(t *testing.T) {
 
 				if tc.dialog {
 					wait := `{"reason":"permission","tool":"Bash"}`
-					if err := os.WriteFile(state.WaitPath(fx.in.stateDir, "s-GH-1"), []byte(wait), 0o600); err != nil {
+					if err := os.WriteFile(state.WaitPath(fx.in.StateDir, "s-GH-1"), []byte(wait), 0o600); err != nil {
 						t.Fatal(err)
 					}
 				}
@@ -751,7 +764,7 @@ func TestDriveWaitsOutACatchupParkedOnBackgroundWork(t *testing.T) {
 		fx.f.script("git status --porcelain", " M a.go")
 
 		mark := state.Background{At: fx.clock, Parked: true}
-		if err := state.MarkBackground(fx.in.stateDir, "s-GH-1", mark); err != nil {
+		if err := state.MarkBackground(fx.in.StateDir, "s-GH-1", mark); err != nil {
 			t.Fatal(err)
 		}
 
@@ -775,7 +788,7 @@ func TestDriveWaitsOutACatchupParkedOnBackgroundWork(t *testing.T) {
 
 			if waited == 6 {
 				parked = false
-				_ = os.Remove(state.BackgroundPath(fx.in.stateDir, "s-GH-1"))
+				_ = os.Remove(state.BackgroundPath(fx.in.StateDir, "s-GH-1"))
 				fx.f.script("git status --porcelain", "")
 				fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
 				fx.reports(t, fx.clock)
@@ -809,15 +822,15 @@ func TestDriveRefusesARetargetedPullRequest(t *testing.T) {
 			fx.f.fail("git merge-base --is-ancestor m2 main0", shell.Result{Code: 1})
 			fx.f.fail("git merge-base --is-ancestor m2 refs/heads/GH-1", shell.Result{Code: 1})
 			fx.f.script("set branch.GH-1."+string(branchmeta.Landed)+" main", "")
-			fx.in.pull = func(context.Context, string) (forge.PR, error) {
+			fx.in.Pull = func(context.Context, string) (forge.PR, error) {
 				return forge.PR{URL: "https://gh/pr/9", Status: forge.Open, Base: base}, nil
 			}
 
-			r := &driveRun{
-				task: driveTask{ref: ref.Ref{ID: "GH-1"}},
-				o:    openedTask{branch: "GH-1", path: "/code/repo.GH-1"},
+			r := &drive.DriveRun{
+				Task: drive.DriveTask{Ref: ref.Ref{ID: "GH-1"}},
+				O:    start.OpenedTask{Branch: "GH-1", Path: "/code/repo.GH-1"},
 			}
-			err := fx.in.markBehind(t.Context(), r)
+			err := fx.in.MarkBehind(t.Context(), r)
 			marked := fx.f.called("set branch.GH-1." + string(branchmeta.Landed))
 
 			if base == "main" {
@@ -839,32 +852,35 @@ func TestDriveRefusesARetargetedPullRequest(t *testing.T) {
 // as it changes, and read back for the task when the drive resumes.
 func TestDriveKeepsTheCatchupRecordForAResume(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "ship")
-	fx.in.root = t.TempDir()
-	fx.in.rec = &drives.Record{Args: []string{"GH-1"}, Tasks: []drives.Task{{ID: "GH-1"}}}
+	fx.in.Root = t.TempDir()
+	fx.in.Rec = &drives.Record{Args: []string{"GH-1"}, Tasks: []drives.Task{{ID: "GH-1"}}}
 
-	if err := drives.Create(fx.in.root, fx.in.rec); err != nil {
+	if err := drives.Create(fx.in.Root, fx.in.Rec); err != nil {
 		t.Fatal(err)
 	}
 
-	task := driveTask{ref: ref.Ref{ID: "GH-1"}}
-	r := &driveRun{task: task, lastCatchup: &drives.Catchup{Target: "m2", Origin: "p1", Base: "main", Integrated: true}}
-	fx.in.keepCatchup(r)
+	task := drive.DriveTask{Ref: ref.Ref{ID: "GH-1"}}
+	r := &drive.DriveRun{
+		Task:        task,
+		LastCatchup: &drives.Catchup{Target: "m2", Origin: "p1", Base: "main", Integrated: true},
+	}
+	fx.in.KeepCatchup(r)
 
-	back, err := drives.Read(fx.in.root, fx.in.rec.Number)
+	back, err := drives.Read(fx.in.Root, fx.in.Rec.Number)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	fx.in.rec = back
+	fx.in.Rec = back
 
-	got := fx.in.savedCatchup(task)
-	if got == nil || *got != *r.lastCatchup {
-		t.Fatalf("resumed with %+v, want %+v", got, r.lastCatchup)
+	got := fx.in.SavedCatchup(task)
+	if got == nil || *got != *r.LastCatchup {
+		t.Fatalf("resumed with %+v, want %+v", got, r.LastCatchup)
 	}
 
 	// a copy: a change on the resumed run is written only through keepCatchup
 	got.Spent = true
-	if fx.in.rec.Task("GH-1").Catchup.Spent {
+	if fx.in.Rec.Task("GH-1").Catchup.Spent {
 		t.Error("the resumed record shares the drive record's copy")
 	}
 }
@@ -913,24 +929,24 @@ func TestReadTree(t *testing.T) {
 				tc.setup(r)
 			}
 
-			tree, err := readTree(t.Context(), r.dir)
-			if err == nil && tree.busy() == "" {
-				tree, err = tree.withBase(t.Context(), "FT-1/a", catchupPlan{base: "main", sha: r.sha("main")})
+			tree, err := stack.ReadTree(t.Context(), r.dir)
+			if err == nil && tree.Busy() == "" {
+				tree, err = tree.WithBase(t.Context(), "FT-1/a", stack.CatchupPlan{Base: "main", SHA: r.sha("main")})
 			}
 
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			switch left := tree.left(); {
+			switch left := tree.Left(); {
 			case tc.left == "" && left != "":
 				t.Errorf("left = %q, want nothing", left)
 			case !strings.Contains(left, tc.left):
 				t.Errorf("left = %q, want %q", left, tc.left)
 			}
 
-			if tree.baseLost() != tc.lost {
-				t.Errorf("baseLost = %v, want %v", tree.baseLost(), tc.lost)
+			if tree.BaseLost() != tc.lost {
+				t.Errorf("baseLost = %v, want %v", tree.BaseLost(), tc.lost)
 			}
 		})
 	}

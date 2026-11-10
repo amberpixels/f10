@@ -14,7 +14,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/asknotify"
 	"github.com/amberpixels/f10/cli/internal/asks"
+	askscmd "github.com/amberpixels/f10/cli/internal/command/asks"
 	"github.com/amberpixels/f10/cli/internal/layout"
 )
 
@@ -25,19 +27,19 @@ type fakeDeliver struct {
 	resumed  []int
 }
 
-func (f *fakeDeliver) deliverer() deliverer {
-	return deliverer{
-		prompt: func(_ context.Context, _ io.Writer, a asks.Ask) error {
+func (f *fakeDeliver) deliverer() askscmd.Deliverer {
+	return askscmd.Deliverer{
+		Prompt: func(_ context.Context, _ io.Writer, a asks.Ask) error {
 			f.prompted = append(f.prompted, a.Task+": "+a.Answer)
 
 			return nil
 		},
-		resume: func(_ context.Context, _ io.Writer, a asks.Ask) error {
+		Resume: func(_ context.Context, _ io.Writer, a asks.Ask) error {
 			f.resumed = append(f.resumed, a.Drive)
 
 			return nil
 		},
-		live: func(asks.Ask) bool { return f.live },
+		Live: func(asks.Ask) bool { return f.live },
 	}
 }
 
@@ -76,7 +78,7 @@ func TestAnswerAskRoutes(t *testing.T) {
 			f := &fakeDeliver{live: c.live}
 
 			var out bytes.Buffer
-			if err := answerAsk(context.Background(), &out, dir, "ft-1", []string{"1=b", "2=8080"}, asks.ByAsks,
+			if err := askscmd.AnswerAsk(context.Background(), &out, dir, "ft-1", []string{"1=b", "2=8080"}, asks.ByAsks,
 				f.deliverer()); err != nil {
 				t.Fatal(err)
 			}
@@ -95,7 +97,7 @@ func TestAnswerAskRoutes(t *testing.T) {
 			}
 
 			// a second way in finds it answered
-			err := answerAsk(context.Background(), &out, dir, "FT-1", nil, asks.BySkill, f.deliverer())
+			err := askscmd.AnswerAsk(context.Background(), &out, dir, "FT-1", nil, asks.BySkill, f.deliverer())
 			if !strings.Contains(fmtErr(err), "already answered with f10 asks") {
 				t.Errorf("second answer: %v", err)
 			}
@@ -117,19 +119,34 @@ func TestAnswerAskRefuses(t *testing.T) {
 	raised(t, dir, asks.Ask{Task: "FT-1", Root: "/b", Project: "beta"})
 	f := &fakeDeliver{}
 
-	err := answerAsk(context.Background(), io.Discard, dir, "FT-1", nil, asks.ByAsks, f.deliverer())
+	err := askscmd.AnswerAsk(context.Background(), io.Discard, dir, "FT-1", nil, asks.ByAsks, f.deliverer())
 	if !strings.Contains(fmtErr(err), "alpha:FT-1 or beta:FT-1") {
 		t.Errorf("ambiguous task: %v", err)
 	}
 
 	// question 2 has no default, so it must be answered
-	err = answerAsk(context.Background(), io.Discard, dir, "alpha:FT-1", []string{"1=yes"}, asks.ByAsks, f.deliverer())
+	err = askscmd.AnswerAsk(
+		context.Background(),
+		io.Discard,
+		dir,
+		"alpha:FT-1",
+		[]string{"1=yes"},
+		asks.ByAsks,
+		f.deliverer(),
+	)
 	if !strings.Contains(fmtErr(err), "question 2") {
 		t.Errorf("missing free answer: %v", err)
 	}
 
-	err = answerAsk(context.Background(), io.Discard, dir, "alpha:FT-1", []string{"1=maybe", "2=80"}, asks.ByAsks,
-		f.deliverer())
+	err = askscmd.AnswerAsk(
+		context.Background(),
+		io.Discard,
+		dir,
+		"alpha:FT-1",
+		[]string{"1=maybe", "2=80"},
+		asks.ByAsks,
+		f.deliverer(),
+	)
 	if !strings.Contains(fmtErr(err), "takes a) yes, b) wait") {
 		t.Errorf("bad option: %v", err)
 	}
@@ -147,7 +164,7 @@ func TestWalkAsks(t *testing.T) {
 
 	// Enter takes FT-1's default; FT-2 is skipped
 	in := bufio.NewReader(strings.NewReader("\ns\n"))
-	if err := walkAsks(context.Background(), io.Discard, in, dir, f.deliverer()); err != nil {
+	if err := askscmd.WalkAsks(context.Background(), io.Discard, in, dir, f.deliverer()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -170,11 +187,11 @@ func TestListAsksJSON(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := listAsks(t.Context(), &out, dir, time.Now(), true); err != nil {
+	if err := askscmd.ListAsks(t.Context(), &out, dir, time.Now(), true); err != nil {
 		t.Fatal(err)
 	}
 
-	var got askList
+	var got askscmd.AskList
 
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
 		t.Fatal(err)
@@ -191,19 +208,19 @@ func TestNotifyArgv(t *testing.T) {
 	none := func(string) (string, error) { return "", errors.New("absent") }
 	found := func(string) (string, error) { return "/usr/bin/notify-send", nil }
 
-	if got, _ := notifyArgv("off", a, "darwin", found); got != nil {
+	if got, _ := asknotify.NotifyArgv("off", a, "darwin", found); got != nil {
 		t.Errorf("off = %q", got)
 	}
 
-	if got, _ := notifyArgv("", a, "darwin", none); len(got) != 3 || got[0] != "osascript" {
+	if got, _ := asknotify.NotifyArgv("", a, "darwin", none); len(got) != 3 || got[0] != "osascript" {
 		t.Errorf("darwin = %q", got)
 	}
 
-	if got, _ := notifyArgv("", a, "linux", found); len(got) != 3 || got[0] != "notify-send" {
+	if got, _ := asknotify.NotifyArgv("", a, "linux", found); len(got) != 3 || got[0] != "notify-send" {
 		t.Errorf("linux = %q", got)
 	}
 
-	if got, _ := notifyArgv("", a, "linux", none); got != nil {
+	if got, _ := asknotify.NotifyArgv("", a, "linux", none); got != nil {
 		t.Errorf("linux without notify-send = %q", got)
 	}
 }
@@ -219,7 +236,7 @@ func TestNotifyTemplateRunsNoQuestion(t *testing.T) {
 		`printf '%s\n' {question}`,
 	} {
 		dir := t.TempDir()
-		argv, env := notifyArgv(tmpl, a, "linux", nil)
+		argv, env := asknotify.NotifyArgv(tmpl, a, "linux", nil)
 
 		cmd := exec.Command(argv[0], argv[1:]...)
 		cmd.Dir, cmd.Env = dir, append(os.Environ(), env...)
@@ -252,13 +269,13 @@ func TestPaneAnswered(t *testing.T) {
 	a := raised(t, dir, asks.Ask{Task: "FT-1", Root: "/r", Worktree: root})
 	raised(t, dir, asks.Ask{Task: "FT-2", Root: "/r", Worktree: root, Skill: "finish", Text: "1. x? [local | merge]"})
 
-	paneAnswered(context.Background(), t.TempDir(), "elsewhere")
+	asknotify.PaneAnswered(context.Background(), t.TempDir(), "elsewhere")
 
 	if open, _ := asks.Open(dir); len(open) != 2 {
 		t.Fatalf("a prompt in another checkout answered: %+v", open)
 	}
 
-	paneAnswered(context.Background(), repo, "1. wait")
+	asknotify.PaneAnswered(context.Background(), repo, "1. wait")
 
 	got, isOpen, _ := asks.Get(dir, a.Key())
 	if isOpen || got.By != asks.ByPane || got.Answer != "1. wait" || got.DeliveredAt.IsZero() || got.TakenAt.IsZero() {
@@ -277,17 +294,17 @@ func TestAsksContextOncePerSession(t *testing.T) {
 	raised(t, dir, asks.Ask{Task: "FT-1", Root: "/r", Worktree: "/w1", Skill: "review"})
 	raised(t, dir, asks.Ask{Task: "FT-2", Root: "/r", Worktree: "/w2"})
 
-	out := string(asksContext(dir, stateDir, "s1", "UserPromptSubmit", "/w2"))
+	out := string(askscmd.AsksContext(dir, stateDir, "s1", "UserPromptSubmit", "/w2"))
 	if !strings.Contains(out, "FT-1 asks at review") || strings.Contains(out, "FT-2") ||
 		!strings.Contains(out, `"hookEventName":"UserPromptSubmit"`) {
 		t.Errorf("first prompt:\n%s", out)
 	}
 
-	if out := asksContext(dir, stateDir, "s1", "UserPromptSubmit", "/w2"); out != nil {
+	if out := askscmd.AsksContext(dir, stateDir, "s1", "UserPromptSubmit", "/w2"); out != nil {
 		t.Errorf("told twice:\n%s", out)
 	}
 
-	if out := string(asksContext(dir, stateDir, "s2", "SessionStart", "")); !strings.Contains(out, "FT-2") {
+	if out := string(askscmd.AsksContext(dir, stateDir, "s2", "SessionStart", "")); !strings.Contains(out, "FT-2") {
 		t.Errorf("another session was not told:\n%s", out)
 	}
 }

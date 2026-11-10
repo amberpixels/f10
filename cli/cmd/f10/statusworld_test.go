@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/statusview"
 )
 
 // One parent's children, each in a different place, read end to end as
@@ -28,7 +29,7 @@ func TestStatusParentWorld(t *testing.T) {
 	t.Setenv(ledger.PathEnv, filepath.Join(t.TempDir(), "f10.db"))
 
 	tg := childTarget(t, "gh")
-	root := tg.lay.StorageRoot.Path()
+	root := tg.Layout.StorageRoot.Path()
 
 	f.script("gh api --paginate repos/{owner}/{repo}/issues/1/sub_issues", `[
 		{"number":2,"title":"closed by the tracker","state":"closed","html_url":"https://x/2","body":"","labels":[]},
@@ -113,14 +114,19 @@ func TestStatusParentWorld(t *testing.T) {
 		"git merge-base ",
 	)
 
-	rd, err := newStatusReader(tg, now)
+	rd, err := statusview.NewStatusReader(tg, now)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	var out, warn bytes.Buffer
 
-	if _, err := rd.task(t.Context(), statusView{w: &out, warn: &warn, json: true}, "FT-1", false); err != nil {
+	if _, err := rd.Task(
+		t.Context(),
+		statusview.StatusView{Out: &out, Warn: &warn, JSON: true},
+		"FT-1",
+		false,
+	); err != nil {
 		t.Fatal(err)
 	}
 
@@ -128,7 +134,7 @@ func TestStatusParentWorld(t *testing.T) {
 		t.Errorf("warned: %s", warn.String())
 	}
 
-	var rows []taskRow
+	var rows []statusview.TaskRow
 	if err := json.Unmarshal(out.Bytes(), &rows); err != nil {
 		t.Fatalf("%v:\n%s", err, out.String())
 	}
@@ -160,7 +166,7 @@ func TestStatusParentWorld(t *testing.T) {
 func writeRun(t *testing.T, dir string, r *state.Run) {
 	t.Helper()
 
-	if err := r.Save(dir, r.Updated); err != nil {
+	if err := r.Save(t.Context(), dir, r.Updated); err != nil {
 		t.Fatal(err)
 	}
 }

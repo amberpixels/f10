@@ -7,7 +7,12 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	prcmd "github.com/amberpixels/f10/cli/internal/command/pr"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/probe"
+	"github.com/amberpixels/f10/cli/internal/reviews"
+	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/target"
 )
 
 // prRepo is a clone of a bare origin, so origin/HEAD and pushed branches
@@ -59,7 +64,7 @@ func TestPRBase(t *testing.T) {
 	git(t, dir, "config", branchmeta.AfterBranch.For("feat"), "gone")
 
 	out, errOut, err := runApp(t, "-C", dir, "pr", "base").streams()
-	if err != nil || out != "main\nfound: "+foundGone+"\n" || errOut != "" {
+	if err != nil || out != "main\nfound: "+stack.FoundGone+"\n" || errOut != "" {
 		t.Errorf("gone: base = %q, %q, %v; want main and the typed found line, nothing on stderr", out, errOut, err)
 	}
 
@@ -141,7 +146,7 @@ func TestPullNumberOf(t *testing.T) {
 		"https://github.com/o/r/issues/12": 0,
 		"":                                 0,
 	} {
-		if got := pullNumberOf(token); got != want {
+		if got := reviews.PullNumberOf(token); got != want {
 			t.Errorf("pullNumberOf(%q) = %d, want %d", token, got, want)
 		}
 	}
@@ -155,9 +160,9 @@ func TestOpenPullOfSkipsClosed(t *testing.T) {
 		`[{"number":3,"state":"CLOSED","createdAt":"2026-10-02T00:00:00Z"},`+
 			`{"number":5,"state":"OPEN","createdAt":"2026-10-01T00:00:00Z"}]`)
 
-	tg := &target{dir: t.TempDir(), pb: &probe.Probes{CLI: probe.Signal{Value: "gh"}}}
+	tg := &target.Target{Dir: t.TempDir(), Probes: &probe.Probes{CLI: probe.Signal{Value: "gh"}}}
 
-	if p, err := openPullOf(t.Context(), tg, "feat"); err != nil || p.Number != 5 {
+	if p, err := reviews.OpenPullOf(t.Context(), tg, "feat"); err != nil || p.Number != 5 {
 		t.Errorf("openPullOf = %d, %v; want 5", p.Number, err)
 	}
 }
@@ -171,9 +176,9 @@ func TestLastPullOfTakesTheNewestAnyState(t *testing.T) {
 		`[{"number":3,"state":"CLOSED","createdAt":"2026-10-01T00:00:00Z"},`+
 			`{"number":5,"state":"MERGED","baseRefName":"main","createdAt":"2026-10-02T00:00:00Z"}]`)
 
-	tg := &target{dir: t.TempDir(), pb: &probe.Probes{CLI: probe.Signal{Value: "gh"}}}
+	tg := &target.Target{Dir: t.TempDir(), Probes: &probe.Probes{CLI: probe.Signal{Value: "gh"}}}
 
-	if p, err := lastPullOf(t.Context(), tg, "REPO-7"); err != nil || p.Number != 5 || p.Base != "main" {
+	if p, err := reviews.LastPullOf(t.Context(), tg, "REPO-7"); err != nil || p.Number != 5 || p.Base != "main" {
 		t.Errorf("lastPullOf = #%d on %q, %v; want #5 on main", p.Number, p.Base, err)
 	}
 }
@@ -218,16 +223,16 @@ func TestBranchTask(t *testing.T) {
 	dir := prRepo(t)
 	git(t, dir, "config", branchmeta.Task.For("picked-up"), "REPO-3")
 
-	tg, err := targetAt(t.Context(), dir, false, "pr")
+	tg, err := target.At(t.Context(), dir, false, "pr")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	named := tg.eff.IDPrefix + "-4"
+	named := tg.Effective.IDPrefix + "-4"
 
 	for branch, want := range map[string]string{"picked-up": "REPO-3", named + "/slug": named, "other": ""} {
 		got := ""
-		if r := branchTask(t.Context(), tg, dir, branch); r != nil {
+		if r := reviews.BranchTask(t.Context(), tg, dir, branch); r != nil {
 			got = r.ID
 		}
 
@@ -242,7 +247,7 @@ func TestPullCommentsGitHub(t *testing.T) {
 	f.script("gh pr view 4 --json comments", `{"comments":[`+
 		`{"author":{"login":"ann"},"body":"looks good","createdAt":"2026-10-01T00:00:00Z"}]}`)
 
-	got, err := newHost("gh", t.TempDir()).PullComments(t.Context(), 4)
+	got, err := hostops.NewHost("gh", t.TempDir()).PullComments(t.Context(), 4)
 	if err != nil || len(got) != 1 || got[0].Author != "ann" || got[0].Body != "looks good" {
 		t.Errorf("PullComments = %+v, %v", got, err)
 	}
@@ -252,7 +257,7 @@ func TestPatchFiles(t *testing.T) {
 	patch := "diff --git a/x.go b/x.go\nindex 1..2\n--- a/x.go\n+++ b/x.go\n@@ -1 +1 @@\n-a\n+b\n" +
 		"diff --git a/old.md b/new.md\nrename from old.md\n"
 
-	if got := patchFiles(patch); got != "x.go\nnew.md" {
+	if got := prcmd.PatchFiles(patch); got != "x.go\nnew.md" {
 		t.Errorf("patchFiles = %q", got)
 	}
 }

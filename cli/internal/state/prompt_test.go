@@ -6,6 +6,8 @@ import (
 )
 
 func TestLastPromptIsTheNewestInTheRoot(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	at := time.UnixMilli(1_800_000_000_123)
 

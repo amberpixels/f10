@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	boardcmd "github.com/amberpixels/f10/cli/internal/command/board"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
 )
 
@@ -154,7 +155,7 @@ func renderPage(t *testing.T, b lookaround.Board) string {
 	t.Helper()
 
 	var buf bytes.Buffer
-	if err := renderBoardHTML(&buf, b); err != nil {
+	if err := boardcmd.RenderBoardHTML(&buf, b); err != nil {
 		t.Fatal(err)
 	}
 
@@ -222,12 +223,12 @@ func TestBoardHTMLEscapesScriptClose(t *testing.T) {
 // The page opens from disk with nothing fetched: no stylesheet, script,
 // font or image from anywhere, and the only addresses are the board's own.
 func TestBoardHTMLStandsAlone(t *testing.T) {
-	if n := strings.Count(boardHTMLPage, boardPlaceholder); n != 1 {
+	if n := strings.Count(boardcmd.BoardHTMLPage, boardcmd.BoardPlaceholder); n != 1 {
 		t.Fatalf("the placeholder occurs %d times, want 1", n)
 	}
 
 	for _, reach := range []string{"<link", " src=", "@import", "url("} {
-		if strings.Contains(boardHTMLPage, reach) {
+		if strings.Contains(boardcmd.BoardHTMLPage, reach) {
 			t.Errorf("the page reaches out with %q", reach)
 		}
 	}
@@ -247,7 +248,7 @@ func TestBoardHTMLStandsAlone(t *testing.T) {
 func scriptBody(t *testing.T) string {
 	t.Helper()
 
-	_, after, ok := strings.CutLast(boardHTMLPage, "<script>")
+	_, after, ok := strings.CutLast(boardcmd.BoardHTMLPage, "<script>")
 	if !ok {
 		t.Fatal("the page has no renderer script")
 	}
@@ -261,8 +262,8 @@ func scriptBody(t *testing.T) string {
 }
 
 type rendered struct {
-	Model boardModel `json:"model"`
-	HTML  string     `json:"html"`
+	Model boardcmd.BoardModel `json:"model"`
+	HTML  string              `json:"html"`
 }
 
 func renderUnderNode(t *testing.T) map[string]rendered {
@@ -321,7 +322,7 @@ func TestBoardHTMLModelMatchesTerminal(t *testing.T) {
 
 	for name, b := range htmlBoards(t) {
 		t.Run(name, func(t *testing.T) {
-			want, got := boardLines(b), drawn[name].Model
+			want, got := boardcmd.BoardLines(b), drawn[name].Model
 			if !reflect.DeepEqual(want, got) {
 				wantJSON, _ := json.MarshalIndent(want, "", "  ")
 				gotJSON, _ := json.MarshalIndent(got, "", "  ")
@@ -376,7 +377,7 @@ func TestBoardDrawsParts(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	renderBoard(&buf, b, 0)
+	boardcmd.RenderBoard(&buf, b, 0)
 
 	if !strings.Contains(buf.String(), "#1 + #2") {
 		t.Errorf("the terminal draws no parts:\n%s", buf.String())
@@ -408,7 +409,7 @@ func TestBoardHTMLRenderEscapes(t *testing.T) {
 
 // The version the page knows is the version the binary emits.
 func TestBoardHTMLKnowsThisVersion(t *testing.T) {
-	m := regexp.MustCompile(`var KNOWN_VERSION = (\d+);`).FindStringSubmatch(boardHTMLPage)
+	m := regexp.MustCompile(`var KNOWN_VERSION = (\d+);`).FindStringSubmatch(boardcmd.BoardHTMLPage)
 	if m == nil {
 		t.Fatal("the page declares no KNOWN_VERSION")
 	}
@@ -442,12 +443,12 @@ func TestEmitBoard(t *testing.T) {
 	data := []byte("<!doctype html>\n")
 
 	var buf bytes.Buffer
-	if err := emitBoard(&buf, "", data); err != nil || !bytes.Equal(buf.Bytes(), data) {
+	if err := boardcmd.EmitBoard(&buf, "", data); err != nil || !bytes.Equal(buf.Bytes(), data) {
 		t.Errorf("stdout: %v, %q", err, buf.String())
 	}
 
 	path := filepath.Join(t.TempDir(), "board.html")
-	if err := emitBoard(&buf, path, data); err != nil {
+	if err := boardcmd.EmitBoard(&buf, path, data); err != nil {
 		t.Fatal(err)
 	}
 
@@ -463,7 +464,7 @@ func TestEmitBoard(t *testing.T) {
 func TestBoardGroupsAWaitingTaskUnderNext(t *testing.T) {
 	var got []string
 
-	for _, l := range boardLines(htmlBoards(t)["waiting-base"]).Rows {
+	for _, l := range boardcmd.BoardLines(htmlBoards(t)["waiting-base"]).Rows {
 		got = append(got, l.Group+" "+l.Key)
 	}
 
@@ -476,7 +477,7 @@ func TestBoardGroupsAWaitingTaskUnderNext(t *testing.T) {
 // board.html cannot import the note, so it matches the same text: renaming
 // one without the other would split the terminal and HTML views.
 func TestBoardHTMLMatchesTheLocalOnlyNote(t *testing.T) {
-	if !strings.Contains(boardHTMLPage, `"`+lookaround.NoteLocalOnly+`"`) {
+	if !strings.Contains(boardcmd.BoardHTMLPage, `"`+lookaround.NoteLocalOnly+`"`) {
 		t.Errorf("board.html does not match the note %q", lookaround.NoteLocalOnly)
 	}
 }

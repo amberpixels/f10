@@ -9,6 +9,8 @@ import (
 )
 
 func TestLeaseIsExclusiveAndNamesItsHolder(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join(t.TempDir(), "locks", "x.lock")
 
 	l, err := Acquire(path, "pid=1 drive=2")

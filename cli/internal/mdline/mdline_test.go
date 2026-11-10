@@ -3,6 +3,8 @@ package mdline
 import "testing"
 
 func TestItem(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		line, want string
 		ok         bool
@@ -22,6 +24,8 @@ func TestItem(t *testing.T) {
 }
 
 func TestCut(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		line       string
 		seps       []string
@@ -60,6 +64,8 @@ func TestCut(t *testing.T) {
 }
 
 func TestBareAndUnmark(t *testing.T) {
+	t.Parallel()
+
 	if got := Bare(" **FT-12** "); got != "FT-12" {
 		t.Errorf("Bare = %q", got)
 	}

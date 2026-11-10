@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	statscmd "github.com/amberpixels/f10/cli/internal/command/stats"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 )
 
@@ -51,7 +52,7 @@ func TestStatsTable(t *testing.T) {
 	day := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 
 	var out bytes.Buffer
-	if err := writeStats(&out, statRows(statEvents(day), "", day)); err != nil {
+	if err := statscmd.WriteStats(&out, statscmd.StatRows(statEvents(day), "", day)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -81,11 +82,11 @@ func TestStatsRowsSinceAndTask(t *testing.T) {
 	day := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 	events := statEvents(day)
 
-	if rows := statRows(events, "", day.Add(12*time.Hour)); len(rows) != 1 || rows[0].task != "FT-2" {
+	if rows := statscmd.StatRows(events, "", day.Add(12*time.Hour)); len(rows) != 1 || rows[0].Task != "FT-2" {
 		t.Errorf("since: %+v", rows)
 	}
 
-	if rows := statRows(events, "ft-1", day.Add(48*time.Hour)); len(rows) != 1 || rows[0].task != "FT-1" {
+	if rows := statscmd.StatRows(events, "ft-1", day.Add(48*time.Hour)); len(rows) != 1 || rows[0].Task != "FT-1" {
 		t.Errorf("task: %+v", rows)
 	}
 }
@@ -94,13 +95,13 @@ func TestStatsRowsSinceAndTask(t *testing.T) {
 func TestStatsSteps(t *testing.T) {
 	day := time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)
 
-	rows := statRows(statEvents(day), "FT-1", day)
+	rows := statscmd.StatRows(statEvents(day), "FT-1", day)
 	if len(rows) != 1 {
 		t.Fatalf("rows %+v", rows)
 	}
 
 	var out bytes.Buffer
-	if err := writeSteps(&out, rows[0]); err != nil {
+	if err := statscmd.WriteSteps(&out, rows[0]); err != nil {
 		t.Fatal(err)
 	}
 
@@ -143,17 +144,17 @@ func TestStatsStepsByLabel(t *testing.T) {
 		statEvent(at(20), "s1", "FT-1", ledger.StateSet, ledger.Payload{"args": []any{"ship", "done"}}),
 	}
 
-	rows := statRows(events, "FT-1", day)
+	rows := statscmd.StatRows(events, "FT-1", day)
 	if len(rows) != 1 {
 		t.Fatalf("rows %+v", rows)
 	}
 
-	if d := rows[0].steps["pr"]; d != 8*time.Minute {
+	if d := rows[0].Steps["pr"]; d != 8*time.Minute {
 		t.Errorf("pr step = %v, want both entries' 8m", d)
 	}
 
 	var out bytes.Buffer
-	if err := writeSteps(&out, rows[0]); err != nil {
+	if err := statscmd.WriteSteps(&out, rows[0]); err != nil {
 		t.Fatal(err)
 	}
 
@@ -206,13 +207,13 @@ func TestStatsCutoff(t *testing.T) {
 	now := time.Date(2026, 10, 14, 9, 0, 0, 0, time.UTC)
 
 	for arg, want := range map[string]time.Time{"30d": now.AddDate(0, 0, -30), "2w": now.AddDate(0, 0, -14)} {
-		if got, err := statsCutoff(arg, now); err != nil || !got.Equal(want) {
+		if got, err := statscmd.StatsCutoff(arg, now); err != nil || !got.Equal(want) {
 			t.Errorf("statsCutoff(%q) = %v, %v, want %v", arg, got, err, want)
 		}
 	}
 
 	for _, bad := range []string{"", "0d", "3651d", "2026-10-01", "yesterday", "12h", "3mo", "x"} {
-		if _, err := statsCutoff(bad, now); err == nil {
+		if _, err := statscmd.StatsCutoff(bad, now); err == nil {
 			t.Errorf("statsCutoff(%q) took it", bad)
 		}
 	}

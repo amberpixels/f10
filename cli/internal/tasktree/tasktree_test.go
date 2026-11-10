@@ -48,6 +48,8 @@ func golden(t *testing.T, name string, tree Tree, nodes []Node) {
 // Chains three deep, a halted child, an asking child whose ask stays whole,
 // an unrelated task last, and a title cut at the width.
 func TestParent(t *testing.T) {
+	t.Parallel()
+
 	golden(t, "parent", Tree{Head: "FT-209  4 done · 2 halted · 1 asking", Align: true, Width: 80}, []Node{
 		{Cells: cells("✓ FT-206", "done", "finish", "#208"), Title: "Show who runs a driven finish"},
 		{Cells: cells("✓ FT-210", "done", "finish", "#216"), Title: "Keep a drive as a record with a lease per task"},
@@ -74,6 +76,8 @@ func TestParent(t *testing.T) {
 
 // A task alone: no glyphs, its notes' labels wider than its id column.
 func TestSingle(t *testing.T) {
+	t.Parallel()
+
 	golden(t, "single", Tree{Align: true}, []Node{{
 		Cells: cells("✓ FT-1", "done", "finish", "#2"), Title: "One task",
 		Notes: []Note{{Label: "judge", Text: "proceed"}, {Label: "implement", Text: "done"}},
@@ -83,6 +87,8 @@ func TestSingle(t *testing.T) {
 // Unaligned cells join by two spaces, empty ones skipped; Hang and Indent
 // put glyphs on the top level under a heading the caller prints.
 func TestPackedAndHung(t *testing.T) {
+	t.Parallel()
+
 	golden(t, "packed", Tree{}, []Node{
 		{Cells: cells("FT-72", "t72")},
 		{Depth: 1, Cells: cells("FT-73", "t73", "", "after FT-72")},
@@ -98,6 +104,8 @@ func TestPackedAndHung(t *testing.T) {
 // A Nerd Font md-* icon takes one column, as it renders, so the column
 // after it lines up.
 func TestAlignCountsAnIconAsOneColumn(t *testing.T) {
+	t.Parallel()
+
 	var b strings.Builder
 
 	tree := Tree{Align: true}
@@ -117,6 +125,8 @@ func TestAlignCountsAnIconAsOneColumn(t *testing.T) {
 // A Fill cell takes what Width leaves, the cells after it follow it
 // unpadded, and Columns lines up trees written one after another.
 func TestFillAndColumns(t *testing.T) {
+	t.Parallel()
+
 	row := func(id, title, tail string) Node {
 		return Node{Cells: []Cell{{Text: id}, {Text: title, Fill: true}, {Text: tail}}}
 	}

@@ -13,12 +13,16 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
+	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	statuscmd "github.com/amberpixels/f10/cli/internal/command/status"
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/statusview"
 )
 
 var gatePipeline = []string{"implement", "cleanup", "pr", "review:local", "judge", "pr"}
@@ -30,7 +34,7 @@ func hookEvent(at time.Time, session, kind string, p ledger.Payload) ledger.Even
 	return e
 }
 
-func texts(gates []gate) map[string]string {
+func texts(gates []statusview.Gate) map[string]string {
 	out := map[string]string{}
 
 	for _, g := range gates {
@@ -43,13 +47,13 @@ func texts(gates []gate) map[string]string {
 			key += " again"
 		}
 
-		out[key] = g.text()
+		out[key] = g.Text()
 	}
 
 	return out
 }
 
-func checkTexts(t *testing.T, gates []gate, want map[string]string) {
+func checkTexts(t *testing.T, gates []statusview.Gate, want map[string]string) {
 	t.Helper()
 
 	got := texts(gates)
@@ -77,8 +81,8 @@ func TestGatesDuringShip(t *testing.T) {
 
 	run := &state.Run{Session: "s1", Task: "FT-1", Ship: "running", Leaf: "review:local", Pipeline: gatePipeline}
 
-	gates := taskGates(context.Background(), gateInput{
-		task: "FT-1", branch: "FT-1/thing", run: run, events: events, remoteFlow: true, now: at(6),
+	gates := statusview.TaskGates(context.Background(), statusview.GateInput{
+		Task: "FT-1", Branch: "FT-1/thing", Run: run, Events: events, RemoteFlow: true, Now: at(6),
 	})
 
 	checkTexts(t, gates, map[string]string{
@@ -95,9 +99,15 @@ func TestGatesDuringShip(t *testing.T) {
 	}
 
 	// the reviewer wrote round 1 after ship entered the review: resolve is on it
-	gates = taskGates(context.Background(), gateInput{
-		task: "FT-1", run: run, events: events, now: at(6),
-		outcomes: outcomes{local: []reviewRound{{Round: "1", Found: 2, Ask: 2}}, localAt: at(4).Add(30 * time.Second)},
+	gates = statusview.TaskGates(context.Background(), statusview.GateInput{
+		Task:   "FT-1",
+		Run:    run,
+		Events: events,
+		Now:    at(6),
+		Outcomes: statusview.Outcomes{
+			Local:   []statusview.ReviewRound{{Round: "1", Found: 2, Ask: 2}},
+			LocalAt: at(4).Add(30 * time.Second),
+		},
 	})
 
 	checkTexts(t, gates, map[string]string{"review": "local: resolve running (in ship)"})
@@ -115,7 +125,10 @@ func TestGatesParkedOnTheBase(t *testing.T) {
 		Pipeline: gatePipeline,
 	}
 
-	gates := taskGates(context.Background(), gateInput{task: "FT-2", run: run, now: time.Unix(1_800_000_000, 0)})
+	gates := statusview.TaskGates(
+		context.Background(),
+		statusview.GateInput{Task: "FT-2", Run: run, Now: time.Unix(1_800_000_000, 0)},
+	)
 
 	checkTexts(t, gates, map[string]string{"implement": "waiting on FT-1", "cleanup": "upcoming"})
 }
@@ -126,28 +139,31 @@ func TestGatesOptionalCI(t *testing.T) {
 	pipeline := []string{"implement", "pr", "review:local+ci?", "pr"}
 	now := time.Unix(1_800_000_000, 0)
 
-	alone := taskGates(context.Background(), gateInput{task: "FT-1", pipeline: flow.Of(pipeline), now: now})
+	alone := statusview.TaskGates(
+		context.Background(),
+		statusview.GateInput{Task: "FT-1", Pipeline: flow.Of(pipeline), Now: now},
+	)
 	checkTexts(t, alone, map[string]string{"review": "local: upcoming"})
 
-	both := taskGates(
+	both := statusview.TaskGates(
 		context.Background(),
-		gateInput{task: "FT-1", pipeline: flow.Of(pipeline), remoteFlow: true, now: now},
+		statusview.GateInput{Task: "FT-1", Pipeline: flow.Of(pipeline), RemoteFlow: true, Now: now},
 	)
 	checkTexts(t, both, map[string]string{"review": "local: upcoming · remote: upcoming"})
 
 	// a flow whose only review is a dropped ci? keeps one review gate, off
-	ciOnly := taskGates(context.Background(), gateInput{
-		task: "FT-1", pipeline: flow.Of([]string{"implement", "pr", "review:ci?"}), now: now,
+	ciOnly := statusview.TaskGates(context.Background(), statusview.GateInput{
+		Task: "FT-1", Pipeline: flow.Of([]string{"implement", "pr", "review:ci?"}), Now: now,
 	})
 
-	var reviews []gate
+	var reviews []statusview.Gate
 	for _, g := range ciOnly {
 		if g.Step == "review" {
 			reviews = append(reviews, g)
 		}
 	}
 
-	if len(reviews) != 1 || reviews[0].State != gateOff {
+	if len(reviews) != 1 || reviews[0].State != statusview.GateOff {
 		t.Errorf("review gates = %+v", reviews)
 	}
 }
@@ -167,8 +183,8 @@ func TestGatesBothHalvesInOneEntry(t *testing.T) {
 	}
 	run := &state.Run{Session: "s1", Task: "FT-1", Ship: "running", Leaf: "review:local+ci", Pipeline: pipeline}
 
-	upcoming := taskGates(context.Background(), gateInput{
-		task: "FT-1", pipeline: flow.Of(pipeline), events: events[:3], now: at(3),
+	upcoming := statusview.TaskGates(context.Background(), statusview.GateInput{
+		Task: "FT-1", Pipeline: flow.Of(pipeline), Events: events[:3], Now: at(3),
 	})
 	checkTexts(t, upcoming, map[string]string{"review": "local: upcoming · remote: upcoming"})
 
@@ -176,27 +192,30 @@ func TestGatesBothHalvesInOneEntry(t *testing.T) {
 		t.Errorf("%d gates, want implement, pr, review, pr, judge off: %v", n, texts(upcoming))
 	}
 
-	running := taskGates(context.Background(), gateInput{task: "FT-1", run: run, events: events, now: at(4)})
+	running := statusview.TaskGates(
+		context.Background(),
+		statusview.GateInput{Task: "FT-1", Run: run, Events: events, Now: at(4)},
+	)
 	checkTexts(t, running, map[string]string{
 		"review": "local: round 1 running (in ship) · remote: round 1 running (in ship)",
 	})
 
 	// the local reviewer wrote its findings; the CI review has not landed, so
 	// nothing is resolving yet
-	local := taskGates(context.Background(), gateInput{
-		task: "FT-1", run: run, events: events, now: at(5),
-		outcomes: outcomes{local: []reviewRound{{Round: "1", Found: 1, Ask: 1}}, localAt: at(4)},
+	local := statusview.TaskGates(context.Background(), statusview.GateInput{
+		Task: "FT-1", Run: run, Events: events, Now: at(5),
+		Outcomes: statusview.Outcomes{Local: []statusview.ReviewRound{{Round: "1", Found: 1, Ask: 1}}, LocalAt: at(4)},
 	})
 	checkTexts(t, local, map[string]string{
 		"review": "local: round 1 in, waiting for the other review (in ship) · remote: round 1 running (in ship)",
 	})
 
 	// both halves landed: the one resolve settles them
-	both := taskGates(context.Background(), gateInput{
-		task: "FT-1", run: run, events: events, now: at(6),
-		outcomes: outcomes{
-			local: []reviewRound{{Round: "1", Found: 1, Ask: 1}}, localAt: at(4),
-			remote: []reviewRound{{Round: "1", Found: 1, Ask: 1}}, remoteAt: at(5),
+	both := statusview.TaskGates(context.Background(), statusview.GateInput{
+		Task: "FT-1", Run: run, Events: events, Now: at(6),
+		Outcomes: statusview.Outcomes{
+			Local: []statusview.ReviewRound{{Round: "1", Found: 1, Ask: 1}}, LocalAt: at(4),
+			Remote: []statusview.ReviewRound{{Round: "1", Found: 1, Ask: 1}}, RemoteAt: at(5),
 		},
 	})
 	checkTexts(t, both, map[string]string{
@@ -204,11 +223,11 @@ func TestGatesBothHalvesInOneEntry(t *testing.T) {
 	})
 
 	done := &state.Run{Session: "s1", Task: "FT-1", Ship: "done", Pipeline: pipeline}
-	settled := taskGates(context.Background(), gateInput{
-		task: "FT-1", run: done, events: events, now: at(9),
-		outcomes: outcomes{
-			local: []reviewRound{{Round: "1", Found: 1, Fixed: 1}}, localAt: at(6),
-			remote: []reviewRound{{Round: "1", Found: 2, Skipped: 2}}, remoteAt: at(6),
+	settled := statusview.TaskGates(context.Background(), statusview.GateInput{
+		Task: "FT-1", Run: done, Events: events, Now: at(9),
+		Outcomes: statusview.Outcomes{
+			Local: []statusview.ReviewRound{{Round: "1", Found: 1, Fixed: 1}}, LocalAt: at(6),
+			Remote: []statusview.ReviewRound{{Round: "1", Found: 2, Skipped: 2}}, RemoteAt: at(6),
 		},
 	})
 	checkTexts(t, settled, map[string]string{
@@ -306,10 +325,10 @@ func TestGatesStartedOutsideShip(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			gates := taskGates(context.Background(), gateInput{
-				task: "FT-1", branch: "FT-1/thing", checkout: "/code/repo.FT-1", run: done,
-				events: append(append([]ledger.Event{}, base...), tc.extra...),
-				now:    at(9),
+			gates := statusview.TaskGates(context.Background(), statusview.GateInput{
+				Task: "FT-1", Branch: "FT-1/thing", Checkout: "/code/repo.FT-1", Run: done,
+				Events: append(append([]ledger.Event{}, base...), tc.extra...),
+				Now:    at(9),
 			})
 
 			checkTexts(t, gates, tc.want)
@@ -327,52 +346,52 @@ func TestGatesOutcomes(t *testing.T) {
 
 	for _, tc := range []struct {
 		name string
-		in   gateInput
+		in   statusview.GateInput
 		want map[string]string
 	}{
 		{
 			"settled locally, no judge, no remote reviewer",
-			gateInput{outcomes: outcomes{local: []reviewRound{{Round: "1", Found: 4, Fixed: 3, Skipped: 1}}}},
+			statusview.GateInput{Outcomes: statusview.Outcomes{Local: []statusview.ReviewRound{{Round: "1", Found: 4, Fixed: 3, Skipped: 1}}}},
 			map[string]string{"review": "local: 4 found (3 fixed, 1 skipped)", "judge": "not in this flow"},
 		},
 		{
 			"open findings",
-			gateInput{outcomes: outcomes{local: []reviewRound{{Round: "1", Found: 3, Fixed: 1, Ask: 2}}}},
+			statusview.GateInput{Outcomes: statusview.Outcomes{Local: []statusview.ReviewRound{{Round: "1", Found: 3, Fixed: 1, Ask: 2}}}},
 			map[string]string{"review": "local: 2 open of 3 found"},
 		},
 		{
 			"a remote review the host has not handled",
-			gateInput{remoteFlow: true, remote: func(context.Context) remoteState {
-				return remoteState{found: true, done: true}
+			statusview.GateInput{RemoteFlow: true, Remote: func(context.Context) statusview.RemoteState {
+				return statusview.RemoteState{Found: true, Done: true}
 			}},
 			map[string]string{"review": "local: upcoming · remote: open (not handled)"},
 		},
 		{
 			"a remote review settled on the host",
-			gateInput{remoteFlow: true, remote: func(context.Context) remoteState {
-				return remoteState{found: true, done: true, handled: true, settled: true}
+			statusview.GateInput{RemoteFlow: true, Remote: func(context.Context) statusview.RemoteState {
+				return statusview.RemoteState{Found: true, Done: true, Handled: true, Settled: true}
 			}},
 			map[string]string{"review": "local: upcoming · remote: settled"},
 		},
 		{
 			"a host past the timeout",
-			gateInput{remoteFlow: true, remote: func(context.Context) remoteState {
-				return remoteState{err: context.DeadlineExceeded}
+			statusview.GateInput{RemoteFlow: true, Remote: func(context.Context) statusview.RemoteState {
+				return statusview.RemoteState{Err: context.DeadlineExceeded}
 			}},
 			map[string]string{"review": "local: upcoming · remote: unknown (timed out)"},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			tc.in.task, tc.in.run, tc.in.now = "FT-1", ship, time.Now()
+			tc.in.Task, tc.in.Run, tc.in.Now = "FT-1", ship, time.Now()
 
-			checkTexts(t, taskGates(context.Background(), tc.in), tc.want)
+			checkTexts(t, statusview.TaskGates(context.Background(), tc.in), tc.want)
 		})
 	}
 
 	// a judge the flow does not declare shows once it ran
-	gates := taskGates(context.Background(), gateInput{
-		task: "FT-1", run: ship, now: time.Now(),
-		outcomes: outcomes{planJudge: &judgeOutcome{Verdict: "proceed"}},
+	gates := statusview.TaskGates(context.Background(), statusview.GateInput{
+		Task: "FT-1", Run: ship, Now: time.Now(),
+		Outcomes: statusview.Outcomes{PlanJudge: &archive.JudgeOutcome{Verdict: "proceed"}},
 	})
 
 	checkTexts(t, gates, map[string]string{"judge plan": "plan: proceed"})
@@ -382,19 +401,19 @@ func TestGatesOutcomes(t *testing.T) {
 	}
 
 	// a plan judge before ship and a change judge after it
-	gates = taskGates(context.Background(), gateInput{
-		task: "FT-1",
-		now:  time.Now(),
-		run: &state.Run{
+	gates = statusview.TaskGates(context.Background(), statusview.GateInput{
+		Task: "FT-1",
+		Now:  time.Now(),
+		Run: &state.Run{
 			Session:  "s1",
 			Task:     "FT-1",
 			Ship:     "done",
 			Pipeline: []string{"judge", "implement", "review:local", "pr", "judge"},
 		},
-		finishes: true,
-		outcomes: outcomes{
-			planJudge:   &judgeOutcome{Verdict: "proceed", Reason: "sound"},
-			changeJudge: &judgeOutcome{Verdict: "rethink", Reason: "symptom"},
+		Finishes: true,
+		Outcomes: statusview.Outcomes{
+			PlanJudge:   &archive.JudgeOutcome{Verdict: "proceed", Reason: "sound"},
+			ChangeJudge: &archive.JudgeOutcome{Verdict: "rethink", Reason: "symptom"},
 		},
 	})
 
@@ -404,13 +423,13 @@ func TestGatesOutcomes(t *testing.T) {
 		"finish":       "upcoming",
 	})
 
-	if got := compactGates(gates); got != "󰊛 PJ proceed · 󰚔 L upcoming · R - · 󰊛 J rethink" {
+	if got := statusview.CompactGates(gates); got != "󰊛 PJ proceed · 󰚔 L upcoming · R - · 󰊛 J rethink" {
 		t.Errorf("compact = %q", got)
 	}
 
 	t.Setenv("F10_STATUS_GLYPHS", "PR MR rv jd")
 
-	if got := compactGates(gates); got != "jd PJ proceed · rv L upcoming · R - · jd J rethink" {
+	if got := statusview.CompactGates(gates); got != "jd PJ proceed · rv L upcoming · R - · jd J rethink" {
 		t.Errorf("with F10_STATUS_GLYPHS: compactGates = %q", got)
 	}
 }
@@ -441,12 +460,12 @@ func TestOutcomesPreferLore(t *testing.T) {
 	store := &lore.Store{Root: root}
 
 	// no lore entries: the files answer
-	if o := readOutcomes(
+	if o := statuscmd.ReadOutcomes(
 		store,
 		storage,
 		"FT-1",
-	); len(o.local) != 1 || o.changeJudge == nil ||
-		o.changeJudge.Verdict != "stop" {
+	); len(o.Local) != 1 || o.ChangeJudge == nil ||
+		o.ChangeJudge.Verdict != "stop" {
 		t.Fatalf("files fallback = %+v", o)
 	}
 
@@ -457,8 +476,13 @@ func TestOutcomesPreferLore(t *testing.T) {
 		Severity: "minor", Status: "fixed", Resolution: "abcdef1", Source: "local", Body: "old",
 	})
 
-	if o := readOutcomes(&lore.Store{Root: stale}, storage, "FT-1"); len(o.local) != 1 || o.local[0].Ask != 1 {
-		t.Errorf("stale lore won over the newer file: %+v", o.local)
+	if o := statuscmd.ReadOutcomes(
+		&lore.Store{Root: stale},
+		storage,
+		"FT-1",
+	); len(o.Local) != 1 ||
+		o.Local[0].Ask != 1 {
+		t.Errorf("stale lore won over the newer file: %+v", o.Local)
 	}
 
 	when := time.Now().UTC().Truncate(time.Second)
@@ -484,18 +508,19 @@ func TestOutcomesPreferLore(t *testing.T) {
 		},
 	)
 
-	o := readOutcomes(store, storage, "FT-1")
+	o := statuscmd.ReadOutcomes(store, storage, "FT-1")
 
-	if want := (reviewRound{Round: "1", Found: 2, Fixed: 1, Skipped: 1}); len(o.local) != 1 || o.local[0] != want {
-		t.Errorf("local from lore = %+v, want %+v", o.local, want)
+	if want := (statusview.ReviewRound{Round: "1", Found: 2, Fixed: 1, Skipped: 1}); len(o.Local) != 1 ||
+		o.Local[0] != want {
+		t.Errorf("local from lore = %+v, want %+v", o.Local, want)
 	}
 
-	if len(o.remote) != 1 || o.remote[0].Ask != 1 {
-		t.Errorf("remote from lore = %+v", o.remote)
+	if len(o.Remote) != 1 || o.Remote[0].Ask != 1 {
+		t.Errorf("remote from lore = %+v", o.Remote)
 	}
 
-	if o.changeJudge == nil || o.changeJudge.Verdict != "proceed" || o.changeJudge.Reason != "fine" {
-		t.Errorf("change judge from lore = %+v", o.changeJudge)
+	if o.ChangeJudge == nil || o.ChangeJudge.Verdict != "proceed" || o.ChangeJudge.Reason != "fine" {
+		t.Errorf("change judge from lore = %+v", o.ChangeJudge)
 	}
 }
 
@@ -509,8 +534,8 @@ func TestOutcomesRoundTwo(t *testing.T) {
 	writeFile(t, filepath.Join(reviews, "2.md"), "task: FT-1\nround: 2\nreviewer: local\nverdict: findings\n\n"+
 		"## Prior round\n\n### 1.1 A - fixed\n\n### 1.2 B - still open\n\n## Findings\n\n### 2.1 C\ncategory: x\n")
 
-	if o := fileOutcomes(storage, "FT-1", time.Time{}); o.localRaised != 3 {
-		t.Fatalf("raised = %d, want 3: 1.1, 1.2 and 2.1, the reopened 1.2 once", o.localRaised)
+	if o := statusview.FileOutcomes(storage, "FT-1", time.Time{}); o.LocalRaised != 3 {
+		t.Fatalf("raised = %d, want 3: 1.1, 1.2 and 2.1, the reopened 1.2 once", o.LocalRaised)
 	}
 
 	when := time.Now().UTC().Truncate(time.Second).Add(time.Second)
@@ -530,41 +555,42 @@ func TestOutcomesRoundTwo(t *testing.T) {
 	short := t.TempDir()
 	writeLore(t, short, entry("fixed"), entry("open"))
 
-	if o := readOutcomes(&lore.Store{Root: short}, storage, "FT-1"); len(o.local) != 2 {
-		t.Errorf("lore missing a finding answered: %+v", o.local)
+	if o := statuscmd.ReadOutcomes(&lore.Store{Root: short}, storage, "FT-1"); len(o.Local) != 2 {
+		t.Errorf("lore missing a finding answered: %+v", o.Local)
 	}
 
 	whole := t.TempDir()
 	writeLore(t, whole, entry("fixed"), entry("open"), entry("open"))
 
-	o := readOutcomes(&lore.Store{Root: whole}, storage, "FT-1")
-	if want := (reviewRound{Round: "2", Found: 3, Fixed: 1, Ask: 2}); len(o.local) != 1 || o.local[0] != want {
-		t.Errorf("lore with every finding = %+v, want %+v", o.local, want)
+	o := statuscmd.ReadOutcomes(&lore.Store{Root: whole}, storage, "FT-1")
+	if want := (statusview.ReviewRound{Round: "2", Found: 3, Fixed: 1, Ask: 2}); len(o.Local) != 1 ||
+		o.Local[0] != want {
+		t.Errorf("lore with every finding = %+v, want %+v", o.Local, want)
 	}
 }
 
 func TestStorageFor(t *testing.T) {
 	shared := t.TempDir()
 
-	if got := (gateSource{shared: shared}).storageFor(context.Background(), ""); got != shared {
+	if got := (statusview.GateSource{Shared: shared}).StorageFor(context.Background(), ""); got != shared {
 		t.Errorf("no checkout: %q, want %q", got, shared)
 	}
 }
 
 func TestRenderGates(t *testing.T) {
 	r := &state.Run{Task: "FT-1", Capture: "prior", Plan: "done", Ship: "running", Leaf: "review (local)"}
-	gates := []gate{
-		{Step: "implement", State: gateDone},
+	gates := []statusview.Gate{
+		{Step: "implement", State: statusview.GateDone},
 		{
 			Step:   "review",
-			Local:  &reviewHalf{State: gateRunning, Via: viaShip},
-			Remote: &reviewHalf{State: gateUpcoming},
+			Local:  &statusview.ReviewHalf{State: statusview.GateRunning, Via: statusview.ViaShip},
+			Remote: &statusview.ReviewHalf{State: statusview.GateUpcoming},
 		},
-		{Step: "judge", Judged: "change", State: gateUpcoming},
+		{Step: "judge", Judged: "change", State: statusview.GateUpcoming},
 	}
 
 	var out bytes.Buffer
-	runRows(&out, r, runView{gates: gates, now: time.Now()})
+	statusview.RunRows(&out, r, statusview.RunView{Gates: gates, Now: time.Now()})
 
 	for _, want := range []string{
 		"ship            running: review (local)\n",
@@ -577,7 +603,7 @@ func TestRenderGates(t *testing.T) {
 		}
 	}
 
-	raw, err := json.Marshal([]runJSON{{Run: r, Gates: gates}, {Run: r}})
+	raw, err := json.Marshal([]statusview.RunJSON{{Run: r, Gates: gates}, {Run: r}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -596,11 +622,13 @@ func TestRenderGates(t *testing.T) {
 	}
 
 	// a parent's rows carry the compact column, a finished task alone every line
-	rows := []taskRow{{ID: "FT-1", Title: "Thing", Stage: stageReviewing, Step: "review", Gates: gates}}
+	rows := []statusview.TaskRow{
+		{ID: "FT-1", Title: "Thing", Stage: statusview.StageReviewing, Step: "review", Gates: gates},
+	}
 
 	out.Reset()
 
-	if err := renderRows(&out, rows, rowView{}); err != nil {
+	if err := statusview.RenderRows(&out, rows, statusview.RowView{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -608,11 +636,11 @@ func TestRenderGates(t *testing.T) {
 		t.Errorf("rows lack the gate column:\n%s", out.String())
 	}
 
-	rows[0].full = true
+	rows[0].Full = true
 
 	out.Reset()
 
-	if err := renderRows(&out, rows, rowView{}); err != nil {
+	if err := statusview.RenderRows(&out, rows, statusview.RowView{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -624,18 +652,21 @@ func TestRenderGates(t *testing.T) {
 // The judge fetch runs on a stale task leads the gates once it ran or the
 // plan phase is on it, and shows nowhere before that.
 func TestGatesTaskJudge(t *testing.T) {
-	none := taskGates(context.Background(), gateInput{task: "FT-1", pipeline: flow.Of(gatePipeline), now: time.Now()})
+	none := statusview.TaskGates(
+		context.Background(),
+		statusview.GateInput{Task: "FT-1", Pipeline: flow.Of(gatePipeline), Now: time.Now()},
+	)
 	if _, ok := texts(none)["judge task"]; ok {
 		t.Errorf("a task judge with nothing behind it: %v", texts(none))
 	}
 
 	// ship stopped at its own judge carries the same leaf; plan is done, so
 	// it is no task judge
-	atShip := taskGates(context.Background(), gateInput{
-		task:     "FT-1",
-		pipeline: flow.Of(gatePipeline),
-		now:      time.Now(),
-		run: &state.Run{
+	atShip := statusview.TaskGates(context.Background(), statusview.GateInput{
+		Task:     "FT-1",
+		Pipeline: flow.Of(gatePipeline),
+		Now:      time.Now(),
+		Run: &state.Run{
 			Session:  "s1",
 			Task:     "FT-1",
 			Plan:     "done",
@@ -650,35 +681,35 @@ func TestGatesTaskJudge(t *testing.T) {
 
 	for _, tc := range []struct {
 		name string
-		in   gateInput
+		in   statusview.GateInput
 		want string
 	}{
 		{
 			"verdict",
-			gateInput{outcomes: outcomes{taskJudge: &judgeOutcome{Verdict: "stop", Reason: "done in FT-9"}}},
+			statusview.GateInput{Outcomes: statusview.Outcomes{TaskJudge: &archive.JudgeOutcome{Verdict: "stop", Reason: "done in FT-9"}}},
 			"task: stop - done in FT-9",
 		},
-		{"running", gateInput{run: &state.Run{Plan: "running", Ship: "upcoming", Leaf: "judge"}}, "task: running"},
-		{"blocked", gateInput{
-			run:      &state.Run{Plan: "blocked", Ship: "upcoming", Leaf: "judge"},
-			outcomes: outcomes{taskJudge: &judgeOutcome{Verdict: "rethink"}},
+		{"running", statusview.GateInput{Run: &state.Run{Plan: "running", Ship: "upcoming", Leaf: "judge"}}, "task: running"},
+		{"blocked", statusview.GateInput{
+			Run:      &state.Run{Plan: "blocked", Ship: "upcoming", Leaf: "judge"},
+			Outcomes: statusview.Outcomes{TaskJudge: &archive.JudgeOutcome{Verdict: "rethink"}},
 		}, "task: blocked"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			tc.in.task, tc.in.pipeline, tc.in.now = "FT-1", flow.Of(gatePipeline), time.Now()
+			tc.in.Task, tc.in.Pipeline, tc.in.Now = "FT-1", flow.Of(gatePipeline), time.Now()
 
-			gates := taskGates(context.Background(), tc.in)
-			if len(gates) == 0 || gates[0].Judged != "task" || gates[0].text() != tc.want {
+			gates := statusview.TaskGates(context.Background(), tc.in)
+			if len(gates) == 0 || gates[0].Judged != "task" || gates[0].Text() != tc.want {
 				t.Errorf("first gate = %+v, want the task judge reading %q (all: %v)", gates, tc.want, texts(gates))
 			}
 		})
 	}
 
-	gates := taskGates(context.Background(), gateInput{
-		task: "FT-1", pipeline: flow.Of(gatePipeline), now: time.Now(),
-		outcomes: outcomes{taskJudge: &judgeOutcome{Verdict: "proceed"}},
+	gates := statusview.TaskGates(context.Background(), statusview.GateInput{
+		Task: "FT-1", Pipeline: flow.Of(gatePipeline), Now: time.Now(),
+		Outcomes: statusview.Outcomes{TaskJudge: &archive.JudgeOutcome{Verdict: "proceed"}},
 	})
-	if got := compactGates(gates); got != "󰊛 TJ proceed · 󰚔 L upcoming · R - · 󰊛 J upcoming" {
+	if got := statusview.CompactGates(gates); got != "󰊛 TJ proceed · 󰚔 L upcoming · R - · 󰊛 J upcoming" {
 		t.Errorf("compact = %q", got)
 	}
 }
@@ -690,8 +721,8 @@ func TestOutcomesTaskJudge(t *testing.T) {
 	writeFile(t, filepath.Join(storage, "verdicts", "FT-1", "1.md"),
 		"task: FT-1\nsubject: task FT-1\nverdict: stop\nreason: solved\nrun: before plan\n")
 
-	o := readOutcomes(nil, storage, "FT-1")
-	if o.taskJudge == nil || o.taskJudge.Verdict != "stop" || o.changeJudge != nil {
+	o := statuscmd.ReadOutcomes(nil, storage, "FT-1")
+	if o.TaskJudge == nil || o.TaskJudge.Verdict != "stop" || o.ChangeJudge != nil {
 		t.Errorf("file = %+v", o)
 	}
 
@@ -701,8 +732,8 @@ func TestOutcomesTaskJudge(t *testing.T) {
 		Outcome: "proceed", Gate: "judge", Commit: "abcdef1", Judged: "task", Body: "still real",
 	})
 
-	o = readOutcomes(&lore.Store{Root: root}, "", "FT-2")
-	if o.taskJudge == nil || o.taskJudge.Verdict != "proceed" || o.changeJudge != nil {
+	o = statuscmd.ReadOutcomes(&lore.Store{Root: root}, "", "FT-2")
+	if o.TaskJudge == nil || o.TaskJudge.Verdict != "proceed" || o.ChangeJudge != nil {
 		t.Errorf("lore = %+v", o)
 	}
 
@@ -720,9 +751,9 @@ func TestOutcomesTaskJudge(t *testing.T) {
 			Outcome: "proceed", Gate: "judge", Commit: "abcdef1", Judged: "task", Body: "still real",
 		})
 
-		if o := readOutcomes(&lore.Store{Root: both}, storage, "FT-1"); o.taskJudge == nil ||
-			o.taskJudge.Verdict != tc.want {
-			t.Errorf("lore at %v over the file = %+v, want %s", tc.at, o.taskJudge, tc.want)
+		if o := statuscmd.ReadOutcomes(&lore.Store{Root: both}, storage, "FT-1"); o.TaskJudge == nil ||
+			o.TaskJudge.Verdict != tc.want {
+			t.Errorf("lore at %v over the file = %+v, want %s", tc.at, o.TaskJudge, tc.want)
 		}
 	}
 }
@@ -751,19 +782,19 @@ func TestGatesDriveFinish(t *testing.T) {
 		finish branchmeta.DriveFinish
 		want   string
 	}{
-		{"no record", shipped, "", branchmeta.DriveFinish{}, gateUpcoming},
-		{"ship not done", working, "", queued(""), gateUpcoming},
+		{"no record", shipped, "", branchmeta.DriveFinish{}, statusview.GateUpcoming},
+		{"ship not done", working, "", queued(""), statusview.GateUpcoming},
 		{"queued", shipped, "", queued(""), "queued (drive)"},
 		{"queued once drive recorded ship", nil, "ship", queued(""), "queued (drive)"},
 		{"waiting for a base", shipped, "", queued("waiting for FT-0"), "queued (drive): waiting for FT-0"},
 		{"catching up", shipped, "", queued("catching up with main"), "queued (drive): catching up with main"},
 		{"merging", shipped, "", running("merging #204"), "running (drive): merging #204"},
-		{"finished", shipped, "finish", running("removing worktree"), gateDone},
+		{"finished", shipped, "finish", running("removing worktree"), statusview.GateDone},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			gates := taskGates(context.Background(), gateInput{
-				task: "FT-1", pipeline: flow.Of(gatePipeline), now: time.Now(),
-				run: tc.run, finishes: true, driven: tc.driven, finish: tc.finish,
+			gates := statusview.TaskGates(context.Background(), statusview.GateInput{
+				Task: "FT-1", Pipeline: flow.Of(gatePipeline), Now: time.Now(),
+				Run: tc.run, Finishes: true, Driven: tc.driven, Finish: tc.finish,
 			})
 
 			if got := texts(gates)["finish"]; got != tc.want {
@@ -777,7 +808,10 @@ func TestGatesDriveFinish(t *testing.T) {
 // it, or no drive opened it.
 func TestGatesNoFinishRecord(t *testing.T) {
 	shipped := &state.Run{Session: "s1", Task: "FT-1", Plan: "done", Ship: "done", Pipeline: gatePipeline}
-	gates := taskGates(context.Background(), gateInput{task: "FT-1", run: shipped, driven: "ship", now: time.Now()})
+	gates := statusview.TaskGates(
+		context.Background(),
+		statusview.GateInput{Task: "FT-1", Run: shipped, Driven: "ship", Now: time.Now()},
+	)
 
 	if got, ok := texts(gates)["finish"]; ok {
 		t.Errorf("finish = %q, want no row", got)
@@ -787,15 +821,15 @@ func TestGatesNoFinishRecord(t *testing.T) {
 // A flow with no review or judge leaves both out of the compact row, while
 // the full listing still names them as not in this flow.
 func TestCompactGatesOmitsStepsNotInTheFlow(t *testing.T) {
-	gates := taskGates(context.Background(), gateInput{
-		task: "FT-1", pipeline: flow.Of([]string{"implement", "pr"}), now: time.Now(),
+	gates := statusview.TaskGates(context.Background(), statusview.GateInput{
+		Task: "FT-1", Pipeline: flow.Of([]string{"implement", "pr"}), Now: time.Now(),
 	})
 
-	if got := compactGates(gates); got != "" {
+	if got := statusview.CompactGates(gates); got != "" {
 		t.Errorf("compact = %q, want none", got)
 	}
 
-	checkTexts(t, gates, map[string]string{"review": gateOff, "judge": gateOff})
+	checkTexts(t, gates, map[string]string{"review": statusview.GateOff, "judge": statusview.GateOff})
 }
 
 // driveFlows reads drives neither cancelled nor done, the newest first, by
@@ -822,11 +856,11 @@ func TestDriveFlows(t *testing.T) {
 	}
 	defer lease.Release()
 
-	got := driveFlows(drives.Active(root))
-	want := map[string]driveFlow{
-		"FT-1": {name: "prose", running: true},
-		"FT-2": {name: "prose", running: true},
-		"FT-4": {name: "default"},
+	got := statusview.DriveFlows(drives.Active(root))
+	want := map[string]statusview.DriveFlow{
+		"FT-1": {Name: "prose", Running: true},
+		"FT-2": {Name: "prose", Running: true},
+		"FT-4": {Name: "default"},
 	}
 
 	if len(got) != len(want) {
@@ -860,15 +894,24 @@ func TestStatusReadsTheCurrentSeries(t *testing.T) {
 		Outcome: "proceed", Gate: "judge", Commit: "abcdef1", Judged: "change", Body: "first PR",
 	})
 
-	if _, err := closeSeries(filepath.Join(storage, "reviews", "FT-1"), seriesEnd{pr: "#7"}); err != nil {
+	if _, err := finish.CloseSeries(
+		filepath.Join(storage, "reviews", "FT-1"),
+		archive.SeriesEnd{Pr: "#7"},
+	); err != nil {
 		t.Fatal(err)
 	}
 
-	if o := seriesOutcomes(store, storage, "FT-1", true); o.changeJudge != nil || o.planJudge != nil {
+	if o := statusview.SeriesOutcomes(store, storage, "FT-1", true); o.ChangeJudge != nil || o.PlanJudge != nil {
 		t.Errorf("the follow-up shows the first PR's verdicts: %+v", o)
 	}
 
-	if o := seriesOutcomes(store, storage, "FT-1", false); o.changeJudge == nil || o.changeJudge.Reason != "first PR" {
+	if o := statusview.SeriesOutcomes(
+		store,
+		storage,
+		"FT-1",
+		false,
+	); o.ChangeJudge == nil ||
+		o.ChangeJudge.Reason != "first PR" {
 		t.Errorf("the finished task lost its last series: %+v", o)
 	}
 }
@@ -893,15 +936,20 @@ func TestJudgeDecisionText(t *testing.T) {
 		{"overridden", 0, "proceed with changes (overridden by the user) - why"},
 		{"something new", 0, "proceed with changes (something new) - why"},
 	} {
-		g := gate{Step: "judge", Judged: "change", State: gateDone, Outcome: &judgeOutcome{
-			Verdict: "proceed with changes", Reason: "why", Decision: tc.decision, Changes: tc.changes,
-		}}
+		g := statusview.Gate{
+			Step:   "judge",
+			Judged: "change",
+			State:  statusview.GateDone,
+			Outcome: &archive.JudgeOutcome{
+				Verdict: "proceed with changes", Reason: "why", Decision: tc.decision, Changes: tc.changes,
+			},
+		}
 
-		if got := g.stateText(); got != tc.want {
+		if got := g.StateText(); got != tc.want {
 			t.Errorf("decision %q: got %q, want %q", tc.decision, got, tc.want)
 		}
 
-		if got := g.compactState(); got != "proceed with changes" {
+		if got := g.CompactState(); got != "proceed with changes" {
 			t.Errorf("decision %q: compact %q, want the bare verdict", tc.decision, got)
 		}
 	}
@@ -932,7 +980,7 @@ func TestOutcomesKeepTheFileDecision(t *testing.T) {
 	same := t.TempDir()
 	writeLore(t, same, verdictEntry("proceed with changes"))
 
-	j := readOutcomes(&lore.Store{Root: same}, storage, "FT-1").changeJudge
+	j := statuscmd.ReadOutcomes(&lore.Store{Root: same}, storage, "FT-1").ChangeJudge
 	if j == nil || j.Reason != "from lore" || j.Decision != "built" || j.Changes != 2 {
 		t.Errorf("lore verdict lost the file's decision: %+v", j)
 	}
@@ -940,7 +988,7 @@ func TestOutcomesKeepTheFileDecision(t *testing.T) {
 	other := t.TempDir()
 	writeLore(t, other, verdictEntry("proceed"))
 
-	j = readOutcomes(&lore.Store{Root: other}, storage, "FT-1").changeJudge
+	j = statuscmd.ReadOutcomes(&lore.Store{Root: other}, storage, "FT-1").ChangeJudge
 	if j == nil || j.Verdict != "proceed" || j.Decision != "" {
 		t.Errorf("a different lore verdict took the file's decision: %+v", j)
 	}
@@ -965,9 +1013,12 @@ func TestGatesShowEntryLabels(t *testing.T) {
 		Pipeline: []string{"implement", "pr", "review:local", "pr"}, Labels: []string{"", "", "", "pr-polish"},
 	}
 
-	gates := taskGates(context.Background(), gateInput{task: "FT-1", run: run, events: events, now: at(5)})
+	gates := statusview.TaskGates(
+		context.Background(),
+		statusview.GateInput{Task: "FT-1", Run: run, Events: events, Now: at(5)},
+	)
 
-	var polish *gate
+	var polish *statusview.Gate
 
 	for i, g := range gates {
 		if g.Label == "pr-polish" {
@@ -975,7 +1026,7 @@ func TestGatesShowEntryLabels(t *testing.T) {
 		}
 	}
 
-	if polish == nil || polish.Step != "pr" || polish.State != "running" || polish.shown() != "pr-polish" {
+	if polish == nil || polish.Step != "pr" || polish.State != "running" || polish.Shown() != "pr-polish" {
 		t.Fatalf("gates = %+v, want the second pr running and shown as pr-polish", gates)
 	}
 
@@ -983,16 +1034,21 @@ func TestGatesShowEntryLabels(t *testing.T) {
 		t.Errorf("json = %s", b)
 	}
 
-	if rows := gateLines(gates); !slices.ContainsFunc(rows, func(r [2]string) bool { return r[0] == "  pr-polish" }) {
+	if rows := statusview.GateLines(
+		gates,
+	); !slices.ContainsFunc(
+		rows,
+		func(r [2]string) bool { return r[0] == "  pr-polish" },
+	) {
 		t.Errorf("rows = %v, want a pr-polish row", rows)
 	}
 
 	// with no run yet, the branch's flow gives the labels
-	gates = taskGates(context.Background(), gateInput{
-		task: "FT-1", pipeline: run.Entries(), now: at(5),
+	gates = statusview.TaskGates(context.Background(), statusview.GateInput{
+		Task: "FT-1", Pipeline: run.Entries(), Now: at(5),
 	})
-	if i := slices.IndexFunc(gates, func(g gate) bool { return g.shown() == "pr-polish" }); i < 0 ||
-		gates[i].State != gateUpcoming {
+	if i := slices.IndexFunc(gates, func(g statusview.Gate) bool { return g.Shown() == "pr-polish" }); i < 0 ||
+		gates[i].State != statusview.GateUpcoming {
 		t.Errorf("gates = %+v, want pr-polish upcoming", gates)
 	}
 }
@@ -1001,9 +1057,9 @@ func TestGatesShowEntryLabels(t *testing.T) {
 // round written before it does not read as this review's.
 func TestClaimedAtCutsTheLabel(t *testing.T) {
 	at := time.Unix(1_800_000_000, 0)
-	in := gateInput{events: []ledger.Event{shipClaim(at, "s1", "review:local[review-final]")}}
+	in := statusview.GateInput{Events: []ledger.Event{shipClaim(at, "s1", "review:local[review-final]")}}
 
-	if got := in.claimedAt("s1", "review:local"); !got.Equal(at) {
+	if got := in.ClaimedAt("s1", "review:local"); !got.Equal(at) {
 		t.Errorf("claimedAt = %v, want %v", got, at)
 	}
 }

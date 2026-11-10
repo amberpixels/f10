@@ -11,6 +11,8 @@ import (
 )
 
 func TestParse(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		text string
 		want []Question
@@ -51,6 +53,8 @@ func TestParse(t *testing.T) {
 }
 
 func TestResolveAndFormat(t *testing.T) {
+	t.Parallel()
+
 	q := Question{N: 1, Text: "Reuse?", Options: []string{"reuse", "re-plan"}}
 
 	for _, v := range []string{"b", "2", "Re-Plan"} {
@@ -78,6 +82,8 @@ func sample(root string) Ask {
 }
 
 func TestRaiseOnce(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	t0 := time.Date(2026, 10, 28, 10, 0, 0, 0, time.UTC)
 
@@ -104,6 +110,8 @@ func TestRaiseOnce(t *testing.T) {
 }
 
 func TestClaimFirstWins(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	now := time.Now()
 
@@ -168,6 +176,8 @@ func TestClaimFirstWins(t *testing.T) {
 }
 
 func TestUntakenAndPrune(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	old := time.Now().Add(-8 * 24 * time.Hour)
 
@@ -220,6 +230,8 @@ func TestUntakenAndPrune(t *testing.T) {
 // question asked again is a new ask, told again. One a drive will take
 // stays the same ask until the drive takes it.
 func TestRaiseAfterAnswer(t *testing.T) {
+	t.Parallel()
+
 	dir, now := t.TempDir(), time.Now()
 
 	a, _, _ := Raise(dir, sample("/r"), now)
@@ -251,6 +263,8 @@ func TestRaiseAfterAnswer(t *testing.T) {
 // A raise merging into an open ask while claims race never reopens an
 // answered one.
 func TestRaiseMergeNeverReopens(t *testing.T) {
+	t.Parallel()
+
 	for range 20 {
 		dir, now := t.TempDir(), time.Now()
 

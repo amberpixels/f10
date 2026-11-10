@@ -14,6 +14,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta/branchmetatest"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/seam"
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
@@ -43,9 +44,8 @@ func newFakes(t *testing.T) *fakes {
 	t.Helper()
 
 	f := &fakes{t: t, answers: map[string][]shell.Result{}, meta: branchmetatest.Use(t)}
-	prevExec, prevCapture := gitx.Exec, shell.Capture
 
-	gitx.Exec = func(_ context.Context, _ string, args ...string) (string, error) {
+	seam.Swap(t, &gitx.Exec, func(_ context.Context, _ string, args ...string) (string, error) {
 		res := f.answer("git " + strings.Join(args, " "))
 		if res.Code != 0 {
 			return "", &gitx.ExitError{
@@ -54,13 +54,11 @@ func newFakes(t *testing.T) *fakes {
 		}
 
 		return strings.TrimSpace(res.Stdout), nil
-	}
+	})
 
-	shell.Capture = func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
+	seam.Swap(t, &shell.Capture, func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
 		return f.answer(filepath.Base(name) + " " + strings.Join(args, " ")), nil
-	}
-
-	t.Cleanup(func() { gitx.Exec, shell.Capture = prevExec, prevCapture })
+	})
 
 	return f
 }

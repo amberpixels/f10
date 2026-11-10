@@ -11,9 +11,12 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	hookcmd "github.com/amberpixels/f10/cli/internal/command/hook"
+	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/statusview"
 )
 
 // objectKeys is the sorted top-level keys of one JSON object.
@@ -39,7 +42,7 @@ func TestStatusTaskJSONShape(t *testing.T) {
 	t.Chdir(repo)
 
 	other := &state.Run{Session: "other", Task: "DM-7", Root: repo, Capture: "done", Plan: "running", Ship: "pending"}
-	if err := other.Save(dir, time.Now()); err != nil {
+	if err := other.Save(t.Context(), dir, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -56,7 +59,7 @@ func TestStatusTaskJSONShape(t *testing.T) {
 		Session: "own", Task: "DM-5", Root: repo, Capture: "prior", Plan: "done", Ship: "running",
 		Leaf: "implement", Ask: "1. Keep? [yes | no]",
 	}
-	if err := own.Save(dir, time.Now()); err != nil {
+	if err := own.Save(t.Context(), dir, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -75,7 +78,7 @@ func TestStatusTaskJSONShape(t *testing.T) {
 	}
 
 	var entry struct {
-		Shipment shipment `json:"shipment"`
+		Shipment statusview.Shipment `json:"shipment"`
 	}
 	if err := json.Unmarshal(runs[0], &entry); err != nil {
 		t.Fatal(err)
@@ -104,7 +107,7 @@ func TestTaskReportChildrenTree(t *testing.T) {
 	cmd := &cli.Command{Writer: &out, ErrWriter: &out}
 	r := ref.Ref{ID: "FT-71", Number: "71"}
 
-	if err := writeParentTree(t.Context(), cmd, tg, "71", r,
+	if err := taskcmd.WriteParentTree(t.Context(), cmd, tg, "71", r,
 		ledger.TaskRef{ID: "FT-71", Title: "Rate limits", URL: "https://x/71"}); err != nil {
 		t.Fatal(err)
 	}
@@ -127,11 +130,11 @@ func TestHookStatusTextReportsTheSessionTasksAsk(t *testing.T) {
 	})
 
 	own := &state.Run{Session: "sess-1", Task: "DM-3", Root: fx.repo, Capture: "prior", Plan: "done", Ship: "pending"}
-	if err := own.Save(fx.stateDir, time.Now()); err != nil {
+	if err := own.Save(t.Context(), fx.stateDir, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 
-	text, asks := hookStatusText(t.Context(), "sess-1")
+	text, asks := hookcmd.HookStatusText(t.Context(), "sess-1")
 	if !asks || !strings.Contains(text, "1. Refactor?") {
 		t.Errorf("asks = %v, text:\n%s", asks, text)
 	}
@@ -149,7 +152,7 @@ func TestStateShowPrintsTheRunBlock(t *testing.T) {
 		Session: "sess-1", Task: "GH-1", URL: "https://gh/issues/1", Capture: "prior", Plan: "done",
 		Ship: "blocked", Leaf: "judge", Note: "stop: x", Ask: "1. Keep? [yes | no]",
 	}
-	if err := r.Save(dir, time.Now()); err != nil {
+	if err := r.Save(t.Context(), dir, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -161,7 +164,7 @@ func TestStateShowPrintsTheRunBlock(t *testing.T) {
 	}
 
 	var want bytes.Buffer
-	runRows(&want, saved, runView{showRoot: true, now: time.Now()})
+	statusview.RunRows(&want, saved, statusview.RunView{ShowRoot: true, Now: time.Now()})
 
 	// the saved run's updated time differs by the save; compare the rest
 	cut := func(s string) string { before, _, _ := strings.Cut(s, "updated"); return before }

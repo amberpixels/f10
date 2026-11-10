@@ -1,2 +1,3 @@
 justfile.local
 /cli/cmd/f10/f10
+/cli/f10

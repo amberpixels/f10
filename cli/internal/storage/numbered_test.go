@@ -8,6 +8,8 @@ import (
 )
 
 func TestNumbered(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 
 	for _, name := range []string{"10.md", "9.md", "notes.md", "2.txt", "1.md"} {

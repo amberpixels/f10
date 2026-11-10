@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/projects"
+	"github.com/amberpixels/f10/cli/internal/scope"
 	"github.com/amberpixels/f10/cli/internal/standup"
 )
 
@@ -109,7 +110,7 @@ func TestStandupGroups(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	writeUserFile(t, home, standupConfigFile,
+	writeUserFile(t, home, scope.StandupConfigFile,
 		"---\ngroups:\n  work: ["+root+"/acme-*]\n  broken: ["+root+"/acme-notes]\n---\n")
 
 	out, err := runApp(t, "standup", "--json", "--week", "--group", "work").outErr()

@@ -13,9 +13,12 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/calendar"
+	boardcmd "github.com/amberpixels/f10/cli/internal/command/board"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
+	"github.com/amberpixels/f10/cli/internal/seam"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
@@ -149,9 +152,9 @@ func runBoardFixture(t *testing.T, fx boardFixture) lookaround.Board {
 		f.answers[sub(key)] = []shell.Result{shell.Result(res)}
 	}
 
-	h := newHost(fx.Host, root)
+	h := hostops.NewHost(fx.Host, root)
 	if fx.Repo != "" {
-		h, fx.Remote = host{Name: fx.Host, Repo: fx.Repo}, true
+		h, fx.Remote = hostops.Host{Name: fx.Host, Repo: fx.Repo}, true
 	}
 
 	in := lookaround.Inputs{
@@ -175,30 +178,30 @@ func runBoardFixture(t *testing.T, fx boardFixture) lookaround.Board {
 			return fx.Tasks, nil
 		}
 
-		rows, err := h.listIssues(ctx, "", fx.Prefix, nil, boardPage)
+		rows, err := h.ListIssues(ctx, "", fx.Prefix, nil, boardcmd.BoardPage)
 		if err != nil {
 			return nil, err
 		}
 
-		return boardTasks(rows, fx.Prefix), nil
+		return boardcmd.BoardTasks(rows, fx.Prefix), nil
 	}
 
 	var board lookaround.Board
 
 	if fx.Feed {
-		span, err := resolveBoardSpan(fx.Window, false, fx.Now, func() (calendar.Workdays, error) {
+		span, err := boardcmd.ResolveBoardSpan(fx.Window, false, fx.Now, func() (calendar.Workdays, error) {
 			return calendar.DefaultWorkdays(), nil
 		})
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		in.Since, in.Feed = span.from(), true
+		in.Since, in.Feed = span.From(), true
 		facts := lookaround.Collect(t.Context(), in)
 
-		w := lookaround.ChooseWindow(span.today, span.lastWorkday, facts)
-		if span.named != nil {
-			w = *span.named
+		w := lookaround.ChooseWindow(span.Today, span.LastWorkday, facts)
+		if span.Named != nil {
+			w = *span.Named
 		}
 
 		board = lookaround.DeriveFeed(facts, fx.Now, w)
@@ -251,7 +254,7 @@ func TestRecordBoardFixture(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	fx := boardFixture{
 		Now:    now,
-		Since:  now.Add(-boardStateWindow),
+		Since:  now.Add(-boardcmd.BoardStateWindow),
 		Prefix: parts[2],
 		Host:   "gh",
 		Calls:  map[string]fixtureCall{},
@@ -260,9 +263,8 @@ func TestRecordBoardFixture(t *testing.T) {
 	sub := func(s string) string { return strings.ReplaceAll(s, root, "{root}") }
 
 	prevExec, prevCapture := gitx.Exec, shell.Capture
-	t.Cleanup(func() { gitx.Exec, shell.Capture = prevExec, prevCapture })
 
-	gitx.Exec = func(ctx context.Context, dir string, args ...string) (string, error) {
+	seam.Swap(t, &gitx.Exec, func(ctx context.Context, dir string, args ...string) (string, error) {
 		out, err := prevExec(ctx, dir, args...)
 
 		res := fixtureCall{Stdout: sub(out)}
@@ -273,28 +275,28 @@ func TestRecordBoardFixture(t *testing.T) {
 		fx.Calls[sub("git "+strings.Join(args, " "))] = res
 
 		return out, err
-	}
+	})
 
-	shell.Capture = func(ctx context.Context, dir, name string, args ...string) (shell.Result, error) {
+	seam.Swap(t, &shell.Capture, func(ctx context.Context, dir, name string, args ...string) (shell.Result, error) {
 		res, err := prevCapture(ctx, dir, name, args...)
 		fx.Calls[sub(filepath.Base(name)+" "+strings.Join(args, " "))] = fixtureCall{
 			Stdout: sub(res.Stdout), Stderr: sub(res.Stderr), Code: res.Code,
 		}
 
 		return res, err
-	}
+	})
 
 	h := forge.Host{Name: "gh", Dir: root}
 	in := lookaround.Inputs{
 		Project: lookaround.Project{ID: "recorded", Name: filepath.Base(root), Host: "gh", Remote: true},
 		Prefix:  fx.Prefix, Since: fx.Since, Host: &h,
 		Tasks: func(ctx context.Context) ([]lookaround.Task, error) {
-			rows, err := newHost("gh", root).listIssues(ctx, "", fx.Prefix, nil, boardPage)
+			rows, err := hostops.NewHost("gh", root).ListIssues(ctx, "", fx.Prefix, nil, boardcmd.BoardPage)
 			if err != nil {
 				return nil, err
 			}
 
-			return boardTasks(rows, fx.Prefix), nil
+			return boardcmd.BoardTasks(rows, fx.Prefix), nil
 		},
 	}
 

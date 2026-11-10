@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 )
 
 // A step's line names the profile, where each segment came from, the Agent
 // tool form where a subagent runs on it, and the lever that reaches it.
 func TestAgentLines(t *testing.T) {
-	m := agentMap{
+	m := runplan.AgentMap{
 		"default":  {Key: "default", Value: "opus:high", Origin: "declared (user, ~/.f10/agents.md)"},
 		"review":   {Key: "review", Value: "sonnet", Origin: "declared (main, frontmatter)"},
 		"plan.bug": {Key: "plan.bug", Value: "medium", Origin: "declared (main, frontmatter)"},
@@ -30,13 +33,13 @@ func TestAgentLines(t *testing.T) {
 		},
 		{
 			step: "plan", kind: "bug",
-			want: []string{"plan.bug: claude:opus:medium", agentReachNone}, notWant: "Agent tool",
+			want: []string{"plan.bug: claude:opus:medium", configcmd.AgentReachNone}, notWant: "Agent tool",
 		},
 		{step: "default", want: []string{"default: claude:opus:high", "the task's agent"}},
 	}
 
 	for _, c := range cases {
-		line := agentLineFor(m, c.step, c.kind, "").String()
+		line := configcmd.AgentLineFor(m, c.step, c.kind, "").String()
 		for _, w := range c.want {
 			if !strings.Contains(line, w) {
 				t.Errorf("%s.%s line %q lacks %q", c.step, c.kind, line, w)
@@ -48,17 +51,17 @@ func TestAgentLines(t *testing.T) {
 		}
 	}
 
-	line := agentLineFor(agentMap{}, "implement", "", "").String()
+	line := configcmd.AgentLineFor(runplan.AgentMap{}, "implement", "", "").String()
 	if !strings.Contains(line, "the kind's default: no flag passed") {
 		t.Errorf("no map: %q", line)
 	}
 
-	if kinds := m.kindsScoped("plan"); len(kinds) != 1 || kinds[0] != "bug" {
+	if kinds := m.KindsScoped("plan"); len(kinds) != 1 || kinds[0] != "bug" {
 		t.Errorf("kinds scoped for plan: %v", kinds)
 	}
 
 	var b bytes.Buffer
-	if err := printAgentMap(&b, m, false); err != nil {
+	if err := configcmd.PrintAgentMap(&b, m, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -68,7 +71,12 @@ func TestAgentLines(t *testing.T) {
 
 	b.Reset()
 
-	if err := printAgentMap(&b, agentMap{}, false); err != nil || !strings.Contains(b.String(), "none declared") {
+	if err := configcmd.PrintAgentMap(
+		&b,
+		runplan.AgentMap{},
+		false,
+	); err != nil ||
+		!strings.Contains(b.String(), "none declared") {
 		t.Errorf("empty map: %v %q", err, b.String())
 	}
 }

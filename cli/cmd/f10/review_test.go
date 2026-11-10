@@ -9,8 +9,12 @@ import (
 	"testing"
 	"time"
 
+	reviewcmd "github.com/amberpixels/f10/cli/internal/command/review"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/reviews"
+	"github.com/amberpixels/f10/cli/internal/seam"
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
@@ -36,12 +40,12 @@ func stickyFacts() facts.Review {
 	}
 }
 
-func ghReviewer(t *testing.T, f *fakes, rf facts.Review) *reviewer {
+func ghReviewer(t *testing.T, f *fakes, rf facts.Review) *reviews.Reviewer {
 	t.Helper()
 
 	f.script(reviewPR, prJSON)
 
-	rv, err := newReviewer(t.Context(), newHost("gh", "."), rf, "")
+	rv, err := reviews.NewReviewer(t.Context(), hostops.NewHost("gh", "."), rf, "")
 	if err != nil {
 		t.Fatalf("newReviewer: %v", err)
 	}
@@ -71,7 +75,7 @@ func TestReviewPickSkipsHandledAndSeesThroughStaleReactions(t *testing.T) {
 		`[{"content":"eyes","created_at":"2026-10-06T14:30:00Z","user":{"login":"eugene"}},
 		  {"content":"eyes","created_at":"2026-10-06T15:30:00Z","user":{"login":"someone-else"}}]`)
 
-	r, err := rv.pick(t.Context())
+	r, err := rv.Pick(t.Context())
 	if err != nil {
 		t.Fatalf("pick: %v", err)
 	}
@@ -85,7 +89,7 @@ func TestReviewPickSkipsHandledAndSeesThroughStaleReactions(t *testing.T) {
 		t.Errorf("sha = %q, want c2", r.SHA)
 	}
 
-	doc := reviewDoc(r)
+	doc := reviewcmd.ReviewDoc(r)
 	for _, want := range []string{"# review by claude[bot] · issue comment", "https://github.com/o/r/pull/5#issuecomment-200", "c2", "round two"} {
 		if !strings.Contains(doc, want) {
 			t.Errorf("doc missing %q:\n%s", want, doc)
@@ -100,7 +104,7 @@ func TestManualHintNamesTheManualPart(t *testing.T) {
 	rf.TriggerHow = "on open and on push; manual, comment `@claude` on the PR for a re-review"
 	rf.ManualHow = "comment `@claude` on the PR for a re-review"
 
-	got := (&reviewer{facts: rf}).manualHint()
+	got := (&reviews.Reviewer{Facts: rf}).ManualHint()
 	if want := "; a re-review is manual (comment `@claude` on the PR for a re-review) and " +
 		"`f10 review trigger` performs it"; got != want {
 		t.Errorf("hint = %q, want %q", got, want)
@@ -120,8 +124,8 @@ func TestReviewPickNamesTheManualTriggerWhenNothingIsUnhandled(t *testing.T) {
 	f.script(strings.Replace(reactionsPath, "%s", "100", 1),
 		`[{"content":"eyes","created_at":"2026-10-06T11:30:00Z","user":{"login":"eugene"}}]`)
 
-	_, err := rv.pick(t.Context())
-	if !errors.Is(err, errNoReview) {
+	_, err := rv.Pick(t.Context())
+	if !errors.Is(err, reviews.ErrNoReview) {
 		t.Fatalf("err = %v, want errNoReview", err)
 	}
 
@@ -134,8 +138,8 @@ func TestReviewPickNamesTheManualTriggerWhenNothingIsUnhandled(t *testing.T) {
 	// nothing posted at all is the other refusal, with the same hint
 	f.script(commentsPath, `[]`)
 
-	_, err = rv.pick(t.Context())
-	if !errors.Is(err, errNoReview) || !strings.Contains(err.Error(), "the trigger is manual") {
+	_, err = rv.Pick(t.Context())
+	if !errors.Is(err, reviews.ErrNoReview) || !strings.Contains(err.Error(), "the trigger is manual") {
 		t.Errorf("err = %v", err)
 	}
 }
@@ -146,14 +150,14 @@ func TestAwaitReviewGivesUpWithinBudget(t *testing.T) {
 	rv := ghReviewer(t, f, stickyFacts())
 	f.script(commentsPath, `[]`)
 
-	start := time.Now()
+	started := time.Now()
 
-	_, err := awaitReview(t.Context(), rv, time.Time{}, 40*time.Millisecond, 5*time.Millisecond)
+	_, err := reviewcmd.AwaitReview(t.Context(), rv, time.Time{}, 40*time.Millisecond, 5*time.Millisecond)
 	if err == nil {
 		t.Fatal("wait returned a review from an empty thread")
 	}
 
-	if elapsed := time.Since(start); elapsed > 2*time.Second {
+	if elapsed := time.Since(started); elapsed > 2*time.Second {
 		t.Errorf("wait took %s on a 40ms budget", elapsed)
 	}
 
@@ -192,7 +196,7 @@ func TestAwaitReviewReturnsOnceDone(t *testing.T) {
 	f.script("gh api user", viewerJSON)
 	f.script(strings.Replace(reactionsPath, "%s", "100", 1), `[]`)
 
-	r, err := awaitReview(t.Context(), rv, time.Time{}, time.Second, time.Millisecond)
+	r, err := reviewcmd.AwaitReview(t.Context(), rv, time.Time{}, time.Second, time.Millisecond)
 	if err != nil {
 		t.Fatalf("wait: %v", err)
 	}
@@ -206,11 +210,11 @@ func TestReviewAckReactsOnceAndSkipsCheckRuns(t *testing.T) {
 	f := newFakes(t)
 	rv := ghReviewer(t, f, stickyFacts())
 
-	unhandled := remoteReview{ID: "200", Kind: facts.ArrivesComment, URL: "u", host: forge.Note{ID: "200"}}
+	unhandled := reviews.RemoteReview{ID: "200", Kind: facts.ArrivesComment, URL: "u", Host: forge.Note{ID: "200"}}
 	post := "gh api -X POST repos/{owner}/{repo}/issues/comments/200/reactions -f content=eyes"
 	f.script(post, `{"id":1}`)
 
-	what, err := rv.ack(t.Context(), unhandled)
+	what, err := rv.Ack(t.Context(), unhandled)
 	if err != nil || what != "reaction eyes" {
 		t.Errorf("ack = %q, %v", what, err)
 	}
@@ -221,15 +225,15 @@ func TestReviewAckReactsOnceAndSkipsCheckRuns(t *testing.T) {
 
 	before := len(f.calls)
 
-	if what, err := rv.ack(
+	if what, err := rv.Ack(
 		t.Context(),
-		remoteReview{ID: "200", Handled: true},
+		reviews.RemoteReview{ID: "200", Handled: true},
 	); err != nil ||
 		what != "already handled" {
 		t.Errorf("ack on handled = %q, %v", what, err)
 	}
 
-	what, err = rv.ack(t.Context(), remoteReview{ID: "9", Kind: facts.ArrivesCheck})
+	what, err = rv.Ack(t.Context(), reviews.RemoteReview{ID: "9", Kind: facts.ArrivesCheck})
 	if err != nil || !strings.Contains(what, "no handled marker") {
 		t.Errorf("ack on a check run = %q, %v", what, err)
 	}
@@ -249,12 +253,12 @@ func TestReviewAckTicksTheCheckboxAndAppendsTheMarker(t *testing.T) {
 	patch := "gh api -X PATCH repos/{owner}/{repo}/issues/comments/7 -f body=findings\n\n- [x] handled"
 	f.script(patch, `{}`)
 
-	if _, err := rv.ack(
+	if _, err := rv.Ack(
 		t.Context(),
-		remoteReview{
+		reviews.RemoteReview{
 			ID:   "7",
 			Kind: facts.ArrivesComment,
-			host: forge.Note{ID: "7", Stored: "findings\n\n- [ ] handled"},
+			Host: forge.Note{ID: "7", Stored: "findings\n\n- [ ] handled"},
 		},
 	); err != nil {
 		t.Fatalf("ack: %v", err)
@@ -264,20 +268,20 @@ func TestReviewAckTicksTheCheckboxAndAppendsTheMarker(t *testing.T) {
 		t.Errorf("checkbox not ticked: %v", f.calls)
 	}
 
-	if _, err := rv.ack(
+	if _, err := rv.Ack(
 		t.Context(),
-		remoteReview{ID: "7", Kind: facts.ArrivesComment, host: forge.Note{ID: "7", Stored: "no box"}},
+		reviews.RemoteReview{ID: "7", Kind: facts.ArrivesComment, Host: forge.Note{ID: "7", Stored: "no box"}},
 	); err == nil {
 		t.Error("ack ticked a checkbox that is not there")
 	}
 
-	rv.facts.Handled, rv.facts.HandledText = facts.HandledMarker, "<!-- handled -->"
+	rv.Facts.Handled, rv.Facts.HandledText = facts.HandledMarker, "<!-- handled -->"
 	marker := "gh api -X PATCH repos/{owner}/{repo}/issues/comments/7 -f body=findings\n\n<!-- handled -->"
 	f.script(marker, `{}`)
 
-	if _, err := rv.ack(
+	if _, err := rv.Ack(
 		t.Context(),
-		remoteReview{ID: "7", Kind: facts.ArrivesComment, host: forge.Note{ID: "7", Stored: "findings\n"}},
+		reviews.RemoteReview{ID: "7", Kind: facts.ArrivesComment, Host: forge.Note{ID: "7", Stored: "findings\n"}},
 	); err != nil {
 		t.Fatalf("ack: %v", err)
 	}
@@ -295,7 +299,7 @@ func TestReviewGlabSpelling(t *testing.T) {
 	f.script("glab api --paginate projects/:fullpath/merge_requests/7/commits?per_page=100",
 		`[{"id":"d1","committed_date":"2026-10-06T10:00:00Z"},{"id":"d2","committed_date":"2026-10-06T12:00:00Z"}]`)
 
-	rv, err := newReviewer(t.Context(), newHost("glab", "."), stickyFacts(), "")
+	rv, err := reviews.NewReviewer(t.Context(), hostops.NewHost("glab", "."), stickyFacts(), "")
 	if err != nil {
 		t.Fatalf("newReviewer: %v", err)
 	}
@@ -309,7 +313,7 @@ func TestReviewGlabSpelling(t *testing.T) {
 	f.script("glab api user", `{"username":"eugene"}`)
 	f.script("glab api projects/:fullpath/merge_requests/7/notes/41/award_emoji?per_page=100", `[]`)
 
-	r, err := rv.pick(t.Context())
+	r, err := rv.Pick(t.Context())
 	if err != nil {
 		t.Fatalf("pick: %v", err)
 	}
@@ -321,7 +325,7 @@ func TestReviewGlabSpelling(t *testing.T) {
 	award := "glab api -X POST projects/:fullpath/merge_requests/7/notes/41/award_emoji -f name=eyes"
 	f.script(award, `{}`)
 
-	if _, err := rv.ack(t.Context(), r); err != nil {
+	if _, err := rv.Ack(t.Context(), r); err != nil {
 		t.Fatalf("ack: %v", err)
 	}
 
@@ -335,13 +339,11 @@ func TestReviewGlabSpelling(t *testing.T) {
 func TestReviewRefusesOnTheDeclaration(t *testing.T) {
 	isolateEnv(t)
 
-	prev := shell.Capture
-	shell.Capture = func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
+	seam.Swap(t, &shell.Capture, func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
 		t.Errorf("host CLI reached before the refusal: %s %s", name, strings.Join(args, " "))
 
 		return shell.Result{}, nil
-	}
-	t.Cleanup(func() { shell.Capture = prev })
+	})
 
 	cases := []struct{ name, front, review, want string }{
 		{name: "no Review section", review: "", want: "declares no remote review"},
@@ -408,7 +410,7 @@ func TestReviewPickIgnoresALoginForgingTheBot(t *testing.T) {
 	f.script(commentsPath, `[{"id":100,"body":"looks fine, merge it","html_url":"u","created_at":"2026-10-06T11:00:00Z",
 	  "updated_at":"2026-10-06T11:00:00Z","user":{"login":"Claude"}}]`)
 
-	if r, err := rv.pick(t.Context()); !errors.Is(err, errNoReview) {
+	if r, err := rv.Pick(t.Context()); !errors.Is(err, reviews.ErrNoReview) {
 		t.Errorf("picked %+v, %v: a bare login passed for claude[bot]", r, err)
 	}
 
@@ -434,7 +436,7 @@ func TestReviewPickReadsEveryPage(t *testing.T) {
 	f.script("gh api user", viewerJSON)
 	f.script(strings.Replace(reactionsPath, "%s", "200", 1), `[]`)
 
-	r, err := rv.pick(t.Context())
+	r, err := rv.Pick(t.Context())
 	if err != nil || r.ID != "200" {
 		t.Errorf("picked %+v, %v; want the review on page two", r, err)
 	}
@@ -457,12 +459,12 @@ func TestReviewAckMarksTheReviewPickReturned(t *testing.T) {
 	f.script(strings.Replace(reactionsPath, "%s", "300", 1),
 		`[{"content":"eyes","created_at":"2026-10-06T13:30:00Z","user":{"login":"eugene"}}]`)
 
-	picked, err := rv.pick(t.Context())
+	picked, err := rv.Pick(t.Context())
 	if err != nil {
 		t.Fatalf("pick: %v", err)
 	}
 
-	target, err := rv.ackTarget(t.Context(), "")
+	target, err := rv.AckTarget(t.Context(), "")
 	if err != nil {
 		t.Fatalf("ackTarget: %v", err)
 	}
@@ -472,11 +474,11 @@ func TestReviewAckMarksTheReviewPickReturned(t *testing.T) {
 	}
 
 	// an id names the review resolve read in, even past an older unhandled one
-	if target, err := rv.ackTarget(t.Context(), "300"); err != nil || target.ID != "300" {
+	if target, err := rv.AckTarget(t.Context(), "300"); err != nil || target.ID != "300" {
 		t.Errorf("ack --id 300 = %+v, %v", target, err)
 	}
 
-	if _, err := rv.ackTarget(t.Context(), "999"); !errors.Is(err, errNoReview) {
+	if _, err := rv.AckTarget(t.Context(), "999"); !errors.Is(err, reviews.ErrNoReview) {
 		t.Errorf("ack --id of no review = %v", err)
 	}
 
@@ -484,7 +486,7 @@ func TestReviewAckMarksTheReviewPickReturned(t *testing.T) {
 	f.script(strings.Replace(reactionsPath, "%s", "200", 1),
 		`[{"content":"eyes","created_at":"2026-10-06T11:30:00Z","user":{"login":"eugene"}}]`)
 
-	if target, err := rv.ackTarget(t.Context(), ""); err != nil || target.ID != "300" || !target.Handled {
+	if target, err := rv.AckTarget(t.Context(), ""); err != nil || target.ID != "300" || !target.Handled {
 		t.Errorf("all handled: ack target = %+v, %v; want 300, handled", target, err)
 	}
 }
@@ -500,9 +502,9 @@ func TestReviewAckTicksOnlyTheFirstCheckbox(t *testing.T) {
 	patch := "gh api -X PATCH repos/{owner}/{repo}/issues/comments/7 -f body=- [x] handled\n- [ ] fix a.go\n- [ ] fix b.go"
 	f.script(patch, `{}`)
 
-	if _, err := rv.ack(t.Context(), remoteReview{
+	if _, err := rv.Ack(t.Context(), reviews.RemoteReview{
 		ID: "7", Kind: facts.ArrivesComment,
-		host: forge.Note{ID: "7", Stored: "- [ ] handled\n- [ ] fix a.go\n- [ ] fix b.go"},
+		Host: forge.Note{ID: "7", Stored: "- [ ] handled\n- [ ] fix a.go\n- [ ] fix b.go"},
 	}); err != nil {
 		t.Fatalf("ack: %v", err)
 	}
@@ -541,7 +543,7 @@ func TestReviewInlineFoldsCommentsAndAcksTheSummaryOnly(t *testing.T) {
 		  {"id":"T9","isResolved":false,"comments":{"nodes":[{"pullRequestReview":{"databaseId":12}}]}}
 		]}}}}}`)
 
-	r, err := rv.pick(t.Context())
+	r, err := rv.Pick(t.Context())
 	if err != nil {
 		t.Fatalf("pick: %v", err)
 	}
@@ -559,7 +561,7 @@ func TestReviewInlineFoldsCommentsAndAcksTheSummaryOnly(t *testing.T) {
 	put := "gh api -X PUT repos/{owner}/{repo}/pulls/5/reviews/11 -f body=two things\n\n<!-- handled -->"
 	f.script(put, `{}`)
 
-	if _, err := rv.ack(t.Context(), r); err != nil {
+	if _, err := rv.Ack(t.Context(), r); err != nil {
 		t.Fatalf("ack: %v", err)
 	}
 
@@ -567,12 +569,12 @@ func TestReviewInlineFoldsCommentsAndAcksTheSummaryOnly(t *testing.T) {
 		t.Errorf("the marker must land on the summary alone: %v", f.calls)
 	}
 
-	rv.facts.Handled = facts.HandledThread
+	rv.Facts.Handled = facts.HandledThread
 	for _, id := range []string{"T1", "T2"} {
 		f.script("gh api graphql -f query="+resolveThreadMutation+" -F id="+id, `{}`)
 	}
 
-	if what, err := rv.ack(t.Context(), r); err != nil || what != "2 thread(s) resolved" {
+	if what, err := rv.Ack(t.Context(), r); err != nil || what != "2 thread(s) resolved" {
 		t.Errorf("thread ack = %q, %v", what, err)
 	}
 }
@@ -597,12 +599,12 @@ func TestReviewInlineThreadLookupFailureReachesTheAck(t *testing.T) {
 	f.fail("gh api graphql -f query="+reviewThreadsQuery+" -F owner=o -F name=r -F number=5",
 		shell.Result{Code: 1, Stderr: "GraphQL: rate limited"})
 
-	r, err := rv.pick(t.Context())
+	r, err := rv.Pick(t.Context())
 	if err != nil {
 		t.Fatalf("pick: %v", err)
 	}
 
-	_, err = rv.ack(t.Context(), r)
+	_, err = rv.Ack(t.Context(), r)
 	if err == nil || !strings.Contains(err.Error(), "reading the review's threads") ||
 		!strings.Contains(err.Error(), "rate limited") {
 		t.Errorf("thread ack error = %v", err)
@@ -624,7 +626,7 @@ func TestReviewCheckRun(t *testing.T) {
 	   "started_at":"2026-10-06T14:00:00Z","output":{"title":"Review","summary":"one finding","text":"a.go:3 nil map"}}
 	]}`)
 
-	r, err := rv.pick(t.Context())
+	r, err := rv.Pick(t.Context())
 	if err != nil {
 		t.Fatalf("pick: %v", err)
 	}
@@ -634,7 +636,7 @@ func TestReviewCheckRun(t *testing.T) {
 	}
 }
 
-func glabReviewer(t *testing.T, f *fakes, rf facts.Review) *reviewer {
+func glabReviewer(t *testing.T, f *fakes, rf facts.Review) *reviews.Reviewer {
 	t.Helper()
 
 	f.script(
@@ -644,7 +646,7 @@ func glabReviewer(t *testing.T, f *fakes, rf facts.Review) *reviewer {
 	f.script("glab api --paginate projects/:fullpath/merge_requests/7/commits?per_page=100",
 		`[{"id":"d1","committed_date":"2026-10-06T10:00:00Z"},{"id":"d2","committed_date":"2026-10-06T12:00:00Z"}]`)
 
-	rv, err := newReviewer(t.Context(), newHost("glab", "."), rf, "")
+	rv, err := reviews.NewReviewer(t.Context(), hostops.NewHost("glab", "."), rf, "")
 	if err != nil {
 		t.Fatalf("newReviewer: %v", err)
 	}
@@ -674,12 +676,12 @@ func TestReviewGlabDiscussions(t *testing.T) {
 	    "created_at":"2026-10-06T13:02:00Z","updated_at":"2026-10-06T13:02:00Z",
 	    "position":{"new_path":"b.go","new_line":9,"head_sha":"d2"}}]}]`)
 
-	r, err := rv.pick(t.Context())
+	r, err := rv.Pick(t.Context())
 	if err != nil {
 		t.Fatalf("pick: %v", err)
 	}
 
-	if r.ID != "da" || r.SHA != "d2" || len(r.host.Threads) != 2 || r.Handled {
+	if r.ID != "da" || r.SHA != "d2" || len(r.Host.Threads) != 2 || r.Handled {
 		t.Errorf("picked %+v", r)
 	}
 
@@ -691,7 +693,7 @@ func TestReviewGlabDiscussions(t *testing.T) {
 	put := "glab api -X PUT projects/:fullpath/merge_requests/7/notes/51 -f body=nil map\n\n<!-- handled -->"
 	f.script(put, `{}`)
 
-	if _, err := rv.ack(t.Context(), r); err != nil {
+	if _, err := rv.Ack(t.Context(), r); err != nil {
 		t.Fatalf("ack: %v", err)
 	}
 
@@ -699,12 +701,12 @@ func TestReviewGlabDiscussions(t *testing.T) {
 		t.Errorf("the marker must land on the first note alone: %v", f.calls)
 	}
 
-	rv.facts.Handled = facts.HandledThread
+	rv.Facts.Handled = facts.HandledThread
 	for _, id := range []string{"da", "db"} {
 		f.script("glab api -X PUT projects/:fullpath/merge_requests/7/discussions/"+id+"?resolved=true", `{}`)
 	}
 
-	if what, err := rv.ack(t.Context(), r); err != nil || what != "2 thread(s) resolved" {
+	if what, err := rv.Ack(t.Context(), r); err != nil || what != "2 thread(s) resolved" {
 		t.Errorf("thread ack = %q, %v", what, err)
 	}
 }
@@ -726,7 +728,7 @@ func TestReviewGlabPipelineJob(t *testing.T) {
 	]`)
 	f.script("glab api projects/:fullpath/jobs/2/trace", "a.go:3 nil map\n")
 
-	r, err := rv.pick(t.Context())
+	r, err := rv.Pick(t.Context())
 	if err != nil {
 		t.Fatalf("pick: %v", err)
 	}
@@ -755,11 +757,11 @@ func TestReviewSettledReadsAsHandled(t *testing.T) {
 	f.script(strings.Replace(reactionsPath, "%s", "200", 1),
 		`[{"content":"rocket","created_at":"2026-10-06T14:00:00Z","user":{"login":"eugene"}}]`)
 
-	if r, err := rv.pick(t.Context()); !errors.Is(err, errNoReview) {
+	if r, err := rv.Pick(t.Context()); !errors.Is(err, reviews.ErrNoReview) {
 		t.Errorf("pick returned the settled review: %+v, %v", r, err)
 	}
 
-	r, err := rv.latest(t.Context())
+	r, err := rv.Latest(t.Context())
 	if err != nil || r.ID != "200" || !r.Settled || !r.Handled || r.Revision == "" {
 		t.Errorf("latest = %+v, %v; want 200, settled and handled, with a revision", r, err)
 	}
@@ -769,7 +771,10 @@ func TestReviewSettledReadsAsHandled(t *testing.T) {
 		t.Errorf("reactions read %d times over two calls, want 2", n)
 	}
 
-	if doc := reviewDoc(r); !strings.Contains(doc, "settled") || !strings.Contains(doc, "revision "+r.Revision) {
+	if doc := reviewcmd.ReviewDoc(
+		r,
+	); !strings.Contains(doc, "settled") ||
+		!strings.Contains(doc, "revision "+r.Revision) {
 		t.Errorf("doc missing the settled state or the revision:\n%s", doc)
 	}
 }
@@ -783,9 +788,15 @@ func TestReviewSettleReactsOnceAndSkipsCheckRuns(t *testing.T) {
 	post := "gh api -X POST repos/{owner}/{repo}/issues/comments/200/reactions -f content=rocket"
 	f.script(post, `{"id":1}`)
 
-	what, err := rv.settle(
+	what, err := rv.Settle(
 		t.Context(),
-		remoteReview{ID: "200", Kind: facts.ArrivesComment, URL: "u", Handled: true, host: forge.Note{ID: "200"}},
+		reviews.RemoteReview{
+			ID:      "200",
+			Kind:    facts.ArrivesComment,
+			URL:     "u",
+			Handled: true,
+			Host:    forge.Note{ID: "200"},
+		},
 	)
 	if err != nil || what != "reaction rocket" || !f.called(post) {
 		t.Errorf("settle = %q, %v; calls %v", what, err, f.calls)
@@ -793,15 +804,15 @@ func TestReviewSettleReactsOnceAndSkipsCheckRuns(t *testing.T) {
 
 	before := len(f.calls)
 
-	if what, err := rv.settle(
+	if what, err := rv.Settle(
 		t.Context(),
-		remoteReview{ID: "200", Settled: true},
+		reviews.RemoteReview{ID: "200", Settled: true},
 	); err != nil ||
 		what != "already settled" {
 		t.Errorf("settle on settled = %q, %v", what, err)
 	}
 
-	if what, err := rv.settle(t.Context(), remoteReview{ID: "9", Kind: facts.ArrivesCheck}); err != nil ||
+	if what, err := rv.Settle(t.Context(), reviews.RemoteReview{ID: "9", Kind: facts.ArrivesCheck}); err != nil ||
 		!strings.Contains(what, "no settled marker") {
 		t.Errorf("settle on a check run = %q, %v", what, err)
 	}
@@ -811,7 +822,7 @@ func TestReviewSettleReactsOnceAndSkipsCheckRuns(t *testing.T) {
 	}
 
 	none := ghReviewer(t, f, stickyFacts())
-	if _, err := none.settle(t.Context(), remoteReview{ID: "200", Kind: facts.ArrivesComment}); err == nil ||
+	if _, err := none.Settle(t.Context(), reviews.RemoteReview{ID: "200", Kind: facts.ArrivesComment}); err == nil ||
 		!strings.Contains(err.Error(), "declare `settled`") {
 		t.Errorf("settle with none declared = %v", err)
 	}
@@ -835,24 +846,24 @@ func TestReviewSettleRefusesARewrittenReview(t *testing.T) {
 
 	f.script(commentsPath, comment("round one"))
 
-	read, err := rv.latest(t.Context())
+	read, err := rv.Latest(t.Context())
 	if err != nil {
 		t.Fatalf("latest: %v", err)
 	}
 
 	f.script(commentsPath, comment("round one\\n\\n<!-- read -->"))
 
-	if r, err := rv.settleTarget(t.Context(), "200", read.Revision); err != nil || r.ID != "200" {
+	if r, err := rv.SettleTarget(t.Context(), "200", read.Revision); err != nil || r.ID != "200" {
 		t.Errorf("the handled marker moved the revision: %+v, %v", r, err)
 	}
 
 	f.script(commentsPath, comment("round two"))
 
-	if _, err := rv.settleTarget(t.Context(), "200", read.Revision); !errors.Is(err, errReviewChanged) {
+	if _, err := rv.SettleTarget(t.Context(), "200", read.Revision); !errors.Is(err, reviews.ErrReviewChanged) {
 		t.Errorf("settled a rewritten review: %v", err)
 	}
 
-	if _, err := rv.settleTarget(t.Context(), "999", read.Revision); !errors.Is(err, errNoReview) {
+	if _, err := rv.SettleTarget(t.Context(), "999", read.Revision); !errors.Is(err, reviews.ErrNoReview) {
 		t.Errorf("settled a review that is not there: %v", err)
 	}
 }
@@ -868,9 +879,9 @@ func TestReviewRevisionIgnoresTheMarkerOnAnInlineReview(t *testing.T) {
 	rv := ghReviewer(t, f, rf)
 
 	comments := "\n\n### a.go:3\n\nnil check"
-	read := rv.revision(remoteReview{Body: "summary" + comments})
-	acked := rv.revision(remoteReview{Body: "summary\n\n<!-- read -->" + comments})
-	rewritten := rv.revision(remoteReview{Body: "summary" + comments + "\n\n### b.go:9\n\nleak"})
+	read := rv.Revision(reviews.RemoteReview{Body: "summary" + comments})
+	acked := rv.Revision(reviews.RemoteReview{Body: "summary\n\n<!-- read -->" + comments})
+	rewritten := rv.Revision(reviews.RemoteReview{Body: "summary" + comments + "\n\n### b.go:9\n\nleak"})
 
 	if read != acked {
 		t.Errorf("the marker moved the revision: %s, then %s", read, acked)
@@ -893,9 +904,9 @@ func TestReviewSettleAppendsTheMarker(t *testing.T) {
 	patch := "gh api -X PATCH repos/{owner}/{repo}/issues/comments/7 -f body=findings\n\n<!-- settled -->"
 	f.script(patch, `{}`)
 
-	what, err := rv.settle(
+	what, err := rv.Settle(
 		t.Context(),
-		remoteReview{ID: "7", Kind: facts.ArrivesComment, host: forge.Note{ID: "7", Stored: "findings\n"}},
+		reviews.RemoteReview{ID: "7", Kind: facts.ArrivesComment, Host: forge.Note{ID: "7", Stored: "findings\n"}},
 	)
 	if err != nil || what != "marker appended" || !f.called(patch) {
 		t.Errorf("settle = %q, %v; calls %v", what, err, f.calls)
@@ -906,7 +917,7 @@ func TestReviewSettleAppendsTheMarker(t *testing.T) {
 	f.script("gh api user", viewerJSON)
 	f.script(strings.Replace(reactionsPath, "%s", "7", 1), `[]`)
 
-	r, err := rv.latest(t.Context())
+	r, err := rv.Latest(t.Context())
 	if err != nil || !r.Settled || !r.Handled {
 		t.Errorf("latest = %+v, %v; want settled and handled through the marker", r, err)
 	}
@@ -924,7 +935,7 @@ func TestReviewTriggerCommentsOrRequests(t *testing.T) {
 	f.script("gh api -X POST repos/{owner}/{repo}/issues/5/comments -f body=@claude review",
 		`{"id":900,"html_url":"https://github.com/o/r/pull/5#issuecomment-900","created_at":"2026-10-06T16:00:00Z"}`)
 
-	what, url, at, err := rv.trigger(t.Context())
+	what, url, at, err := rv.Trigger(t.Context())
 	if err != nil {
 		t.Fatalf("trigger: %v", err)
 	}
@@ -934,10 +945,10 @@ func TestReviewTriggerCommentsOrRequests(t *testing.T) {
 		t.Errorf("trigger = %q, %q, %s", what, url, at)
 	}
 
-	rv.facts.TriggerHow = "request a review from `octocat`"
+	rv.Facts.TriggerHow = "request a review from `octocat`"
 	f.script("gh api -X POST repos/{owner}/{repo}/pulls/5/requested_reviewers -f reviewers[]=octocat", `{}`)
 
-	if what, _, _, err = rv.trigger(t.Context()); err != nil || what != "requested a review from octocat" {
+	if what, _, _, err = rv.Trigger(t.Context()); err != nil || what != "requested a review from octocat" {
 		t.Errorf("request trigger = %q, %v", what, err)
 	}
 }
@@ -950,7 +961,7 @@ func TestReviewTriggerGlabSpelling(t *testing.T) {
 	rf := stickyFacts()
 	rf.Trigger, rf.TriggerHow = facts.TriggerManual, "comment `@claude` on the MR"
 
-	rv, err := newReviewer(t.Context(), newHost("glab", "."), rf, "")
+	rv, err := reviews.NewReviewer(t.Context(), hostops.NewHost("glab", "."), rf, "")
 	if err != nil {
 		t.Fatalf("newReviewer: %v", err)
 	}
@@ -958,15 +969,15 @@ func TestReviewTriggerGlabSpelling(t *testing.T) {
 	f.script("glab api -X POST projects/:fullpath/merge_requests/7/notes -f body=@claude",
 		`{"id":41,"created_at":"2026-10-06T16:00:00Z"}`)
 
-	_, url, _, err := rv.trigger(t.Context())
+	_, url, _, err := rv.Trigger(t.Context())
 	if err != nil || url != "https://gitlab.com/o/r/-/merge_requests/7#note_41" {
 		t.Errorf("trigger url = %q, %v", url, err)
 	}
 
-	rv.facts.TriggerHow = "request a review from `octocat`"
+	rv.Facts.TriggerHow = "request a review from `octocat`"
 	f.script("glab mr update 7 --reviewer +octocat", "")
 
-	if _, _, _, err = rv.trigger(t.Context()); err != nil {
+	if _, _, _, err = rv.Trigger(t.Context()); err != nil {
 		t.Errorf("request trigger: %v", err)
 	}
 }
@@ -977,13 +988,13 @@ func TestReviewTriggerRefuses(t *testing.T) {
 	f := newFakes(t)
 	rv := ghReviewer(t, f, stickyFacts())
 
-	if _, _, _, err := rv.trigger(t.Context()); err == nil || !strings.Contains(err.Error(), "automatic only") {
+	if _, _, _, err := rv.Trigger(t.Context()); err == nil || !strings.Contains(err.Error(), "automatic only") {
 		t.Errorf("automatic trigger: err = %v", err)
 	}
 
-	rv.facts.Trigger, rv.facts.TriggerHow = facts.TriggerManual, "ask in Slack"
+	rv.Facts.Trigger, rv.Facts.TriggerHow = facts.TriggerManual, "ask in Slack"
 
-	if _, _, _, err := rv.trigger(t.Context()); err == nil || !strings.Contains(err.Error(), "Trigger how") {
+	if _, _, _, err := rv.Trigger(t.Context()); err == nil || !strings.Contains(err.Error(), "Trigger how") {
 		t.Errorf("unreadable how: err = %v", err)
 	}
 
@@ -1009,7 +1020,7 @@ func TestAwaitReviewSinceSkipsTheOlderReview(t *testing.T) {
 
 	since := time.Date(2026, 10, 6, 16, 0, 0, 0, time.UTC)
 
-	r, err := awaitReview(t.Context(), rv, since, time.Second, time.Millisecond)
+	r, err := reviewcmd.AwaitReview(t.Context(), rv, since, time.Second, time.Millisecond)
 	if err != nil {
 		t.Fatalf("wait: %v", err)
 	}
@@ -1020,7 +1031,7 @@ func TestAwaitReviewSinceSkipsTheOlderReview(t *testing.T) {
 
 	f.script(commentsPath, old)
 
-	_, err = awaitReview(t.Context(), rv, since, 20*time.Millisecond, 5*time.Millisecond)
+	_, err = reviewcmd.AwaitReview(t.Context(), rv, since, 20*time.Millisecond, 5*time.Millisecond)
 	if err == nil || !strings.Contains(err.Error(), "predates 2026-10-06T16:00:00Z") {
 		t.Errorf("err = %v", err)
 	}
@@ -1042,7 +1053,7 @@ func TestReviewStaleAgainstTheHead(t *testing.T) {
 	f.script(strings.Replace(reactionsPath, "%s", "100", 1), `[]`)
 	f.script(strings.Replace(reactionsPath, "%s", "200", 1), `[]`)
 
-	found, err := rv.candidates(t.Context())
+	found, err := rv.Candidates(t.Context())
 	if err != nil {
 		t.Fatalf("candidates: %v", err)
 	}
@@ -1068,7 +1079,7 @@ func TestReviewStaleReadsAStickyCommentAtItsLastEdit(t *testing.T) {
 	f.script("gh api user", viewerJSON)
 	f.script(strings.Replace(reactionsPath, "%s", "100", 1), `[]`)
 
-	found, err := rv.candidates(t.Context())
+	found, err := rv.Candidates(t.Context())
 	if err != nil {
 		t.Fatalf("candidates: %v", err)
 	}

@@ -13,9 +13,15 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/amberpixels/f10/cli/internal/archive"
+	"github.com/amberpixels/f10/cli/internal/finish"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
+	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/statusview"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -30,7 +36,7 @@ func TestTaskRuns(t *testing.T) {
 	catchup := &state.Run{Session: "catchup", Capture: "upcoming", Plan: "upcoming", Ship: "upcoming", Done: "catchup"}
 	planning := &state.Run{Session: "planning", Skill: "plan", Capture: "upcoming", Plan: "running", Ship: "upcoming"}
 
-	own, others := taskRuns([]*state.Run{catchup, capture, ship, other, fresh, fetching, planning}, "GH-1")
+	own, others := statusview.TaskRuns([]*state.Run{catchup, capture, ship, other, fresh, fetching, planning}, "GH-1")
 
 	if got := sessions(own); got != "ship fresh fetching planning" {
 		t.Errorf("own = %q, want the matching task and the runs fetch has not named yet, in order", got)
@@ -59,15 +65,15 @@ func TestStatusFallbackReportsPlanAndPR(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h := newHost("gh", root)
-	in := taskStatusInput{id: "GH-1", branch: "GH-1", root: root, plan: plan, host: &h}
+	h := hostops.NewHost("gh", root)
+	in := statusview.TaskStatusInput{ID: "GH-1", Branch: "GH-1", Root: root, Plan: plan, Host: &h}
 	capture := &state.Run{Capture: "running", Plan: "upcoming", Ship: "upcoming"}
 
-	ship := readShipment(t.Context(), in, nil, ledger.TaskRef{})
-	ship.askPR(t.Context(), in)
+	ship := statusview.ReadShipment(t.Context(), in, nil, ledger.TaskRef{})
+	ship.AskPR(t.Context(), in)
 
 	var out bytes.Buffer
-	taskFallback(in, []*state.Run{capture}, ship).render(&out, 0, false)
+	statusview.TaskFallback(in, []*state.Run{capture}, ship).Render(&out, 0, false)
 
 	for _, want := range []string{
 		"none for GH-1 in " + root,
@@ -88,16 +94,22 @@ func TestStatusFallbackLeavesOutWhatDoesNotExist(t *testing.T) {
 	f.fail(ghView, shell.Result{Code: 1, Stderr: `no pull requests found for branch "GH-1"`})
 
 	root := t.TempDir()
-	h := newHost("gh", root)
-	in := taskStatusInput{id: "GH-1", branch: "GH-1", root: root, plan: filepath.Join(root, "GH-1.md"), host: &h}
+	h := hostops.NewHost("gh", root)
+	in := statusview.TaskStatusInput{
+		ID:     "GH-1",
+		Branch: "GH-1",
+		Root:   root,
+		Plan:   filepath.Join(root, "GH-1.md"),
+		Host:   &h,
+	}
 
-	ship := readShipment(t.Context(), in, nil, ledger.TaskRef{})
-	ship.askPR(t.Context(), in)
+	ship := statusview.ReadShipment(t.Context(), in, nil, ledger.TaskRef{})
+	ship.AskPR(t.Context(), in)
 
-	fb := taskFallback(in, nil, ship)
+	fb := statusview.TaskFallback(in, nil, ship)
 
 	var out bytes.Buffer
-	fb.render(&out, 0, false)
+	fb.Render(&out, 0, false)
 	assertOneColumn(t, out.String())
 
 	for _, absent := range []string{"agent", "plan", "pr"} {
@@ -135,7 +147,7 @@ func TestStatusFallbackLeavesOutWhatDoesNotExist(t *testing.T) {
 // before the id, and a capture, which is about another task.
 func TestTaskRunsFromTheWriter(t *testing.T) {
 	seed := func(skill, args string) func(r *state.Run) {
-		return func(r *state.Run) { r.Seed(skill, args, "/work/acme") }
+		return func(r *state.Run) { r.Seed(t.Context(), skill, args, "/work/acme") }
 	}
 	set := func(phase, status string) func(r *state.Run) {
 		return func(r *state.Run) { _ = r.Set(phase, status, "") }
@@ -170,7 +182,7 @@ func TestTaskRunsFromTheWriter(t *testing.T) {
 				step(r)
 			}
 
-			own, _ := taskRuns([]*state.Run{r}, "GH-1")
+			own, _ := statusview.TaskRuns([]*state.Run{r}, "GH-1")
 
 			if got := len(own) == 1; got != tc.own {
 				t.Errorf("own = %v, want %v for %+v", got, tc.own, *r)
@@ -183,13 +195,13 @@ func TestTaskRunsFromTheWriter(t *testing.T) {
 func TestRenderRunKeepsTheAsk(t *testing.T) {
 	r := &state.Run{Task: "GH-1", Capture: "prior", Plan: "done", Ship: "blocked", Leaf: "judge", Ask: "1. Keep it?"}
 
-	own, _ := taskRuns([]*state.Run{r}, "GH-1")
+	own, _ := statusview.TaskRuns([]*state.Run{r}, "GH-1")
 	if len(own) != 1 {
 		t.Fatal("the driven run is not the task's own")
 	}
 
 	var out bytes.Buffer
-	runRows(&out, own[0], runView{showRoot: true, agent: "opus:high", now: time.Now()})
+	statusview.RunRows(&out, own[0], statusview.RunView{ShowRoot: true, Agent: "opus:high", Now: time.Now()})
 
 	if !strings.Contains(out.String(), "opus:high") {
 		t.Errorf("output lacks the agent row:\n%s", out.String())
@@ -210,7 +222,7 @@ func TestRunRowsFinalLabelAndWait(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	runRows(&out, r, runView{headed: true, now: time.Now()})
+	statusview.RunRows(&out, r, statusview.RunView{Headed: true, Now: time.Now()})
 
 	got := out.String()
 
@@ -232,7 +244,7 @@ func TestCurrentPhase(t *testing.T) {
 		{state.Run{Capture: "running", Plan: "upcoming", Ship: "upcoming"}, "capture running"},
 		{state.Run{Capture: "prior", Plan: "done", Ship: "blocked", Leaf: "judge"}, "ship blocked at judge"},
 	} {
-		if got := currentPhase(&tc.run); got != tc.want {
+		if got := statusview.CurrentPhase(&tc.run); got != tc.want {
 			t.Errorf("currentPhase(%+v) = %q, want %q", tc.run, got, tc.want)
 		}
 	}
@@ -261,7 +273,7 @@ func TestBareStatusReadsTheBranchTask(t *testing.T) {
 		{Session: "own", Task: "DM-5", Root: repo, Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"},
 		{Session: "other", Task: "DM-7", Root: repo, Capture: "done", Plan: "running", Ship: "upcoming"},
 	} {
-		if err := r.Save(dir, time.Now()); err != nil {
+		if err := r.Save(t.Context(), dir, time.Now()); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -290,7 +302,7 @@ func TestBareStatusKeepsTheSessionRunForATaskWithNoBranch(t *testing.T) {
 	t.Chdir(repo)
 
 	r := &state.Run{Session: "sess-1", Task: "DM-9", Root: repo, Capture: "done", Plan: "running", Ship: "upcoming"}
-	if err := r.Save(dir, time.Now()); err != nil {
+	if err := r.Save(t.Context(), dir, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -316,23 +328,26 @@ func TestBareTaskID(t *testing.T) {
 			t.Setenv("F10_SESSION_ID", "sess-1")
 
 			r := &state.Run{Session: "sess-1", Task: tc.session, Root: repo}
-			if err := r.Save(dir, time.Now()); err != nil {
+			if err := r.Save(t.Context(), dir, time.Now()); err != nil {
 				t.Fatal(err)
 			}
 
-			tg, err := targetAt(t.Context(), repo, false, "status")
+			tg, err := target.At(t.Context(), repo, false, "status")
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			if got := cmp.Or(sessionTaskID("sess-1"), checkoutTaskID(t.Context(), tg)); got != tc.want {
+			if got := cmp.Or(
+				statusview.SessionTaskID("sess-1"),
+				statusview.CheckoutTaskID(t.Context(), tg),
+			); got != tc.want {
 				t.Errorf("bare task = %q, want %q", got, tc.want)
 			}
 		})
 	}
 }
 
-func runStatusJSON(t *testing.T, args ...string) []runJSON {
+func runStatusJSON(t *testing.T, args ...string) []statusview.RunJSON {
 	t.Helper()
 
 	r := runApp(t, append([]string{"status", "--json"}, args...)...)
@@ -340,7 +355,7 @@ func runStatusJSON(t *testing.T, args ...string) []runJSON {
 		t.Fatalf("status %v: %v\n%s", args, r.err, r.combined)
 	}
 
-	var runs []runJSON
+	var runs []statusview.RunJSON
 	if err := json.Unmarshal([]byte(r.combined), &runs); err != nil {
 		t.Fatalf("status %v: not a run list: %v\n%s", args, err, r.combined)
 	}
@@ -361,12 +376,12 @@ func TestBareTaskIDFromTheWorktreeName(t *testing.T) {
 	git(t, repo, "worktree", "add", "-q", "--detach", detached)
 
 	for dir, want := range map[string]string{repo: "", named: "", detached: "DM-4"} {
-		tg, err := targetAt(t.Context(), dir, false, "status")
+		tg, err := target.At(t.Context(), dir, false, "status")
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		if got := checkoutTaskID(t.Context(), tg); got != want {
+		if got := statusview.CheckoutTaskID(t.Context(), tg); got != want {
 			t.Errorf("checkoutTaskID in %s = %q, want %q", filepath.Base(dir), got, want)
 		}
 	}
@@ -375,7 +390,7 @@ func TestBareTaskIDFromTheWorktreeName(t *testing.T) {
 // The ship report's rows in its order, each only when it has a value, the
 // marker on the two urls alone.
 func TestShipmentFacts(t *testing.T) {
-	s := shipment{
+	s := statusview.Shipment{
 		Task:   "GH-1",
 		Title:  "Add a retry",
 		URL:    "https://gh/issues/1",
@@ -385,7 +400,7 @@ func TestShipmentFacts(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := writeReport(&out, s.facts(false), nil); err != nil {
+	if err := render.WriteReport(&out, s.Facts(false), nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -410,7 +425,7 @@ func TestReadShipmentFromTheLedger(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	in := taskStatusInput{id: "GH-1", branch: "GH-1", plan: plan, handoff: filepath.Join(dir, "none.md")}
+	in := statusview.TaskStatusInput{ID: "GH-1", Branch: "GH-1", Plan: plan, Handoff: filepath.Join(dir, "none.md")}
 	events := []ledger.Event{{
 		Kind:    ledger.PROpened,
 		Task:    "GH-1",
@@ -418,9 +433,9 @@ func TestReadShipmentFromTheLedger(t *testing.T) {
 	}}
 
 	known := ledger.TaskRef{ID: "GH-1", Title: "Add a retry", URL: "https://gh/issues/1"}
-	s := readShipment(t.Context(), in, events, known)
+	s := statusview.ReadShipment(t.Context(), in, events, known)
 
-	want := shipment{
+	want := statusview.Shipment{
 		Task: "GH-1", Title: "Add a retry", URL: "https://gh/issues/1", Branch: "GH-1",
 		PR: "https://gh/pr/9", Plan: plan,
 	}
@@ -435,11 +450,11 @@ func TestReadShipmentPRByBranch(t *testing.T) {
 	f := newFakes(t)
 	f.script(ghView, prOpen)
 
-	h := newHost("gh", t.TempDir())
-	in := taskStatusInput{id: "GH-1", branch: "GH-1", host: &h}
+	h := hostops.NewHost("gh", t.TempDir())
+	in := statusview.TaskStatusInput{ID: "GH-1", Branch: "GH-1", Host: &h}
 	pushed := []ledger.Event{{Kind: ledger.Pushed, Task: "GH-1", Payload: ledger.NewPayload(ledger.Payload{})}}
 
-	if s := readShipment(t.Context(), in, nil, ledger.TaskRef{}); s.PR != "" {
+	if s := statusview.ReadShipment(t.Context(), in, nil, ledger.TaskRef{}); s.PR != "" {
 		t.Errorf("an unpushed task has pr %q, want none", s.PR)
 	}
 
@@ -447,16 +462,16 @@ func TestReadShipmentPRByBranch(t *testing.T) {
 		t.Error("status asked the host for a task that never pushed")
 	}
 
-	s := readShipment(t.Context(), in, pushed, ledger.TaskRef{})
+	s := statusview.ReadShipment(t.Context(), in, pushed, ledger.TaskRef{})
 	if s.PR != "https://gh/pr/9" {
 		t.Errorf("pr = %q, want the branch's PR", s.PR)
 	}
 
 	// the fallback reuses that answer rather than asking the host again
 	f.script(ghView)
-	s.askPR(t.Context(), in)
+	s.AskPR(t.Context(), in)
 
-	if fb := taskFallback(in, nil, s); fb.PR != "https://gh/pr/9" || fb.PRState != "open" {
+	if fb := statusview.TaskFallback(in, nil, s); fb.PR != "https://gh/pr/9" || fb.PRState != "open" {
 		t.Errorf("fallback pr = %q (%s), want the shipment's PR and its state", fb.PR, fb.PRState)
 	}
 }
@@ -474,7 +489,10 @@ func TestShipFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := closeSeries(filepath.Join(storage, "reviews", "FT-1"), seriesEnd{pr: "#7"}); err != nil {
+	if _, err := finish.CloseSeries(
+		filepath.Join(storage, "reviews", "FT-1"),
+		archive.SeriesEnd{Pr: "#7"},
+	); err != nil {
 		t.Fatal(err)
 	}
 
@@ -484,11 +502,11 @@ func TestShipFiles(t *testing.T) {
 	writeFile(t, filepath.Join(storage, "reviews", "FT-1", "1.md"), "# Review\n")
 	writeFile(t, filepath.Join(storage, "reviews", "FT-1", "2.md"), "# Review\n")
 
-	s := shipment{Task: "FT-1"}
-	s.Verdicts, s.Reviews = shipFiles(storage, "FT-1")
+	s := statusview.Shipment{Task: "FT-1"}
+	s.Verdicts, s.Reviews = statusview.ShipFiles(storage, "FT-1")
 
 	var out bytes.Buffer
-	if err := writeReport(&out, s.facts(false), nil); err != nil {
+	if err := render.WriteReport(&out, s.Facts(false), nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -506,19 +524,19 @@ func TestShipFiles(t *testing.T) {
 // --json carries the same files: on each run under a shipment, and on the
 // fallback.
 func TestStatusJSONCarriesTheFiles(t *testing.T) {
-	head := shipment{
+	head := statusview.Shipment{
 		Task:     "GH-1",
-		Verdicts: []verdictPath{{Subject: "plan", Path: "/s/verdicts/GH-1/1.md"}},
-		Reviews:  []reviewPath{{Round: "1", Path: "/s/reviews/GH-1/1.md"}},
+		Verdicts: []statusview.VerdictPath{{Subject: "plan", Path: "/s/verdicts/GH-1/1.md"}},
+		Reviews:  []statusview.ReviewPath{{Round: "1", Path: "/s/reviews/GH-1/1.md"}},
 	}
 
 	var out bytes.Buffer
 
 	r := &state.Run{Task: "GH-1", Capture: "prior", Plan: "done", Ship: "done"}
-	if err := writeRuns(
-		statusView{w: &out, json: true},
+	if err := statusview.WriteRuns(
+		statusview.StatusView{Out: &out, JSON: true},
 		[]*state.Run{r},
-		[][]gate{nil},
+		[][]statusview.Gate{nil},
 		&head,
 		false,
 		"",
@@ -527,7 +545,7 @@ func TestStatusJSONCarriesTheFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var runs []runJSON
+	var runs []statusview.RunJSON
 	if err := json.Unmarshal(out.Bytes(), &runs); err != nil {
 		t.Fatal(err)
 	}
@@ -539,7 +557,7 @@ func TestStatusJSONCarriesTheFiles(t *testing.T) {
 
 	out.Reset()
 
-	fb := taskFallback(taskStatusInput{id: "GH-1"}, nil, head)
+	fb := statusview.TaskFallback(statusview.TaskStatusInput{ID: "GH-1"}, nil, head)
 	if err := ui.JSON(&out, fb); err != nil {
 		t.Fatal(err)
 	}
@@ -553,11 +571,19 @@ func TestStatusJSONCarriesTheFiles(t *testing.T) {
 // A headed run prints the block once and drops its own task and url rows.
 func TestWriteRunsUnderTheShipment(t *testing.T) {
 	r := &state.Run{Task: "GH-1", URL: "https://gh/issues/1", Capture: "prior", Plan: "done", Ship: "done"}
-	head := shipment{Task: "GH-1", URL: "https://gh/issues/1"}
+	head := statusview.Shipment{Task: "GH-1", URL: "https://gh/issues/1"}
 
 	var out bytes.Buffer
 
-	if err := writeRuns(statusView{w: &out}, []*state.Run{r}, [][]gate{nil}, &head, false, "", time.Now()); err != nil {
+	if err := statusview.WriteRuns(
+		statusview.StatusView{Out: &out},
+		[]*state.Run{r},
+		[][]statusview.Gate{nil},
+		&head,
+		false,
+		"",
+		time.Now(),
+	); err != nil {
 		t.Fatal(err)
 	}
 
@@ -577,15 +603,15 @@ func TestWriteRunsUnderTheShipment(t *testing.T) {
 // the label still ends at the first colon, its value in the head's column.
 func TestWriteRunsGatesShareTheColumn(t *testing.T) {
 	r := &state.Run{Task: "GH-1", Capture: "prior", Plan: "running", Ship: "upcoming"}
-	head := shipment{Task: "GH-1", Branch: "GH-1/some-branch"}
-	gates := []gate{{Step: "judge", Judged: "plan", State: "upcoming"}}
+	head := statusview.Shipment{Task: "GH-1", Branch: "GH-1/some-branch"}
+	gates := []statusview.Gate{{Step: "judge", Judged: "plan", State: "upcoming"}}
 
 	var out bytes.Buffer
 
-	if err := writeRuns(
-		statusView{w: &out},
+	if err := statusview.WriteRuns(
+		statusview.StatusView{Out: &out},
 		[]*state.Run{r},
-		[][]gate{gates},
+		[][]statusview.Gate{gates},
 		&head,
 		true,
 		"",
@@ -605,11 +631,19 @@ func TestWriteRunsGatesShareTheColumn(t *testing.T) {
 // A planned task's file row and its plan phase row never share a key.
 func TestWriteRunsNamesThePlanFileApart(t *testing.T) {
 	r := &state.Run{Task: "GH-1", Capture: "prior", Plan: "done", Ship: "running"}
-	head := shipment{Task: "GH-1", Plan: "/work/.f10/plans/GH-1.md"}
+	head := statusview.Shipment{Task: "GH-1", Plan: "/work/.f10/plans/GH-1.md"}
 
 	var out bytes.Buffer
 
-	if err := writeRuns(statusView{w: &out}, []*state.Run{r}, [][]gate{nil}, &head, false, "", time.Now()); err != nil {
+	if err := statusview.WriteRuns(
+		statusview.StatusView{Out: &out},
+		[]*state.Run{r},
+		[][]statusview.Gate{nil},
+		&head,
+		false,
+		"",
+		time.Now(),
+	); err != nil {
 		t.Fatal(err)
 	}
 
@@ -623,13 +657,17 @@ func TestWriteRunsNamesThePlanFileApart(t *testing.T) {
 
 // A long run value wraps under the value column, never under the labels.
 func TestWriteFactsWrapsUnderTheValueColumn(t *testing.T) {
-	rows := []fact{
-		{label: "url", value: "https://gh/issues/1", url: true},
-		runFact("note", "stop: the change patches the symptom and the cause is the retry loop", lipgloss.NewStyle()),
+	rows := []render.Fact{
+		{Label: "url", Value: "https://gh/issues/1", URL: true},
+		statusview.RunFact(
+			"note",
+			"stop: the change patches the symptom and the cause is the retry loop",
+			lipgloss.NewStyle(),
+		),
 	}
 
 	var out bytes.Buffer
-	if err := writeFacts(&out, rows, labelWidth(rows), 40); err != nil {
+	if err := render.WriteFacts(&out, rows, render.LabelWidth(rows), 40); err != nil {
 		t.Fatal(err)
 	}
 
@@ -683,16 +721,16 @@ func TestReadShipmentCommitRow(t *testing.T) {
 
 	r.at(before, "checkout", "-q", "-b", "FT-2/b", "origin/main")
 
-	in := taskStatusInput{id: "FT-2", branch: "FT-2/b", main: r.dir}
+	in := statusview.TaskStatusInput{ID: "FT-2", Branch: "FT-2/b", Main: r.dir}
 
-	if s := readShipment(t.Context(), in, nil, ledger.TaskRef{}); s.Commit != "" {
+	if s := statusview.ReadShipment(t.Context(), in, nil, ledger.TaskRef{}); s.Commit != "" {
 		t.Errorf("a fresh branch has commit %q, want none", s.Commit)
 	}
 
 	r.commit(during, "c.go", "package main // c\n", "c")
 
 	want := r.at(during, "rev-parse", "--short", "HEAD")
-	if s := readShipment(t.Context(), in, nil, ledger.TaskRef{}); s.Commit != want {
+	if s := statusview.ReadShipment(t.Context(), in, nil, ledger.TaskRef{}); s.Commit != want {
 		t.Errorf("commit = %q, want the branch head %q", s.Commit, want)
 	}
 }

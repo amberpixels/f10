@@ -12,8 +12,11 @@ import (
 	"testing"
 	"time"
 
+	boardcmd "github.com/amberpixels/f10/cli/internal/command/board"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
 	"github.com/amberpixels/f10/cli/internal/projects"
+	"github.com/amberpixels/f10/cli/internal/scope"
+	"github.com/amberpixels/f10/cli/internal/seam"
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
@@ -151,35 +154,39 @@ func TestBoardGroupsMixRepositories(t *testing.T) {
 	root := canonical(t, t.TempDir())
 	scopeRepo(t, root, "acme-api")
 
-	writeUserFile(t, home, boardConfigFile, "---\ngroups:\n  work: ["+root+"/acme-*, github.com/acme/widgets]\n"+
+	writeUserFile(t, home, scope.BoardConfigFile, "---\ngroups:\n  work: ["+root+"/acme-*, github.com/acme/widgets]\n"+
 		"  odd: [git.example.com/acme/widgets]\n---\n")
 
-	items, err := readGroups(boardConfigFile, []string{"work"})
+	items, err := scope.ReadGroups(scope.BoardConfigFile, []string{"work"})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(items) != 2 || items[0].dir != filepath.Join(root, "acme-api") || items[1].repo == nil ||
-		items[1].repo.id() != "github.com/acme/widgets" || items[1].repo.CLI != "gh" || items[1].repo.Prefix != "WID" {
+	if len(items) != 2 || items[0].Dir != filepath.Join(root, "acme-api") || items[1].Repo == nil ||
+		items[1].Repo.ID() != "github.com/acme/widgets" || items[1].Repo.CLI != "gh" || items[1].Repo.Prefix != "WID" {
 		t.Errorf("items = %+v", items)
 	}
 
-	if _, err := readGroups(boardConfigFile, []string{"odd"}); err == nil || !strings.Contains(err.Error(), "glab:") {
+	if _, err := scope.ReadGroups(
+		scope.BoardConfigFile,
+		[]string{"odd"},
+	); err == nil ||
+		!strings.Contains(err.Error(), "glab:") {
 		t.Errorf("odd: err = %v, want the prefixes named", err)
 	}
 
-	if _, err := readGroups(
-		boardConfigFile,
+	if _, err := scope.ReadGroups(
+		scope.BoardConfigFile,
 		[]string{"play"},
 	); err == nil ||
-		!strings.Contains(err.Error(), boardConfigFile) {
-		t.Errorf("play: err = %v, want %s named", err, boardConfigFile)
+		!strings.Contains(err.Error(), scope.BoardConfigFile) {
+		t.Errorf("play: err = %v, want %s named", err, scope.BoardConfigFile)
 	}
 
 	// standup's groups live in its own file: the board's are not read for it
-	if _, err := readGroups(standupConfigFile, []string{"work"}); err == nil ||
-		!strings.Contains(err.Error(), standupConfigFile) {
-		t.Errorf("standup: err = %v, want %s named", err, standupConfigFile)
+	if _, err := scope.ReadGroups(scope.StandupConfigFile, []string{"work"}); err == nil ||
+		!strings.Contains(err.Error(), scope.StandupConfigFile) {
+		t.Errorf("standup: err = %v, want %s named", err, scope.StandupConfigFile)
 	}
 }
 
@@ -188,11 +195,11 @@ func TestBoardGroupsMixRepositories(t *testing.T) {
 func TestBoardRepos(t *testing.T) {
 	home := isolateEnv(t)
 
-	writeUserFile(t, home, boardConfigFile, "---\nrepos:\n  - github.com/acme/widgets\n"+
+	writeUserFile(t, home, scope.BoardConfigFile, "---\nrepos:\n  - github.com/acme/widgets\n"+
 		"  - {repo: gitlab.com/acme/sub/widgets, prefix: wid}\n  - glab:git.example.com/acme/infra\n"+
 		"people:\n  - {name: ann, tracker: Ann Lee, host: annl, emails: [ann@acme.example]}\n---\n")
 
-	cfg, _, err := readBoardConfig()
+	cfg, _, err := scope.ReadBoardConfig()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,12 +207,12 @@ func TestBoardRepos(t *testing.T) {
 	var got []string
 
 	for _, r := range cfg.Repos {
-		ref, err := parseRepo(r.Repo, r.Prefix)
+		ref, err := scope.ParseRepo(r.Repo, r.Prefix)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		got = append(got, ref.CLI+" "+ref.id()+" "+ref.Prefix+" "+ref.repo())
+		got = append(got, ref.CLI+" "+ref.ID()+" "+ref.Prefix+" "+ref.Repo())
 	}
 
 	want := "gh github.com/acme/widgets WID acme/widgets|glab gitlab.com/acme/sub/widgets WID acme/sub/widgets|" +
@@ -218,9 +225,9 @@ func TestBoardRepos(t *testing.T) {
 		t.Errorf("people = %+v", cfg.People)
 	}
 
-	writeUserFile(t, home, boardConfigFile, "---\npeople:\n  - {host: annl}\n---\n")
+	writeUserFile(t, home, scope.BoardConfigFile, "---\npeople:\n  - {host: annl}\n---\n")
 
-	if _, _, err := readBoardConfig(); err == nil || !strings.Contains(err.Error(), "no name") {
+	if _, _, err := scope.ReadBoardConfig(); err == nil || !strings.Contains(err.Error(), "no name") {
 		t.Errorf("err = %v, want the nameless person refused", err)
 	}
 }
@@ -235,18 +242,15 @@ func TestBoardAllReadsWatchedRepos(t *testing.T) {
 	good := scopeRepo(t, root, "good")
 	git(t, good, "remote", "add", "origin", "https://github.com/acme/good.git")
 
-	writeUserFile(t, home, boardConfigFile, "---\nrepos: [github.com/acme/good, github.com/acme/other]\n---\n")
+	writeUserFile(t, home, scope.BoardConfigFile, "---\nrepos: [github.com/acme/good, github.com/acme/other]\n---\n")
 	t.Setenv(projects.RootsEnv, filepath.Join(root, "*"))
-
-	prev := shell.Capture
-	t.Cleanup(func() { shell.Capture = prev })
 
 	var (
 		mu    sync.Mutex // projects are collected concurrently
 		calls []string
 	)
 
-	shell.Capture = func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
+	seam.Swap(t, &shell.Capture, func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
 		call := filepath.Base(name) + " " + strings.Join(args, " ")
 
 		mu.Lock()
@@ -265,7 +269,7 @@ func TestBoardAllReadsWatchedRepos(t *testing.T) {
 		default:
 			return shell.Result{Code: 1, Stderr: "unscripted: " + call}, nil
 		}
-	}
+	})
 
 	out, err := runApp(t, "board", "--all", "--json", "--state").outErr()
 	if err != nil {
@@ -335,7 +339,7 @@ func TestBoardAllReadsWatchedRepos(t *testing.T) {
 	}
 
 	// a repository entry that does not parse fails only the run that reads it
-	writeUserFile(t, home, boardConfigFile, "---\nrepos: [git.example.com/acme/x]\n---\n")
+	writeUserFile(t, home, scope.BoardConfigFile, "---\nrepos: [git.example.com/acme/x]\n---\n")
 
 	if _, err := runApp(t, "-C", good, "board", "--json").outErr(); err != nil {
 		t.Errorf("one checkout with a bad repos entry: %v, want it unread", err)
@@ -368,7 +372,7 @@ func TestRenderByPerson(t *testing.T) {
 
 	var out bytes.Buffer
 
-	renderByPerson(&out, boards, 0)
+	boardcmd.RenderByPerson(&out, boards, 0)
 
 	var heads, lines []string
 
@@ -424,7 +428,7 @@ func TestRenderSummary(t *testing.T) {
 
 	var out bytes.Buffer
 
-	renderSummary(&out, boards, now, 0)
+	boardcmd.RenderSummary(&out, boards, now, 0)
 
 	for _, want := range []string{
 		"api  2 in flight  1 waiting on you  oldest FT-2 2d",
@@ -446,7 +450,7 @@ func TestTitleAfterKey(t *testing.T) {
 		{"FT-121", "FT-121", "FT-121"},
 		{"#12 title", "", "#12 title"},
 	} {
-		if got := titleAfterKey(tc.title, tc.key); got != tc.want {
+		if got := boardcmd.TitleAfterKey(tc.title, tc.key); got != tc.want {
 			t.Errorf("titleAfterKey(%q, %q) = %q, want %q", tc.title, tc.key, got, tc.want)
 		}
 	}

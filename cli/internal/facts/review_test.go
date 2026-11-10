@@ -9,6 +9,8 @@ import (
 )
 
 func TestParseReview(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name string
 		body string
@@ -105,6 +107,8 @@ func TestParseReview(t *testing.T) {
 }
 
 func TestReviewMissing(t *testing.T) {
+	t.Parallel()
+
 	r := Review{Reviewer: "x", ReviewerKind: ReviewerBot, Trigger: TriggerAutomatic}
 	if got := r.Missing(); !slices.Equal(got, []string{"Arrives as", "Done", "handled"}) {
 		t.Errorf("Missing = %v", got)
@@ -133,6 +137,8 @@ func TestReviewMissing(t *testing.T) {
 // whose value parses to the same four facts; a declared section wins over
 // it, and one declaring only the local half declares no remote reviewer.
 func TestBuildReviewFallsBackToTheWorkflow(t *testing.T) {
+	t.Parallel()
+
 	pb := &probe.Probes{
 		CLI:    probe.Signal{Value: "gh", Evidence: "well-known host github.com"},
 		Review: &probe.Review{Reviewer: "claude[bot]", Trigger: "automatic", Workflow: ".github/workflows/review.yml"},
@@ -173,6 +179,8 @@ func TestBuildReviewFallsBackToTheWorkflow(t *testing.T) {
 // A line naming both kinds keeps the manual part apart, so a code span in
 // the automatic half is never what a flow posts.
 func TestManualHow(t *testing.T) {
+	t.Parallel()
+
 	for line, want := range map[string]string{
 		"automatic, on open and on push; manual, comment `@claude` on the PR for a re-review": "comment `@claude` on the PR for a re-review",
 		"manual, comment `@claude review` on the PR":                                          "",
@@ -214,6 +222,8 @@ func TestManualHow(t *testing.T) {
 }
 
 func TestReviewManualAction(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name, trigger, how string
 		kind, text         string

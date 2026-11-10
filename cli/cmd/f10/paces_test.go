@@ -8,8 +8,15 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
+	startcmd "github.com/amberpixels/f10/cli/internal/command/start"
+	"github.com/amberpixels/f10/cli/internal/drive"
+	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
+	"github.com/amberpixels/f10/cli/internal/launch"
+	"github.com/amberpixels/f10/cli/internal/runplan"
+	"github.com/amberpixels/f10/cli/internal/start"
 )
 
 // paceRepo is a checkout whose project.md declares frontmatter, with the
@@ -18,7 +25,7 @@ func paceRepo(t *testing.T, frontmatter, user string) string {
 	t.Helper()
 
 	home := isolateEnv(t)
-	t.Setenv(userDirEnv, filepath.Join(home, ".f10"))
+	t.Setenv(configcmd.UserDirEnv, filepath.Join(home, ".f10"))
 
 	repo := mkRepo(t)
 	path := filepath.Join(repo, ".f10", "instructions", "project.md")
@@ -147,7 +154,7 @@ func TestPaceShapesTheDriveSkills(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if got := strings.Join(driveSkills(fl), " "); got != want {
+		if got := strings.Join(drive.DriveSkills(fl), " "); got != want {
 			t.Errorf("%q: skills %q, want %q", pace, got, want)
 		}
 	}
@@ -156,8 +163,8 @@ func TestPaceShapesTheDriveSkills(t *testing.T) {
 // A run's --pace wins and is recorded; a rerun naming none keeps the
 // pace its branch records.
 func TestDriveKeepsTheRecordedPace(t *testing.T) {
-	paced := func(fl shipFlow, pace string) (shipFlow, error) {
-		fl.pace = pace
+	paced := func(fl runplan.ShipFlow, pace string) (runplan.ShipFlow, error) {
+		fl.Pace = pace
 
 		return fl, nil
 	}
@@ -175,27 +182,27 @@ func TestDriveKeepsTheRecordedPace(t *testing.T) {
 		f := newFakes(t)
 		f.meta.Seed("GH-1", branchmeta.Pace, tc.recorded)
 
-		in := &driveInput{
-			main:  "/code/repo",
-			args:  driveArgs{pace: tc.flag},
-			paced: paced,
+		in := &drive.DriveInput{
+			Main:  "/code/repo",
+			Args:  driverec.DriveArgs{Pace: tc.flag},
+			Paced: paced,
 		}
 
-		fl, note, err := in.keepPace(t.Context(), "GH-1", shipFlow{pace: tc.run})
-		if err != nil || fl.pace != tc.want || !strings.Contains(note, tc.note) ||
+		fl, note, err := in.KeepPace(t.Context(), "GH-1", runplan.ShipFlow{Pace: tc.run})
+		if err != nil || fl.Pace != tc.want || !strings.Contains(note, tc.note) ||
 			f.called("set branch.GH-1."+string(branchmeta.Pace)+" "+tc.flag) != tc.writes {
-			t.Errorf("recorded %q: pace %q, note %q, err %v, calls %v", tc.recorded, fl.pace, note, err, f.calls)
+			t.Errorf("recorded %q: pace %q, note %q, err %v, calls %v", tc.recorded, fl.Pace, note, err, f.calls)
 		}
 	}
 }
 
 func TestDriveTakesPace(t *testing.T) {
-	a, err := parseDriveArgs([]string{"GH-1", "--pace", "Fast"})
-	if err != nil || a.pace != "fast" {
+	a, err := driverec.ParseDriveArgs([]string{"GH-1", "--pace", "Fast"})
+	if err != nil || a.Pace != "fast" {
 		t.Errorf("--pace = %+v, %v", a, err)
 	}
 
-	if _, err := parseDriveArgs([]string{"GH-1", "--pace", "fast", "--pace=slow"}); err == nil {
+	if _, err := driverec.ParseDriveArgs([]string{"GH-1", "--pace", "fast", "--pace=slow"}); err == nil {
 		t.Error("two paces were taken")
 	}
 }
@@ -210,7 +217,7 @@ func TestStartRecordsThePace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got := prompt(modeDefault, ultra, "GH-1", nil, "", nil, ""); strings.Contains(got, "/f10:plan") {
+	if got := launch.Prompt(startcmd.ModeDefault, ultra, "GH-1", nil, "", nil, ""); strings.Contains(got, "/f10:plan") {
 		t.Errorf("ultra's prompt = %q, want ship alone", got)
 	}
 
@@ -227,13 +234,23 @@ func TestStartRecordsThePace(t *testing.T) {
 	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
 
-	dep := &dependency{task: "GH-7", branch: "GH-7/base", plan: testStorage.Plan("GH-7")}
-	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, ultra, "GH-1", dep, "", nil, ""), "{}")
+	dep := &launch.Dependency{Task: "GH-7", Branch: "GH-7/base", Plan: testStorage.Plan("GH-7")}
+	f.script(
+		"herdr agent prompt "+agentOf("GH-1")+" "+launch.Prompt(startcmd.ModeDefault, ultra, "GH-1", dep, "", nil, ""),
+		"{}",
+	)
 
 	var out bytes.Buffer
 
-	in := startInput{main: "/code/repo", storage: testStorage, task: gh1, flow: ultra, pace: "ultra", after: "GH-7"}
-	if err := start(t.Context(), &out, in); err != nil {
+	in := start.StartInput{
+		Main:    "/code/repo",
+		Storage: testStorage,
+		Task:    gh1,
+		Flow:    ultra,
+		Pace:    "ultra",
+		After:   "GH-7",
+	}
+	if err := start.Start(t.Context(), &out, in); err != nil {
 		t.Fatal(err)
 	}
 
@@ -319,7 +336,7 @@ func TestCeilingShapesTheDriveChain(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if got := strings.Join(driveSkills(fl), " "); got != "plan ship" {
+		if got := strings.Join(drive.DriveSkills(fl), " "); got != "plan ship" {
 			t.Errorf("%s under finish off: %q", pace, got)
 		}
 	}
@@ -331,14 +348,14 @@ func TestCeilingShapesTheDriveChain(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got := strings.Join(driveSkills(fl), " "); got != "plan ship finish" {
+	if got := strings.Join(drive.DriveSkills(fl), " "); got != "plan ship finish" {
 		t.Errorf("excepted fast: %q", got)
 	}
 }
 
 // pacedFlowIn resolves on a literal Effective, which Build would have given
 // a pace set; nil is the built-ins.
-func pacedFlowIn(eff *facts.Effective, set *facts.PaceSet, pace, name string) (shipFlow, error) {
+func pacedFlowIn(eff *facts.Effective, set *facts.PaceSet, pace, name string) (runplan.ShipFlow, error) {
 	if set == nil {
 		set = facts.NewPaceSet()
 		set.Remote = eff.Review.Remote()
@@ -346,5 +363,5 @@ func pacedFlowIn(eff *facts.Effective, set *facts.PaceSet, pace, name string) (s
 
 	eff.PaceSet = set
 
-	return pacedFlow(eff, pace, name)
+	return runplan.PacedFlow(eff, pace, name)
 }

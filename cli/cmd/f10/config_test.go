@@ -12,9 +12,11 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
+	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
+	"github.com/amberpixels/f10/cli/internal/render"
 )
 
 func TestWrap(t *testing.T) {
@@ -52,7 +54,7 @@ func TestWrap(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := wrap(tc.text, tc.width)
+			got := render.Wrap(tc.text, tc.width)
 			if !slices.Equal(got, tc.want) {
 				t.Errorf("wrap(%q, %d) = %q, want %q", tc.text, tc.width, got, tc.want)
 			}
@@ -66,8 +68,8 @@ func TestWrap(t *testing.T) {
 	}
 }
 
-func sampleView() *view {
-	return &view{
+func sampleView() *configcmd.View {
+	return &configcmd.View{
 		CheckoutRoot: "/repo",
 		StorageRoot:  "/repo/.f10",
 		Instructions: "main",
@@ -98,7 +100,7 @@ func sampleView() *view {
 func TestRenderHumanPageWidth(t *testing.T) {
 	for _, tc := range []struct{ limit, want int }{{200, 85}, {50, 50}, {0, 0}} {
 		var b bytes.Buffer
-		renderHuman(&b, sampleView(), tc.limit)
+		configcmd.RenderHuman(&b, sampleView(), tc.limit)
 
 		rules := 0
 
@@ -119,8 +121,8 @@ func TestRenderHumanPageWidth(t *testing.T) {
 		}
 	}
 
-	for _, tc := range []struct{ widest, want int }{{130, pageMax}, {20, pageMin}} {
-		if got := pageWidth(tc.widest, 200); got != tc.want {
+	for _, tc := range []struct{ widest, want int }{{130, configcmd.PageMax}, {20, configcmd.PageMin}} {
+		if got := configcmd.PageWidth(tc.widest, 200); got != tc.want {
 			t.Errorf("a %d-cell row on 200 columns = %d, want %d", tc.widest, got, tc.want)
 		}
 	}
@@ -130,7 +132,7 @@ func TestRenderHumanPageWidth(t *testing.T) {
 // a body with anything else keeps its prose.
 func TestRenderHumanKeyValues(t *testing.T) {
 	var b bytes.Buffer
-	renderHuman(&b, sampleView(), 120)
+	configcmd.RenderHuman(&b, sampleView(), 120)
 	out := b.String()
 
 	for _, want := range []string{"\n Fetch   gh issue view <n> --comments\n", "\n Create  gh issue create\n"} {
@@ -153,7 +155,7 @@ func TestRenderHumanKeyValues(t *testing.T) {
 // project's, each with its own origin.
 func TestConfigShowsAgentsPerKey(t *testing.T) {
 	repo := paceRepo(t, "flows:\n  default: plan review implement pr\nagents:\n  review: sonnet:low\n", "")
-	user := os.Getenv(userDirEnv)
+	user := os.Getenv(configcmd.UserDirEnv)
 	if err := os.MkdirAll(user, 0o750); err != nil {
 		t.Fatal(err)
 	}
@@ -163,7 +165,7 @@ func TestConfigShowsAgentsPerKey(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var v view
+	var v configcmd.View
 	if err := json.Unmarshal([]byte(runApp(t, "-C", repo, "config", "--json").must(t)), &v); err != nil {
 		t.Fatal(err)
 	}
@@ -265,7 +267,7 @@ func TestVerifyLine(t *testing.T) {
 			pb := &probe.Probes{Verify: tc.signals}
 			eff := facts.Build(lay, pb, "")
 
-			if got := verifyLine(verifyFieldIn(eff.Fields)); got != tc.want {
+			if got := configcmd.VerifyLine(configcmd.VerifyFieldIn(eff.Fields)); got != tc.want {
 				t.Errorf("verifyLine = %q, want %q", got, tc.want)
 			}
 		})

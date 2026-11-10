@@ -8,6 +8,8 @@ import (
 )
 
 func TestRootPaths(t *testing.T) {
+	t.Parallel()
+
 	for _, root := range []Root{InRepo("/code/repo"), OutOfTree("/home/me", "repo")} {
 		base := string(root)
 		cases := map[string]string{
@@ -46,6 +48,8 @@ func TestRootPaths(t *testing.T) {
 // Every dir a method names for a task file is granted to the agent, so a
 // new one cannot land in one place and not the other.
 func TestTaskFileDirsCoverMethods(t *testing.T) {
+	t.Parallel()
+
 	root := InRepo("/code/repo")
 	granted := root.TaskFileDirs()
 
@@ -70,6 +74,8 @@ func TestTaskFileDirsCoverMethods(t *testing.T) {
 }
 
 func TestOutside(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name     string
 		root     Root
@@ -90,6 +96,8 @@ func TestOutside(t *testing.T) {
 
 // A worktree reached through a symlink holds the root it really contains.
 func TestOutsideResolvesSymlinks(t *testing.T) {
+	t.Parallel()
+
 	target := t.TempDir()
 	link := filepath.Join(t.TempDir(), "link")
 
@@ -103,6 +111,8 @@ func TestOutsideResolvesSymlinks(t *testing.T) {
 }
 
 func TestEmptyRootPanics(t *testing.T) {
+	t.Parallel()
+
 	defer func() {
 		if recover() == nil {
 			t.Error("an empty root resolved a path")

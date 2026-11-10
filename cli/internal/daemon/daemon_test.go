@@ -75,6 +75,8 @@ func waitExit(t *testing.T, log string) Exit {
 }
 
 func TestServeRunsAndAttaches(t *testing.T) {
+	t.Parallel()
+
 	s := &Server{Dir: runDir(t), Version: "v1", Child: shell}
 	serve(t, s)
 
@@ -124,6 +126,8 @@ func TestServeRunsAndAttaches(t *testing.T) {
 // A resumed drive tells the daemon its number only once it has taken the
 // answer; a rerun of its command before then still attaches.
 func TestServeAttachesToAResumeBeforeItsNumber(t *testing.T) {
+	t.Parallel()
+
 	s := &Server{Dir: runDir(t), Version: "v1", Child: shell}
 	serve(t, s)
 
@@ -167,6 +171,8 @@ func TestServeAttachesToAResumeBeforeItsNumber(t *testing.T) {
 // The other order: a resume sent while a drive started by its command line
 // has not reported its number attaches to it too.
 func TestServeAttachesAResumeToAnUnnumberedDrive(t *testing.T) {
+	t.Parallel()
+
 	s := &Server{Dir: runDir(t), Version: "v1", Child: shell}
 	serve(t, s)
 
@@ -230,6 +236,8 @@ func TestServeAttachesAResumeToAnUnnumberedDrive(t *testing.T) {
 }
 
 func TestServeExitsWhenIdle(t *testing.T) {
+	t.Parallel()
+
 	s := &Server{Dir: runDir(t), Version: "v1", Child: shell, Idle: 50 * time.Millisecond, Tick: 10 * time.Millisecond}
 	done := serve(t, s)
 
@@ -250,6 +258,8 @@ func TestServeExitsWhenIdle(t *testing.T) {
 // A drain stops each drive at its tick (exit 6), and the next daemon
 // resumes it by its record number with the same dir and environment.
 func TestDrainResumesInTheNextDaemon(t *testing.T) {
+	t.Parallel()
+
 	dir := runDir(t)
 
 	s := &Server{Dir: dir, Version: "v1", Child: shell}
@@ -319,6 +329,8 @@ func TestDrainResumesInTheNextDaemon(t *testing.T) {
 }
 
 func TestEnsureStartsOneDaemon(t *testing.T) {
+	t.Parallel()
+
 	dir := runDir(t)
 
 	ctx, cancel := context.WithCancel(t.Context())
@@ -379,6 +391,8 @@ func TestEnsureStartsOneDaemon(t *testing.T) {
 // A plain stop drains too, but hands nothing to a next daemon: the drive's
 // exit says it stopped, and the next daemon resumes nothing.
 func TestStopKeepsNoDrainedList(t *testing.T) {
+	t.Parallel()
+
 	dir := runDir(t)
 
 	s := &Server{Dir: dir, Version: "v1", Child: shell}
@@ -411,6 +425,8 @@ func TestStopKeepsNoDrainedList(t *testing.T) {
 // A drive that ignores the drain keeps the socket up, so a stop --now can
 // end it rather than waiting out DrainWait.
 func TestStopNowCutsADrainShort(t *testing.T) {
+	t.Parallel()
+
 	dir := runDir(t)
 
 	s := &Server{Dir: dir, Version: "v1", Child: shell, DrainWait: time.Hour}
@@ -455,6 +471,8 @@ func TestStopNowCutsADrainShort(t *testing.T) {
 // An older client, or one of another development build, uses the daemon
 // running rather than replacing it; following, any version is used.
 func TestEnsureReplacesOnlyForANewerRelease(t *testing.T) {
+	t.Parallel()
+
 	dir := runDir(t)
 
 	serve(t, &Server{Dir: dir, Version: "0.46.0", Child: shell})
@@ -487,6 +505,8 @@ func TestEnsureReplacesOnlyForANewerRelease(t *testing.T) {
 }
 
 func TestNewer(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		a, b string
 		want bool
@@ -505,6 +525,8 @@ func TestNewer(t *testing.T) {
 }
 
 func TestPruneLogsKeepsRunningAndRecent(t *testing.T) {
+	t.Parallel()
+
 	dir := runDir(t)
 	logs := logsDir(dir)
 
@@ -558,6 +580,8 @@ func waitNumbered(t *testing.T, dir string, n int) {
 // Past the drain deadline every drive still running is stopped, not only
 // the first one the deadline reaches.
 func TestDrainDeadlineStopsEveryDrive(t *testing.T) {
+	t.Parallel()
+
 	dir := runDir(t)
 
 	s := &Server{Dir: dir, Version: "v1", Child: shell, DrainWait: 200 * time.Millisecond}
@@ -584,6 +608,8 @@ func TestDrainDeadlineStopsEveryDrive(t *testing.T) {
 // A drive that prints its number while a drain waits on it is logged by the
 // number it printed, read under the lock that guards it (run with -race).
 func TestDrainReadsADriveNumberedLate(t *testing.T) {
+	t.Parallel()
+
 	dir := runDir(t)
 
 	var logged bytes.Buffer
@@ -630,6 +656,8 @@ func TestDrainReadsADriveNumberedLate(t *testing.T) {
 // A drive that exits ExitResume is started again with --resume in the same
 // place, and a follower's resume request attaches to the new run.
 func TestServeResumesADriveThatAsksIt(t *testing.T) {
+	t.Parallel()
+
 	dir := runDir(t)
 
 	var (
@@ -686,6 +714,8 @@ func TestServeResumesADriveThatAsksIt(t *testing.T) {
 
 // A drive asking to resume while an upgrade drains goes to the next daemon.
 func TestDrainKeepsADriveThatAsksToResume(t *testing.T) {
+	t.Parallel()
+
 	dir := runDir(t)
 
 	s := &Server{Dir: dir, Version: "v1", Child: shell}

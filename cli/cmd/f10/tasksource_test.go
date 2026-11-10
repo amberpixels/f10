@@ -7,10 +7,13 @@ import (
 	"strings"
 	"testing"
 
+	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -182,27 +185,27 @@ func TestTasksPicksTheSource(t *testing.T) {
 		cli    string
 		want   string
 	}{
-		{false, facts.TrackerGitHub, "gh", "main.hostSource"},
-		{false, facts.TrackerGitHub, "", "main.refusedSource"},
-		{false, facts.TrackerNotion, "gh", "main.refusedSource"},
-		{true, facts.TrackerGitHub, "gh", "main.fallbackSource main.hostSource"},
-		{true, facts.TrackerGitHub, "", "main.fallbackSource main.refusedSource"},
-		{true, facts.TrackerNotion, "gh", "main.fallbackSource main.refusedSource"},
+		{false, facts.TrackerGitHub, "gh", "hostops.HostSource"},
+		{false, facts.TrackerGitHub, "", "hostops.RefusedSource"},
+		{false, facts.TrackerNotion, "gh", "hostops.RefusedSource"},
+		{true, facts.TrackerGitHub, "gh", "hostops.FallbackSource hostops.HostSource"},
+		{true, facts.TrackerGitHub, "", "hostops.FallbackSource hostops.RefusedSource"},
+		{true, facts.TrackerNotion, "gh", "hostops.FallbackSource hostops.RefusedSource"},
 	} {
 		name := fmt.Sprintf("driver %v, %s, cli %q", tc.driver, tc.kind, tc.cli)
 		t.Run(name, func(t *testing.T) {
 			tg := declaredTracker(t, tc.kind)
-			tg.pb = &probe.Probes{CLI: probe.Signal{Value: tc.cli, Evidence: "none"}}
+			tg.Probes = &probe.Probes{CLI: probe.Signal{Value: tc.cli, Evidence: "none"}}
 
 			if tc.driver {
-				writeDriver(t, tg.lay.StorageRoot.Path())
+				writeDriver(t, tg.Layout.StorageRoot.Path())
 			}
 
-			src := tg.tasks()
+			src := hostops.TasksFor(tg)
 			got := fmt.Sprintf("%T", src)
 
-			if f, ok := src.(fallbackSource); ok {
-				got += fmt.Sprintf(" %T", f.rest)
+			if f, ok := src.(hostops.FallbackSource); ok {
+				got += fmt.Sprintf(" %T", f.Rest)
 			}
 
 			if got != tc.want {
@@ -217,11 +220,16 @@ func TestTasksPicksTheSource(t *testing.T) {
 func TestFallbackOnlyOnUnsupported(t *testing.T) {
 	f := newFakes(t)
 	tg := declaredTracker(t, facts.TrackerGitHub)
-	writeDriver(t, tg.lay.StorageRoot.Path())
+	writeDriver(t, tg.Layout.StorageRoot.Path())
 
 	f.fail("driver list", shell.Result{Code: 1, Stderr: "tracker down"})
 
-	if _, err := taskRows(t.Context(), tg, issuePage); err == nil || !strings.Contains(err.Error(), "tracker down") {
+	if _, err := stack.TaskRows(
+		t.Context(),
+		tg,
+		hostops.IssuePage,
+	); err == nil ||
+		!strings.Contains(err.Error(), "tracker down") {
 		t.Errorf("err = %v, want the driver's failure", err)
 	}
 
@@ -232,7 +240,7 @@ func TestFallbackOnlyOnUnsupported(t *testing.T) {
 	f.fail("driver search x", shell.Result{Code: driver.ExitUnsupported})
 	f.script("gh issue list --search x --json number,title,state,url,labels,body,assignees,createdAt --limit 30", `[]`)
 
-	if _, err := searchRows(t.Context(), tg, "x"); err != nil || !f.called("gh issue list") {
+	if _, err := taskcmd.SearchRows(t.Context(), tg, "x"); err != nil || !f.called("gh issue list") {
 		t.Errorf("err = %v; want the declined search on host issues", err)
 	}
 }

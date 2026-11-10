@@ -10,18 +10,20 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/drive"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
 // undrivenTask is an undriven task with an open PR on main, its agent idle.
-func undrivenTask() watchedTask {
-	return watchedTask{
-		id: "GH-1", branch: "GH-1/x", path: "/code/repo.GH-1", localSHA: "p1",
-		pr:    &forge.PR{URL: "https://gh/pr/9", Status: forge.Open, Base: "main"},
-		agent: agentctl.StatusIdle, listed: true, ws: "ws-1",
+func undrivenTask() drive.WatchedTask {
+	return drive.WatchedTask{
+		ID: "GH-1", Branch: "GH-1/x", Path: "/code/repo.GH-1", LocalSHA: "p1",
+		Pr:    &forge.PR{URL: "https://gh/pr/9", Status: forge.Open, Base: "main"},
+		Agent: agentctl.StatusIdle, Listed: true, Ws: "ws-1",
 	}
 }
 
@@ -48,35 +50,45 @@ func scriptTarget(fx *janitorFixture) {
 
 // watchEngine is the watcher's engine with git's integration scripted: a
 // rebase onto origin/main at m2, stopped on a conflict when stopped says so.
-func watchEngine(stopped bool) *catchupEngine {
-	return &catchupEngine{
-		agentVerifies: "the watcher leaves verify to the agent",
-		integrate: func(context.Context, catchupInput, func(catchupPlan) []string) (catchupPlan, bool, error) {
-			return catchupPlan{branch: "GH-1/x", base: "origin/main", sha: "m2", method: methodRebase}, stopped, nil
+func watchEngine(stopped bool) *stack.CatchupEngine {
+	return &stack.CatchupEngine{
+		AgentVerifies: "the watcher leaves verify to the agent",
+		Integrate: func(context.Context, stack.CatchupInput, func(stack.CatchupPlan) []string) (stack.CatchupPlan, bool, error) {
+			return stack.CatchupPlan{
+				Branch: "GH-1/x",
+				Base:   "origin/main",
+				SHA:    "m2",
+				Method: stack.MethodRebase,
+			}, stopped, nil
 		},
 	}
 }
 
 // A pass under watch_catchup: on, as watchPass runs it after collecting.
-func catchupPass(t *testing.T, in watchInput, tasks []watchedTask, store map[string]watchReport) collected {
+func catchupPass(
+	t *testing.T,
+	in drive.WatchInput,
+	tasks []drive.WatchedTask,
+	store map[string]drive.WatchReport,
+) collected {
 	t.Helper()
 
 	var out collected
 
-	in.out = &out
-	if in.engine == nil {
-		in.engine = watchEngine(false)
+	in.Out = &out
+	if in.Engine == nil {
+		in.Engine = watchEngine(false)
 	}
 
-	if in.now == nil {
-		in.now = func() time.Time { return watchNow }
+	if in.Now == nil {
+		in.Now = func() time.Time { return watchNow }
 	}
 
-	if in.catchup {
-		in.readTargets(t.Context(), tasks, store)
+	if in.Catchup {
+		in.ReadTargets(t.Context(), tasks, store)
 	}
 
-	in.reconcile(t.Context(), tasks, store)
+	in.Reconcile(t.Context(), tasks, store)
 
 	return out
 }
@@ -86,20 +98,20 @@ func TestWatchCatchesUpAnOpenPR(t *testing.T) {
 
 	cases := map[string]struct {
 		key    bool
-		task   func(*watchedTask)
+		task   func(*drive.WatchedTask)
 		script func(*janitorFixture)
 		lease  bool // a drive holds the task
 		prompt bool // a catchup went out
 		kind   string
 		warned string
 	}{
-		"key off":             {task: func(*watchedTask) {}},
-		"behind, idle, clean": {key: true, prompt: true, kind: watchCatchup},
-		"agent working":       {key: true, task: func(w *watchedTask) { w.agent = agentctl.StatusWorking }},
-		"no listing":          {key: true, task: func(w *watchedTask) { w.listed = false; w.agent = "" }},
-		"waiting on an ask": {key: true, task: func(w *watchedTask) {
-			w.run = &state.Run{Ship: "blocked", Leaf: "judge", Ask: "1. Go on? [yes | no]", Updated: watchNow}
-		}, kind: watchStopped},
+		"key off":             {task: func(*drive.WatchedTask) {}},
+		"behind, idle, clean": {key: true, prompt: true, kind: drive.WatchCatchup},
+		"agent working":       {key: true, task: func(w *drive.WatchedTask) { w.Agent = agentctl.StatusWorking }},
+		"no listing":          {key: true, task: func(w *drive.WatchedTask) { w.Listed = false; w.Agent = "" }},
+		"waiting on an ask": {key: true, task: func(w *drive.WatchedTask) {
+			w.Run = &state.Run{Ship: "blocked", Leaf: "judge", Ask: "1. Go on? [yes | no]", Updated: watchNow}
+		}, kind: drive.WatchStopped},
 		"tree dirty": {key: true, script: func(fx *janitorFixture) {
 			fx.f.script("git status --porcelain", " M a.go")
 		}},
@@ -112,20 +124,36 @@ func TestWatchCatchesUpAnOpenPR(t *testing.T) {
 		// a mark a finish or a ship guard left is a catchup nobody else sends
 		"already marked": {key: true, script: func(fx *janitorFixture) {
 			fx.f.meta.Seed("GH-1/x", branchmeta.Landed, "main")
-		}, prompt: true, kind: watchCatchup},
-		"diverged from origin": {key: true, task: func(w *watchedTask) { w.localSHA = "h9" }, kind: watchBehind},
+		}, prompt: true, kind: drive.WatchCatchup},
+		"diverged from origin": {
+			key:  true,
+			task: func(w *drive.WatchedTask) { w.LocalSHA = "h9" },
+			kind: drive.WatchBehind,
+		},
 		"not on origin": {key: true, script: func(fx *janitorFixture) {
 			fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1/x", "")
 		}},
-		"no workspace": {key: true, task: func(w *watchedTask) { w.ws, w.agent = "", "" }, kind: watchBehind},
-		"retargeted":   {key: true, task: func(w *watchedTask) { w.pr.Base = "feature" }, kind: watchBehind},
-		"closed":       {key: true, task: func(w *watchedTask) { w.pr.Status = forge.Closed }, kind: watchClosed},
+		"no workspace": {
+			key:  true,
+			task: func(w *drive.WatchedTask) { w.Ws, w.Agent = "", "" },
+			kind: drive.WatchBehind,
+		},
+		"retargeted": {
+			key:  true,
+			task: func(w *drive.WatchedTask) { w.Pr.Base = "feature" },
+			kind: drive.WatchBehind,
+		},
+		"closed": {
+			key:  true,
+			task: func(w *drive.WatchedTask) { w.Pr.Status = forge.Closed },
+			kind: drive.WatchClosed,
+		},
 		"fetch fails": {key: true, script: func(fx *janitorFixture) {
 			fx.f.fail("git fetch origin", shell.Result{Code: 128, Stderr: "no route to host"})
 		}, warned: "no route to host"},
 		"lease held":  {key: true, lease: true},
-		"handed back": {key: true, task: func(w *watchedTask) { w.off = true }},
-		"owned":       {key: true, task: func(w *watchedTask) { w.owner = "drive 2" }},
+		"handed back": {key: true, task: func(w *drive.WatchedTask) { w.Off = true }},
+		"owned":       {key: true, task: func(w *drive.WatchedTask) { w.Owner = "drive 2" }},
 	}
 
 	for name, tc := range cases {
@@ -158,18 +186,18 @@ func TestWatchCatchesUpAnOpenPR(t *testing.T) {
 				warned  []string
 			)
 
-			in := watchInput{
-				main: fx.in.main, root: root, mode: "report", catchup: tc.key,
-				prompt: func(_ context.Context, _ watchedTask, text string) error {
+			in := drive.WatchInput{
+				Main: fx.in.Main, Root: root, Mode: "report", Catchup: tc.key,
+				Prompt: func(_ context.Context, _ drive.WatchedTask, text string) error {
 					prompts = append(prompts, text)
 
 					return nil
 				},
-				warn: func(line string) { warned = append(warned, line) },
+				Warn: func(line string) { warned = append(warned, line) },
 			}
 
-			store := map[string]watchReport{}
-			out := catchupPass(t, in, []watchedTask{task}, store)
+			store := map[string]drive.WatchReport{}
+			out := catchupPass(t, in, []drive.WatchedTask{task}, store)
 
 			kind := ""
 			if len(out) > 0 {
@@ -200,7 +228,8 @@ func TestWatchCatchesUpAnOpenPR(t *testing.T) {
 				t.Errorf("a record was stored: %+v", store["GH-1"].Catchup)
 			}
 
-			if !tc.key || tc.task != nil && (task.off || task.owner != "" || !task.listed || waitingOnAsk(task.run)) {
+			if !tc.key ||
+				tc.task != nil && (task.Off || task.Owner != "" || !task.Listed || drive.WaitingOnAsk(task.Run)) {
 				if fx.f.called("git fetch origin") {
 					t.Error("origin was fetched")
 				}
@@ -213,10 +242,10 @@ func TestWatchCatchesUpAnOpenPR(t *testing.T) {
 			// the same pass again tells nothing new and sends nothing twice;
 			// a sent catchup has its agent working on it
 			if tc.prompt {
-				task.agent = agentctl.StatusWorking
+				task.Agent = agentctl.StatusWorking
 			}
 
-			out = catchupPass(t, in, []watchedTask{task}, store)
+			out = catchupPass(t, in, []drive.WatchedTask{task}, store)
 			if len(out) != 0 || len(prompts) > 1 {
 				t.Errorf("a second pass reported %+v and prompted %d times", out, len(prompts))
 			}
@@ -244,16 +273,16 @@ func TestWatchCatchesUpAStackedPR(t *testing.T) {
 		}
 
 		task := undrivenTask()
-		task.pr.Base = "GH-9/y"
+		task.Pr.Base = "GH-9/y"
 
 		prompts := 0
-		in := watchInput{
-			main: fx.in.main, root: t.TempDir(), mode: "report", catchup: true,
-			prompt: func(context.Context, watchedTask, string) error { prompts++; return nil },
+		in := drive.WatchInput{
+			Main: fx.in.Main, Root: t.TempDir(), Mode: "report", Catchup: true,
+			Prompt: func(context.Context, drive.WatchedTask, string) error { prompts++; return nil },
 		}
 
-		store := map[string]watchReport{}
-		out := catchupPass(t, in, []watchedTask{task}, store)
+		store := map[string]drive.WatchReport{}
+		out := catchupPass(t, in, []drive.WatchedTask{task}, store)
 		marked := fx.f.called("set branch.GH-1/x." + string(branchmeta.Moved) + " b2")
 
 		want := map[bool]int{true: 1, false: 0}[onOrigin]
@@ -274,15 +303,15 @@ func TestWatchReportsAnAgentItCannotPrompt(t *testing.T) {
 	scriptTarget(fx)
 	fx.f.script("git reset --hard p1", "")
 
-	in := watchInput{
-		main: fx.in.main, root: t.TempDir(), mode: "report", catchup: true,
-		prompt: func(context.Context, watchedTask, string) error { return agentctl.ErrAgentNotFound },
+	in := drive.WatchInput{
+		Main: fx.in.Main, Root: t.TempDir(), Mode: "report", Catchup: true,
+		Prompt: func(context.Context, drive.WatchedTask, string) error { return agentctl.ErrAgentNotFound },
 	}
 
-	store := map[string]watchReport{}
-	out := catchupPass(t, in, []watchedTask{undrivenTask()}, store)
+	store := map[string]drive.WatchReport{}
+	out := catchupPass(t, in, []drive.WatchedTask{undrivenTask()}, store)
 
-	if len(out) != 1 || out[0].Kind != watchBehind || !strings.Contains(out[0].Text, "not found") ||
+	if len(out) != 1 || out[0].Kind != drive.WatchBehind || !strings.Contains(out[0].Text, "not found") ||
 		!fx.f.called("unset branch.GH-1/x."+string(branchmeta.Landed)) || store["GH-1"].Catchup != nil ||
 		!fx.f.called("git reset --hard p1") {
 		t.Errorf("reported %+v, unset %v, record %+v", out, fx.f.called("git config --unset"), store["GH-1"].Catchup)
@@ -297,37 +326,37 @@ func TestWatchSettlesASentCatchup(t *testing.T) {
 
 	cases := map[string]struct {
 		script func(*janitorFixture)
-		task   func(*watchedTask)
+		task   func(*drive.WatchedTask)
 		held   bool
 		push   string // the push expected, "" for none
 		kind   string
 		kept   bool // the record stays
 		failed bool // and is marked failed
 	}{
-		"ended clean, merged": {push: plain, kind: watchCatchup},
+		"ended clean, merged": {push: plain, kind: drive.WatchCatchup},
 		"ended clean, rebased": {script: func(fx *janitorFixture) {
 			fx.f.fail("git merge-base --is-ancestor p1 HEAD", shell.Result{Code: 1})
-		}, push: lease, kind: watchCatchup},
+		}, push: lease, kind: drive.WatchCatchup},
 		"head equals origin": {script: func(fx *janitorFixture) {
 			fx.f.script("git rev-parse -q --verify HEAD", "p1")
 		}},
-		"agent still working": {task: func(w *watchedTask) { w.agent = agentctl.StatusWorking }, kept: true},
+		"agent still working": {task: func(w *drive.WatchedTask) { w.Agent = agentctl.StatusWorking }, kept: true},
 		"mark still set": {script: func(fx *janitorFixture) {
 			fx.f.meta.Seed("GH-1/x", branchmeta.Landed, "main")
-		}, kind: watchCatchup, kept: true, failed: true},
+		}, kind: drive.WatchCatchup, kept: true, failed: true},
 		"rebase left open": {script: func(fx *janitorFixture) {
 			fx.f.script("git rev-parse --git-path rebase-merge", fx.f.t.TempDir())
-		}, kind: watchCatchup, kept: true, failed: true},
+		}, kind: drive.WatchCatchup, kept: true, failed: true},
 		"lease held": {held: true},
 		"push rejected": {script: func(fx *janitorFixture) {
 			fx.f.fail(plain, shell.Result{Code: 1, Stderr: "rejected"})
-		}, push: plain, kind: watchCatchup, kept: true},
+		}, push: plain, kind: drive.WatchCatchup, kept: true},
 		// a commit pushed to the request meanwhile is never overwritten
 		"origin moved meanwhile": {script: func(fx *janitorFixture) {
 			fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1/x", "p2")
 			fx.f.fail("git merge-base --is-ancestor p2 HEAD", shell.Result{Code: 1})
-		}, kind: watchCatchup, kept: true, failed: true},
-		"request closed": {task: func(w *watchedTask) { w.pr.Status = forge.Closed }, kind: watchClosed},
+		}, kind: drive.WatchCatchup, kept: true, failed: true},
+		"request closed": {task: func(w *drive.WatchedTask) { w.Pr.Status = forge.Closed }, kind: drive.WatchClosed},
 	}
 
 	for name, tc := range cases {
@@ -362,17 +391,17 @@ func TestWatchSettlesASentCatchup(t *testing.T) {
 			}
 
 			prompts := 0
-			in := watchInput{
-				main: fx.in.main, root: root, mode: "report", catchup: true,
-				prompt: func(context.Context, watchedTask, string) error { prompts++; return nil },
+			in := drive.WatchInput{
+				Main: fx.in.Main, Root: root, Mode: "report", Catchup: true,
+				Prompt: func(context.Context, drive.WatchedTask, string) error { prompts++; return nil },
 			}
 
-			store := map[string]watchReport{"GH-1": {
-				Kind: watchCatchup, Key: "catchup sent m2 h1", At: watchNow,
+			store := map[string]drive.WatchReport{"GH-1": {
+				Kind: drive.WatchCatchup, Key: "catchup sent m2 h1", At: watchNow,
 				Catchup: &drives.Catchup{Target: "m2", Head: "p1", Origin: "p1", Base: "origin/main", At: watchNow},
 			}}
 
-			out := catchupPass(t, in, []watchedTask{task}, store)
+			out := catchupPass(t, in, []drive.WatchedTask{task}, store)
 
 			kind := ""
 			if len(out) > 0 {
@@ -401,7 +430,7 @@ func TestWatchSettlesASentCatchup(t *testing.T) {
 			if tc.failed && name != "origin moved meanwhile" {
 				// the same fingerprint: nothing more; the target moved: sent
 				// again, the mark the failure kept notwithstanding
-				if out := catchupPass(t, in, []watchedTask{task}, store); len(out) != 0 || prompts != 0 {
+				if out := catchupPass(t, in, []drive.WatchedTask{task}, store); len(out) != 0 || prompts != 0 {
 					t.Errorf("a failed catchup was told again or resent: %+v, %d", out, prompts)
 				}
 
@@ -411,7 +440,7 @@ func TestWatchSettlesASentCatchup(t *testing.T) {
 				fx.f.script("git rev-parse --git-path rebase-merge", "/nonexistent/rebase-merge")
 				fx.f.script("git merge-tree --write-tree --no-messages m3 HEAD", "tree")
 
-				if out := catchupPass(t, in, []watchedTask{task}, store); len(out) != 1 || prompts != 1 {
+				if out := catchupPass(t, in, []drive.WatchedTask{task}, store); len(out) != 1 || prompts != 1 {
 					t.Errorf("a moved target did not send a new catchup: %+v, %d", out, prompts)
 				}
 			}
@@ -423,12 +452,12 @@ func TestWatchStoreKeepsTheCatchupRecord(t *testing.T) {
 	root := t.TempDir()
 	rec := &drives.Catchup{Target: "m2", Head: "h1", Origin: "p1", Base: "origin/main", At: watchNow, Failed: true}
 
-	want := map[string]watchReport{"FT-1": {Kind: watchCatchup, Key: "k", At: watchNow, Catchup: rec}}
-	if err := saveWatchStore(root, want); err != nil {
+	want := map[string]drive.WatchReport{"FT-1": {Kind: drive.WatchCatchup, Key: "k", At: watchNow, Catchup: rec}}
+	if err := drive.SaveWatchStore(root, want); err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := loadWatchStore(root)
+	got, err := drive.LoadWatchStore(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -441,10 +470,10 @@ func TestWatchStoreKeepsTheCatchupRecord(t *testing.T) {
 	// a newer report keeps the record
 	var out collected
 
-	in := watchInput{mode: "report", now: func() time.Time { return watchNow }, out: &out}
-	in.tell(got, "FT-1", watchNow, &watchReport{Kind: watchStopped, Key: "s"})
+	in := drive.WatchInput{Mode: "report", Now: func() time.Time { return watchNow }, Out: &out}
+	in.Tell(got, "FT-1", watchNow, &drive.WatchReport{Kind: drive.WatchStopped, Key: "s"})
 
-	if got["FT-1"].Catchup == nil || got["FT-1"].Kind != watchStopped {
+	if got["FT-1"].Catchup == nil || got["FT-1"].Kind != drive.WatchStopped {
 		t.Errorf("after a newer report: %+v", got["FT-1"])
 	}
 }
@@ -458,17 +487,17 @@ func TestWatchHandsAConflictToTheAgent(t *testing.T) {
 
 	var prompts []string
 
-	in := watchInput{
-		main: fx.in.main, root: t.TempDir(), mode: "report", catchup: true, engine: watchEngine(true),
-		prompt: func(_ context.Context, _ watchedTask, text string) error {
+	in := drive.WatchInput{
+		Main: fx.in.Main, Root: t.TempDir(), Mode: "report", Catchup: true, Engine: watchEngine(true),
+		Prompt: func(_ context.Context, _ drive.WatchedTask, text string) error {
 			prompts = append(prompts, text)
 
 			return nil
 		},
 	}
 
-	store := map[string]watchReport{}
-	catchupPass(t, in, []watchedTask{undrivenTask()}, store)
+	store := map[string]drive.WatchReport{}
+	catchupPass(t, in, []drive.WatchedTask{undrivenTask()}, store)
 
 	if len(prompts) != 1 || !strings.Contains(prompts[0], "the watcher rebased GH-1/x onto origin/main") ||
 		!strings.Contains(prompts[0], "git stopped on conflicts in a.go") ||
@@ -486,11 +515,11 @@ func TestWatchStoreReadsAnOlderCatchupRecord(t *testing.T) {
 		"  catchup:\n    target: m2\n    head: h1\n    origin: p1\n    base: origin/main\n" +
 		"    at: 2026-10-28T12:00:00Z\n"
 
-	if err := os.WriteFile(filepath.Join(root, watchFile), []byte(old), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, drive.WatchFile), []byte(old), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := loadWatchStore(root)
+	got, err := drive.LoadWatchStore(root)
 	if err != nil {
 		t.Fatal(err)
 	}

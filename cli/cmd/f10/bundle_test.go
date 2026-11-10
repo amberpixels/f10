@@ -10,9 +10,17 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	ledgercmd "github.com/amberpixels/f10/cli/internal/command/ledger"
+	"github.com/amberpixels/f10/cli/internal/drive"
+	"github.com/amberpixels/f10/cli/internal/driverec"
+	"github.com/amberpixels/f10/cli/internal/finish"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/start"
 )
 
 var bundle12 = ref.Ref{ID: "GH-1", Number: "1", Origin: ref.OriginExplicit, Bundle: []string{"GH-1", "GH-2"}}
@@ -20,7 +28,7 @@ var bundle12 = ref.Ref{ID: "GH-1", Number: "1", Origin: ref.OriginExplicit, Bund
 var refsRider = riderKey("refs/heads/", "GH-2")
 
 func riderKey(root, id string) string {
-	patterns := append(taskRefs(root, id), riderRefs(root, id)...)
+	patterns := append(stack.TaskRefs(root, id), stack.RiderRefs(root, id)...)
 
 	return "git for-each-ref --format=%(refname) " + strings.Join(patterns, " ")
 }
@@ -52,8 +60,13 @@ func TestStartABundle(t *testing.T) {
 
 	var out bytes.Buffer
 
-	in := startInput{main: "/code/repo", storage: testStorage, task: bundle12, title: titled("Add dark mode", nil)}
-	if err := start(t.Context(), &out, in); err != nil {
+	in := start.StartInput{
+		Main:    "/code/repo",
+		Storage: testStorage,
+		Task:    bundle12,
+		Title:   titled("Add dark mode", nil),
+	}
+	if err := start.Start(t.Context(), &out, in); err != nil {
 		t.Fatal(err)
 	}
 
@@ -72,7 +85,7 @@ func TestSettleBundle(t *testing.T) {
 		f := newFakes(t)
 		f.script(refsRider, heads("GH-2/own"))
 
-		_, err := settleBundle(t.Context(), "/code/repo", bundle12, "")
+		_, err := start.SettleBundle(t.Context(), "/code/repo", bundle12, "")
 		if err == nil || !strings.Contains(err.Error(), "GH-2 is already on branch GH-2/own") {
 			t.Errorf("err = %v, want the rider's branch named", err)
 		}
@@ -83,7 +96,7 @@ func TestSettleBundle(t *testing.T) {
 		f.meta.Seed("GH-3+GH-2/x", branchmeta.Riders, "GH-2")
 		f.script(refsRider, "")
 
-		_, err := settleBundle(t.Context(), "/code/repo", bundle12, "")
+		_, err := start.SettleBundle(t.Context(), "/code/repo", bundle12, "")
 		if err == nil || !strings.Contains(err.Error(), "GH-3+GH-2/x") {
 			t.Errorf("err = %v, want the other bundle's branch named", err)
 		}
@@ -96,7 +109,7 @@ func TestSettleBundle(t *testing.T) {
 		f.script(refsRider, "")
 		f.script(riderKey("refs/remotes/origin/", "GH-2"), "refs/remotes/origin/GH-5+GH-2/x\n")
 
-		_, err := settleBundle(t.Context(), "/code/repo", bundle12, "")
+		_, err := start.SettleBundle(t.Context(), "/code/repo", bundle12, "")
 		if err == nil || !strings.Contains(err.Error(), "GH-2 is already on branch GH-5+GH-2/x") {
 			t.Errorf("err = %v, want the remote bundle named", err)
 		}
@@ -107,7 +120,7 @@ func TestSettleBundle(t *testing.T) {
 		f.meta.Seed("GH-1+GH-3/x", branchmeta.Riders, "GH-3")
 		f.meta.Seed("GH-1+GH-3/x", branchmeta.Task, "GH-1")
 
-		_, err := settleBundle(t.Context(), "/code/repo", bundle12, "GH-1+GH-3/x")
+		_, err := start.SettleBundle(t.Context(), "/code/repo", bundle12, "GH-1+GH-3/x")
 		if err == nil || !strings.Contains(err.Error(), "ships GH-1+GH-3; riders are fixed at start") {
 			t.Errorf("err = %v, want the recorded bundle named", err)
 		}
@@ -116,7 +129,7 @@ func TestSettleBundle(t *testing.T) {
 	t.Run("the task rides in another bundle", func(t *testing.T) {
 		newFakes(t)
 
-		_, err := settleBundle(t.Context(), "/code/repo", bundle12, "GH-5+GH-1/x")
+		_, err := start.SettleBundle(t.Context(), "/code/repo", bundle12, "GH-5+GH-1/x")
 		if err == nil || !strings.Contains(err.Error(), "GH-1 is already on branch GH-5+GH-1/x, led by GH-5") {
 			t.Errorf("err = %v, want the branch's own lead named", err)
 		}
@@ -130,7 +143,7 @@ func TestSettleBundle(t *testing.T) {
 		f.meta.Seed("GH-1+GH-2/x", branchmeta.Riders, "GH-2")
 		f.script(refsRider, "")
 
-		if _, err := settleBundle(t.Context(), "/code/repo", bundle12, "GH-1+GH-2/x"); err != nil {
+		if _, err := start.SettleBundle(t.Context(), "/code/repo", bundle12, "GH-1+GH-2/x"); err != nil {
 			t.Errorf("err = %v reopening the bundle's own branch", err)
 		}
 	})
@@ -139,7 +152,7 @@ func TestSettleBundle(t *testing.T) {
 		f := newFakes(t)
 		f.script(refsRider, "")
 
-		got, err := settleBundle(t.Context(), "/code/repo", gh1, "GH-1+GH-2/x")
+		got, err := start.SettleBundle(t.Context(), "/code/repo", gh1, "GH-1+GH-2/x")
 		if err != nil || got.Label() != "GH-1+GH-2" {
 			t.Errorf("settleBundle = %s, %v; want the bundle GH-1+GH-2", got.Label(), err)
 		}
@@ -148,7 +161,7 @@ func TestSettleBundle(t *testing.T) {
 	t.Run("a task alone is never refused", func(t *testing.T) {
 		newFakes(t)
 
-		if got, err := settleBundle(t.Context(), "/code/repo", gh1, ""); err != nil || got.Bundle != nil {
+		if got, err := start.SettleBundle(t.Context(), "/code/repo", gh1, ""); err != nil || got.Bundle != nil {
 			t.Errorf("settleBundle = %+v, %v for a single task", got, err)
 		}
 	})
@@ -161,12 +174,12 @@ func TestLinkedFindsAnyMember(t *testing.T) {
 	f.meta.Seed("GH-1+GH-2/x", branchmeta.Riders, "GH-2 GH-3")
 
 	for _, id := range []string{"GH-1", "GH-3", "gh-2"} {
-		if got := indexOf(t).linked(id); strings.Join(got, ",") != "GH-1+GH-2/x" {
+		if got := indexOf(t).Linked(id); strings.Join(got, ",") != "GH-1+GH-2/x" {
 			t.Errorf("linked(%s) = %v, want [GH-1+GH-2/x]", id, got)
 		}
 	}
 
-	if got := indexOf(t).linked("GH-4"); got != nil {
+	if got := indexOf(t).Linked("GH-4"); got != nil {
 		t.Errorf("linked(GH-4) = %v, want none", got)
 	}
 }
@@ -176,17 +189,17 @@ func TestStartRefusesABundleWithAParent(t *testing.T) {
 	f := newFakes(t)
 	f.script(refsLocal, "")
 
-	kids := func(_ context.Context, r ref.Ref) ([]childRow, error) {
+	kids := func(_ context.Context, r ref.Ref) ([]stack.ChildRow, error) {
 		if r.ID == "GH-2" {
-			return []childRow{{ID: "GH-5"}}, nil
+			return []stack.ChildRow{{ID: "GH-5"}}, nil
 		}
 
 		return nil, nil
 	}
 
-	err := refuseStartParent(
+	err := start.RefuseStartParent(
 		t.Context(),
-		startInput{main: "/code/repo", storage: testStorage, task: bundle12, children: kids},
+		start.StartInput{Main: "/code/repo", Storage: testStorage, Task: bundle12, Children: kids},
 	)
 	if err == nil || !strings.Contains(err.Error(), "GH-2 is a parent of GH-5") {
 		t.Errorf("err = %v, want GH-2 named as the parent", err)
@@ -196,67 +209,67 @@ func TestStartRefusesABundleWithAParent(t *testing.T) {
 func TestBundleAfter(t *testing.T) {
 	bodies := map[string]string{}
 
-	trimmed := tracker{
-		resolve: func(_ context.Context, token string) (ref.Ref, error) {
+	trimmed := stack.Tracker{
+		Resolve: func(_ context.Context, token string) (ref.Ref, error) {
 			return ref.Ref{ID: strings.ToUpper(token)}, nil
 		},
-		info: func(_ context.Context, r ref.Ref) (taskInfo, error) {
+		Info: func(_ context.Context, r ref.Ref) (hostops.TaskInfo, error) {
 			body, ok := bodies[r.ID]
 			if !ok {
-				return taskInfo{}, errors.New("no such task")
+				return hostops.TaskInfo{}, errors.New("no such task")
 			}
 
-			return taskInfo{body: body}, nil
+			return hostops.TaskInfo{Body: body}, nil
 		},
 	}
 
 	bodies["GH-2"] = "After: GH-7"
 
-	line, err := bundleAfter(t.Context(), trimmed, bundle12, "After: GH-2")
+	line, err := stack.BundleAfter(t.Context(), trimmed, bundle12, "After: GH-2")
 	if err != nil || line != "GH-7" {
 		t.Errorf("bundleAfter = %q, %v; want the rider's outside base GH-7", line, err)
 	}
 
 	bodies["GH-2"] = "After: GH-8"
 
-	if _, err := bundleAfter(t.Context(), trimmed, bundle12, "After: GH-7"); err == nil ||
+	if _, err := stack.BundleAfter(t.Context(), trimmed, bundle12, "After: GH-7"); err == nil ||
 		!strings.Contains(err.Error(), "two bases") {
 		t.Errorf("err = %v, want two bases refused", err)
 	}
 
-	if line, err := bundleAfter(t.Context(), trimmed, gh1, "After: GH-7"); err != nil || line != "GH-7" {
+	if line, err := stack.BundleAfter(t.Context(), trimmed, gh1, "After: GH-7"); err != nil || line != "GH-7" {
 		t.Errorf("a single task's line = %q, %v; want its own body's", line, err)
 	}
 }
 
 func TestDriveParsesABundle(t *testing.T) {
-	a, err := parseDriveArgs(strings.Fields("GH-1+GH-2:opus GH-3"))
+	a, err := driverec.ParseDriveArgs(strings.Fields("GH-1+GH-2:opus GH-3"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if strings.Join(a.tasks, " ") != "GH-1+GH-2 GH-3" || a.profiles[0] != "opus" {
-		t.Errorf("tasks %v profiles %v, want the bundle whole with its profile", a.tasks, a.profiles)
+	if strings.Join(a.Tasks, " ") != "GH-1+GH-2 GH-3" || a.Profiles[0] != "opus" {
+		t.Errorf("tasks %v profiles %v, want the bundle whole with its profile", a.Tasks, a.Profiles)
 	}
 
-	in := &driveInput{
-		args: driveArgs{tasks: []string{"GH-1+GH-2", "GH-5"}, span: true},
+	in := &drive.DriveInput{
+		Args: driverec.DriveArgs{Tasks: []string{"GH-1+GH-2", "GH-5"}, Span: true},
 	}
-	if _, _, err := in.span(t.Context()); err == nil {
+	if _, _, err := in.Span(t.Context()); err == nil {
 		t.Error("a bundle as a range end was taken")
 	}
 }
 
 // A task after a rider waits for the bundle the rider ships in.
 func TestDriveIndexesEveryMember(t *testing.T) {
-	tasks := []driveTask{{ref: bundle12}, {ref: ref.Ref{ID: "GH-3"}, base: "GH-2"}}
+	tasks := []drive.DriveTask{{Ref: bundle12}, {Ref: ref.Ref{ID: "GH-3"}, Base: "GH-2"}}
 
-	index := listIndex(tasks)
+	index := drive.ListIndex(tasks)
 	if index["GH-2"] != 0 || index["GH-1"] != 0 || index["GH-3"] != 1 {
 		t.Errorf("index = %v, want both members at the bundle's place", index)
 	}
 
-	order, err := topoOrder(tasks, index)
+	order, err := drive.TopoOrder(tasks, index)
 	if err != nil || len(order) != 2 || order[0] != 0 {
 		t.Errorf("order = %v, %v; want the bundle first", order, err)
 	}
@@ -269,7 +282,7 @@ func TestSkillPromptForABundle(t *testing.T) {
 		"review": "/f10:review GH-1 --driven",
 		"finish": "/f10:finish GH-1 --driven",
 	} {
-		if got := skillPrompt(skill, "GH-1+GH-2", nil, shipFlow{}, false); got != want {
+		if got := drive.SkillPrompt(skill, "GH-1+GH-2", nil, runplan.ShipFlow{}, false); got != want {
 			t.Errorf("skillPrompt(%s) = %q, want %q", skill, got, want)
 		}
 	}
@@ -279,11 +292,11 @@ func TestSkillPromptForABundle(t *testing.T) {
 func TestFinishAsksWhichRidersClose(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.openPR()
-	fx.in.task = bundle12
+	fx.in.Task = bundle12
 
 	_, err := fx.run(t)
 
-	var re ridersError
+	var re finish.RidersError
 	if !errors.As(err, &re) || !strings.Contains(err.Error(), "riders GH-2") {
 		t.Fatalf("err = %v, want the riders asked", err)
 	}
@@ -307,7 +320,7 @@ func TestFinishKeepsARiderOpen(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			fx := newFinishFixture(t)
 			fx.openPR()
-			fx.in.task, fx.in.close, fx.in.hostCloses = bundle12, tc.close, true
+			fx.in.Task, fx.in.Close, fx.in.HostCloses = bundle12, tc.close, true
 			fx.f.script("gh pr view GH-1 --json body", `{"body":"Closes #1\nCloses #2"}`)
 			fx.f.absent = append(fx.f.absent, "gh pr edit GH-1 --body-file ")
 
@@ -338,7 +351,7 @@ func TestFinishReopensAKeptRiderAfterTheMerge(t *testing.T) {
 	fx.f.script(ghView, prMerged)
 	fx.f.script(lsRem, "")
 	fx.f.script("gh issue reopen 2", "")
-	fx.in.task, fx.in.close, fx.in.hostCloses = bundle12, []string{}, true
+	fx.in.Task, fx.in.Close, fx.in.HostCloses = bundle12, []string{}, true
 
 	out, err := fx.run(t)
 	if err != nil {
@@ -354,7 +367,7 @@ func TestKeepOpen(t *testing.T) {
 	body := "Closes #12\nfixes: #12\nResolved https://github.com/a/b/issues/12\nCloses #123\nSee #12\nCloses #3"
 	want := "Part of #12\nPart of #12\nPart of https://github.com/a/b/issues/12\nCloses #123\nSee #12\nCloses #3"
 
-	if got := keepOpen(body, "12"); got != want {
+	if got := finish.KeepOpen(body, "12"); got != want {
 		t.Errorf("keepOpen =\n%s\nwant\n%s", got, want)
 	}
 }
@@ -366,13 +379,13 @@ func TestCloseChoice(t *testing.T) {
 	}
 
 	for value, want := range map[string]string{"all": "GH-2 GH-3", "none": "", "3": "GH-3", "gh-2, 3": "GH-2 GH-3"} {
-		got, err := closeChoice(task, value, resolve)
+		got, err := finish.CloseChoice(task, value, resolve)
 		if err != nil || strings.Join(got, " ") != want || got == nil {
 			t.Errorf("closeChoice(%q) = %v, %v; want [%s]", value, got, err, want)
 		}
 	}
 
-	if _, err := closeChoice(task, "GH-1", resolve); err == nil {
+	if _, err := finish.CloseChoice(task, "GH-1", resolve); err == nil {
 		t.Error("the lead was taken as a rider")
 	}
 }
@@ -387,11 +400,11 @@ func TestLedgerMatchesABundleMember(t *testing.T) {
 		}
 	}
 
-	if got := eventTask(e); got != "GH-1+GH-2" {
+	if got := ledgercmd.EventTask(e); got != "GH-1+GH-2" {
 		t.Errorf("eventTask = %q, want the bundle", got)
 	}
 
-	if got := eventTask(ledger.Event{Task: "GH-1", Branch: "GH-1/slug"}); got != "GH-1" {
+	if got := ledgercmd.EventTask(ledger.Event{Task: "GH-1", Branch: "GH-1/slug"}); got != "GH-1" {
 		t.Errorf("eventTask on a single branch = %q, want GH-1", got)
 	}
 }
@@ -403,10 +416,10 @@ func TestFinishWithATrackerDriverClosesNothing(t *testing.T) {
 	for _, withDriver := range []bool{true, false} {
 		fx := newFinishFixture(t)
 		fx.openPR()
-		fx.in.task, fx.in.close = bundle12, []string{"GH-2"}
+		fx.in.Task, fx.in.Close = bundle12, []string{"GH-2"}
 
 		if withDriver {
-			fx.in.driver = fakeDriver(t)
+			fx.in.Driver = fakeDriver(t)
 			fx.f.fail("driver branch 1", shell.Result{Code: 3})
 		}
 
@@ -427,12 +440,12 @@ func TestFinishWithATrackerDriverClosesNothing(t *testing.T) {
 
 // A rerun after a failed merge closes a rider an earlier run kept open.
 func TestCloseAgain(t *testing.T) {
-	body := keepOpen("Closes #1\nCloses #2", "2")
-	if got := closeAgain(body, "2"); got != "Closes #1\nCloses #2" {
+	body := finish.KeepOpen("Closes #1\nCloses #2", "2")
+	if got := finish.CloseAgain(body, "2"); got != "Closes #1\nCloses #2" {
 		t.Errorf("closeAgain = %q, want the keyword back", got)
 	}
 
-	if got := closeAgain("Part of #22", "2"); got != "Part of #22" {
+	if got := finish.CloseAgain("Part of #22", "2"); got != "Part of #22" {
 		t.Errorf("closeAgain touched another issue: %q", got)
 	}
 }

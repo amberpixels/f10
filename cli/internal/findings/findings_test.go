@@ -44,6 +44,8 @@ category: tests and docs
 `
 
 func TestParse(t *testing.T) {
+	t.Parallel()
+
 	f, err := Parse(roundTwo)
 	if err != nil {
 		t.Fatal(err)
@@ -90,6 +92,8 @@ func TestParse(t *testing.T) {
 // A file both halves wrote tags each block with its source; an untagged
 // block in it is the local reviewer's.
 func TestParseBothHalves(t *testing.T) {
+	t.Parallel()
+
 	f, err := Parse("task: GH-13\nround: 1\nreviewer: local, claude[bot]\nreview: https://x/1\nverdict: findings\n\n" +
 		"## Findings\n\n### 1.1 Local one\nwhere: a.go:1\ncategory: tests and docs\nsource: local\n\n" +
 		"### 1.2 Remote one\nwhere: b.go:2\ncategory: tests and docs\nsource: Remote\n\n" +
@@ -119,6 +123,8 @@ func TestParseBothHalves(t *testing.T) {
 }
 
 func TestParseWithoutHeader(t *testing.T) {
+	t.Parallel()
+
 	if _, err := Parse("# findings\n"); !errors.Is(err, ErrNoHeader) {
 		t.Errorf("err = %v", err)
 	}
@@ -126,6 +132,8 @@ func TestParseWithoutHeader(t *testing.T) {
 
 // pr: names the PR a round reviewed; a file older than the line has none.
 func TestParsePR(t *testing.T) {
+	t.Parallel()
+
 	for text, want := range map[string]string{
 		"task: GH-13\nround: 1\npr: #204\n": "#204",
 		"task: GH-13\nround: 1\npr: none\n": "none",

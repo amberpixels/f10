@@ -8,11 +8,16 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/amberpixels/f10/cli/internal/asknotify"
 	"github.com/amberpixels/f10/cli/internal/asks"
+	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
 	"github.com/amberpixels/f10/cli/internal/daemon"
+	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/ledger"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/target"
 )
 
 // testRoot holds every user-level dir for the run, so a test that sets
@@ -28,7 +33,7 @@ var testStorage storage.Root
 // otherwise leak into the tests. The dir overrides among it are cleared, not
 // pinned, so they follow HOME and a test that moves HOME moves them too.
 var cleared = []string{
-	"XDG_CONFIG_HOME", "F10_STATE_DIR", userDirEnv, "CLAUDE_CONFIG_DIR", "GH_CONFIG_DIR", "GLAB_CONFIG_DIR",
+	"XDG_CONFIG_HOME", "F10_STATE_DIR", configcmd.UserDirEnv, "CLAUDE_CONFIG_DIR", "GH_CONFIG_DIR", "GLAB_CONFIG_DIR",
 	daemon.NumberFileEnv, "F10_AGENT_MODEL", "F10_AGENT_VIA", "F10_AGENT_SESSION",
 	"F10_SESSION_ID", "CLAUDE_CODE_SESSION_ID", "CLAUDECODE",
 	"HERDR_ENV", "HERDR_WORKSPACE_ID",
@@ -75,10 +80,10 @@ func TestMain(m *testing.M) {
 		_ = os.Setenv(name, value)
 	}
 
-	askNotifier = nil
+	asknotify.AskNotifier = nil
 
 	// a start or a drive run here hands nothing to a real daemon
-	watchProject = func(context.Context, io.Writer, *target) {}
+	driverec.WatchProject = func(context.Context, io.Writer, *target.Target) {}
 
 	code := m.Run()
 
@@ -107,7 +112,7 @@ func TestUserDirsStayInTheTestRoot(t *testing.T) {
 		"asks dir":        asks.Dir(),
 		"ledger":          ledger.Path(),
 		"user f10 dir":    userDir,
-		"claude settings": claudeSettingsPath(),
+		"claude settings": runplan.ClaudeSettingsPath(),
 	} {
 		if !strings.HasPrefix(path, testRoot+string(filepath.Separator)) {
 			t.Errorf("%s = %q, outside the test root %q", name, path, testRoot)

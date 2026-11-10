@@ -61,10 +61,9 @@ func IsCode(err error, code string) bool {
 	return errors.As(err, &he) && he.Code == code
 }
 
-// ErrNotInside is the one refusal: start, forward, drive and finish run
-// inside a Herdr session and nowhere else, with no fallback by design.
-var ErrNotInside = errors.New("f10 start, forward, drive and finish run inside a Herdr session: " +
-	"open a pane there, or install it from https://herdr.dev")
+// ErrNotInside is the one refusal: this process is not in a Herdr session,
+// or cannot run the herdr CLI. Callers word it for their own users.
+var ErrNotInside = errors.New("not inside a Herdr session")
 
 // Available reports whether this process can reach Herdr: the session
 // marks itself in the environment, and the CLI has to be on PATH.

@@ -6,6 +6,8 @@ import (
 )
 
 func TestCut(t *testing.T) {
+	t.Parallel()
+
 	for _, c := range []struct {
 		in   string
 		n    int
@@ -23,12 +25,16 @@ func TestCut(t *testing.T) {
 }
 
 func TestOrDash(t *testing.T) {
+	t.Parallel()
+
 	if OrDash("") != "-" || OrDash("x") != "x" {
 		t.Errorf("OrDash: %q %q", OrDash(""), OrDash("x"))
 	}
 }
 
 func TestAge(t *testing.T) {
+	t.Parallel()
+
 	now := time.Date(2026, 11, 9, 12, 0, 0, 0, time.UTC)
 
 	for _, c := range []struct {

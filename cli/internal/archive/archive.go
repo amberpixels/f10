@@ -1,0 +1,48 @@
+// Package archive keeps what a finished task leaves behind: archived plans and
+// findings, the review and verdict series, and the handoff file.
+package archive
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/amberpixels/f10/cli/internal/fsx"
+	"github.com/amberpixels/f10/cli/internal/storage"
+)
+
+// ArchiveReviews moves a findings directory to reviews/archive/<id>.<N>/,
+// so the task's next PR starts its own series of rounds. N always counts
+// from 1, since a bare <id>/ under archive would read as a live directory.
+func ArchiveReviews(dir string, end SeriesEnd) (string, error) {
+	if !fsx.Exists(dir) {
+		return "", nil
+	}
+
+	archived := storage.ArchiveOf(filepath.Dir(dir))
+	if err := os.MkdirAll(archived, 0o750); err != nil {
+		return "", fmt.Errorf("archiving the findings at %s: %w", dir, err)
+	}
+
+	target := NextSeries(archived, filepath.Base(dir))
+	if err := os.Rename(dir, target); err != nil {
+		return "", fmt.Errorf("archiving the findings at %s: %w", dir, err)
+	}
+
+	return target, end.Write(target)
+}
+
+// FreeArchiveName numbers `<id>.<N>.md` the way steps/plan.md does.
+func FreeArchiveName(dir, id string) string {
+	candidate := filepath.Join(dir, id+".md")
+	if !fsx.Exists(candidate) {
+		return candidate
+	}
+
+	for n := 1; ; n++ {
+		candidate = filepath.Join(dir, fmt.Sprintf("%s.%d.md", id, n))
+		if !fsx.Exists(candidate) {
+			return candidate
+		}
+	}
+}

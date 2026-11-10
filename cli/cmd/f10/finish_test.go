@@ -13,18 +13,25 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/herdr"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/seam"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -35,7 +42,7 @@ type finishFixture struct {
 	f    *fakes
 	main string
 	wt   string
-	in   finishInput
+	in   finish.FinishInput
 }
 
 const (
@@ -76,12 +83,12 @@ func newFinishFixture(t *testing.T) *finishFixture {
 		}
 	}
 
-	fx.in = finishInput{
-		main:    fx.main,
-		storage: storage.InRepo(fx.main),
-		task:    gh1,
-		host:    newHost("gh", fx.main),
-		cwd:     fx.main,
+	fx.in = finish.FinishInput{
+		Main:    fx.main,
+		Storage: storage.InRepo(fx.main),
+		Task:    gh1,
+		Host:    hostops.NewHost("gh", fx.main),
+		Cwd:     fx.main,
 	}
 
 	f := fx.f
@@ -120,7 +127,7 @@ func (fx *finishFixture) workspaces(open bool) string {
 func (fx *finishFixture) plan(t *testing.T, body string) string {
 	t.Helper()
 
-	p := fx.in.storage.Plan("GH-1")
+	p := fx.in.Storage.Plan("GH-1")
 	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +150,7 @@ func (fx *finishFixture) run(t *testing.T) (string, error) {
 
 	var out bytes.Buffer
 
-	err := finish(t.Context(), &out, fx.in)
+	err := finish.Finish(t.Context(), &out, fx.in)
 
 	return out.String(), err
 }
@@ -153,8 +160,8 @@ func (fx *finishFixture) run(t *testing.T) (string, error) {
 // state block says finish before the merge and never reaches the commit.
 func TestFinishSquashBodyKeepsTheTask(t *testing.T) {
 	fx := newFinishFixture(t)
-	fx.in.traces = true
-	fx.in.method = "squash"
+	fx.in.Traces = true
+	fx.in.Method = "squash"
 	fx.plan(t, "# plan")
 
 	open := `{"state":"OPEN","url":"https://gh/pr/9","number":9,"baseRefName":"main","body":"stale"}`
@@ -188,7 +195,7 @@ func captureBodyEdits(t *testing.T) *string {
 	var last string
 
 	prev := shell.Capture
-	shell.Capture = func(ctx context.Context, dir, name string, args ...string) (shell.Result, error) {
+	seam.Swap(t, &shell.Capture, func(ctx context.Context, dir, name string, args ...string) (shell.Result, error) {
 		if name == "gh" && len(args) > 2 && args[0] == "pr" && args[1] == "edit" {
 			data, err := os.ReadFile(args[len(args)-1])
 			if err != nil {
@@ -199,9 +206,7 @@ func captureBodyEdits(t *testing.T) *string {
 		}
 
 		return prev(ctx, dir, name, args...)
-	}
-
-	t.Cleanup(func() { shell.Capture = prev })
+	})
 
 	return &last
 }
@@ -210,8 +215,8 @@ func captureBodyEdits(t *testing.T) *string {
 // the merge still runs, with the description finish read first.
 func TestFinishStateBlockFailureIsANote(t *testing.T) {
 	fx := newFinishFixture(t)
-	fx.in.traces = true
-	fx.in.method = "squash"
+	fx.in.Traces = true
+	fx.in.Method = "squash"
 	fx.plan(t, "# plan")
 
 	open := `{"state":"OPEN","url":"https://gh/pr/9","number":9,"baseRefName":"main","body":"Adds the thing.\n"}`
@@ -235,9 +240,9 @@ func TestFinishStateBlockFailureIsANote(t *testing.T) {
 func TestFinishStateBlockFailureStopsABundle(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.openPR()
-	fx.in.traces = true
-	fx.in.method = "squash"
-	fx.in.task, fx.in.close, fx.in.hostCloses = bundle12, []string{}, true
+	fx.in.Traces = true
+	fx.in.Method = "squash"
+	fx.in.Task, fx.in.Close, fx.in.HostCloses = bundle12, []string{}, true
 	fx.f.answers["gh pr view GH-1 --json body"] = []shell.Result{
 		{Stdout: `{"body":"Closes #1\nCloses #2"}`},
 		{Code: 1, Stderr: "rate limited"},
@@ -255,32 +260,44 @@ func TestFinishStateBlockFailureStopsABundle(t *testing.T) {
 }
 
 func TestMergeBody(t *testing.T) {
-	bundle := finishInput{traces: true, task: ref.Ref{ID: "GH-1", Bundle: []string{"GH-1", "GH-2"}}}
+	bundle := finish.FinishInput{Traces: true, Task: ref.Ref{ID: "GH-1", Bundle: []string{"GH-1", "GH-2"}}}
 	described := "  Adds the thing.\n"
 
 	cases := []struct {
 		name        string
-		in          finishInput
+		in          finish.FinishInput
 		description string
 		method      string
 		want        string
 	}{
-		{"off", finishInput{task: gh1}, described, "--squash", ""},
-		{"rebase", finishInput{traces: true, task: gh1}, described, "--rebase", ""},
-		{"glab plain merge", finishInput{traces: true, task: gh1}, described, "", ""},
-		{"squash", finishInput{traces: true, task: gh1}, described, "--squash", "Adds the thing.\n\nTask: GH-1\n"},
-		{"merge commit", finishInput{traces: true, task: gh1}, described, "--merge", "Adds the thing.\n\nTask: GH-1\n"},
-		{"empty description", finishInput{traces: true, task: gh1}, "", "--squash", "Task: GH-1\n"},
+		{"off", finish.FinishInput{Task: gh1}, described, "--squash", ""},
+		{"rebase", finish.FinishInput{Traces: true, Task: gh1}, described, "--rebase", ""},
+		{"glab plain merge", finish.FinishInput{Traces: true, Task: gh1}, described, "", ""},
+		{
+			"squash",
+			finish.FinishInput{Traces: true, Task: gh1},
+			described,
+			"--squash",
+			"Adds the thing.\n\nTask: GH-1\n",
+		},
+		{
+			"merge commit",
+			finish.FinishInput{Traces: true, Task: gh1},
+			described,
+			"--merge",
+			"Adds the thing.\n\nTask: GH-1\n",
+		},
+		{"empty description", finish.FinishInput{Traces: true, Task: gh1}, "", "--squash", "Task: GH-1\n"},
 		{
 			"state block stripped",
-			finishInput{traces: true, task: gh1},
+			finish.FinishInput{Traces: true, Task: gh1},
 			"## Summary\n\n<!-- state {\"v\":1,\"step\":\"finish\"} -->\n\nAdds the thing.\n", "--squash",
 			"## Summary\n\nAdds the thing.\n\nTask: GH-1\n",
 		},
 		{"bundle", bundle, "", "--squash", "Task: GH-1\nTask: GH-2\n"},
 		{
 			"a follow-up series",
-			finishInput{traces: true, task: gh1, change: "GH-1.2"},
+			finish.FinishInput{Traces: true, Task: gh1, Change: "GH-1.2"},
 			"",
 			"--squash",
 			"Task: GH-1\nChange: GH-1.2\n",
@@ -288,7 +305,7 @@ func TestMergeBody(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		if got := mergeBody(c.in, c.description, c.method); got != c.want {
+		if got := finish.MergeBody(c.in, c.description, c.method); got != c.want {
 			t.Errorf("%s: %q, want %q", c.name, got, c.want)
 		}
 	}
@@ -300,9 +317,9 @@ func TestMergeBody(t *testing.T) {
 func TestFinishSquashBodyFollowsTheKeptRider(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.openPR()
-	fx.in.traces = true
-	fx.in.method = "squash"
-	fx.in.task, fx.in.close, fx.in.hostCloses = bundle12, []string{}, true
+	fx.in.Traces = true
+	fx.in.Method = "squash"
+	fx.in.Task, fx.in.Close, fx.in.HostCloses = bundle12, []string{}, true
 	fx.f.script("gh pr view GH-1 --json body", `{"body":"Closes #1\nCloses #2"}`, `{"body":"Closes #1\nPart of #2"}`)
 	fx.f.absent = append(fx.f.absent, "gh pr edit GH-1 --body-file ")
 
@@ -321,7 +338,7 @@ func TestFinishSquashBodyFollowsTheKeptRider(t *testing.T) {
 // glab takes the whole message, so the title goes on top of the body.
 func TestMergePullGlabSquashMessage(t *testing.T) {
 	f := newFakes(t)
-	h := newHost("glab", t.TempDir())
+	h := hostops.NewHost("glab", t.TempDir())
 	view := "glab mr view GH-1 -F json"
 	merge := "glab mr merge GH-1 --remove-source-branch --auto-merge=false --yes --squash --squash-message Add the thing\n\nTask: GH-1\n"
 	f.script(merge, "")
@@ -355,7 +372,7 @@ func TestMergePullGhSquashSubject(t *testing.T) {
 
 	for _, c := range cases {
 		f := newFakes(t)
-		h := newHost("gh", t.TempDir())
+		h := hostops.NewHost("gh", t.TempDir())
 		f.script(c.merge, "")
 		f.script(ghView, prMerged)
 
@@ -571,7 +588,7 @@ func TestFinishStopsOnHostRefusal(t *testing.T) {
 		}
 	}
 
-	if _, err := os.Stat(fx.in.storage.Plan("GH-1")); err != nil {
+	if _, err := os.Stat(fx.in.Storage.Plan("GH-1")); err != nil {
 		t.Error("the plan was moved although the merge failed")
 	}
 }
@@ -654,7 +671,7 @@ func TestFinishKeepsBranchWhenRetargetFails(t *testing.T) {
 		}
 	}
 
-	if _, err := os.Stat(fx.in.storage.Plan("GH-1")); err != nil {
+	if _, err := os.Stat(fx.in.Storage.Plan("GH-1")); err != nil {
 		t.Error("the plan was moved although the retarget failed")
 	}
 }
@@ -719,7 +736,7 @@ func TestFinishRetargetsAfterEarlierMerge(t *testing.T) {
 // for a retry that clears it once the pull goes through.
 func TestFinishDefersAFailedPull(t *testing.T) {
 	fx := newFinishFixture(t)
-	fx.in.root = t.TempDir()
+	fx.in.Root = t.TempDir()
 	fx.openPR()
 	fx.plan(t, "# plan")
 	fx.f.fail("git pull --ff-only", shell.Result{Code: 1, Stderr: "fatal: Not possible to fast-forward, aborting."})
@@ -744,27 +761,27 @@ func TestFinishDefersAFailedPull(t *testing.T) {
 		t.Errorf("the plan was not archived: %v", err)
 	}
 
-	if _, ok := drives.Probe(fx.in.root, mainPullKey); ok {
+	if _, ok := drives.Probe(fx.in.Root, finish.MainPullKey); ok {
 		t.Error("the main-pull lease outlived the failed pull")
 	}
 
-	if def, sha := readPendingPull(fx.in.root); def != "main" || sha != "m3rge" {
+	if def, sha := finish.ReadPendingPull(fx.in.Root); def != "main" || sha != "m3rge" {
 		t.Fatalf("pending pull = %q %q, want main m3rge", def, sha)
 	}
 
 	fx.f.calls = nil
 	fx.f.script("git pull --ff-only", "")
 
-	line, pending := retryPendingPull(t.Context(), fx.in.root, fx.main)
+	line, pending := finish.RetryPendingPull(t.Context(), fx.in.Root, fx.main)
 	if pending || !strings.Contains(line, "pulled main") {
 		t.Errorf("retry = %q, %v, want it pulled", line, pending)
 	}
 
-	if def, _ := readPendingPull(fx.in.root); def != "" {
+	if def, _ := finish.ReadPendingPull(fx.in.Root); def != "" {
 		t.Error("the pending pull outlived its retry")
 	}
 
-	if line, pending := retryPendingPull(t.Context(), fx.in.root, fx.main); line != "" || pending {
+	if line, pending := finish.RetryPendingPull(t.Context(), fx.in.Root, fx.main); line != "" || pending {
 		t.Errorf("retry with nothing pending = %q, %v", line, pending)
 	}
 }
@@ -783,14 +800,14 @@ func TestDeferredPullNote(t *testing.T) {
 		want string
 	}{
 		{lock, "main not pulled: another git held origin's refs; f10 retries the pull"},
-		{fmt.Errorf("%w: lease", errPullBusy), "another git held origin's refs"},
+		{fmt.Errorf("%w: lease", finish.ErrPullBusy), "another git held origin's refs"},
 		{errors.New("boom"), "main not pulled: boom; settle it with git -C /m pull --ff-only; f10 retries the pull"},
 		{
 			&gitx.ExitError{Args: []string{"pull"}, Code: 1, Stderr: "error: 'refs/remotes/origin/foo' exists; cannot create"},
 			"a stale origin ref is in the way; settle it with git -C /m remote prune origin",
 		},
 	} {
-		if got := deferredPullNote(c.err, "/m", "main"); !strings.Contains(got, c.want) {
+		if got := finish.DeferredPullNote(c.err, "/m", "main"); !strings.Contains(got, c.want) {
 			t.Errorf("deferredPullNote(%v) = %q, want %q in it", c.err, got, c.want)
 		}
 	}
@@ -864,7 +881,7 @@ func TestFinishRunsOnPastAFailedClose(t *testing.T) {
 // by iid before the API deletes it.
 func TestFinishRetargetsStackedMRsOnGitLab(t *testing.T) {
 	fx := newFinishFixture(t)
-	fx.in.host = newHost("glab", fx.main)
+	fx.in.Host = hostops.NewHost("glab", fx.main)
 	fx.f.script(
 		"glab mr view GH-1 -F json",
 		`{"state":"merged","web_url":"https://gl/mr/4","iid":4,"target_branch":"main","squash_commit_sha":"m3rge"}`,
@@ -913,7 +930,7 @@ func TestFinishRefusesDirtyWorktree(t *testing.T) {
 // report precedes the focus on main's workspace and the close.
 func TestFinishSelfClose(t *testing.T) {
 	fx := newFinishFixture(t)
-	fx.in.cwd = filepath.Join(fx.wt, "cli")
+	fx.in.Cwd = filepath.Join(fx.wt, "cli")
 
 	_, err := fx.run(t)
 	if err == nil || !strings.Contains(err.Error(), "would close its own workspace (GH-1)") {
@@ -925,15 +942,15 @@ func TestFinishSelfClose(t *testing.T) {
 	}
 
 	fx = newFinishFixture(t)
-	fx.in.cwd = filepath.Join(fx.wt, "cli")
-	fx.in.flags.yes = true
+	fx.in.Cwd = filepath.Join(fx.wt, "cli")
+	fx.in.Flags.Yes = true
 	fx.openPR()
 	fx.f.script("herdr workspace focus ws:1", "{}")
 
 	// a writer that records which herdr calls had run when the report landed
 	rec := &recorder{f: fx.f}
 
-	if err := finish(t.Context(), rec, fx.in); err != nil {
+	if err := finish.Finish(t.Context(), rec, fx.in); err != nil {
 		t.Fatal(err)
 	}
 
@@ -979,7 +996,7 @@ func (r *recorder) Write(p []byte) (int, error) {
 // too, wherever the shell has cd'd to.
 func TestFinishSelfCloseByWorkspaceID(t *testing.T) {
 	fx := newFinishFixture(t)
-	fx.in.workspace = "ws:9"
+	fx.in.Workspace = "ws:9"
 
 	_, err := fx.run(t)
 	if err == nil || !strings.Contains(err.Error(), "would close its own workspace") {
@@ -1061,13 +1078,13 @@ func TestFinishArchiveNumbering(t *testing.T) {
 	fx.openPR()
 	fx.plan(t, "current")
 
-	archive := filepath.Join(fx.main, ".f10", "plans", "archive")
-	if err := os.MkdirAll(archive, 0o755); err != nil {
+	archived := filepath.Join(fx.main, ".f10", "plans", "archive")
+	if err := os.MkdirAll(archived, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
 	for name, body := range map[string]string{"GH-1.md": "first", "GH-1.1.md": "older"} {
-		if err := os.WriteFile(filepath.Join(archive, name), []byte(body), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(archived, name), []byte(body), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -1078,13 +1095,13 @@ func TestFinishArchiveNumbering(t *testing.T) {
 	}
 
 	for name, body := range map[string]string{"GH-1.md": "first", "GH-1.1.md": "older", "GH-1.2.md": "current"} {
-		got, err := os.ReadFile(filepath.Join(archive, name))
+		got, err := os.ReadFile(filepath.Join(archived, name))
 		if err != nil || string(got) != body {
 			t.Errorf("%s = %q, %v; want %q", name, got, err, body)
 		}
 	}
 
-	if !strings.Contains(out, filepath.Join(archive, "GH-1.2.md")) {
+	if !strings.Contains(out, filepath.Join(archived, "GH-1.2.md")) {
 		t.Errorf("report does not name the archived plan:\n%s", out)
 	}
 }
@@ -1096,7 +1113,7 @@ func TestFinishArchivesOutOfTree(t *testing.T) {
 
 	root := t.TempDir()
 	shared := filepath.Join(root, "plans")
-	fx.in.storage = storage.Root(root)
+	fx.in.Storage = storage.Root(root)
 
 	images := filepath.Join(root, "images", "GH-1")
 	for _, d := range []string{shared, images} {
@@ -1135,7 +1152,7 @@ func TestRemoveImagesInRepo(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if note := removeImages(storage.InRepo(main), "GH-1"); note != "" {
+	if note := finish.RemoveImages(storage.InRepo(main), "GH-1"); note != "" {
 		t.Errorf("removeImages = %q, want no note", note)
 	}
 
@@ -1164,7 +1181,7 @@ func TestFinishRemovesThroughWorktrunk(t *testing.T) {
 // auto-merge off, the source branch removed by the merge itself.
 func TestFinishOnGitLab(t *testing.T) {
 	fx := newFinishFixture(t)
-	fx.in.host = newHost("glab", fx.main)
+	fx.in.Host = hostops.NewHost("glab", fx.main)
 	fx.f.script(
 		"glab mr view GH-1 -F json",
 		`{"state":"opened","web_url":"https://gl/mr/4","iid":4,"target_branch":"main"}`,
@@ -1243,22 +1260,22 @@ func TestFinishMergedWithoutWorktreeKeepsTheRecords(t *testing.T) {
 	fx.f.script(ghView, prMerged)
 	fx.f.script(lsRem, "")
 	fx.f.script("git diff --numstat --no-renames origin/main...refs/heads/GH-1", "10\t2\tcli/stats.go")
-	fx.in.task, fx.in.close, fx.in.hostCloses = bundle12, []string{"GH-2"}, true
-	fx.in.loreStore = &lore.Store{Root: filepath.Join(fx.main, ".f10", "lore")}
+	fx.in.Task, fx.in.Close, fx.in.HostCloses = bundle12, []string{"GH-2"}, true
+	fx.in.LoreStore = &lore.Store{Root: filepath.Join(fx.main, ".f10", "lore")}
 
-	var sized []branchSize
+	var sized []finish.BranchSize
 
-	prev := recordSize
-	recordSize = func(_ context.Context, _, _, _ string, s branchSize) { sized = append(sized, s) }
+	prev := finish.RecordSize
+	finish.RecordSize = func(_ context.Context, _, _, _ string, s finish.BranchSize) { sized = append(sized, s) }
 
-	t.Cleanup(func() { recordSize = prev })
+	t.Cleanup(func() { finish.RecordSize = prev })
 
 	out, err := fx.run(t)
 	if err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
 
-	if len(sized) != 1 || sized[0].files != 1 {
+	if len(sized) != 1 || sized[0].Files != 1 {
 		t.Errorf("sizes %+v, want the branch's one file", sized)
 	}
 
@@ -1276,7 +1293,7 @@ func TestFinishMergedWithoutWorktreeKeepsTheRecords(t *testing.T) {
 func TestFinishMarksDriveRecords(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.openPR()
-	fx.in.root = t.TempDir()
+	fx.in.Root = t.TempDir()
 
 	halted := func() *drives.Outcome { return &drives.Outcome{Row: "halted at catchup", Code: ui.ExitHalted} }
 	for _, tasks := range [][]drives.Task{
@@ -1284,12 +1301,12 @@ func TestFinishMarksDriveRecords(t *testing.T) {
 		{{ID: "GH-1", Outcome: halted()}},
 		{{ID: "GH-1-b", Outcome: halted()}},
 	} {
-		if err := drives.Create(fx.in.root, &drives.Record{Tasks: tasks}); err != nil {
+		if err := drives.Create(fx.in.Root, &drives.Record{Tasks: tasks}); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	running, err := drives.Acquire(fx.in.root, drives.DriveKey(2), 2)
+	running, err := drives.Acquire(fx.in.Root, drives.DriveKey(2), 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1304,12 +1321,12 @@ func TestFinishMarksDriveRecords(t *testing.T) {
 		id    string
 		want  string
 	}{
-		{1, "GH-1", rowFinished},
+		{1, "GH-1", driverec.RowFinished},
 		{1, "GH-2", "halted at catchup"},
 		{2, "GH-1", "halted at catchup"},
 		{3, "GH-1-b", "halted at catchup"},
 	} {
-		rec, err := drives.Read(fx.in.root, c.drive)
+		rec, err := drives.Read(fx.in.Root, c.drive)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1334,8 +1351,8 @@ func TestAttemptRows(t *testing.T) {
 		{"b", "", []string{"GH-1-b"}},
 		{"", "feat/GH-1-dark-mode-b", []string{"GH-1-b"}},
 	} {
-		in := finishInput{task: gh1, suffix: c.suffix}
-		match := attemptRows(in, c.branch, rows)
+		in := finish.FinishInput{Task: gh1, Suffix: c.suffix}
+		match := finish.AttemptRows(in, c.branch, rows)
 
 		var got []string
 
@@ -1355,26 +1372,26 @@ func TestAttemptRows(t *testing.T) {
 func TestFinishAlreadyFinished(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.f.script(refsLocal, "")
-	fx.in.storage = storage.Root(t.TempDir())
+	fx.in.Storage = storage.Root(t.TempDir())
 
-	if err := os.MkdirAll(filepath.Join(fx.in.storage.Plans(), "archive"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(fx.in.Storage.Plans(), "archive"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
 	if err := os.WriteFile(
-		filepath.Join(fx.in.storage.Plans(), "archive", "GH-1.1.md"),
+		filepath.Join(fx.in.Storage.Plans(), "archive", "GH-1.1.md"),
 		[]byte("# plan"),
 		0o644,
 	); err != nil {
 		t.Fatal(err)
 	}
 
-	fx.in.root = t.TempDir()
+	fx.in.Root = t.TempDir()
 
 	halted := &drives.Outcome{Row: "halted at catchup", Code: ui.ExitHalted}
 
 	rec := &drives.Record{Tasks: []drives.Task{{ID: "GH-1", Outcome: halted}}}
-	if err := drives.Create(fx.in.root, rec); err != nil {
+	if err := drives.Create(fx.in.Root, rec); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1383,17 +1400,17 @@ func TestFinishAlreadyFinished(t *testing.T) {
 		t.Errorf("err = %v, out:\n%s", err, out)
 	}
 
-	rec, err = drives.Read(fx.in.root, 1)
+	rec, err = drives.Read(fx.in.Root, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if o := rec.Task("GH-1").Outcome; o == nil || o.Row != rowFinished {
+	if o := rec.Task("GH-1").Outcome; o == nil || o.Row != driverec.RowFinished {
 		t.Errorf("the drive record kept %+v", o)
 	}
 
 	// a re-plan archives the old plan too, and keeps the new one live
-	if err := os.WriteFile(filepath.Join(fx.in.storage.Plans(), "GH-1.md"), []byte("# plan"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(fx.in.Storage.Plans(), "GH-1.md"), []byte("# plan"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1411,14 +1428,14 @@ func TestFinishLeaseRefusesADrivenTask(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := finishLease(root, "GH-1"); err == nil || !strings.Contains(err.Error(), "owned by drive 3") ||
+	if _, err := finish.Lease(root, "GH-1"); err == nil || !strings.Contains(err.Error(), "owned by drive 3") ||
 		!strings.Contains(err.Error(), "f10 drive cancel 3") {
 		t.Errorf("err = %v", err)
 	}
 
 	held.Release()
 
-	l, err := finishLease(root, "GH-1")
+	l, err := finish.Lease(root, "GH-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1433,6 +1450,10 @@ func TestFinishRefusesOutsideHerdr(t *testing.T) {
 	err := runApp(t, "finish", "42").err
 	if !errors.Is(err, herdr.ErrNotInside) {
 		t.Fatalf("err = %v, want ErrNotInside", err)
+	}
+
+	if !strings.Contains(err.Error(), "f10 start, forward, drive and finish run inside a Herdr session") {
+		t.Errorf("the refusal does not name the commands that need Herdr: %v", err)
 	}
 
 	if len(f.calls) != 0 {
@@ -1471,7 +1492,7 @@ func TestMergeMethod(t *testing.T) {
 			f.script(ghRepo, c.repo)
 			f.script("glab repo view -F json", c.repo)
 
-			got, note, err := newHost(c.host, "/repo").mergeMethod(t.Context(), c.declared)
+			got, note, err := hostops.NewHost(c.host, "/repo").MergeMethod(t.Context(), c.declared)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1521,11 +1542,11 @@ func TestFinishFromTheMainCheckout(t *testing.T) {
 	fx.f.has["wt"] = true
 	fx.openPR()
 	plan := fx.onMain(t, "# plan")
-	fx.in.workspace = "ws:1"
+	fx.in.Workspace = "ws:1"
 
 	rec := &recorder{f: fx.f}
 
-	if err := finish(t.Context(), rec, fx.in); err != nil {
+	if err := finish.Finish(t.Context(), rec, fx.in); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1606,7 +1627,7 @@ func TestFinishFindsTheIdPastAPrefix(t *testing.T) {
 				plan = fx.onMain(t, "# plan")
 				fx.f.script(worktrees, porcelain(branch, fx.main))
 				fx.f.script(curBr, branch)
-				fx.in.workspace = "ws:1"
+				fx.in.Workspace = "ws:1"
 			} else {
 				fx.f.script(worktrees, porcelain(branch, fx.wt))
 			}
@@ -1632,13 +1653,13 @@ func TestFinishFromTheMainCheckoutArchiveNumbering(t *testing.T) {
 	fx.openPR()
 	fx.onMain(t, "current")
 
-	archive := filepath.Join(fx.main, ".f10", "plans", "archive")
-	if err := os.MkdirAll(archive, 0o755); err != nil {
+	archived := filepath.Join(fx.main, ".f10", "plans", "archive")
+	if err := os.MkdirAll(archived, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
 	for name, body := range map[string]string{"GH-1.md": "first", "GH-1.1.md": "older"} {
-		if err := os.WriteFile(filepath.Join(archive, name), []byte(body), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(archived, name), []byte(body), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -1648,7 +1669,7 @@ func TestFinishFromTheMainCheckoutArchiveNumbering(t *testing.T) {
 	}
 
 	for name, body := range map[string]string{"GH-1.md": "first", "GH-1.1.md": "older", "GH-1.2.md": "current"} {
-		got, err := os.ReadFile(filepath.Join(archive, name))
+		got, err := os.ReadFile(filepath.Join(archived, name))
 		if err != nil || string(got) != body {
 			t.Errorf("%s = %q, %v; want %q", name, got, err, body)
 		}
@@ -1745,8 +1766,8 @@ func TestFinishRefusesSomeoneElsesPR(t *testing.T) {
 
 	_, err := fx.run(t)
 
-	fp := foreignPullError{}
-	if !errors.As(err, &fp) || fp.author != "alice" || !strings.Contains(err.Error(), "--merge") ||
+	fp := finish.ForeignPullError{}
+	if !errors.As(err, &fp) || fp.Author != "alice" || !strings.Contains(err.Error(), "--merge") ||
 		!strings.Contains(err.Error(), "--local") {
 		t.Fatalf("err = %v, want the foreign PR refusal naming both flags", err)
 	}
@@ -1777,7 +1798,7 @@ func TestFinishMergeFlagMergesSomeoneElsesPR(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.openPR()
 	fx.f.script(ghView, prOpenBy("alice"), prMerged)
-	fx.in.flags.merge = true
+	fx.in.Flags.Merge = true
 
 	if _, err := fx.run(t); err != nil {
 		t.Fatal(err)
@@ -1795,7 +1816,7 @@ func TestFinishLocalLeavesThePROpen(t *testing.T) {
 	fx.f.script(ghView, prOpenBy("alice"))
 	fx.f.script(unpushed, "")
 	fx.plan(t, "# plan")
-	fx.in.flags.leaveOpen = true
+	fx.in.Flags.LeaveOpen = true
 	released := fx.dependent()
 
 	out, err := fx.run(t)
@@ -1835,7 +1856,7 @@ func TestFinishLocalRefusesUnpushedCommits(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.f.script(ghView, prOpenBy("alice"))
 	fx.f.fail(unpushed, missing)
-	fx.in.flags.leaveOpen = true
+	fx.in.Flags.LeaveOpen = true
 
 	if _, err := fx.run(t); err == nil || !strings.Contains(err.Error(), "push or drop them") {
 		t.Fatalf("err = %v, want the unpushed commits refused", err)
@@ -1878,8 +1899,8 @@ func TestFinishMergesABranchNeverPushedHere(t *testing.T) {
 		t.Run(fmt.Sprintf("onDefault=%v", onDefault), func(t *testing.T) {
 			fx := newFinishFixture(t)
 			fx.noPull()
-			fx.in.method = "squash"
-			fx.in.title = func(context.Context) (string, error) { return "Add the thing", nil }
+			fx.in.Method = "squash"
+			fx.in.Title = func(context.Context) (string, error) { return "Add the thing", nil }
 			fx.f.script("git commit-tree tr33 -p m0 -m GH-1: Add the thing -m - first\n- second", "s9")
 			fx.f.script("git merge --ff-only s9", "")
 			fx.f.script("git update-ref refs/heads/main s9 m0", "")
@@ -1964,8 +1985,8 @@ func TestFinishLocalCommitClosesTheTask(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			fx := newFinishFixture(t)
 			fx.noPull()
-			fx.in.method, fx.in.traces, fx.in.hostCloses = c.method, c.traces, true
-			fx.in.title = func(context.Context) (string, error) { return "Add the thing", nil }
+			fx.in.Method, fx.in.Traces, fx.in.HostCloses = c.method, c.traces, true
+			fx.in.Title = func(context.Context) (string, error) { return "Add the thing", nil }
 			fx.f.script(c.commit, c.sha)
 			fx.f.script("git merge --ff-only "+c.sha, "")
 
@@ -1986,7 +2007,7 @@ func TestFinishLocalCommitClosesTheTask(t *testing.T) {
 
 	fx := newFinishFixture(t)
 	fx.noPull()
-	fx.in.method, fx.in.hostCloses = "rebase", true
+	fx.in.Method, fx.in.HostCloses = "rebase", true
 	fx.f.script("git merge-base --is-ancestor m0 refs/heads/GH-1", "")
 	fx.f.script("git merge --ff-only t1", "")
 
@@ -1998,18 +2019,18 @@ func TestFinishLocalCommitClosesTheTask(t *testing.T) {
 // Each member the merge closes gets a line: the lead, and the riders --close
 // names; a rider kept open, or a tracker that is not the host's, gets none.
 func TestClosingLines(t *testing.T) {
-	in := finishInput{task: bundle12, hostCloses: true}
-	if got := closingLines(in); got != "Closes #1" {
+	in := finish.FinishInput{Task: bundle12, HostCloses: true}
+	if got := finish.ClosingLines(in); got != "Closes #1" {
 		t.Errorf("rider kept open: %q", got)
 	}
 
-	in.close = []string{"GH-2"}
-	if got := closingLines(in); got != "Closes #1\nCloses #2" {
+	in.Close = []string{"GH-2"}
+	if got := finish.ClosingLines(in); got != "Closes #1\nCloses #2" {
 		t.Errorf("rider closed: %q", got)
 	}
 
-	in.hostCloses = false
-	if got := closingLines(in); got != "" {
+	in.HostCloses = false
+	if got := finish.ClosingLines(in); got != "" {
 		t.Errorf("not the host's issues, or a driver's tracker: %q", got)
 	}
 }
@@ -2020,7 +2041,7 @@ func TestFinishLocalRerunKeepsTheClosingNote(t *testing.T) {
 	for _, landed := range []string{"GH-1: Add the thing\n\nCloses #1\n", "GH-1: Add the thing\n"} {
 		fx := newFinishFixture(t)
 		fx.noPull()
-		fx.in.hostCloses = true
+		fx.in.HostCloses = true
 		fx.f.script("git rev-parse m0^{tree}", "tr33")
 		fx.f.script("git log --format=%B refs/remotes/origin/main..refs/heads/main", landed)
 
@@ -2045,7 +2066,7 @@ func TestFinishLocalRerunKeepsTheClosingNote(t *testing.T) {
 func TestFinishLandsANeverPushedBranchByMethod(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.noPull()
-	fx.in.method = "merge"
+	fx.in.Method = "merge"
 	fx.f.script("git commit-tree tr33 -p m0 -p t1 -m Merge branch 'GH-1'", "mm")
 	fx.f.script("git merge --ff-only mm", "")
 
@@ -2055,7 +2076,7 @@ func TestFinishLandsANeverPushedBranchByMethod(t *testing.T) {
 
 	fx = newFinishFixture(t)
 	fx.noPull()
-	fx.in.method = "rebase"
+	fx.in.Method = "rebase"
 	fx.f.script("git merge-base --is-ancestor m0 refs/heads/GH-1", "")
 	fx.f.script("git merge --ff-only t1", "")
 
@@ -2082,7 +2103,7 @@ func TestFinishRefusesANeverPushedBranchItCannotLand(t *testing.T) {
 
 	fx = newFinishFixture(t)
 	fx.noPull()
-	fx.in.method = "rebase"
+	fx.in.Method = "rebase"
 	fx.f.fail("git merge-base --is-ancestor m0 refs/heads/GH-1", shell.Result{Code: 1})
 
 	if _, err := fx.run(t); err == nil || !strings.Contains(err.Error(), "lands only a fast-forward") {
@@ -2122,7 +2143,7 @@ func TestFinishRefusesAPushedBranchWithoutAPR(t *testing.T) {
 func TestFinishLandsANeverPushedBranchOnOriginsHead(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.noPull()
-	fx.in.method = "squash"
+	fx.in.Method = "squash"
 	fx.f.script("git rev-parse -q --verify refs/remotes/origin/main", "o1")
 	fx.f.fail("git merge-base --is-ancestor o1 m0", shell.Result{Code: 1})
 	fx.f.script("git merge-base --is-ancestor m0 o1", "")
@@ -2157,7 +2178,7 @@ func TestFinishLandsANeverPushedBranchOnOriginsHead(t *testing.T) {
 func TestFinishKeepsTheRefusalWhenNeverPushedIsNotProven(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.noPull()
-	fx.in.flags.leaveOpen = true
+	fx.in.Flags.LeaveOpen = true
 
 	if _, err := fx.run(t); err == nil || !strings.Contains(err.Error(), "no pull requests found") {
 		t.Fatalf("--local: err = %v", err)
@@ -2183,7 +2204,7 @@ func TestFinishArchivesMainsSharedPlan(t *testing.T) {
 	fx.openPR()
 
 	shared := filepath.Join(fx.main, ".f10", "plans")
-	fx.in.storage = storage.InRepo(fx.main)
+	fx.in.Storage = storage.InRepo(fx.main)
 
 	if err := os.MkdirAll(shared, 0o750); err != nil {
 		t.Fatal(err)
@@ -2211,12 +2232,14 @@ func TestFinishRecordsTheBranchSize(t *testing.T) {
 		diff    = "git diff --numstat --no-renames "
 	)
 
-	sized := func(base string) *branchSize { return &branchSize{lines: 18, md: 6, files: 3, base: base} }
+	sized := func(base string) *finish.BranchSize {
+		return &finish.BranchSize{Lines: 18, Md: 6, Files: 3, Base: base}
+	}
 
 	for _, tc := range []struct {
 		name  string
 		setup func(fx *finishFixture)
-		want  *branchSize
+		want  *finish.BranchSize
 	}{
 		{
 			name:  "against the default branch",
@@ -2253,7 +2276,7 @@ func TestFinishRecordsTheBranchSize(t *testing.T) {
 			name: "a branch never pushed",
 			setup: func(fx *finishFixture) {
 				fx.noPull()
-				fx.in.method = "merge"
+				fx.in.Method = "merge"
 				fx.f.script("git commit-tree tr33 -p m0 -p t1 -m Merge branch 'GH-1'", "mm")
 				fx.f.script("git merge --ff-only mm", "")
 				fx.f.script(diff+"main...refs/heads/GH-1", numstat)
@@ -2277,10 +2300,10 @@ func TestFinishRecordsTheBranchSize(t *testing.T) {
 			fx.openPR()
 			tc.setup(fx)
 
-			var got []branchSize
+			var got []finish.BranchSize
 
-			prev := recordSize
-			recordSize = func(_ context.Context, _, branch, task string, s branchSize) {
+			prev := finish.RecordSize
+			finish.RecordSize = func(_ context.Context, _, branch, task string, s finish.BranchSize) {
 				if branch != "GH-1" || task != "GH-1" {
 					t.Errorf("recorded for %s on %s", task, branch)
 				}
@@ -2288,7 +2311,7 @@ func TestFinishRecordsTheBranchSize(t *testing.T) {
 				got = append(got, s)
 			}
 
-			t.Cleanup(func() { recordSize = prev })
+			t.Cleanup(func() { finish.RecordSize = prev })
 
 			if out, err := fx.run(t); err != nil {
 				t.Fatalf("%v\n%s", err, out)
@@ -2310,7 +2333,7 @@ func TestFinishSweepsBeforeTheWorkspaceCloses(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.openPR()
 	fx.f.script("sweep", "")
-	fx.in.sweep = func(context.Context) { fx.f.answer("sweep") }
+	fx.in.Sweep = func(context.Context) { fx.f.answer("sweep") }
 
 	if _, err := fx.run(t); err != nil {
 		t.Fatal(err)
@@ -2332,29 +2355,29 @@ func TestFinishRef(t *testing.T) {
 	repo := tracedRepo(t, "DM-5/fix", "")
 	sessionTask(t, "DM-9")
 
-	tg, err := targetAt(t.Context(), repo, false, "finish")
+	tg, err := target.At(t.Context(), repo, false, "finish")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if r, suffix, _, err := finishRef(t.Context(), tg, ""); err != nil || r.ID != "DM-5" || suffix != "" {
+	if r, suffix, _, err := finish.Ref(t.Context(), tg, ""); err != nil || r.ID != "DM-5" || suffix != "" {
 		t.Errorf("bare = %q %q %v, want DM-5 and no suffix", r.ID, suffix, err)
 	}
 
-	if _, _, branch, _ := finishRef(t.Context(), tg, ""); branch != "DM-5/fix" {
+	if _, _, branch, _ := finish.Ref(t.Context(), tg, ""); branch != "DM-5/fix" {
 		t.Errorf("bare branch = %q, want the one checked out here", branch)
 	}
 
-	if r, suffix, _, err := finishRef(t.Context(), tg, "DM-7-b"); err != nil || r.ID != "DM-7" || suffix != "b" {
+	if r, suffix, _, err := finish.Ref(t.Context(), tg, "DM-7-b"); err != nil || r.ID != "DM-7" || suffix != "b" {
 		t.Errorf("DM-7-b = %q %q %v, want DM-7 and suffix b", r.ID, suffix, err)
 	}
 
-	scoped, err := targetAt(t.Context(), repo, true, "finish")
+	scoped, err := target.At(t.Context(), repo, true, "finish")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, _, _, err = finishRef(t.Context(), scoped, "")
+	_, _, _, err = finish.Ref(t.Context(), scoped, "")
 	if err == nil || !strings.Contains(err.Error(), "explicit task id") {
 		t.Errorf("bare under -C: err = %v, want a refusal", err)
 	}
@@ -2362,12 +2385,12 @@ func TestFinishRef(t *testing.T) {
 	onMain := tracedRepo(t, "main", "")
 	sessionTask(t, "DM-9")
 
-	tg, err = targetAt(t.Context(), onMain, false, "finish")
+	tg, err = target.At(t.Context(), onMain, false, "finish")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	r, _, _, err := finishRef(t.Context(), tg, "")
+	r, _, _, err := finish.Ref(t.Context(), tg, "")
 	if err == nil || !strings.Contains(err.Error(), "branch names no task") {
 		t.Errorf("bare on main with a session task = %q, %v; want a refusal", r.ID, err)
 	}
@@ -2379,9 +2402,9 @@ func TestFinishTargetTakesTheBareCallsBranch(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.f.script(refsLocal, heads("GH-1", "GH-1-b"))
 	fx.f.script(worktrees, porcelain("GH-1", fx.main+".other", "GH-1-b", fx.wt))
-	fx.in.branch = "GH-1-b"
+	fx.in.Branch = "GH-1-b"
 
-	name, path, _, err := finishTarget(t.Context(), fx.in)
+	name, path, _, err := finish.FinishTarget(t.Context(), fx.in)
 	if err != nil || name != "GH-1-b" || path != fx.wt {
 		t.Errorf("finishTarget = %q %q %v, want GH-1-b at %s", name, path, err, fx.wt)
 	}
@@ -2395,7 +2418,7 @@ func sessionTask(t *testing.T, id string) {
 	t.Setenv("F10_STATE_DIR", dir)
 	t.Setenv("F10_SESSION_ID", "sess-1")
 
-	if err := (&state.Run{Session: "sess-1", Task: id}).Save(dir, time.Now()); err != nil {
+	if err := (&state.Run{Session: "sess-1", Task: id}).Save(t.Context(), dir, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -2409,7 +2432,7 @@ func TestFinishReportsProgress(t *testing.T) {
 
 		var got []string
 
-		fx.in.progress = func(a string) { got = append(got, a) }
+		fx.in.Progress = func(a string) { got = append(got, a) }
 
 		if out, err := fx.run(t); err != nil {
 			t.Fatalf("%v\n%s", err, out)
@@ -2425,13 +2448,13 @@ func TestFinishReportsProgress(t *testing.T) {
 	t.Run("local", func(t *testing.T) {
 		fx := newFinishFixture(t)
 		fx.noPull()
-		fx.in.method = "merge"
+		fx.in.Method = "merge"
 		fx.f.script("git commit-tree tr33 -p m0 -p t1 -m Merge branch 'GH-1'", "mm")
 		fx.f.script("git merge --ff-only mm", "")
 
 		var got []string
 
-		fx.in.progress = func(a string) { got = append(got, a) }
+		fx.in.Progress = func(a string) { got = append(got, a) }
 
 		if out, err := fx.run(t); err != nil {
 			t.Fatalf("%v\n%s", err, out)
@@ -2447,10 +2470,10 @@ func TestFinishReportsProgress(t *testing.T) {
 // moves, and a merged one finishes as any finish would.
 func TestFinishMergedOnly(t *testing.T) {
 	fx := newFinishFixture(t)
-	fx.in.flags.mergedOnly = true
+	fx.in.Flags.MergedOnly = true
 	fx.openPR()
 
-	if _, err := fx.run(t); !errors.Is(err, errNotMerged) {
+	if _, err := fx.run(t); !errors.Is(err, finish.ErrNotMerged) {
 		t.Fatalf("err = %v, want errNotMerged", err)
 	}
 
@@ -2461,7 +2484,7 @@ func TestFinishMergedOnly(t *testing.T) {
 	}
 
 	fx = newFinishFixture(t)
-	fx.in.flags.mergedOnly = true
+	fx.in.Flags.MergedOnly = true
 	fx.f.script(ghView, prMerged)
 	fx.f.script(lsRem, "")
 
@@ -2484,7 +2507,7 @@ func TestFinishLoreGate(t *testing.T) {
 	t.Run("warn", func(t *testing.T) {
 		fx := newFinishFixture(t)
 		fx.openPR()
-		fx.in.loreStore, fx.in.gate = storeIn(fx), "warn"
+		fx.in.LoreStore, fx.in.Gate = storeIn(fx), "warn"
 
 		out, err := fx.run(t)
 		if err != nil {
@@ -2501,7 +2524,7 @@ func TestFinishLoreGate(t *testing.T) {
 		fx := newFinishFixture(t)
 		fx.openPR()
 		plan := fx.plan(t, "# plan")
-		fx.in.loreStore, fx.in.gate = storeIn(fx), "block"
+		fx.in.LoreStore, fx.in.Gate = storeIn(fx), "block"
 
 		_, err := fx.run(t)
 		if err == nil || !strings.Contains(err.Error(), "lore check GH-1: no entries for GH-1 (lore_gate: block)") {
@@ -2521,7 +2544,7 @@ func TestFinishLoreGate(t *testing.T) {
 		fx := newFinishFixture(t)
 		fx.f.script(ghView, prMerged)
 		fx.f.script(lsRem, "")
-		fx.in.loreStore, fx.in.gate = storeIn(fx), "block"
+		fx.in.LoreStore, fx.in.Gate = storeIn(fx), "block"
 
 		if out, err := fx.run(t); err != nil || strings.Contains(out, "lore check") {
 			t.Errorf("a merged PR was checked: %v\n%s", err, out)
@@ -2532,8 +2555,8 @@ func TestFinishLoreGate(t *testing.T) {
 		fx := newFinishFixture(t)
 		fx.f.script(ghView, prOpenBy("alice"))
 		fx.f.script(unpushed, "")
-		fx.in.flags.leaveOpen = true
-		fx.in.loreStore, fx.in.gate = storeIn(fx), "block"
+		fx.in.Flags.LeaveOpen = true
+		fx.in.LoreStore, fx.in.Gate = storeIn(fx), "block"
 
 		if out, err := fx.run(t); err != nil || strings.Contains(out, "lore check") {
 			t.Errorf("--local was checked: %v\n%s", err, out)
@@ -2546,11 +2569,11 @@ func TestFinishLoreGate(t *testing.T) {
 
 		fx := newFinishFixture(t)
 		fx.noPull()
-		fx.in.method = "squash"
-		fx.in.title = func(context.Context) (string, error) { return "Add the thing", nil }
+		fx.in.Method = "squash"
+		fx.in.Title = func(context.Context) (string, error) { return "Add the thing", nil }
 		fx.f.script("git commit-tree tr33 -p m0 -m GH-1: Add the thing -m - first\n- second", "s9")
 		fx.f.script("git merge --ff-only s9", "")
-		fx.in.loreStore, fx.in.gate = storeIn(fx), gate
+		fx.in.LoreStore, fx.in.Gate = storeIn(fx), gate
 
 		out, err := fx.run(t)
 
@@ -2585,7 +2608,7 @@ func TestFinishLoreGate(t *testing.T) {
 		fx := newFinishFixture(t)
 		fx.openPR()
 		store := storeIn(fx)
-		fx.in.loreStore, fx.in.gate = store, "warn"
+		fx.in.LoreStore, fx.in.Gate = store, "warn"
 
 		if err := os.MkdirAll(filepath.Join(fx.main, ".f10", "reviews", "archive", "GH-1.1"), 0o750); err != nil {
 			t.Fatal(err)
@@ -2614,7 +2637,7 @@ func TestFinishLoreGate(t *testing.T) {
 		fx := newFinishFixture(t)
 		fx.openPR()
 		store := storeIn(fx)
-		fx.in.loreStore, fx.in.gate = store, "block"
+		fx.in.LoreStore, fx.in.Gate = store, "block"
 
 		for _, e := range []lore.Entry{
 			{Kind: lore.KindIntent, Change: "GH-1", Human: "dev@example.com", Body: "Why"},
@@ -2638,7 +2661,7 @@ func TestFinishLoreGate(t *testing.T) {
 // A parent delivered through its subtasks has no branch and no plan of its
 // own: finish closes it once every subtask is closed and branchless.
 func TestFinishParentClosesWhenSubtasksAreDone(t *testing.T) {
-	fx := newParentFixture(t, childRow{ID: "GH-2", State: "closed"}, childRow{ID: "GH-3", State: "CLOSED"})
+	fx := newParentFixture(t, stack.ChildRow{ID: "GH-2", State: "closed"}, stack.ChildRow{ID: "GH-3", State: "CLOSED"})
 	fx.f.script("gh issue close 1", "")
 
 	out, err := fx.run(t)
@@ -2658,7 +2681,7 @@ func TestFinishParentClosesWhenSubtasksAreDone(t *testing.T) {
 // A subtask open, or closed with a branch left, keeps the parent open, and
 // the refusal names it; a stale tracking ref is named so it can be pruned.
 func TestFinishParentRefusesUnfinishedSubtasks(t *testing.T) {
-	fx := newParentFixture(t, childRow{ID: "GH-2", State: "open"}, childRow{ID: "GH-3", State: "closed"})
+	fx := newParentFixture(t, stack.ChildRow{ID: "GH-2", State: "open"}, stack.ChildRow{ID: "GH-3", State: "closed"})
 	fx.f.script("git for-each-ref --format=%(refname) refs/remotes/origin/GH-3 refs/remotes/origin/GH-3-* "+
 		"refs/remotes/origin/GH-3+* refs/remotes/origin/GH-3+*/*", "refs/remotes/origin/GH-3")
 
@@ -2675,12 +2698,12 @@ func TestFinishParentRefusesUnfinishedSubtasks(t *testing.T) {
 
 // No subtasks, or no parent link, keeps today's refusal.
 func TestFinishNoBranchNoSubtasksRefuses(t *testing.T) {
-	for name, kids := range map[string]func(context.Context, ref.Ref) ([]childRow, error){
-		"none":           func(context.Context, ref.Ref) ([]childRow, error) { return nil, nil },
-		"no parent link": func(context.Context, ref.Ref) ([]childRow, error) { return nil, errNoParentLink },
+	for name, kids := range map[string]func(context.Context, ref.Ref) ([]stack.ChildRow, error){
+		"none":           func(context.Context, ref.Ref) ([]stack.ChildRow, error) { return nil, nil },
+		"no parent link": func(context.Context, ref.Ref) ([]stack.ChildRow, error) { return nil, hostops.ErrNoParentLink },
 	} {
 		fx := newParentFixture(t)
-		fx.in.subtasks = kids
+		fx.in.Subtasks = kids
 
 		if _, err := fx.run(t); err == nil || !strings.Contains(err.Error(), "nothing to finish") {
 			t.Errorf("%s: err = %v", name, err)
@@ -2690,8 +2713,8 @@ func TestFinishNoBranchNoSubtasksRefuses(t *testing.T) {
 
 // A tracker that is not the host closes nothing: the note says where to.
 func TestFinishParentOnAnotherTracker(t *testing.T) {
-	fx := newParentFixture(t, childRow{ID: "GH-2", State: "closed"})
-	fx.in.closeTask = nil
+	fx := newParentFixture(t, stack.ChildRow{ID: "GH-2", State: "closed"})
+	fx.in.CloseTask = nil
 
 	out, err := fx.run(t)
 	if err != nil || !strings.Contains(out, "close GH-1 there") {
@@ -2706,13 +2729,13 @@ func TestFinishParentOnAnotherTracker(t *testing.T) {
 // An open subtask drive already counts as finished is still refused, and
 // a close the host rejects fails the finish.
 func TestFinishParentArchivedButOpenAndFailedClose(t *testing.T) {
-	fx := newParentFixture(t, childRow{ID: "GH-2", State: "open", Finished: true})
+	fx := newParentFixture(t, stack.ChildRow{ID: "GH-2", State: "open", Finished: true})
 	_, err := fx.run(t)
 	if err == nil || !strings.Contains(err.Error(), "open in the tracker though its plan is archived") {
 		t.Errorf("err = %v", err)
 	}
 
-	fx = newParentFixture(t, childRow{ID: "GH-2", State: "closed"})
+	fx = newParentFixture(t, stack.ChildRow{ID: "GH-2", State: "closed"})
 	fx.f.answers["gh issue close 1"] = []shell.Result{{Code: 1, Stderr: "boom"}}
 
 	if _, err := fx.run(t); err == nil || !strings.Contains(err.Error(), "closing GH-1") {
@@ -2723,26 +2746,26 @@ func TestFinishParentArchivedButOpenAndFailedClose(t *testing.T) {
 // Only the host's issues get a close; a declared tracker of another kind gets nil.
 func TestCloseTaskFor(t *testing.T) {
 	tg := childTarget(t, "gh")
-	if closeTaskFor(tg, newHost("gh", tg.dir)) == nil {
+	if finish.CloseTaskFor(tg, hostops.NewHost("gh", tg.Dir)) == nil {
 		t.Error("host issues: no close")
 	}
 
-	tg.eff.TrackerKind = facts.TrackerJira
-	tg.eff.Facts = append(tg.eff.Facts, facts.Fact{Key: "tracker.kind", Origin: facts.DeclaredIn("main")})
+	tg.Effective.TrackerKind = facts.TrackerJira
+	tg.Effective.Facts = append(tg.Effective.Facts, facts.Fact{Key: "tracker.kind", Origin: facts.DeclaredIn("main")})
 
-	if closeTaskFor(tg, newHost("gh", tg.dir)) != nil {
+	if finish.CloseTaskFor(tg, hostops.NewHost("gh", tg.Dir)) != nil {
 		t.Error("a Jira tracker: a close was bound")
 	}
 }
 
-func newParentFixture(t *testing.T, kids ...childRow) *finishFixture {
+func newParentFixture(t *testing.T, kids ...stack.ChildRow) *finishFixture {
 	t.Helper()
 
 	fx := newFinishFixture(t)
 	fx.f.script(refsLocal, "")
-	fx.in.storage = storage.Root(t.TempDir())
-	fx.in.subtasks = func(context.Context, ref.Ref) ([]childRow, error) { return kids, nil }
-	fx.in.closeTask = func(ctx context.Context, r ref.Ref) error { return fx.in.host.SetIssueOpen(ctx, r.Number, false) }
+	fx.in.Storage = storage.Root(t.TempDir())
+	fx.in.Subtasks = func(context.Context, ref.Ref) ([]stack.ChildRow, error) { return kids, nil }
+	fx.in.CloseTask = func(ctx context.Context, r ref.Ref) error { return fx.in.Host.SetIssueOpen(ctx, r.Number, false) }
 
 	for _, k := range kids {
 		fx.f.script(strings.ReplaceAll(refsLocal, "GH-1", k.ID), "")
@@ -2758,12 +2781,12 @@ func TestFinishPrintsAndArchivesTheHandoff(t *testing.T) {
 	fx.openPR()
 	fx.f.script("git rev-parse --verify -q refs/heads/GH-1", "abc1234567")
 
-	src := taskHandoff(fx.in.storage, "GH-1")
+	src := archive.TaskHandoff(fx.in.Storage, "GH-1")
 	writeHandoffFile(t, src, "abc1234567")
 
 	var handed []string
 
-	fx.in.handoff = func(lines []string) { handed = lines }
+	fx.in.Handoff = func(lines []string) { handed = lines }
 
 	out, err := fx.run(t)
 	if err != nil {
@@ -2798,7 +2821,7 @@ func TestFinishCompletesOnAStaleOrMissingHandoff(t *testing.T) {
 
 			if name == "stale" {
 				fx.f.script("git rev-parse --verify -q refs/heads/GH-1", "def7654321")
-				writeHandoffFile(t, taskHandoff(fx.in.storage, "GH-1"), "abc1234567")
+				writeHandoffFile(t, archive.TaskHandoff(fx.in.Storage, "GH-1"), "abc1234567")
 			}
 
 			out, err := fx.run(t)
@@ -2818,9 +2841,9 @@ func TestFinishLocalArchivesTheHandoffSilently(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.f.script(ghView, prOpenBy("alice"))
 	fx.f.script(unpushed, "")
-	fx.in.flags.leaveOpen = true
+	fx.in.Flags.LeaveOpen = true
 
-	src := taskHandoff(fx.in.storage, "GH-1")
+	src := archive.TaskHandoff(fx.in.Storage, "GH-1")
 	writeHandoffFile(t, src, "abc")
 
 	out, err := fx.run(t)
@@ -2842,12 +2865,12 @@ func TestFinishMergedWithoutWorktreePrintsTheHandoff(t *testing.T) {
 	fx.f.script(lsRem, "")
 	fx.f.script("git rev-parse --verify -q refs/heads/GH-1", "abc1234567")
 
-	src := taskHandoff(fx.in.storage, "GH-1")
+	src := archive.TaskHandoff(fx.in.Storage, "GH-1")
 	writeHandoffFile(t, src, "abc1234567")
 
 	var handed []string
 
-	fx.in.handoff = func(lines []string) { handed = lines }
+	fx.in.Handoff = func(lines []string) { handed = lines }
 
 	out, err := fx.run(t)
 	if err != nil {
@@ -2980,12 +3003,12 @@ func TestFinishRefOnADetachedHead(t *testing.T) {
 	repo := tracedRepo(t, "DM-5/fix", "")
 	git(t, repo, "checkout", "-q", "--detach")
 
-	tg, err := targetAt(t.Context(), repo, false, "finish")
+	tg, err := target.At(t.Context(), repo, false, "finish")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if r, _, branch, err := finishRef(t.Context(), tg, ""); err == nil || branch == "HEAD" {
+	if r, _, branch, err := finish.Ref(t.Context(), tg, ""); err == nil || branch == "HEAD" {
 		t.Errorf("detached = %q on %q, %v; want a refusal", r.ID, branch, err)
 	}
 }
@@ -3016,7 +3039,7 @@ func TestFinishReportRowOrder(t *testing.T) {
 		"left open": {func(fx *finishFixture) {
 			fx.f.script(ghView, prOpenBy("alice"))
 			fx.f.script(unpushed, "")
-			fx.in.flags.leaveOpen = true
+			fx.in.Flags.LeaveOpen = true
 		}, "task pr plan workspace path"},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -3043,7 +3066,7 @@ func TestFinishMergedWithoutWorktreeSweeps(t *testing.T) {
 	fx.f.script(ghView, prMerged)
 	fx.f.script(lsRem, "")
 	fx.f.script("sweep", "")
-	fx.in.sweep = func(context.Context) { fx.f.answer("sweep") }
+	fx.in.Sweep = func(context.Context) { fx.f.answer("sweep") }
 
 	if out, err := fx.run(t); err != nil {
 		t.Fatalf("%v\n%s", err, out)

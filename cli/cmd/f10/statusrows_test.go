@@ -14,12 +14,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/archive"
+	"github.com/amberpixels/f10/cli/internal/drive"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
+	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -40,39 +45,39 @@ func TestStageOf(t *testing.T) {
 		baseDone    bool
 		stage, step string
 	}{
-		{"finished", facts{Finished: true}, false, stageDone, "finish"},
-		{"merged", facts{PR: merged, Run: run("prior", "done", "done", "")}, false, stageDone, "finish"},
-		{"ask", facts{Run: asking}, false, stageAsking, "judge"},
+		{"finished", facts{Finished: true}, false, statusview.StageDone, "finish"},
+		{"merged", facts{PR: merged, Run: run("prior", "done", "done", "")}, false, statusview.StageDone, "finish"},
+		{"ask", facts{Run: asking}, false, statusview.StageAsking, "judge"},
 		{
 			"drive halt",
 			facts{Halt: &lookaround.Halt{Skill: "ship"}, Run: run("prior", "done", "running", "implement")},
-			false, stageHalted, "ship",
+			false, statusview.StageHalted, "ship",
 		},
-		{"run stopped", facts{Run: run("prior", "done", "failed", "pr")}, false, stageHalted, "pr"},
-		{"implementing", facts{Run: run("prior", "done", "running", "cleanup")}, false, stageImplementing, "cleanup"},
-		{"reviewing", facts{Run: run("prior", "done", "running", "review")}, false, stageReviewing, "review"},
-		{"resolving", facts{Run: run("prior", "done", "running", "resolve")}, false, stageResolving, "resolve"},
-		{"judging", facts{Run: run("prior", "done", "running", "judge")}, false, stageJudging, "judge"},
+		{"run stopped", facts{Run: run("prior", "done", "failed", "pr")}, false, statusview.StageHalted, "pr"},
+		{"implementing", facts{Run: run("prior", "done", "running", "cleanup")}, false, statusview.StageImplementing, "cleanup"},
+		{"reviewing", facts{Run: run("prior", "done", "running", "review")}, false, statusview.StageReviewing, "review"},
+		{"resolving", facts{Run: run("prior", "done", "running", "resolve")}, false, statusview.StageResolving, "resolve"},
+		{"judging", facts{Run: run("prior", "done", "running", "judge")}, false, statusview.StageJudging, "judge"},
 		{
 			"shipped",
 			facts{Run: &state.Run{Capture: "prior", Plan: "done", Ship: "done", Final: "pr"}},
-			false, stageShipped, "pr",
+			false, statusview.StageShipped, "pr",
 		},
-		{"planning", facts{Run: run("skipped", "running", "upcoming", "")}, false, stagePlanning, "plan"},
-		{"planned", facts{Run: run("skipped", "done", "upcoming", "")}, false, stagePlanned, "plan"},
-		{"after, no drive", facts{Base: "FT-1"}, false, stageNotStarted, "after FT-1"},
-		{"waiting", facts{Base: "FT-1", Driven: true}, false, stageWaiting, "after FT-1"},
+		{"planning", facts{Run: run("skipped", "running", "upcoming", "")}, false, statusview.StagePlanning, "plan"},
+		{"planned", facts{Run: run("skipped", "done", "upcoming", "")}, false, statusview.StagePlanned, "plan"},
+		{"after, no drive", facts{Base: "FT-1"}, false, statusview.StageNotStarted, "after FT-1"},
+		{"waiting", facts{Base: "FT-1", Driven: true}, false, statusview.StageWaiting, "after FT-1"},
 		{
 			"parked",
 			facts{Run: &state.Run{Capture: "prior", Plan: "done", Ship: "blocked", Leaf: "implement", Wait: "FT-1"}},
-			false, stageWaiting, "on FT-1",
+			false, statusview.StageWaiting, "on FT-1",
 		},
-		{"base done", facts{Base: "FT-1"}, true, stageNotStarted, ""},
-		{"queued", facts{Queued: true, Base: "FT-1"}, false, stageQueued, ""},
+		{"base done", facts{Base: "FT-1"}, true, statusview.StageNotStarted, ""},
+		{"queued", facts{Queued: true, Base: "FT-1"}, false, statusview.StageQueued, ""},
 		{
 			"parked by its drive",
 			facts{Run: run("skipped", "done", "upcoming", ""), Base: "FT-1", DrivePhase: drives.PhaseParked},
-			false, stageWaiting, "on FT-1",
+			false, statusview.StageWaiting, "on FT-1",
 		},
 		{
 			"finish waits for its base",
@@ -80,12 +85,12 @@ func TestStageOf(t *testing.T) {
 				Run:  &state.Run{Capture: "prior", Plan: "done", Ship: "done", Final: "pr"},
 				Base: "FT-1", DrivePhase: drives.PhaseWaiting,
 			},
-			false, stageWaiting, "to finish after FT-1",
+			false, statusview.StageWaiting, "to finish after FT-1",
 		},
-		{"nothing", facts{}, false, stageNotStarted, ""},
+		{"nothing", facts{}, false, statusview.StageNotStarted, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if stage, step := stageOf(tc.f, tc.baseDone); stage != tc.stage || step != tc.step {
+			if stage, step := statusview.StageOf(tc.f, tc.baseDone); stage != tc.stage || step != tc.step {
 				t.Errorf("stageOf = %q %q, want %q %q", stage, step, tc.stage, tc.step)
 			}
 		})
@@ -117,7 +122,7 @@ func TestDrivenTasks(t *testing.T) {
 		t.Cleanup(lease.Release)
 	}
 
-	got := drivenTasks(drives.Active(root))
+	got := statusview.DrivenTasks(drives.Active(root))
 	want := map[string]bool{"FT-2": true, "FT-3": true}
 
 	if len(got) != len(want) || !got["FT-2"] || !got["FT-3"] {
@@ -136,7 +141,7 @@ func TestRowsFromTheLedger(t *testing.T) {
 	t0 := time.Unix(1_800_000_000, 0)
 	at := func(m int) time.Time { return t0.Add(time.Duration(m) * time.Minute) }
 
-	src := rowSource{events: []ledger.Event{
+	src := statusview.RowSource{Events: []ledger.Event{
 		event(
 			at(1),
 			"FT-1",
@@ -179,8 +184,8 @@ func TestRowsFromTheLedger(t *testing.T) {
 			"next":    "rebase",
 		}),
 	}}
-	src.driven = map[string]bool{"FT-6": true}
-	src.resolve = func(tok string) string {
+	src.Driven = map[string]bool{"FT-6": true}
+	src.Resolve = func(tok string) string {
 		if tok == "" {
 			t.Error("resolved an empty finish argument")
 		}
@@ -188,7 +193,7 @@ func TestRowsFromTheLedger(t *testing.T) {
 		return "FT-" + strings.TrimPrefix(tok, "FT-")
 	}
 
-	rows := src.rowsFrom(t.Context(), []childRow{
+	rows := src.RowsFrom(t.Context(), []stack.ChildRow{
 		{ID: "FT-1", Title: "trailers"},
 		{ID: "FT-2", Title: "state block"},
 		{ID: "FT-3", Title: "look-around"},
@@ -200,7 +205,7 @@ func TestRowsFromTheLedger(t *testing.T) {
 		{ID: "FT-10", Title: "after board, no drive", After: "FT-5", Depth: 1},
 	})
 
-	got := map[string]taskRow{}
+	got := map[string]statusview.TaskRow{}
 	for _, r := range rows {
 		got[r.ID] = r
 	}
@@ -213,15 +218,15 @@ func TestRowsFromTheLedger(t *testing.T) {
 		}
 	}
 
-	check("FT-1", stageDone, "finish")
-	check("FT-2", stageHalted, "ship")
-	check("FT-3", stageReviewing, "review")
-	check("FT-4", stageAsking, "judge")
-	check("FT-5", stageHalted, "pr")
-	check("FT-6", stageWaiting, "after FT-5")
-	check("FT-7", stageNotStarted, "")
-	check("FT-8", stageDone, "finish")
-	check("FT-10", stageNotStarted, "after FT-5")
+	check("FT-1", statusview.StageDone, "finish")
+	check("FT-2", statusview.StageHalted, "ship")
+	check("FT-3", statusview.StageReviewing, "review")
+	check("FT-4", statusview.StageAsking, "judge")
+	check("FT-5", statusview.StageHalted, "pr")
+	check("FT-6", statusview.StageWaiting, "after FT-5")
+	check("FT-7", statusview.StageNotStarted, "")
+	check("FT-8", statusview.StageDone, "finish")
+	check("FT-10", statusview.StageNotStarted, "after FT-5")
 
 	if r := got["FT-1"]; r.PR != "https://github.com/a/b/pull/128" {
 		t.Errorf("FT-1 PR = %q, want the ledger's url", r.PR)
@@ -273,35 +278,53 @@ var updateGolden = flag.Bool("update", false, "rewrite the golden files")
 // task row carries an id, and none of it is a markdown table.
 func TestRenderRows(t *testing.T) {
 	gh := func(kind string, n int) string { return "https://github.com/a/b/" + kind + "/" + strconv.Itoa(n) }
-	rows := []taskRow{
+	rows := []statusview.TaskRow{
 		{
-			ID: "FT-206", URL: gh("issues", 206), Title: "Show who runs a driven finish", Stage: stageDone,
+			ID: "FT-206", URL: gh("issues", 206), Title: "Show who runs a driven finish", Stage: statusview.StageDone,
 			Step: "finish", PR: gh("pull", 208), PRState: "merged",
 		},
 		{
-			ID: "FT-210", URL: gh("issues", 210), Title: "Keep a drive as a record", Stage: stageDone,
+			ID: "FT-210", URL: gh("issues", 210), Title: "Keep a drive as a record", Stage: statusview.StageDone,
 			Step: "finish", PR: gh("pull", 216), PRState: "merged",
 		},
 		{
-			ID: "FT-212", URL: gh("issues", 212), Title: "Run drives in a per-user daemon", Depth: 1,
-			After: "FT-210", Stage: stageReviewing, Step: "review", PR: gh("pull", 219), PRState: forge.Open,
-			Gates: []gate{{Step: "judge", Judged: "plan", State: gateDone, Outcome: &judgeOutcome{Verdict: "proceed"}}},
+			ID:      "FT-212",
+			URL:     gh("issues", 212),
+			Title:   "Run drives in a per-user daemon",
+			Depth:   1,
+			After:   "FT-210",
+			Stage:   statusview.StageReviewing,
+			Step:    "review",
+			PR:      gh("pull", 219),
+			PRState: forge.Open,
+			Gates: []statusview.Gate{
+				{
+					Step:    "judge",
+					Judged:  "plan",
+					State:   statusview.GateDone,
+					Outcome: &archive.JudgeOutcome{Verdict: "proceed"},
+				},
+			},
 		},
 		{
 			ID: "FT-213", URL: gh("issues", 213), Title: "Keep asks in an inbox the user is told about",
-			Depth: 2, After: "FT-212", Stage: stageHalted, Step: "implement",
+			Depth: 2, After: "FT-212", Stage: statusview.StageHalted, Step: "implement",
 			Note: "catchup guard: merging FT-212 conflicts in drives/record.go",
 			Next: "/f10:catchup, then /f10:ship FT-213",
 		},
 		{
 			ID: "FT-214", URL: gh("issues", 214), Title: "Let the daemon watch tasks no drive owns", Depth: 2,
-			After: "FT-212", Stage: stageAsking, Step: "judge", Ask: "1. Proceed? [yes | no]",
+			After: "FT-212", Stage: statusview.StageAsking, Step: "judge", Ask: "1. Proceed? [yes | no]",
 		},
-		{ID: "FT-230", URL: gh("issues", 230), Title: "An unrelated task", Stage: stageNotStarted},
+		{ID: "FT-230", URL: gh("issues", 230), Title: "An unrelated task", Stage: statusview.StageNotStarted},
 	}
 
 	var out bytes.Buffer
-	if err := renderRows(&out, rows, rowView{parent: "FT-209", plain: true, width: 100}); err != nil {
+	if err := statusview.RenderRows(
+		&out,
+		rows,
+		statusview.RowView{Parent: "FT-209", Plain: true, Width: 100},
+	); err != nil {
 		t.Fatal(err)
 	}
 
@@ -315,13 +338,13 @@ func TestRenderRows(t *testing.T) {
 	// on a terminal the id and the PR are links that take no columns
 	out.Reset()
 
-	if err := renderRows(&out, rows[:1], rowView{term: true, width: 80}); err != nil {
+	if err := statusview.RenderRows(&out, rows[:1], statusview.RowView{Term: true, Width: 80}); err != nil {
 		t.Fatal(err)
 	}
 
 	line, _, _ := strings.Cut(out.String(), "\n")
-	if !strings.Contains(line, hyperlink(rows[0].URL, "FT-206")) ||
-		!strings.Contains(line, hyperlink(rows[0].PR, "\U000F062D #208 merged")) {
+	if !strings.Contains(line, render.Hyperlink(rows[0].URL, "FT-206")) ||
+		!strings.Contains(line, render.Hyperlink(rows[0].PR, "\U000F062D #208 merged")) {
 		t.Errorf("a terminal line = %q, want the id and the PR linked", line)
 	}
 
@@ -343,19 +366,34 @@ func TestRenderRows(t *testing.T) {
 
 // A finished task alone is a one-row tree with every gate on a line.
 func TestRenderFinishedRow(t *testing.T) {
-	row := taskRow{
-		ID: "FT-210", URL: "https://github.com/a/b/issues/210", Title: "Keep a drive as a record",
-		Stage: stageDone, Step: "finish", PR: "https://github.com/a/b/pull/216", PRState: "merged", full: true,
-		Gates: []gate{
-			{Step: "judge", Judged: "plan", State: gateDone, Outcome: &judgeOutcome{Verdict: "proceed"}},
-			{Step: "implement", State: gateDone},
-			{Step: "cleanup", State: gateDone},
-			{Step: "pr", State: gateDone},
+	row := statusview.TaskRow{
+		ID:      "FT-210",
+		URL:     "https://github.com/a/b/issues/210",
+		Title:   "Keep a drive as a record",
+		Stage:   statusview.StageDone,
+		Step:    "finish",
+		PR:      "https://github.com/a/b/pull/216",
+		PRState: "merged",
+		Full:    true,
+		Gates: []statusview.Gate{
+			{
+				Step:    "judge",
+				Judged:  "plan",
+				State:   statusview.GateDone,
+				Outcome: &archive.JudgeOutcome{Verdict: "proceed"},
+			},
+			{Step: "implement", State: statusview.GateDone},
+			{Step: "cleanup", State: statusview.GateDone},
+			{Step: "pr", State: statusview.GateDone},
 		},
 	}
 
 	var out bytes.Buffer
-	if err := renderRows(&out, []taskRow{row}, rowView{plain: true, width: 100}); err != nil {
+	if err := statusview.RenderRows(
+		&out,
+		[]statusview.TaskRow{row},
+		statusview.RowView{Plain: true, Width: 100},
+	); err != nil {
 		t.Fatal(err)
 	}
 
@@ -385,10 +423,10 @@ func TestStatusTaskWithNoRun(t *testing.T) {
 		warned   bool
 	}{
 		{name: "has a checkout", checkout: true, printed: true},
-		{name: "finished", kids: "[]", archived: true, printed: true, stage: stageDone},
+		{name: "finished", kids: "[]", archived: true, printed: true, stage: statusview.StageDone},
 		{name: "parent", kids: `[{"number":2,"title":"kid","state":"open","html_url":"https://x/2","body":"","labels":[]}]`, printed: true},
-		{name: "host down", fail: true, err: errNoRunToRead, warned: true},
-		{name: "guessed", guessed: true, err: errNoRunToRead},
+		{name: "host down", fail: true, err: statusview.ErrNoRunToRead, warned: true},
+		{name: "guessed", guessed: true, err: statusview.ErrNoRunToRead},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFakes(t)
@@ -406,12 +444,12 @@ func TestStatusTaskWithNoRun(t *testing.T) {
 			}
 
 			if tc.archived {
-				tr := tg.tracker()
-				if err := os.MkdirAll(tr.storage.Archive(), 0o750); err != nil {
+				tr := stack.TrackerFor(tg)
+				if err := os.MkdirAll(tr.Storage.Archive(), 0o750); err != nil {
 					t.Fatal(err)
 				}
 
-				if err := os.WriteFile(filepath.Join(tr.storage.Archive(), "FT-1.md"), nil, 0o600); err != nil {
+				if err := os.WriteFile(filepath.Join(tr.Storage.Archive(), "FT-1.md"), nil, 0o600); err != nil {
 					t.Fatal(err)
 				}
 
@@ -437,20 +475,25 @@ func TestStatusTaskWithNoRun(t *testing.T) {
 				f.script(subIssues, tc.kids)
 			}
 
-			rd, err := newStatusReader(tg, time.Now())
+			rd, err := statusview.NewStatusReader(tg, time.Now())
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			var out, warn bytes.Buffer
 
-			p, err := rd.task(t.Context(), statusView{w: &out, warn: &warn, json: true}, "FT-1", tc.guessed)
+			p, err := rd.Task(
+				t.Context(),
+				statusview.StatusView{Out: &out, Warn: &warn, JSON: true},
+				"FT-1",
+				tc.guessed,
+			)
 			if !errors.Is(err, tc.err) || (tc.err == nil && err != nil) {
 				t.Fatalf("err = %v, want %v", err, tc.err)
 			}
 
-			if p.printed != tc.printed {
-				t.Errorf("printed = %v, want %v:\n%s", p.printed, tc.printed, out.String())
+			if p.Printed != tc.printed {
+				t.Errorf("printed = %v, want %v:\n%s", p.Printed, tc.printed, out.String())
 			}
 
 			if got := warn.Len() > 0; got != tc.warned {
@@ -462,7 +505,7 @@ func TestStatusTaskWithNoRun(t *testing.T) {
 			}
 
 			if tc.stage != "" {
-				var rows []taskRow
+				var rows []statusview.TaskRow
 				if err := json.Unmarshal(
 					out.Bytes(),
 					&rows,
@@ -479,15 +522,19 @@ func TestStatusTaskWithNoRun(t *testing.T) {
 func TestRowStepNamesDriveFinish(t *testing.T) {
 	f := lookaround.TaskFacts{Run: &state.Run{Plan: "done", Ship: "done"}}
 
-	row := taskRow{Gates: []gate{{Step: "finish", State: gateRunning, Via: viaDrive, Action: "merging #204"}}}
-	row.finish(f, false)
+	row := statusview.TaskRow{
+		Gates: []statusview.Gate{
+			{Step: "finish", State: statusview.GateRunning, Via: statusview.ViaDrive, Action: "merging #204"},
+		},
+	}
+	row.Finish(f, false)
 
-	if row.Stage != stageShipped || row.Step != "finish: running (drive): merging #204" {
+	if row.Stage != statusview.StageShipped || row.Step != "finish: running (drive): merging #204" {
 		t.Errorf("row = %s / %q, want shipped / the finish action", row.Stage, row.Step)
 	}
 
-	plain := taskRow{Gates: []gate{{Step: "finish", State: gateUpcoming}}}
-	plain.finish(f, false)
+	plain := statusview.TaskRow{Gates: []statusview.Gate{{Step: "finish", State: statusview.GateUpcoming}}}
+	plain.Finish(f, false)
 
 	if plain.Step != "ship" {
 		t.Errorf("an upcoming finish changed the step to %q", plain.Step)
@@ -504,27 +551,27 @@ func TestPRColumnIcons(t *testing.T) {
 		forge.Merged: "\U000F062D #7 merged",
 		"closed":     "#7 closed",
 	} {
-		if got := prColumn(taskRow{PR: pr, PRState: state}); got != want {
+		if got := statusview.PRColumn(statusview.TaskRow{PR: pr, PRState: state}); got != want {
 			t.Errorf("%s: %q, want %q", state, got, want)
 		}
 	}
 
 	t.Setenv("F10_STATUS_GLYPHS", "PR MR rv jd")
 
-	if got := prColumn(taskRow{PR: pr, PRState: forge.Merged}); got != "MR #7 merged" {
+	if got := statusview.PRColumn(statusview.TaskRow{PR: pr, PRState: forge.Merged}); got != "MR #7 merged" {
 		t.Errorf("with F10_STATUS_GLYPHS: %q", got)
 	}
 
 	t.Setenv("F10_STATUS_GLYPHS", "too few")
 
-	if got := prColumn(taskRow{PR: pr}); got != "\U000F04C2 #7" {
+	if got := statusview.PRColumn(statusview.TaskRow{PR: pr}); got != "\U000F04C2 #7" {
 		t.Errorf("a short F10_STATUS_GLYPHS replaced the icons: %q", got)
 	}
 }
 
 // A halt drive records reads back through the ledger's readers.
 func TestHaltPayloadReadsBack(t *testing.T) {
-	p := haltPayload(driveResult{skill: "ship", reason: "stalled"})
+	p := drive.HaltPayload(drive.DriveResult{Skill: "ship", Reason: "stalled"})
 
 	e := ledger.Event{Kind: ledger.TaskHalted, Payload: ledger.NewPayload(p)}
 	if e.Skill() != "ship" || e.Reason() != "stalled" {
@@ -543,32 +590,32 @@ func TestGatherReadsTheBranchRequests(t *testing.T) {
 	merged := lookaround.PR{Number: 40, Status: forge.Merged, Head: "FT-5/x", MergedAt: time.Now()}
 	open := lookaround.PR{Number: 41, Status: forge.Open, Head: "FT-5/z"}
 
-	src := rowSource{
-		live: []*state.Run{run},
-		checkout: func(_ context.Context, _, suffix string) (string, string) {
+	src := statusview.RowSource{
+		Live: []*state.Run{run},
+		Checkout: func(_ context.Context, _, suffix string) (string, string) {
 			if suffix == "" {
 				return "FT-5/y", "/w/FT-5"
 			}
 
 			return "", ""
 		},
-		requests: map[string][]lookaround.PR{"FT-5": {merged, open}},
+		Requests: map[string][]lookaround.PR{"FT-5": {merged, open}},
 	}
 
-	if _, f := src.gather(t.Context(), childRow{ID: "FT-5"}); f.PR != nil {
+	if _, f := src.Gather(t.Context(), stack.ChildRow{ID: "FT-5"}); f.PR != nil {
 		t.Errorf("FT-5/y read request #%d of another head", f.PR.Number)
-	} else if stage, _ := stageOf(f, false); stage != stageImplementing {
+	} else if stage, _ := statusview.StageOf(f, false); stage != statusview.StageImplementing {
 		t.Errorf("stage = %s, want implementing", stage)
 	}
 
 	var wg sync.WaitGroup
 	for range 8 {
-		wg.Go(func() { src.gather(t.Context(), childRow{ID: "FT-5", suffix: "2"}) })
+		wg.Go(func() { src.Gather(t.Context(), stack.ChildRow{ID: "FT-5", Suffix: "2"}) })
 	}
 
 	wg.Wait()
 
-	if got := src.requests["FT-5"]; got[0].Number != 40 || got[1].Number != 41 {
+	if got := src.Requests["FT-5"]; got[0].Number != 40 || got[1].Number != 41 {
 		t.Errorf("the shared requests were reordered: #%d, #%d", got[0].Number, got[1].Number)
 	}
 }

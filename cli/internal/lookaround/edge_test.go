@@ -10,6 +10,8 @@ import (
 )
 
 func TestReadRootOnTheEdgeFixture(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		files []string
 		round int
@@ -56,6 +58,8 @@ func TestReadRootOnTheEdgeFixture(t *testing.T) {
 // The board reads each key's highest-numbered file, and a file that does
 // not parse becomes a note instead of a value.
 func TestReadRootReadsTheLatestFiles(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 
 	write := func(path, text string) {

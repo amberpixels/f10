@@ -6,6 +6,8 @@ import (
 )
 
 func TestReviewValidate(t *testing.T) {
+	t.Parallel()
+
 	ok := Review{
 		Reviewer: "claude[bot]", ReviewerKind: ReviewerBot, Arrives: ArrivesComment, Trigger: TriggerAutomatic,
 		Done: DonePosted, Handled: HandledReaction, HandledText: "eyes",

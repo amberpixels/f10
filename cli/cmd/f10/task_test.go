@@ -13,11 +13,16 @@ import (
 	"strings"
 	"testing"
 
+	boardcmd "github.com/amberpixels/f10/cli/internal/command/board"
+	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/images"
 	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -40,13 +45,13 @@ func TestWithImages(t *testing.T) {
 	d := images.Downloader{Client: srv.Client()}
 
 	plain := "# GH-1: no images\n\nbody\n"
-	if got := withImages(context.Background(), plain, dir, d); got != plain {
+	if got := taskcmd.WithImages(context.Background(), plain, dir, d); got != plain {
 		t.Errorf("withImages(plain) = %q, want it unchanged", got)
 	}
 
 	doc := "# GH-1: shots\n\n![a](" + srv.URL + "/shot.png)\n\n---\n\n**bob**\n\n" + srv.URL + "/gone.png\n"
 
-	got := withImages(context.Background(), doc, dir, d)
+	got := taskcmd.WithImages(context.Background(), doc, dir, d)
 	want := strings.TrimRight(doc, "\n") + "\n\n" +
 		"Images: " + filepath.Join(dir, "1.png") + " - read each before summarising\n" +
 		"Images not downloaded: " + srv.URL + "/gone.png (HTTP 404)\n"
@@ -64,7 +69,7 @@ func TestWithImagesUnwritableDir(t *testing.T) {
 
 	doc := "# GH-1\n\n![a](https://x.io/a.png)\n"
 
-	got := withImages(context.Background(), doc, filepath.Join(blocker, "GH-1"), images.Downloader{})
+	got := taskcmd.WithImages(context.Background(), doc, filepath.Join(blocker, "GH-1"), images.Downloader{})
 	if !strings.HasPrefix(got, doc) || !strings.Contains(got, "Images not downloaded: https://x.io/a.png (") {
 		t.Errorf("withImages = %q, want the doc and the image named as failed", got)
 	}
@@ -79,9 +84,9 @@ func TestGithubAuthScopesTheToken(t *testing.T) {
 
 	t.Setenv("PATH", bin)
 
-	tg := &target{dir: t.TempDir(), pb: &probe.Probes{CLI: probe.Signal{Value: "gh"}}}
+	tg := &target.Target{Dir: t.TempDir(), Probes: &probe.Probes{CLI: probe.Signal{Value: "gh"}}}
 
-	auth := githubAuth(context.Background(), tg)
+	auth := taskcmd.GithubAuth(context.Background(), tg)
 	if auth == nil {
 		t.Fatal("githubAuth = nil on a gh host")
 	}
@@ -115,7 +120,7 @@ func TestListURLs(t *testing.T) {
 		{"gh", "https://github.com/o/r/issues", "https://github.com/o/r/pulls"},
 		{"glab", "https://gitlab.example.com/g/r/-/issues", "https://gitlab.example.com/g/r/-/merge_requests"},
 	} {
-		h := newHost(tc.cli, "")
+		h := hostops.NewHost(tc.cli, "")
 
 		if got, err := h.IssuesURL(t.Context()); err != nil || got != tc.issues {
 			t.Errorf("%s issues = %q, %v; want %q", tc.cli, got, err, tc.issues)
@@ -131,18 +136,18 @@ func TestListURLs(t *testing.T) {
 func TestTaskListURL(t *testing.T) {
 	f := newFakes(t)
 	tg := childTarget(t, "gh")
-	writeDriver(t, tg.lay.StorageRoot.Path())
+	writeDriver(t, tg.Layout.StorageRoot.Path())
 
 	f.script("driver index", "https://tracker.example.com/board\n")
 
-	if got, err := taskListURL(t.Context(), tg); err != nil || got != "https://tracker.example.com/board" {
+	if got, err := taskcmd.TaskListURL(t.Context(), tg); err != nil || got != "https://tracker.example.com/board" {
 		t.Errorf("driver index = %q, %v", got, err)
 	}
 
 	f.fail("driver index", shell.Result{Code: driver.ExitUnsupported})
 	f.script("gh repo view --json url", `{"url":"https://github.com/o/r"}`)
 
-	if got, err := taskListURL(t.Context(), tg); err != nil || got != "https://github.com/o/r/issues" {
+	if got, err := taskcmd.TaskListURL(t.Context(), tg); err != nil || got != "https://github.com/o/r/issues" {
 		t.Errorf("fallback = %q, %v", got, err)
 	}
 }
@@ -153,7 +158,7 @@ func TestTaskListURL(t *testing.T) {
 func TestTaskRows(t *testing.T) {
 	f := newFakes(t)
 	tg := childTarget(t, "gh")
-	writeDriver(t, tg.lay.StorageRoot.Path())
+	writeDriver(t, tg.Layout.StorageRoot.Path())
 
 	f.script(
 		"driver list",
@@ -161,19 +166,19 @@ func TestTaskRows(t *testing.T) {
 			`"body":"Some text.\n\nAfter: 12\n"}]`,
 	)
 
-	rows, err := taskRows(t.Context(), tg, issuePage)
+	rows, err := stack.TaskRows(t.Context(), tg, hostops.IssuePage)
 	if err != nil || len(rows) != 1 || rows[0].ID != "FT-9" || rows[0].Priority != "high" {
 		t.Errorf("driver list = %+v, %v", rows, err)
 	}
 
 	// the body is read for its After: line, a bare number in the project's
 	// format, and never printed
-	if tasks := boardTasks(rows, "FT"); len(tasks) != 1 || tasks[0].After != "FT-12" {
+	if tasks := boardcmd.BoardTasks(rows, "FT"); len(tasks) != 1 || tasks[0].After != "FT-12" {
 		t.Errorf("board tasks = %+v, want After FT-12", tasks)
 	}
 
 	var printed bytes.Buffer
-	if err := writeRows(&printed, rows, "none"); err != nil || strings.Contains(printed.String(), "body") {
+	if err := hostops.WriteRows(&printed, rows, "none"); err != nil || strings.Contains(printed.String(), "body") {
 		t.Errorf("printed rows = %q, %v; want no body", printed.String(), err)
 	}
 
@@ -185,19 +190,19 @@ func TestTaskRows(t *testing.T) {
 			`{"number":9,"title":"two labels","state":"OPEN","url":"https://github.com/o/r/issues/9","labels":[{"name":"p1"},{"name":"P3"}]}]`,
 	)
 
-	rows, err = taskRows(t.Context(), tg, issuePage)
+	rows, err = stack.TaskRows(t.Context(), tg, hostops.IssuePage)
 	if err != nil || len(rows) != 3 || rows[0].ID != "FT-7" || rows[0].Status != "OPEN" || rows[0].Priority != "" {
 		t.Errorf("fallback without a map = %+v, %v", rows, err)
 	}
 
-	tg.eff.PriorityLabels = map[string]string{"p1": "high", "p3": "low"}
+	tg.Effective.PriorityLabels = map[string]string{"p1": "high", "p3": "low"}
 
-	rows, err = taskRows(t.Context(), tg, issuePage)
+	rows, err = stack.TaskRows(t.Context(), tg, hostops.IssuePage)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	rows = rankRows(rows)
+	rows = taskcmd.RankRows(rows)
 
 	got := make([]string, 0, len(rows))
 	for _, r := range rows {
@@ -215,18 +220,18 @@ func TestTaskRows(t *testing.T) {
 func TestWriteTaskListRanksAndWarns(t *testing.T) {
 	f := newFakes(t)
 	tg := childTarget(t, "gh")
-	writeDriver(t, tg.lay.StorageRoot.Path())
+	writeDriver(t, tg.Layout.StorageRoot.Path())
 
 	f.script("driver list", `[{"id":"FT-1","title":"a","priority":"Highest"},{"id":"FT-2","title":"b"},`+
 		`{"id":"FT-3","title":"c","priority":"low"},{"id":"FT-4","title":"d","priority":"HIGH"},`+
 		`{"id":"FT-5","title":"e","priority":"Highest"}]`)
 
 	var out, warn bytes.Buffer
-	if err := writeTaskList(t.Context(), tg, &out, &warn); err != nil {
+	if err := taskcmd.WriteTaskList(t.Context(), tg, &out, &warn); err != nil {
 		t.Fatal(err)
 	}
 
-	var rows []row
+	var rows []hostops.Row
 	if err := json.Unmarshal(out.Bytes(), &rows); err != nil {
 		t.Fatalf("%v\n%s", err, out.String())
 	}
@@ -250,12 +255,12 @@ func TestWriteTaskListRanksAndWarns(t *testing.T) {
 		`[{"number":7,"title":"low","state":"OPEN","labels":[{"name":"P3"}]},`+
 			`{"number":8,"title":"none","state":"OPEN","labels":[]},`+
 			`{"number":9,"title":"high","state":"OPEN","labels":[{"name":"P1"}]}]`)
-	tg.eff.PriorityLabels = map[string]string{"p1": "high", "p3": "low"}
+	tg.Effective.PriorityLabels = map[string]string{"p1": "high", "p3": "low"}
 
 	out.Reset()
 	warn.Reset()
 
-	if err := writeTaskList(t.Context(), tg, &out, &warn); err != nil {
+	if err := taskcmd.WriteTaskList(t.Context(), tg, &out, &warn); err != nil {
 		t.Fatal(err)
 	}
 
@@ -274,7 +279,7 @@ func TestWriteTaskListRanksAndWarns(t *testing.T) {
 func TestSettleAndRankPriorities(t *testing.T) {
 	var warn bytes.Buffer
 
-	rows := settlePriorities([]row{
+	rows := hostops.SettlePriorities([]hostops.Row{
 		{ID: "a"},
 		{ID: "b", Priority: "Highest"},
 		{ID: "c", Priority: " LOW "},
@@ -292,7 +297,7 @@ func TestSettleAndRankPriorities(t *testing.T) {
 	}
 
 	var order strings.Builder
-	for _, r := range rankRows(rows) {
+	for _, r := range taskcmd.RankRows(rows) {
 		order.WriteString(r.ID)
 	}
 
@@ -300,7 +305,7 @@ func TestSettleAndRankPriorities(t *testing.T) {
 		t.Errorf("ranked order = %q, want ecfabd", order.String())
 	}
 
-	if len(rankRows(nil)) != 0 {
+	if len(taskcmd.RankRows(nil)) != 0 {
 		t.Error("ranking nothing produced rows")
 	}
 }
@@ -309,9 +314,9 @@ func TestSettleAndRankPriorities(t *testing.T) {
 // one, so a project with nothing declared sees no priority key.
 func TestWriteRowsJSONPriority(t *testing.T) {
 	var out bytes.Buffer
-	if err := writeRows(
+	if err := hostops.WriteRows(
 		&out,
-		[]row{{ID: "FT-1", Title: "a", Priority: "high"}, {ID: "FT-2", Title: "b"}},
+		[]hostops.Row{{ID: "FT-1", Title: "a", Priority: "high"}, {ID: "FT-2", Title: "b"}},
 		"none",
 	); err != nil {
 		t.Fatal(err)
@@ -335,7 +340,7 @@ func TestPullRows(t *testing.T) {
 		{"gh", "#113", "https://github.com/o/r/pull/113"},
 		{"glab", "!4", "https://gitlab.example.com/g/r/-/merge_requests/4"},
 	} {
-		rows, err := newHost(tc.cli, "").pullRows(t.Context())
+		rows, err := hostops.NewHost(tc.cli, "").PullRows(t.Context())
 		if err != nil || len(rows) != 1 || rows[0].ID != tc.id || rows[0].Status != forge.Open ||
 			rows[0].URL != tc.url {
 			t.Errorf("%s rows = %+v, %v", tc.cli, rows, err)
@@ -520,7 +525,7 @@ func TestTaskCreateFailureMayExist(t *testing.T) {
 		"echo created it\n": "not one task id",
 	} {
 		_, _, err := runAppStdin(t, strings.NewReader("# A\n"), "-C", createRepo(t, script), "task", "create").streams()
-		if err == nil || !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), mayExist) {
+		if err == nil || !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), hostops.MayExist) {
 			t.Errorf("%q: err = %v, want %q and the may-exist warning", script, err, want)
 		}
 	}
@@ -534,7 +539,7 @@ func TestTaskCreateNotWrittenDropsMayExist(t *testing.T) {
 	_, _, err := runAppStdin(t, strings.NewReader("# A\n"), "-C", createRepo(t, script), "task", "create",
 		"--label", "bug").streams()
 	if err == nil || !strings.Contains(err.Error(), `is not an option of "Tags"`) ||
-		strings.Contains(err.Error(), mayExist) {
+		strings.Contains(err.Error(), hostops.MayExist) {
 		t.Errorf("err = %v, want the driver's stderr and no may-exist warning", err)
 	}
 }
@@ -644,7 +649,7 @@ func TestTaskCreateOnHostIssuesRefusesSet(t *testing.T) {
 		_, _, err := runAppStdin(t, strings.NewReader("# A\n"), "-C", repo, "task", "create", "--set",
 			"Kind=Bug").streams()
 		if err == nil || !strings.Contains(err.Error(), "nothing was created") ||
-			strings.Contains(err.Error(), mayExist) {
+			strings.Contains(err.Error(), hostops.MayExist) {
 			t.Errorf("%s: err = %v, want a refusal saying nothing was created", name, err)
 		}
 

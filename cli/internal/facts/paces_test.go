@@ -21,6 +21,8 @@ func decodePaces(t *testing.T, yml string) Declared {
 
 // Each shorthand reads as the dials it stands for.
 func TestPaceShorthands(t *testing.T) {
+	t.Parallel()
+
 	d := decodePaces(t, "paces:\n  quick: { judge: off, review: ci, finish: on, pr: { marker: fast } }\npace: quick\n")
 	p := d.Paces["quick"]
 
@@ -38,6 +40,8 @@ func TestPaceShorthands(t *testing.T) {
 }
 
 func TestPaceRefusals(t *testing.T) {
+	t.Parallel()
+
 	for yml, want := range map[string]string{
 		"paces:\n  x: { implement: off }\n":          "implement cannot be off",
 		"paces:\n  x: { judge: { rounds: 2 } }\n":    "rounds is a review dial",
@@ -64,6 +68,8 @@ func TestPaceRefusals(t *testing.T) {
 }
 
 func TestBuiltinPacesPass(t *testing.T) {
+	t.Parallel()
+
 	for name, p := range BuiltinPaces() {
 		if bad := CheckPace(name, p); len(bad) > 0 {
 			t.Errorf("%s: %v", name, bad)
@@ -74,6 +80,8 @@ func TestBuiltinPacesPass(t *testing.T) {
 // A worktree tuning one key of a pace keeps main's other keys, and each
 // key remembers its layer; the project's keys lie over the built-ins'.
 func TestPacesMergeKeyByKey(t *testing.T) {
+	t.Parallel()
+
 	var fm layered
 
 	fm.merge(decodePaces(t, "paces:\n  fast: { review: { rounds: 2 }, judge: off }\n"), "main")
@@ -100,6 +108,8 @@ func TestPacesMergeKeyByKey(t *testing.T) {
 }
 
 func TestResolveFlow(t *testing.T) {
+	t.Parallel()
+
 	written := strings.Fields("plan judge implement cleanup pr review:local judge pr")
 	s := NewPaceSet()
 
@@ -148,6 +158,8 @@ func TestResolveFlow(t *testing.T) {
 // Every built-in pace keeps handoff, ultra included: an auto-merged run is
 // where the list of what to do after merge matters most.
 func TestBuiltinPacesKeepHandoff(t *testing.T) {
+	t.Parallel()
+
 	written := strings.Fields("plan implement handoff pr")
 	s := NewPaceSet()
 
@@ -170,6 +182,8 @@ func TestBuiltinPacesKeepHandoff(t *testing.T) {
 // handoff: off reaches every pr entry as a dial, because the pr step runs the
 // handoff; a ceiling's handoff: on keeps the dial off them.
 func TestPaceHandoffOffReachesPR(t *testing.T) {
+	t.Parallel()
+
 	d := decodePaces(t, "paces:\n  quiet:\n    handoff: off\n")
 
 	s := NewPaceSet()
@@ -205,6 +219,8 @@ func TestPaceHandoffOffReachesPR(t *testing.T) {
 
 // handoff: off skips the entry like any step key, naming the pace.
 func TestPaceHandoffOff(t *testing.T) {
+	t.Parallel()
+
 	d := decodePaces(t, "paces:\n  quiet:\n    handoff: off\n")
 
 	s := NewPaceSet()
@@ -226,6 +242,8 @@ func TestPaceHandoffOff(t *testing.T) {
 
 // finish applies only where the run would stop at an open PR.
 func TestPaceFinishOnlyAtAPR(t *testing.T) {
+	t.Parallel()
+
 	s := NewPaceSet()
 
 	for flow, want := range map[string]bool{
@@ -249,6 +267,8 @@ func TestPaceFinishOnlyAtAPR(t *testing.T) {
 // A pace that leaves a flow invalid fails, naming the pace and the flow,
 // and shows as a problem at load.
 func TestPaceThatBreaksAFlow(t *testing.T) {
+	t.Parallel()
+
 	s := NewPaceSet()
 	s.Over(
 		map[string]Pace{"noplan": {Steps: map[string]Dials{"plan": {Off: true}}}},
@@ -274,6 +294,8 @@ func TestPaceThatBreaksAFlow(t *testing.T) {
 
 // A ceiling reads every pace shorthand plus on, with except beside it.
 func TestCeilingDecode(t *testing.T) {
+	t.Parallel()
+
 	d := decodePaces(t, "ceiling: { finish: off, judge: on, review: { rounds: 2 }, except: [ultra] }\n")
 
 	c := d.Ceiling
@@ -298,6 +320,8 @@ func TestCeilingDecode(t *testing.T) {
 }
 
 func TestCeilingRefusals(t *testing.T) {
+	t.Parallel()
+
 	for yml, want := range map[string]string{
 		"ceiling: { judge: off }\n":                  "a ceiling never skips a step",
 		"ceiling: { review: { by: local } }\n":       "by has no order",
@@ -318,6 +342,8 @@ func TestCeilingRefusals(t *testing.T) {
 // The worktree's ceiling key replaces main's and keeps main's others;
 // except is one list, replaced whole.
 func TestCeilingMergeKeyByKey(t *testing.T) {
+	t.Parallel()
+
 	var fm layered
 
 	fm.merge(decodePaces(t, "ceiling: { finish: off, judge: on, except: [ultra] }\n"), "main")
@@ -341,6 +367,8 @@ func TestCeilingMergeKeyByKey(t *testing.T) {
 // A ceiling slows every pace but the excepted one, a silent pace included,
 // and each capped dial says what the pace had.
 func TestCeilingCaps(t *testing.T) {
+	t.Parallel()
+
 	written := strings.Fields("plan judge implement cleanup pr review judge pr")
 	set := NewPaceSet()
 	set.Ceiling = Pace{
@@ -403,6 +431,8 @@ func TestCeilingCaps(t *testing.T) {
 
 // A ceiling's effort raises a pace's lower effort and leaves a silent one.
 func TestCeilingEffort(t *testing.T) {
+	t.Parallel()
+
 	set := NewPaceSet()
 	set.Ceiling = Pace{Steps: map[string]Dials{"judge": {Effort: "high"}}}
 
@@ -421,6 +451,8 @@ func TestCeilingEffort(t *testing.T) {
 // A ceiling judge: on under a pace that drops plan keeps a plan judge with
 // no plan, which the flow check refuses.
 func TestCeilingThatBreaksAFlow(t *testing.T) {
+	t.Parallel()
+
 	set := NewPaceSet()
 	set.Ceiling = Pace{Steps: map[string]Dials{"judge": {On: true}}}
 
@@ -443,6 +475,8 @@ func dialValue(dials []Dial, name string) string {
 // An optional CI review settles where the flow resolves: kept with a remote
 // reviewer and a PR before it, dropped otherwise, with the reason.
 func TestResolveOptionalCI(t *testing.T) {
+	t.Parallel()
+
 	for name, tc := range map[string]struct {
 		flow, pace string
 		remote     bool
@@ -487,6 +521,8 @@ func TestResolveOptionalCI(t *testing.T) {
 // YAML refuses a plain ci? inside { }; the error says to quote it, and the
 // quoted form reads.
 func TestOptionalCIInFlowStyle(t *testing.T) {
+	t.Parallel()
+
 	if _, err := decodeDeclared([]byte("paces:\n  x: { review: local+ci? }\n")); err == nil ||
 		!strings.Contains(err.Error(), `quote an optional CI review`) {
 		t.Errorf("unquoted = %v", err)

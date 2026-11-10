@@ -1,0 +1,109 @@
+package task
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/urfave/cli/v3"
+
+	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/target"
+)
+
+// PlanCommand is the plan noun. A plan is a markdown file named after its task, so the reference that
+// reaches a task reaches its plan; no driver, network or host CLI behind it.
+func PlanCommand() *cli.Command {
+	return &cli.Command{
+		Name:  "plan",
+		Usage: "read or open the plan saved for a task",
+		Commands: []*cli.Command{
+			{
+				Name:      "read",
+				Usage:     "write the plan to stdout",
+				ArgsUsage: "[task-id]",
+				Action:    runPlanRead,
+			},
+			{
+				Name:      "open",
+				Usage:     "open the plan in your editor",
+				ArgsUsage: "[task-id]",
+				Flags:     []cli.Flag{render.LinkFlag()},
+				Action:    runPlanOpen,
+			},
+		},
+	}
+}
+
+func runPlanRead(ctx context.Context, cmd *cli.Command) error {
+	t, path, err := planFile(ctx, cmd)
+	if err != nil {
+		return err
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("reading %s: %w", path, err)
+	}
+
+	return render.WriteDoc(ctx, cmd.Writer, t.Dir, string(data))
+}
+
+func runPlanOpen(ctx context.Context, cmd *cli.Command) error {
+	t, path, err := planFile(ctx, cmd)
+	if err != nil {
+		return err
+	}
+
+	if cmd.Bool("link") {
+		if render.LinkTerminal(cmd.Writer) {
+			path = render.FileLink(path)
+		}
+
+		_, err := fmt.Fprintln(cmd.Writer, path)
+
+		return err
+	}
+
+	editor := shell.Editor()
+	if len(editor) == 0 {
+		return fmt.Errorf("no editor: set $EDITOR, or use --link to get the path (%s)", path)
+	}
+
+	return shell.Passthrough(ctx, t.Dir, editor[0], append(editor[1:], path)...)
+}
+
+// planFile never falls back to another plan: that is how a run ends up
+// reading the wrong task's work.
+func planFile(ctx context.Context, cmd *cli.Command) (*target.Target, string, error) {
+	t, err := target.For(ctx, cmd)
+	if err != nil {
+		return nil, "", err
+	}
+
+	r, err := t.Reference(ctx, cmd.Args().First())
+	if err != nil {
+		return nil, "", err
+	}
+
+	// a bundle's plan is the lead's file, whichever member was named
+	path := filepath.Join(t.Probes.PlansDir, r.Head().ID+".md")
+	if _, err := os.Stat(path); err != nil {
+		return nil, "", fmt.Errorf("no plan for %s at %s", memberLabel(r), path)
+	}
+
+	return t, path, nil
+}
+
+// memberLabel names what was typed, and the lead it was read through when
+// that was a rider.
+func memberLabel(r ref.Ref) string {
+	if lead := r.Head().ID; lead != r.ID {
+		return r.ID + " (bundle lead " + lead + ")"
+	}
+
+	return r.ID
+}

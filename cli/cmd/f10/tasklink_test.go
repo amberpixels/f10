@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -12,11 +13,19 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/asks"
+	askscmd "github.com/amberpixels/f10/cli/internal/command/asks"
+	boardcmd "github.com/amberpixels/f10/cli/internal/command/board"
+	standupcmd "github.com/amberpixels/f10/cli/internal/command/standup"
 	"github.com/amberpixels/f10/cli/internal/daemon"
+	"github.com/amberpixels/f10/cli/internal/drive"
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/layers"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/standup"
+	"github.com/amberpixels/f10/cli/internal/statusview"
+	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasktree"
 )
 
@@ -33,11 +42,11 @@ func withLinks(t *testing.T, on bool) {
 
 	t.Setenv(ledger.PathEnv, filepath.Join(t.TempDir(), "f10.db"))
 
-	prevTerm, prevProject := linkTerminal, projectOf
-	t.Cleanup(func() { linkTerminal, projectOf = prevTerm, prevProject })
+	prevTerm, prevProject := render.LinkTerminal, target.ProjectOf
+	t.Cleanup(func() { render.LinkTerminal, target.ProjectOf = prevTerm, prevProject })
 
-	linkTerminal = func(io.Writer) bool { return on }
-	projectOf = func(context.Context, string) string { return linkProject }
+	render.LinkTerminal = func(io.Writer) bool { return on }
+	target.ProjectOf = func(context.Context, string) string { return linkProject }
 
 	ledger.RememberRefs(t.Context(), linkProject,
 		ledger.TaskRef{ID: "FT-1", Title: "One", URL: issueURL("FT-1")},
@@ -78,7 +87,7 @@ func requireLinked(t *testing.T, out string, ids ...string) {
 func TestTaskLinksID(t *testing.T) {
 	withLinks(t, true)
 
-	l := linksFor(io.Discard, false)
+	l := render.LinksFor(io.Discard, false)
 	l.Load(t.Context(), linkProject, "FT-1+FT-2", "FT-9")
 
 	if got := l.ID(linkProject, "FT-9"); got != "FT-9" {
@@ -86,7 +95,7 @@ func TestTaskLinksID(t *testing.T) {
 	}
 
 	if got, want := l.ID(linkProject, "FT-1+FT-2"),
-		hyperlink(issueURL("FT-1"), "FT-1")+"+"+hyperlink(issueURL("FT-2"), "FT-2"); got != want {
+		render.Hyperlink(issueURL("FT-1"), "FT-1")+"+"+render.Hyperlink(issueURL("FT-2"), "FT-2"); got != want {
 		t.Errorf("bundle = %q, want %q", got, want)
 	}
 
@@ -94,11 +103,11 @@ func TestTaskLinksID(t *testing.T) {
 		t.Errorf("an id under another project = %q", got)
 	}
 
-	if got := linksFor(io.Discard, true); got.on {
+	if got := render.LinksFor(io.Discard, true); got.On {
 		t.Error("--plain links")
 	}
 
-	var none *taskLinks
+	var none *render.TaskLinks
 	if none.ID(linkProject, "FT-1") != "FT-1" {
 		t.Error("a nil taskLinks links")
 	}
@@ -110,7 +119,7 @@ func TestTaskLinksOffReadsNothing(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "f10.db")
 	t.Setenv(ledger.PathEnv, path)
 
-	linksOn(false).Load(t.Context(), linkProject, "FT-1")
+	render.LinksOn(false).Load(t.Context(), linkProject, "FT-1")
 
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Errorf("the ledger was touched: %v", err)
@@ -118,7 +127,11 @@ func TestTaskLinksOffReadsNothing(t *testing.T) {
 }
 
 func TestPadRightCountsVisibleText(t *testing.T) {
-	if got := padRight(hyperlink("https://x", "FT-1"), 6); visibleWidth(got) != 6 || !strings.HasSuffix(got, "  ") {
+	if got := render.PadRight(
+		render.Hyperlink("https://x", "FT-1"),
+		6,
+	); render.VisibleWidth(got) != 6 ||
+		!strings.HasSuffix(got, "  ") {
 		t.Errorf("padRight = %q", got)
 	}
 }
@@ -127,9 +140,9 @@ func TestPadRightCountsVisibleText(t *testing.T) {
 // terminal, and prints no escape code anywhere else. A new renderer of task
 // ids gets a row here.
 func TestTaskIDsPrintThroughLinks(t *testing.T) {
-	type render func(t *testing.T, on bool) string
+	type renderer func(t *testing.T, on bool) string
 
-	cases := map[string]render{
+	cases := map[string]renderer{
 		"drive list": func(t *testing.T, _ bool) string {
 			root := t.TempDir()
 			if err := drives.Create(root, &drives.Record{
@@ -140,7 +153,15 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 			}
 
 			var out bytes.Buffer
-			if err := driveList(t.Context(), &out, linksFor(&out, false), linkProject, root, false, nil); err != nil {
+			if err := drive.DriveList(
+				t.Context(),
+				&out,
+				render.LinksFor(&out, false),
+				linkProject,
+				root,
+				false,
+				nil,
+			); err != nil {
 				t.Fatal(err)
 			}
 
@@ -156,7 +177,7 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 			}
 
 			var out bytes.Buffer
-			writeDaemonStatus(t.Context(), &out, linksFor(&out, false),
+			drive.WriteDaemonStatus(t.Context(), &out, render.LinksFor(&out, false),
 				daemon.Reply{Runs: []daemon.Run{{Root: root, Dir: "/x", Drive: 1}}})
 
 			return out.String()
@@ -171,7 +192,7 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 			}
 
 			var out bytes.Buffer
-			if err := listAsks(t.Context(), &out, dir, time.Now(), false); err != nil {
+			if err := askscmd.ListAsks(t.Context(), &out, dir, time.Now(), false); err != nil {
 				t.Fatal(err)
 			}
 
@@ -186,10 +207,10 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 
 			var out bytes.Buffer
 
-			links := linksFor(&out, false)
-			loadStandupLinks(t.Context(), links, rep)
+			links := render.LinksFor(&out, false)
+			standupcmd.LoadStandupLinks(t.Context(), links, rep)
 
-			if err := renderStandup(&out, links, rep); err != nil {
+			if err := standupcmd.RenderStandup(&out, links, rep); err != nil {
 				t.Fatal(err)
 			}
 
@@ -197,7 +218,11 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 		},
 		"start and finish report": func(t *testing.T, _ bool) string {
 			var out bytes.Buffer
-			if err := writeReport(&out, []fact{taskFact(t.Context(), &out, "/x", "FT-1+FT-2")}, nil); err != nil {
+			if err := render.WriteReport(
+				&out,
+				[]render.Fact{render.TaskFact(t.Context(), &out, "/x", "FT-1+FT-2")},
+				nil,
+			); err != nil {
 				t.Fatal(err)
 			}
 
@@ -206,17 +231,17 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 		"drive report": func(t *testing.T, _ bool) string {
 			var out bytes.Buffer
 
-			in := &driveInput{
-				out:     &out,
-				answers: newAnswerBook(),
+			in := &drive.DriveInput{
+				Out:     &out,
+				Answers: drive.NewAnswerBook(),
 			}
-			in.loadLinks(t.Context(), []driveTask{{ref: ref.Ref{ID: "FT-1"}}, {ref: ref.Ref{ID: "FT-2"}}})
+			in.LoadLinks(t.Context(), []drive.DriveTask{{Ref: ref.Ref{ID: "FT-1"}}, {Ref: ref.Ref{ID: "FT-2"}}})
 
-			runs := []*driveRun{
-				{task: driveTask{ref: ref.Ref{ID: "FT-1"}}, phase: atHeld},
-				{task: driveTask{ref: ref.Ref{ID: "FT-2"}}},
+			runs := []*drive.DriveRun{
+				{Task: drive.DriveTask{Ref: ref.Ref{ID: "FT-1"}}, Phase: drive.AtHeld},
+				{Task: drive.DriveTask{Ref: ref.Ref{ID: "FT-2"}}},
 			}
-			if err := in.report(runs, nil); err != nil {
+			if err := in.Report(runs, nil); err != nil {
 				t.Fatal(err)
 			}
 
@@ -225,21 +250,21 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 		"drive progress": func(t *testing.T, _ bool) string {
 			var out bytes.Buffer
 
-			in := &driveInput{out: &out}
-			in.loadLinks(t.Context(), []driveTask{{ref: ref.Ref{ID: "FT-1"}}, {ref: ref.Ref{ID: "FT-2"}}})
-			in.queue(&driveRun{task: driveTask{ref: ref.Ref{ID: "FT-1"}}})
-			in.queue(&driveRun{task: driveTask{ref: ref.Ref{ID: "FT-2"}}})
+			in := &drive.DriveInput{Out: &out}
+			in.LoadLinks(t.Context(), []drive.DriveTask{{Ref: ref.Ref{ID: "FT-1"}}, {Ref: ref.Ref{ID: "FT-2"}}})
+			in.Queue(&drive.DriveRun{Task: drive.DriveTask{Ref: ref.Ref{ID: "FT-1"}}})
+			in.Queue(&drive.DriveRun{Task: drive.DriveTask{Ref: ref.Ref{ID: "FT-2"}}})
 
 			return out.String()
 		},
 		"status": func(t *testing.T, on bool) string {
 			var out bytes.Buffer
 
-			rows := []taskRow{
-				{ID: "FT-1", URL: issueURL("FT-1"), Stage: stageDone},
+			rows := []statusview.TaskRow{
+				{ID: "FT-1", URL: issueURL("FT-1"), Stage: statusview.StageDone},
 				{ID: "FT-2", URL: issueURL("FT-2")},
 			}
-			if err := renderRows(&out, rows, rowView{term: on, plain: !on}); err != nil {
+			if err := statusview.RenderRows(&out, rows, statusview.RowView{Term: on, Plain: !on}); err != nil {
 				t.Fatal(err)
 			}
 
@@ -248,18 +273,18 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 		"board": func(t *testing.T, on bool) string {
 			var out bytes.Buffer
 
-			lines := []boardLine{{Key: "FT-1", URL: issueURL("FT-1")}, {Key: "FT-2", URL: issueURL("FT-2")}}
+			lines := []boardcmd.BoardLine{{Key: "FT-1", URL: issueURL("FT-1")}, {Key: "FT-2", URL: issueURL("FT-2")}}
 
 			limit := 0
 			if on {
 				limit = 120
 			}
 
-			links := linksOn(limit > 0)
+			links := render.LinksOn(limit > 0)
 
 			nodes := make([]tasktree.Node, len(lines))
 			for i, l := range lines {
-				nodes[i] = boardNode(l, "", false, links)
+				nodes[i] = boardcmd.BoardNode(l, "", false, links)
 			}
 
 			if err := (tasktree.Tree{Align: true, Width: limit}).Write(&out, nodes); err != nil {
@@ -294,31 +319,72 @@ var plainIDPrint = regexp.MustCompile(
 )
 
 // machineRead are prints of a bare id that agents or scripts parse, by file
-// and a piece of the line, so they stay plain on purpose.
+// (relative to the module root) and a piece of the line, so they stay plain
+// on purpose.
 var machineRead = map[string]string{
-	"host.go":        `"# %s: %s\n\n"`,                // the task as markdown, for an agent
-	"reviewround.go": `"  %s %s - %s\n"`,              // a declined round, read by the review step
-	"review.go":      `"%s  %s  %s\n"`,                // review pick, parsed
-	"pr.go":          `"task: %s\n"`,                  // pr view, parsed
-	"taskref.go":     `"%s: %v"`,                      // a warning on stderr
-	"taskreport.go":  `"%s: %v: no subtasks to list"`, // a warning on stderr
+	"internal/hostops/host.go":               `"# %s: %s\n\n"`,                // the task as markdown, for an agent
+	"internal/command/task/taskwrite.go":     `"%s  %s  ->  %s\n"`,            // retitle's change list, plain since it was written
+	"internal/command/review/reviewround.go": `"  %s %s - %s\n"`,              // a declined round, read by the review step
+	"internal/command/review/review.go":      `"%s  %s  %s\n"`,                // review pick, parsed
+	"internal/command/pr/pr.go":              `"task: %s\n"`,                  // pr view, parsed
+	"internal/statusview/refs.go":            `"%s: %v"`,                      // a warning on stderr
+	"internal/command/task/taskreport.go":    `"%s: %v: no subtasks to list"`, // a warning on stderr
+}
+
+// commandSources are the non-test files of the command tree: cmd/f10 and
+// every package the layers table ranks above the domain packages.
+func commandSources(t *testing.T) []string {
+	t.Helper()
+
+	root := filepath.Join("..", "..")
+
+	var files []string
+
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go") {
+			return err
+		}
+
+		rel, _ := filepath.Rel(root, path)
+		rel = filepath.ToSlash(rel)
+
+		if r, ok := layers.RankOf(
+			filepath.ToSlash(filepath.Dir(rel)),
+			layers.Table,
+		); ok && r.Rank > 0 &&
+			!strings.HasPrefix(rel, "cmd/f10eval/") {
+			files = append(files, rel)
+		}
+
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(files) == 0 {
+		t.Fatal("no command sources found")
+	}
+
+	return files
 }
 
 // The render table above covers the commands that exist; this scan catches a
 // new print of a bare task id in any file, which must go through taskLinks or
 // be listed in machineRead.
 func TestNoPlainTaskIDPrints(t *testing.T) {
-	files, err := filepath.Glob("*.go")
-	if err != nil {
-		t.Fatal(err)
-	}
+	used := map[string]bool{}
 
-	for _, f := range files {
-		if strings.HasSuffix(f, "_test.go") {
-			continue
+	t.Cleanup(func() {
+		for f := range machineRead {
+			if !used[f] {
+				t.Errorf("machineRead names %s, but no print there matches it: move the entry with its line", f)
+			}
 		}
+	})
 
-		src, err := os.ReadFile(f)
+	for _, f := range commandSources(t) {
+		src, err := os.ReadFile(filepath.Join("..", "..", f))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -329,6 +395,8 @@ func TestNoPlainTaskIDPrints(t *testing.T) {
 			}
 
 			if allowed, ok := machineRead[f]; ok && strings.Contains(line, allowed) {
+				used[f] = true
+
 				continue
 			}
 

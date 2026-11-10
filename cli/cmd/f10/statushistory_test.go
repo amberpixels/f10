@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/ledger"
+	"github.com/amberpixels/f10/cli/internal/statusview"
 )
 
 func sessionEvent(at time.Time, session, kind string, p ledger.Payload) ledger.Event {
@@ -51,16 +52,16 @@ func TestShipSteps(t *testing.T) {
 	}
 
 	want := []string{"implement", "cleanup", "pr", "review", "judge", "pr"}
-	if got := shipSteps(events, "s1", at(9)); !slices.Equal(got, want) {
+	if got := statusview.ShipSteps(events, "s1", at(9)); !slices.Equal(got, want) {
 		t.Errorf("shipSteps = %v, want %v", got, want)
 	}
 
-	if got := shipSteps(events, "s1", at(30)); !slices.Equal(got, []string{"implement"}) {
+	if got := statusview.ShipSteps(events, "s1", at(30)); !slices.Equal(got, []string{"implement"}) {
 		t.Errorf("the later run: shipSteps = %v, want [implement]", got)
 	}
 
 	// claims with no ship run started in the session: an older run
-	if got := shipSteps(events, "s2", at(30)); got != nil {
+	if got := statusview.ShipSteps(events, "s2", at(30)); got != nil {
 		t.Errorf("no ship run: shipSteps = %v, want nil", got)
 	}
 }
@@ -105,17 +106,17 @@ source: remote
 verdict: ask
 `)
 
-	o := fileOutcomes(root, "FT-1", time.Time{})
-	if want := []reviewRound{{Round: "1", Found: 1, Fixed: 1}}; !slices.Equal(o.local, want) {
-		t.Errorf("local = %+v, want %+v", o.local, want)
+	o := statusview.FileOutcomes(root, "FT-1", time.Time{})
+	if want := []statusview.ReviewRound{{Round: "1", Found: 1, Fixed: 1}}; !slices.Equal(o.Local, want) {
+		t.Errorf("local = %+v, want %+v", o.Local, want)
 	}
 
-	if want := []reviewRound{{Round: "1", Found: 2, Skipped: 1, Ask: 1}}; !slices.Equal(o.remote, want) {
-		t.Errorf("remote = %+v, want %+v", o.remote, want)
+	if want := []statusview.ReviewRound{{Round: "1", Found: 2, Skipped: 1, Ask: 1}}; !slices.Equal(o.Remote, want) {
+		t.Errorf("remote = %+v, want %+v", o.Remote, want)
 	}
 
-	if o.localRaised != 1 || o.remoteRaised != 2 {
-		t.Errorf("raised local %d, remote %d", o.localRaised, o.remoteRaised)
+	if o.LocalRaised != 1 || o.RemoteRaised != 2 {
+		t.Errorf("raised local %d, remote %d", o.LocalRaised, o.RemoteRaised)
 	}
 }
 
@@ -161,18 +162,18 @@ category: correctness
 	writeFile(t, filepath.Join(reviews, "3.md"), "no header here\n")
 	writeFile(t, filepath.Join(reviews, "4.md"), "task: FT-1\nround: 1\nreviewer: claude[bot]\nverdict: clean\n")
 
-	o := fileOutcomes(root, "FT-1", time.Time{})
-	want := []reviewRound{
+	o := statusview.FileOutcomes(root, "FT-1", time.Time{})
+	want := []statusview.ReviewRound{
 		{Round: "1", Found: 3, Fixed: 1, Skipped: 1, Ask: 1},
 		{Round: "2", Found: 2, Fixed: 1, Ask: 1},
 	}
 
-	if !slices.Equal(o.local, want) {
-		t.Errorf("local rounds = %+v, want %+v", o.local, want)
+	if !slices.Equal(o.Local, want) {
+		t.Errorf("local rounds = %+v, want %+v", o.Local, want)
 	}
 
-	if !slices.Equal(o.remote, []reviewRound{{Round: "1"}}) || o.remoteAt.IsZero() {
-		t.Errorf("remote rounds = %+v at %v, want 4.md's clean round", o.remote, o.remoteAt)
+	if !slices.Equal(o.Remote, []statusview.ReviewRound{{Round: "1"}}) || o.RemoteAt.IsZero() {
+		t.Errorf("remote rounds = %+v at %v, want 4.md's clean round", o.Remote, o.RemoteAt)
 	}
 
 	verdicts := filepath.Join(root, "verdicts", "FT-1")
@@ -182,21 +183,21 @@ category: correctness
 	writeFile(t, filepath.Join(verdicts, "11.md"), "subject: idea something else\nverdict: stop\n")
 	writeFile(t, filepath.Join(verdicts, "12.md"), "task: FT-1\nsubject: plan FT-1\nverdict: proceed\nreason: sound\n")
 
-	o = fileOutcomes(root, "FT-1", time.Time{})
-	if j := o.changeJudge; j == nil || j.Verdict != "proceed with changes" || j.Reason != "tighten the parser" {
+	o = statusview.FileOutcomes(root, "FT-1", time.Time{})
+	if j := o.ChangeJudge; j == nil || j.Verdict != "proceed with changes" || j.Reason != "tighten the parser" {
 		t.Errorf("change judge = %+v, want 10.md's verdict", j)
 	}
 
-	if j := o.planJudge; j == nil || j.Verdict != "proceed" {
+	if j := o.PlanJudge; j == nil || j.Verdict != "proceed" {
 		t.Errorf("plan judge = %+v, want 12.md's verdict", j)
 	}
 
-	if o := fileOutcomes(
+	if o := statusview.FileOutcomes(
 		root,
 		"FT-2",
 		time.Time{},
-	); o.local != nil || o.remote != nil || o.changeJudge != nil ||
-		o.planJudge != nil {
+	); o.Local != nil || o.Remote != nil || o.ChangeJudge != nil ||
+		o.PlanJudge != nil {
 		t.Errorf("a task with no files has outcomes: %+v", o)
 	}
 }

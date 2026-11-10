@@ -8,6 +8,8 @@ import (
 )
 
 func TestSegments(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name string
 		line string
@@ -44,6 +46,8 @@ func TestSegments(t *testing.T) {
 }
 
 func TestFromBashCommandShapes(t *testing.T) {
+	t.Parallel()
+
 	commit := "[main 1a2b3c4] subject\n 1 file changed\n"
 
 	for _, tc := range []struct {
@@ -78,6 +82,8 @@ func TestFromBashCommandShapes(t *testing.T) {
 }
 
 func TestFromWrite(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name, path, root string
 		want             Observation
@@ -104,6 +110,8 @@ func TestFromWrite(t *testing.T) {
 }
 
 func TestFromMovesNeedsTheArchivedFile(t *testing.T) {
+	t.Parallel()
+
 	root := filepath.Join(t.TempDir(), "proj", ".f10")
 	archive := filepath.Join(root, "plans", "archive")
 

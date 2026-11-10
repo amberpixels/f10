@@ -122,3 +122,15 @@ func Editor() []string {
 
 	return nil
 }
+
+// Group runs script under sh -c in dir, in a process group of its own that a
+// cancelled ctx kills whole, so the script's children die with it; waitDelay
+// stops reading a pipe an orphan still holds. It returns the combined output.
+func Group(ctx context.Context, dir, script string, waitDelay time.Duration) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, "sh", "-c", script)
+	cmd.Dir = dir
+	killGroup(cmd)
+	cmd.WaitDelay = waitDelay
+
+	return cmd.CombinedOutput()
+}

@@ -11,6 +11,8 @@ import (
 
 // A finish record outlives a killed drive; only a held lease keeps it.
 func TestDropDeadFinish(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	rec := &branchmeta.DriveFinish{State: branchmeta.FinishRunning, Action: "merging #9"}
 

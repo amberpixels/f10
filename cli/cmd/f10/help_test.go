@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/urfave/cli/v3"
+
+	"github.com/amberpixels/f10/cli/internal/command"
 )
 
 // listed reports whether a help listing has a command row named name.
@@ -59,8 +61,8 @@ func TestHelpTiers(t *testing.T) {
 		}
 	})
 
-	if !strings.Contains(all, plumbingCategory+":") {
-		t.Errorf("f10 help --all has no %s: heading:\n%s", plumbingCategory, all)
+	if !strings.Contains(all, command.Plumbing+":") {
+		t.Errorf("f10 help --all has no %s: heading:\n%s", command.Plumbing, all)
 	}
 }
 
@@ -68,11 +70,11 @@ func TestHelpTiers(t *testing.T) {
 // internal, a category alone lists it beside the human commands.
 func TestPlumbingMarkedWhole(t *testing.T) {
 	walkCommands(newApp(), "f10", func(path string, c *cli.Command) {
-		if c.Category != "" && c.Category != plumbingCategory {
-			t.Errorf("%s: category %q, want none or %q", path, c.Category, plumbingCategory)
+		if c.Category != "" && c.Category != command.Plumbing {
+			t.Errorf("%s: category %q, want none or %q", path, c.Category, command.Plumbing)
 		}
 
-		if c.Category == plumbingCategory && !c.Hidden {
+		if c.Category == command.Plumbing && !c.Hidden {
 			t.Errorf("%s: plumbing but not Hidden", path)
 		}
 	})

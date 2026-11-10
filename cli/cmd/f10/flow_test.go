@@ -9,8 +9,13 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
+	startcmd "github.com/amberpixels/f10/cli/internal/command/start"
+	"github.com/amberpixels/f10/cli/internal/drive"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
+	"github.com/amberpixels/f10/cli/internal/launch"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 )
 
 // f10 flow and f10 config read the same flows, and the human list names
@@ -30,12 +35,12 @@ func TestFlowAndConfigAgree(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var flows flowView
+	var flows runplan.FlowView
 	if err := json.Unmarshal([]byte(runApp(t, "-C", repo, "flow", "--json").must(t)), &flows); err != nil {
 		t.Fatal(err)
 	}
 
-	var config view
+	var config configcmd.View
 	if err := json.Unmarshal([]byte(runApp(t, "-C", repo, "config", "--json").must(t)), &config); err != nil {
 		t.Fatal(err)
 	}
@@ -68,13 +73,13 @@ func TestFlowAndConfigAgree(t *testing.T) {
 // A rerun of drive keeps the flow a branch records; a branch with none,
 // or one recording a flow no longer declared, takes the run's.
 func TestDriveKeepsTheRecordedFlow(t *testing.T) {
-	declared := map[string]shipFlow{"": {}, "local": {name: "local"}}
-	resolve := func(name string) (shipFlow, error) {
+	declared := map[string]runplan.ShipFlow{"": {}, "local": {Name: "local"}}
+	resolve := func(name string) (runplan.ShipFlow, error) {
 		if fl, ok := declared[name]; ok {
 			return fl, nil
 		}
 
-		return shipFlow{}, os.ErrNotExist
+		return runplan.ShipFlow{}, os.ErrNotExist
 	}
 
 	for _, tc := range []struct {
@@ -89,15 +94,15 @@ func TestDriveKeepsTheRecordedFlow(t *testing.T) {
 		f := newFakes(t)
 		f.meta.Seed("GH-1", branchmeta.Flow, tc.recorded)
 
-		in := &driveInput{
-			main:    "/code/repo",
-			resolve: resolve,
+		in := &drive.DriveInput{
+			Main:    "/code/repo",
+			Resolve: resolve,
 		}
 
-		fl, note, err := in.keepFlow(t.Context(), "GH-1")
-		if err != nil || fl.recorded() != tc.want || !strings.Contains(note, tc.note) ||
+		fl, note, err := in.KeepFlow(t.Context(), "GH-1")
+		if err != nil || fl.Recorded() != tc.want || !strings.Contains(note, tc.note) ||
 			f.called("set branch.GH-1."+string(branchmeta.Flow)+" default") != tc.writes {
-			t.Errorf("recorded %q: flow %q, note %q, err %v, calls %v", tc.recorded, fl.recorded(), note, err, f.calls)
+			t.Errorf("recorded %q: flow %q, note %q, err %v, calls %v", tc.recorded, fl.Recorded(), note, err, f.calls)
 		}
 	}
 }
@@ -109,7 +114,7 @@ func TestCompletingFlow(t *testing.T) {
 		"f10 start --local --generate-shell-completion":      false,
 		"f10 start --flow local --generate-shell-completion": false,
 	} {
-		if got := completingFlow(strings.Fields(args)); got != want {
+		if got := configcmd.CompletingFlow(strings.Fields(args)); got != want {
 			t.Errorf("%q = %v, want %v", args, got, want)
 		}
 	}
@@ -118,21 +123,21 @@ func TestCompletingFlow(t *testing.T) {
 // A task runs the skills of the flow it keeps from its branch: a planless
 // run still plans a task whose recorded flow leads with plan.
 func TestSkillsOfAKeptFlow(t *testing.T) {
-	direct := shipFlow{name: "direct", planless: true}
-	in := &driveInput{
-		flow: direct,
+	direct := runplan.ShipFlow{Name: "direct", Planless: true}
+	in := &drive.DriveInput{
+		Flow: direct,
 	}
 
-	if got := strings.Join(in.skills(&driveRun{flow: direct}), " "); got != "ship finish" {
+	if got := strings.Join(in.Skills(&drive.DriveRun{Flow: direct}), " "); got != "ship finish" {
 		t.Errorf("the run's own flow = %q", got)
 	}
 
-	if got := strings.Join(in.skills(&driveRun{flow: shipFlow{}}), " "); got != "plan ship finish" {
+	if got := strings.Join(in.Skills(&drive.DriveRun{Flow: runplan.ShipFlow{}}), " "); got != "plan ship finish" {
 		t.Errorf("a kept default flow = %q, want plan first and finish kept", got)
 	}
 
-	spike := &driveRun{flow: shipFlow{finish: "off"}, finishes: true}
-	if got := strings.Join(in.skills(spike), " "); got != "plan ship finish" {
+	spike := &drive.DriveRun{Flow: runplan.ShipFlow{Finish: "off"}, Finishes: true}
+	if got := strings.Join(in.Skills(spike), " "); got != "plan ship finish" {
 		t.Errorf("a spike closing on a pace without finish = %q, want finish added", got)
 	}
 }
@@ -148,29 +153,29 @@ func TestFlowByArea(t *testing.T) {
 	}
 
 	fl, err := pacedFlowIn(eff, nil, "", "")
-	if err != nil || !fl.byArea || fl.plans() || fl.recorded() != "" {
+	if err != nil || !fl.ByArea || fl.Plans() || fl.Recorded() != "" {
 		t.Fatalf("no flow named = %+v, %v", fl, err)
 	}
 
-	if named, _ := pacedFlowIn(eff, nil, "", "default"); named.byArea || !named.plans() {
+	if named, _ := pacedFlowIn(eff, nil, "", "default"); named.ByArea || !named.Plans() {
 		t.Errorf("a named flow wins over the area map: %+v", named)
 	}
 
-	if got := prompt(modeDefault, fl, "GH-1", nil, "", nil, ""); got != "/f10:ship GH-1 --driven" {
+	if got := launch.Prompt(startcmd.ModeDefault, fl, "GH-1", nil, "", nil, ""); got != "/f10:ship GH-1 --driven" {
 		t.Errorf("prompt = %q, want ship alone", got)
 	}
 
-	if got := strings.Join(driveSkills(fl), " "); got != "ship finish" {
+	if got := strings.Join(drive.DriveSkills(fl), " "); got != "ship finish" {
 		t.Errorf("drive skills = %q, want ship plans as the area's flow says", got)
 	}
 
 	f := newFakes(t)
 
-	in := &driveInput{
-		main: "/code/repo",
-		flow: fl,
+	in := &drive.DriveInput{
+		Main: "/code/repo",
+		Flow: fl,
 	}
-	if kept, note, err := in.keepFlow(t.Context(), "GH-1"); err != nil || kept != fl || note != "" ||
+	if kept, note, err := in.KeepFlow(t.Context(), "GH-1"); err != nil || kept != fl || note != "" ||
 		slices.ContainsFunc(f.calls, func(c string) bool { return strings.HasPrefix(c, "set branch.") }) {
 		t.Errorf("keepFlow = %+v, %q, %v; calls %v", kept, note, err, f.calls)
 	}
@@ -209,7 +214,7 @@ func TestFlowPrintsEntryLabels(t *testing.T) {
 		t.Errorf("f10 flow:\n%s", all)
 	}
 
-	var v flowView
+	var v runplan.FlowView
 	if err := json.Unmarshal([]byte(runApp(t, "-C", repo, "flow", "--json").must(t)), &v); err != nil {
 		t.Fatal(err)
 	}

@@ -7,7 +7,9 @@ import (
 	"testing"
 	"time"
 
+	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
@@ -27,12 +29,12 @@ func TestStaleAt(t *testing.T) {
 		{"over 3w", 22 * 24 * time.Hour, "3w", true},
 		{"undeclared", 1000 * 24 * time.Hour, "", false},
 	} {
-		if got := staleAt(now.Add(-tc.age), staleOf(tc.staleAfter), now); got != tc.want {
+		if got := hostops.StaleAt(now.Add(-tc.age), staleOf(tc.staleAfter), now); got != tc.want {
 			t.Errorf("%s: staleAt = %v, want %v", tc.name, got, tc.want)
 		}
 	}
 
-	if staleAt(time.Time{}, staleOf("10d"), now) {
+	if hostops.StaleAt(time.Time{}, staleOf("10d"), now) {
 		t.Error("no created date read as stale")
 	}
 }
@@ -65,15 +67,15 @@ func TestStaleness(t *testing.T) {
 	old := now.Add(-60 * 24 * time.Hour)
 	day := 24 * time.Hour
 
-	if got := staleness(old, staleOf(""), now, nil, "FT-1"); got != staleFresh {
+	if got := taskcmd.Staleness(old, staleOf(""), now, nil, "FT-1"); got != taskcmd.StaleFresh {
 		t.Errorf("undeclared = %q", got)
 	}
 
-	if got := staleness(time.Time{}, staleOf("3w"), now, nil, "FT-1"); got != staleUndated {
+	if got := taskcmd.Staleness(time.Time{}, staleOf("3w"), now, nil, "FT-1"); got != taskcmd.StaleUndated {
 		t.Errorf("no date = %q", got)
 	}
 
-	if got := staleness(now.Add(-day), staleOf("3w"), now, nil, "FT-1"); got != staleFresh {
+	if got := taskcmd.Staleness(now.Add(-day), staleOf("3w"), now, nil, "FT-1"); got != taskcmd.StaleFresh {
 		t.Errorf("young = %q", got)
 	}
 
@@ -83,18 +85,24 @@ func TestStaleness(t *testing.T) {
 	writeVerdict(t, root, "FT-1", "2", "plan FT-1", "proceed", now.Add(-day))
 	writeVerdict(t, root, "FT-1", "3", "task FT-1", "proceed", now.Add(-30*day))
 
-	if got := staleness(old, staleOf("3w"), now, []string{root}, "FT-1"); got != staleNeeds {
+	if got := taskcmd.Staleness(old, staleOf("3w"), now, []string{root}, "FT-1"); got != taskcmd.StaleNeeds {
 		t.Errorf("no recent task proceed = %q", got)
 	}
 
 	older := writeVerdict(t, root, "FT-1", "4", "task FT-1", "proceed", now.Add(-5*day))
 	newer := writeVerdict(t, main, "FT-1", "1", "task FT-1", "proceed", now.Add(-2*day))
 
-	if got := staleness(old, staleOf("3w"), now, []string{root}, "FT-1"); got != staleJudged+" "+older {
+	if got := taskcmd.Staleness(old, staleOf("3w"), now, []string{root}, "FT-1"); got != taskcmd.StaleJudged+" "+older {
 		t.Errorf("recent proceed = %q, want %s", got, older)
 	}
 
-	if got := staleness(old, staleOf("3w"), now, []string{root, main}, "FT-1"); got != staleJudged+" "+newer {
+	if got := taskcmd.Staleness(
+		old,
+		staleOf("3w"),
+		now,
+		[]string{root, main},
+		"FT-1",
+	); got != taskcmd.StaleJudged+" "+newer {
 		t.Errorf("newest across roots = %q, want %s", got, newer)
 	}
 }
@@ -109,17 +117,17 @@ func TestHostIssueCreated(t *testing.T) {
 		`{"url":"https://github.com/o/r/pull/4"}`,
 	)
 
-	at, err := newHost("gh", "/code/repo").issueCreated(t.Context(), "14")
+	at, err := hostops.NewHost("gh", "/code/repo").IssueCreated(t.Context(), "14")
 	if err != nil || at.UTC().Format(time.DateOnly) != "2026-09-21" {
 		t.Errorf("gh created = %v, %v", at, err)
 	}
 
-	at, err = newHost("glab", "/code/repo").issueCreated(t.Context(), "7")
+	at, err = hostops.NewHost("glab", "/code/repo").IssueCreated(t.Context(), "7")
 	if err != nil || at.UTC().Format(time.DateOnly) != "2026-10-01" {
 		t.Errorf("glab created = %v, %v", at, err)
 	}
 
-	if _, err := newHost("gh", "/code/repo").issueCreated(t.Context(), "4"); err == nil {
+	if _, err := hostops.NewHost("gh", "/code/repo").IssueCreated(t.Context(), "4"); err == nil {
 		t.Error("a pull request answered for an issue")
 	}
 }
@@ -151,21 +159,21 @@ func TestTaskStaleCommand(t *testing.T) {
 		return strings.TrimSpace(r.combined)
 	}
 
-	if got := run(""); got != staleFresh {
+	if got := run(""); got != taskcmd.StaleFresh {
 		t.Errorf("undeclared = %q", got)
 	}
 
-	if got := run("3w", "--created", time.Now().UTC().Format(time.DateOnly)); got != staleFresh {
+	if got := run("3w", "--created", time.Now().UTC().Format(time.DateOnly)); got != taskcmd.StaleFresh {
 		t.Errorf("created today = %q", got)
 	}
 
-	if got := run("3w", "--created", "2020-01-01"); got != staleNeeds {
+	if got := run("3w", "--created", "2020-01-01"); got != taskcmd.StaleNeeds {
 		t.Errorf("old = %q", got)
 	}
 
 	writeVerdict(t, filepath.Join(repo, ".f10"), "DM-5", "1", "task DM-5", "proceed", time.Now())
 
-	if got := run("3w", "--created", "2020-01-01"); !strings.HasPrefix(got, staleJudged+" ") ||
+	if got := run("3w", "--created", "2020-01-01"); !strings.HasPrefix(got, taskcmd.StaleJudged+" ") ||
 		!strings.HasSuffix(got, filepath.Join("verdicts", "DM-5", "1.md")) {
 		t.Errorf("judged = %q", got)
 	}
@@ -184,30 +192,36 @@ func TestTaskStaleCreatedAt(t *testing.T) {
 
 	tg := childTarget(t, "gh")
 
-	at, err := tg.createdAt(t.Context(), ref.Ref{ID: "FT-14", Number: "14"}, "")
+	at, err := taskcmd.CreatedAtFor(t.Context(), tg, ref.Ref{ID: "FT-14", Number: "14"}, "")
 	if err != nil || at.Format(time.DateOnly) != "2026-09-20" {
 		t.Errorf("host date = %v, %v", at, err)
 	}
 
-	_, err = tg.createdAt(t.Context(), ref.Ref{ID: "FT-15", Number: "15"}, "")
+	_, err = taskcmd.CreatedAtFor(t.Context(), tg, ref.Ref{ID: "FT-15", Number: "15"}, "")
 	if err == nil || !strings.Contains(err.Error(), "rate limited") || strings.Contains(err.Error(), "fetch adapter") {
 		t.Errorf("failing host = %v, want gh's error alone", err)
 	}
 
-	at, err = tg.createdAt(t.Context(), ref.Ref{ID: "FT-16", Number: "16"}, "2020-01-02")
+	at, err = taskcmd.CreatedAtFor(t.Context(), tg, ref.Ref{ID: "FT-16", Number: "16"}, "2020-01-02")
 	if err != nil || at.Format(time.DateOnly) != "2020-01-02" {
 		t.Errorf("--created = %v, %v; want no host call", at, err)
 	}
 
-	if _, err := tg.createdAt(t.Context(), ref.Ref{ID: "FT-16", Number: "16"}, "2020-13-01"); err == nil ||
+	if _, err := taskcmd.CreatedAtFor(t.Context(), tg, ref.Ref{ID: "FT-16", Number: "16"}, "2020-13-01"); err == nil ||
 		!strings.Contains(err.Error(), "YYYY-MM-DD") {
 		t.Errorf("bad --created = %v", err)
 	}
 
-	tg.eff.TrackerKind = facts.TrackerJira
-	tg.eff.Facts = append(tg.eff.Facts, facts.Fact{Key: "tracker.kind", Origin: facts.DeclaredIn("main")})
+	tg.Effective.TrackerKind = facts.TrackerJira
+	tg.Effective.Facts = append(tg.Effective.Facts, facts.Fact{Key: "tracker.kind", Origin: facts.DeclaredIn("main")})
 
-	if at, err := tg.createdAt(t.Context(), ref.Ref{ID: "FT-14", Number: "14"}, ""); err != nil || !at.IsZero() {
+	if at, err := taskcmd.CreatedAtFor(
+		t.Context(),
+		tg,
+		ref.Ref{ID: "FT-14", Number: "14"},
+		"",
+	); err != nil ||
+		!at.IsZero() {
 		t.Errorf("non-host tracker = %v, %v; want undated", at, err)
 	}
 }

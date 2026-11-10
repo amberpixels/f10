@@ -6,7 +6,12 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/drive"
+	"github.com/amberpixels/f10/cli/internal/finish"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -30,13 +35,13 @@ func TestUnsettledWhenGitCannotRead(t *testing.T) {
 			fx.f.script("git status --porcelain", "")
 			fail(fx.f)
 
-			r := &driveRun{o: openedTask{branch: "GH-1", path: "/code/repo.GH-1"}}
+			r := &drive.DriveRun{O: start.OpenedTask{Branch: "GH-1", Path: "/code/repo.GH-1"}}
 
-			if got := branchUnsettled(
+			if got := stack.BranchUnsettled(
 				t.Context(),
-				fx.in.main,
-				r.o.path,
-				r.o.branch,
+				fx.in.Main,
+				r.O.Path,
+				r.O.Branch,
 			); !strings.Contains(
 				got,
 				"unable to read config",
@@ -51,7 +56,7 @@ func TestUnsettledWhenGitCannotRead(t *testing.T) {
 // read: a wrong "not pushed" or "not an ancestor" would pick the wrong push.
 func TestDriveHaltsFinishWhenGitCannotRead(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "finish")
-	fx.task("GH-1", taskInfo{body: "x"}, heads("GH-1"))
+	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, heads("GH-1"))
 	fx.f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.f.script(headRef, "origin/main")
@@ -71,14 +76,14 @@ func TestJanitorKeepsABranchItCannotRead(t *testing.T) {
 	f := newFakes(t)
 	f.fail("git config --get branch.GH-1.merge", broken)
 
-	j := &sweeper{in: janitorInput{main: "/code/repo"}, def: "main"}
+	j := &finish.Sweeper{In: finish.JanitorInput{Main: "/code/repo"}, Def: "main"}
 
-	if _, removed := j.sweepUnpushed(t.Context(), staleBranch{name: "GH-1", localSHA: "abc"}); removed {
+	if _, removed := j.SweepUnpushed(t.Context(), finish.StaleBranch{Name: "GH-1", LocalSHA: "abc"}); removed {
 		t.Fatal("removed a branch whose upstream could not be read")
 	}
 
-	if len(j.lines) != 1 || !strings.Contains(j.lines[0], "GH-1 kept") {
-		t.Errorf("lines = %q, want one naming the kept branch", j.lines)
+	if len(j.Lines) != 1 || !strings.Contains(j.Lines[0], "GH-1 kept") {
+		t.Errorf("lines = %q, want one naming the kept branch", j.Lines)
 	}
 
 	if f.called("git branch -D") {

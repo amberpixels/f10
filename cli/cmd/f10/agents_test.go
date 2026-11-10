@@ -10,6 +10,10 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	startcmd "github.com/amberpixels/f10/cli/internal/command/start"
+	"github.com/amberpixels/f10/cli/internal/launch"
+	"github.com/amberpixels/f10/cli/internal/start"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // memAgents is an agent backend held in memory: what a backend other than
@@ -93,10 +97,10 @@ func useAgents(t *testing.T) *memAgents {
 	t.Helper()
 
 	m := &memAgents{prompts: map[string][]string{}}
-	prev := agents
-	agents = func(string) agentctl.Backend { return m }
+	prev := worktree.Agents
+	worktree.Agents = func(string) agentctl.Backend { return m }
 
-	t.Cleanup(func() { agents = prev })
+	t.Cleanup(func() { worktree.Agents = prev })
 
 	return m
 }
@@ -113,10 +117,10 @@ func TestStartAndForwardThroughAnotherBackend(t *testing.T) {
 	f.script(worktrees, porcelain(), porcelain("GH-1", fwdWT))
 	f.script("wt switch --no-cd --yes --format json --create GH-1", "{}")
 
-	if err := start(
+	if err := start.Start(
 		t.Context(),
 		&bytes.Buffer{},
-		startInput{main: fwdMain, storage: testStorage, task: gh1},
+		start.StartInput{Main: fwdMain, Storage: testStorage, Task: gh1},
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -131,8 +135,15 @@ func TestStartAndForwardThroughAnotherBackend(t *testing.T) {
 
 	var out bytes.Buffer
 
-	fwd := forwardInput{main: fwdMain, here: fwdMain, task: gh1, text: fwdText, stateDir: t.TempDir(), now: time.Now()}
-	if err := forward(t.Context(), &out, fwd); err != nil {
+	fwd := startcmd.ForwardInput{
+		Main:     fwdMain,
+		Here:     fwdMain,
+		Task:     gh1,
+		Text:     fwdText,
+		StateDir: t.TempDir(),
+		Now:      time.Now(),
+	}
+	if err := startcmd.Forward(t.Context(), &out, fwd); err != nil {
 		t.Fatal(err)
 	}
 
@@ -155,12 +166,21 @@ func TestPromptAgentFallsBackToTheBareName(t *testing.T) {
 	m := useAgents(t)
 	m.started = []string{agentctl.BareAgentName("GH-1", "")}
 
-	name, err := promptAgentAs(t.Context(), fwdWT, "GH-1", "", "hi")
+	name, err := launch.PromptAgentAs(t.Context(), fwdWT, "GH-1", "", "hi")
 	if err != nil || name != agentctl.BareAgentName("GH-1", "") {
 		t.Fatalf("took %q, %v; want the bare name", name, err)
 	}
 
-	if _, err := promptAgentAs(t.Context(), fwdWT, "GH-2", "", "hi"); !errors.Is(err, agentctl.ErrAgentNotFound) {
+	if _, err := launch.PromptAgentAs(
+		t.Context(),
+		fwdWT,
+		"GH-2",
+		"",
+		"hi",
+	); !errors.Is(
+		err,
+		agentctl.ErrAgentNotFound,
+	) {
 		t.Errorf("unknown agent = %v, want ErrAgentNotFound", err)
 	}
 }

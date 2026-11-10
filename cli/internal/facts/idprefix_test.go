@@ -3,6 +3,8 @@ package facts
 import "testing"
 
 func TestIDPrefix(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name     string
 		declared string
@@ -38,6 +40,8 @@ func TestIDPrefix(t *testing.T) {
 }
 
 func TestProjectPrefix(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct{ name, want string }{
 		// a short name with a digit is already an abbreviation
 		{name: "f10", want: "F10"},

@@ -3,6 +3,8 @@ package tasktitle
 import "testing"
 
 func TestParse(t *testing.T) {
+	t.Parallel()
+
 	for _, c := range []struct {
 		raw string
 		ok  bool
@@ -22,6 +24,8 @@ func TestParse(t *testing.T) {
 }
 
 func TestRender(t *testing.T) {
+	t.Parallel()
+
 	for _, c := range []struct {
 		tmpl Template
 		want string
@@ -37,6 +41,8 @@ func TestRender(t *testing.T) {
 }
 
 func TestStrip(t *testing.T) {
+	t.Parallel()
+
 	for _, c := range []struct {
 		name  string
 		tmpl  Template
@@ -63,6 +69,8 @@ func TestStrip(t *testing.T) {
 }
 
 func TestApplied(t *testing.T) {
+	t.Parallel()
+
 	tmpl := Template("{id}: {title}")
 
 	for title, want := range map[string]bool{
@@ -88,6 +96,8 @@ func TestApplied(t *testing.T) {
 }
 
 func TestClean(t *testing.T) {
+	t.Parallel()
+
 	for in, want := range map[string]string{
 		"Add the index":           "Add the index",
 		"# FT-12: Add the index":  "Add the index",

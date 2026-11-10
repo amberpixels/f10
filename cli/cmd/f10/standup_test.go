@@ -7,7 +7,9 @@ import (
 	"testing"
 	"time"
 
+	standupcmd "github.com/amberpixels/f10/cli/internal/command/standup"
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/standup"
 )
@@ -24,19 +26,22 @@ const (
 )
 
 func TestParseSince(t *testing.T) {
-	if got, err := parseSince(
+	if got, err := standupcmd.ParseSince(
 		"2026-10-14T09:30:00+03:00",
 	); err != nil ||
 		!got.Equal(time.Date(2026, 10, 14, 6, 30, 0, 0, time.UTC)) {
 		t.Errorf("rfc3339 = %v, %v", got, err)
 	}
 
-	if got, err := parseSince("2026-10-14"); err != nil || got != time.Date(2026, 10, 14, 0, 0, 0, 0, time.Local) {
+	if got, err := standupcmd.ParseSince(
+		"2026-10-14",
+	); err != nil ||
+		got != time.Date(2026, 10, 14, 0, 0, 0, 0, time.Local) {
 		t.Errorf("date = %v, %v, want local midnight", got, err)
 	}
 
 	for _, bad := range []string{"2d", "yesterday", "", "2026-10-14 09:30", "1760000000"} {
-		if _, err := parseSince(bad); err == nil {
+		if _, err := standupcmd.ParseSince(bad); err == nil {
 			t.Errorf("parseSince(%q) took it; the period's forms are not --since's", bad)
 		}
 	}
@@ -79,7 +84,7 @@ func TestStandupPullsGitHub(t *testing.T) {
 	  {"number":9,"title":"theirs","state":"MERGED","url":"u9","author":{"login":"bob"},
 	   "mergedAt":"2026-10-14T10:00:00Z","mergedBy":{"login":"me"}}]`)
 
-	got, err := newHost("gh", ".").Pulls(t.Context(), "me", standupSince)
+	got, err := hostops.NewHost("gh", ".").Pulls(t.Context(), "me", standupSince)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +141,7 @@ func TestStandupPullsGitLab(t *testing.T) {
 	  {"body":"requested review from @me","system":true,"created_at":"2026-10-14T08:00:00Z","author":{"username":"bob"}},
 	  {"body":"looks good","system":false,"created_at":"2026-10-14T10:00:00Z","author":{"username":"me"}}]`)
 
-	got, err := newHost("glab", ".").Pulls(t.Context(), "me", standupSince)
+	got, err := hostops.NewHost("glab", ".").Pulls(t.Context(), "me", standupSince)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,7 +189,7 @@ func TestRenderStandup(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := renderStandup(&out, nil, r); err != nil {
+	if err := standupcmd.RenderStandup(&out, nil, r); err != nil {
 		t.Fatal(err)
 	}
 
@@ -204,7 +209,7 @@ func TestRenderStandupFoldsUpkeep(t *testing.T) {
 	}}}}
 
 	var out bytes.Buffer
-	if err := renderStandup(&out, nil, r); err != nil {
+	if err := standupcmd.RenderStandup(&out, nil, r); err != nil {
 		t.Fatal(err)
 	}
 
@@ -230,7 +235,7 @@ func TestCommitCI(t *testing.T) {
 	f.script("glab api projects/:fullpath/repository/commits/p3",
 		`{"last_pipeline":{"status":"failed","updated_at":"2026-10-14T11:00:00Z"}}`)
 
-	gh := newHost("gh", ".")
+	gh := hostops.NewHost("gh", ".")
 
 	ci, err := gh.CommitCI(t.Context(), "p1")
 	if err != nil || ci == nil || !ci.Red || !ci.At.Equal(standupSince.Add(10*time.Hour)) {
@@ -241,7 +246,7 @@ func TestCommitCI(t *testing.T) {
 		t.Errorf("p2 = %+v, %v; want unknown with no checks", ci, err)
 	}
 
-	if ci, err := newHost("glab", ".").CommitCI(t.Context(), "p3"); err != nil || ci == nil || !ci.Red {
+	if ci, err := hostops.NewHost("glab", ".").CommitCI(t.Context(), "p3"); err != nil || ci == nil || !ci.Red {
 		t.Errorf("p3 = %+v, %v; want a red pipeline", ci, err)
 	}
 }
@@ -272,7 +277,7 @@ func TestRenderStandupProjects(t *testing.T) {
 	}}
 
 	var out bytes.Buffer
-	if err := renderStandup(&out, nil, r); err != nil {
+	if err := standupcmd.RenderStandup(&out, nil, r); err != nil {
 		t.Fatal(err)
 	}
 
@@ -294,7 +299,7 @@ func TestRenderStandupChainsOnlyStackedPRs(t *testing.T) {
 	}}}
 
 	var out bytes.Buffer
-	if err := renderStandup(&out, nil, r); err != nil {
+	if err := standupcmd.RenderStandup(&out, nil, r); err != nil {
 		t.Fatal(err)
 	}
 

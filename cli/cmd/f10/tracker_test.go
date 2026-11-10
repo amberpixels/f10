@@ -6,13 +6,18 @@ import (
 	"strings"
 	"testing"
 
+	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // writeDriver puts an executable driver in a storage root.
@@ -38,7 +43,7 @@ func TestDriverFromAWorktree(t *testing.T) {
 	wt := filepath.Join(t.TempDir(), "wt", ".f10")
 	mainDriver := writeDriver(t, main)
 
-	extends := &target{lay: &layout.Layout{
+	extends := &target.Target{Layout: &layout.Layout{
 		StorageRoot: storage.Root(wt),
 		Layers: []layout.Layer{
 			{Label: "main", Dir: filepath.Join(main, "instructions")},
@@ -46,22 +51,22 @@ func TestDriverFromAWorktree(t *testing.T) {
 		},
 	}}
 
-	if d := extends.driver(); d == nil || d.Path != mainDriver {
+	if d := extends.Driver(); d == nil || d.Path != mainDriver {
 		t.Errorf("driver = %+v, want main's %s", d, mainDriver)
 	}
 
-	replaces := &target{lay: &layout.Layout{
+	replaces := &target.Target{Layout: &layout.Layout{
 		StorageRoot: storage.Root(wt),
 		Layers:      []layout.Layer{{Label: "worktree", Dir: filepath.Join(wt, "instructions")}},
 	}}
 
-	if d := replaces.driver(); d != nil {
+	if d := replaces.Driver(); d != nil {
 		t.Errorf("driver = %+v, want none: the worktree replaces main", d)
 	}
 
 	// the worktree's own driver wins over main's
 	own := writeDriver(t, wt)
-	if d := extends.driver(); d == nil || d.Path != own {
+	if d := extends.Driver(); d == nil || d.Path != own {
 		t.Errorf("driver = %+v, want the worktree's own %s", d, own)
 	}
 }
@@ -71,10 +76,10 @@ func TestIssuesRefusesADeclaredNonHostTracker(t *testing.T) {
 	root := filepath.Join(t.TempDir(), ".f10")
 	gh := &probe.Probes{CLI: probe.Signal{Value: "gh"}}
 
-	notion := &target{
-		lay: &layout.Layout{CheckoutRoot: filepath.Dir(root), StorageRoot: storage.Root(root)},
-		pb:  gh,
-		eff: &facts.Effective{
+	notion := &target.Target{
+		Layout: &layout.Layout{CheckoutRoot: filepath.Dir(root), StorageRoot: storage.Root(root)},
+		Probes: gh,
+		Effective: &facts.Effective{
 			TrackerKind: facts.TrackerNotion,
 			Facts: []facts.Fact{
 				{Key: "tracker.kind", Value: "Notion", Origin: facts.DeclaredFrontmatter("main")},
@@ -82,33 +87,35 @@ func TestIssuesRefusesADeclaredNonHostTracker(t *testing.T) {
 		},
 	}
 
-	_, err := notion.tasks().Title(t.Context(), ref.Ref{Number: "7"})
+	_, err := hostops.TasksFor(notion).Title(t.Context(), ref.Ref{Number: "7"})
 	if err == nil || !strings.Contains(err.Error(), "Notion") ||
 		!strings.Contains(err.Error(), filepath.Join(root, "driver")) {
 		t.Errorf("Title() = %v, want the Notion refusal naming the driver path", err)
 	}
 
-	github := &target{
-		lay: &layout.Layout{CheckoutRoot: filepath.Dir(root), StorageRoot: storage.Root(root)},
-		pb:  gh,
-		eff: &facts.Effective{
+	github := &target.Target{
+		Layout: &layout.Layout{CheckoutRoot: filepath.Dir(root), StorageRoot: storage.Root(root)},
+		Probes: gh,
+		Effective: &facts.Effective{
 			TrackerKind: facts.TrackerGitHub,
 			Facts:       []facts.Fact{{Key: "tracker.kind", Value: "GitHub Issues", Origin: facts.DeclaredIn("main")}},
 		},
 	}
 
-	if _, ok := github.tasks().(hostSource); !ok {
-		t.Errorf("a GitHub tracker = %T, want its host", github.tasks())
+	if _, ok := hostops.TasksFor(github).(hostops.HostSource); !ok {
+		t.Errorf("a GitHub tracker = %T, want its host", hostops.TasksFor(github))
 	}
 }
 
 // declaredTracker is a child target whose project.md declares kind.
-func declaredTracker(t *testing.T, kind facts.TrackerKind) *target {
+func declaredTracker(t *testing.T, kind facts.TrackerKind) *target.Target {
 	t.Helper()
 
 	tg := childTarget(t, "gh")
-	tg.eff.TrackerKind = kind
-	tg.eff.Facts = []facts.Fact{{Key: "tracker.kind", Value: kind.String(), Origin: facts.DeclaredFrontmatter("main")}}
+	tg.Effective.TrackerKind = kind
+	tg.Effective.Facts = []facts.Fact{
+		{Key: "tracker.kind", Value: kind.String(), Origin: facts.DeclaredFrontmatter("main")},
+	}
 
 	return tg
 }
@@ -118,13 +125,13 @@ func declaredTracker(t *testing.T, kind facts.TrackerKind) *target {
 func TestDeclinedVerbOnNonHostTracker(t *testing.T) {
 	f := newFakes(t)
 	tg := declaredTracker(t, facts.TrackerNotion)
-	path := writeDriver(t, tg.lay.StorageRoot.Path())
+	path := writeDriver(t, tg.Layout.StorageRoot.Path())
 
 	f.fail("driver list", shell.Result{Code: driver.ExitUnsupported})
 	f.fail("driver search index", shell.Result{Code: driver.ExitUnsupported})
 
-	_, listErr := taskRows(t.Context(), tg, issuePage)
-	_, searchErr := searchRows(t.Context(), tg, "index")
+	_, listErr := stack.TaskRows(t.Context(), tg, hostops.IssuePage)
+	_, searchErr := taskcmd.SearchRows(t.Context(), tg, "index")
 
 	for verb, err := range map[string]error{"list": listErr, "search": searchErr} {
 		if err == nil || !strings.Contains(err.Error(), path) || !strings.Contains(err.Error(), "`"+verb+"`") ||
@@ -143,24 +150,30 @@ func TestDeclinedVerbOnNonHostTracker(t *testing.T) {
 // name answers for a declined branch.
 func TestDeclinedVerbRefusalNamesTheNeed(t *testing.T) {
 	tg := declaredTracker(t, facts.TrackerNotion)
-	path := writeDriver(t, tg.lay.StorageRoot.Path())
+	path := writeDriver(t, tg.Layout.StorageRoot.Path())
 
 	verbs := []string{
 		driver.VerbRead, driver.VerbURL, driver.VerbIndex, driver.VerbList, driver.VerbSearch, driver.VerbBranch,
 	}
 	for _, verb := range verbs {
-		err := refusedSource{t: tg, d: tg.driver()}.refuse(verb)
+		err := hostops.RefusedSource{Target: tg, Driver: tg.Driver()}.Refuse(verb)
 		if err == nil || !strings.Contains(err.Error(), path) || !strings.Contains(err.Error(), "`"+verb+"`") ||
-			!strings.Contains(err.Error(), verbNeeds[verb]) {
+			!strings.Contains(err.Error(), hostops.VerbNeeds[verb]) {
 			t.Errorf("refuse(%s) = %v, want the driver path, the verb and what needs it", verb, err)
 		}
 	}
 
-	if !strings.Contains(verbNeeds[driver.VerbList], "`f10 task open --print` and the board's next rows") {
-		t.Errorf("list need = %q", verbNeeds[driver.VerbList])
+	if !strings.Contains(hostops.VerbNeeds[driver.VerbList], "`f10 task open --print` and the board's next rows") {
+		t.Errorf("list need = %q", hostops.VerbNeeds[driver.VerbList])
 	}
 
-	if _, err := titleLookup(tg, "7")(t.Context()); err == nil || strings.Contains(err.Error(), "none was found") {
+	if _, err := worktree.TitleLookup(
+		tg,
+		"7",
+	)(
+		t.Context(),
+	); err == nil ||
+		strings.Contains(err.Error(), "none was found") {
 		t.Errorf("title lookup = %v, want the declined branch, not a missing driver", err)
 	}
 }
@@ -169,7 +182,7 @@ func TestDeclinedVerbRefusalNamesTheNeed(t *testing.T) {
 func TestDeclinedVerbOnHostTrackerFallsBack(t *testing.T) {
 	f := newFakes(t)
 	tg := declaredTracker(t, facts.TrackerGitHub)
-	writeDriver(t, tg.lay.StorageRoot.Path())
+	writeDriver(t, tg.Layout.StorageRoot.Path())
 
 	f.fail("driver list", shell.Result{Code: driver.ExitUnsupported})
 	f.script(
@@ -177,7 +190,12 @@ func TestDeclinedVerbOnHostTrackerFallsBack(t *testing.T) {
 		`[{"number":7,"title":"host issue","state":"OPEN","url":"https://github.com/o/r/issues/7","labels":[]}]`,
 	)
 
-	if rows, err := taskRows(t.Context(), tg, issuePage); err != nil || len(rows) != 1 || rows[0].ID != "FT-7" {
+	if rows, err := stack.TaskRows(
+		t.Context(),
+		tg,
+		hostops.IssuePage,
+	); err != nil || len(rows) != 1 ||
+		rows[0].ID != "FT-7" {
 		t.Errorf("fallback = %+v, %v; want the host issue", rows, err)
 	}
 }

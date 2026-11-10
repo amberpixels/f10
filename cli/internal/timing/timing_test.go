@@ -60,6 +60,8 @@ type got struct {
 }
 
 func TestWindows(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name   string
 		events []ledger.Event
@@ -352,6 +354,8 @@ func TestWindows(t *testing.T) {
 // A session from before waits were recorded has no wait at all: its
 // windows would be wall time, so it counts nothing.
 func TestWindowsSkipASessionWithNoWaits(t *testing.T) {
+	t.Parallel()
+
 	ws := Windows(join(run(0, "ship"), claim(0, "ship", "running", "implement"), claim(5, "ship", "done")))
 	if len(ws) != 0 {
 		t.Errorf("windows %+v", ws)
@@ -361,6 +365,8 @@ func TestWindowsSkipASessionWithNoWaits(t *testing.T) {
 // A question nothing ended runs to the end of the record: the window it
 // starts in has no active time to report.
 func TestWindowsDropAWindowAnUnendedWaitRunsInto(t *testing.T) {
+	t.Parallel()
+
 	ws := Windows(join(
 		run(0, "ship"),
 		claim(0, "ship", "running", "implement"),
@@ -375,6 +381,8 @@ func TestWindowsDropAWindowAnUnendedWaitRunsInto(t *testing.T) {
 // A claim built in memory holds its place as an int, a stored one as a
 // float64; both name the entry's label.
 func TestWindowsLabelAClaimByItsPlace(t *testing.T) {
+	t.Parallel()
+
 	for _, at := range []any{2, float64(2)} {
 		c := claim(0, "ship", "running", "pr")
 		c.Payload.Val["labels"] = []any{"", "pr-polish"}

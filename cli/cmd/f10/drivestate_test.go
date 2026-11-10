@@ -8,11 +8,15 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/drive"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -27,7 +31,10 @@ func TestDriveCatchesUpAShipTypedByHand(t *testing.T) {
 	catchup := catchupTurn("GH-1")
 	resume := "herdr agent prompt " + agentOf("GH-1") + " /f10:ship GH-1 resume at pr (entry 4) --driven"
 
-	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("plan", "GH-1", nil, shipFlow{}, false), "{}")
+	fx.f.script(
+		"herdr agent prompt "+agentOf("GH-1")+" "+drive.SkillPrompt("plan", "GH-1", nil, runplan.ShipFlow{}, false),
+		"{}",
+	)
 
 	fx.f.script(catchup, "{}")
 	fx.f.script(resume, "{}")
@@ -63,7 +70,7 @@ func TestDriveCatchesUpAShipTypedByHand(t *testing.T) {
 // commits and an open PR carrying them, has shipped.
 func TestDriveTakesAShippedBranchFromGit(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "ship")
-	fx.task("GH-1", taskInfo{body: "x"}, "")
+	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.expects("GH-1", "ship")
@@ -77,7 +84,7 @@ func TestDriveTakesAShippedBranchFromGit(t *testing.T) {
 		fx.f.script("git rev-list --count --no-merges refs/heads/GH-1 --not refs/heads/main", "2")
 	}
 
-	fx.in.pull = func(context.Context, string) (forge.PR, error) { return forge.PR{Status: forge.Open, Number: 7}, nil }
+	fx.in.Pull = func(context.Context, string) (forge.PR, error) { return forge.PR{Status: forge.Open, Number: 7}, nil }
 
 	err := fx.drive(t)
 	if err != nil {
@@ -127,7 +134,7 @@ func TestDriveHaltsOnlyOnRepeatedFailureWithNoProgress(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			fx := newDriveFixture(t, "GH-1", "ship")
-			fx.task("GH-1", taskInfo{body: "x"}, "")
+			fx.task("GH-1", hostops.TaskInfo{Body: "x"}, "")
 			fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 			fx.opens("GH-1", "ws:GH-1", "pane:1")
 			fx.expects("GH-1", "ship")
@@ -152,7 +159,7 @@ func TestDriveHaltsOnlyOnRepeatedFailureWithNoProgress(t *testing.T) {
 
 			var halts []ledger.Event
 
-			fx.in.record = func(_ context.Context, _ string, e ledger.Event) { halts = append(halts, e) }
+			fx.in.Record = func(_ context.Context, _ string, e ledger.Event) { halts = append(halts, e) }
 
 			err := fx.drive(t)
 			out := fx.out.String()
@@ -189,22 +196,22 @@ func TestDriveHaltsOnlyOnRepeatedFailureWithNoProgress(t *testing.T) {
 // The fingerprint leaves out what moves on every turn, and takes in what
 // only progress moves.
 func TestTaskStateFingerprint(t *testing.T) {
-	base := taskState{head: "c1", run: &state.Run{Plan: "done", Ship: "failed", Leaf: "implement"}}
+	base := drive.TaskState{Head: "c1", Run: &state.Run{Plan: "done", Ship: "failed", Leaf: "implement"}}
 
 	same := base
-	same.run = &state.Run{Plan: "done", Ship: "failed", Leaf: "implement", Note: "another note"}
+	same.Run = &state.Run{Plan: "done", Ship: "failed", Leaf: "implement", Note: "another note"}
 
-	if base.fingerprint() != same.fingerprint() {
+	if base.Fingerprint() != same.Fingerprint() {
 		t.Error("a new note changed the fingerprint")
 	}
 
-	for name, moved := range map[string]taskState{
-		"commit":   {head: "c2", run: base.run},
-		"review":   {head: "c1", reviews: 1, run: base.run},
-		"pr":       {head: "c1", pr: "7", run: base.run},
-		"run leaf": {head: "c1", run: &state.Run{Plan: "done", Ship: "failed", Leaf: "pr"}},
+	for name, moved := range map[string]drive.TaskState{
+		"commit":   {Head: "c2", Run: base.Run},
+		"review":   {Head: "c1", Reviews: 1, Run: base.Run},
+		"pr":       {Head: "c1", Pr: "7", Run: base.Run},
+		"run leaf": {Head: "c1", Run: &state.Run{Plan: "done", Ship: "failed", Leaf: "pr"}},
 	} {
-		if moved.fingerprint() == base.fingerprint() {
+		if moved.Fingerprint() == base.Fingerprint() {
 			t.Errorf("%s left the fingerprint unchanged", name)
 		}
 	}
@@ -217,37 +224,48 @@ func TestTaskStateShipped(t *testing.T) {
 	running := &state.Run{Ship: "running", Pipeline: pipeline}
 
 	cases := map[string]struct {
-		s    taskState
+		s    drive.TaskState
 		want bool
 	}{
-		"no pipeline, PR open and pushed": {s: taskState{head: "c", origin: "c", code: true, pr: "7"}, want: true},
-		"no pipeline, push behind":        {s: taskState{head: "c", origin: "b", code: true, pr: "7"}},
-		"no pipeline, no PR":              {s: taskState{head: "c", origin: "c", code: true}},
+		"no pipeline, PR open and pushed": {
+			s:    drive.TaskState{Head: "c", Origin: "c", Code: true, Pr: "7"},
+			want: true,
+		},
+		"no pipeline, push behind": {s: drive.TaskState{Head: "c", Origin: "b", Code: true, Pr: "7"}},
+		"no pipeline, no PR":       {s: drive.TaskState{Head: "c", Origin: "c", Code: true}},
 		"stopped at the change judge": {
-			s: taskState{head: "c", origin: "c", code: true, pr: "7", reviews: 1, run: running},
+			s: drive.TaskState{Head: "c", Origin: "c", Code: true, Pr: "7", Reviews: 1, Run: running},
 		},
 		"every gate in": {
-			s:    taskState{head: "c", origin: "c", code: true, pr: "7", reviews: 1, changeJudged: true, run: running},
+			s: drive.TaskState{
+				Head:         "c",
+				Origin:       "c",
+				Code:         true,
+				Pr:           "7",
+				Reviews:      1,
+				ChangeJudged: true,
+				Run:          running,
+			},
 			want: true,
 		},
 		"commit flow": {
-			s: taskState{
-				head: "c",
-				code: true,
-				run:  &state.Run{Ship: "running", Pipeline: []string{"implement", "commit"}},
+			s: drive.TaskState{
+				Head: "c",
+				Code: true,
+				Run:  &state.Run{Ship: "running", Pipeline: []string{"implement", "commit"}},
 			},
 			want: true,
 		},
 	}
 
 	for name, tc := range cases {
-		if got := tc.s.shipped(); got != tc.want {
+		if got := tc.s.Shipped(); got != tc.want {
 			t.Errorf("%s: shipped = %v, want %v", name, got, tc.want)
 		}
 	}
 
-	failed := taskState{head: "c", origin: "c", code: true, pr: "7", run: &state.Run{Ship: "failed"}}
-	if failed.has("ship") {
+	failed := drive.TaskState{Head: "c", Origin: "c", Code: true, Pr: "7", Run: &state.Run{Ship: "failed"}}
+	if failed.Has("ship") {
 		t.Error("an explicit ship stop read as shipped")
 	}
 }
@@ -257,17 +275,19 @@ func TestTaskStateShipped(t *testing.T) {
 // moves the head every time without settling anything, so the third with the
 // same fingerprint halts, and a moved target or a new conflict starts over.
 func TestCatchupAttemptsCountTheFingerprint(t *testing.T) {
-	in := &driveInput{
-		now: func() time.Time { return time.Unix(1_800_000_000, 0) },
+	in := &drive.DriveInput{
+		Now: func() time.Time { return time.Unix(1_800_000_000, 0) },
 	}
-	r := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-1"}}, o: openedTask{path: "/code/repo.GH-1"}}
+	r := &drive.DriveRun{Task: drive.DriveTask{Ref: ref.Ref{ID: "GH-1"}}, O: start.OpenedTask{Path: "/code/repo.GH-1"}}
 
 	var out bytes.Buffer
 
-	in.out = &out
+	in.Out = &out
 
-	attempt := func(fp string) *driveResult {
-		res, ok := endOf(in.attemptAt(r, "catchup", fp, halted("GH-1", "ship", "GH-1 still conflicts with main")))
+	attempt := func(fp string) *drive.DriveResult {
+		res, ok := drive.EndOf(
+			in.AttemptAt(r, "catchup", fp, drive.Halted("GH-1", "ship", "GH-1 still conflicts with main")),
+		)
 		if !ok {
 			return nil
 		}
@@ -294,7 +314,7 @@ func TestCatchupAttemptsCountTheFingerprint(t *testing.T) {
 		}
 	}
 
-	if res := attempt(same); res == nil || res.code != ui.ExitHalted || len(res.attempts) != 3 {
+	if res := attempt(same); res == nil || res.Code != ui.ExitHalted || len(res.Attempts) != 3 {
 		t.Fatalf("the third same fingerprint in a row did not halt: %+v\n%s", res, out.String())
 	}
 }
@@ -303,15 +323,15 @@ func TestCatchupAttemptsCountTheFingerprint(t *testing.T) {
 // when a moved state starts that count over, so two lines reading "1 of 3"
 // never look like one failure printed twice.
 func TestAttemptLinesSayWhatTheyCount(t *testing.T) {
-	in := &driveInput{now: func() time.Time { return time.Unix(1_800_000_000, 0) }}
-	r := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-1"}}}
+	in := &drive.DriveInput{Now: func() time.Time { return time.Unix(1_800_000_000, 0) }}
+	r := &drive.DriveRun{Task: drive.DriveTask{Ref: ref.Ref{ID: "GH-1"}}}
 
 	var out bytes.Buffer
 
-	in.out = &out
+	in.Out = &out
 
 	for _, fp := range []string{"a", "b", "b"} {
-		if res := in.attemptAt(r, "ship", fp, driveResult{reason: "pr: base not on origin"}); res != nil {
+		if res := in.AttemptAt(r, "ship", fp, drive.DriveResult{Reason: "pr: base not on origin"}); res != nil {
 			t.Fatalf("halted early: %+v", res)
 		}
 	}

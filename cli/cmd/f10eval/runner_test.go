@@ -9,6 +9,8 @@ import (
 )
 
 func TestProfilesFor(t *testing.T) {
+	t.Parallel()
+
 	s := Scenario{Name: "s", Agents: []string{"opus:high", "opus:medium"}}
 
 	got, err := profilesFor(s, "")
@@ -36,6 +38,8 @@ func TestProfilesFor(t *testing.T) {
 }
 
 func TestReportNameAndArgs(t *testing.T) {
+	t.Parallel()
+
 	def, _, _ := agentctl.Profile{}.Resolve()
 	high, _, _ := agentctl.Profile{Model: "opus", Effort: "high"}.Resolve()
 
@@ -64,6 +68,8 @@ func TestReportNameAndArgs(t *testing.T) {
 }
 
 func TestRunEnv(t *testing.T) {
+	t.Parallel()
+
 	env := runEnv([]string{"HOME=/h", "CLAUDECODE=1", "PATH=/bin"}, "/tmp/x")
 
 	if slices.ContainsFunc(env, func(kv string) bool { return strings.HasPrefix(kv, "CLAUDECODE=") }) {

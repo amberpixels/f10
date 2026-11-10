@@ -4,6 +4,8 @@ import "testing"
 
 // Each reader's answer on the edges where the three prefixes differ.
 func TestReaders(t *testing.T) {
+	t.Parallel()
+
 	for _, c := range []struct {
 		token                string
 		parse, word, declare bool

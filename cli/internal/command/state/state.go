@@ -1,0 +1,185 @@
+package state
+
+import (
+	"cmp"
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/urfave/cli/v3"
+
+	"github.com/amberpixels/f10/cli/internal/asknotify"
+	"github.com/amberpixels/f10/cli/internal/asks"
+	"github.com/amberpixels/f10/cli/internal/ledger"
+	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/statusview"
+	"github.com/amberpixels/f10/cli/internal/ui"
+)
+
+// Command is the state noun, which writes the run state the badge renders. The badge is
+// cosmetic, so no session or an unwritable directory is a silent no-op; a
+// malformed call exits 2, since silence would freeze the badge over a typo.
+func Command() *cli.Command {
+	verb := func(name, args, usage string, apply func(r *state.Run, a cli.Args) error) *cli.Command {
+		kind := "state_" + name
+
+		return &cli.Command{
+			Name:      name,
+			ArgsUsage: args,
+			Usage:     usage,
+			// notes and asks are free prose: a leading dash is text, not a flag
+			SkipFlagParsing: true,
+			Action: func(ctx context.Context, cmd *cli.Command) error {
+				return writeState(ctx, cmd, kind, apply)
+			},
+		}
+	}
+
+	return &cli.Command{
+		Name:   "state",
+		Usage:  "write this session's run state for the status-line badge",
+		Hidden: true,
+		Commands: []*cli.Command{
+			verb("set", "<capture|plan|ship> <status> [<leaf>]", "record a phase's status",
+				func(r *state.Run, a cli.Args) error { return r.Set(a.Get(0), a.Get(1), a.Get(2)) }),
+			verb("task", "<id> [<url>]", "record the task this run is about",
+				func(r *state.Run, a cli.Args) error { return r.SetTask(a.Get(0), a.Get(1)) }),
+			verb("note", "<reason> [<next>]", "why a run stopped, and what unblocks it",
+				func(r *state.Run, a cli.Args) error { return r.SetNote(a.Get(0), a.Get(1)) }),
+			verb("ask", "<text>", "the question a driven run stopped on, options included",
+				func(r *state.Run, a cli.Args) error { return r.SetAsk(a.Get(0)) }),
+			verb("wait", "<base-task>", "the base task a driven ship stopped for, its branch without code yet",
+				func(r *state.Run, a cli.Args) error { return r.SetWait(a.Get(0)) }),
+			verb("stop", "guard", "the kind of stop ship left: guard for its catchup guard",
+				func(r *state.Run, a cli.Args) error { return r.SetStop(a.Get(0)) }),
+			verb("done", "<step>", "record that a step with no phase of its own (catchup) reported",
+				func(r *state.Run, a cli.Args) error { return r.SetDone(a.Get(0), time.Now()) }),
+			verb("final", "<step>", "declare the ship pipeline's last step",
+				func(r *state.Run, a cli.Args) error { return r.SetFinal(a.Get(0)) }),
+			verb("pipeline", "<step>...", "declare the ship pipeline's steps, the last one final",
+				func(r *state.Run, a cli.Args) error { return r.SetPipeline(a.Slice()) }),
+			{
+				Name:  "show",
+				Usage: "the current run, one line per fact",
+				Action: func(_ context.Context, cmd *cli.Command) error {
+					sid := state.Session()
+					if sid == "" {
+						_, err := fmt.Fprintln(cmd.Writer, "no session id - nothing to show")
+
+						return err
+					}
+
+					r, err := state.Load(state.Path(state.Dir(), sid))
+					if err != nil {
+						_, err = fmt.Fprintln(cmd.Writer, "no state for session", sid)
+
+						return err
+					}
+
+					statusview.RunRows(
+						cmd.Writer,
+						r,
+						statusview.RunView{ShowRoot: r.Root != "", Now: time.Now(), Limit: ui.Width(cmd.Writer)},
+					)
+
+					return nil
+				},
+			},
+			{
+				Name:  "clear",
+				Usage: "drop this session's state",
+				Action: func(context.Context, *cli.Command) error {
+					if sid := state.Session(); sid != "" {
+						state.Clear(state.Dir(), sid)
+					}
+
+					return nil
+				},
+			},
+			{
+				Name:  "prune",
+				Usage: "drop long-dead sessions' files",
+				Action: func(context.Context, *cli.Command) error {
+					state.Prune(state.Dir(), time.Now())
+
+					return nil
+				},
+			},
+		},
+	}
+}
+
+// stateLockWait is how long f10 state waits on a hook's write of the same
+// session before it errors.
+const stateLockWait = 5 * time.Second
+
+func writeState(ctx context.Context, cmd *cli.Command, kind string, apply func(r *state.Run, a cli.Args) error) error {
+	// a typo fails even without a session, or step prose would hide it
+	// until the first real run
+	var (
+		r        *state.Run
+		applyErr error
+		now      = time.Now()
+	)
+
+	change := func(got *state.Run, _ bool) (bool, error) {
+		r, applyErr = got, apply(got, cmd.Args())
+
+		return applyErr == nil && got.Session != "", nil
+	}
+
+	// a hook writing the same session holds the lock for an instant
+	var err error
+	if session := state.Session(); session == "" {
+		_, err = change(state.Fresh(""), false)
+	} else {
+		err = state.Update(ctx, state.Dir(), session, stateLockWait, now, change)
+	}
+
+	if ue, ok := errors.AsType[*state.UsageError](applyErr); ok {
+		return cli.Exit("f10-state: "+ue.Error(), ui.ExitUsage)
+	}
+
+	if err := cmp.Or(applyErr, err); err != nil {
+		return err
+	}
+
+	if r.Session == "" {
+		return nil
+	}
+
+	recordClaim(ctx, r, kind, cmd.Args().Slice(), now)
+
+	// every driven ask goes to the inbox, a drive's or not
+	if kind == "state_ask" {
+		if cwd, err := os.Getwd(); err == nil {
+			if a, ok := asknotify.AskFromRun(ctx, r, cwd); ok {
+				asknotify.RaiseAsk(ctx, cmd.ErrWriter, asks.Dir(), a, now, asknotify.AskNotifier)
+			}
+		}
+	}
+
+	return nil
+}
+
+// recordClaim puts the call in the ledger as the model made it, beside the
+// state it left. Its outcome never reaches the exit code.
+func recordClaim(ctx context.Context, r *state.Run, kind string, args []string, now time.Time) {
+	cwd, _ := os.Getwd()
+	place := ledger.Where(ctx, cwd)
+
+	ledger.Record(ledger.Event{
+		At:           now,
+		Project:      place.Project,
+		ProjectLocal: place.ProjectLocal,
+		Checkout:     place.Checkout,
+		Branch:       place.Branch,
+		Session:      r.Session,
+		Task:         r.Task,
+		Kind:         kind,
+		Source:       ledger.Claimed,
+		Payload:      ledger.NewPayload(ledger.EncodeClaim(r, args)),
+	})
+}

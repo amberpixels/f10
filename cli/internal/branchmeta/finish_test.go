@@ -3,6 +3,8 @@ package branchmeta
 import "testing"
 
 func TestDriveFinishRoundTrip(t *testing.T) {
+	t.Parallel()
+
 	for _, d := range []DriveFinish{
 		{State: FinishQueued},
 		{State: FinishQueued, Action: "waiting for GH-1"},

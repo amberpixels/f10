@@ -7,8 +7,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/fsx"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
@@ -17,13 +20,13 @@ import (
 func (fx *finishFixture) spike(t *testing.T) string {
 	t.Helper()
 
-	fx.in.storage = storage.InRepo(fx.main)
-	writeFile(t, filepath.Join(fx.in.storage.Plans(), "GH-1.md"), "Roles: senior engineer\nKind: spike\n\n# GH-1\n")
+	fx.in.Storage = storage.InRepo(fx.main)
+	writeFile(t, filepath.Join(fx.in.Storage.Plans(), "GH-1.md"), "Roles: senior engineer\nKind: spike\n\n# GH-1\n")
 	writePlan(t, filepath.Join(fx.main, ".f10", "spikes", "GH-1.md"))
 	fx.f.script("git status --porcelain", " M cli/a.go\n?? probe.txt")
 	fx.f.script("git rev-list --count refs/heads/main..refs/heads/GH-1", "0")
 
-	return filepath.Join(fx.in.storage.Plans(), "archive")
+	return filepath.Join(fx.in.Storage.Plans(), "archive")
 }
 
 // A spike with no PR closes without a merge: the experiment is discarded
@@ -31,7 +34,7 @@ func (fx *finishFixture) spike(t *testing.T) string {
 func TestFinishClosesASpike(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.noPull()
-	archive := fx.spike(t)
+	archived := fx.spike(t)
 	fx.f.script("git reset --hard", "")
 	fx.f.script("git clean -fd", "")
 	released := fx.dependent()
@@ -42,7 +45,7 @@ func TestFinishClosesASpike(t *testing.T) {
 	}
 
 	for _, name := range []string{"GH-1.md", "GH-1.spike.md"} {
-		if !fsx.Exists(filepath.Join(archive, name)) {
+		if !fsx.Exists(filepath.Join(archived, name)) {
 			t.Errorf("%s is not archived", name)
 		}
 	}
@@ -77,7 +80,7 @@ func TestFinishKeepsASpikesExperiment(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.noPull()
 	fx.spike(t)
-	fx.in.flags.keep = true
+	fx.in.Flags.Keep = true
 	fx.f.script("git rev-parse -q --verify refs/heads/kept/spike", "")
 	fx.f.script("git add -A", "")
 	fx.f.script("git commit --no-verify -m GH-1: spike experiment, not for merge", "")
@@ -113,14 +116,14 @@ func TestFinishASpikeWithAPR(t *testing.T) {
 	t.Run("clean", func(t *testing.T) {
 		fx := newFinishFixture(t)
 		fx.openPR()
-		archive := fx.spike(t)
+		archived := fx.spike(t)
 		fx.f.script("git status --porcelain", "")
 
 		if out, err := fx.run(t); err != nil {
 			t.Fatalf("%v\n%s", err, out)
 		}
 
-		if !fx.f.called(ghMerge) || !fsx.Exists(filepath.Join(archive, "GH-1.spike.md")) {
+		if !fx.f.called(ghMerge) || !fsx.Exists(filepath.Join(archived, "GH-1.spike.md")) {
 			t.Errorf("calls = %q", fx.f.calls)
 		}
 	})
@@ -160,7 +163,7 @@ func TestFinishRefusesADirtySpikeOnMain(t *testing.T) {
 
 func TestFinishKeepNeedsASpike(t *testing.T) {
 	fx := newFinishFixture(t)
-	fx.in.flags.keep = true
+	fx.in.Flags.Keep = true
 
 	_, err := fx.run(t)
 	if err == nil || !strings.Contains(err.Error(), "has no spike report") {
@@ -187,7 +190,7 @@ func TestKeptName(t *testing.T) {
 		f := newFakes(t)
 		f.script("git rev-parse -q --verify refs/heads/"+c.want, "")
 
-		if got := keptName(t.Context(), "/repo", c.branch, c.ids); got != c.want {
+		if got := finish.KeptName(t.Context(), "/repo", c.branch, c.ids); got != c.want {
 			t.Errorf("keptName(%q) = %q, want %q", c.branch, got, c.want)
 		}
 	}
@@ -196,7 +199,7 @@ func TestKeptName(t *testing.T) {
 	f.script("git rev-parse -q --verify refs/heads/kept/x", "abc")
 	f.script("git rev-parse -q --verify refs/heads/kept/x-2", "")
 
-	if got := keptName(t.Context(), "/repo", "GH-1/x", []string{"GH-1"}); got != "kept/x-2" {
+	if got := finish.KeptName(t.Context(), "/repo", "GH-1/x", []string{"GH-1"}); got != "kept/x-2" {
 		t.Errorf("a taken name = %q", got)
 	}
 }
@@ -206,7 +209,7 @@ func TestFinishedTaskBySpikeReport(t *testing.T) {
 	root := storage.Root(t.TempDir())
 	writePlan(t, filepath.Join(root.Archive(), "GH-1.spike.md"))
 
-	if !finishedTask(taskInfo{}, root, "GH-1", false) {
+	if !stack.FinishedTask(hostops.TaskInfo{}, root, "GH-1", false) {
 		t.Error("an archived spike report did not count")
 	}
 }
@@ -217,7 +220,7 @@ func TestFinishIgnoresAReportUnderAPlanThatIsNoSpike(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.noPull()
 	fx.spike(t)
-	writeFile(t, filepath.Join(fx.in.storage.Plans(), "GH-1.md"), "Roles: senior engineer\n\n# GH-1\n")
+	writeFile(t, filepath.Join(fx.in.Storage.Plans(), "GH-1.md"), "Roles: senior engineer\n\n# GH-1\n")
 
 	_, err := fx.run(t)
 	if err == nil || !strings.Contains(err.Error(), "uncommitted changes") {
@@ -271,7 +274,7 @@ func TestFinishArchivesALegacyWorktreesSpikeReport(t *testing.T) {
 	}
 
 	// the worktree's own copy goes with the worktree, so a rerun still finds it
-	if taskSpike(fx.wt, fx.in.storage, "GH-1") == "" {
+	if finish.TaskSpike(fx.wt, fx.in.Storage, "GH-1") == "" {
 		t.Error("a rerun after the failed removal sees no spike")
 	}
 }
@@ -291,7 +294,7 @@ func TestSpikePlan(t *testing.T) {
 		p := filepath.Join(t.TempDir(), "plan.md")
 		writeFile(t, p, body)
 
-		if got := spikePlan(p); got != want {
+		if got := finish.SpikePlan(p); got != want {
 			t.Errorf("spikePlan(%q) = %v, want %v", body, got, want)
 		}
 	}

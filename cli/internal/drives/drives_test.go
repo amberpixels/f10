@@ -13,6 +13,8 @@ import (
 )
 
 func TestLeaseIsExclusive(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 
 	l, err := Acquire(root, "GH-1", 3)
@@ -63,6 +65,8 @@ func TestLeaseIsExclusive(t *testing.T) {
 // The watcher's lease names it, so a drive or a finish refused by it says
 // who holds the task.
 func TestWatcherLeaseNamesIt(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 
 	l, err := AcquireAs(root, "GH-1", Holder{Watch: true})
@@ -82,6 +86,8 @@ func TestWatcherLeaseNamesIt(t *testing.T) {
 }
 
 func TestProbeOnNoLockFile(t *testing.T) {
+	t.Parallel()
+
 	if _, ok := Probe(t.TempDir(), "GH-9"); ok {
 		t.Error("a lease never taken reads held")
 	}
@@ -89,6 +95,8 @@ func TestProbeOnNoLockFile(t *testing.T) {
 
 // A lock file a dead process left reads free: the kernel dropped its lock.
 func TestStaleLockFileReadsFree(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 
 	l, err := Acquire(root, "GH-2", 7)
@@ -108,6 +116,8 @@ func TestStaleLockFileReadsFree(t *testing.T) {
 }
 
 func TestCreateNumbersRecords(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 
 	var (
@@ -144,6 +154,8 @@ func TestCreateNumbersRecords(t *testing.T) {
 }
 
 func TestUpdateKeepsAConcurrentCancel(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 
 	rec := &Record{Args: []string{"GH-1"}, Tasks: []Task{{ID: "GH-1"}}}
@@ -179,6 +191,8 @@ func TestUpdateKeepsAConcurrentCancel(t *testing.T) {
 }
 
 func TestFind(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 
 	if r, err := Find(root, []string{"GH-1"}); err != nil || r != nil {
@@ -214,6 +228,8 @@ func TestFind(t *testing.T) {
 // The creating session round-trips; a record written before the field
 // existed reads as none.
 func TestRecordKeepsItsSession(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 
 	for _, session := range []string{"sess-1", ""} {
@@ -235,6 +251,8 @@ func TestRecordKeepsItsSession(t *testing.T) {
 
 // Await waits out a holder that lets go, and names one that does not.
 func TestAwaitWaitsForTheHolder(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 
 	held, err := Acquire(root, "main-pull", 2)
@@ -273,6 +291,8 @@ func TestAwaitWaitsForTheHolder(t *testing.T) {
 // A task's catchup round-trips through the record, so a resumed drive
 // leases its push against the origin tip the catchup started from.
 func TestRecordKeepsATasksCatchup(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	c := &Catchup{
 		Target: "m2", Head: "h1", Origin: "p1", Base: "origin/main", At: time.Unix(1_800_000_000, 0).UTC(),
@@ -297,6 +317,8 @@ func TestRecordKeepsATasksCatchup(t *testing.T) {
 // The fingerprint moves with the target, the conflicts or the red command,
 // and with nothing else.
 func TestCatchupFingerprint(t *testing.T) {
+	t.Parallel()
+
 	base := Fingerprint("m1", "a.go:x:y", "")
 
 	for name, fp := range map[string]string{
@@ -317,6 +339,8 @@ func TestCatchupFingerprint(t *testing.T) {
 // A task's phase round-trips, and a record written before phases were kept
 // reads with none.
 func TestTaskPhase(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 
 	rec := &Record{Args: []string{"GH-1"}, Tasks: []Task{{ID: "GH-1", Phase: PhaseParked}}}

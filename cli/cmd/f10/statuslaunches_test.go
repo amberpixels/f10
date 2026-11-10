@@ -11,9 +11,12 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	hookcmd "github.com/amberpixels/f10/cli/internal/command/hook"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/statusview"
+	"github.com/amberpixels/f10/cli/internal/target"
 )
 
 // launchFixture is a main checkout whose session sess-1 launched tasks,
@@ -45,7 +48,7 @@ func (fx launchFixture) worktree(t *testing.T, id string, run state.Run) {
 	git(t, fx.repo, "worktree", "add", "-q", "-b", id+"/work", path)
 
 	run.Session, run.Task, run.Root = "agent-"+id, id, gitx.Resolved(path)
-	if err := run.Save(fx.stateDir, time.Now()); err != nil {
+	if err := run.Save(t.Context(), fx.stateDir, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -62,7 +65,7 @@ func (fx launchFixture) launch(t *testing.T, kind, value string) {
 func (fx launchFixture) drive(t *testing.T, change func(*drives.Record), ids ...string) int {
 	t.Helper()
 
-	tg, err := targetAt(t.Context(), fx.repo, false, "status")
+	tg, err := target.At(t.Context(), fx.repo, false, "status")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +79,7 @@ func (fx launchFixture) drive(t *testing.T, change func(*drives.Record), ids ...
 		change(rec)
 	}
 
-	if err := drives.Create(tg.lay.StorageRoot.Path(), rec); err != nil {
+	if err := drives.Create(tg.Layout.StorageRoot.Path(), rec); err != nil {
 		t.Fatal(err)
 	}
 
@@ -92,12 +95,12 @@ func (fx launchFixture) status(t *testing.T, args ...string) string {
 	return runApp(t, append([]string{"status"}, args...)...).must(t)
 }
 
-func (fx launchFixture) rows(t *testing.T) []taskRow {
+func (fx launchFixture) rows(t *testing.T) []statusview.TaskRow {
 	t.Helper()
 
 	out := fx.status(t, "--json")
 
-	var rows []taskRow
+	var rows []statusview.TaskRow
 	if err := json.Unmarshal([]byte(out), &rows); err != nil {
 		t.Fatalf("not a row list: %v\n%s", err, out)
 	}
@@ -105,7 +108,7 @@ func (fx launchFixture) rows(t *testing.T) []taskRow {
 	return rows
 }
 
-func rowIDs(rows []taskRow) string {
+func rowIDs(rows []statusview.TaskRow) string {
 	ids := make([]string, len(rows))
 	for i, r := range rows {
 		ids[i] = r.ID + ":" + r.Stage
@@ -141,7 +144,7 @@ func TestBareStatusListsTheSessionLaunches(t *testing.T) {
 	if plain := fx.status(
 		t,
 		"--plain",
-	); !strings.HasPrefix(plain, launchesHead) ||
+	); !strings.HasPrefix(plain, statusview.LaunchesHead) ||
 		!strings.Contains(plain, "Refactor?") {
 		t.Errorf("plain tree:\n%s", plain)
 	}
@@ -180,7 +183,7 @@ func TestBareStatusLaunchesOutrankTheSessionTask(t *testing.T) {
 	fx.worktree(t, "DM-2", state.Run{Capture: "prior", Plan: "done", Ship: "upcoming"})
 
 	own := &state.Run{Session: "sess-1", Task: "DM-1", Root: fx.repo, Capture: "done", Plan: "done", Ship: "upcoming"}
-	if err := own.Save(fx.stateDir, time.Now()); err != nil {
+	if err := own.Save(t.Context(), fx.stateDir, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -192,7 +195,7 @@ func TestBareStatusLaunchesOutrankTheSessionTask(t *testing.T) {
 	}
 
 	own.Task = "DM-9"
-	if err := own.Save(fx.stateDir, time.Now()); err != nil {
+	if err := own.Save(t.Context(), fx.stateDir, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -215,12 +218,12 @@ func TestBareStatusNestsLaunchesUnderTheirBase(t *testing.T) {
 	fx.launch(t, state.LaunchStart, "DM-5")
 
 	// only a running drive holds DM-4 for its base
-	tg, err := targetAt(t.Context(), fx.repo, false, "status")
+	tg, err := target.At(t.Context(), fx.repo, false, "status")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	lease, err := drives.Acquire(tg.lay.StorageRoot.Path(), drives.DriveKey(n), n)
+	lease, err := drives.Acquire(tg.Layout.StorageRoot.Path(), drives.DriveKey(n), n)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,12 +267,12 @@ func TestBareStatusBranchBaseBeatsTheDrives(t *testing.T) {
 func TestBareStatusIgnoresAFinishedBase(t *testing.T) {
 	fx := newLaunchFixture(t)
 
-	archive := filepath.Join(fx.repo, ".f10", "plans", "archive")
-	if err := os.MkdirAll(archive, 0o750); err != nil {
+	archived := filepath.Join(fx.repo, ".f10", "plans", "archive")
+	if err := os.MkdirAll(archived, 0o750); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := os.WriteFile(filepath.Join(archive, "DM-5.1.md"), []byte("# plan\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(archived, "DM-5.1.md"), []byte("# plan\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -287,16 +290,16 @@ func TestBareStatusIgnoresAFinishedBase(t *testing.T) {
 
 // Dropping a row moves what hung under it up to its level.
 func TestDropRowsLiftsTheDroppedRowsChildren(t *testing.T) {
-	rows := []taskRow{
-		{ID: "A", Depth: 0, Stage: stageDone},
+	rows := []statusview.TaskRow{
+		{ID: "A", Depth: 0, Stage: statusview.StageDone},
 		{ID: "B", Depth: 1},
-		{ID: "C", Depth: 2, Stage: stageDone},
+		{ID: "C", Depth: 2, Stage: statusview.StageDone},
 		{ID: "D", Depth: 3},
 		{ID: "E", Depth: 1},
 		{ID: "F", Depth: 0},
 	}
 
-	got := dropRows(rows, func(r taskRow) bool { return r.Stage == stageDone })
+	got := statusview.DropRows(rows, func(r statusview.TaskRow) bool { return r.Stage == statusview.StageDone })
 
 	var b strings.Builder
 	for _, r := range got {
@@ -345,12 +348,12 @@ func TestBareStatusDropsFinishedStarts(t *testing.T) {
 
 	fx.worktree(t, "DM-1", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
 
-	archive := filepath.Join(fx.repo, ".f10", "plans", "archive")
-	if err := os.MkdirAll(archive, 0o750); err != nil {
+	archived := filepath.Join(fx.repo, ".f10", "plans", "archive")
+	if err := os.MkdirAll(archived, 0o750); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := os.WriteFile(filepath.Join(archive, "DM-5.1.md"), []byte("# plan\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(archived, "DM-5.1.md"), []byte("# plan\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -371,8 +374,8 @@ func TestHookStatusTextReportsAsks(t *testing.T) {
 	fx.worktree(t, "DM-1", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
 	fx.launch(t, state.LaunchStart, "DM-1")
 
-	text, asks := hookStatusText(t.Context(), "sess-1")
-	if asks || !strings.HasPrefix(text, launchesHead) {
+	text, asks := hookcmd.HookStatusText(t.Context(), "sess-1")
+	if asks || !strings.HasPrefix(text, statusview.LaunchesHead) {
 		t.Errorf("no ask: asks = %v, text:\n%s", asks, text)
 	}
 
@@ -386,7 +389,7 @@ func TestHookStatusTextReportsAsks(t *testing.T) {
 	})
 	fx.launch(t, state.LaunchStart, "DM-3")
 
-	if _, asks := hookStatusText(t.Context(), "sess-1"); !asks {
+	if _, asks := hookcmd.HookStatusText(t.Context(), "sess-1"); !asks {
 		t.Error("an asking launch did not report an ask")
 	}
 }
@@ -413,12 +416,12 @@ func TestBareStatusUnopenedTaskTakesTheDrivesFlow(t *testing.T) {
 
 	for _, row := range rows {
 		for _, g := range row.Gates {
-			if g.Step == "judge" && g.State != gateOff || g.Local != nil {
+			if g.Step == "judge" && g.State != statusview.GateOff || g.Local != nil {
 				t.Errorf("%s: gate %+v is the default flow's, not prose's", row.ID, g)
 			}
 		}
 
-		if gc := row.gateColumn(); gc != "" {
+		if gc := row.GateColumn(); gc != "" {
 			t.Errorf("%s: gate column = %q, want none", row.ID, gc)
 		}
 	}
