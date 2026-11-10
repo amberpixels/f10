@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/drive"
 	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/hostops"
@@ -27,13 +28,13 @@ import (
 // opened or prompted for it.
 func TestDriveSkipsATaskAnotherDriveOwns(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "judge")
-	fx.in.root = t.TempDir()
+	fx.in.Root = t.TempDir()
 	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, "")
 
 	// bouncing off the lease says nothing about the owner's task
-	fx.in.record = func(_ context.Context, _ string, e ledger.Event) { t.Errorf("recorded %+v", e) }
+	fx.in.Record = func(_ context.Context, _ string, e ledger.Event) { t.Errorf("recorded %+v", e) }
 
-	other, err := drives.Acquire(fx.in.root, "GH-1", 7)
+	other, err := drives.Acquire(fx.in.Root, "GH-1", 7)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,12 +62,12 @@ func TestDriveRecordIsPickedUpByTheSameCommand(t *testing.T) {
 	root := t.TempDir()
 
 	fx := newDriveFixture(t, "GH-1", "judge")
-	fx.in.root = root
+	fx.in.Root = root
 	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.f.script(
-		"herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, runplan.ShipFlow{}, false),
+		"herdr agent prompt "+agentOf("GH-1")+" "+drive.SkillPrompt("judge", "GH-1", nil, runplan.ShipFlow{}, false),
 		"{}",
 	)
 	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
@@ -95,7 +96,7 @@ func TestDriveRecordIsPickedUpByTheSameCommand(t *testing.T) {
 	}
 
 	fx = newDriveFixture(t, "GH-1", "judge", "--answer", "1. proceed")
-	fx.in.root = root
+	fx.in.Root = root
 	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, heads("GH-1"))
 	fx.f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
 	fx.f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1",
@@ -143,7 +144,7 @@ func TestDriveRecordIsPickedUpByTheSameCommand(t *testing.T) {
 // resume never sends it to a later question.
 func TestDriveDropsUnusedAnswers(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "judge", "--answer", "GH-1=1. proceed")
-	fx.in.root = t.TempDir()
+	fx.in.Root = t.TempDir()
 	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
@@ -159,7 +160,7 @@ func TestDriveDropsUnusedAnswers(t *testing.T) {
 		t.Errorf("output:\n%s", fx.out.String())
 	}
 
-	rec, err := drives.Read(fx.in.root, 1)
+	rec, err := drives.Read(fx.in.Root, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,29 +180,29 @@ func TestOpenRecordKeepsAnswersNotTaken(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	in := &driveInput{
-		root: root,
-		argv: []string{"GH-1", "GH-2", "--answer", "GH-2=2. maybe"},
-		now:  time.Now,
+	in := &drive.DriveInput{
+		Root: root,
+		Argv: []string{"GH-1", "GH-2", "--answer", "GH-2=2. maybe"},
+		Now:  time.Now,
 	}
-	in.args.Answers = []string{"GH-2=2. maybe"}
+	in.Args.Answers = []string{"GH-2=2. maybe"}
 
-	if err := in.openRecord(answerTasks("GH-1", "GH-2")); err != nil {
+	if err := in.OpenRecord(answerTasks("GH-1", "GH-2")); err != nil {
 		t.Fatal(err)
 	}
-	defer in.releaseAll()
+	defer in.ReleaseAll()
 
-	if want := []string{"GH-1=1. yes", "GH-2=2. maybe"}; !slices.Equal(in.args.Answers, want) {
-		t.Errorf("answers = %q, want %q", in.args.Answers, want)
+	if want := []string{"GH-1=1. yes", "GH-2=2. maybe"}; !slices.Equal(in.Args.Answers, want) {
+		t.Errorf("answers = %q, want %q", in.Args.Answers, want)
 	}
 
 	// the drive's own lease is held: a second drive on the record refuses
-	second := &driveInput{
-		root: root,
-		argv: []string{"GH-1", "GH-2"},
-		now:  time.Now,
+	second := &drive.DriveInput{
+		Root: root,
+		Argv: []string{"GH-1", "GH-2"},
+		Now:  time.Now,
 	}
-	if err := second.openRecord(nil); err == nil || !strings.Contains(err.Error(), "drive 1 is running") {
+	if err := second.OpenRecord(nil); err == nil || !strings.Contains(err.Error(), "drive 1 is running") {
 		t.Errorf("second openRecord = %v", err)
 	}
 }
@@ -216,32 +217,32 @@ func TestOpenRecordReplacesABareAnswerHoldingEquals(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	in := &driveInput{
-		root: root,
-		argv: []string{"GH-1", "--answer", "use x=1"},
-		now:  time.Now,
+	in := &drive.DriveInput{
+		Root: root,
+		Argv: []string{"GH-1", "--answer", "use x=1"},
+		Now:  time.Now,
 	}
-	in.args.Answers = []string{"use x=1"}
+	in.Args.Answers = []string{"use x=1"}
 
 	tasks := answerTasks("GH-1")
-	if err := in.openRecord(tasks); err != nil {
+	if err := in.OpenRecord(tasks); err != nil {
 		t.Fatal(err)
 	}
-	defer in.releaseAll()
+	defer in.ReleaseAll()
 
-	if want := []string{"use x=1"}; !slices.Equal(in.args.Answers, want) {
-		t.Errorf("answers = %q, want %q", in.args.Answers, want)
+	if want := []string{"use x=1"}; !slices.Equal(in.Args.Answers, want) {
+		t.Errorf("answers = %q, want %q", in.Args.Answers, want)
 	}
 
-	if err := in.takeAnswers(tasks); err != nil || in.answers.bare != "use x=1" {
-		t.Errorf("takeAnswers = %v, answer %q", err, in.answers.bare)
+	if err := in.TakeAnswers(tasks); err != nil || in.Answers.Bare != "use x=1" {
+		t.Errorf("takeAnswers = %v, answer %q", err, in.Answers.Bare)
 	}
 }
 
-func answerTasks(ids ...string) []driveTask {
-	tasks := make([]driveTask, len(ids))
+func answerTasks(ids ...string) []drive.DriveTask {
+	tasks := make([]drive.DriveTask, len(ids))
 	for i, id := range ids {
-		tasks[i] = driveTask{ref: ref.Ref{ID: id}}
+		tasks[i] = drive.DriveTask{Ref: ref.Ref{ID: id}}
 	}
 
 	return tasks
@@ -280,16 +281,16 @@ func TestDriveSkipsAPromptTheAgentAlreadyFinished(t *testing.T) {
 // and their worktrees stay.
 func TestDriveStopsWhenCancelled(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "judge", "ship")
-	fx.in.root = t.TempDir()
+	fx.in.Root = t.TempDir()
 	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.expects("GH-1", "judge")
 	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"))
-	fx.in.record = func(_ context.Context, _ string, e ledger.Event) { t.Errorf("recorded %+v", e) }
+	fx.in.Record = func(_ context.Context, _ string, e ledger.Event) { t.Errorf("recorded %+v", e) }
 	fx.onTick[1] = func() {
 		var out strings.Builder
-		if err := driveCancel(&out, fx.in.root, 1, fx.clock); err != nil {
+		if err := drive.DriveCancel(&out, fx.in.Root, 1, fx.clock); err != nil {
 			t.Error(err)
 		}
 
@@ -311,7 +312,7 @@ func TestDriveStopsWhenCancelled(t *testing.T) {
 	}
 
 	var list strings.Builder
-	if err := driveList(t.Context(), &list, nil, "", fx.in.root, false, nil); err != nil {
+	if err := drive.DriveList(t.Context(), &list, nil, "", fx.in.Root, false, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -339,7 +340,7 @@ func TestDriveListHealsRowsFinishedOutside(t *testing.T) {
 	finished := func(row string) bool { return row == "GH-1" || row == "GH-3" }
 
 	var list strings.Builder
-	if err := driveList(t.Context(), &list, nil, "", root, false, finished); err != nil {
+	if err := drive.DriveList(t.Context(), &list, nil, "", root, false, finished); err != nil {
 		t.Fatal(err)
 	}
 
@@ -388,7 +389,7 @@ func TestDriveListLeavesARunningDrive(t *testing.T) {
 	defer own.Release()
 
 	var list strings.Builder
-	if err := driveList(t.Context(), &list, nil, "", root, false, func(string) bool { return true }); err != nil {
+	if err := drive.DriveList(t.Context(), &list, nil, "", root, false, func(string) bool { return true }); err != nil {
 		t.Fatal(err)
 	}
 
@@ -441,7 +442,7 @@ func TestParseDriveSubcommands(t *testing.T) {
 }
 
 func TestRecordArgs(t *testing.T) {
-	got := recordArgs(
+	got := drive.RecordArgs(
 		[]string{
 			"GH-1", "--answer", "1. x", "--every=5s", "--flow", "local", "--resume", "2",
 			"--parallel", "3", "GH-2:opus", "--parallel=4",
@@ -458,41 +459,41 @@ func TestRecordArgs(t *testing.T) {
 func TestOpenRecordRecordsTheLaunch(t *testing.T) {
 	root, stateDir := t.TempDir(), t.TempDir()
 
-	open := func(session string, change func(*driveInput)) *driveInput {
-		in := &driveInput{
-			root:     root,
-			stateDir: stateDir,
-			session:  session,
-			argv:     []string{"GH-1"},
-			now:      time.Now,
+	open := func(session string, change func(*drive.DriveInput)) *drive.DriveInput {
+		in := &drive.DriveInput{
+			Root:     root,
+			StateDir: stateDir,
+			Session:  session,
+			Argv:     []string{"GH-1"},
+			Now:      time.Now,
 		}
 		if change != nil {
 			change(in)
 		}
 
-		if err := in.openRecord(nil); err != nil {
+		if err := in.OpenRecord(nil); err != nil {
 			t.Fatal(err)
 		}
 
-		if err := in.recordLaunch(); err != nil {
+		if err := in.RecordLaunch(); err != nil {
 			t.Fatal(err)
 		}
 
-		in.releaseAll()
+		in.ReleaseAll()
 
 		return in
 	}
 
-	if in := open("sess-1", nil); in.rec.Session != "sess-1" {
-		t.Errorf("record session = %q", in.rec.Session)
+	if in := open("sess-1", nil); in.Rec.Session != "sess-1" {
+		t.Errorf("record session = %q", in.Rec.Session)
 	}
 
-	if in := open("sess-2", nil); in.rec.Session != "sess-1" {
-		t.Errorf("a rerun rewrote the record's session to %q", in.rec.Session)
+	if in := open("sess-2", nil); in.Rec.Session != "sess-1" {
+		t.Errorf("a rerun rewrote the record's session to %q", in.Rec.Session)
 	}
 
-	open("sess-3", func(in *driveInput) { in.args.Resume = 1 })
-	open("sess-4", func(in *driveInput) { in.args.Answers = []string{"1. yes"} })
+	open("sess-3", func(in *drive.DriveInput) { in.Args.Resume = 1 })
+	open("sess-4", func(in *drive.DriveInput) { in.Args.Answers = []string{"1. yes"} })
 
 	for session, want := range map[string]string{"sess-1": "drive 1\n", "sess-2": "drive 1\n", "sess-3": "", "sess-4": ""} {
 		b, err := os.ReadFile(state.LaunchesPath(stateDir, session))
@@ -512,20 +513,20 @@ func TestOpenRecordRecordsTheLaunch(t *testing.T) {
 func TestOpenRecordKeepsTheCap(t *testing.T) {
 	root := t.TempDir()
 
-	open := func(argv []string, parallel int) *driveInput {
-		in := &driveInput{
-			root:            root,
-			stateDir:        t.TempDir(),
-			argv:            argv,
-			defaultParallel: 6,
-			args:            driverec.DriveArgs{Parallel: parallel},
-			now:             time.Now,
+	open := func(argv []string, parallel int) *drive.DriveInput {
+		in := &drive.DriveInput{
+			Root:            root,
+			StateDir:        t.TempDir(),
+			Argv:            argv,
+			DefaultParallel: 6,
+			Args:            driverec.DriveArgs{Parallel: parallel},
+			Now:             time.Now,
 		}
-		if err := in.openRecord(nil); err != nil {
+		if err := in.OpenRecord(nil); err != nil {
 			t.Fatal(err)
 		}
 
-		in.releaseAll()
+		in.ReleaseAll()
 
 		return in
 	}
@@ -542,11 +543,11 @@ func TestOpenRecordKeepsTheCap(t *testing.T) {
 		{[]string{"GH-2"}, 0, 6},
 	} {
 		in := open(c.argv, c.parallel)
-		if in.parallel != c.want {
-			t.Errorf("%q: cap %d, want %d", c.argv, in.parallel, c.want)
+		if in.Parallel != c.want {
+			t.Errorf("%q: cap %d, want %d", c.argv, in.Parallel, c.want)
 		}
 
-		rec, err := drives.Read(root, in.rec.Number)
+		rec, err := drives.Read(root, in.Rec.Number)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -558,11 +559,11 @@ func TestOpenRecordKeepsTheCap(t *testing.T) {
 }
 
 func TestTaskStandingQueued(t *testing.T) {
-	if got := taskStanding(drives.Task{Queued: true}, true); got != "queued" {
+	if got := drive.TaskStanding(drives.Task{Queued: true}, true); got != "queued" {
 		t.Errorf("a queued task in a running drive stands %q", got)
 	}
 
-	if got := taskStanding(drives.Task{Queued: true}, false); got != "not reached" {
+	if got := drive.TaskStanding(drives.Task{Queued: true}, false); got != "not reached" {
 		t.Errorf("a queued task in a stopped drive stands %q", got)
 	}
 }
@@ -571,16 +572,16 @@ func TestTaskStandingQueued(t *testing.T) {
 // running the skill it last had in flight.
 func TestTaskStandingWaiting(t *testing.T) {
 	parked := drives.Task{Skill: "ship", Phase: drives.PhaseParked}
-	if got := taskStanding(parked, true); got != "waiting on its base" {
+	if got := drive.TaskStanding(parked, true); got != "waiting on its base" {
 		t.Errorf("a parked task stands %q", got)
 	}
 
 	held := drives.Task{Skill: "finish", Phase: drives.PhaseWaiting}
-	if got := taskStanding(held, true); got != "waiting to finish after its base" {
+	if got := drive.TaskStanding(held, true); got != "waiting to finish after its base" {
 		t.Errorf("a finish held for its base stands %q", got)
 	}
 
-	if got := taskStanding(parked, false); got != "stopped at ship" {
+	if got := drive.TaskStanding(parked, false); got != "stopped at ship" {
 		t.Errorf("a parked task in a stopped drive stands %q", got)
 	}
 }
@@ -612,7 +613,7 @@ func TestFinishedLazily(t *testing.T) {
 			}
 
 			asked := false
-			got := finishedLazily(root, "GH-1",
+			got := drive.FinishedLazily(root, "GH-1",
 				func() (bool, error) { return c.branched, nil },
 				func() hostops.TaskInfo { asked = true; return hostops.TaskInfo{Closed: c.closed} })
 
@@ -634,12 +635,12 @@ func TestRecordFollowsThePhase(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	in := &driveInput{
-		root: root,
-		out:  io.Discard,
-		rec:  rec,
+	in := &drive.DriveInput{
+		Root: root,
+		Out:  io.Discard,
+		Rec:  rec,
 	}
-	r := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-1"}}}
+	r := &drive.DriveRun{Task: drive.DriveTask{Ref: ref.Ref{ID: "GH-1"}}}
 
 	want := func(phase string, queued bool) {
 		t.Helper()
@@ -654,19 +655,19 @@ func TestRecordFollowsThePhase(t *testing.T) {
 		}
 	}
 
-	in.queue(r)
+	in.Queue(r)
 	want(drives.PhaseQueued, true)
 
-	in.unqueue(r)
-	in.enter(r, atRunning)
+	in.Unqueue(r)
+	in.Enter(r, drive.AtRunning)
 	want(drives.PhaseRunning, false)
 
-	in.enter(r, atParked)
+	in.Enter(r, drive.AtParked)
 	want(drives.PhaseParked, false)
 
-	in.enter(r, atWaiting)
+	in.Enter(r, drive.AtWaiting)
 	want(drives.PhaseWaiting, false)
 
-	in.end(t.Context(), r, driveResult{row: "done: ship"})
+	in.End(t.Context(), r, drive.DriveResult{Row: "done: ship"})
 	want(drives.PhaseEnded, false)
 }

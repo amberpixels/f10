@@ -1,4 +1,4 @@
-package main
+package drive
 
 import (
 	"context"
@@ -11,32 +11,32 @@ import (
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
-// wakeStep is how often a waiting drive looks for a write: a step boundary,
+// WakeStep is how often a waiting drive looks for a write: a step boundary,
 // a prompt mark or a cancel is seen within it.
-var wakeStep = time.Second
+var WakeStep = time.Second
 
-// wake returns before d once the drive's record or a per-session file about
+// Wake returns before d once the drive's record or a per-session file about
 // one of its worktrees is written. A stat a second of a few dozen small
 // files costs nothing, and sees in-place writes a directory watch misses.
-func (in *driveInput) wake(ctx context.Context, d time.Duration) error {
+func (in *DriveInput) Wake(ctx context.Context, d time.Duration) error {
 	started := time.Now()
 	deadline := started.Add(d)
 
 	var record string
-	if in.rec != nil && in.root != "" {
-		record = drives.Path(in.root, in.rec.Number)
+	if in.Rec != nil && in.Root != "" {
+		record = drives.Path(in.Root, in.Rec.Number)
 	}
 
 	var roots []string
 
-	for _, r := range in.runs {
-		if r.active() && r.o.Path != "" {
-			roots = append(roots, r.o.Path)
+	for _, r := range in.Runs {
+		if r.active() && r.O.Path != "" {
+			roots = append(roots, r.O.Path)
 		}
 	}
 
 	for {
-		step := min(wakeStep, time.Until(deadline))
+		step := min(WakeStep, time.Until(deadline))
 		if step <= 0 {
 			return nil
 		}
@@ -45,7 +45,7 @@ func (in *driveInput) wake(ctx context.Context, d time.Duration) error {
 			return err
 		}
 
-		if in.draining.Load() || written(in.stateDir, record, roots, started) {
+		if in.Draining.Load() || written(in.StateDir, record, roots, started) {
 			return nil
 		}
 	}

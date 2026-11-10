@@ -11,6 +11,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	ledgercmd "github.com/amberpixels/f10/cli/internal/command/ledger"
+	"github.com/amberpixels/f10/cli/internal/drive"
 	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/hostops"
@@ -251,24 +252,24 @@ func TestDriveParsesABundle(t *testing.T) {
 		t.Errorf("tasks %v profiles %v, want the bundle whole with its profile", a.Tasks, a.Profiles)
 	}
 
-	in := &driveInput{
-		args: driverec.DriveArgs{Tasks: []string{"GH-1+GH-2", "GH-5"}, Span: true},
+	in := &drive.DriveInput{
+		Args: driverec.DriveArgs{Tasks: []string{"GH-1+GH-2", "GH-5"}, Span: true},
 	}
-	if _, _, err := in.span(t.Context()); err == nil {
+	if _, _, err := in.Span(t.Context()); err == nil {
 		t.Error("a bundle as a range end was taken")
 	}
 }
 
 // A task after a rider waits for the bundle the rider ships in.
 func TestDriveIndexesEveryMember(t *testing.T) {
-	tasks := []driveTask{{ref: bundle12}, {ref: ref.Ref{ID: "GH-3"}, base: "GH-2"}}
+	tasks := []drive.DriveTask{{Ref: bundle12}, {Ref: ref.Ref{ID: "GH-3"}, Base: "GH-2"}}
 
-	index := listIndex(tasks)
+	index := drive.ListIndex(tasks)
 	if index["GH-2"] != 0 || index["GH-1"] != 0 || index["GH-3"] != 1 {
 		t.Errorf("index = %v, want both members at the bundle's place", index)
 	}
 
-	order, err := topoOrder(tasks, index)
+	order, err := drive.TopoOrder(tasks, index)
 	if err != nil || len(order) != 2 || order[0] != 0 {
 		t.Errorf("order = %v, %v; want the bundle first", order, err)
 	}
@@ -281,7 +282,7 @@ func TestSkillPromptForABundle(t *testing.T) {
 		"review": "/f10:review GH-1 --driven",
 		"finish": "/f10:finish GH-1 --driven",
 	} {
-		if got := skillPrompt(skill, "GH-1+GH-2", nil, runplan.ShipFlow{}, false); got != want {
+		if got := drive.SkillPrompt(skill, "GH-1+GH-2", nil, runplan.ShipFlow{}, false); got != want {
 			t.Errorf("skillPrompt(%s) = %q, want %q", skill, got, want)
 		}
 	}

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/archive"
+	"github.com/amberpixels/f10/cli/internal/drive"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ledger"
@@ -570,7 +571,7 @@ func TestPRColumnIcons(t *testing.T) {
 
 // A halt drive records reads back through the ledger's readers.
 func TestHaltPayloadReadsBack(t *testing.T) {
-	p := haltPayload(driveResult{skill: "ship", reason: "stalled"})
+	p := drive.HaltPayload(drive.DriveResult{Skill: "ship", Reason: "stalled"})
 
 	e := ledger.Event{Kind: ledger.TaskHalted, Payload: ledger.NewPayload(p)}
 	if e.Skill() != "ship" || e.Reason() != "stalled" {

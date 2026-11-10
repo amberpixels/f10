@@ -1,6 +1,6 @@
 //go:build unix
 
-package main
+package drive
 
 import (
 	"os"
@@ -8,9 +8,9 @@ import (
 	"syscall"
 )
 
-// watchDrain catches SIGUSR1, the daemon's request that a foreground drive
+// WatchDrain catches SIGUSR1, the daemon's request that a foreground drive
 // stop at its next tick; nil, and nothing caught, outside the foreground.
-func watchDrain(fore bool) (<-chan os.Signal, func()) {
+func WatchDrain(fore bool) (<-chan os.Signal, func()) {
 	if !fore {
 		return nil, func() {}
 	}

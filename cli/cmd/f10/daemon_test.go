@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/daemon"
+	"github.com/amberpixels/f10/cli/internal/drive"
 	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/hostops"
@@ -40,7 +41,7 @@ func TestDriveSeesATurnBetweenTwoLooks(t *testing.T) {
 	fx := fastTurn(t)
 	fx.onTick[1] = func() {
 		at := fx.clock.Add(-driverec.DefaultEvery + time.Second)
-		if err := state.MarkPrompt(fx.in.stateDir, "s-1", "/code/repo.GH-1", at); err != nil {
+		if err := state.MarkPrompt(fx.in.StateDir, "s-1", "/code/repo.GH-1", at); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -59,7 +60,7 @@ func TestDriveSeesATurnBetweenTwoLooks(t *testing.T) {
 func TestDriveWithoutAPromptMarkHalts(t *testing.T) {
 	fx := fastTurn(t)
 	fx.onTick[1] = func() {
-		_ = state.MarkPrompt(fx.in.stateDir, "s-2", "/code/repo.GH-2", fx.clock)
+		_ = state.MarkPrompt(fx.in.StateDir, "s-2", "/code/repo.GH-2", fx.clock)
 	}
 
 	err := fx.drive(t)
@@ -76,8 +77,8 @@ func TestDriveWithoutAPromptMarkHalts(t *testing.T) {
 // keeps its record for the new daemon's resume.
 func TestDriveDrainsAtATick(t *testing.T) {
 	fx := fastTurn(t)
-	fx.in.root = t.TempDir()
-	fx.onTick[1] = func() { fx.in.draining.Store(true) }
+	fx.in.Root = t.TempDir()
+	fx.onTick[1] = func() { fx.in.Draining.Store(true) }
 
 	err := fx.drive(t)
 	if exitCode(err) != daemon.ExitDrained {
@@ -88,7 +89,7 @@ func TestDriveDrainsAtATick(t *testing.T) {
 		t.Errorf("output = %s", fx.out.String())
 	}
 
-	rec, err := drives.Read(fx.in.root, 1)
+	rec, err := drives.Read(fx.in.Root, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,30 +98,30 @@ func TestDriveDrainsAtATick(t *testing.T) {
 		t.Errorf("drained task has outcome %+v", rec.Tasks[0].Outcome)
 	}
 
-	if _, held := drives.Probe(fx.in.root, "GH-1"); held {
+	if _, held := drives.Probe(fx.in.Root, "GH-1"); held {
 		t.Error("the task's lease is still held after the drain")
 	}
 }
 
 func TestWakeReturnsOnAWrite(t *testing.T) {
-	wakeStep = 10 * time.Millisecond
-	t.Cleanup(func() { wakeStep = time.Second })
+	drive.WakeStep = 10 * time.Millisecond
+	t.Cleanup(func() { drive.WakeStep = time.Second })
 
-	in := &driveInput{
-		stateDir: t.TempDir(),
+	in := &drive.DriveInput{
+		StateDir: t.TempDir(),
 	}
-	in.runs = []*driveRun{{phase: atRunning, o: start.OpenedTask{Path: "/code/repo.GH-1"}}}
+	in.Runs = []*drive.DriveRun{{Phase: drive.AtRunning, O: start.OpenedTask{Path: "/code/repo.GH-1"}}}
 
 	write := func(name, root string) {
 		time.Sleep(50 * time.Millisecond)
 
-		_ = os.WriteFile(filepath.Join(in.stateDir, name), []byte("v 1\nroot "+root+"\n"), 0o600)
+		_ = os.WriteFile(filepath.Join(in.StateDir, name), []byte("v 1\nroot "+root+"\n"), 0o600)
 	}
 
 	go write("s1.state", "/code/repo.GH-1")
 
 	started := time.Now()
-	if err := in.wake(t.Context(), 5*time.Second); err != nil {
+	if err := in.Wake(t.Context(), 5*time.Second); err != nil {
 		t.Fatal(err)
 	}
 
@@ -133,7 +134,7 @@ func TestWakeReturnsOnAWrite(t *testing.T) {
 	go write("hooks.log", "/code/repo.GH-1")
 
 	started = time.Now()
-	if err := in.wake(t.Context(), 300*time.Millisecond); err != nil {
+	if err := in.Wake(t.Context(), 300*time.Millisecond); err != nil {
 		t.Fatal(err)
 	}
 
@@ -154,7 +155,12 @@ func TestDriveEnv(t *testing.T) {
 }
 
 func TestRecordArgsDropsForeground(t *testing.T) {
-	if got := recordArgs([]string{"--foreground", "GH-1", "--every", "5s"}); !slices.Equal(got, []string{"GH-1"}) {
+	if got := drive.RecordArgs(
+		[]string{"--foreground", "GH-1", "--every", "5s"},
+	); !slices.Equal(
+		got,
+		[]string{"GH-1"},
+	) {
 		t.Errorf("recordArgs = %v", got)
 	}
 
@@ -184,7 +190,7 @@ func TestTailLog(t *testing.T) {
 
 	var out bytes.Buffer
 
-	exit, err := tailLog(t.Context(), &out, path)
+	exit, err := drive.TailLog(t.Context(), &out, path)
 	if err != nil || exit != (daemon.Exit{Code: 6, Drive: 7, Reason: daemon.ReasonUpgrade}) {
 		t.Fatalf("tail = %+v, %v", exit, err)
 	}
@@ -200,7 +206,7 @@ func TestTailLog(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := tailLog(ctx, &bytes.Buffer{}, path); err == nil {
+	if _, err := drive.TailLog(ctx, &bytes.Buffer{}, path); err == nil {
 		t.Error("a cancelled tail of a running drive returned no error")
 	}
 }
@@ -210,7 +216,7 @@ func TestDriveTitle(t *testing.T) {
 		"/code/repo/.f10":     "repo: drive 3",
 		"/home/u/.f10/widget": "widget: drive 3",
 	} {
-		if got := driveTitle(daemon.Run{Root: root, Drive: 3}); got != want {
+		if got := drive.DriveTitle(daemon.Run{Root: root, Drive: 3}); got != want {
 			t.Errorf("driveTitle(%s) = %q, want %q", root, got, want)
 		}
 	}

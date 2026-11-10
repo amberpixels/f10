@@ -1,4 +1,4 @@
-package main
+package drive
 
 import (
 	"fmt"
@@ -10,9 +10,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
-// report exits with an ask over a halt, since answering the ask is what
+// Report exits with an ask over a halt, since answering the ask is what
 // resumes the drive.
-func (in *driveInput) report(runs []*driveRun, notes []string) error {
+func (in *DriveInput) Report(runs []*DriveRun, notes []string) error {
 	var (
 		rows   []render.Fact
 		lines  []string
@@ -23,29 +23,29 @@ func (in *driveInput) report(runs []*driveRun, notes []string) error {
 	halted := map[string]bool{}
 
 	for _, r := range runs {
-		id, shown := r.task.ref.ID, in.id(r.task.ref.ID)
+		id, shown := r.Task.Ref.ID, in.id(r.Task.Ref.ID)
 
 		switch {
-		case r.end != nil:
-			rows = append(rows, render.Fact{Label: shown, Value: r.end.row})
-			lines = append(lines, r.end.lines...)
+		case r.End != nil:
+			rows = append(rows, render.Fact{Label: shown, Value: r.End.Row})
+			lines = append(lines, r.End.Lines...)
 
-			if r.end.code == ui.ExitAsk {
+			if r.End.Code == ui.ExitAsk {
 				asking = append(asking, id)
 			}
 
-			halted[id] = r.end.code == ui.ExitHalted
-			code = max(code, r.end.code)
-		case r.queued():
+			halted[id] = r.End.Code == ui.ExitHalted
+			code = max(code, r.End.Code)
+		case r.Queued():
 			rows = append(rows, render.Fact{Label: shown, Value: "queued"})
-		case r.active() && r.phase == atParked:
-			rows = append(rows, render.Fact{Label: shown, Value: "waiting on " + in.id(r.base.task.ref.ID)})
-		case r.active() && r.phase == atWaiting:
-			rows = append(rows, render.Fact{Label: shown, Value: "waiting for " + in.id(r.base.task.ref.ID)})
+		case r.active() && r.Phase == AtParked:
+			rows = append(rows, render.Fact{Label: shown, Value: "waiting on " + in.id(r.Base.Task.Ref.ID)})
+		case r.active() && r.Phase == AtWaiting:
+			rows = append(rows, render.Fact{Label: shown, Value: "waiting for " + in.id(r.Base.Task.Ref.ID)})
 		case r.active():
-			rows = append(rows, render.Fact{Label: shown, Value: "running " + r.skill})
-		case halted[r.task.base]:
-			rows = append(rows, render.Fact{Label: shown, Value: "halted: base " + in.id(r.task.base) + " halted"})
+			rows = append(rows, render.Fact{Label: shown, Value: "running " + r.Skill})
+		case halted[r.Task.Base]:
+			rows = append(rows, render.Fact{Label: shown, Value: "halted: base " + in.id(r.Task.Base) + " halted"})
 			halted[id] = true
 			code = max(code, ui.ExitHalted)
 		default:
@@ -58,28 +58,28 @@ func (in *driveInput) report(runs []*driveRun, notes []string) error {
 		lines = append(lines, "answer with: "+in.resumeLine()+answerFlags(asking))
 	}
 
-	if in.answers.bare != "" {
+	if in.Answers.Bare != "" {
 		notes = append(notes, "--answer went unused: no task was stopped on a question")
 	}
 
 	for _, r := range runs {
-		if _, left := in.answers.keyed(r.task.ref.ID); left {
-			notes = append(notes, "--answer for "+r.task.ref.ID+" went unused: it was not stopped on a question")
+		if _, left := in.Answers.Keyed(r.Task.Ref.ID); left {
+			notes = append(notes, "--answer for "+r.Task.Ref.ID+" went unused: it was not stopped on a question")
 		}
 	}
 
 	// an answer reported unused is dropped, so a resume never sends it to a
 	// question nobody saw; only one a stopped drive never reached is kept
-	in.answers.clear()
+	in.Answers.Clear()
 	in.savePending(nil)
 
 	notes = append(notes, lines...)
 
 	if len(rows) > 0 {
-		fmt.Fprintln(in.out)
+		fmt.Fprintln(in.Out)
 	}
 
-	if err := render.WriteReport(in.out, rows, notes); err != nil {
+	if err := render.WriteReport(in.Out, rows, notes); err != nil {
 		return err
 	}
 

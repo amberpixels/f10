@@ -1,4 +1,4 @@
-package main
+package drive
 
 import (
 	"context"
@@ -10,10 +10,10 @@ import (
 	"github.com/amberpixels/f10/cli/internal/stack"
 )
 
-// verifySpecOf reads the project's verify as commands. A Verify heading
+// VerifySpecOf reads the project's verify as commands. A Verify heading
 // counts only in the form f10 init writes (backticked commands joined by
 // " / "); any other prose is rules only a model can follow, and why says so.
-func verifySpecOf(eff *facts.Effective) (stack.VerifySpec, string) {
+func VerifySpecOf(eff *facts.Effective) (stack.VerifySpec, string) {
 	if eff.Verify != nil {
 		return stack.VerifySpec{List: eff.Verify}, ""
 	}
@@ -64,24 +64,20 @@ func backticked(body string) ([]string, bool) {
 // A verifyJob is verify running off the poll loop, since a test suite can
 // take minutes and the loop polls every task.
 type verifyJob struct {
-	done chan struct{}
+	Done chan struct{}
 	stop context.CancelFunc // ends the verify when its run ends first
 	res  stack.VerifyRun
-	err  error
+	Err  error
 }
 
-func startVerifyJob(ctx context.Context, run func(context.Context) (stack.VerifyRun, error)) *verifyJob {
-	ctx, stop := context.WithCancel(ctx)
-	job := &verifyJob{done: make(chan struct{}), stop: stop}
-
-	go func() {
-		defer close(job.done)
-		defer stop()
-
-		job.res, job.err = run(ctx)
-	}()
-
-	return job
+// Finished says the job is through, without waiting for it.
+func (j *verifyJob) Finished() bool {
+	select {
+	case <-j.Done:
+		return true
+	default:
+		return false
+	}
 }
 
 // halt stops the job and waits for its kill to land, bounded as the verify's
@@ -90,17 +86,21 @@ func (j *verifyJob) halt() {
 	j.stop()
 
 	select {
-	case <-j.done:
+	case <-j.Done:
 	case <-time.After(stack.VerifyWaitDelay):
 	}
 }
 
-// finished says the job is through, without waiting for it.
-func (j *verifyJob) finished() bool {
-	select {
-	case <-j.done:
-		return true
-	default:
-		return false
-	}
+func StartVerifyJob(ctx context.Context, run func(context.Context) (stack.VerifyRun, error)) *verifyJob {
+	ctx, stop := context.WithCancel(ctx)
+	job := &verifyJob{Done: make(chan struct{}), stop: stop}
+
+	go func() {
+		defer close(job.Done)
+		defer stop()
+
+		job.res, job.Err = run(ctx)
+	}()
+
+	return job
 }

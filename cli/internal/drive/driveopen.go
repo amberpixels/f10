@@ -1,4 +1,4 @@
-package main
+package drive
 
 import (
 	"cmp"
@@ -21,30 +21,30 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
-func (in *driveInput) open(ctx context.Context, r *driveRun) error {
-	task := r.task
+func (in *DriveInput) open(ctx context.Context, r *DriveRun) error {
+	task := r.Task
 
-	after, note, err := stack.BodyAfter(ctx, in.tracker, in.main, task.ref, task.info.Body)
+	after, note, err := stack.BodyAfter(ctx, in.Tracker, in.Main, task.Ref, task.info.Body)
 	if err != nil {
 		return err
 	}
 
 	var title func(context.Context) (string, error)
-	if in.title != nil {
-		title = in.title(task.ref)
+	if in.Title != nil {
+		title = in.Title(task.Ref)
 	}
 
 	o, err := start.OpenTask(ctx, start.StartInput{
-		Main:           in.main,
-		Driver:         in.driver,
-		Task:           task.ref,
-		Suffix:         task.suffix,
+		Main:           in.Main,
+		Driver:         in.Driver,
+		Task:           task.Ref,
+		Suffix:         task.Suffix,
 		After:          after,
-		Storage:        in.storage,
+		Storage:        in.Storage,
 		Title:          title,
 		Profile:        task.profile,
 		ProfileFlagged: task.flagged,
-		Progress:       in.out,
+		Progress:       in.Out,
 		FlowKept:       true,
 	})
 	if err != nil {
@@ -52,9 +52,9 @@ func (in *driveInput) open(ctx context.Context, r *driveRun) error {
 	}
 
 	fmt.Fprintf(
-		in.out,
+		in.Out,
 		"%s: branch %s at %s, workspace %s%s\n",
-		in.id(task.ref.ID),
+		in.id(task.Ref.ID),
 		o.Branch,
 		o.Path,
 		o.Ws.ID,
@@ -62,10 +62,10 @@ func (in *driveInput) open(ctx context.Context, r *driveRun) error {
 	)
 
 	if o.Fresh {
-		o.Notes = append(o.Notes, start.MarkStarted(ctx, in.started, o.Task)...)
+		o.Notes = append(o.Notes, start.MarkStarted(ctx, in.Started, o.Task)...)
 	}
 
-	fl, flowNote, err := in.keepFlow(ctx, o.Branch)
+	fl, flowNote, err := in.KeepFlow(ctx, o.Branch)
 	if err != nil {
 		return err
 	}
@@ -74,7 +74,7 @@ func (in *driveInput) open(ctx context.Context, r *driveRun) error {
 		o.Notes = append(o.Notes, flowNote)
 	}
 
-	fl, paceNote, err := in.keepPace(ctx, o.Branch, fl)
+	fl, paceNote, err := in.KeepPace(ctx, o.Branch, fl)
 	if err != nil {
 		return err
 	}
@@ -85,105 +85,105 @@ func (in *driveInput) open(ctx context.Context, r *driveRun) error {
 
 	// status reads the finish record as drive finishing the branch; a rerun
 	// at a pace without finish takes it off
-	skills := in.sequenceOf(fl)
+	skills := in.SequenceOf(fl)
 
 	finishes := slices.Contains(skills, "finish")
 	if finishes {
 		in.finishStep(ctx, o.Branch, branchmeta.FinishQueued, "")
 	} else {
-		_ = branchmeta.Unset(ctx, in.main, o.Branch, branchmeta.Finish) // absent is fine
+		_ = branchmeta.Unset(ctx, in.Main, o.Branch, branchmeta.Finish) // absent is fine
 	}
 
 	// drives before the skills were read off the flow stored them here
-	_ = branchmeta.Unset(ctx, in.main, o.Branch, branchmeta.Chain) // absent is fine
+	_ = branchmeta.Unset(ctx, in.Main, o.Branch, branchmeta.Chain) // absent is fine
 
 	for _, n := range finish.AppendNote(o.Notes, note) {
-		fmt.Fprintf(in.out, "  %s\n", n)
+		fmt.Fprintf(in.Out, "  %s\n", n)
 	}
 
-	pos, err := in.position(ctx, o, skills)
+	pos, err := in.Position(ctx, o, skills)
 	if err != nil {
 		return err
 	}
 
-	r.o, r.pos, r.flow, r.finishes = o, pos, fl, finishes
-	in.view().justOpened(r)
-	in.enter(r, atRunning)
+	r.O, r.Pos, r.Flow, r.Finishes = o, pos, fl, finishes
+	in.View().JustOpened(r)
+	in.Enter(r, AtRunning)
 	if o.Fresh {
-		r.freshAt = in.now().Truncate(time.Second) // the state file keeps whole seconds
+		r.freshAt = in.Now().Truncate(time.Second) // the state file keeps whole seconds
 	}
 
 	return nil
 }
 
-// keepFlow prefers the flow a branch already records over the run's, since
+// KeepFlow prefers the flow a branch already records over the run's, since
 // switching mid-run would rerun or skip entries ship already declared; one
 // project.md no longer declares gives way to the run's, with a note.
-func (in *driveInput) keepFlow(ctx context.Context, branch string) (runplan.ShipFlow, string, error) {
-	recorded, err := branchmeta.Get(ctx, in.main, branch, branchmeta.Flow)
+func (in *DriveInput) KeepFlow(ctx context.Context, branch string) (runplan.ShipFlow, string, error) {
+	recorded, err := branchmeta.Get(ctx, in.Main, branch, branchmeta.Flow)
 	if err != nil {
 		return runplan.ShipFlow{}, "", fmt.Errorf("reading the recorded flow: %w", err)
 	}
 
-	if recorded == in.flow.Recorded() {
-		return in.flow, "", nil
+	if recorded == in.Flow.Recorded() {
+		return in.Flow, "", nil
 	}
 
 	// an area picks the flow in ship, so a branch with none stays without
-	if recorded == "" && in.flow.ByArea {
-		return in.flow, "", nil
+	if recorded == "" && in.Flow.ByArea {
+		return in.Flow, "", nil
 	}
 
 	// a recorded name is looked up as written: `default` is the default
 	// flow, never the area's pick
-	if recorded != "" && in.resolve != nil {
-		if fl, err := in.resolve(recorded); err == nil {
+	if recorded != "" && in.Resolve != nil {
+		if fl, err := in.Resolve(recorded); err == nil {
 			return fl, fmt.Sprintf("kept the %s flow its branch records; the run's %s does not apply to it",
-				recorded, in.flow.Label()), nil
+				recorded, in.Flow.Label()), nil
 		}
 	}
 
-	if !in.flow.ByArea {
-		if err := branchmeta.Set(ctx, in.main, branch, branchmeta.Flow, in.flow.Recorded()); err != nil {
+	if !in.Flow.ByArea {
+		if err := branchmeta.Set(ctx, in.Main, branch, branchmeta.Flow, in.Flow.Recorded()); err != nil {
 			return runplan.ShipFlow{}, "", fmt.Errorf("recording the flow: %w", err)
 		}
 	}
 
 	if recorded != "" {
-		return in.flow, fmt.Sprintf("its branch recorded the %s flow, which project.md no longer declares; running %s",
-			recorded, in.flow.Label()), nil
+		return in.Flow, fmt.Sprintf("its branch recorded the %s flow, which project.md no longer declares; running %s",
+			recorded, in.Flow.Label()), nil
 	}
 
-	return in.flow, "", nil
+	return in.Flow, "", nil
 }
 
-// keepPace: a run's --pace wins and is recorded on the branch, since a
+// KeepPace: a run's --pace wins and is recorded on the branch, since a
 // rerun that slows down must be able to take finish off; with none typed,
 // the branch's record wins over the project's default.
-func (in *driveInput) keepPace(
+func (in *DriveInput) KeepPace(
 	ctx context.Context,
 	branch string,
 	fl runplan.ShipFlow,
 ) (runplan.ShipFlow, string, error) {
-	recorded, err := runplan.RecordedPace(ctx, in.main, branch)
+	recorded, err := runplan.RecordedPace(ctx, in.Main, branch)
 	if err != nil {
 		return runplan.ShipFlow{}, "", err
 	}
 
 	switch {
-	case in.args.Pace != "":
-		if recorded != in.args.Pace {
-			if err := branchmeta.Set(ctx, in.main, branch, branchmeta.Pace, in.args.Pace); err != nil {
+	case in.Args.Pace != "":
+		if recorded != in.Args.Pace {
+			if err := branchmeta.Set(ctx, in.Main, branch, branchmeta.Pace, in.Args.Pace); err != nil {
 				return runplan.ShipFlow{}, "", fmt.Errorf("recording the pace: %w", err)
 			}
 		}
 
 		return fl, "", nil
-	case recorded == "" || recorded == fl.Pace || in.paced == nil:
+	case recorded == "" || recorded == fl.Pace || in.Paced == nil:
 		return fl, "", nil
 	}
 
-	kept, err := in.paced(fl, recorded)
+	kept, err := in.Paced(fl, recorded)
 	if err != nil {
 		return fl, fmt.Sprintf("its branch records the %s pace, which does not resolve (%v); running %s",
 			recorded, err, cmp.Or(fl.Pace, "no pace")), nil
@@ -192,11 +192,11 @@ func (in *driveInput) keepPace(
 	return kept, fmt.Sprintf("kept the %s pace its branch records over %s", recorded, cmp.Or(fl.Pace, "no pace")), nil
 }
 
-// position: a skill drive recorded on the branch wins; else a plan the
+// Position: a skill drive recorded on the branch wins; else a plan the
 // worktree reads counts as plan done, so driven ship takes it rather than
 // planning again.
-func (in *driveInput) position(ctx context.Context, o start.OpenedTask, skills []string) (int, error) {
-	last, err := branchmeta.Get(ctx, in.main, o.Branch, branchmeta.Drive)
+func (in *DriveInput) Position(ctx context.Context, o start.OpenedTask, skills []string) (int, error) {
+	last, err := branchmeta.Get(ctx, in.Main, o.Branch, branchmeta.Drive)
 	if err != nil {
 		return 0, fmt.Errorf("reading where the drive left %s: %w", o.Branch, err)
 	}
@@ -231,68 +231,68 @@ func (in *driveInput) position(ctx context.Context, o start.OpenedTask, skills [
 	return pos, nil
 }
 
-// next sends the task its next element. A branch marked landed or moved is
+// Next sends the task its next element. A branch marked landed or moved is
 // caught up before any skill, finish included; finish waits for the base,
 // and a branch that conflicts is marked landed and caught up first.
-func (in *driveInput) next(ctx context.Context, r *driveRun) error {
-	wasWaiting, held := r.phase == atWaiting, r.holdsSlot()
+func (in *DriveInput) Next(ctx context.Context, r *DriveRun) error {
+	wasWaiting, held := r.Phase == AtWaiting, r.HoldsSlot()
 
-	spike, err := in.spikeDone(ctx, r)
+	spike, err := in.SpikeDone(ctx, r)
 	if err != nil {
-		return halt(r.task.ref.ID, "finish", err.Error())
+		return Halt(r.Task.Ref.ID, "finish", err.Error())
 	}
 
-	if spike && !r.finishes {
+	if spike && !r.Finishes {
 		in.closeAfterShip(ctx, r)
 	}
 
-	skills := in.skills(r)
-	if r.pos >= len(skills) {
-		return endWith(driveResult{row: "done: " + strings.Join(skills, " ")})
+	skills := in.Skills(r)
+	if r.Pos >= len(skills) {
+		return endWith(DriveResult{Row: "done: " + strings.Join(skills, " ")})
 	}
 
-	skill := skills[r.pos]
+	skill := skills[r.Pos]
 
-	if b := r.base; b != nil && b.end != nil && b.end.code == ui.ExitHalted {
+	if b := r.Base; b != nil && b.End != nil && b.End.Code == ui.ExitHalted {
 		return endWith(baseHalted(r, skill))
 	}
 
 	// a drive resumed onto a ship stopped before pr waits for origin, not code
-	if skill == "ship" && r.base != nil && r.phase != atParked {
-		if run, _ := in.run(r.o.Path); originWait(run) {
-			r.parkedOrigin = true
+	if skill == "ship" && r.Base != nil && r.Phase != AtParked {
+		if run, _ := in.run(r.O.Path); OriginWait(run) {
+			r.ParkedOrigin = true
 		}
 	}
 
-	if skill != "finish" && r.base != nil && !in.baseReady(ctx, r) {
-		if r.phase != atParked {
-			fmt.Fprintf(in.out, "%s %s: waiting on %s for %s\n",
-				in.id(r.task.ref.ID), skill, in.id(r.base.task.ref.ID), r.waitsFor())
+	if skill != "finish" && r.Base != nil && !in.BaseReady(ctx, r) {
+		if r.Phase != AtParked {
+			fmt.Fprintf(in.Out, "%s %s: waiting on %s for %s\n",
+				in.id(r.Task.Ref.ID), skill, in.id(r.Base.Task.Ref.ID), r.waitsFor())
 		}
 
-		in.enter(r, atParked)
+		in.Enter(r, AtParked)
 
 		return nil
 	}
 
-	if r.phase == atParked {
-		in.enter(r, atRunning)
+	if r.Phase == AtParked {
+		in.Enter(r, AtRunning)
 	}
 
-	r.parkedHead, r.parkedOrigin = "", false
+	r.parkedHead, r.ParkedOrigin = "", false
 
-	if skill == "finish" && r.base != nil && !r.base.through() {
+	if skill == "finish" && r.Base != nil && !r.Base.through() {
 		if !wasWaiting {
 			fmt.Fprintf(
-				in.out,
+				in.Out,
 				"%s finish: waiting for %s to finish\n",
-				in.id(r.task.ref.ID),
-				in.id(r.base.task.ref.ID),
+				in.id(r.Task.Ref.ID),
+				in.id(r.Base.Task.Ref.ID),
 			)
-			in.finishStep(ctx, r.o.Branch, branchmeta.FinishQueued, "waiting for "+r.base.task.ref.ID)
+			in.finishStep(ctx, r.O.Branch, branchmeta.FinishQueued, "waiting for "+r.Base.Task.Ref.ID)
 		}
 
-		in.enter(r, atWaiting)
+		in.Enter(r, AtWaiting)
 
 		return nil
 	}
@@ -300,29 +300,29 @@ func (in *driveInput) next(ctx context.Context, r *driveRun) error {
 	// a finish still waiting stays waiting above, so the record never reads
 	// running between two polls
 	if wasWaiting {
-		in.enter(r, atRunning)
+		in.Enter(r, AtRunning)
 	}
 
 	// finish runs here and sends no skill; anything else held back by the
 	// cap retries each poll
-	if skill != "finish" && !held && !in.slotFree(r) {
-		in.queue(r)
+	if skill != "finish" && !held && !in.SlotFree(r) {
+		in.Queue(r)
 
 		return nil
 	}
 
-	in.unqueue(r)
+	in.Unqueue(r)
 
 	// a spike merges nothing, so it needs no catchup and no clean merge
 	if skill == "finish" && spike {
-		return endWith(in.runFinish(ctx, r))
+		return endWith(in.RunFinish(ctx, r))
 	}
 
 	// finish tries the merge itself and catches up only a conflict, under
 	// the progress rule, so a clean PR merges as it stands
 	if skill != "finish" {
-		if err := in.markBehind(ctx, r); err != nil {
-			return halt(r.task.ref.ID, skill, err.Error())
+		if err := in.MarkBehind(ctx, r); err != nil {
+			return Halt(r.Task.Ref.ID, skill, err.Error())
 		}
 	}
 
@@ -336,7 +336,7 @@ func (in *driveInput) next(ctx context.Context, r *driveRun) error {
 	}
 
 	if err != nil {
-		return halt(r.task.ref.ID, skill, err.Error())
+		return Halt(r.Task.Ref.ID, skill, err.Error())
 	}
 
 	switch {
@@ -344,26 +344,26 @@ func (in *driveInput) next(ctx context.Context, r *driveRun) error {
 		skill = "catchup"
 
 		if err := in.recordCatchup(ctx, r, key); err != nil {
-			return halt(r.task.ref.ID, skill, err.Error())
+			return Halt(r.Task.Ref.ID, skill, err.Error())
 		}
 	case skill == "finish":
-		return endWith(in.runFinish(ctx, r))
+		return endWith(in.RunFinish(ctx, r))
 	}
 
 	return in.send(ctx, r, skill)
 }
 
-// spikeDone: a spike report on a branch never pushed closes without a merge;
+// SpikeDone: a spike report on a branch never pushed closes without a merge;
 // a pushed one finishes through its PR.
-func (in *driveInput) spikeDone(ctx context.Context, r *driveRun) (bool, error) {
-	i := slices.Index(in.skills(r), "ship")
-	if i < 0 || r.pos <= i || finish.TaskSpike(r.o.Path, in.storage, r.task.ref.ID) == "" {
+func (in *DriveInput) SpikeDone(ctx context.Context, r *DriveRun) (bool, error) {
+	i := slices.Index(in.Skills(r), "ship")
+	if i < 0 || r.Pos <= i || finish.TaskSpike(r.O.Path, in.Storage, r.Task.Ref.ID) == "" {
 		return false, nil
 	}
 
-	pushed, err := gitx.Ref(ctx, in.main, "refs/remotes/origin/"+r.o.Branch)
+	pushed, err := gitx.Ref(ctx, in.Main, "refs/remotes/origin/"+r.O.Branch)
 	if err != nil {
-		return false, fmt.Errorf("reading whether %s was pushed: %w", r.o.Branch, err)
+		return false, fmt.Errorf("reading whether %s was pushed: %w", r.O.Branch, err)
 	}
 
 	return pushed == "", nil
@@ -372,28 +372,28 @@ func (in *driveInput) spikeDone(ctx context.Context, r *driveRun) (bool, error) 
 // closeAfterShip has drive finish a spike its pace does not finish: a spike
 // close merges nothing, which the pace's finish gates, and a spike left open
 // keeps its dependents on an empty base. status reads the finish record.
-func (in *driveInput) closeAfterShip(ctx context.Context, r *driveRun) {
-	r.finishes = true
-	in.finishStep(ctx, r.o.Branch, branchmeta.FinishQueued, "")
+func (in *DriveInput) closeAfterShip(ctx context.Context, r *DriveRun) {
+	r.Finishes = true
+	in.finishStep(ctx, r.O.Branch, branchmeta.FinishQueued, "")
 }
 
-// baseReady reports the base's code there for a skill: released, and
+// BaseReady reports the base's code there for a skill: released, and
 // for a ship that parked itself, moved past the head it found empty. A ship
 // parked before pr needs the base's branch on origin instead, or the base done.
-func (in *driveInput) baseReady(ctx context.Context, r *driveRun) bool {
-	if r.parkedOrigin {
-		return r.base.through() || in.onOrigin(ctx, r.base)
+func (in *DriveInput) BaseReady(ctx context.Context, r *DriveRun) bool {
+	if r.ParkedOrigin {
+		return r.Base.through() || in.onOrigin(ctx, r.Base)
 	}
 
-	if !in.released(ctx, r.base) {
+	if !in.Released(ctx, r.Base) {
 		return false
 	}
 
-	if r.parkedHead == "" || r.base.through() {
+	if r.parkedHead == "" || r.Base.through() {
 		return true
 	}
 
-	head, err := gitx.Ref(ctx, in.main, "refs/heads/"+r.base.o.Branch)
+	head, err := gitx.Ref(ctx, in.Main, "refs/heads/"+r.Base.O.Branch)
 
 	return err == nil && head != "" && head != r.parkedHead
 }
@@ -401,85 +401,85 @@ func (in *driveInput) baseReady(ctx context.Context, r *driveRun) bool {
 // park holds a ship that stopped on a base without code until the base
 // commits, or ends it when nothing in this drive ever will. A base that
 // committed between the ship's look and this read gets ship sent at once.
-func (in *driveInput) park(ctx context.Context, r *driveRun, run *state.Run) error {
-	b := r.base
-	if b != nil && originWait(run) {
-		return in.parkForOrigin(ctx, r)
+func (in *DriveInput) park(ctx context.Context, r *DriveRun, run *state.Run) error {
+	b := r.Base
+	if b != nil && OriginWait(run) {
+		return in.ParkForOrigin(ctx, r)
 	}
 
 	if b == nil || b.through() {
-		return endWith(in.verdict(r.task, r.skill, run))
+		return endWith(in.verdict(r.Task, r.Skill, run))
 	}
 
 	head, why := in.baseHead(ctx, b)
 	if why != "" {
-		return halt(r.task.ref.ID, r.skill, why)
+		return Halt(r.Task.Ref.ID, r.Skill, why)
 	}
 
-	if head != r.waitHead && in.released(ctx, b) {
-		r.waitHead = head
+	if head != r.WaitHead && in.Released(ctx, b) {
+		r.WaitHead = head
 
-		return in.next(ctx, r)
+		return in.Next(ctx, r)
 	}
 
-	r.parkedHead, r.waitHead = head, head
-	in.enter(r, atParked)
+	r.parkedHead, r.WaitHead = head, head
+	in.Enter(r, AtParked)
 
-	fmt.Fprintf(in.out, "%s ship: waiting on %s for code\n", in.id(r.task.ref.ID), in.id(b.task.ref.ID))
+	fmt.Fprintf(in.Out, "%s ship: waiting on %s for code\n", in.id(r.Task.Ref.ID), in.id(b.Task.Ref.ID))
 
 	return nil
 }
 
-// parkForOrigin holds a ship that stopped before pr on a base origin lacks
+// ParkForOrigin holds a ship that stopped before pr on a base origin lacks
 // until the base is pushed or done. A base already there gets ship sent at
 // once; the same origin sha stopping it twice ends it, so the two never loop.
-func (in *driveInput) parkForOrigin(ctx context.Context, r *driveRun) error {
-	b := r.base
-	r.parkedOrigin = true
+func (in *DriveInput) ParkForOrigin(ctx context.Context, r *DriveRun) error {
+	b := r.Base
+	r.ParkedOrigin = true
 
 	// a base done in this drive is resent to once: a finish deleted its branch
 	// and pr then targets the default branch, while a base that ended unpushed
 	// stops pr the same way again, and nothing here will push it
 	if b.through() {
-		if r.waitHead == "through" {
-			return halt(r.task.ref.ID, r.skill,
+		if r.WaitHead == "through" {
+			return Halt(r.Task.Ref.ID, r.Skill,
 				fmt.Sprintf("%s ended in this drive, yet its pr step still found %s not on origin",
-					in.id(b.task.ref.ID), b.o.Branch))
+					in.id(b.Task.Ref.ID), b.O.Branch))
 		}
 
-		r.waitHead = "through"
+		r.WaitHead = "through"
 
-		return in.next(ctx, r)
+		return in.Next(ctx, r)
 	}
 
 	sha, why := in.originHead(ctx, b)
 	if why != "" {
-		return halt(r.task.ref.ID, r.skill, why)
+		return Halt(r.Task.Ref.ID, r.Skill, why)
 	}
 
 	if sha != "" {
-		if r.waitHead == "origin "+sha {
+		if r.WaitHead == "origin "+sha {
 			why = fmt.Sprintf("its pr step found %s not on origin though origin/%s is at %s",
-				b.o.Branch, b.o.Branch, sha)
-			return halt(r.task.ref.ID, r.skill, why)
+				b.O.Branch, b.O.Branch, sha)
+			return Halt(r.Task.Ref.ID, r.Skill, why)
 		}
 
-		r.waitHead = "origin " + sha
+		r.WaitHead = "origin " + sha
 
-		return in.next(ctx, r)
+		return in.Next(ctx, r)
 	}
 
 	r.parkedHead = ""
-	in.enter(r, atParked)
+	in.Enter(r, AtParked)
 
-	fmt.Fprintf(in.out, "%s ship: waiting on %s for origin\n", in.id(r.task.ref.ID), in.id(b.task.ref.ID))
+	fmt.Fprintf(in.Out, "%s ship: waiting on %s for origin\n", in.id(r.Task.Ref.ID), in.id(b.Task.Ref.ID))
 
 	return nil
 }
 
 // onOrigin reports b's branch on origin, read as f10 pr base --origin reads
 // it: the base's own push from its worktree updates this shared ref.
-func (in *driveInput) onOrigin(ctx context.Context, b *driveRun) bool {
+func (in *DriveInput) onOrigin(ctx context.Context, b *DriveRun) bool {
 	sha, why := in.originHead(ctx, b)
 
 	return why == "" && sha != ""
@@ -487,24 +487,24 @@ func (in *driveInput) onOrigin(ctx context.Context, b *driveRun) bool {
 
 // originHead is origin's copy of b's branch, "" when origin lacks it, and why
 // when git cannot say.
-func (in *driveInput) originHead(ctx context.Context, b *driveRun) (string, string) {
-	sha, err := gitx.Ref(ctx, in.main, "refs/remotes/origin/"+b.o.Branch)
+func (in *DriveInput) originHead(ctx context.Context, b *DriveRun) (string, string) {
+	sha, err := gitx.Ref(ctx, in.Main, "refs/remotes/origin/"+b.O.Branch)
 	if err != nil {
-		return "", "reading origin/" + b.o.Branch + ": " + err.Error()
+		return "", "reading origin/" + b.O.Branch + ": " + err.Error()
 	}
 
 	return sha, ""
 }
 
-// originWait is a ship stopped before pr on a base origin lacks: a wait whose
+// OriginWait is a ship stopped before pr on a base origin lacks: a wait whose
 // leaf is a pr entry, where the implement guard's wait is on the base's code.
-func originWait(run *state.Run) bool {
+func OriginWait(run *state.Run) bool {
 	return run != nil && run.Wait != "" && state.Stopped(run.Ship) && flow.Parse(run.Leaf).Step == "pr"
 }
 
 // waitsFor names what a parked task waits on its base for.
-func (r *driveRun) waitsFor() string {
-	if r.parkedOrigin {
+func (r *DriveRun) waitsFor() string {
+	if r.ParkedOrigin {
 		return "origin"
 	}
 
@@ -513,23 +513,23 @@ func (r *driveRun) waitsFor() string {
 
 // baseHalted ends a dependent whose base halted after releasing it, at the
 // boundary before skill: its work stays on its branch.
-func baseHalted(r *driveRun, skill string) driveResult {
-	id, base := r.task.ref.ID, r.base.task.ref.ID
-	reason := fmt.Sprintf("base %s halted, its work stays on %s", base, r.o.Branch)
+func baseHalted(r *DriveRun, skill string) DriveResult {
+	id, base := r.Task.Ref.ID, r.Base.Task.Ref.ID
+	reason := fmt.Sprintf("base %s halted, its work stays on %s", base, r.O.Branch)
 
-	return driveResult{
-		row:    "halted: base " + base + " halted",
-		code:   ui.ExitHalted,
-		lines:  []string{fmt.Sprintf("%s halted before %s: %s", id, skill, reason)},
-		skill:  skill,
-		reason: reason,
+	return DriveResult{
+		Row:    "halted: base " + base + " halted",
+		Code:   ui.ExitHalted,
+		Lines:  []string{fmt.Sprintf("%s halted before %s: %s", id, skill, reason)},
+		Skill:  skill,
+		Reason: reason,
 	}
 }
 
-// skillPrompt: plan is bare and ship names only a non-default flow, since
+// SkillPrompt: plan is bare and ship names only a non-default flow, since
 // driven mode takes every gap on its default and reuses a saved plan; every
 // skill but plan and ship takes a bundle's lead, which finds the branch.
-func skillPrompt(skill, id string, dep *launch.Dependency, fl runplan.ShipFlow, finishing bool) string {
+func SkillPrompt(skill, id string, dep *launch.Dependency, fl runplan.ShipFlow, finishing bool) string {
 	var p string
 
 	if skill != "plan" && skill != "ship" {
@@ -550,14 +550,14 @@ func skillPrompt(skill, id string, dep *launch.Dependency, fl runplan.ShipFlow, 
 	}
 
 	if finishing && skill == "ship" {
-		p += " && " + finishClause
+		p += " && " + FinishClause
 	}
 
 	return launch.Driven(p)
 }
 
-// finishClause tells a driven ship that drive finishes the task after it.
-const finishClause = "drive finishes it after ship and removes this worktree"
+// FinishClause tells a driven ship that drive finishes the task after it.
+const FinishClause = "drive finishes it after ship and removes this worktree"
 
 // onProfile is the open line's tail naming the profile a fresh agent
 // started on, "" for the kind's default or an agent left as it was.

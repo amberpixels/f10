@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/drive"
 	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/shell"
@@ -34,13 +35,13 @@ func TestUnsettledWhenGitCannotRead(t *testing.T) {
 			fx.f.script("git status --porcelain", "")
 			fail(fx.f)
 
-			r := &driveRun{o: start.OpenedTask{Branch: "GH-1", Path: "/code/repo.GH-1"}}
+			r := &drive.DriveRun{O: start.OpenedTask{Branch: "GH-1", Path: "/code/repo.GH-1"}}
 
 			if got := stack.BranchUnsettled(
 				t.Context(),
-				fx.in.main,
-				r.o.Path,
-				r.o.Branch,
+				fx.in.Main,
+				r.O.Path,
+				r.O.Branch,
 			); !strings.Contains(
 				got,
 				"unable to read config",

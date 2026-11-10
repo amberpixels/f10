@@ -1,4 +1,4 @@
-package main
+package drive
 
 import (
 	"context"
@@ -12,9 +12,9 @@ import (
 // started, else its body's After: line. The graph is rebuilt every run from
 // those, so nothing is stored and a resume reads the same answer.
 
-// graph refuses a base outside the list that is not finished, and a cycle,
+// Graph refuses a base outside the list that is not finished, and a cycle,
 // before anything is created.
-func (in *driveInput) graph(ctx context.Context, tasks []driveTask) ([]int, []string, error) {
+func (in *DriveInput) Graph(ctx context.Context, tasks []DriveTask) ([]int, []string, error) {
 	var notes []string
 
 	for i := range tasks {
@@ -23,18 +23,18 @@ func (in *driveInput) graph(ctx context.Context, tasks []driveTask) ([]int, []st
 			continue
 		}
 
-		t.base = t.after
+		t.Base = t.after
 
-		if t.branch == "" {
+		if t.Branch == "" {
 			continue
 		}
 
 		// the branch's copy wins: it is what start recorded, and what ship
 		// and pr act on; finish clears it, and the body then names a base
 		// that is finished, which is the same answer
-		recorded, err := branchmeta.Get(ctx, in.main, t.branch, branchmeta.After)
+		recorded, err := branchmeta.Get(ctx, in.Main, t.Branch, branchmeta.After)
 		if err != nil {
-			return nil, nil, fmt.Errorf("%s: reading its recorded base: %w", t.ref.ID, err)
+			return nil, nil, fmt.Errorf("%s: reading its recorded base: %w", t.Ref.ID, err)
 		}
 
 		if recorded == "" {
@@ -45,36 +45,36 @@ func (in *driveInput) graph(ctx context.Context, tasks []driveTask) ([]int, []st
 			notes = append(
 				notes,
 				fmt.Sprintf("%s: its branch records after %s and its body says After: %s; the branch wins",
-					t.ref.ID, recorded, t.after),
+					t.Ref.ID, recorded, t.after),
 			)
 		}
 
-		t.base = recorded
+		t.Base = recorded
 	}
 
-	index := listIndex(tasks)
+	index := ListIndex(tasks)
 
 	for _, t := range tasks {
-		if t.finished || t.base == "" {
+		if t.finished || t.Base == "" {
 			continue
 		}
 
-		if _, listed := index[t.base]; listed {
+		if _, listed := index[t.Base]; listed {
 			continue
 		}
 
-		done, err := in.baseFinished(ctx, t.base)
+		done, err := in.baseFinished(ctx, t.Base)
 		if err != nil {
 			return nil, nil, err
 		}
 
 		if !done {
 			return nil, nil, fmt.Errorf("%s is After: %s, which is not in the list and not finished: "+
-				"add %s to the list, or finish it first", t.ref.ID, t.base, t.base)
+				"add %s to the list, or finish it first", t.Ref.ID, t.Base, t.Base)
 		}
 	}
 
-	order, err := topoOrder(tasks, index)
+	order, err := TopoOrder(tasks, index)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -82,13 +82,13 @@ func (in *driveInput) graph(ctx context.Context, tasks []driveTask) ([]int, []st
 	return order, notes, nil
 }
 
-// listIndex maps each listed id to its first position; every member of a
+// ListIndex maps each listed id to its first position; every member of a
 // bundle maps to the bundle's, so a base that rides in it waits for it.
-func listIndex(tasks []driveTask) map[string]int {
+func ListIndex(tasks []DriveTask) map[string]int {
 	index := make(map[string]int, len(tasks))
 
 	for i, t := range tasks {
-		for _, id := range t.ref.Members() {
+		for _, id := range t.Ref.Members() {
 			if _, seen := index[id]; !seen {
 				index[id] = i
 			}
@@ -98,16 +98,16 @@ func listIndex(tasks []driveTask) map[string]int {
 	return index
 }
 
-// topoOrder puts bases before dependents; among the ready, the one listed
+// TopoOrder puts bases before dependents; among the ready, the one listed
 // first goes first, so a list already in order runs in that order.
-func topoOrder(tasks []driveTask, index map[string]int) ([]int, error) {
+func TopoOrder(tasks []DriveTask, index map[string]int) ([]int, error) {
 	placed := make([]bool, len(tasks))
 	order := make([]int, 0, len(tasks))
 
-	ready := func(t driveTask) bool {
-		b, listed := index[t.base]
+	ready := func(t DriveTask) bool {
+		b, listed := index[t.Base]
 
-		return t.finished || t.base == "" || !listed || placed[b]
+		return t.finished || t.Base == "" || !listed || placed[b]
 	}
 
 	for len(order) < len(tasks) {
@@ -126,7 +126,7 @@ func topoOrder(tasks []driveTask, index map[string]int) ([]int, error) {
 
 			for i, t := range tasks {
 				if !placed[i] {
-					stuck = append(stuck, t.ref.ID+" after "+t.base)
+					stuck = append(stuck, t.Ref.ID+" after "+t.Base)
 				}
 			}
 

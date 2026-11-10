@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/drive"
 	"github.com/amberpixels/f10/cli/internal/stack"
 )
 
@@ -29,7 +30,16 @@ func TestStalledReadsBackgroundWorkAsWorking(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			got := stalled(agentctl.StatusIdle, nil, "catchup", sent, look.Sub(launched), stallGrace, tc.bg, tc.now)
+			got := drive.Stalled(
+				agentctl.StatusIdle,
+				nil,
+				"catchup",
+				sent,
+				look.Sub(launched),
+				drive.StallGrace,
+				tc.bg,
+				tc.now,
+			)
 			if got != tc.want {
 				t.Errorf("stalled = %v, want %v", got, tc.want)
 			}

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/amberpixels/f10/cli/internal/drive"
 	"github.com/amberpixels/f10/cli/internal/driverec"
 )
 
@@ -43,7 +44,7 @@ func TestDriveFlagTable(t *testing.T) {
 				t.Errorf("--resume with %s: err = %v, want taken %v", f.Name, err, f.Resume)
 			}
 
-			kept := recordArgs(append([]string{"GH-1"}, given...))
+			kept := drive.RecordArgs(append([]string{"GH-1"}, given...))
 			if matched := len(kept) > 1; matched == f.Tunes {
 				t.Errorf("recordArgs(%q) = %q, want matched %v", given, kept, !f.Tunes)
 			}
@@ -62,7 +63,7 @@ func TestDriveFlagTable(t *testing.T) {
 	}
 
 	for _, f := range driverec.DriveFlags {
-		if f.Name != "--resume" && !strings.Contains(driveUsage(), f.Name) {
+		if f.Name != "--resume" && !strings.Contains(drive.DriveUsage(), f.Name) {
 			t.Errorf("the usage does not name %s", f.Name)
 		}
 	}

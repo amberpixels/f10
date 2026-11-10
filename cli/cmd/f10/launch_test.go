@@ -7,6 +7,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	startcmd "github.com/amberpixels/f10/cli/internal/command/start"
+	"github.com/amberpixels/f10/cli/internal/drive"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/runplan"
@@ -92,7 +93,7 @@ func TestDriveLaunchesWithTheFirstSkill(t *testing.T) {
 	}
 
 	want := "herdr agent start " + agentOf("GH-1") + " --kind claude --pane pane:1 -- " +
-		skillPrompt("judge", "GH-1", nil, runplan.ShipFlow{}, false)
+		drive.SkillPrompt("judge", "GH-1", nil, runplan.ShipFlow{}, false)
 	if len(fx.f.launches) != 1 || fx.f.launches[0] != want {
 		t.Errorf("launches = %q, want %q", fx.f.launches, want)
 	}
@@ -170,24 +171,34 @@ func TestDriveRetriesEnterOnceForATypedSend(t *testing.T) {
 	t.Cleanup(func() { launch.EnterRetry = prev })
 
 	now := time.Now()
-	in := &driveInput{
-		now: func() time.Time { return now },
+	in := &drive.DriveInput{
+		Now: func() time.Time { return now },
 	}
 
-	typed := &driveRun{task: driveTask{ref: gh1}, skill: "ship", sentAt: now.Add(-11 * time.Second), typed: sentText}
-	typed.o.Path = fwdWT
+	typed := &drive.DriveRun{
+		Task:   drive.DriveTask{Ref: gh1},
+		Skill:  "ship",
+		SentAt: now.Add(-11 * time.Second),
+		Typed:  sentText,
+	}
+	typed.O.Path = fwdWT
 
-	launched := &driveRun{task: driveTask{ref: gh1}, skill: "ship", sentAt: now.Add(-11 * time.Second)}
-	recent := &driveRun{task: driveTask{ref: gh1}, skill: "ship", sentAt: now.Add(-time.Second), typed: sentText}
+	launched := &drive.DriveRun{Task: drive.DriveTask{Ref: gh1}, Skill: "ship", SentAt: now.Add(-11 * time.Second)}
+	recent := &drive.DriveRun{
+		Task:   drive.DriveTask{Ref: gh1},
+		Skill:  "ship",
+		SentAt: now.Add(-time.Second),
+		Typed:  sentText,
+	}
 
 	var out bytes.Buffer
 
-	in.out = &out
+	in.Out = &out
 
 	for range 2 {
-		in.retryEnter(t.Context(), typed)
-		in.retryEnter(t.Context(), launched)
-		in.retryEnter(t.Context(), recent)
+		in.RetryEnter(t.Context(), typed)
+		in.RetryEnter(t.Context(), launched)
+		in.RetryEnter(t.Context(), recent)
 	}
 
 	if len(m.enters) != 1 || !bytes.Contains(out.Bytes(), []byte("Enter resent")) {

@@ -5,12 +5,14 @@ package main
 import (
 	"testing"
 	"time"
+
+	"github.com/amberpixels/f10/cli/internal/drive"
 )
 
 // Unwatching ends the goroutine that ranges over the drain channel, so a
 // drive leaves nothing behind once it returns.
 func TestUnwatchEndsTheDrainLoop(t *testing.T) {
-	drain, unwatch := watchDrain(true)
+	drain, unwatch := drive.WatchDrain(true)
 
 	done := make(chan struct{})
 

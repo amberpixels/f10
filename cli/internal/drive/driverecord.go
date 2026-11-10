@@ -1,4 +1,4 @@
-package main
+package drive
 
 import (
 	"cmp"
@@ -50,9 +50,9 @@ func healFinished(root string, rec *drives.Record, finished func(string) bool) {
 	}
 }
 
-// recordArgs is the command line a record is matched on: the flags that only
+// RecordArgs is the command line a record is matched on: the flags that only
 // tune a drive dropped, since none of them names another drive.
-func recordArgs(argv []string) []string {
+func RecordArgs(argv []string) []string {
 	var out []string
 
 	for i := 0; i < len(argv); i++ {
@@ -77,65 +77,65 @@ func recordArgs(argv []string) []string {
 	return out
 }
 
-// openRecord folds the record's kept answers under the ones given now; a
+// OpenRecord folds the record's kept answers under the ones given now; a
 // root of "" keeps no record.
-func (in *driveInput) openRecord(tasks []driveTask) error {
-	in.parallel = cmp.Or(in.args.Parallel, in.defaultParallel)
+func (in *DriveInput) OpenRecord(tasks []DriveTask) error {
+	in.Parallel = cmp.Or(in.Args.Parallel, in.DefaultParallel)
 
-	if in.root == "" {
+	if in.Root == "" {
 		return nil
 	}
 
 	// before the kept answers join the ones given now
-	in.launched = in.args.Resume == 0 && len(in.args.Answers) == 0
+	in.launched = in.Args.Resume == 0 && len(in.Args.Answers) == 0
 
 	var err error
 
 	switch {
-	case in.args.Resume > 0:
-		in.rec, err = drives.Read(in.root, in.args.Resume)
-		if err == nil && in.rec.Cancelled != nil {
+	case in.Args.Resume > 0:
+		in.Rec, err = drives.Read(in.Root, in.Args.Resume)
+		if err == nil && in.Rec.Cancelled != nil {
 			err = fmt.Errorf("drive %d was cancelled: run the same command without --resume to start a new one",
-				in.rec.Number)
+				in.Rec.Number)
 		}
 	default:
-		in.rec, err = drives.Find(in.root, recordArgs(in.argv))
+		in.Rec, err = drives.Find(in.Root, RecordArgs(in.Argv))
 	}
 
 	if err != nil {
 		return err
 	}
 
-	if in.rec == nil {
-		in.rec = &drives.Record{
-			Created:  in.now(),
-			Args:     recordArgs(in.argv),
-			Flow:     in.args.Flow,
-			Agent:    in.args.Agent,
-			Session:  in.session,
-			Parallel: in.parallel,
+	if in.Rec == nil {
+		in.Rec = &drives.Record{
+			Created:  in.Now(),
+			Args:     RecordArgs(in.Argv),
+			Flow:     in.Args.Flow,
+			Agent:    in.Args.Agent,
+			Session:  in.Session,
+			Parallel: in.Parallel,
 		}
 
 		for i, t := range tasks {
 			profile := ""
-			if i < len(in.args.Profiles) {
-				profile = in.args.Profiles[i]
+			if i < len(in.Args.Profiles) {
+				profile = in.Args.Profiles[i]
 			}
 
-			in.rec.Tasks = append(in.rec.Tasks, drives.Task{
-				ID: t.ref.Label() + worktree.SuffixOf(t.suffix), Agent: profile, After: t.after,
+			in.Rec.Tasks = append(in.Rec.Tasks, drives.Task{
+				ID: t.Ref.Label() + worktree.SuffixOf(t.Suffix), Agent: profile, After: t.after,
 			})
 		}
 
-		if err := drives.Create(in.root, in.rec); err != nil {
+		if err := drives.Create(in.Root, in.Rec); err != nil {
 			return err
 		}
 	}
 
-	own, err := drives.Acquire(in.root, drives.DriveKey(in.rec.Number), in.rec.Number)
+	own, err := drives.Acquire(in.Root, drives.DriveKey(in.Rec.Number), in.Rec.Number)
 	if held := (drives.HeldError{}); errors.As(err, &held) {
-		return fmt.Errorf("drive %d is running (pid %d): f10 drive cancel %d stops it", in.rec.Number,
-			held.Holder.PID, in.rec.Number)
+		return fmt.Errorf("drive %d is running (pid %d): f10 drive cancel %d stops it", in.Rec.Number,
+			held.Holder.PID, in.Rec.Number)
 	}
 
 	if err != nil {
@@ -145,19 +145,19 @@ func (in *driveInput) openRecord(tasks []driveTask) error {
 	in.own = own
 
 	// the drive keeps the cap it started with, unless this run passes one
-	in.parallel = cmp.Or(in.args.Parallel, in.rec.Parallel, in.defaultParallel)
-	if in.rec.Parallel != in.parallel {
-		in.save(func(rec *drives.Record) { rec.Parallel = in.parallel })
+	in.Parallel = cmp.Or(in.Args.Parallel, in.Rec.Parallel, in.DefaultParallel)
+	if in.Rec.Parallel != in.Parallel {
+		in.save(func(rec *drives.Record) { rec.Parallel = in.Parallel })
 	}
 
 	// an answer kept from a run that stopped before taking it goes first,
 	// and one given now for the same task replaces it
-	kept := make([]string, 0, len(in.rec.Answers))
+	kept := make([]string, 0, len(in.Rec.Answers))
 
-	for _, key := range slices.Sorted(maps.Keys(in.rec.Answers)) {
-		text := in.rec.Answers[key]
+	for _, key := range slices.Sorted(maps.Keys(in.Rec.Answers)) {
+		text := in.Rec.Answers[key]
 		if key == "" {
-			if !slices.ContainsFunc(in.args.Answers, func(a string) bool {
+			if !slices.ContainsFunc(in.Args.Answers, func(a string) bool {
 				_, _, keyed := keyedAnswer(a, tasks)
 
 				return !keyed
@@ -168,7 +168,7 @@ func (in *driveInput) openRecord(tasks []driveTask) error {
 			continue
 		}
 
-		if !slices.ContainsFunc(in.args.Answers, func(a string) bool {
+		if !slices.ContainsFunc(in.Args.Answers, func(a string) bool {
 			id, _, keyed := keyedAnswer(a, tasks)
 
 			return keyed && strings.EqualFold(id, key)
@@ -177,43 +177,43 @@ func (in *driveInput) openRecord(tasks []driveTask) error {
 		}
 	}
 
-	in.args.Answers = append(kept, in.args.Answers...)
+	in.Args.Answers = append(kept, in.Args.Answers...)
 
 	return nil
 }
 
-// recordLaunch: a --resume (a drained drive, a drive resuming itself) and an
+// RecordLaunch: a --resume (a drained drive, a drive resuming itself) and an
 // --answer relayed from another session are nobody's launch.
-func (in *driveInput) recordLaunch() error {
-	if !in.launched || in.rec == nil {
+func (in *DriveInput) RecordLaunch() error {
+	if !in.launched || in.Rec == nil {
 		return nil
 	}
 
-	return state.AppendLaunch(in.stateDir, in.session,
-		state.Launch{Kind: state.LaunchDrive, Value: strconv.Itoa(in.rec.Number)})
+	return state.AppendLaunch(in.StateDir, in.Session,
+		state.Launch{Kind: state.LaunchDrive, Value: strconv.Itoa(in.Rec.Number)})
 }
 
 // save applies change to the record. A failed write is a line, never a
 // halt: the branch keeps the position, the record what it cannot.
-func (in *driveInput) save(change func(*drives.Record)) {
-	if in.rec == nil {
+func (in *DriveInput) save(change func(*drives.Record)) {
+	if in.Rec == nil {
 		return
 	}
 
-	rec, err := drives.Update(in.root, in.rec.Number, change)
+	rec, err := drives.Update(in.Root, in.Rec.Number, change)
 	if err != nil {
-		fmt.Fprintf(in.out, "  recording drive %d: %v\n", in.rec.Number, err)
+		fmt.Fprintf(in.Out, "  recording drive %d: %v\n", in.Rec.Number, err)
 
 		return
 	}
 
-	in.rec = rec
+	in.Rec = rec
 }
 
-func (in *driveInput) saveTask(r *driveRun, change func(*drives.Task)) {
+func (in *DriveInput) saveTask(r *DriveRun, change func(*drives.Task)) {
 	ids := []string{
-		r.task.ref.Label() + worktree.SuffixOf(r.task.suffix),
-		r.task.ref.ID + worktree.SuffixOf(r.task.suffix),
+		r.Task.Ref.Label() + worktree.SuffixOf(r.Task.Suffix),
+		r.Task.Ref.ID + worktree.SuffixOf(r.Task.Suffix),
 	}
 
 	in.save(func(rec *drives.Record) {
@@ -227,9 +227,9 @@ func (in *driveInput) saveTask(r *driveRun, change func(*drives.Task)) {
 	})
 }
 
-func (in *driveInput) savePending(taken *drives.Answer) {
+func (in *DriveInput) savePending(taken *drives.Answer) {
 	in.save(func(rec *drives.Record) {
-		rec.Answers = in.answers.pending()
+		rec.Answers = in.Answers.Pending()
 
 		if taken != nil {
 			rec.Answered = append(rec.Answered, *taken)
@@ -237,49 +237,49 @@ func (in *driveInput) savePending(taken *drives.Answer) {
 	})
 }
 
-func (in *driveInput) took(id, skill, text string) {
-	if in.rec != nil {
-		in.savePending(&drives.Answer{Task: id, Skill: skill, Text: text, At: in.now()})
+func (in *DriveInput) took(id, skill, text string) {
+	if in.Rec != nil {
+		in.savePending(&drives.Answer{Task: id, Skill: skill, Text: text, At: in.Now()})
 	}
 }
 
 // refreshRecord reads the drive's record again, for a cancel or a new cap
 // written since; a failed read keeps the one it has.
-func (in *driveInput) refreshRecord() {
-	if in.rec == nil {
+func (in *DriveInput) refreshRecord() {
+	if in.Rec == nil {
 		return
 	}
 
-	rec, err := drives.Read(in.root, in.rec.Number)
+	rec, err := drives.Read(in.Root, in.Rec.Number)
 	if err != nil {
 		return
 	}
 
-	in.rec = rec
+	in.Rec = rec
 
 	// a rerun attached to this live drive writes its new cap here
 	if rec.Parallel > 0 {
-		in.parallel = rec.Parallel
+		in.Parallel = rec.Parallel
 	}
 }
 
 // leaseKey is a task's lease: its lead id, so two attempts at one task are
 // one owner's.
-func leaseKey(task driveTask) string { return task.ref.Head().ID }
+func leaseKey(task DriveTask) string { return task.Ref.Head().ID }
 
 // lease takes the task's lease, or shares one this drive already holds
 // for another attempt at the same task. Held elsewhere, it says who holds it.
-func (in *driveInput) lease(r *driveRun) (string, bool) {
-	if in.root == "" {
+func (in *DriveInput) lease(r *DriveRun) (string, bool) {
+	if in.Root == "" {
 		return "", true
 	}
 
-	key := leaseKey(r.task)
+	key := leaseKey(r.Task)
 	if _, ok := in.leases[key]; ok {
 		return "", true
 	}
 
-	l, err := drives.Acquire(in.root, key, in.rec.Number)
+	l, err := drives.Acquire(in.Root, key, in.Rec.Number)
 	if held := (drives.HeldError{}); errors.As(err, &held) {
 		return "owned by " + held.Holder.String(), false
 	}
@@ -295,16 +295,16 @@ func (in *driveInput) lease(r *driveRun) (string, bool) {
 
 // unlease releases the task's lease once no other run of this drive on the
 // same task is still going.
-func (in *driveInput) unlease(r *driveRun, runs []*driveRun) {
-	key := leaseKey(r.task)
+func (in *DriveInput) unlease(r *DriveRun, runs []*DriveRun) {
+	key := leaseKey(r.Task)
 
 	l, ok := in.leases[key]
 	if !ok {
 		return
 	}
 
-	if slices.ContainsFunc(runs, func(o *driveRun) bool {
-		return o != r && o.end == nil && leaseKey(o.task) == key
+	if slices.ContainsFunc(runs, func(o *DriveRun) bool {
+		return o != r && o.End == nil && leaseKey(o.Task) == key
 	}) {
 		return
 	}
@@ -313,8 +313,8 @@ func (in *driveInput) unlease(r *driveRun, runs []*driveRun) {
 	delete(in.leases, key)
 }
 
-// releaseAll drops every lease the drive still holds, its own last.
-func (in *driveInput) releaseAll() {
+// ReleaseAll drops every lease the drive still holds, its own last.
+func (in *DriveInput) ReleaseAll() {
 	for key, l := range in.leases {
 		l.Release()
 		delete(in.leases, key)
@@ -323,25 +323,25 @@ func (in *driveInput) releaseAll() {
 	in.own.Release()
 }
 
-func (in *driveInput) number() int {
-	if in.rec == nil {
+func (in *DriveInput) number() int {
+	if in.Rec == nil {
 		return 0
 	}
 
-	return in.rec.Number
+	return in.Rec.Number
 }
 
-func (in *driveInput) resumeLine() string {
-	if in.rec != nil {
-		return "f10 drive --resume " + strconv.Itoa(in.rec.Number)
+func (in *DriveInput) resumeLine() string {
+	if in.Rec != nil {
+		return "f10 drive --resume " + strconv.Itoa(in.Rec.Number)
 	}
 
-	return resumeCommand(in.argv)
+	return ResumeCommand(in.Argv)
 }
 
-// driveList prints the records, newest first. finished reports a row's task
+// DriveList prints the records, newest first. finished reports a row's task
 // finished outside its drive; nil checks nothing.
-func driveList(
+func DriveList(
 	ctx context.Context,
 	w io.Writer,
 	links *render.TaskLinks,
@@ -407,7 +407,7 @@ func driveList(
 			id := links.ID(project, t.ID) + ":"
 			nodes[j] = tasktree.Node{Cells: []tasktree.Cell{
 				{Text: t.ID + ":", Render: func(string) string { return id }},
-				{Text: taskStanding(t, running)},
+				{Text: TaskStanding(t, running)},
 			}}
 		}
 
@@ -423,10 +423,10 @@ func driveList(
 	return nil
 }
 
-// rowFinishedFor checks a record's row, an id as typed, by finishedTask, as
+// RowFinishedFor checks a record's row, an id as typed, by finishedTask, as
 // drive and status do; a row that names no task, or a git error, reads as
 // unfinished, since a wrong yes hides a halt.
-func rowFinishedFor(ctx context.Context, t *target.Target) func(string) bool {
+func RowFinishedFor(ctx context.Context, t *target.Target) func(string) bool {
 	main := cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot)
 	tr := stack.TrackerFor(t)
 	seen := map[string]bool{} // a task several records list is checked once
@@ -445,7 +445,7 @@ func rowFinishedFor(ctx context.Context, t *target.Target) func(string) bool {
 		}
 
 		head := r.Head()
-		seen[id] = finishedLazily(tr.Storage, head.ID,
+		seen[id] = FinishedLazily(tr.Storage, head.ID,
 			func() (bool, error) { return stack.HasTaskBranch(ctx, main, head.ID) },
 			func() hostops.TaskInfo {
 				info, _ := tr.Info(ctx, head) // an unread tracker leaves the archive to decide
@@ -457,9 +457,9 @@ func rowFinishedFor(ctx context.Context, t *target.Target) func(string) bool {
 	}
 }
 
-// finishedLazily is finishedTask with its reads made lazily: the tracker is
+// FinishedLazily is finishedTask with its reads made lazily: the tracker is
 // asked only when no branch, live plan or archived plan already decides.
-func finishedLazily(root storage.Root, id string, branched func() (bool, error), info func() hostops.TaskInfo) bool {
+func FinishedLazily(root storage.Root, id string, branched func() (bool, error), info func() hostops.TaskInfo) bool {
 	if b, err := branched(); err != nil || b {
 		return false
 	}
@@ -472,7 +472,7 @@ func finishedLazily(root storage.Root, id string, branched func() (bool, error),
 	return stack.FinishedTask(ti, root, id, false)
 }
 
-func taskStanding(t drives.Task, running bool) string {
+func TaskStanding(t drives.Task, running bool) string {
 	switch {
 	case t.Outcome != nil:
 		return t.Outcome.Row
@@ -491,9 +491,9 @@ func taskStanding(t drives.Task, running bool) string {
 	return "not reached"
 }
 
-// driveCancel marks drive n cancelled: a live drive stops prompting at its
+// DriveCancel marks drive n cancelled: a live drive stops prompting at its
 // next poll; worktrees, branches and agents stay as they are.
-func driveCancel(w io.Writer, root string, n int, now time.Time) error {
+func DriveCancel(w io.Writer, root string, n int, now time.Time) error {
 	rec, err := drives.Update(root, n, func(r *drives.Record) {
 		if r.Cancelled == nil {
 			r.Cancelled = &now

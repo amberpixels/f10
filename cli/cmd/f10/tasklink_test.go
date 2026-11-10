@@ -17,6 +17,7 @@ import (
 	boardcmd "github.com/amberpixels/f10/cli/internal/command/board"
 	standupcmd "github.com/amberpixels/f10/cli/internal/command/standup"
 	"github.com/amberpixels/f10/cli/internal/daemon"
+	"github.com/amberpixels/f10/cli/internal/drive"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/layers"
 	"github.com/amberpixels/f10/cli/internal/ledger"
@@ -152,7 +153,7 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 			}
 
 			var out bytes.Buffer
-			if err := driveList(
+			if err := drive.DriveList(
 				t.Context(),
 				&out,
 				render.LinksFor(&out, false),
@@ -176,7 +177,7 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 			}
 
 			var out bytes.Buffer
-			writeDaemonStatus(t.Context(), &out, render.LinksFor(&out, false),
+			drive.WriteDaemonStatus(t.Context(), &out, render.LinksFor(&out, false),
 				daemon.Reply{Runs: []daemon.Run{{Root: root, Dir: "/x", Drive: 1}}})
 
 			return out.String()
@@ -230,17 +231,17 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 		"drive report": func(t *testing.T, _ bool) string {
 			var out bytes.Buffer
 
-			in := &driveInput{
-				out:     &out,
-				answers: newAnswerBook(),
+			in := &drive.DriveInput{
+				Out:     &out,
+				Answers: drive.NewAnswerBook(),
 			}
-			in.loadLinks(t.Context(), []driveTask{{ref: ref.Ref{ID: "FT-1"}}, {ref: ref.Ref{ID: "FT-2"}}})
+			in.LoadLinks(t.Context(), []drive.DriveTask{{Ref: ref.Ref{ID: "FT-1"}}, {Ref: ref.Ref{ID: "FT-2"}}})
 
-			runs := []*driveRun{
-				{task: driveTask{ref: ref.Ref{ID: "FT-1"}}, phase: atHeld},
-				{task: driveTask{ref: ref.Ref{ID: "FT-2"}}},
+			runs := []*drive.DriveRun{
+				{Task: drive.DriveTask{Ref: ref.Ref{ID: "FT-1"}}, Phase: drive.AtHeld},
+				{Task: drive.DriveTask{Ref: ref.Ref{ID: "FT-2"}}},
 			}
-			if err := in.report(runs, nil); err != nil {
+			if err := in.Report(runs, nil); err != nil {
 				t.Fatal(err)
 			}
 
@@ -249,10 +250,10 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 		"drive progress": func(t *testing.T, _ bool) string {
 			var out bytes.Buffer
 
-			in := &driveInput{out: &out}
-			in.loadLinks(t.Context(), []driveTask{{ref: ref.Ref{ID: "FT-1"}}, {ref: ref.Ref{ID: "FT-2"}}})
-			in.queue(&driveRun{task: driveTask{ref: ref.Ref{ID: "FT-1"}}})
-			in.queue(&driveRun{task: driveTask{ref: ref.Ref{ID: "FT-2"}}})
+			in := &drive.DriveInput{Out: &out}
+			in.LoadLinks(t.Context(), []drive.DriveTask{{Ref: ref.Ref{ID: "FT-1"}}, {Ref: ref.Ref{ID: "FT-2"}}})
+			in.Queue(&drive.DriveRun{Task: drive.DriveTask{Ref: ref.Ref{ID: "FT-1"}}})
+			in.Queue(&drive.DriveRun{Task: drive.DriveTask{Ref: ref.Ref{ID: "FT-2"}}})
 
 			return out.String()
 		},

@@ -19,6 +19,8 @@ import (
 	askscmd "github.com/amberpixels/f10/cli/internal/command/asks"
 	boardcmd "github.com/amberpixels/f10/cli/internal/command/board"
 	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
+	daemoncmd "github.com/amberpixels/f10/cli/internal/command/daemon"
+	drivecmd "github.com/amberpixels/f10/cli/internal/command/drive"
 	finishcmd "github.com/amberpixels/f10/cli/internal/command/finish"
 	hookcmd "github.com/amberpixels/f10/cli/internal/command/hook"
 	ledgercmd "github.com/amberpixels/f10/cli/internal/command/ledger"
@@ -76,10 +78,10 @@ func newApp() *cli.Command {
 			boardcmd.Command(),
 			startcmd.Command(),
 			startcmd.ForwardCommand(),
-			driveCommand(),
-			daemonCommand(),
+			drivecmd.Command(),
+			daemoncmd.Command(),
 			askscmd.Command(),
-			watchCommand(),
+			drivecmd.WatchCommand(),
 			finishcmd.Command(),
 			finishcmd.JanitorCommand(),
 			hookcmd.Command(),

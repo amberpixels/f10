@@ -10,6 +10,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
 	startcmd "github.com/amberpixels/f10/cli/internal/command/start"
+	"github.com/amberpixels/f10/cli/internal/drive"
 	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
@@ -153,7 +154,7 @@ func TestPaceShapesTheDriveSkills(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if got := strings.Join(driveSkills(fl), " "); got != want {
+		if got := strings.Join(drive.DriveSkills(fl), " "); got != want {
 			t.Errorf("%q: skills %q, want %q", pace, got, want)
 		}
 	}
@@ -181,13 +182,13 @@ func TestDriveKeepsTheRecordedPace(t *testing.T) {
 		f := newFakes(t)
 		f.meta.Seed("GH-1", branchmeta.Pace, tc.recorded)
 
-		in := &driveInput{
-			main:  "/code/repo",
-			args:  driverec.DriveArgs{Pace: tc.flag},
-			paced: paced,
+		in := &drive.DriveInput{
+			Main:  "/code/repo",
+			Args:  driverec.DriveArgs{Pace: tc.flag},
+			Paced: paced,
 		}
 
-		fl, note, err := in.keepPace(t.Context(), "GH-1", runplan.ShipFlow{Pace: tc.run})
+		fl, note, err := in.KeepPace(t.Context(), "GH-1", runplan.ShipFlow{Pace: tc.run})
 		if err != nil || fl.Pace != tc.want || !strings.Contains(note, tc.note) ||
 			f.called("set branch.GH-1."+string(branchmeta.Pace)+" "+tc.flag) != tc.writes {
 			t.Errorf("recorded %q: pace %q, note %q, err %v, calls %v", tc.recorded, fl.Pace, note, err, f.calls)
@@ -335,7 +336,7 @@ func TestCeilingShapesTheDriveChain(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if got := strings.Join(driveSkills(fl), " "); got != "plan ship" {
+		if got := strings.Join(drive.DriveSkills(fl), " "); got != "plan ship" {
 			t.Errorf("%s under finish off: %q", pace, got)
 		}
 	}
@@ -347,7 +348,7 @@ func TestCeilingShapesTheDriveChain(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got := strings.Join(driveSkills(fl), " "); got != "plan ship finish" {
+	if got := strings.Join(drive.DriveSkills(fl), " "); got != "plan ship finish" {
 		t.Errorf("excepted fast: %q", got)
 	}
 }

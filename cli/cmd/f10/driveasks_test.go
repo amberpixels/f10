@@ -8,6 +8,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/asks"
 	"github.com/amberpixels/f10/cli/internal/daemon"
+	"github.com/amberpixels/f10/cli/internal/drive"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/runplan"
@@ -20,10 +21,10 @@ func inboxFixture(t *testing.T, args ...string) (*driveFixture, *int) {
 	t.Helper()
 
 	fx := newDriveFixture(t, args...)
-	fx.in.root, fx.in.asksDir, fx.in.daemonRun = t.TempDir(), t.TempDir(), true
+	fx.in.Root, fx.in.AsksDir, fx.in.DaemonRun = t.TempDir(), t.TempDir(), true
 
 	notified := 0
-	fx.in.notify = func(context.Context, asks.Ask) error {
+	fx.in.Notify = func(context.Context, asks.Ask) error {
 		notified++
 
 		return nil
@@ -38,7 +39,7 @@ func (fx *driveFixture) asking(t *testing.T) {
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.f.script(
-		"herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, runplan.ShipFlow{}, false),
+		"herdr agent prompt "+agentOf("GH-1")+" "+drive.SkillPrompt("judge", "GH-1", nil, runplan.ShipFlow{}, false),
 		"{}",
 	)
 	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
@@ -64,7 +65,7 @@ func TestDriveRaisesAskIntoInbox(t *testing.T) {
 		t.Fatalf("err = %v\n%s", err, fx.out.String())
 	}
 
-	open, err := asks.Open(fx.in.asksDir)
+	open, err := asks.Open(fx.in.AsksDir)
 	if err != nil || len(open) != 1 {
 		t.Fatalf("open asks = %+v, %v", open, err)
 	}
@@ -87,11 +88,11 @@ func TestDriveTakesInboxAnswer(t *testing.T) {
 	fx.resumedOnAsk(t)
 	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" 1. stop", "{}")
 
-	a, _, _ := asks.Raise(fx.in.asksDir, asks.Ask{
-		Task: "GH-1", Root: fx.in.root, Drive: 1,
+	a, _, _ := asks.Raise(fx.in.AsksDir, asks.Ask{
+		Task: "GH-1", Root: fx.in.Root, Drive: 1,
 		Worktree: "/code/repo.GH-1", Text: "1. Rethink: [proceed | stop]",
 	}, time.Now())
-	if _, err := asks.Claim(fx.in.asksDir, a.Key(), asks.ByAsks, "1. stop", false, time.Now()); err != nil {
+	if _, err := asks.Claim(fx.in.AsksDir, a.Key(), asks.ByAsks, "1. stop", false, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -103,12 +104,12 @@ func TestDriveTakesInboxAnswer(t *testing.T) {
 		t.Errorf("output:\n%s", fx.out.String())
 	}
 
-	got, _, _ := asks.Get(fx.in.asksDir, a.Key())
+	got, _, _ := asks.Get(fx.in.AsksDir, a.Key())
 	if got.TakenAt.IsZero() {
 		t.Error("the inbox answer was not marked taken")
 	}
 
-	rec, _ := drives.Read(fx.in.root, 1)
+	rec, _ := drives.Read(fx.in.Root, 1)
 	if len(rec.Answered) != 1 || rec.Answered[0].Text != "1. stop" {
 		t.Errorf("record answered = %+v", rec.Answered)
 	}
@@ -120,11 +121,11 @@ func TestDriveFollowsPaneAnswer(t *testing.T) {
 	fx, _ := inboxFixture(t, "GH-1", "judge")
 	fx.resumedOnAsk(t)
 
-	a, _, _ := asks.Raise(fx.in.asksDir, asks.Ask{
-		Task: "GH-1", Root: fx.in.root, Drive: 1,
+	a, _, _ := asks.Raise(fx.in.AsksDir, asks.Ask{
+		Task: "GH-1", Root: fx.in.Root, Drive: 1,
 		Worktree: "/code/repo.GH-1", Text: "1. Rethink: [proceed | stop]",
 	}, time.Now())
-	if _, err := asks.Claim(fx.in.asksDir, a.Key(), asks.ByPane, "stop", true, time.Now()); err != nil {
+	if _, err := asks.Claim(fx.in.AsksDir, a.Key(), asks.ByPane, "stop", true, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -148,12 +149,12 @@ func TestDriveResumesForLateAnswer(t *testing.T) {
 	fx.asking(t)
 
 	// the user answers the moment they are told, before the drive exits
-	fx.in.notify = func(_ context.Context, a asks.Ask) error {
-		if _, held := drives.Probe(fx.in.root, drives.DriveKey(1)); !held {
+	fx.in.Notify = func(_ context.Context, a asks.Ask) error {
+		if _, held := drives.Probe(fx.in.Root, drives.DriveKey(1)); !held {
 			t.Error("the drive's lease was free before it exited")
 		}
 
-		_, err := asks.Claim(fx.in.asksDir, a.Key(), asks.ByAsks, "1. proceed", false, time.Now())
+		_, err := asks.Claim(fx.in.AsksDir, a.Key(), asks.ByAsks, "1. proceed", false, time.Now())
 
 		return err
 	}
@@ -169,10 +170,10 @@ func TestDriveResumesForLateAnswer(t *testing.T) {
 
 	// outside the daemon the drive ends as it would, naming the command
 	fx2, _ := inboxFixture(t, "GH-1", "judge")
-	fx2.in.daemonRun = false
+	fx2.in.DaemonRun = false
 	fx2.asking(t)
-	fx2.in.notify = func(_ context.Context, a asks.Ask) error {
-		_, err := asks.Claim(fx2.in.asksDir, a.Key(), asks.ByAsks, "1. proceed", false, time.Now())
+	fx2.in.Notify = func(_ context.Context, a asks.Ask) error {
+		_, err := asks.Claim(fx2.in.AsksDir, a.Key(), asks.ByAsks, "1. proceed", false, time.Now())
 
 		return err
 	}
@@ -199,7 +200,7 @@ func TestCloseDriveAsks(t *testing.T) {
 		}
 	}
 
-	closeDriveAsks(dir, "/r", 2, now)
+	drive.CloseDriveAsks(dir, "/r", 2, now)
 
 	open, _ := asks.Open(dir)
 	if len(open) != 1 || open[0].Task != "GH-2" {

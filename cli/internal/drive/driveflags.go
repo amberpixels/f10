@@ -1,4 +1,4 @@
-package main
+package drive
 
 import (
 	"slices"
@@ -44,8 +44,8 @@ func flagUsage(flags []driverec.DriveFlag) string {
 	return strings.Join(parts, " ")
 }
 
-// driveUsage is drive's ArgsUsage, read off driveFlags.
-func driveUsage() string {
+// DriveUsage is drive's ArgsUsage, read off driveFlags.
+func DriveUsage() string {
 	run := slices.DeleteFunc(
 		slices.Clone(driverec.DriveFlags),
 		func(f driverec.DriveFlag) bool { return f.Name == "--resume" },

@@ -1,15 +1,13 @@
-package main
+package drive
 
 import (
 	"context"
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
-	"syscall"
 	"time"
 
 	"github.com/urfave/cli/v3"
@@ -23,85 +21,13 @@ import (
 	"github.com/amberpixels/f10/cli/internal/target"
 )
 
-func daemonCommand() *cli.Command {
-	return &cli.Command{
-		Name:  "daemon",
-		Usage: "the per-user process that runs drives and watches started tasks; f10 drive and f10 start start it when needed",
-		Description: "Bare, it serves in the foreground: what f10 drive starts, detached. " +
-			"It exits after ten minutes with no drive, no watched project and no call. A client of a newer release " +
-			"replaces it: each drive stops at its next tick and the new daemon resumes it.",
-		Action: runDaemon,
-		Commands: []*cli.Command{
-			{
-				Name:   "status",
-				Usage:  "pid, version, the drives it runs and the projects it watches",
-				Action: runDaemonStatus,
-			},
-			{
-				Name:   "stop",
-				Usage:  "stop the daemon; each drive stops at its next tick, and f10 drive --resume N goes on",
-				Flags:  []cli.Flag{&cli.BoolFlag{Name: "now", Usage: "stop each drive at once, not at its next tick"}},
-				Action: runDaemonStop,
-			},
-			{
-				Name:      "logs",
-				Usage:     "the daemon's log, or a drive's newest log in this project",
-				ArgsUsage: "[<drive>]",
-				Flags: []cli.Flag{
-					&cli.BoolFlag{Name: "follow", Aliases: []string{"f"}, Usage: "keep printing until the drive exits"},
-				},
-				Action: runDaemonLogs,
-			},
-		},
-	}
-}
-
-func runDaemon(ctx context.Context, cmd *cli.Command) error {
-	ctx, stop := signal.NotifyContext(ctx, syscall.SIGTERM, syscall.SIGINT)
-	defer stop()
-
-	s := &daemon.Server{
-		Dir:     daemon.RunDir(),
-		Version: buildinfo.Version(),
-		Log:     log.New(cmd.ErrWriter, "", log.LstdFlags),
-	}
-
-	err := s.Serve(ctx)
-	if errors.Is(err, daemon.ErrRunning) {
-		fmt.Fprintln(cmd.Writer, err)
-
-		return nil
-	}
-
-	return err
-}
-
-func runDaemonStatus(ctx context.Context, cmd *cli.Command) error {
-	w := cmd.Writer
-
-	rep, err := daemon.Call(ctx, daemon.RunDir(), daemon.Request{Op: daemon.OpStatus}, 0)
-	if errors.Is(err, daemon.ErrNotRunning) {
-		fmt.Fprintln(w, "no f10 daemon is running")
-
-		return nil
-	}
-
-	if err != nil {
-		return err
-	}
-
-	writeDaemonStatus(ctx, w, render.LinksFor(w, false), rep)
-
-	return nil
-}
-
-// writeDaemonStatus prints what the daemon runs and watches.
-func writeDaemonStatus(ctx context.Context, w io.Writer, links *render.TaskLinks, rep daemon.Reply) {
+// WriteDaemonStatus prints what the daemon runs and watches.
+func WriteDaemonStatus(ctx context.Context, w io.Writer, links *render.TaskLinks, rep daemon.Reply) {
 	fmt.Fprintf(w, "pid      %d\nversion  %s\nsince    %s\ndrives   %d\nwatching %d\n", rep.PID, rep.Version,
 		rep.Started.Format(time.DateTime), len(rep.Runs), len(rep.Watches))
 
 	for _, r := range rep.Runs {
-		fmt.Fprintf(w, "\n%s\n", driveTitle(r))
+		fmt.Fprintf(w, "\n%s\n", DriveTitle(r))
 		fmt.Fprintf(w, "  pid    %d, since %s\n  log    %s\n", r.PID, r.Since.Format(time.DateTime), r.Log)
 
 		if r.Drive == 0 {
@@ -124,7 +50,7 @@ func writeDaemonStatus(ctx context.Context, w io.Writer, links *render.TaskLinks
 			links.Load(ctx, project, ids...)
 
 			for _, t := range rec.Tasks {
-				fmt.Fprintf(w, "  %s %s\n", render.PadRight(links.ID(project, t.ID), 6), taskStanding(t, true))
+				fmt.Fprintf(w, "  %s %s\n", render.PadRight(links.ID(project, t.ID), 6), TaskStanding(t, true))
 			}
 		}
 	}
@@ -142,7 +68,7 @@ func writeDaemonStatus(ctx context.Context, w io.Writer, links *render.TaskLinks
 	}
 }
 
-func driveTitle(r daemon.Run) string {
+func DriveTitle(r daemon.Run) string {
 	project := projectName(r.Root)
 	if r.Drive == 0 {
 		return project + ": drive starting"
@@ -159,72 +85,7 @@ func projectName(root string) string {
 	return filepath.Base(filepath.Dir(root))
 }
 
-func runDaemonStop(ctx context.Context, cmd *cli.Command) error {
-	_, err := daemon.Call(ctx, daemon.RunDir(), daemon.Request{Op: daemon.OpStop, Drain: !cmd.Bool("now")}, 0)
-	if errors.Is(err, daemon.ErrNotRunning) {
-		fmt.Fprintln(cmd.Writer, "no f10 daemon is running")
-
-		return nil
-	}
-
-	if err != nil {
-		return err
-	}
-
-	if cmd.Bool("now") {
-		fmt.Fprintln(cmd.Writer, "f10 daemon stopping: each drive stops now; f10 drive --resume <n> goes on with one")
-	} else {
-		fmt.Fprintln(cmd.Writer,
-			"f10 daemon stopping: each drive stops at its next tick; f10 drive --resume <n> goes on with one")
-	}
-
-	return nil
-}
-
-func runDaemonLogs(ctx context.Context, cmd *cli.Command) error {
-	dir := daemon.RunDir()
-	path := daemon.LogPath(dir)
-
-	if arg := cmd.Args().First(); arg != "" {
-		n, err := driverec.DriveNumber(arg)
-		if err != nil {
-			return err
-		}
-
-		t, err := target.For(ctx, cmd)
-		if err != nil {
-			return err
-		}
-
-		if path = daemon.FindLog(dir, t.Layout.StorageRoot.Path(), n); path == "" {
-			return fmt.Errorf("no daemon log for drive %d in this project", n)
-		}
-	}
-
-	if !cmd.Bool("follow") {
-		f, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-
-		_, err = io.Copy(cmd.Writer, f)
-
-		return err
-	}
-
-	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
-	defer stop()
-
-	_, err := tailLog(ctx, cmd.Writer, path)
-	if errors.Is(err, context.Canceled) {
-		return nil
-	}
-
-	return err
-}
-
-func driveThroughDaemon(ctx context.Context, w io.Writer, t *target.Target, argv []string, a driverec.DriveArgs) error {
+func ThroughDaemon(ctx context.Context, w io.Writer, t *target.Target, argv []string, a driverec.DriveArgs) error {
 	dir, ver := daemon.RunDir(), buildinfo.Version()
 
 	cwd, err := os.Getwd()
@@ -250,7 +111,7 @@ func driveThroughDaemon(ctx context.Context, w io.Writer, t *target.Target, argv
 	if len(a.Answers) == 0 {
 		req.Resume = a.Resume
 		if a.Resume == 0 {
-			req.Key = drives.Key(recordArgs(argv))
+			req.Key = drives.Key(RecordArgs(argv))
 		}
 	}
 
@@ -260,7 +121,7 @@ func driveThroughDaemon(ctx context.Context, w io.Writer, t *target.Target, argv
 	// a task the drive leaves unfinished is watched once the drive ends
 	driverec.WatchProject(ctx, w, t)
 
-	return followDrive(ctx, w, dir, ver, req, nil)
+	return FollowDrive(ctx, w, dir, ver, req, nil)
 }
 
 // setDriveParallel writes a given --parallel into the record --resume names
@@ -274,7 +135,7 @@ func setDriveParallel(w io.Writer, root string, argv []string, a driverec.DriveA
 	if a.Resume > 0 {
 		rec, err = drives.Read(root, a.Resume)
 	} else {
-		rec, err = drives.Find(root, recordArgs(argv))
+		rec, err = drives.Find(root, RecordArgs(argv))
 	}
 
 	if err != nil || rec == nil || rec.Parallel == a.Parallel {
@@ -286,9 +147,9 @@ func setDriveParallel(w io.Writer, root string, argv []string, a driverec.DriveA
 	}
 }
 
-// followDrive follows the drive until it exits, into the next daemon when
+// FollowDrive follows the drive until it exits, into the next daemon when
 // an upgrade drained it. spawn starts a daemon; nil is this binary's.
-func followDrive(
+func FollowDrive(
 	ctx context.Context,
 	w io.Writer,
 	dir, ver string,
@@ -324,7 +185,7 @@ func followDrive(
 			fmt.Fprintln(w, "following the drive the daemon already runs")
 		}
 
-		exit, err := tailLog(ctx, w, rep.Log)
+		exit, err := TailLog(ctx, w, rep.Log)
 		if errors.Is(err, context.Canceled) {
 			if n := runningDrive(dir, rep.Log); n > 0 {
 				fmt.Fprintf(w, "\ndrive %d keeps running in the f10 daemon: f10 daemon logs %d -f\n", n, n)
@@ -364,9 +225,9 @@ func followDrive(
 	}
 }
 
-// tailLog copies a drive's log to w as it grows, until its exit file
+// TailLog copies a drive's log to w as it grows, until its exit file
 // appears, and returns the exit; ctx ending stops only the copy.
-func tailLog(ctx context.Context, w io.Writer, path string) (daemon.Exit, error) {
+func TailLog(ctx context.Context, w io.Writer, path string) (daemon.Exit, error) {
 	var f *os.File
 
 	for i := 0; ; i++ {

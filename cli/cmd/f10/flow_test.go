@@ -11,6 +11,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
 	startcmd "github.com/amberpixels/f10/cli/internal/command/start"
+	"github.com/amberpixels/f10/cli/internal/drive"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/launch"
@@ -93,12 +94,12 @@ func TestDriveKeepsTheRecordedFlow(t *testing.T) {
 		f := newFakes(t)
 		f.meta.Seed("GH-1", branchmeta.Flow, tc.recorded)
 
-		in := &driveInput{
-			main:    "/code/repo",
-			resolve: resolve,
+		in := &drive.DriveInput{
+			Main:    "/code/repo",
+			Resolve: resolve,
 		}
 
-		fl, note, err := in.keepFlow(t.Context(), "GH-1")
+		fl, note, err := in.KeepFlow(t.Context(), "GH-1")
 		if err != nil || fl.Recorded() != tc.want || !strings.Contains(note, tc.note) ||
 			f.called("set branch.GH-1."+string(branchmeta.Flow)+" default") != tc.writes {
 			t.Errorf("recorded %q: flow %q, note %q, err %v, calls %v", tc.recorded, fl.Recorded(), note, err, f.calls)
@@ -123,20 +124,20 @@ func TestCompletingFlow(t *testing.T) {
 // run still plans a task whose recorded flow leads with plan.
 func TestSkillsOfAKeptFlow(t *testing.T) {
 	direct := runplan.ShipFlow{Name: "direct", Planless: true}
-	in := &driveInput{
-		flow: direct,
+	in := &drive.DriveInput{
+		Flow: direct,
 	}
 
-	if got := strings.Join(in.skills(&driveRun{flow: direct}), " "); got != "ship finish" {
+	if got := strings.Join(in.Skills(&drive.DriveRun{Flow: direct}), " "); got != "ship finish" {
 		t.Errorf("the run's own flow = %q", got)
 	}
 
-	if got := strings.Join(in.skills(&driveRun{flow: runplan.ShipFlow{}}), " "); got != "plan ship finish" {
+	if got := strings.Join(in.Skills(&drive.DriveRun{Flow: runplan.ShipFlow{}}), " "); got != "plan ship finish" {
 		t.Errorf("a kept default flow = %q, want plan first and finish kept", got)
 	}
 
-	spike := &driveRun{flow: runplan.ShipFlow{Finish: "off"}, finishes: true}
-	if got := strings.Join(in.skills(spike), " "); got != "plan ship finish" {
+	spike := &drive.DriveRun{Flow: runplan.ShipFlow{Finish: "off"}, Finishes: true}
+	if got := strings.Join(in.Skills(spike), " "); got != "plan ship finish" {
 		t.Errorf("a spike closing on a pace without finish = %q, want finish added", got)
 	}
 }
@@ -164,17 +165,17 @@ func TestFlowByArea(t *testing.T) {
 		t.Errorf("prompt = %q, want ship alone", got)
 	}
 
-	if got := strings.Join(driveSkills(fl), " "); got != "ship finish" {
+	if got := strings.Join(drive.DriveSkills(fl), " "); got != "ship finish" {
 		t.Errorf("drive skills = %q, want ship plans as the area's flow says", got)
 	}
 
 	f := newFakes(t)
 
-	in := &driveInput{
-		main: "/code/repo",
-		flow: fl,
+	in := &drive.DriveInput{
+		Main: "/code/repo",
+		Flow: fl,
 	}
-	if kept, note, err := in.keepFlow(t.Context(), "GH-1"); err != nil || kept != fl || note != "" ||
+	if kept, note, err := in.KeepFlow(t.Context(), "GH-1"); err != nil || kept != fl || note != "" ||
 		slices.ContainsFunc(f.calls, func(c string) bool { return strings.HasPrefix(c, "set branch.") }) {
 		t.Errorf("keepFlow = %+v, %q, %v; calls %v", kept, note, err, f.calls)
 	}

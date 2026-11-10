@@ -1,4 +1,4 @@
-package main
+package drive
 
 import (
 	"context"
@@ -14,11 +14,11 @@ import (
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
-// resolveTasks skips a range member the tracker does not know as a task,
+// ResolveTasks skips a range member the tracker does not know as a task,
 // with a note; a listed one is an error.
-func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, error) {
+func (in *DriveInput) ResolveTasks(ctx context.Context) ([]DriveTask, []string, error) {
 	var (
-		tasks []driveTask
+		tasks []DriveTask
 		notes []string
 	)
 
@@ -26,15 +26,15 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 	add := func(r ref.Ref, suffix string, listed int) error {
 		ranged := listed < 0
 
-		if i := slices.IndexFunc(tasks, func(t driveTask) bool {
-			return t.suffix == suffix && slices.ContainsFunc(r.Members(), func(id string) bool {
-				return slices.Contains(t.ref.Members(), id)
+		if i := slices.IndexFunc(tasks, func(t DriveTask) bool {
+			return t.Suffix == suffix && slices.ContainsFunc(r.Members(), func(id string) bool {
+				return slices.Contains(t.Ref.Members(), id)
 			})
 		}); i >= 0 {
-			return fmt.Errorf("%s is listed twice", sharedMember(tasks[i].ref, r))
+			return fmt.Errorf("%s is listed twice", sharedMember(tasks[i].Ref, r))
 		}
 
-		info, err := in.tracker.Info(ctx, r)
+		info, err := in.Tracker.Info(ctx, r)
 
 		switch {
 		case err != nil && ranged:
@@ -51,18 +51,18 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 			return fmt.Errorf("%s is a pull request, not a task", r.ID)
 		}
 
-		task := driveTask{
-			ref: r, suffix: suffix, info: info,
+		task := DriveTask{
+			Ref: r, Suffix: suffix, info: info,
 			profile: in.profileFor(listed), flagged: in.profileFlagged(listed),
 		}
 
-		line, err := stack.BundleAfter(ctx, in.tracker, r, info.Body)
+		line, err := stack.BundleAfter(ctx, in.Tracker, r, info.Body)
 		if err != nil {
 			return err
 		}
 
 		if line != "" {
-			base, err := in.tracker.Resolve(ctx, line)
+			base, err := in.Tracker.Resolve(ctx, line)
 			if err != nil {
 				return fmt.Errorf("%s's body says After: %s: %w", r.ID, line, err)
 			}
@@ -70,7 +70,7 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 			task.after = base.Head().ID
 		}
 
-		x, err := stack.LoadBranchIndex(ctx, in.main)
+		x, err := stack.LoadBranchIndex(ctx, in.Main)
 		if err != nil {
 			return err
 		}
@@ -94,11 +94,11 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 			}
 
 			if len(local) == 1 {
-				task.branch = local[0]
+				task.Branch = local[0]
 			}
 		}
 
-		task.finished = stack.FinishedTask(info, in.tracker.Storage, r.ID, branched)
+		task.finished = stack.FinishedTask(info, in.Tracker.Storage, r.ID, branched)
 
 		if !ranged && !task.finished && !branched {
 			for _, m := range r.MemberRefs() {
@@ -113,8 +113,8 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 		return nil
 	}
 
-	if in.args.Span {
-		from, to, err := in.span(ctx)
+	if in.Args.Span {
+		from, to, err := in.Span(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -128,10 +128,10 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 		return tasks, notes, nil
 	}
 
-	for i, tok := range in.args.Tasks {
+	for i, tok := range in.Args.Tasks {
 		id, suffix := ref.SplitSuffix(tok)
 
-		r, err := in.tracker.Resolve(ctx, id)
+		r, err := in.Tracker.Resolve(ctx, id)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -152,8 +152,8 @@ func (in *driveInput) resolveTasks(ctx context.Context) ([]driveTask, []string, 
 // refuseParent stops a parent with unfinished subtasks: the subtasks are what
 // runs, chosen in the drive skill. A started task is never a parent here, so
 // a resumed drive asks the tracker nothing more.
-func (in *driveInput) refuseParent(ctx context.Context, r ref.Ref) error {
-	open, err := taskcmd.OpenSubtasks(ctx, in.tracker, r)
+func (in *DriveInput) refuseParent(ctx context.Context, r ref.Ref) error {
+	open, err := taskcmd.OpenSubtasks(ctx, in.Tracker, r)
 	if err != nil || len(open) == 0 {
 		return err
 	}
@@ -162,16 +162,16 @@ func (in *driveInput) refuseParent(ctx context.Context, r ref.Ref) error {
 		"or run /f10:drive %s to choose", r.ID, strings.Join(open, ", "), r.ID, r.ID)
 }
 
-func (in *driveInput) span(ctx context.Context) (ref.Ref, ref.Ref, error) {
-	if slices.ContainsFunc(in.args.Tasks, func(t string) bool { return strings.Contains(t, ref.Separator) }) {
+func (in *DriveInput) Span(ctx context.Context) (ref.Ref, ref.Ref, error) {
+	if slices.ContainsFunc(in.Args.Tasks, func(t string) bool { return strings.Contains(t, ref.Separator) }) {
 		return ref.Ref{}, ref.Ref{}, errors.New("a range's ends are single ids: list a bundle on its own")
 	}
-	from, err := in.tracker.Resolve(ctx, in.args.Tasks[0])
+	from, err := in.Tracker.Resolve(ctx, in.Args.Tasks[0])
 	if err != nil {
 		return ref.Ref{}, ref.Ref{}, err
 	}
 
-	to, err := in.tracker.Resolve(ctx, in.args.Tasks[1])
+	to, err := in.Tracker.Resolve(ctx, in.Args.Tasks[1])
 	if err != nil {
 		return ref.Ref{}, ref.Ref{}, err
 	}
@@ -212,23 +212,23 @@ func spanRefs(from, to ref.Ref) []ref.Ref {
 	return refs
 }
 
-func (in *driveInput) baseFinished(ctx context.Context, id string) (bool, error) {
-	base, err := in.tracker.Resolve(ctx, id)
+func (in *DriveInput) baseFinished(ctx context.Context, id string) (bool, error) {
+	base, err := in.Tracker.Resolve(ctx, id)
 	if err != nil {
 		return false, err
 	}
 
-	branched, err := stack.HasTaskBranch(ctx, in.main, base.ID)
+	branched, err := stack.HasTaskBranch(ctx, in.Main, base.ID)
 	if err != nil || branched {
 		return false, err
 	}
 
-	info, err := in.tracker.Info(ctx, base)
+	info, err := in.Tracker.Info(ctx, base)
 	if err != nil {
 		return false, fmt.Errorf("%s: %w", base.ID, err)
 	}
 
-	return stack.FinishedTask(info, in.tracker.Storage, base.ID, false), nil
+	return stack.FinishedTask(info, in.Tracker.Storage, base.ID, false), nil
 }
 
 func sharedMember(a, b ref.Ref) string {
