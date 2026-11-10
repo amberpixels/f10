@@ -56,6 +56,10 @@ type Window struct {
 	Fallback bool `json:"fallback,omitempty"`
 }
 
+// NoteLocalOnly is the host source's note on a checkout with no origin
+// remote; board.html matches the same text.
+const NoteLocalOnly = "local only"
+
 // The three sources, in the order the board lists them.
 const (
 	SourceHost    = "host"

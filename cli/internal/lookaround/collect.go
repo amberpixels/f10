@@ -10,7 +10,7 @@ import (
 )
 
 // Inputs binds the collectors to one project. A nil Host, Tasks or Local
-// is that source absent; Remote skips the local collector on purpose.
+// is that source absent; Project.Remote skips the local collector on purpose.
 type Inputs struct {
 	Project Project
 	Prefix  string
@@ -20,12 +20,9 @@ type Inputs struct {
 
 	// Feed reads what changed since Since instead of where every task
 	// stands: the host's activity, the tracker's list, and nothing local
-	// unless the checkout is local only.
+	// unless the checkout is local only (Project.LocalOnly): then the host is
+	// skipped, and the tracker too unless a driver answers it (Tasks set).
 	Feed bool
-
-	// LocalOnly is a checkout with no origin remote: the host is skipped,
-	// and the tracker too unless a driver answers it (Tasks set).
-	LocalOnly bool
 
 	Host      *forge.Host
 	HostError string // why there is no host, for the source's error
@@ -37,8 +34,7 @@ type Inputs struct {
 	// error is a note on the host source, the request kept without it.
 	RemoteOpen func(ctx context.Context, number int) (bool, error)
 
-	Remote bool
-	Local  *LocalInputs
+	Local *LocalInputs
 
 	// People is the user's map of one person's identities across the
 	// sources; nil groups rows by whatever identity each source gives.
@@ -75,8 +71,8 @@ func Collect(ctx context.Context, in Inputs) Facts {
 	skip := func(name string) { f.Sources = append(f.Sources, Source{Name: name, OK: true, Skipped: true}) }
 
 	switch {
-	case in.LocalOnly:
-		f.Sources = append(f.Sources, Source{Name: SourceHost, OK: true, Skipped: true, Notes: []string{"local only"}})
+	case in.Project.LocalOnly:
+		f.Sources = append(f.Sources, Source{Name: SourceHost, OK: true, Skipped: true, Notes: []string{NoteLocalOnly}})
 	case in.Feed:
 		timed(SourceHost, func() ([]string, error) {
 			if in.Host == nil {
@@ -105,7 +101,7 @@ func Collect(ctx context.Context, in Inputs) Facts {
 		})
 	}
 
-	if in.LocalOnly && in.Tasks == nil {
+	if in.Project.LocalOnly && in.Tasks == nil {
 		skip(SourceTracker)
 	} else {
 		timed(SourceTracker, func() ([]string, error) {
@@ -123,9 +119,9 @@ func Collect(ctx context.Context, in Inputs) Facts {
 	}
 
 	switch {
-	case in.Remote || in.Local == nil:
+	case in.Project.Remote || in.Local == nil:
 		skip(SourceLocal)
-	case in.Feed && in.LocalOnly:
+	case in.Feed && in.Project.LocalOnly:
 		timed(SourceLocal, func() ([]string, error) {
 			tips, err := collectTips(ctx, in.Local.Main)
 			if err == nil {

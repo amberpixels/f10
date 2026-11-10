@@ -46,8 +46,6 @@ type boardPR struct {
 	URL    string `json:"url,omitempty"`
 }
 
-const localOnly = "local only"
-
 // boardLines reduces the board to its model. The feed skips its local
 // source on purpose, so a skip there is no note; a local-only checkout
 // notes its host alone.
@@ -59,8 +57,8 @@ func boardLines(b lookaround.Board) boardModel {
 
 	for _, s := range b.Sources {
 		switch {
-		case s.Skipped && slices.Contains(s.Notes, localOnly):
-			m.Notes = append(m.Notes, boardNote{Name: s.Name, Status: localOnly})
+		case s.Skipped && slices.Contains(s.Notes, lookaround.NoteLocalOnly):
+			m.Notes = append(m.Notes, boardNote{Name: s.Name, Status: lookaround.NoteLocalOnly})
 		case s.Skipped && (feed || b.Project.LocalOnly):
 		case s.Skipped:
 			m.Notes = append(m.Notes, boardNote{Name: s.Name, Status: "skipped"})

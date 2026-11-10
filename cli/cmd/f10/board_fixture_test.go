@@ -12,11 +12,11 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/calendar"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
 	"github.com/amberpixels/f10/cli/internal/shell"
-	"github.com/amberpixels/f10/cli/internal/standup"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
@@ -159,7 +159,6 @@ func runBoardFixture(t *testing.T, fx boardFixture) lookaround.Board {
 		Prefix:  fx.Prefix,
 		Since:   fx.Since,
 		Host:    &h.Host,
-		Remote:  fx.Remote,
 		Now:     func() time.Time { return fx.Now },
 	}
 
@@ -187,8 +186,8 @@ func runBoardFixture(t *testing.T, fx boardFixture) lookaround.Board {
 	var board lookaround.Board
 
 	if fx.Feed {
-		span, err := resolveBoardSpan(fx.Window, false, fx.Now, func() (standup.Workdays, error) {
-			return standup.DefaultWorkdays(), nil
+		span, err := resolveBoardSpan(fx.Window, false, fx.Now, func() (calendar.Workdays, error) {
+			return calendar.DefaultWorkdays(), nil
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -288,7 +287,7 @@ func TestRecordBoardFixture(t *testing.T) {
 	h := forge.Host{Name: "gh", Dir: root}
 	in := lookaround.Inputs{
 		Project: lookaround.Project{ID: "recorded", Name: filepath.Base(root), Host: "gh", Remote: true},
-		Prefix:  fx.Prefix, Since: fx.Since, Host: &h, Remote: true,
+		Prefix:  fx.Prefix, Since: fx.Since, Host: &h,
 		Tasks: func(ctx context.Context) ([]lookaround.Task, error) {
 			rows, err := newHost("gh", root).listIssues(ctx, "", fx.Prefix, nil, boardPage)
 			if err != nil {

@@ -107,7 +107,7 @@ func htmlBoards(t *testing.T) map[string]lookaround.Board {
 	feed.View = lookaround.ViewFeed
 	feed.Project.LocalOnly = true
 	feed.Sources = []lookaround.Source{
-		{Name: lookaround.SourceHost, OK: true, Skipped: true, Notes: []string{localOnly}},
+		{Name: lookaround.SourceHost, OK: true, Skipped: true, Notes: []string{lookaround.NoteLocalOnly}},
 		{Name: lookaround.SourceTracker, OK: true, Skipped: true},
 		{Name: lookaround.SourceLocal, OK: true},
 	}
@@ -470,5 +470,13 @@ func TestBoardGroupsAWaitingTaskUnderNext(t *testing.T) {
 	want := []string{"in progress FT-8", "in progress FT-9", "in progress FT-7", "next FT-11", "next FT-10"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("lines %q, want %q", got, want)
+	}
+}
+
+// board.html cannot import the note, so it matches the same text: renaming
+// one without the other would split the terminal and HTML views.
+func TestBoardHTMLMatchesTheLocalOnlyNote(t *testing.T) {
+	if !strings.Contains(boardHTMLPage, `"`+lookaround.NoteLocalOnly+`"`) {
+		t.Errorf("board.html does not match the note %q", lookaround.NoteLocalOnly)
 	}
 }

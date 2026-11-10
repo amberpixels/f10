@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/amberpixels/f10/cli/internal/standup"
+	"github.com/amberpixels/f10/cli/internal/calendar"
 )
 
 // Every named window is years' span at the board's now; the default is
@@ -15,9 +15,9 @@ import (
 func TestResolveBoardSpan(t *testing.T) {
 	monday := time.Date(2026, 10, 26, 8, 0, 0, 0, time.UTC)
 	day := func(d int) time.Time { return time.Date(2026, 10, d, 0, 0, 0, 0, time.UTC) }
-	monFri := func() (standup.Workdays, error) { return standup.DefaultWorkdays(), nil }
-	sunThu := func() (standup.Workdays, error) {
-		var w standup.Workdays
+	monFri := func() (calendar.Workdays, error) { return calendar.DefaultWorkdays(), nil }
+	sunThu := func() (calendar.Workdays, error) {
+		var w calendar.Workdays
 		for d := time.Sunday; d <= time.Thursday; d++ {
 			w[d] = true
 		}
@@ -27,7 +27,7 @@ func TestResolveBoardSpan(t *testing.T) {
 
 	for _, c := range []struct {
 		arg        string
-		workdays   func() (standup.Workdays, error)
+		workdays   func() (calendar.Workdays, error)
 		since, end time.Time
 		chosen     string
 	}{
@@ -68,7 +68,7 @@ func TestResolveBoardSpan(t *testing.T) {
 		t.Errorf("state yesterday = %+v", span)
 	}
 
-	broken := func() (standup.Workdays, error) { return standup.Workdays{}, errors.New("standup.md: bad") }
+	broken := func() (calendar.Workdays, error) { return calendar.Workdays{}, errors.New("standup.md: bad") }
 	if _, err := resolveBoardSpan("today", false, monday, broken); err != nil {
 		t.Errorf("a named window read the working days: %v", err)
 	}

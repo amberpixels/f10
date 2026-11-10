@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/standup"
@@ -149,8 +150,8 @@ func TestRecordStandupFixture(t *testing.T) {
 func classes(t *testing.T, fx standupFixture, dir string) map[string]string {
 	t.Helper()
 
-	in, err := collectStandup(t.Context(), standupSource{
-		dir: dir, main: dir, prefix: fx.Prefix, host: newHost(fx.Host, dir),
+	in, err := standup.Collect(t.Context(), standup.Source{
+		Dir: dir, Main: dir, Prefix: fx.Prefix, Host: &forge.Host{Name: fx.Host, Dir: dir},
 	}, fx.Since)
 	if err != nil {
 		t.Fatal(err)

@@ -29,13 +29,17 @@ func (t *target) standupTracker() (standup.Tracker, string) {
 
 // collectTarget collects one checkout, its repository and tracker named.
 func collectTarget(ctx context.Context, t *target, since time.Time) (standup.Input, error) {
-	h, hostErr := t.host()
 	tr, project := t.standupTracker()
+	src := standup.Source{
+		Dir: t.lay.CheckoutRoot, Main: cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot), Prefix: t.eff.IDPrefix,
+		Upkeep: t.eff.UpkeepPaths,
+	}
 
-	in, err := collectStandup(ctx, standupSource{
-		dir: t.lay.CheckoutRoot, main: cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot), prefix: t.eff.IDPrefix,
-		upkeep: t.eff.UpkeepPaths, host: h, noHost: hostErr != nil,
-	}, since)
+	if h := t.optionalHost(); h != nil {
+		src.Host = &h.Host
+	}
+
+	in, err := standup.Collect(ctx, src, since)
 	if err != nil {
 		return standup.Input{}, err
 	}

@@ -13,7 +13,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/calendar"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/timing"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -35,7 +35,9 @@ func statsCommand() *cli.Command {
 }
 
 func runStats(ctx context.Context, cmd *cli.Command) error {
-	since, err := facts.ParseStaleAfter(cmd.String("since"))
+	now := time.Now()
+
+	cutoff, err := statsCutoff(cmd.String("since"), now)
 	if err != nil {
 		return ui.Exit(ui.ExitUsage, "stats: --since: %v", err)
 	}
@@ -61,7 +63,7 @@ func runStats(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	rows := statRows(events, task, time.Now().Add(-since))
+	rows := statRows(events, task, cutoff)
 
 	if err := writeStats(cmd.Writer, rows); err != nil || task == "" || len(rows) == 0 {
 		return err
@@ -363,4 +365,15 @@ func percent(part, whole int) int {
 	}
 
 	return (part*100 + whole/2) / whole
+}
+
+// statsCutoff is where --since starts the table: a count of days or weeks
+// back from now.
+func statsCutoff(arg string, now time.Time) (time.Time, error) {
+	p, err := calendar.Parse(arg, now, calendar.Offsets, nil)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	return p.Start, nil
 }
