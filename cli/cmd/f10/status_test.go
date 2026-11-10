@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -71,8 +73,8 @@ func TestStatusFallbackReportsPlanAndPR(t *testing.T) {
 		"none for GH-1 in " + root,
 		"- · capture running",
 		plan,
-		"pr:      ↗ https://gh/pr/9",
-		"pr state        open",
+		"pr:        ↗ https://gh/pr/9",
+		"pr state:    open",
 	} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("output lacks %q:\n%s", want, out.String())
@@ -96,6 +98,7 @@ func TestStatusFallbackLeavesOutWhatDoesNotExist(t *testing.T) {
 
 	var out bytes.Buffer
 	fb.render(&out, 0, false)
+	assertOneColumn(t, out.String())
 
 	for _, absent := range []string{"agent", "plan", "pr"} {
 		if strings.Contains(out.String(), absent) {
@@ -559,12 +562,117 @@ func TestWriteRunsUnderTheShipment(t *testing.T) {
 	}
 
 	got := out.String()
-	if !strings.HasPrefix(got, "task:    GH-1\nurl:   ↗ https://gh/issues/1\n\n") {
-		t.Errorf("output does not open with the block:\n%s", got)
+	if !strings.HasPrefix(got, "task:       GH-1\nurl:      ↗ https://gh/issues/1\ncapture:    prior\n") {
+		t.Errorf("the run rows do not go on under the block:\n%s", got)
 	}
 
 	if strings.Count(got, "GH-1") != 1 {
 		t.Errorf("the task prints more than once:\n%s", got)
+	}
+
+	assertOneColumn(t, got)
+}
+
+// A gate row's label is indented and its text may hold a colon of its own;
+// the label still ends at the first colon, its value in the head's column.
+func TestWriteRunsGatesShareTheColumn(t *testing.T) {
+	r := &state.Run{Task: "GH-1", Capture: "prior", Plan: "running", Ship: "upcoming"}
+	head := shipment{Task: "GH-1", Branch: "GH-1/some-branch"}
+	gates := []gate{{Step: "judge", Judged: "plan", State: "upcoming"}}
+
+	var out bytes.Buffer
+
+	if err := writeRuns(
+		statusView{w: &out},
+		[]*state.Run{r},
+		[][]gate{gates},
+		&head,
+		true,
+		"",
+		time.Now(),
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	got := out.String()
+	if !strings.Contains(got, "\n  judge:    plan: upcoming\n") {
+		t.Errorf("the gate row is not `  judge: plan: upcoming` in the column:\n%s", got)
+	}
+
+	assertOneColumn(t, got)
+}
+
+// A planned task's file row and its plan phase row never share a key.
+func TestWriteRunsNamesThePlanFileApart(t *testing.T) {
+	r := &state.Run{Task: "GH-1", Capture: "prior", Plan: "done", Ship: "running"}
+	head := shipment{Task: "GH-1", Plan: "/work/.f10/plans/GH-1.md"}
+
+	var out bytes.Buffer
+
+	if err := writeRuns(statusView{w: &out}, []*state.Run{r}, [][]gate{nil}, &head, false, "", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+
+	got := out.String()
+	if !strings.Contains(got, "plan file:  ") || strings.Count(got, "\nplan:") != 1 {
+		t.Errorf("want one `plan file:` row and one `plan:` row:\n%s", got)
+	}
+
+	assertOneColumn(t, got)
+}
+
+// A long run value wraps under the value column, never under the labels.
+func TestWriteFactsWrapsUnderTheValueColumn(t *testing.T) {
+	rows := []fact{
+		{label: "url", value: "https://gh/issues/1", url: true},
+		runFact("note", "stop: the change patches the symptom and the cause is the retry loop", lipgloss.NewStyle()),
+	}
+
+	var out bytes.Buffer
+	if err := writeFacts(&out, rows, labelWidth(rows), 40); err != nil {
+		t.Fatal(err)
+	}
+
+	lines := strings.Split(strings.TrimRight(out.String(), "\n"), "\n")
+	if len(lines) < 3 {
+		t.Fatalf("the note did not wrap at 40 columns:\n%s", out.String())
+	}
+
+	col := strings.Index(lines[1], "stop:")
+	for _, l := range lines[2:] {
+		if len(l)-len(strings.TrimLeft(l, " ")) != col {
+			t.Errorf("continuation %q does not start at column %d:\n%s", l, col, out.String())
+		}
+
+		if len(l) > 40 {
+			t.Errorf("continuation %q runs past 40 columns", l)
+		}
+	}
+}
+
+// assertOneColumn fails unless every line is `label: value` with its value,
+// past the marker cell, at one column.
+func assertOneColumn(t *testing.T, out string) {
+	t.Helper()
+
+	col := -1
+
+	for line := range strings.Lines(strings.TrimRight(out, "\n")) {
+		label, rest, ok := strings.Cut(strings.TrimSuffix(line, "\n"), ":")
+		if !ok || strings.TrimSpace(label) == "" {
+			t.Errorf("line is not `label: value`: %q\n%s", line, out)
+
+			continue
+		}
+
+		lead := len([]rune(rest)) - len([]rune(strings.TrimLeft(rest, " ↗")))
+		at := len([]rune(label)) + 1 + lead
+
+		if col == -1 {
+			col = at
+		} else if at != col {
+			t.Errorf("value of %q starts at column %d, want %d:\n%s", strings.TrimSpace(label), at, col, out)
+		}
 	}
 }
 

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"slices"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
@@ -31,20 +32,59 @@ func writeRuns(v statusView, runs []*state.Run, gates [][]gate, head *shipment, 
 		return ui.JSON(v.w, out)
 	}
 
+	limit := ui.Width(v.w)
+
 	if head != nil {
-		if err := writeReport(v.w, head.facts(linksFor(v.w, v.plain).on), nil); err != nil {
-			return err
-		}
+		return writeRunsUnder(v.w, head.facts(linksFor(v.w, v.plain).on), runs, gates, showRoot, agent, now, limit)
 	}
 
 	for i, r := range runs {
-		if i > 0 || head != nil {
+		if i > 0 {
 			fmt.Fprintln(v.w)
 		}
 
-		runRows(v.w, r, runView{
-			gates: gates[i], showRoot: showRoot, agent: agent, now: now, limit: ui.Width(v.w), headed: head != nil,
-		})
+		runRows(v.w, r, runView{gates: gates[i], showRoot: showRoot, agent: agent, now: now, limit: limit})
+	}
+
+	return nil
+}
+
+// writeRunsUnder prints the facts head and each run's rows as one table, every
+// value in one column, so a yaml fence colors the block as one mapping. The
+// first run goes on under the head; each later one follows a blank line.
+func writeRunsUnder(w io.Writer, head []fact, runs []*state.Run, gates [][]gate, showRoot bool, agent string,
+	now time.Time, limit int,
+) error {
+	blocks := make([][]fact, max(1, len(runs)))
+	for i, r := range runs {
+		blocks[i] = runFacts(r, runView{gates: gates[i], showRoot: showRoot, agent: agent, now: now, headed: true})
+	}
+
+	// the plan phase row takes the key `plan`, so the plan file's row names itself
+	head = slices.Clone(head)
+	if len(runs) > 0 {
+		for i := range head {
+			if head[i].label == "plan" {
+				head[i].label = "plan file"
+			}
+		}
+	}
+
+	blocks[0] = slices.Concat(head, blocks[0])
+
+	width := 0
+	for _, b := range blocks {
+		width = max(width, labelWidth(b))
+	}
+
+	for i, b := range blocks {
+		if i > 0 {
+			fmt.Fprintln(w)
+		}
+
+		if err := writeFacts(w, b, width, limit); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -83,41 +123,55 @@ type runView struct {
 	headed   bool // a shipment block above holds the task and url rows
 }
 
-// runRows prints one run, the task's gates under ship when it has them;
-// every run block, `f10 state show` included, prints through it.
+// runRows prints one run in the headless colon-less shape; every run block
+// without a facts head, `f10 state show` included, prints through it.
 func runRows(w io.Writer, r *state.Run, v runView) {
+	for _, f := range runFacts(r, v) {
+		headerRow(w, f.label, f.value, v.limit, f.style)
+	}
+}
+
+// runFacts is a run's rows as data, each styled by its status, the task's
+// gates under ship when it has them.
+func runFacts(r *state.Run, v runView) []fact {
 	plain := lipgloss.NewStyle()
 	faint := lipgloss.NewStyle().Faint(true)
 
+	var rows []fact
+
+	add := func(label, value string, style lipgloss.Style) {
+		rows = append(rows, runFact(label, value, style))
+	}
+
 	if !v.headed {
-		headerRow(w, "task", textx.OrDash(r.Task), v.limit, plain)
-		headerRow(w, "url", textx.OrDash(r.URL), v.limit, plain)
+		add("task", textx.OrDash(r.Task), plain)
+		add("url", textx.OrDash(r.URL), plain)
 	}
 
 	if v.agent != "" {
-		headerRow(w, "agent", v.agent, v.limit, faint)
+		add("agent", v.agent, faint)
 	}
 
 	if v.showRoot {
-		headerRow(w, "root", textx.OrDash(r.Root), v.limit, faint)
+		add("root", textx.OrDash(r.Root), faint)
 	}
 
 	for _, p := range state.Phases {
-		headerRow(w, p, r.PhaseText(p), v.limit, statusStyle(r.Status(p)))
+		add(p, r.PhaseText(p), statusStyle(r.Status(p)))
 	}
 
 	for _, g := range v.gates {
-		headerRow(w, "  "+g.shown(), g.text(), v.limit, statusStyle(g.style()))
+		add("  "+g.shown(), g.text(), statusStyle(g.style()))
 	}
 
 	for _, kv := range [][2]string{{"note", r.Note}, {"next", r.Next}, {"ask", r.Ask}, {"wait", r.Wait}} {
 		if kv[1] != "" {
-			headerRow(w, kv[0], kv[1], v.limit, plain)
+			add(kv[0], kv[1], plain)
 		}
 	}
 
 	if final := r.FinalShown(); final != "" {
-		headerRow(w, "final", final, v.limit, faint)
+		add("final", final, faint)
 	}
 
 	age := "unknown"
@@ -129,7 +183,13 @@ func runRows(w io.Writer, r *state.Run, v runView) {
 		age += " (stale)"
 	}
 
-	headerRow(w, "updated", age, v.limit, faint)
+	add("updated", age, faint)
+
+	return rows
+}
+
+func runFact(label, value string, style lipgloss.Style) fact {
+	return fact{label: label, value: value, run: true, style: style}
 }
 
 // statusStyle is the badge's palette: shape first, color second, so the

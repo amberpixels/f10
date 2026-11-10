@@ -312,21 +312,22 @@ func (fb fallback) render(w io.Writer, limit int, link bool) {
 	plain := lipgloss.NewStyle()
 	faint := lipgloss.NewStyle().Faint(true)
 
+	var rows []fact
 	if fb.Shipment != nil {
-		_ = writeReport(w, fb.Shipment.facts(link), nil)
-
-		fmt.Fprintln(w)
+		rows = fb.Shipment.facts(link)
 	}
 
-	headerRow(w, "run", "none for "+fb.Task+" in "+fb.Root, limit, faint)
+	rows = append(rows, runFact("run", "none for "+fb.Task+" in "+fb.Root, faint))
 
 	for _, r := range fb.Others {
-		headerRow(w, "agent", textx.OrDash(r.Task)+" · "+currentPhase(r), limit, plain)
+		rows = append(rows, runFact("agent", textx.OrDash(r.Task)+" · "+currentPhase(r), plain))
 	}
 
 	if fb.PRState != "" {
-		headerRow(w, "pr state", fb.PRState, limit, plain)
+		rows = append(rows, runFact("pr state", fb.PRState, plain))
 	}
+
+	_ = writeFacts(w, rows, labelWidth(rows), limit)
 }
 
 // writeTaskRows prints task rows as a tree, headed by parent unless the
