@@ -19,6 +19,8 @@ var (
 )
 
 func TestDeriveFixtures(t *testing.T) {
+	t.Parallel()
+
 	paths, err := filepath.Glob("testdata/derive/*.facts.json")
 	if err != nil || len(paths) == 0 {
 		t.Fatalf("no fixtures: %v", err)
@@ -66,6 +68,8 @@ func TestDeriveFixtures(t *testing.T) {
 
 // A board is the same whatever order the facts came in.
 func TestDeriveIsStable(t *testing.T) {
+	t.Parallel()
+
 	raw, err := os.ReadFile("testdata/derive/next-ranked.facts.json")
 	if err != nil {
 		t.Fatal(err)
@@ -92,6 +96,8 @@ func TestDeriveIsStable(t *testing.T) {
 // Nothing in a fixture or a derived board names f10, outside the commands
 // a next action spells.
 func TestFixturesNameNothing(t *testing.T) {
+	t.Parallel()
+
 	paths, _ := filepath.Glob("testdata/derive/*.json")
 
 	for _, path := range paths {

@@ -92,6 +92,8 @@ func feedFacts() Facts {
 }
 
 func TestDeriveFeed(t *testing.T) {
+	t.Parallel()
+
 	b := DeriveFeed(feedFacts(), feedNow, feedToday)
 
 	type want struct{ group, from, summary, owes string }
@@ -165,6 +167,8 @@ func TestDeriveFeed(t *testing.T) {
 // A morning with nothing yet today falls back to the last working day;
 // one thing today keeps today.
 func TestChooseWindow(t *testing.T) {
+	t.Parallel()
+
 	quiet := Facts{Activity: &forge.Activity{Requests: []forge.Touched{
 		touched(9, "FT-9", "FT-9/a", forge.Open, longAgo, commitEvent(hourFriday(9), "friday")),
 	}}}
@@ -187,6 +191,8 @@ func TestChooseWindow(t *testing.T) {
 
 // A local-only checkout's feed is its branches committed in the window.
 func TestDeriveFeedTips(t *testing.T) {
+	t.Parallel()
+
 	f := Facts{Prefix: "FT", Tips: []Tip{{Branch: "FT-4/x", At: hourToday(2)}, {Branch: "old", At: longAgo}}}
 
 	b := DeriveFeed(f, feedNow, feedToday)
@@ -228,6 +234,8 @@ func golden(t *testing.T, path string, v any) {
 // Every earlier request of a task is listed by how it relates to the
 // latest: merged before it opened, still open beside it, closed unmerged.
 func TestDeriveFeedRelated(t *testing.T) {
+	t.Parallel()
+
 	f := Facts{
 		Prefix: "FT",
 		Activity: &forge.Activity{Requests: []forge.Touched{
@@ -260,6 +268,8 @@ func TestDeriveFeedRelated(t *testing.T) {
 // A task's requests make one row however they relate; only a request
 // closed with nothing after it keeps abandoned.
 func TestDeriveFeedOneRowPerTask(t *testing.T) {
+	t.Parallel()
+
 	merged := func(n int, head string, created, at time.Time) forge.Touched {
 		r := touched(n, "FT-0: part", head, forge.Merged, created, forge.Event{Kind: forge.EventMerged, At: at})
 		r.MergedAt = at
@@ -344,6 +354,8 @@ func TestDeriveFeedOneRowPerTask(t *testing.T) {
 // A review comment this morning makes no row, so the default still falls
 // back to the last working day.
 func TestChooseWindowIgnoresRowlessActivity(t *testing.T) {
+	t.Parallel()
+
 	f := Facts{Activity: &forge.Activity{Requests: []forge.Touched{
 		touched(9, "FT-9", "FT-9/a", forge.Open, longAgo,
 			commitEvent(hourFriday(9), "friday"),

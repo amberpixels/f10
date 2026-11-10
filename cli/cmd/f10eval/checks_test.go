@@ -22,6 +22,8 @@ func canned(t *testing.T) string {
 }
 
 func TestChecksOnACannedRun(t *testing.T) {
+	t.Parallel()
+
 	dir := canned(t)
 	s := Scenario{Task: "T-1", Verify: []string{"true"}}
 
@@ -44,6 +46,8 @@ func TestChecksOnACannedRun(t *testing.T) {
 }
 
 func TestChecksFailOnMissingArtifacts(t *testing.T) {
+	t.Parallel()
+
 	dir := canned(t)
 	s := Scenario{Task: "T-2", Verify: []string{"false"}}
 
@@ -55,6 +59,8 @@ func TestChecksFailOnMissingArtifacts(t *testing.T) {
 }
 
 func TestPlanCheckNamesWhatIsMissing(t *testing.T) {
+	t.Parallel()
+
 	dir := canned(t)
 	plan := filepath.Join(dir, ".f10", "plans", "T-1.md")
 
@@ -71,6 +77,8 @@ func TestPlanCheckNamesWhatIsMissing(t *testing.T) {
 }
 
 func TestCommitCheckSeesANewCommit(t *testing.T) {
+	t.Parallel()
+
 	dir := canned(t)
 
 	if out, err := exec.Command("git", "-C", dir, "commit", "-q", "--allow-empty", "-m", "work").
@@ -86,6 +94,8 @@ func TestCommitCheckSeesANewCommit(t *testing.T) {
 // The fixture's .f10/ stays out of its initial commit, as f10 keeps it
 // untracked in a stealth project.
 func TestPrepareKeepsF10Untracked(t *testing.T) {
+	t.Parallel()
+
 	dir := canned(t)
 
 	out, err := exec.Command("git", "-C", dir, "ls-files").Output()
@@ -100,6 +110,8 @@ func TestPrepareKeepsF10Untracked(t *testing.T) {
 
 // Every scenario in the repo loads, and names only checks that exist.
 func TestScenariosLoad(t *testing.T) {
+	t.Parallel()
+
 	list, err := loadScenarios(filepath.Join("..", "..", "..", "evals", "scenarios"), "")
 	if err != nil {
 		t.Fatal(err)
@@ -129,6 +141,8 @@ func TestScenariosLoad(t *testing.T) {
 // planted finds each defect by a finding inside its line range, and bounds
 // the findings outside every range. The canned round has main.go:3 and :40.
 func TestPlantedCheck(t *testing.T) {
+	t.Parallel()
+
 	dir := canned(t)
 	zero := 0
 
@@ -165,6 +179,8 @@ func TestPlantedCheck(t *testing.T) {
 // A scenario's change lands as a commit on the task's branch, so a review
 // run sees a diff against main.
 func TestApplyChange(t *testing.T) {
+	t.Parallel()
+
 	dir := canned(t)
 	patch := filepath.Join(t.TempDir(), "change.patch")
 
@@ -190,6 +206,8 @@ func TestApplyChange(t *testing.T) {
 // accept compares each command's stdout with what the scenario wants, and
 // fails a scenario that names none: verify alone passes on the fixture.
 func TestAcceptCheck(t *testing.T) {
+	t.Parallel()
+
 	dir := canned(t)
 
 	for _, c := range []struct {

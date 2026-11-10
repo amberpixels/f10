@@ -26,6 +26,8 @@ func write(t *testing.T, dir, session, body string) string {
 }
 
 func TestLoad(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	now := time.Now()
 	stamp := strconv.FormatInt(now.Unix(), 10)
@@ -82,6 +84,8 @@ func TestLoad(t *testing.T) {
 }
 
 func TestLoadMissing(t *testing.T) {
+	t.Parallel()
+
 	_, err := Load(filepath.Join(t.TempDir(), "nope.state"))
 	if !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("want ErrNotExist, got %v", err)
@@ -89,6 +93,8 @@ func TestLoadMissing(t *testing.T) {
 }
 
 func TestPathSanitizes(t *testing.T) {
+	t.Parallel()
+
 	got := filepath.Base(Path("/d", "a b/c:d.e-f"))
 	if got != "a_b_c_d.e-f.state" {
 		t.Errorf("Path = %q", got)
@@ -96,6 +102,8 @@ func TestPathSanitizes(t *testing.T) {
 }
 
 func TestList(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	now := time.Now()
 
@@ -130,6 +138,8 @@ func TestList(t *testing.T) {
 }
 
 func TestPhaseText(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		status, leaf, want string
 	}{
@@ -163,6 +173,8 @@ func TestPhaseText(t *testing.T) {
 // A declared pipeline survives a save and load, sets the final step, and a
 // new run forgets it.
 func TestPipelineRoundTrip(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	r := Fresh("pipe")
 
@@ -202,6 +214,8 @@ func TestPipelineRoundTrip(t *testing.T) {
 // A step the pipeline names twice is told apart by its place: a resumed judge
 // stays put, the place survives a save, and an undeclared leaf keeps it.
 func TestLeafPlace(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	r := Fresh("at")
 
@@ -281,6 +295,8 @@ func TestLeafPlace(t *testing.T) {
 // A ship run stopped by a judge verdict: the ask folds to one line and the
 // ship phase names the step it stopped at.
 func TestBlockedRunFacts(t *testing.T) {
+	t.Parallel()
+
 	r := Fresh("blocked")
 
 	for _, err := range []error{
@@ -308,6 +324,8 @@ func TestBlockedRunFacts(t *testing.T) {
 // bin/f10-state.sh render, the status line's bash reader, must draw the file
 // this package writes exactly as it drew the bash writer's.
 func TestRenderParity(t *testing.T) {
+	t.Parallel()
+
 	if runtime.GOOS == "windows" {
 		t.Skip("bash script")
 	}
@@ -361,6 +379,8 @@ func TestRenderParity(t *testing.T) {
 }
 
 func TestSetRejectsTypos(t *testing.T) {
+	t.Parallel()
+
 	r := Fresh("s")
 
 	for _, err := range []error{
@@ -379,6 +399,8 @@ func TestSetRejectsTypos(t *testing.T) {
 }
 
 func TestSetTakesPendingAsUpcoming(t *testing.T) {
+	t.Parallel()
+
 	r := Fresh("s")
 	r.Plan = "running"
 
@@ -392,6 +414,8 @@ func TestSetTakesPendingAsUpcoming(t *testing.T) {
 }
 
 func TestSaveFlattensAndRoundTrips(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	r := Fresh("s")
 	r.Root, r.Skill, r.Note = "/work/acme", "ship", "two\nlines"
@@ -422,6 +446,8 @@ func TestSaveFlattensAndRoundTrips(t *testing.T) {
 // phase, survives a stop, and is retired by a phase running again or a new
 // skill's seed.
 func TestDoneSignalRoundTripsAndRetires(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	r := Fresh("s")
 	r.Ship, r.Leaf = "partial", "pr"
@@ -467,6 +493,8 @@ func TestDoneSignalRoundTripsAndRetires(t *testing.T) {
 // written on, survives a restored stop, and is retired by a phase running
 // again; an unknown kind is refused.
 func TestStopKindRoundTripsAndRetires(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	r := Fresh("s")
 
@@ -511,6 +539,8 @@ func TestStopKindRoundTripsAndRetires(t *testing.T) {
 // session: the first skill is told, later prompts, --help and step-less
 // skills are not, and a compaction tells again only where the session had them.
 func TestInject(t *testing.T) {
+	t.Parallel()
+
 	if runtime.GOOS == "windows" {
 		t.Skip("bash script")
 	}
@@ -636,6 +666,8 @@ func TestInject(t *testing.T) {
 // A run seeded from a full task id names its task before fetch reports it,
 // so the board attaches the run to the task's row from the first moment.
 func TestSeedRecordsTheTask(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		skill, args, want string
 	}{
@@ -674,6 +706,8 @@ func TestSeedRecordsTheTask(t *testing.T) {
 // Plan then ship on an id whose prefix holds a digit keeps the plan phase,
 // as it does for a letter-only prefix.
 func TestSeedChainsADigitPrefix(t *testing.T) {
+	t.Parallel()
+
 	r := Fresh("s")
 	r.Seed(t.Context(), "plan", "K8S-12", "")
 	r.Plan = "done"
@@ -686,6 +720,8 @@ func TestSeedChainsADigitPrefix(t *testing.T) {
 
 // The open asks count on the status line, with a run and without one.
 func TestRenderCountsAsks(t *testing.T) {
+	t.Parallel()
+
 	if runtime.GOOS == "windows" {
 		t.Skip("bash script")
 	}
@@ -723,6 +759,8 @@ func TestRenderCountsAsks(t *testing.T) {
 // The status line sees a /model switch that no hook payload carries, so the
 // renderer keeps <session>.model current for lore.
 func TestRenderRecordsModel(t *testing.T) {
+	t.Parallel()
+
 	if runtime.GOOS == "windows" {
 		t.Skip("bash script")
 	}
@@ -754,6 +792,8 @@ func TestRenderRecordsModel(t *testing.T) {
 // A labelled pipeline records its steps bare and its labels beside them: a
 // label places a repeated entry, shows as the leaf, and survives a save.
 func TestPipelineLabels(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	r := Fresh("labels")
 

@@ -14,6 +14,8 @@ import (
 const module = "github.com/amberpixels/f10/cli/"
 
 func TestModuleFollowsTheTable(t *testing.T) {
+	t.Parallel()
+
 	statSources(t)
 
 	out, err := exec.CommandContext(t.Context(), "go", "list", "-f",
@@ -43,6 +45,8 @@ func TestModuleFollowsTheTable(t *testing.T) {
 }
 
 func TestCheckReportsAReverseImport(t *testing.T) {
+	t.Parallel()
+
 	table := []Rule{
 		{Prefix: "internal", Rank: 0, Peers: true},
 		{Prefix: "internal/svc", Rank: 2},

@@ -30,6 +30,8 @@ func storageWith(t *testing.T, fixture string) string {
 }
 
 func TestFindAbsentAndNonExecutable(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 
 	if d := Find(root, root); d != nil {
@@ -46,6 +48,8 @@ func TestFindAbsentAndNonExecutable(t *testing.T) {
 }
 
 func TestRunSucceeds(t *testing.T) {
+	t.Parallel()
+
 	root := storageWith(t, "ok-driver")
 
 	d := Find(root, root)
@@ -66,6 +70,8 @@ func TestRunSucceeds(t *testing.T) {
 // branch returns a name and never creates it: the one verb whose answer
 // f10 acts on with git rather than with a browser.
 func TestRunBranch(t *testing.T) {
+	t.Parallel()
+
 	root := storageWith(t, "ok-driver")
 
 	out, err := Find(root, root).Run(t.Context(), VerbBranch, "1042")
@@ -81,6 +87,8 @@ func TestRunBranch(t *testing.T) {
 // The reserved code is a normal answer, not a failure: a driver may offer
 // read without search.
 func TestRunUnsupportedVerb(t *testing.T) {
+	t.Parallel()
+
 	root := storageWith(t, "ok-driver")
 
 	for _, verb := range []string{VerbSearch, VerbChildren} {
@@ -94,6 +102,8 @@ func TestRunUnsupportedVerb(t *testing.T) {
 // A real failure carries the driver's own stderr, because the driver knows
 // why it failed and f10 does not.
 func TestRunFailureKeepsStderr(t *testing.T) {
+	t.Parallel()
+
 	root := storageWith(t, "failing-driver")
 
 	_, err := Find(root, root).Run(t.Context(), VerbRead, "22")
@@ -113,6 +123,8 @@ func TestRunFailureKeepsStderr(t *testing.T) {
 // A write verb reads the task from stdin and takes its properties as
 // flags; a warning on stderr comes back beside the answer.
 func TestRunInputCreate(t *testing.T) {
+	t.Parallel()
+
 	root := storageWith(t, "ok-driver")
 
 	out, warn, err := Find(
@@ -135,6 +147,8 @@ func TestRunInputCreate(t *testing.T) {
 // The reserved code and a hard failure classify for a write verb exactly as
 // for a read.
 func TestRunInputFailures(t *testing.T) {
+	t.Parallel()
+
 	_, _, err := Find(storageWith(t, "ok-driver"), t.TempDir()).RunInput(t.Context(), "# x\n", VerbSearch)
 	if !errors.Is(err, ErrUnsupported) {
 		t.Errorf("RunInput(declined) = %v, want ErrUnsupported", err)
@@ -149,6 +163,8 @@ func TestRunInputFailures(t *testing.T) {
 // Exit 4 marks a create as not written, keeping the driver's stderr as the
 // message; on any other verb it is an ordinary failure.
 func TestNotWrittenOnlyOnCreate(t *testing.T) {
+	t.Parallel()
+
 	d := Find(storageWith(t, "rejecting-driver"), t.TempDir())
 	want := `is not an option of "Tags"`
 
@@ -166,6 +182,8 @@ func TestNotWrittenOnlyOnCreate(t *testing.T) {
 // The vocabulary is ordered and case-insensitive; a word outside it has no
 // rank, so a caller can drop it with a warning rather than guess.
 func TestPriorityRank(t *testing.T) {
+	t.Parallel()
+
 	for value, want := range map[string]int{"urgent": 0, "High": 1, "medium": 2, "LOW": 3, "low\n": 3} {
 		if got, ok := PriorityRank(value); !ok || got != want {
 			t.Errorf("PriorityRank(%q) = %d, %v; want %d", value, got, ok, want)
@@ -192,6 +210,8 @@ func hanging(t *testing.T) *Driver {
 // A verb past its limit is ErrTimeout naming the driver, the verb and the
 // limit, returned long before the driver would have answered.
 func TestRunTimeout(t *testing.T) {
+	t.Parallel()
+
 	start := time.Now()
 
 	_, err := hanging(t).Run(t.Context(), VerbRead, "22")
@@ -210,6 +230,8 @@ func TestRunTimeout(t *testing.T) {
 
 // A write past its limit says it may have landed, since it is never retried.
 func TestRunInputTimeout(t *testing.T) {
+	t.Parallel()
+
 	_, _, err := hanging(t).RunInput(t.Context(), "# x\n", VerbCreate)
 	if !errors.Is(err, ErrTimeout) || !strings.Contains(err.Error(), "may still have reached the tracker") {
 		t.Errorf("RunInput(create) = %v, want ErrTimeout saying the write may have landed", err)
@@ -219,6 +241,8 @@ func TestRunInputTimeout(t *testing.T) {
 // A background child still holding stdout cannot keep a killed driver, or
 // one that already answered, from returning.
 func TestLeftoverChildDoesNotBlock(t *testing.T) {
+	t.Parallel()
+
 	start := time.Now()
 
 	if _, err := hanging(t).Run(t.Context(), VerbSearch, "x"); !errors.Is(err, ErrTimeout) {
@@ -240,6 +264,8 @@ func TestLeftoverChildDoesNotBlock(t *testing.T) {
 
 // Only the verb's own deadline is a timeout; a caller cancelling is not.
 func TestCancelledParentIsNotTimeout(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
@@ -252,6 +278,8 @@ func TestCancelledParentIsNotTimeout(t *testing.T) {
 // it left behind still held stdout: a write reported as timed out would be
 // retried into a duplicate.
 func TestAnswerBeforeTheLimitIsNotATimeout(t *testing.T) {
+	t.Parallel()
+
 	out, err := hanging(t).Run(t.Context(), VerbURL, "22")
 	if err != nil || out != "https://example.test/22" {
 		t.Errorf("Run(url) with its limit inside the wait for the child = %q, %v; want the url", out, err)

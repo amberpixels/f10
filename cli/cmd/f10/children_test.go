@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/seam"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/storage"
@@ -195,9 +196,9 @@ func TestChildrenDriverDeclines(t *testing.T) {
 		Facts:       []facts.Fact{{Key: "tracker.kind", Value: "Notion", Origin: facts.DeclaredFrontmatter("main")}},
 	}
 
-	shell.Capture = func(context.Context, string, string, ...string) (shell.Result, error) {
+	seam.Swap(t, &shell.Capture, func(context.Context, string, string, ...string) (shell.Result, error) {
 		return shell.Result{Code: 3}, nil
-	}
+	})
 
 	if _, err := stack.RawChildrenFor(
 		t.Context(),

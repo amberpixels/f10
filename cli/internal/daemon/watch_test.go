@@ -40,6 +40,8 @@ func waitFor(t *testing.T, what string, ok func() bool) {
 // A watched project gets a pass at once and again every WatchEvery, keeps
 // the daemon from idling out, and is dropped once a pass exits 7.
 func TestWatchRunsPassesUntilNothingIsLeft(t *testing.T) {
+	t.Parallel()
+
 	project := t.TempDir()
 	s := &Server{
 		Dir: runDir(t), Version: "v1", Child: shell, Pass: passScript,
@@ -90,6 +92,8 @@ func TestWatchRunsPassesUntilNothingIsLeft(t *testing.T) {
 // The watch list outlives the daemon: the next one goes on with the same
 // projects and environment, no client needed.
 func TestWatchListSurvivesARestart(t *testing.T) {
+	t.Parallel()
+
 	dir, project := runDir(t), t.TempDir()
 
 	first := &Server{Dir: dir, Version: "v1", Child: shell, Pass: passScript, WatchEvery: time.Hour}
@@ -134,6 +138,8 @@ func TestWatchListSurvivesARestart(t *testing.T) {
 // running one may have listed the project before the new task, and its
 // exit 7 must not drop the project unread.
 func TestWatchRegisteredDuringAPassGetsAnother(t *testing.T) {
+	t.Parallel()
+
 	project := t.TempDir()
 	if err := os.WriteFile(filepath.Join(project, "code"), []byte("7"), 0o600); err != nil {
 		t.Fatal(err)
@@ -183,6 +189,8 @@ func TestWatchRegisteredDuringAPassGetsAnother(t *testing.T) {
 
 // A project whose checkout is gone is dropped at its first failed pass.
 func TestWatchDropsAGoneCheckout(t *testing.T) {
+	t.Parallel()
+
 	s := &Server{Dir: runDir(t), Version: "v1", Child: shell, Pass: passScript, WatchEvery: time.Hour}
 	serve(t, s)
 

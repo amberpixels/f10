@@ -15,7 +15,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
-	"github.com/amberpixels/f10/cli/internal/frontmatter"
+	"github.com/amberpixels/f10/cli/internal/layout"
 )
 
 // The user's own files are the first layer under every project's, so a key
@@ -98,7 +98,7 @@ func ReadUserFile(dir, file string, cfg any) (string, bool, error) {
 		return path, false, err
 	}
 
-	block, _, ok := frontmatter.Split(data)
+	block, _, ok := layout.SplitFrontmatter(data)
 	if !ok {
 		return path, false, nil
 	}

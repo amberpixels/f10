@@ -5,8 +5,6 @@ import (
 	"slices"
 	"strings"
 	"unicode"
-
-	"github.com/amberpixels/f10/cli/internal/model"
 )
 
 // A Profile is what one step's agent runs on, `claude:opus:high`. An empty
@@ -42,7 +40,7 @@ type Kind struct {
 var Kinds = map[string]Kind{
 	DefaultKind: {
 		Efforts:      []string{"low", "medium", "high", "xhigh", "max"},
-		resolveModel: model.Resolve,
+		resolveModel: ResolveModel,
 		args: func(m, e string) []string {
 			var out []string
 			if m != "" {
@@ -252,7 +250,7 @@ func ParseRecorded(s string) Profile {
 // a full `claude-<family>-...` id cut to its family, anything else "".
 func toolFamily(m string) string {
 	lower := strings.ToLower(strings.TrimSpace(m))
-	if slices.Contains(model.Families, lower) {
+	if slices.Contains(ModelFamilies, lower) {
 		return lower
 	}
 
@@ -262,7 +260,7 @@ func toolFamily(m string) string {
 	}
 
 	family, _, _ := strings.Cut(rest, "-")
-	if slices.Contains(model.Families, family) {
+	if slices.Contains(ModelFamilies, family) {
 		return family
 	}
 

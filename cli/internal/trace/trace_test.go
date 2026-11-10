@@ -15,6 +15,8 @@ const fixtures = "testdata/trailers"
 // Every .msg in the fixture directory parses to its .json partner; a .msg
 // without one fails, since the pair is the spec's conformance suite.
 func TestParseFixtures(t *testing.T) {
+	t.Parallel()
+
 	msgs, err := filepath.Glob(filepath.Join(fixtures, "*.msg"))
 	if err != nil || len(msgs) == 0 {
 		t.Fatalf("fixtures: %v, %d files", err, len(msgs))
@@ -55,6 +57,8 @@ func TestParseFixtures(t *testing.T) {
 // Render then Parse is the identity for every fixture value that has a
 // single step, which is what one commit carries.
 func TestRenderRoundTrip(t *testing.T) {
+	t.Parallel()
+
 	goldens, _ := filepath.Glob(filepath.Join(fixtures, "*.json"))
 
 	for _, golden := range goldens {
@@ -84,6 +88,8 @@ func TestRenderRoundTrip(t *testing.T) {
 }
 
 func TestRenderBytes(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		in   Trailers
 		want string
@@ -107,6 +113,8 @@ func TestRenderBytes(t *testing.T) {
 }
 
 func TestRenderRefuses(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		in  Trailers
 		err error
@@ -127,6 +135,8 @@ func TestRenderRefuses(t *testing.T) {
 
 // Nothing that reaches the host names f10: not a fixture, not a rendered line.
 func TestNothingNamesF10(t *testing.T) {
+	t.Parallel()
+
 	files, _ := filepath.Glob(filepath.Join(fixtures, "*"))
 	bodies, _ := filepath.Glob(filepath.Join(stateFixtures, "*"))
 

@@ -9,6 +9,8 @@ import (
 )
 
 func TestScaffoldSections(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name        string
 		lay         *layout.Layout
@@ -170,6 +172,8 @@ func TestScaffoldSections(t *testing.T) {
 // run must read back as a declared fact the next one, with the sub-facts
 // intact. A renderer that drifts from the parsers fails here first.
 func TestScaffoldRoundTrip(t *testing.T) {
+	t.Parallel()
+
 	detected := &probe.Probes{
 		Host:   "github.com",
 		CLI:    probe.Signal{Value: "gh", Evidence: "well-known host github.com"},

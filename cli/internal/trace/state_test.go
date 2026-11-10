@@ -15,6 +15,8 @@ const stateFixtures = "testdata/state"
 // Every .md in the fixture directory parses to its .json partner; a
 // partner holding `null` means no state.
 func TestParseStateFixtures(t *testing.T) {
+	t.Parallel()
+
 	bodies, err := filepath.Glob(filepath.Join(stateFixtures, "*.md"))
 	if err != nil || len(bodies) == 0 {
 		t.Fatalf("fixtures: %v, %d files", err, len(bodies))
@@ -58,6 +60,8 @@ func TestParseStateFixtures(t *testing.T) {
 
 // RenderState then ParseState is the identity for every fixture state.
 func TestRenderStateRoundTrip(t *testing.T) {
+	t.Parallel()
+
 	goldens, _ := filepath.Glob(filepath.Join(stateFixtures, "*.json"))
 
 	for _, golden := range goldens {
@@ -87,6 +91,8 @@ func TestRenderStateRoundTrip(t *testing.T) {
 }
 
 func TestRenderStateBytes(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		in   State
 		want string
@@ -116,6 +122,8 @@ func TestRenderStateBytes(t *testing.T) {
 }
 
 func TestRenderStateRefuses(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		in  State
 		err error
@@ -136,6 +144,8 @@ func TestRenderStateRefuses(t *testing.T) {
 }
 
 func TestMerge(t *testing.T) {
+	t.Parallel()
+
 	prev := State{V: 1, Task: "GH-1", Step: "review", Round: 1, Open: 3, Asks: 1, After: "GH-0"}
 
 	cases := []struct {
@@ -172,6 +182,8 @@ func TestMerge(t *testing.T) {
 }
 
 func TestPutState(t *testing.T) {
+	t.Parallel()
+
 	pr := State{Task: "GH-1", Step: "pr"}
 	block := `<!-- state {"v":1,"task":"GH-1","step":"pr"} -->`
 
@@ -223,6 +235,8 @@ func TestPutState(t *testing.T) {
 }
 
 func TestCarryState(t *testing.T) {
+	t.Parallel()
+
 	held := "Old.\n\n<!-- state {\"v\":1,\"step\":\"judge\",\"round\":1} -->\n"
 	raw := `<!-- state {"v":1,"step":"judge","round":1} -->`
 
@@ -255,6 +269,8 @@ func TestCarryState(t *testing.T) {
 }
 
 func TestRewriteCarriesTheCounts(t *testing.T) {
+	t.Parallel()
+
 	body := "Adds the thing.\n\n<!-- state {\"v\":1,\"task\":\"GH-1\",\"step\":\"review\",\"round\":1,\"open\":2} -->\n"
 
 	got, err := Rewrite(body, Update{Step: "judge", Task: "GH-1", After: "GH-0"})
@@ -273,6 +289,8 @@ func TestRewriteCarriesTheCounts(t *testing.T) {
 }
 
 func TestStripState(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name string
 		body string

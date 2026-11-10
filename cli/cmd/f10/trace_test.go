@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/seam"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
@@ -184,9 +185,8 @@ func fakeHost(t *testing.T, cli, viewKey, editPrefix, view string) *ghFake {
 	t.Helper()
 
 	f := &ghFake{}
-	prev := shell.Capture
 
-	shell.Capture = func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
+	seam.Swap(t, &shell.Capture, func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
 		key := filepath.Base(name) + " " + strings.Join(args, " ")
 		f.calls = append(f.calls, key)
 
@@ -214,9 +214,7 @@ func fakeHost(t *testing.T, cli, viewKey, editPrefix, view string) *ghFake {
 		t.Fatalf("unscripted call: %q", key)
 
 		return shell.Result{}, nil
-	}
-
-	t.Cleanup(func() { shell.Capture = prev })
+	})
 
 	return f
 }

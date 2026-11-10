@@ -6,6 +6,8 @@ import (
 )
 
 func TestVersion(t *testing.T) {
+	t.Parallel()
+
 	stamped := func(version string, settings ...debug.BuildSetting) *debug.BuildInfo {
 		bi := &debug.BuildInfo{Settings: settings}
 		bi.Main.Version = version

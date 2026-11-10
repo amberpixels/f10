@@ -53,6 +53,8 @@ func jsonFields(typ reflect.Type) []string {
 }
 
 func TestSchemaMatchesTypes(t *testing.T) {
+	t.Parallel()
+
 	s := readSchema(t)
 
 	for name, typ := range map[string]reflect.Type{
@@ -99,6 +101,8 @@ func TestSchemaMatchesTypes(t *testing.T) {
 // Every derived board uses only declared keys and carries every required
 // one, at every level.
 func TestFixturesFitSchema(t *testing.T) {
+	t.Parallel()
+
 	s := readSchema(t)
 
 	paths, _ := filepath.Glob("testdata/derive/*.board.json")

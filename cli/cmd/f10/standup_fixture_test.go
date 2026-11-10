@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/seam"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/standup"
 )
@@ -107,9 +108,8 @@ func TestRecordStandupFixture(t *testing.T) {
 	fx := standupFixture{Since: since, Prefix: parts[3], Host: "gh", Calls: map[string]fixtureCall{}}
 
 	prevExec, prevCapture := gitx.Exec, shell.Capture
-	t.Cleanup(func() { gitx.Exec, shell.Capture = prevExec, prevCapture })
 
-	gitx.Exec = func(ctx context.Context, dir string, args ...string) (string, error) {
+	seam.Swap(t, &gitx.Exec, func(ctx context.Context, dir string, args ...string) (string, error) {
 		out, err := prevExec(ctx, dir, args...)
 
 		res := fixtureCall{Stdout: out}
@@ -120,14 +120,14 @@ func TestRecordStandupFixture(t *testing.T) {
 		fx.Calls["git "+strings.Join(args, " ")] = res
 
 		return out, err
-	}
+	})
 
-	shell.Capture = func(ctx context.Context, dir, name string, args ...string) (shell.Result, error) {
+	seam.Swap(t, &shell.Capture, func(ctx context.Context, dir, name string, args ...string) (shell.Result, error) {
 		res, err := prevCapture(ctx, dir, name, args...)
 		fx.Calls[filepath.Base(name)+" "+strings.Join(args, " ")] = fixtureCall(res)
 
 		return res, err
-	}
+	})
 
 	fx.Expect = classes(t, fx, parts[0])
 

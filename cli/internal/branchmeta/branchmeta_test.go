@@ -51,6 +51,8 @@ func writes(t *testing.T, ctx context.Context, dir string) {
 }
 
 func TestGitRoundTrip(t *testing.T) {
+	t.Parallel()
+
 	ctx, dir := t.Context(), gitRepo(t)
 	writes(t, ctx, dir)
 
@@ -111,6 +113,8 @@ func TestGitRoundTrip(t *testing.T) {
 
 // Memory answers what git answers for the same writes.
 func TestMemoryMatchesGit(t *testing.T) {
+	t.Parallel()
+
 	ctx, dir := t.Context(), gitRepo(t)
 	writes(t, ctx, dir)
 
@@ -141,6 +145,8 @@ func TestMemoryMatchesGit(t *testing.T) {
 }
 
 func TestSplit(t *testing.T) {
+	t.Parallel()
+
 	for name, want := range map[string]struct {
 		branch string
 		key    branchmeta.Key

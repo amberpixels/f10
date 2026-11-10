@@ -14,6 +14,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/reviews"
+	"github.com/amberpixels/f10/cli/internal/seam"
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
@@ -338,13 +339,11 @@ func TestReviewGlabSpelling(t *testing.T) {
 func TestReviewRefusesOnTheDeclaration(t *testing.T) {
 	isolateEnv(t)
 
-	prev := shell.Capture
-	shell.Capture = func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
+	seam.Swap(t, &shell.Capture, func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
 		t.Errorf("host CLI reached before the refusal: %s %s", name, strings.Join(args, " "))
 
 		return shell.Result{}, nil
-	}
-	t.Cleanup(func() { shell.Capture = prev })
+	})
 
 	cases := []struct{ name, front, review, want string }{
 		{name: "no Review section", review: "", want: "declares no remote review"},

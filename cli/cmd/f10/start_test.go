@@ -29,6 +29,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/runplan"
+	"github.com/amberpixels/f10/cli/internal/seam"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/start"
@@ -89,12 +90,12 @@ func newFakes(t *testing.T) *fakes {
 
 	t.Cleanup(func() { launch.EnterRetry, launch.EnterPoll = prevRetry, prevPoll })
 
-	prevExec, prevCapture, prevHas, prevProject := gitx.Exec, shell.Capture, shell.Has, target.ProjectOf
+	prevProject := target.ProjectOf
 
 	// task refs need the project from git, which these fakes do not script
 	target.ProjectOf = func(context.Context, string) string { return "" }
 
-	gitx.Exec = func(_ context.Context, _ string, args ...string) (string, error) {
+	seam.Swap(t, &gitx.Exec, func(_ context.Context, _ string, args ...string) (string, error) {
 		res := f.answer("git " + strings.Join(args, " "))
 		if res.Code != 0 {
 			return "", &gitx.ExitError{
@@ -103,21 +104,21 @@ func newFakes(t *testing.T) *fakes {
 		}
 
 		return strings.TrimSpace(res.Stdout), nil
-	}
+	})
 
-	shell.Capture = func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
+	seam.Swap(t, &shell.Capture, func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
 		args = withoutTestGrants(name, args)
 		if res, ok := f.argvLaunch(filepath.Base(name), args); ok {
 			return res, nil
 		}
 
 		return f.answer(filepath.Base(name) + " " + strings.Join(args, " ")), nil
-	}
+	})
 
-	shell.Has = func(name string) bool { return f.has[name] }
+	seam.Swap(t, &shell.Has, func(name string) bool { return f.has[name] })
 
 	t.Cleanup(func() {
-		gitx.Exec, shell.Capture, shell.Has, target.ProjectOf = prevExec, prevCapture, prevHas, prevProject
+		target.ProjectOf = prevProject
 	})
 	t.Setenv("HERDR_ENV", "1")
 

@@ -13,6 +13,8 @@ import (
 // A round-two file's settled prior blocks are not open findings; one in a
 // status that takes a verdict is.
 func TestReadRootCountsOpenFindings(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	dir := filepath.Join(root, "reviews", "FT-1")
 

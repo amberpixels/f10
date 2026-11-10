@@ -1,4 +1,4 @@
-package model
+package agentctl
 
 import "testing"
 
@@ -30,7 +30,7 @@ func TestResolve(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.raw, func(t *testing.T) {
-			value, note, ok := Resolve(tt.raw)
+			value, note, ok := ResolveModel(tt.raw)
 			if value != tt.value || note != tt.note || ok != tt.ok {
 				t.Errorf("Resolve(%q) = %q, %q, %v; want %q, %q, %v",
 					tt.raw, value, note, ok, tt.value, tt.note, tt.ok)
@@ -40,10 +40,10 @@ func TestResolve(t *testing.T) {
 }
 
 func TestNearestTie(t *testing.T) {
-	saved := Families
-	t.Cleanup(func() { Families = saved })
+	saved := ModelFamilies
+	t.Cleanup(func() { ModelFamilies = saved })
 
-	Families = []string{"abcd", "abce"}
+	ModelFamilies = []string{"abcd", "abce"}
 
 	if f, ok := nearest("abc"); ok {
 		t.Errorf("nearest(abc) = %q; want a tie, no match", f)

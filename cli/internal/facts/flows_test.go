@@ -9,6 +9,8 @@ import (
 )
 
 func TestDecodeFlows(t *testing.T) {
+	t.Parallel()
+
 	d, err := decodeDeclared([]byte("flows:\n" +
 		"  default: plan judge implement cleanup:comments,prose pr → review:ci pr\n" +
 		"  local: [plan, implement, 'review:local', commit]\n"))
@@ -39,6 +41,8 @@ func TestDecodeFlows(t *testing.T) {
 }
 
 func TestCheckFlow(t *testing.T) {
+	t.Parallel()
+
 	for name, tc := range map[string]struct {
 		flow Flow
 		want string
@@ -72,6 +76,8 @@ func TestCheckFlow(t *testing.T) {
 }
 
 func TestFlowLabels(t *testing.T) {
+	t.Parallel()
+
 	for name, tc := range map[string]struct {
 		flow Flow
 		want string
@@ -119,6 +125,8 @@ func TestFlowLabels(t *testing.T) {
 }
 
 func TestReviewBy(t *testing.T) {
+	t.Parallel()
+
 	for arg, want := range map[string]By{
 		"":          {Local: true},
 		"local":     {Local: true},
@@ -146,6 +154,8 @@ func TestReviewBy(t *testing.T) {
 // An optional CI review runs only with a remote reviewer and something
 // published before it; a required one is never touched.
 func TestBySettle(t *testing.T) {
+	t.Parallel()
+
 	opt := By{Local: true, CI: true, CIOptional: true}
 
 	for name, tc := range map[string]struct {
@@ -169,6 +179,8 @@ func TestBySettle(t *testing.T) {
 // A required CI review that cannot run warns: no remote reviewer, or nothing
 // published before it. Neither is an error. An optional one never warns.
 func TestRemoteReviewWarnings(t *testing.T) {
+	t.Parallel()
+
 	const review = "review:\n  reviewer: bot `claude[bot]`\n  arrives: issue comment\n  trigger: automatic\n" +
 		"  done: posted, reaction `eyes`\n"
 
@@ -206,6 +218,8 @@ func TestRemoteReviewWarnings(t *testing.T) {
 }
 
 func TestFlowNames(t *testing.T) {
+	t.Parallel()
+
 	e := &Effective{Flows: map[string]flow.Flow{"local": nil, "default": nil, "direct": nil}}
 	if got := strings.Join(e.FlowNames(), " "); got != "default direct local" {
 		t.Errorf("names = %q", got)

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/seam"
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
@@ -18,8 +19,7 @@ func fake(t *testing.T, res ...shell.Result) *[]string {
 
 	var calls []string
 
-	prev := shell.Capture
-	shell.Capture = func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
+	seam.Swap(t, &shell.Capture, func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
 		calls = append(calls, name+" "+strings.Join(args, " "))
 
 		next := res[0]
@@ -28,18 +28,13 @@ func fake(t *testing.T, res ...shell.Result) *[]string {
 		}
 
 		return next, nil
-	}
-
-	t.Cleanup(func() { shell.Capture = prev })
+	})
 
 	return &calls
 }
 
 func TestAvailable(t *testing.T) {
-	prev := shell.Has
-	shell.Has = func(string) bool { return true }
-
-	t.Cleanup(func() { shell.Has = prev })
+	seam.Swap(t, &shell.Has, func(string) bool { return true })
 
 	t.Setenv("HERDR_ENV", "")
 
@@ -53,7 +48,7 @@ func TestAvailable(t *testing.T) {
 		t.Errorf("Available inside herdr = %v", err)
 	}
 
-	shell.Has = func(string) bool { return false }
+	seam.Swap(t, &shell.Has, func(string) bool { return false })
 
 	if err := Available(); !errors.Is(err, ErrNotInside) {
 		t.Errorf("Available without the binary = %v, want ErrNotInside", err)

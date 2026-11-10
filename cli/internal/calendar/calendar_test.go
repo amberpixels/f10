@@ -16,6 +16,8 @@ func monFri() (Workdays, error) { return DefaultWorkdays(), nil }
 // Each form takes only its own spellings, so sharing one parser widens no
 // command's --since.
 func TestParseForms(t *testing.T) {
+	t.Parallel()
+
 	now := local(10, 14, 9) // a Wednesday
 
 	took := map[Forms][]string{
@@ -47,6 +49,8 @@ func TestParseForms(t *testing.T) {
 }
 
 func TestParseInstants(t *testing.T) {
+	t.Parallel()
+
 	now := local(10, 14, 9)
 
 	p, _ := Parse("2026-10-14T09:30:00+03:00", now, Instants, nil)
@@ -61,6 +65,8 @@ func TestParseInstants(t *testing.T) {
 
 // Only last-workday reads the working days.
 func TestParseReadsWorkdaysOnlyForLastWorkday(t *testing.T) {
+	t.Parallel()
+
 	read := 0
 	count := func() (Workdays, error) { read++; return DefaultWorkdays(), nil }
 
@@ -77,6 +83,8 @@ func TestParseReadsWorkdaysOnlyForLastWorkday(t *testing.T) {
 
 // 2026-10-12 is a Monday; last week starts on the 5th whatever today is.
 func TestLastWeekStart(t *testing.T) {
+	t.Parallel()
+
 	for _, now := range []time.Time{local(10, 12, 9), local(10, 14, 9), local(10, 18, 9)} {
 		if got := LastWeekStart(now); !got.Equal(local(10, 5, 0)) {
 			t.Errorf("LastWeekStart(%v) = %v, want Monday the 5th", now, got)
@@ -85,6 +93,8 @@ func TestLastWeekStart(t *testing.T) {
 }
 
 func TestLastWorkday(t *testing.T) {
+	t.Parallel()
+
 	sunThu := Workdays{true, true, true, true, true, false, false}
 
 	for _, c := range []struct {
@@ -103,6 +113,8 @@ func TestLastWorkday(t *testing.T) {
 }
 
 func TestLastActiveWorkday(t *testing.T) {
+	t.Parallel()
+
 	monday := local(10, 12, 9)
 	weekend := DefaultWorkdays()
 	weekend[time.Saturday] = true

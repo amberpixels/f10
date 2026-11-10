@@ -10,6 +10,8 @@ import (
 // Two writers changing different fields of one session never lose each
 // other's change: the hooks and f10 state run in separate processes.
 func TestUpdateKeepsConcurrentChanges(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 
 	const rounds = 200
@@ -54,6 +56,8 @@ func writeField(t *testing.T, dir, field, value string) {
 // A clear waits for a writer holding the session's lock, so the writer's
 // save lands first and the clear removes it.
 func TestClearWaitsForAWriter(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	saving, cleared := make(chan struct{}), make(chan struct{})
 

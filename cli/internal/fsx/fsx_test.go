@@ -7,6 +7,8 @@ import (
 )
 
 func TestWriteFile(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	path := filepath.Join(dir, "run.state")
 
@@ -37,6 +39,8 @@ func TestWriteFile(t *testing.T) {
 }
 
 func TestWriteFileMissingDir(t *testing.T) {
+	t.Parallel()
+
 	if err := WriteFile(filepath.Join(t.TempDir(), "no", "such"), nil, 0o600); err == nil {
 		t.Error("a missing directory wrote")
 	}

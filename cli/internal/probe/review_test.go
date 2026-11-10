@@ -51,6 +51,8 @@ jobs:
 `
 
 func TestParseWorkflow(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name string
 		yaml string
@@ -91,6 +93,8 @@ func TestParseWorkflow(t *testing.T) {
 }
 
 func TestReviewWorkflowPicksTheReviewFile(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	dir := filepath.Join(root, ".github", "workflows")
 
@@ -121,6 +125,8 @@ func TestReviewWorkflowPicksTheReviewFile(t *testing.T) {
 // that fires on pull_request, and the review still wins. With only the
 // assistant, it stands as the manual review.
 func TestReviewWorkflowPrefersTheAutomaticOne(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	dir := filepath.Join(root, ".github", "workflows")
 

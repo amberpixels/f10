@@ -11,6 +11,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/branchmeta/branchmetatest"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/seam"
 )
 
 func TestParse(t *testing.T) {
@@ -217,16 +218,13 @@ func TestFromBranchReadsTheLink(t *testing.T) {
 func fakeGit(t *testing.T, answers map[string]string) {
 	t.Helper()
 
-	prev := gitx.Exec
-	gitx.Exec = func(_ context.Context, _ string, args ...string) (string, error) {
+	seam.Swap(t, &gitx.Exec, func(_ context.Context, _ string, args ...string) (string, error) {
 		if out, ok := answers[strings.Join(args, " ")]; ok {
 			return out, nil
 		}
 
 		return "", &gitx.ExitError{Args: args, Code: 1}
-	}
-
-	t.Cleanup(func() { gitx.Exec = prev })
+	})
 }
 
 // A bundle's branch answers with every member: from its recorded link and

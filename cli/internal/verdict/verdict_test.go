@@ -6,6 +6,8 @@ import (
 )
 
 func TestParse(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name string
 		text string
@@ -79,6 +81,8 @@ verdict: stop would be wrong here.
 }
 
 func TestParseErrors(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name string
 		text string

@@ -11,6 +11,8 @@ import (
 // capitalized `Ask`, the off-vocabulary `asked` and `ask+reply`, and prior
 // blocks with and without a verdict.
 func TestRoundsOnTheEdgeFixture(t *testing.T) {
+	t.Parallel()
+
 	dir := filepath.Join("testdata", "edge")
 
 	st, err := Rounds(dir, []string{filepath.Join(dir, "1.md")})
@@ -35,6 +37,8 @@ func TestRoundsOnTheEdgeFixture(t *testing.T) {
 }
 
 func TestTally(t *testing.T) {
+	t.Parallel()
+
 	read := func(name string) *File {
 		raw, err := os.ReadFile(filepath.Join("testdata", "edge", name))
 		if err != nil {

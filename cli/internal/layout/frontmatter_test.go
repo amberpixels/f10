@@ -1,4 +1,4 @@
-package frontmatter
+package layout
 
 import "testing"
 
@@ -17,7 +17,7 @@ func TestSplit(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			block, body, ok := Split([]byte(c.in))
+			block, body, ok := SplitFrontmatter([]byte(c.in))
 			if string(block) != c.block || string(body) != c.body || ok != c.ok {
 				t.Errorf("Split = %q, %q, %v; want %q, %q, %v", block, body, ok, c.block, c.body, c.ok)
 			}

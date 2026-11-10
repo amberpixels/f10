@@ -26,6 +26,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/seam"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -194,7 +195,7 @@ func captureBodyEdits(t *testing.T) *string {
 	var last string
 
 	prev := shell.Capture
-	shell.Capture = func(ctx context.Context, dir, name string, args ...string) (shell.Result, error) {
+	seam.Swap(t, &shell.Capture, func(ctx context.Context, dir, name string, args ...string) (shell.Result, error) {
 		if name == "gh" && len(args) > 2 && args[0] == "pr" && args[1] == "edit" {
 			data, err := os.ReadFile(args[len(args)-1])
 			if err != nil {
@@ -205,9 +206,7 @@ func captureBodyEdits(t *testing.T) *string {
 		}
 
 		return prev(ctx, dir, name, args...)
-	}
-
-	t.Cleanup(func() { shell.Capture = prev })
+	})
 
 	return &last
 }

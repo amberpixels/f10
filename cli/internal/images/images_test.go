@@ -14,6 +14,8 @@ import (
 )
 
 func TestLinks(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name, doc string
 		want      []string
@@ -50,6 +52,8 @@ func TestLinks(t *testing.T) {
 var png = []byte("\x89PNG\r\n\x1a\n0000")
 
 func TestDownload(t *testing.T) {
+	t.Parallel()
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/typed":
@@ -119,6 +123,8 @@ func TestDownload(t *testing.T) {
 }
 
 func TestDownloadRefusesAnOversizedBody(t *testing.T) {
+	t.Parallel()
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
 		_, _ = w.Write(make([]byte, maxBytes+1))
@@ -136,6 +142,8 @@ func TestDownloadRefusesAnOversizedBody(t *testing.T) {
 }
 
 func TestDownloadCapsTheCount(t *testing.T) {
+	t.Parallel()
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write(png)
 	}))
@@ -159,6 +167,8 @@ func TestDownloadCapsTheCount(t *testing.T) {
 
 // The default client never dials a local address, whatever the url says.
 func TestDownloadRefusesLocalAddresses(t *testing.T) {
+	t.Parallel()
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write(png)
 	}))
@@ -175,6 +185,8 @@ func TestDownloadRefusesLocalAddresses(t *testing.T) {
 }
 
 func TestFooter(t *testing.T) {
+	t.Parallel()
+
 	if got := Footer(nil); got != "" {
 		t.Errorf("Footer(nil) = %q, want none", got)
 	}

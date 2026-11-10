@@ -18,6 +18,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
+	"github.com/amberpixels/f10/cli/internal/seam"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
@@ -262,9 +263,8 @@ func TestRecordBoardFixture(t *testing.T) {
 	sub := func(s string) string { return strings.ReplaceAll(s, root, "{root}") }
 
 	prevExec, prevCapture := gitx.Exec, shell.Capture
-	t.Cleanup(func() { gitx.Exec, shell.Capture = prevExec, prevCapture })
 
-	gitx.Exec = func(ctx context.Context, dir string, args ...string) (string, error) {
+	seam.Swap(t, &gitx.Exec, func(ctx context.Context, dir string, args ...string) (string, error) {
 		out, err := prevExec(ctx, dir, args...)
 
 		res := fixtureCall{Stdout: sub(out)}
@@ -275,16 +275,16 @@ func TestRecordBoardFixture(t *testing.T) {
 		fx.Calls[sub("git "+strings.Join(args, " "))] = res
 
 		return out, err
-	}
+	})
 
-	shell.Capture = func(ctx context.Context, dir, name string, args ...string) (shell.Result, error) {
+	seam.Swap(t, &shell.Capture, func(ctx context.Context, dir, name string, args ...string) (shell.Result, error) {
 		res, err := prevCapture(ctx, dir, name, args...)
 		fx.Calls[sub(filepath.Base(name)+" "+strings.Join(args, " "))] = fixtureCall{
 			Stdout: sub(res.Stdout), Stderr: sub(res.Stderr), Code: res.Code,
 		}
 
 		return res, err
-	}
+	})
 
 	h := forge.Host{Name: "gh", Dir: root}
 	in := lookaround.Inputs{

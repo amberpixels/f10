@@ -9,6 +9,8 @@ import (
 )
 
 func TestHostOf(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct{ url, want string }{
 		{url: "git@github.com:amberpixels/f10.git", want: "github.com"},
 		{url: "https://github.com/amberpixels/f10.git", want: "github.com"},
@@ -25,6 +27,8 @@ func TestHostOf(t *testing.T) {
 }
 
 func TestKnowsHost(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 
 	// gh shape: hosts are top-level keys
@@ -56,6 +60,8 @@ func TestKnowsHost(t *testing.T) {
 }
 
 func TestPlanNamesMostRecentFirst(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	base := time.Now().Add(-time.Hour)
 
@@ -86,6 +92,8 @@ func writeFile(t *testing.T, path, body string) {
 }
 
 func TestVerifySignals(t *testing.T) {
+	t.Parallel()
+
 	goMod := []Signal{{Value: "Go", Evidence: "go.mod"}}
 	cases := []struct {
 		name  string

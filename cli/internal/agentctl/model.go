@@ -1,25 +1,26 @@
-// Package model reads a claude model name as typed: a family, a family and a
+// A claude model name is read as typed: a family, a family and a
 // version, or a full id. Only the families are known here; versions change
 // too often to keep a list, so a wrong one is passed on for claude to refuse.
-package model
+
+package agentctl
 
 import (
 	"strings"
 	"unicode"
 )
 
-// Families are the claude model families --model may name. A full
+// ModelFamilies are the claude model families --model may name. A full
 // `claude-` id of a family missing here still passes as typed.
-var Families = []string{"opus", "sonnet", "haiku", "fable"}
+var ModelFamilies = []string{"opus", "sonnet", "haiku", "fable"}
 
 // maxTypos is how far a typed family may be from a real one and still be
 // read as it.
 const maxTypos = 2
 
-// Resolve reads raw as a model name: the value to pass claude, a note
+// ResolveModel reads raw as a model name: the value to pass claude, a note
 // when that differs from raw beyond case, and false when raw names no
 // family.
-func Resolve(raw string) (string, string, bool) {
+func ResolveModel(raw string) (string, string, bool) {
 	typed := strings.TrimSpace(raw)
 	lower := strings.ToLower(typed)
 
@@ -115,7 +116,7 @@ func split(s string) (string, []string, bool) {
 func nearest(word string) (string, bool) {
 	best, bestDist, tie := "", maxTypos+1, false
 
-	for _, f := range Families {
+	for _, f := range ModelFamilies {
 		d := distance(word, f)
 
 		switch {

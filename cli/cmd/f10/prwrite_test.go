@@ -12,6 +12,7 @@ import (
 	prcmd "github.com/amberpixels/f10/cli/internal/command/pr"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/seam"
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
@@ -170,17 +171,14 @@ func TestStatusOnceTakesAPushAheadOfTheHead(t *testing.T) {
 
 	var posted string
 
-	prev := shell.Capture
-	shell.Capture = func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
+	seam.Swap(t, &shell.Capture, func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
 		key := name + " " + strings.Join(args, " ")
 		if strings.Contains(key, "-X POST") {
 			posted = key
 		}
 
 		return shell.Result{Stdout: "[]"}, nil
-	}
-
-	t.Cleanup(func() { shell.Capture = prev })
+	})
 
 	p := forge.PR{Number: 4, Status: forge.Open, URL: "u", HeadSHA: head}
 	s := forge.CommitStatus{Name: "judge", State: "success", Description: "ok"}

@@ -34,6 +34,8 @@ func buildWithUser(t *testing.T, main string, files map[string]string) (*Effecti
 // The user's files lie under the project's, key by key, each key naming
 // the layer that set it; a default pace only the user names still applies.
 func TestUserLayerUnderTheProject(t *testing.T) {
+	t.Parallel()
+
 	eff, dir := buildWithUser(t,
 		"---\nflows:\n  default: plan judge implement pr\nagents:\n  judge: opus:max\n"+
 			"paces:\n  brisk: { judge: { effort: high } }\n---\n",
@@ -81,6 +83,8 @@ func TestUserLayerUnderTheProject(t *testing.T) {
 
 // A refused user file is one problem naming the file, and adds nothing.
 func TestUserFileRefused(t *testing.T) {
+	t.Parallel()
+
 	for name, tc := range map[string]struct{ file, block, want, key string }{
 		"the run's key":  {UserAgentsFile, "agents:\n  --agent: opus\n", "agents.--agent", "agents.--agent"},
 		"a bad profile":  {UserAgentsFile, "agents:\n  review: opus:huge\n", "agents.review", "agents.review"},
@@ -116,6 +120,8 @@ func TestUserFileRefused(t *testing.T) {
 
 // A pace that breaks a flow is reported once, after every layer merged.
 func TestPaceProblemReportedOnce(t *testing.T) {
+	t.Parallel()
+
 	eff, _ := buildWithUser(t,
 		"---\nflows:\n  default: plan judge implement pr\npaces:\n  lazy: { pr: { marker: fast } }\n---\n",
 		map[string]string{UserPacesFile: "paces:\n  lazy: { plan: off }\n"})
@@ -135,6 +141,8 @@ func TestPaceProblemReportedOnce(t *testing.T) {
 // A default pace no layer declares is an error in project.md, and a
 // warning in the user's file, which serves projects that may lack it.
 func TestDefaultPaceUnknown(t *testing.T) {
+	t.Parallel()
+
 	eff, _ := buildWithUser(t, "---\nflows:\n  default: plan implement pr\n---\n",
 		map[string]string{UserPacesFile: "pace: brisk\n"})
 
@@ -152,6 +160,8 @@ func TestDefaultPaceUnknown(t *testing.T) {
 
 // A pace reads back as it was written, finish beside the step dials.
 func TestPaceRoundTrip(t *testing.T) {
+	t.Parallel()
+
 	var p Pace
 	if err := yaml.Unmarshal([]byte("{ review: { by: local, rounds: 2 }, plan: off, finish: off }"), &p); err != nil {
 		t.Fatal(err)
@@ -175,6 +185,8 @@ func TestPaceRoundTrip(t *testing.T) {
 
 // Every dial's step, check and order come from its row.
 func TestDialTable(t *testing.T) {
+	t.Parallel()
+
 	for _, s := range dials {
 		var d Dials
 

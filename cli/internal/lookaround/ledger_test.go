@@ -12,6 +12,8 @@ import (
 // `/f10:finish FT-12` run from a session whose run is FT-9 finishes FT-12:
 // the row's task is the session's, the argument names the task finished.
 func TestFinishedFromTakesFinishsArgument(t *testing.T) {
+	t.Parallel()
+
 	finish := func(task string, args ...any) ledger.Event {
 		p := ledger.NewPayload(ledger.Payload{"args": args})
 
@@ -47,6 +49,8 @@ func TestFinishedFromTakesFinishsArgument(t *testing.T) {
 
 // A task re-planned after its finish is pending work, not finished.
 func TestDeriveLeavesARePlannedTaskUnfinished(t *testing.T) {
+	t.Parallel()
+
 	l := &Local{Finished: map[string]bool{"FT-1": true, "FT-2": true}, Plans: map[string]time.Time{"FT-2": time.Now()}}
 	if !finishedNow(l, "FT-1") || finishedNow(l, "FT-2") {
 		t.Errorf("FT-1 %v, FT-2 %v; want finished and pending", finishedNow(l, "FT-1"), finishedNow(l, "FT-2"))
@@ -55,6 +59,8 @@ func TestDeriveLeavesARePlannedTaskUnfinished(t *testing.T) {
 
 // A ledger claim reads back without the wait and done it recorded.
 func TestClaimRunLeavesWaitAndDoneOff(t *testing.T) {
+	t.Parallel()
+
 	r := &state.Run{Ship: "blocked", Leaf: "implement", Wait: "FT-2", Done: "catchup"}
 	e := ledger.Event{Task: "FT-1", Kind: ledger.StateSet, Payload: ledger.NewPayload(ledger.EncodeClaim(r, nil))}
 
@@ -66,6 +72,8 @@ func TestClaimRunLeavesWaitAndDoneOff(t *testing.T) {
 // A ledger finish counts only while no live plan says the task came back,
 // the rule the board's local collector applies too.
 func TestAddLedgerKeepsARePlannedTaskOpen(t *testing.T) {
+	t.Parallel()
+
 	var replanned, done TaskFacts
 
 	replanned.AddLedger(LedgerTask{Finished: true}, true)

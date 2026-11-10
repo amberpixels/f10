@@ -16,6 +16,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/lookaround"
 	"github.com/amberpixels/f10/cli/internal/projects"
 	"github.com/amberpixels/f10/cli/internal/scope"
+	"github.com/amberpixels/f10/cli/internal/seam"
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
@@ -244,15 +245,12 @@ func TestBoardAllReadsWatchedRepos(t *testing.T) {
 	writeUserFile(t, home, scope.BoardConfigFile, "---\nrepos: [github.com/acme/good, github.com/acme/other]\n---\n")
 	t.Setenv(projects.RootsEnv, filepath.Join(root, "*"))
 
-	prev := shell.Capture
-	t.Cleanup(func() { shell.Capture = prev })
-
 	var (
 		mu    sync.Mutex // projects are collected concurrently
 		calls []string
 	)
 
-	shell.Capture = func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
+	seam.Swap(t, &shell.Capture, func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
 		call := filepath.Base(name) + " " + strings.Join(args, " ")
 
 		mu.Lock()
@@ -271,7 +269,7 @@ func TestBoardAllReadsWatchedRepos(t *testing.T) {
 		default:
 			return shell.Result{Code: 1, Stderr: "unscripted: " + call}, nil
 		}
-	}
+	})
 
 	out, err := runApp(t, "board", "--all", "--json", "--state").outErr()
 	if err != nil {

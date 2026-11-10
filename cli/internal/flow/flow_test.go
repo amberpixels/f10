@@ -9,6 +9,8 @@ import (
 )
 
 func TestParse(t *testing.T) {
+	t.Parallel()
+
 	for written, want := range map[string]Entry{
 		"implement":                {Step: "implement"},
 		"review:local":             {Step: "review", Arg: "local"},
@@ -38,6 +40,8 @@ func TestParse(t *testing.T) {
 }
 
 func TestFlowPredicates(t *testing.T) {
+	t.Parallel()
+
 	f := Of([]string{"plan", "judge", "implement", "review:local", "judge", "pr[pr-final]"})
 
 	if got := f.Ship(); got[0].Step != "judge" || len(got) != 5 {
@@ -70,6 +74,8 @@ func TestFlowPredicates(t *testing.T) {
 }
 
 func TestZipAndJSON(t *testing.T) {
+	t.Parallel()
+
 	f := Zip([]string{"implement", "pr", "pr"}, []string{"", "", "pr-polish"})
 	if got := strings.Join(f.Written(), " "); got != "implement pr pr[pr-polish]" {
 		t.Errorf("zip = %q", got)
@@ -93,6 +99,8 @@ func TestZipAndJSON(t *testing.T) {
 // GenericSteps tracks the plugin's step files, so a label can never take
 // a generic step's name once a step is added.
 func TestGenericStepsMatchStepFiles(t *testing.T) {
+	t.Parallel()
+
 	files, err := filepath.Glob("../../../steps/*.md")
 	if err != nil || len(files) == 0 {
 		t.Fatalf("no step files: %v", err)

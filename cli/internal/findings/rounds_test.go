@@ -23,6 +23,8 @@ const (
 )
 
 func TestRounds(t *testing.T) {
+	t.Parallel()
+
 	for _, tc := range []struct {
 		name    string
 		files   []string // round bodies, 1.md first
@@ -98,6 +100,8 @@ func TestRounds(t *testing.T) {
 }
 
 func TestRoundsMalformed(t *testing.T) {
+	t.Parallel()
+
 	path := filepath.Join(t.TempDir(), "1.md")
 	if err := os.WriteFile(path, []byte("# findings\n"), 0o600); err != nil {
 		t.Fatal(err)

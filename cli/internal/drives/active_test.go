@@ -6,6 +6,8 @@ import (
 )
 
 func TestActiveSkipsCancelledAndDoneAndProbesTheDriver(t *testing.T) {
+	t.Parallel()
+
 	root := t.TempDir()
 	now := time.Now()
 

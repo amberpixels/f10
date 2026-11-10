@@ -28,19 +28,19 @@ func ReachableAgents(dir string) agentctl.Backend {
 func RequireAgents() error {
 	err := Agents("").Available()
 	if errors.Is(err, herdr.ErrNotInside) {
-		return outsideHerdr{err}
+		return outsideHerdrError{err}
 	}
 
 	return err
 }
 
-// outsideHerdr words herdr's refusal for the commands that need it, and
+// outsideHerdrError words herdr's refusal for the commands that need it, and
 // still unwraps to herdr.ErrNotInside.
-type outsideHerdr struct{ err error }
+type outsideHerdrError struct{ err error }
 
-func (outsideHerdr) Error() string {
+func (outsideHerdrError) Error() string {
 	return "f10 start, forward, drive and finish run inside a Herdr session: " +
 		"open a pane there, or install it from https://herdr.dev"
 }
 
-func (e outsideHerdr) Unwrap() error { return e.err }
+func (e outsideHerdrError) Unwrap() error { return e.err }

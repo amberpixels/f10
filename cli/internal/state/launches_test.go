@@ -8,6 +8,8 @@ import (
 )
 
 func TestLaunchesRoundTrip(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 
 	for _, l := range []Launch{
@@ -42,6 +44,8 @@ func TestLaunchesRoundTrip(t *testing.T) {
 }
 
 func TestLaunchesMissingOrNoSession(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 
 	if got, err := Launches(dir, "none"); err != nil || got != nil {
@@ -58,6 +62,8 @@ func TestLaunchesMissingOrNoSession(t *testing.T) {
 }
 
 func TestPruneReclaimsLaunches(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 
 	if err := AppendLaunch(dir, "old", Launch{LaunchStart, "FT-1"}); err != nil {
@@ -87,6 +93,8 @@ func TestPruneReclaimsLaunches(t *testing.T) {
 }
 
 func TestPruneReclaimsAsks(t *testing.T) {
+	t.Parallel()
+
 	dir := t.TempDir()
 	now := time.Now()
 	old := now.Add(-pruneAge - time.Hour)

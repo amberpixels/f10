@@ -13,6 +13,8 @@ import (
 // derives for its verbs, in shell. Both are held to one table here, so a
 // rule that moves on one side fails until the other follows.
 func TestProjectPrefixParity(t *testing.T) {
+	t.Parallel()
+
 	script := bundleScript(t)
 
 	for _, name := range []string{

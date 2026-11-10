@@ -12,7 +12,6 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
-	"github.com/amberpixels/f10/cli/internal/frontmatter"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
@@ -167,7 +166,7 @@ func layeringDecl(projectMD string) string {
 		return ""
 	}
 
-	block, _, ok := frontmatter.Split(data)
+	block, _, ok := SplitFrontmatter(data)
 	if !ok {
 		return ""
 	}

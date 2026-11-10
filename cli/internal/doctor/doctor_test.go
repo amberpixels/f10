@@ -152,6 +152,8 @@ func (f *fixture) run(name string) Result {
 }
 
 func TestChecks(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		check  string
 		name   string
@@ -282,6 +284,8 @@ func TestChecks(t *testing.T) {
 }
 
 func TestHerdrMissingIsScopedAndDoesNotFail(t *testing.T) {
+	t.Parallel()
+
 	f := newFixture(t)
 	delete(f.path, "herdr")
 
@@ -296,6 +300,8 @@ func TestHerdrMissingIsScopedAndDoesNotFail(t *testing.T) {
 }
 
 func TestStatuslineMissingIsScopedAndDoesNotFail(t *testing.T) {
+	t.Parallel()
+
 	f := newFixture(t)
 	f.settings["statusLine"] = map[string]any{"command": "echo hi"}
 
@@ -312,6 +318,8 @@ func TestStatuslineMissingIsScopedAndDoesNotFail(t *testing.T) {
 // A project-scope install is matched to the checkout through symlinks, the
 // way macOS reaches /tmp through /private/tmp, and beats the user-scope one.
 func TestProjectScopeInstallThroughASymlink(t *testing.T) {
+	t.Parallel()
+
 	f := newFixture(t)
 	delete(f.env, "CLAUDECODE")
 
@@ -336,6 +344,8 @@ func TestProjectScopeInstallThroughASymlink(t *testing.T) {
 }
 
 func TestFailed(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name    string
 		results []Result
@@ -355,6 +365,8 @@ func TestFailed(t *testing.T) {
 }
 
 func TestResultsMarshalEveryKey(t *testing.T) {
+	t.Parallel()
+
 	f := newFixture(t)
 	f.run(CheckVersion)
 
@@ -392,6 +404,8 @@ func (f *fixture) shim(body string) {
 }
 
 func TestDriverCheck(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name   string
 		mutate func(f *fixture)
@@ -488,6 +502,8 @@ func TestDriverCheck(t *testing.T) {
 }
 
 func TestNoDriverPrintsNoDriverRow(t *testing.T) {
+	t.Parallel()
+
 	f := newFixture(t)
 	f.writeJSON(filepath.Join(f.claude, "settings.json"), f.settings)
 

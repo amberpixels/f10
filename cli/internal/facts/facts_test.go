@@ -23,6 +23,8 @@ Free prose the contract does not know.
 `
 
 func TestParseFile(t *testing.T) {
+	t.Parallel()
+
 	path := writeProjectMD(t, mainProjectMD)
 
 	fields, unknown := parseFile(readFile(t, path), path, "main")
@@ -58,6 +60,8 @@ const headingProjectMD = "# acme · f10 project instructions\n\n" +
 	"## Visibility\nstealth\n"
 
 func TestParseFileHeadingShape(t *testing.T) {
+	t.Parallel()
+
 	path := writeProjectMD(t, headingProjectMD)
 	fields, unknown := parseFile(readFile(t, path), path, "main")
 
@@ -102,6 +106,8 @@ func TestParseFileHeadingShape(t *testing.T) {
 }
 
 func TestBuildMergesLayersFieldLevel(t *testing.T) {
+	t.Parallel()
+
 	lay := &layout.Layout{
 		Layers: []layout.Layer{
 			{Label: "main", Dir: dirWithProjectMD(t, "- **Project** - main says\n- **Verify** - just test\n")},
@@ -124,6 +130,8 @@ func TestBuildMergesLayersFieldLevel(t *testing.T) {
 }
 
 func TestBuildDefaultsAndDetection(t *testing.T) {
+	t.Parallel()
+
 	lay := &layout.Layout{Project: "demo"} // no layers at all
 	pb := &probe.Probes{
 		CLI:   probe.Signal{Value: "gh", Evidence: "well-known host github.com"},
@@ -168,6 +176,8 @@ func TestBuildDefaultsAndDetection(t *testing.T) {
 // A Visibility section is prose for the agents; only the frontmatter's
 // visibility key sets the fact.
 func TestBuildVisibilityProseSetsNothing(t *testing.T) {
+	t.Parallel()
+
 	lay := &layout.Layout{
 		Layers: []layout.Layer{
 			{Label: "main", Dir: dirWithProjectMD(t, "- **Visibility** - public\n")},
@@ -233,6 +243,8 @@ func contains(haystack, needle string) bool {
 // A declared id format is never second-guessed by the project's name, and
 // says where it came from.
 func TestBuildDeclaredPrefixWins(t *testing.T) {
+	t.Parallel()
+
 	lay := &layout.Layout{
 		Project: "demo",
 		Layers: []layout.Layer{
@@ -250,6 +262,8 @@ func TestBuildDeclaredPrefixWins(t *testing.T) {
 // A name that derives nothing leaves the prefix empty rather than inventing
 // one: only explicit ids are accepted, and init leaves the Tracker to a human.
 func TestBuildUnusableProjectName(t *testing.T) {
+	t.Parallel()
+
 	eff := Build(&layout.Layout{Project: "x"}, &probe.Probes{CLI: probe.Signal{Value: "gh"}}, "")
 
 	if eff.IDPrefix != "" || eff.IDPrefixOrigin != (Origin{}) {

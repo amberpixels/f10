@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/seam"
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
@@ -13,9 +14,7 @@ import (
 func script(t *testing.T, answers map[string]string) {
 	t.Helper()
 
-	prev := shell.Capture
-
-	shell.Capture = func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
+	seam.Swap(t, &shell.Capture, func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
 		key := name + " " + strings.Join(args, " ")
 
 		out, ok := answers[key]
@@ -28,9 +27,7 @@ func script(t *testing.T, answers map[string]string) {
 		}
 
 		return shell.Result{Stdout: out}, nil
-	}
-
-	t.Cleanup(func() { shell.Capture = prev })
+	})
 }
 
 func TestStatus(t *testing.T) {
@@ -144,14 +141,11 @@ func TestPullsSince(t *testing.T) {
 func TestRunNamesTheRepository(t *testing.T) {
 	var got []string
 
-	prev := shell.Capture
-	shell.Capture = func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
+	seam.Swap(t, &shell.Capture, func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
 		got = append(got, name+" "+strings.Join(args, " "))
 
 		return shell.Result{Stdout: "[]"}, nil
-	}
-
-	t.Cleanup(func() { shell.Capture = prev })
+	})
 
 	ctx := context.Background()
 
