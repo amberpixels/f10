@@ -164,7 +164,7 @@ func runFacts(r *state.Run, v runView) []fact {
 		add("  "+g.shown(), g.text(), statusStyle(g.style()))
 	}
 
-	for _, kv := range [][2]string{{"note", r.Note}, {"next", r.Next}, {"ask", r.Ask}, {"wait", r.Wait}} {
+	for _, kv := range [][2]string{{"note", r.Note}, {"next", r.Next}, {"ask", r.Ask}, {"wait", r.Wait}, {"stop", r.Stop}} {
 		if kv[1] != "" {
 			add(kv[0], kv[1], plain)
 		}

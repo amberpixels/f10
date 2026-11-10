@@ -122,8 +122,8 @@ Otherwise unset `.f10-base-tip`, because the base is now the default branch.
    Any other mark stays set, because the drive reads a cleared mark as that base brought in, and the report names it.
 
    The `done catchup` signal is how `f10 drive` knows the turn ended.
-   For a catchup the drive integrated itself (**Sent by `f10 drive`**, below), git then tells the drive whether it settled: nothing in progress, no conflict marker, the base in the branch, and verify green when the drive runs it.
-   For a whole catchup the drive sent with no steering, it also halts a task whose signal sits beside a mark still set.
+   Git then tells the drive whether the turn settled (**Sent by `f10 drive` or the watcher**, below): nothing in progress, no conflict marker, the base in the branch, and verify green.
+   Verify is green when the drive's own run of it passes, or, where the turn ran verify itself, when the marks are cleared.
    Every run writes the signal, a run by hand included.
 
 6. **Report** per `conventions/report.md`, with `branch`, `base` and `commit` (the new HEAD) rows.
@@ -158,10 +158,11 @@ The guard differs from the run above in these ways:
   Before failing, mark the branch with the `mark` line, `git config branch.<branch>.<key> <value>`, so point 2 finds the same base later.
   Then run `git merge --abort` or `git rebase --abort`, so the branch is as it was, with any mark kept.
   Put `/f10:catchup` in the `next` row.
-  `f10 drive` reads the mark, never the note, to decide to send a catchup.
+  Run `f10-state.sh stop guard` after the failing `set`, so `f10 drive` reads the stop as the guard's.
+  `f10 drive` reads the mark and that kind, never the note, to decide to send a catchup.
 - **Verify** runs when commits came in, except before implement, because implement runs its own verify next.
   Red verify is a semantic conflict that the guard leaves to `/f10:catchup`.
-  Run `git reset --hard` to the sha read before integrating, which is safe because the tree was clean, then mark and fail as for a conflict.
+  Run `git reset --hard` to the sha read before integrating, which is safe because the tree was clean, then mark and fail as for a conflict, the `stop guard` call included.
 - **Marks** are cleared once the integration is clean and verify, where it ran, is green.
   The guard writes no `done catchup` signal, because ship's phase reports for it.
 - **The report** is one line in the ship run, naming the base, the commits brought in and the method.
@@ -172,9 +173,8 @@ On entry, note the ship status with `f10-state.sh show`.
 The method is point 3's.
 The sender pushes the branch itself once this run ends clean.
 
-**Sent by `f10 drive`** with steering: the drive integrated the branch itself and prompts this step only for what git or verify could not settle.
-A prompt with no steering is a whole catchup, sent because the project's verify is prose the drive cannot run, and every point above applies, point 5's marks included.
-The steering says which of three cases it is:
+**Sent by `f10 drive` or the watcher** with steering: the sender integrated the branch itself and prompts this step only for what git or verify could not settle.
+The steering says which of four cases it is:
 
 - **A merge or rebase is in progress**, with its conflicted files named.
   Point 1's operation-in-progress path settles it in place, and a rebase continues through its remaining commits.
@@ -182,14 +182,17 @@ The steering says which of three cases it is:
   Skip points 1 to 4, and fix it as point 5's semantic conflict.
 - **The last turn left it unsettled**, naming what is left: conflict markers, uncommitted paths, or the base missing from the branch.
   Settle that in place and commit it.
+- **The base came in cleanly and the sender cannot run verify**: the project's Verify heading is prose, or the watcher sent it, since a watcher pass stays short.
+  Skip points 1 to 4, and run point 5 whole, its marks included: verify, fix a red by the branch's intent, and clear the marks once green.
 
-In these three cases, leave the marks as they are, because the drive clears them once its own verify is green.
+When the steering also says to run verify and clear the catchup marks (the sender cannot run verify), do so after settling, as point 5 says.
+Otherwise leave the marks as they are, because the drive clears them once its own verify is green.
 Never abort the operation or reset the branch on a failure, because the drive reads the state the run leaves and prompts again naming what is left.
-After the turn, the drive checks the branch from git, runs verify itself, clears the marks and pushes.
-The watcher starts from a clean tree, so a run it sends never meets an operation already in progress.
+After the turn, the drive checks the branch from git, runs verify itself where it can, clears the marks and pushes.
+A mark still set after a turn that was told to clear it reads as verify not green.
 The run never asks: no `AskUserQuestion` and no `f10-state.sh ask`.
 Verify runs in the foreground, or is waited on in the same turn, and the turn ends only at the report (`modes/driven.md`).
-`f10 drive` reads point 5's `done catchup` signal as the run's end, while the watcher reads only the mark and the tree.
+`f10 drive` reads point 5's `done catchup` signal as the run's end, while the watcher reads only git: the mark, the tree, the base in the branch and no conflict marker.
 
 Every question point 4 would put to the user is decided instead by the task's intent.
 Read that intent once, from the plan file (`<storage root>/plans/<id>.md`, the id from `f10 task current`) and from the task body (`f10 task read <id>`).
@@ -213,8 +216,7 @@ Each choice is written down, one per file, so the reviewer and the change judge 
 Any failure is `f10-state.sh set ship failed catchup` with a `note`, never an ask.
 That covers the **On failure** cases below and a conflict the step cannot settle at all, such as a binary file both sides changed or a regenerate that fails.
 
-**Sent by the watcher** (the prompt says so): note HEAD's sha before point 3 moves anything.
-A failure then also puts the branch back at that sha, with its marks kept, because nobody follows up in this pane.
+**Sent by the watcher** (the prompt says so, naming the sha the branch stood at before the watcher integrated): a failure puts the branch back at that sha, with its marks kept, because nobody follows up in this pane.
 For an operation still in progress, run `git merge --abort` or `git rebase --abort`, whatever was settled.
 Otherwise, when verify is red after the integration concluded, run `git reset --hard <that sha>`.
 The report says which of the two ran.

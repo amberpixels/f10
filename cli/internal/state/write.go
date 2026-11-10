@@ -152,7 +152,12 @@ func (r *Run) Save(dir string, now time.Time) error {
 		signal = [][2]string{{"done", r.Done}, {"done_at", unixText(r.DoneAt)}}
 	}
 
-	// so is a wait, which only a driven ship on an empty base writes
+	// so is a wait, which only a driven ship on an empty base writes, and a
+	// stop kind, which only ship's catchup guard writes
+	if r.Stop != "" {
+		signal = append([][2]string{{"stop", r.Stop}}, signal...)
+	}
+
 	if r.Wait != "" {
 		signal = append([][2]string{{"wait", r.Wait}}, signal...)
 	}
@@ -309,7 +314,7 @@ func (r *Run) Set(phase, status, leaf string) error {
 
 	switch {
 	case status == "running":
-		r.Leaf, r.Note, r.Next, r.Ask, r.Wait = leaf, "", "", "", ""
+		r.Leaf, r.Note, r.Next, r.Ask, r.Wait, r.Stop = leaf, "", "", "", "", ""
 		r.Done, r.DoneAt = "", time.Time{}
 	case Stopped(status):
 		if leaf != "" {
@@ -410,6 +415,21 @@ func (r *Run) SetWait(task string) error {
 	}
 
 	r.Wait = oneLine(task)
+
+	return nil
+}
+
+// StopGuard is the stop ship's catchup guard leaves: a conflict it marked
+// the branch for, which a drive catches up before sending ship again.
+const StopGuard = "guard"
+
+// SetStop records the kind of stop a ship left; only StopGuard exists.
+func (r *Run) SetStop(kind string) error {
+	if kind != StopGuard {
+		return usagef("unknown stop kind '%s'", kind)
+	}
+
+	r.Stop = kind
 
 	return nil
 }
@@ -577,7 +597,7 @@ func (r *Run) Seed(skill, args, cwd string) bool {
 	}
 
 	r.Skill = skill
-	r.Leaf, r.Final, r.Note, r.Next, r.Ask, r.Wait = "", "", "", "", "", ""
+	r.Leaf, r.Final, r.Note, r.Next, r.Ask, r.Wait, r.Stop = "", "", "", "", "", "", ""
 	r.Done, r.DoneAt = "", time.Time{}
 	r.Pipeline, r.Labels, r.At = nil, nil, 0
 	r.Ship = Upcoming

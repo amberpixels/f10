@@ -463,6 +463,50 @@ func TestDoneSignalRoundTripsAndRetires(t *testing.T) {
 	}
 }
 
+// The guard's stop kind round-trips whichever side of the failing set it is
+// written on, survives a restored stop, and is retired by a phase running
+// again; an unknown kind is refused.
+func TestStopKindRoundTripsAndRetires(t *testing.T) {
+	dir := t.TempDir()
+	r := Fresh("s")
+
+	if err := r.SetStop("conflict"); err == nil {
+		t.Error("an unknown stop kind was taken")
+	}
+
+	if err := r.SetStop(StopGuard); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := r.Set("ship", "failed", "pr"); err != nil || r.Stop != StopGuard {
+		t.Fatalf("the failing set dropped the kind written before it: %v, %+v", err, r)
+	}
+
+	if err := r.Save(dir, time.Unix(1_800_000_200, 0)); err != nil {
+		t.Fatal(err)
+	}
+
+	back, err := Load(Path(dir, "s"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if back.Stop != StopGuard || back.Ship != "failed" || back.Leaf != "pr" {
+		t.Errorf("read back %+v", back)
+	}
+
+	if err := back.Set("ship", "running", "pr"); err != nil || back.Stop != "" {
+		t.Errorf("a phase running again kept the kind: %v, %+v", err, back)
+	}
+
+	_ = back.SetStop(StopGuard)
+	back.Seed("ship", "GH-1", "")
+
+	if back.Stop != "" {
+		t.Errorf("a new skill's seed kept the kind: %+v", back)
+	}
+}
+
 // f10-inject.sh tells the model to run f10-load-conventions.sh once per
 // session: the first skill is told, later prompts, --help and step-less
 // skills are not, and a compaction tells again only where the session had them.

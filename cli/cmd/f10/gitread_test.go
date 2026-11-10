@@ -32,7 +32,15 @@ func TestUnsettledWhenGitCannotRead(t *testing.T) {
 
 			r := &driveRun{o: openedTask{branch: "GH-1", path: "/code/repo.GH-1"}}
 
-			if got := fx.in.unsettled(t.Context(), r); !strings.Contains(got, "unable to read config") {
+			if got := branchUnsettled(
+				t.Context(),
+				fx.in.main,
+				r.o.path,
+				r.o.branch,
+			); !strings.Contains(
+				got,
+				"unable to read config",
+			) {
 				t.Errorf("unsettled = %q, want the failed read named", got)
 			}
 		})

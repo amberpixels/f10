@@ -118,6 +118,16 @@ func runCatchupBase(ctx context.Context, cmd *cli.Command) error {
 	return p.write(cmd.Writer)
 }
 
+// catchupPolicy is the catchup keys of the effective configuration.
+func catchupPolicy(eff *facts.Effective) catchupInput {
+	return catchupInput{
+		catchup:        eff.Catchup,
+		stacked:        eff.CatchupStacked,
+		catchupDefault: factDefault(eff, "catchup"),
+		stackedDefault: factDefault(eff, "catchup_stacked"),
+	}
+}
+
 func factDefault(eff *facts.Effective, key string) bool {
 	for _, f := range eff.Facts {
 		if f.Key == key {

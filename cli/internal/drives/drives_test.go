@@ -269,3 +269,47 @@ func TestAwaitWaitsForTheHolder(t *testing.T) {
 
 	l.Release()
 }
+
+// A task's catchup round-trips through the record, so a resumed drive
+// leases its push against the origin tip the catchup started from.
+func TestRecordKeepsATasksCatchup(t *testing.T) {
+	root := t.TempDir()
+	c := &Catchup{
+		Target: "m2", Head: "h1", Origin: "p1", Base: "origin/main", At: time.Unix(1_800_000_000, 0).UTC(),
+		Fingerprint: Fingerprint("m2", "a.go", ""), TargetRef: "refs/remotes/origin/main",
+	}
+
+	rec := &Record{Args: []string{"GH-1"}, Tasks: []Task{{ID: "GH-1", Catchup: c}}}
+	if err := Create(root, rec); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := Read(root, rec.Number)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if back := got.Task("GH-1").Catchup; back == nil || *back != *c {
+		t.Errorf("read back %+v, want %+v", back, c)
+	}
+}
+
+// The fingerprint moves with the target, the conflicts or the red command,
+// and with nothing else.
+func TestCatchupFingerprint(t *testing.T) {
+	base := Fingerprint("m1", "a.go:x:y", "")
+
+	for name, fp := range map[string]string{
+		"moved target":   Fingerprint("m2", "a.go:x:y", ""),
+		"other conflict": Fingerprint("m1", "a.go:x:z", ""),
+		"red verify":     Fingerprint("m1", "a.go:x:y", "just test"),
+	} {
+		if fp == base {
+			t.Errorf("%s: fingerprint did not move", name)
+		}
+	}
+
+	if Fingerprint("m1", "a.go:x:y", "") != base {
+		t.Error("the same state gave another fingerprint")
+	}
+}

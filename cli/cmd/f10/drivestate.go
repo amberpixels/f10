@@ -280,7 +280,7 @@ func (in *driveInput) settle(
 	retry bool,
 ) error {
 	// git, not the turn, says whether the drive's own catchup settled
-	if r.skill == "catchup" && in.catchup != nil {
+	if r.skill == "catchup" {
 		return in.catchupSettled(ctx, w, r, retry)
 	}
 

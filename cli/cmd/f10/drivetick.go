@@ -16,6 +16,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -87,7 +88,7 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) (err error) {
 	byID := map[string]*driveRun{}
 
 	for _, i := range order {
-		r := &driveRun{task: tasks[i]}
+		r := &driveRun{task: tasks[i], lastCatchup: in.savedCatchup(tasks[i])}
 		if r.task.finished {
 			in.end(ctx, w, r, driveResult{row: rowAlreadyFinished})
 		}
@@ -457,11 +458,41 @@ func (in *driveInput) markBehind(ctx context.Context, w io.Writer, r *driveRun) 
 		return nil
 	}
 
+	// a PR retargeted by hand: a catchup with git's base would carry another
+	// branch's commits into it
+	if in.pull != nil {
+		if pr, err := in.pull(ctx, branch); err == nil && pr.Status == forge.Open {
+			if st, err := readTarget(ctx, in.main, target, pr.Base, "", ""); err == nil && st.retargeted {
+				return fmt.Errorf("%s targets %s, not %s, which %s was started on: retarget it back, "+
+					"or catch it up by hand with /f10:catchup in %s", pr.URL, pr.Base,
+					strings.TrimPrefix(target.name, "origin/"), branch, r.o.path)
+			}
+		}
+	}
+
 	if err := branchmeta.Set(ctx, in.main, branch, target.key, target.value); err != nil {
 		return fmt.Errorf("marking %s behind %s: %w", branch, target.name, err)
 	}
 
 	fmt.Fprintf(w, "%s: %s moved past %s, catching up before the next skill\n", in.id(id), target.name, branch)
+
+	return nil
+}
+
+// savedCatchup is the catchup record an earlier run of this drive kept for
+// t, so a resumed drive leases its push as the first one would have.
+func (in *driveInput) savedCatchup(t driveTask) *drives.Catchup {
+	if in.rec == nil {
+		return nil
+	}
+
+	for _, id := range []string{t.ref.Label() + suffixOf(t.suffix), t.ref.ID + suffixOf(t.suffix)} {
+		if rt := in.rec.Task(id); rt != nil && rt.Catchup != nil {
+			c := *rt.Catchup
+
+			return &c
+		}
+	}
 
 	return nil
 }

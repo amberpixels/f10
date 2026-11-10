@@ -30,17 +30,18 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 
 	// a skill after the catchup may push the branch itself
 	if c := r.lastCatchup; c != nil && skill != "catchup" {
-		c.held = false
+		c.Spent = true
 	}
 
 	in.saveTask(r, func(t *drives.Task) { t.Skill, t.Outcome = skill, nil })
+	in.keepCatchup(r)
 
 	answeredAt, answered := in.answeredIn[id]
 	delete(in.answeredIn, id)
 
-	if skill == "catchup" && in.catchup == nil && in.catchupWhy != "" && !r.toldCatchup {
+	if skill == "catchup" && in.catchup.agentVerifies != "" && !r.toldCatchup {
 		r.toldCatchup = true
-		fmt.Fprintf(w, "%s catchup: %s, so the agent catches up\n", in.id(id), in.catchupWhy)
+		fmt.Fprintf(w, "%s catchup: %s, so the agent verifies\n", in.id(id), in.catchup.agentVerifies)
 	}
 
 	switch {
@@ -60,22 +61,19 @@ func (in *driveInput) send(ctx context.Context, w io.Writer, r *driveRun, skill 
 		r.sentAt = answeredAt.Add(-time.Second).Truncate(time.Second)
 
 		fmt.Fprintf(w, "%s %s: answered outside this drive, following the turn\n", in.id(id), skill)
-	case skill == "catchup" && in.catchup != nil:
+	case skill == "catchup" && !awaitsDecision(run):
 		// git integrates and verify runs here; the agent gets only what they
 		// could not settle, a resend included
 		return in.catchupHere(ctx, w, r, ws, run)
 	case r.retry:
 		// an attempt failed: the action goes again, whatever the run says
 		return in.prompt(ctx, w, r, ws, skill, "")
-	case run != nil && skill == "catchup" && heldStop(run):
-		// the ship stop is the one this catchup settles
-		return in.prompt(ctx, w, r, ws, skill, "")
 	case run != nil && stoppedRun(run):
 		answer := in.takeAnswer(id)
 		if answer == "" {
 			// a catchup clears a mark but restores the ship stop it noted, so
 			// git, not the note, says whether that stop still holds
-			if at := resumeAt(skill, run); at != "" && in.unsettled(ctx, r) == "" {
+			if at := resumeAt(skill, run); at != "" && branchUnsettled(ctx, in.main, r.o.path, r.o.branch) == "" {
 				why := "stopped for a catchup, the branch is settled"
 				switch {
 				case originWait(run):
