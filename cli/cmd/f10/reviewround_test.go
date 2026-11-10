@@ -12,6 +12,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/findings"
+	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -272,7 +273,7 @@ func TestReviewRoundRestartKeepsTheChange(t *testing.T) {
 		t.Errorf("after a restart: %q, want DM-5", got)
 	}
 
-	if _, err := closeSeries(
+	if _, err := finish.CloseSeries(
 		dir,
 		archive.SeriesEnd{Pr: "#7", Head: "abc1234"},
 	); err != nil ||
@@ -280,7 +281,7 @@ func TestReviewRoundRestartKeepsTheChange(t *testing.T) {
 		t.Errorf("after the PR merged: %q, %v, want DM-5.2", archive.ChangeOf(dir), err)
 	}
 
-	if got, ok := closedChange(dir, archive.SeriesEnd{Pr: "#7"}); !ok || got != "DM-5" {
+	if got, ok := finish.ClosedChange(dir, archive.SeriesEnd{Pr: "#7"}); !ok || got != "DM-5" {
 		t.Errorf("finish run again names %q, %v; want the merged PR's DM-5", got, ok)
 	}
 }
@@ -328,7 +329,7 @@ func TestCloseSeriesCountsEveryPR(t *testing.T) {
 	}
 
 	for range 2 {
-		if _, err := closeSeries(dir, first); err != nil {
+		if _, err := finish.CloseSeries(dir, first); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -341,7 +342,7 @@ func TestCloseSeriesCountsEveryPR(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := closeSeries(dir, archive.SeriesEnd{Pr: "!8", Head: "def5678"})
+	got, err := finish.CloseSeries(dir, archive.SeriesEnd{Pr: "!8", Head: "def5678"})
 	if err != nil || got != filepath.Join(root, "reviews", "archive", "DM-5.2") {
 		t.Fatalf("a second PR's rounds: %q, %v", got, err)
 	}
@@ -350,7 +351,7 @@ func TestCloseSeriesCountsEveryPR(t *testing.T) {
 		t.Errorf("closed file reads %+v", e)
 	}
 
-	if _, err := closeSeries(dir, archive.SeriesEnd{Pr: "#8"}); err != nil || archive.ChangeOf(dir) != "DM-5.3" {
+	if _, err := finish.CloseSeries(dir, archive.SeriesEnd{Pr: "#8"}); err != nil || archive.ChangeOf(dir) != "DM-5.3" {
 		t.Errorf("glab's !8 and gh's #8 are one PR: %q, %v", archive.ChangeOf(dir), err)
 	}
 }

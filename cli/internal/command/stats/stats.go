@@ -87,14 +87,6 @@ type statRow struct {
 	latest time.Time
 }
 
-type shownStep struct {
-	step   string
-	active time.Duration
-}
-
-// The table's step groups: the review loop, and every other named step.
-var reviewLoop = []string{timing.Review, timing.Resolve, timing.Judge}
-
 // group sums the steps the column holds; nil when none was recorded.
 func (r statRow) group(column string) *time.Duration {
 	var (
@@ -115,17 +107,6 @@ func (r statRow) group(column string) *time.Duration {
 	return &sum
 }
 
-func stepColumn(step string) string {
-	switch {
-	case step == timing.Plan, step == timing.Implement, step == timing.Glue:
-		return step
-	case slices.Contains(reviewLoop, step):
-		return "review"
-	}
-
-	return "deliver"
-}
-
 // density is implement minutes per 100 changed lines, when both exist.
 func (r statRow) density() *float64 {
 	impl := r.group(timing.Implement)
@@ -136,6 +117,25 @@ func (r statRow) density() *float64 {
 	d := impl.Minutes() * 100 / float64(*r.lines)
 
 	return &d
+}
+
+type shownStep struct {
+	step   string
+	active time.Duration
+}
+
+// The table's step groups: the review loop, and every other named step.
+var reviewLoop = []string{timing.Review, timing.Resolve, timing.Judge}
+
+func stepColumn(step string) string {
+	switch {
+	case step == timing.Plan, step == timing.Implement, step == timing.Glue:
+		return step
+	case slices.Contains(reviewLoop, step):
+		return "review"
+	}
+
+	return "deliver"
 }
 
 // StatRows is a row per task with a window or a size, newest first: a task

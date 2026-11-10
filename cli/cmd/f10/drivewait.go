@@ -19,8 +19,8 @@ var wakeStep = time.Second
 // one of its worktrees is written. A stat a second of a few dozen small
 // files costs nothing, and sees in-place writes a directory watch misses.
 func (in *driveInput) wake(ctx context.Context, d time.Duration) error {
-	start := time.Now()
-	deadline := start.Add(d)
+	started := time.Now()
+	deadline := started.Add(d)
 
 	var record string
 	if in.rec != nil && in.root != "" {
@@ -30,8 +30,8 @@ func (in *driveInput) wake(ctx context.Context, d time.Duration) error {
 	var roots []string
 
 	for _, r := range in.runs {
-		if r.active() && r.o.path != "" {
-			roots = append(roots, r.o.path)
+		if r.active() && r.o.Path != "" {
+			roots = append(roots, r.o.Path)
 		}
 	}
 
@@ -45,7 +45,7 @@ func (in *driveInput) wake(ctx context.Context, d time.Duration) error {
 			return err
 		}
 
-		if in.draining.Load() || written(in.stateDir, record, roots, start) {
+		if in.draining.Load() || written(in.stateDir, record, roots, started) {
 			return nil
 		}
 	}

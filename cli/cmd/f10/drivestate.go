@@ -40,20 +40,20 @@ type taskState struct {
 // readState reads the task's state. A read git cannot answer leaves its
 // field empty: the state then shows less evidence, never more.
 func (in *driveInput) readState(ctx context.Context, r *driveRun, run *state.Run) taskState {
-	branch := r.o.branch
+	branch := r.o.Branch
 	s := taskState{run: run}
 
 	s.head, _ = gitx.Ref(ctx, in.main, "refs/heads/"+branch)
 	s.origin, _ = gitx.Ref(ctx, in.main, "refs/remotes/origin/"+branch)
 	s.mark, _ = stack.MarkOn(ctx, in.main, branch)
-	s.busy = stack.TreeBusy(ctx, r.o.path)
+	s.busy = stack.TreeBusy(ctx, r.o.Path)
 
 	if def, err := stack.LocalDefault(ctx, in.main); err == nil {
 		s.code = stack.BaseHasCode(ctx, in.main, branch, def)
 	}
 
 	lead := r.task.ref.Head().ID
-	s.plan = r.o.plan != "" || fsx.Exists(in.storage.Plan(lead))
+	s.plan = r.o.Plan != "" || fsx.Exists(in.storage.Plan(lead))
 
 	o := statuscmd.ReadOutcomes(nil, in.storage.Path(), lead)
 	s.reviews, s.changeJudged = len(o.Local)+len(o.Remote), o.ChangeJudge != nil
@@ -176,7 +176,7 @@ func (in *driveInput) reconcile(ctx context.Context, r *driveRun, s taskState) (
 // advance records skill done on the branch and moves the task to its next
 // skill; the task moved, so the attempt count starts over.
 func (in *driveInput) advance(ctx context.Context, r *driveRun, skill string) error {
-	if err := branchmeta.Set(ctx, in.main, r.o.branch, branchmeta.Drive, skill); err != nil {
+	if err := branchmeta.Set(ctx, in.main, r.o.Branch, branchmeta.Drive, skill); err != nil {
 		return fmt.Errorf("recording %s done: %w", skill, err)
 	}
 
@@ -202,7 +202,7 @@ func (in *driveInput) attempt(
 	action string,
 	halt driveResult,
 ) error {
-	run, _ := in.run(r.o.path) // a run the state dir cannot give leaves the run out
+	run, _ := in.run(r.o.Path) // a run the state dir cannot give leaves the run out
 
 	return in.attemptAt(r, action, in.readState(ctx, r, r.current(run)).fingerprint(), halt)
 }

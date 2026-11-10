@@ -25,7 +25,7 @@ func (in *driveInput) raise(ctx context.Context, r *driveRun, skill, text string
 		Root:     in.root,
 		Main:     in.main,
 		Project:  filepath.Base(in.main),
-		Worktree: r.o.path,
+		Worktree: r.o.Path,
 		Suffix:   r.task.suffix,
 		Drive:    in.number(),
 		Skill:    skill,

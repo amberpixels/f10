@@ -6,9 +6,11 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	startcmd "github.com/amberpixels/f10/cli/internal/command/start"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/runplan"
+	"github.com/amberpixels/f10/cli/internal/start"
 )
 
 // A fresh start hands the agent its first prompt on its command line, ahead
@@ -22,17 +24,17 @@ func TestStartLaunchesWithTheFirstPrompt(t *testing.T) {
 	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
 
 	launched := "herdr agent start " + agentOf("GH-1") + " --kind claude --pane pane:7 -- " +
-		launch.Prompt(modeDefault, runplan.ShipFlow{}, "GH-1", nil, "", nil, "") + " --effort high"
+		launch.Prompt(startcmd.ModeDefault, runplan.ShipFlow{}, "GH-1", nil, "", nil, "") + " --effort high"
 	f.script(launched, "{}")
 
-	in := startInput{
-		main:           "/code/repo",
-		storage:        testStorage,
-		task:           gh1,
-		profile:        agentctl.Profile{Effort: "high"},
-		profileFlagged: true,
+	in := start.StartInput{
+		Main:           "/code/repo",
+		Storage:        testStorage,
+		Task:           gh1,
+		Profile:        agentctl.Profile{Effort: "high"},
+		ProfileFlagged: true,
 	}
-	if err := start(t.Context(), &bytes.Buffer{}, in); err != nil {
+	if err := start.Start(t.Context(), &bytes.Buffer{}, in); err != nil {
 		t.Fatal(err)
 	}
 
@@ -59,14 +61,14 @@ func TestStartTypesAPromptWithANewline(t *testing.T) {
 	text := launch.Prompt(launch.ModeDiscuss, runplan.ShipFlow{}, "GH-1", nil, "", nil, "first\nsecond")
 	f.script("herdr agent prompt "+agentOf("GH-1")+" "+text, "{}")
 
-	in := startInput{
-		main:    "/code/repo",
-		storage: testStorage,
-		task:    gh1,
-		mode:    launch.ModeDiscuss,
-		note:    "first\nsecond",
+	in := start.StartInput{
+		Main:    "/code/repo",
+		Storage: testStorage,
+		Task:    gh1,
+		Mode:    launch.ModeDiscuss,
+		Note:    "first\nsecond",
 	}
-	if err := start(t.Context(), &bytes.Buffer{}, in); err != nil {
+	if err := start.Start(t.Context(), &bytes.Buffer{}, in); err != nil {
 		t.Fatal(err)
 	}
 
@@ -173,7 +175,7 @@ func TestDriveRetriesEnterOnceForATypedSend(t *testing.T) {
 	}
 
 	typed := &driveRun{task: driveTask{ref: gh1}, skill: "ship", sentAt: now.Add(-11 * time.Second), typed: sentText}
-	typed.o.path = fwdWT
+	typed.o.Path = fwdWT
 
 	launched := &driveRun{task: driveTask{ref: gh1}, skill: "ship", sentAt: now.Add(-11 * time.Second)}
 	recent := &driveRun{task: driveTask{ref: gh1}, skill: "ship", sentAt: now.Add(-time.Second), typed: sentText}

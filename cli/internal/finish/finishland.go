@@ -1,4 +1,4 @@
-package main
+package finish
 
 import (
 	"cmp"
@@ -21,6 +21,12 @@ import (
 // A landingKind is how a finish ends the task's work.
 type landingKind int
 
+// landed reports whether the kind merges, after which cleanup runs on past
+// a failure instead of stopping.
+func (k landingKind) landed() bool {
+	return k == landingPull || k == landingUnpushed || k == landingGone
+}
+
 const (
 	landingPull     landingKind = iota // merge the PR, or confirm it merged
 	landingUnpushed                    // a branch never pushed merges into the local default branch
@@ -28,12 +34,6 @@ const (
 	landingLeftOpen                    // --local: the PR stays open, only the local side is cleaned up
 	landingGone                        // the PR merged and the worktree is gone: a finish stopped halfway
 )
-
-// landed reports whether the kind merges, after which cleanup runs on past
-// a failure instead of stopping.
-func (k landingKind) landed() bool {
-	return k == landingPull || k == landingUnpushed || k == landingGone
-}
 
 // A landing is what land leaves for cleanup and the report.
 type landing struct {
@@ -45,7 +45,7 @@ type landing struct {
 	kept  string             // the kept/ branch a spike's experiment goes to, "" to discard it
 }
 
-func land(ctx context.Context, w io.Writer, in finishInput, d finishDecision, errs *cleanupErrs) (landing, error) {
+func land(ctx context.Context, w io.Writer, in FinishInput, d finishDecision, errs *cleanupErrs) (landing, error) {
 	switch d.kind {
 	case landingSpike:
 		return landSpike(ctx, w, in, d)
@@ -54,7 +54,7 @@ func land(ctx context.Context, w io.Writer, in finishInput, d finishDecision, er
 
 		return landing{
 			ended: p.URL + " left open",
-			rows:  []render.Fact{render.TaskFact(ctx, w, in.main, in.task.ID), {Label: "pr", Value: p.URL, URL: true}},
+			rows:  []render.Fact{render.TaskFact(ctx, w, in.Main, in.Task.ID), {Label: "pr", Value: p.URL, URL: true}},
 			notes: []string{fmt.Sprintf("%s is left %s: nothing merged, pulled or deleted on origin",
 				p.URL, p.Status)},
 		}, nil
@@ -65,19 +65,19 @@ func land(ctx context.Context, w io.Writer, in finishInput, d finishDecision, er
 
 // landSpike releases what waited on the spike; its experiment goes later,
 // with the worktree.
-func landSpike(ctx context.Context, w io.Writer, in finishInput, d finishDecision) (landing, error) {
-	l := landing{ended: "the spike " + in.task.ID + " closed"}
+func landSpike(ctx context.Context, w io.Writer, in FinishInput, d finishDecision) (landing, error) {
+	l := landing{ended: "the spike " + in.Task.ID + " closed"}
 
-	if in.flags.keep {
-		l.kept = keptName(ctx, in.main, d.name, in.task.Members())
+	if in.Flags.Keep {
+		l.kept = KeptName(ctx, in.Main, d.name, in.Task.Members())
 	}
 
-	released, err := releaseDependents(ctx, in.main, d.name, d.def, false)
+	released, err := ReleaseDependents(ctx, in.Main, d.name, d.def, false)
 	if err != nil {
 		return l, err
 	}
 
-	l.rows = []render.Fact{render.TaskFact(ctx, w, in.main, in.task.Label())}
+	l.rows = []render.Fact{render.TaskFact(ctx, w, in.Main, in.Task.Label())}
 	if l.kept != "" {
 		l.rows = append(l.rows, render.Fact{Label: "branch", Value: l.kept})
 	}
@@ -90,7 +90,7 @@ func landSpike(ctx context.Context, w io.Writer, in finishInput, d finishDecisio
 // landMerge lands a PR or a branch never pushed. Main stays on the task's
 // branch until cleanup, so a failure here leaves a rerun the same shape to
 // find; once the merge lands, errs collects instead of stopping.
-func landMerge(ctx context.Context, w io.Writer, in finishInput, d finishDecision, errs *cleanupErrs) (landing, error) {
+func landMerge(ctx context.Context, w io.Writer, in FinishInput, d finishDecision, errs *cleanupErrs) (landing, error) {
 	name, def, p := d.name, d.def, d.pull
 	unpushed := d.kind == landingUnpushed
 
@@ -100,7 +100,7 @@ func landMerge(ctx context.Context, w io.Writer, in finishInput, d finishDecisio
 		err               error
 	)
 
-	if len(in.task.Riders()) > 0 && !unpushed {
+	if len(in.Task.Riders()) > 0 && !unpushed {
 		if riderNotes, err = settleRiders(ctx, in, name, p.Status == forge.Merged); err != nil {
 			return landing{}, err
 		}
@@ -110,9 +110,9 @@ func landMerge(ctx context.Context, w io.Writer, in finishInput, d finishDecisio
 		ended: p.URL + " merged",
 		// read before the merge, while the branch tip it was written at still exists
 		hand: taskcmd.HandoffLines(
-			archive.TaskHandoff(in.storage, in.task.ID),
-			in.task.ID,
-			taskcmd.BranchTip(ctx, in.main, name, p),
+			archive.TaskHandoff(in.Storage, in.Task.ID),
+			in.Task.ID,
+			taskcmd.BranchTip(ctx, in.Main, name, p),
 		),
 	}
 
@@ -137,13 +137,13 @@ func landMerge(ctx context.Context, w io.Writer, in finishInput, d finishDecisio
 
 		in.step("pulling " + def)
 
-		note, deferred := pullMain(ctx, in.root, in.main, def, p.Landed)
+		note, deferred := pullMain(ctx, in.Root, in.Main, def, p.Landed)
 		if d.place != inMainCheckout || deferred {
-			notes = appendNote(notes, note)
+			notes = AppendNote(notes, note)
 		}
 
-		if deferred && in.deferred != nil {
-			in.deferred(note)
+		if deferred && in.Deferred != nil {
+			in.Deferred(note)
 		}
 
 		sha = p.Landed
@@ -154,17 +154,17 @@ func landMerge(ctx context.Context, w io.Writer, in finishInput, d finishDecisio
 		l.end.Pr = statusview.PullNumber(p.URL)
 	}
 
-	notes = appendNote(notes, d.loreNote)
+	notes = AppendNote(notes, d.loreNote)
 
 	recordLanded()
 
-	released, err := releaseDependents(ctx, in.main, name, def, true)
+	released, err := ReleaseDependents(ctx, in.Main, name, def, true)
 	_ = errs.check("releasing dependents", err)
 
 	notes = append(notes, released...)
 	l.notes = notes
 
-	l.rows = []render.Fact{render.TaskFact(ctx, w, in.main, in.task.Label())}
+	l.rows = []render.Fact{render.TaskFact(ctx, w, in.Main, in.Task.Label())}
 	if !unpushed {
 		l.rows = append(l.rows, render.Fact{Label: "pr", Value: p.URL, URL: true})
 	}
@@ -177,7 +177,7 @@ func landMerge(ctx context.Context, w io.Writer, in finishInput, d finishDecisio
 // landPull merges an open request or confirms a merged one. Requests based
 // on the branch move to the merged one's base before the branch goes, since
 // the delete would close them; the notes say which moved.
-func landPull(ctx context.Context, in finishInput, name, def string, p forge.PR) (forge.PR, []string, error) {
+func landPull(ctx context.Context, in FinishInput, name, def string, p forge.PR) (forge.PR, []string, error) {
 	var notes []string
 
 	switch p.Status {
@@ -193,27 +193,27 @@ func landPull(ctx context.Context, in finishInput, name, def string, p forge.PR)
 			)
 		}
 
-		method, note, err := in.host.MergeMethod(ctx, in.method)
+		method, note, err := in.Host.MergeMethod(ctx, in.Method)
 		if err != nil {
 			return forge.PR{}, nil, err
 		}
 
-		notes = appendNote(notes, note)
+		notes = AppendNote(notes, note)
 
 		// settleRiders may have just rewritten the description's closing
 		// keywords, and the body under the commit must be the host's current one
 		description := p.Body
-		if in.traces {
+		if in.Traces {
 			var note string
 
 			if description, note, err = lastState(ctx, in, name, description); err != nil {
 				return forge.PR{}, nil, err
 			}
 
-			notes = appendNote(notes, note)
+			notes = AppendNote(notes, note)
 		}
 
-		if p, err = in.host.MergePR(ctx, p, name, method, mergeBody(in, description, method)); err != nil {
+		if p, err = in.Host.MergePR(ctx, p, name, method, MergeBody(in, description, method)); err != nil {
 			return forge.PR{}, nil, err
 		}
 	case forge.Merged:
@@ -225,30 +225,30 @@ func landPull(ctx context.Context, in finishInput, name, def string, p forge.PR)
 
 	if p.Status != forge.Merged || p.Landed == "" {
 		return forge.PR{}, nil, fmt.Errorf("%s reports %s as %s with no merge commit after the merge",
-			in.host.Name, p.URL, p.Status)
+			in.Host.Name, p.URL, p.Status)
 	}
 
-	exists, err := gitx.RemoteBranchExists(ctx, in.main, name)
+	exists, err := gitx.RemoteBranchExists(ctx, in.Main, name)
 	if err != nil {
 		return forge.PR{}, nil, err
 	}
 
 	if exists {
-		moved, err := retargetStacked(ctx, in.host, p, name, cmp.Or(p.Base, def))
+		moved, err := retargetStacked(ctx, in.Host, p, name, cmp.Or(p.Base, def))
 		if err != nil {
 			return forge.PR{}, nil, err
 		}
 
 		notes = append(notes, moved...)
 
-		if err := in.host.DeleteBranch(ctx, name); err != nil {
+		if err := in.Host.DeleteBranch(ctx, name); err != nil {
 			return forge.PR{}, nil, fmt.Errorf("%s merged, but deleting its remote branch failed: %w", p.URL, err)
 		}
 	}
 
 	// the local copy of origin's branch outlives the API's delete, and a
 	// task with any branch left reads as not finished to drive and start
-	if err := gitx.DeleteRemoteRef(ctx, in.main, name); err != nil {
+	if err := gitx.DeleteRemoteRef(ctx, in.Main, name); err != nil {
 		notes = append(notes, fmt.Sprintf("origin/%s is gone but its local copy is not: %v", name, err))
 	}
 
@@ -287,11 +287,11 @@ func retargetStacked(ctx context.Context, h hostops.Host, merged forge.PR, branc
 // lastState sets the PR body's state block to finish, returning the body the
 // host holds. A failed read or write is a note, except for a bundle, whose
 // fallback body would close a rider settleRiders just kept open.
-func lastState(ctx context.Context, in finishInput, branch, fallback string) (string, string, error) {
-	body, err := in.host.PRBody(ctx, branch)
+func lastState(ctx context.Context, in FinishInput, branch, fallback string) (string, string, error) {
+	body, err := in.Host.PRBody(ctx, branch)
 
 	switch {
-	case err != nil && len(in.task.Riders()) > 0:
+	case err != nil && len(in.Task.Riders()) > 0:
 		return "", "", err
 	case err != nil:
 		body = fallback
@@ -302,18 +302,18 @@ func lastState(ctx context.Context, in finishInput, branch, fallback string) (st
 	return body, stateNote(err), nil
 }
 
-func putLastState(ctx context.Context, in finishInput, branch, body string) (string, error) {
+func putLastState(ctx context.Context, in FinishInput, branch, body string) (string, error) {
 	out, err := trace.Rewrite(body, trace.Update{
 		Step:   "finish",
-		Task:   in.task.ID,
-		Riders: in.task.Riders(),
-		After:  statusview.BranchAfter(ctx, in.main, branch),
+		Task:   in.Task.ID,
+		Riders: in.Task.Riders(),
+		After:  statusview.BranchAfter(ctx, in.Main, branch),
 	})
 	if err != nil || out == body {
 		return body, err
 	}
 
-	if err := in.host.EditPull(ctx, branch, "", out); err != nil {
+	if err := in.Host.EditPull(ctx, branch, "", out); err != nil {
 		return body, err
 	}
 
@@ -328,20 +328,20 @@ func stateNote(err error) string {
 	return "the PR body's state block was not rewritten: " + err.Error()
 }
 
-// mergeBody is the host commit's body: the description minus its state
+// MergeBody is the host commit's body: the description minus its state
 // block, then a Task: line per member, so a squash still names what it
 // shipped. A rebase, or glab's plain merge (""), keeps the branch's trailers.
-func mergeBody(in finishInput, description, method string) string {
-	if !in.traces || (method != "--squash" && method != "--merge") {
+func MergeBody(in FinishInput, description, method string) string {
+	if !in.Traces || (method != "--squash" && method != "--merge") {
 		return ""
 	}
 
-	trailers, err := trace.Render(trace.Trailers{Tasks: in.task.Members()})
+	trailers, err := trace.Render(trace.Trailers{Tasks: in.Task.Members()})
 	if err != nil {
 		return ""
 	}
 
-	trailers += stack.ChangeTrailer(in.task.ID, in.loreChange())
+	trailers += stack.ChangeTrailer(in.Task.ID, in.loreChange())
 
 	if body := strings.TrimSpace(trace.StripState(description)); body != "" {
 		return body + "\n\n" + trailers

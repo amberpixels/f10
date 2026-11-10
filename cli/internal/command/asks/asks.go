@@ -332,25 +332,6 @@ type Deliverer struct {
 	Live   func(a asks.Ask) bool
 }
 
-func liveDeliver() Deliverer {
-	return Deliverer{
-		Prompt: func(ctx context.Context, w io.Writer, a asks.Ask) error {
-			note, err := launch.PromptChecked(ctx, a.Worktree, a.Task, a.Suffix, a.Answer)
-			if note != "" {
-				fmt.Fprintln(w, note)
-			}
-
-			return err
-		},
-		Resume: resumeAskDrive,
-		Live: func(a asks.Ask) bool {
-			_, held := drives.Probe(a.Root, drives.DriveKey(a.Drive))
-
-			return held
-		},
-	}
-}
-
 // deliver moves a claimed answer to where it acts. A drive's ask goes to its
 // drive, a running one taking it as it exits so nothing runs twice; any
 // other is sent to its agent, unless typed in the pane already.
@@ -382,6 +363,25 @@ func (d Deliverer) deliver(ctx context.Context, w io.Writer, dir string, a asks.
 	fmt.Fprintf(w, "sent to %s's agent\n", asknotify.AskLink(render.LinksFor(w, false), a))
 
 	return nil
+}
+
+func liveDeliver() Deliverer {
+	return Deliverer{
+		Prompt: func(ctx context.Context, w io.Writer, a asks.Ask) error {
+			note, err := launch.PromptChecked(ctx, a.Worktree, a.Task, a.Suffix, a.Answer)
+			if note != "" {
+				fmt.Fprintln(w, note)
+			}
+
+			return err
+		},
+		Resume: resumeAskDrive,
+		Live: func(a asks.Ask) bool {
+			_, held := drives.Probe(a.Root, drives.DriveKey(a.Drive))
+
+			return held
+		},
+	}
 }
 
 func runAsksAnswer(ctx context.Context, cmd *cli.Command) error {

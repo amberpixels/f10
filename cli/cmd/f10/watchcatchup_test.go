@@ -165,7 +165,7 @@ func TestWatchCatchesUpAnOpenPR(t *testing.T) {
 			)
 
 			in := watchInput{
-				main: fx.in.main, root: root, mode: "report", catchup: tc.key,
+				main: fx.in.Main, root: root, mode: "report", catchup: tc.key,
 				prompt: func(_ context.Context, _ watchedTask, text string) error {
 					prompts = append(prompts, text)
 
@@ -254,7 +254,7 @@ func TestWatchCatchesUpAStackedPR(t *testing.T) {
 
 		prompts := 0
 		in := watchInput{
-			main: fx.in.main, root: t.TempDir(), mode: "report", catchup: true,
+			main: fx.in.Main, root: t.TempDir(), mode: "report", catchup: true,
 			prompt: func(context.Context, watchedTask, string) error { prompts++; return nil },
 		}
 
@@ -281,7 +281,7 @@ func TestWatchReportsAnAgentItCannotPrompt(t *testing.T) {
 	fx.f.script("git reset --hard p1", "")
 
 	in := watchInput{
-		main: fx.in.main, root: t.TempDir(), mode: "report", catchup: true,
+		main: fx.in.Main, root: t.TempDir(), mode: "report", catchup: true,
 		prompt: func(context.Context, watchedTask, string) error { return agentctl.ErrAgentNotFound },
 	}
 
@@ -369,7 +369,7 @@ func TestWatchSettlesASentCatchup(t *testing.T) {
 
 			prompts := 0
 			in := watchInput{
-				main: fx.in.main, root: root, mode: "report", catchup: true,
+				main: fx.in.Main, root: root, mode: "report", catchup: true,
 				prompt: func(context.Context, watchedTask, string) error { prompts++; return nil },
 			}
 
@@ -465,7 +465,7 @@ func TestWatchHandsAConflictToTheAgent(t *testing.T) {
 	var prompts []string
 
 	in := watchInput{
-		main: fx.in.main, root: t.TempDir(), mode: "report", catchup: true, engine: watchEngine(true),
+		main: fx.in.Main, root: t.TempDir(), mode: "report", catchup: true, engine: watchEngine(true),
 		prompt: func(_ context.Context, _ watchedTask, text string) error {
 			prompts = append(prompts, text)
 

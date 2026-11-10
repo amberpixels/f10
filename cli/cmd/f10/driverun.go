@@ -19,6 +19,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
@@ -149,7 +150,7 @@ type driveRun struct {
 
 	task     driveTask
 	base     *driveRun // the listed base, or nil for none or one outside the list
-	o        openedTask
+	o        start.OpenedTask
 	phase    runPhase
 	flow     runplan.ShipFlow // the flow this task ships through: its branch's record, else the run's
 	finishes bool             // drive ends the task with finish: the pace says so, or a spike closes

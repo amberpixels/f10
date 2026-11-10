@@ -17,6 +17,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	statuscmd "github.com/amberpixels/f10/cli/internal/command/status"
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lore"
@@ -893,7 +894,10 @@ func TestStatusReadsTheCurrentSeries(t *testing.T) {
 		Outcome: "proceed", Gate: "judge", Commit: "abcdef1", Judged: "change", Body: "first PR",
 	})
 
-	if _, err := closeSeries(filepath.Join(storage, "reviews", "FT-1"), archive.SeriesEnd{Pr: "#7"}); err != nil {
+	if _, err := finish.CloseSeries(
+		filepath.Join(storage, "reviews", "FT-1"),
+		archive.SeriesEnd{Pr: "#7"},
+	); err != nil {
 		t.Fatal(err)
 	}
 

@@ -14,6 +14,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -108,7 +109,7 @@ func TestWakeReturnsOnAWrite(t *testing.T) {
 	in := &driveInput{
 		stateDir: t.TempDir(),
 	}
-	in.runs = []*driveRun{{phase: atRunning, o: openedTask{path: "/code/repo.GH-1"}}}
+	in.runs = []*driveRun{{phase: atRunning, o: start.OpenedTask{Path: "/code/repo.GH-1"}}}
 
 	write := func(name, root string) {
 		time.Sleep(50 * time.Millisecond)
@@ -118,12 +119,12 @@ func TestWakeReturnsOnAWrite(t *testing.T) {
 
 	go write("s1.state", "/code/repo.GH-1")
 
-	start := time.Now()
+	started := time.Now()
 	if err := in.wake(t.Context(), 5*time.Second); err != nil {
 		t.Fatal(err)
 	}
 
-	if took := time.Since(start); took > 2*time.Second {
+	if took := time.Since(started); took > 2*time.Second {
 		t.Errorf("wake took %s with a write after 50ms", took)
 	}
 
@@ -131,12 +132,12 @@ func TestWakeReturnsOnAWrite(t *testing.T) {
 	go write("s2.state", "/code/elsewhere")
 	go write("hooks.log", "/code/repo.GH-1")
 
-	start = time.Now()
+	started = time.Now()
 	if err := in.wake(t.Context(), 300*time.Millisecond); err != nil {
 		t.Fatal(err)
 	}
 
-	if took := time.Since(start); took < 290*time.Millisecond {
+	if took := time.Since(started); took < 290*time.Millisecond {
 		t.Errorf("wake returned after %s with only other writes", took)
 	}
 }

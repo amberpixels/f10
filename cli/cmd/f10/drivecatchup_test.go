@@ -17,6 +17,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -601,7 +602,7 @@ func TestIntegrateBranchThenNothingLeft(t *testing.T) {
 		main:    r.dir,
 		catchup: &stack.CatchupEngine{Policy: in, Base: stack.ResolveCatchup},
 	}
-	run := &driveRun{o: openedTask{branch: "FT-1/a", path: r.dir}}
+	run := &driveRun{o: start.OpenedTask{Branch: "FT-1/a", Path: r.dir}}
 
 	if tree, err := d.catchupLeft(t.Context(), run); err != nil || tree.Left() != "" {
 		left := tree.Left()
@@ -632,7 +633,7 @@ func TestCatchupLeftNamesAMarker(t *testing.T) {
 		main:    r.dir,
 		catchup: &stack.CatchupEngine{Policy: in, Base: stack.ResolveCatchup},
 	}
-	run := &driveRun{o: openedTask{branch: "FT-1/a", path: r.dir}}
+	run := &driveRun{o: start.OpenedTask{Branch: "FT-1/a", Path: r.dir}}
 
 	if _, _, err := stack.IntegrateBranch(
 		t.Context(),
@@ -826,7 +827,7 @@ func TestDriveRefusesARetargetedPullRequest(t *testing.T) {
 
 			r := &driveRun{
 				task: driveTask{ref: ref.Ref{ID: "GH-1"}},
-				o:    openedTask{branch: "GH-1", path: "/code/repo.GH-1"},
+				o:    start.OpenedTask{Branch: "GH-1", Path: "/code/repo.GH-1"},
 			}
 			err := fx.in.markBehind(t.Context(), r)
 			marked := fx.f.called("set branch.GH-1." + string(branchmeta.Landed))

@@ -3,7 +3,10 @@ package layers
 import (
 	"bufio"
 	"bytes"
+	"io/fs"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -11,6 +14,8 @@ import (
 const module = "github.com/amberpixels/f10/cli/"
 
 func TestModuleFollowsTheTable(t *testing.T) {
+	statSources(t)
+
 	out, err := exec.CommandContext(t.Context(), "go", "list", "-f",
 		"{{.ImportPath}} {{join .Imports \" \"}}", module+"...").Output()
 	if err != nil {
@@ -69,5 +74,26 @@ func TestCheckReportsAReverseImport(t *testing.T) {
 		if got[i].String() != want[i] {
 			t.Errorf("violation %d = %q, want %q", i, got[i], want[i])
 		}
+	}
+}
+
+// statSources touches every Go file in the module: go test caches a result
+// against the files the test read, and it cannot see what go list read.
+func statSources(t *testing.T) {
+	t.Helper()
+
+	root := filepath.Join("..", "..")
+
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || filepath.Ext(path) != ".go" {
+			return err
+		}
+
+		_, err = os.Stat(path)
+
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }

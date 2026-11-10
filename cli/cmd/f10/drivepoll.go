@@ -8,6 +8,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/driverec"
+	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -87,12 +88,12 @@ func (in *driveInput) poll(
 	case atPending, atHeld, atRunning:
 	}
 
-	ws := workspaceByID(in.view().wss, r.o.ws.ID)
+	ws := finish.WorkspaceByID(in.view().wss, r.o.Ws.ID)
 	if ws == nil {
 		return in.workspaceGone(r)
 	}
 
-	run, _ := in.run(r.o.path)
+	run, _ := in.run(r.o.Path)
 	run = r.current(run)
 
 	now := in.now()
@@ -118,7 +119,7 @@ func (in *driveInput) poll(
 	// a prompt mark proves a turn the looks missed: one that began and ended
 	// between two of them
 	if !r.begun && !recent {
-		if p, ok := state.LastPrompt(in.stateDir, r.o.path); ok && !p.At.Before(since) {
+		if p, ok := state.LastPrompt(in.stateDir, r.o.Path); ok && !p.At.Before(since) {
 			if now.Sub(p.At) < promptSettle {
 				return nil
 			}
@@ -191,7 +192,7 @@ func (in *driveInput) poll(
 			r.idleSince = time.Time{}
 
 			halt := halted(id, skill, fmt.Sprintf("agent %s in workspace %s is idle %s: "+
-				"it stopped without reporting, answer it in that pane", agentctl.AgentName(id, r.task.suffix, r.o.path),
+				"it stopped without reporting, answer it in that pane", agentctl.AgentName(id, r.task.suffix, r.o.Path),
 				workspaceName(ws), idleWhile(run, skill)))
 
 			if skill == "catchup" {
@@ -238,7 +239,7 @@ func (in *driveInput) marked(ctx context.Context, r *driveRun) bool {
 }
 
 func (in *driveInput) mark(ctx context.Context, r *driveRun) (branchmeta.Key, error) {
-	return stack.MarkOn(ctx, in.main, r.o.branch)
+	return stack.MarkOn(ctx, in.main, r.o.Branch)
 }
 
 // verdict reads a stopped run: an ask goes to the user, anything else is the

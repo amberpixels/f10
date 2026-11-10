@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/stack"
 )
 
@@ -69,7 +70,7 @@ func TestDefaultTipReaders(t *testing.T) {
 			local, remote := c.local(f), c.remote(f)
 			f.point(local, remote)
 
-			sha, err := landingBase(t.Context(), f.repo.dir, "main")
+			sha, err := finish.LandingBase(t.Context(), f.repo.dir, "main")
 
 			switch c.land {
 			case "error":

@@ -1,4 +1,6 @@
-package main
+// Package start opens a task: its checkout, its workspace and its agent,
+// prompted, or a PR picked up to continue.
+package start
 
 import (
 	"context"
@@ -10,6 +12,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/driver"
+	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/launch"
@@ -22,91 +25,94 @@ import (
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
-// startInput is everything start needs once the target is settled, so
+// StartInput is everything start needs once the target is settled, so
 // the flow can be tested without a checkout.
-type startInput struct {
-	main     string         // the main checkout: worktrees are its siblings
-	driver   *driver.Driver // nil without one
-	task     ref.Ref
-	suffix   string
-	mode     string
-	flow     runplan.ShipFlow                      // the flow ship runs; zero for default
-	flowKept bool                                  // drive records the flow and the pace itself, keeping what the branch has
-	pace     string                                // the --pace typed, recorded on the branch; "" records none
-	after    string                                // task id whose branch is the base and whose plan is the contract, or ""
-	base     string                                // branch whose ref is the base, or ""
-	storage  storage.Root                          // the storage root every checkout shares
-	title    func(context.Context) (string, error) // the task's title, for the default branch's slug; nil when nothing answers
-	notes    []string                              // notes settled before the flow, printed beneath the report
-	// profile is what the agent starts on, resolved; profileFlagged says a
+type StartInput struct {
+	Main     string         // the main checkout: worktrees are its siblings
+	Driver   *driver.Driver // nil without one
+	Task     ref.Ref
+	Suffix   string
+	Mode     string
+	Flow     runplan.ShipFlow                      // the flow ship runs; zero for default
+	FlowKept bool                                  // drive records the flow and the pace itself, keeping what the branch has
+	Pace     string                                // the --pace typed, recorded on the branch; "" records none
+	After    string                                // task id whose branch is the base and whose plan is the contract, or ""
+	Base     string                                // branch whose ref is the base, or ""
+	Storage  storage.Root                          // the storage root every checkout shares
+	Title    func(context.Context) (string, error) // the task's title, for the default branch's slug; nil when nothing answers
+	Notes    []string                              // notes settled before the flow, printed beneath the report
+	// Profile is what the agent starts on, resolved; profileFlagged says a
 	// flag chose it, which wins over the profile the branch recorded
-	profile        agentctl.Profile
-	profileFlagged bool
-	progress       io.Writer       // where a wait in progress is reported, or nil for nowhere
-	pick           *hostops.Pickup // the PR picked up, or nil for a task started by its id
-	note           string          // the user's words after the id, for the agent before it waits, or ""
-	// children is the task's subtasks, read to refuse a parent; nil skips the
+	Profile        agentctl.Profile
+	ProfileFlagged bool
+	Progress       io.Writer       // where a wait in progress is reported, or nil for nowhere
+	Pick           *hostops.Pickup // the PR picked up, or nil for a task started by its id
+	Note           string          // the user's words after the id, for the agent before it waits, or ""
+	// Children is the task's subtasks, read to refuse a parent; nil skips the
 	// check (see checksParent)
-	children func(ctx context.Context, task ref.Ref) ([]stack.ChildRow, error)
-	// started moves a task to tracker.status's started word; nil when none
+	Children func(ctx context.Context, task ref.Ref) ([]stack.ChildRow, error)
+	// Started moves a task to tracker.status's started word; nil when none
 	// is declared, or for a PR picked up, whose task someone else started
-	started func(ctx context.Context, task ref.Ref) error
+	Started func(ctx context.Context, task ref.Ref) error
 }
 
-// start runs the flow: the checkout and its agent, the prompt, the report.
+// Start runs the flow: the checkout and its agent, the prompt, the report.
 // A workspace Herdr already showed keeps its agent, and nothing is
 // prompted twice; one left with no agent gets its agent and its prompt.
-func start(ctx context.Context, w io.Writer, in startInput) error {
-	o, err := openTask(ctx, in)
+func Start(ctx context.Context, w io.Writer, in StartInput) error {
+	o, err := OpenTask(ctx, in)
 	if err != nil {
 		return err
 	}
 
-	if o.fresh {
-		text := launch.Prompt(in.mode, in.flow, o.task.Label(), o.dep, o.plan, in.pick, in.note)
+	if o.Fresh {
+		text := launch.Prompt(in.Mode, in.Flow, o.Task.Label(), o.Dep, o.Plan, in.Pick, in.Note)
 
 		sent := time.Now()
 
-		name, typed, err := o.deliver(ctx, in.task.ID, in.suffix, text)
+		name, typed, err := o.Deliver(ctx, in.Task.ID, in.Suffix, text)
 		if err != nil {
 			return err
 		}
 
 		if typed {
-			o.notes = appendNote(o.notes, launch.WatchEnter(ctx, worktree.Agents(o.path), o.path, name, text, sent))
+			o.Notes = finish.AppendNote(
+				o.Notes,
+				launch.WatchEnter(ctx, worktree.Agents(o.Path), o.Path, name, text, sent),
+			)
 		}
 
-		o.notes = append(o.notes, markStarted(ctx, in.started, o.task)...)
+		o.Notes = append(o.Notes, MarkStarted(ctx, in.Started, o.Task)...)
 	}
 
-	rows := []render.Fact{render.TaskFact(ctx, w, in.main, o.task.Label())}
-	if in.pick != nil {
-		rows = append(rows, render.Fact{Label: "pr", Value: in.pick.URL, URL: true})
+	rows := []render.Fact{render.TaskFact(ctx, w, in.Main, o.Task.Label())}
+	if in.Pick != nil {
+		rows = append(rows, render.Fact{Label: "pr", Value: in.Pick.URL, URL: true})
 	}
 
-	rows = append(rows, render.Fact{Label: "branch", Value: o.branch})
-	if o.dep != nil {
-		rows = append(rows, render.Fact{Label: "after", Value: o.dep.Task})
+	rows = append(rows, render.Fact{Label: "branch", Value: o.Branch})
+	if o.Dep != nil {
+		rows = append(rows, render.Fact{Label: "after", Value: o.Dep.Task})
 	}
 
-	if o.plan != "" {
-		rows = append(rows, render.Fact{Label: "plan", Value: o.plan, Path: true})
+	if o.Plan != "" {
+		rows = append(rows, render.Fact{Label: "plan", Value: o.Plan, Path: true})
 	}
 
-	if o.fresh && !o.profile.IsDefault() {
-		rows = append(rows, render.Fact{Label: "agent", Value: o.profile.Short()})
+	if o.Fresh && !o.Profile.IsDefault() {
+		rows = append(rows, render.Fact{Label: "agent", Value: o.Profile.Short()})
 	}
 
 	return render.WriteReport(
 		w,
-		append(rows, render.Fact{Label: "path", Value: o.path}, render.Fact{Label: "workspace", Value: o.ws.ID}),
-		o.notes,
+		append(rows, render.Fact{Label: "path", Value: o.Path}, render.Fact{Label: "workspace", Value: o.Ws.ID}),
+		o.Notes,
 	)
 }
 
-// startedMove moves a task to tracker.status's started word, or is nil when
+// StartedMove moves a task to tracker.status's started word, or is nil when
 // none is declared.
-func startedMove(t *target.Target) func(context.Context, ref.Ref) error {
+func StartedMove(t *target.Target) func(context.Context, ref.Ref) error {
 	word := t.Effective.TrackerStatus["started"]
 	if word == "" {
 		return nil
@@ -117,9 +123,9 @@ func startedMove(t *target.Target) func(context.Context, ref.Ref) error {
 	}
 }
 
-// markStarted moves every member to its started status. The worktree is
+// MarkStarted moves every member to its started status. The worktree is
 // the result, so a failure is a note, never a refusal.
-func markStarted(ctx context.Context, started func(context.Context, ref.Ref) error, task ref.Ref) []string {
+func MarkStarted(ctx context.Context, started func(context.Context, ref.Ref) error, task ref.Ref) []string {
 	if started == nil {
 		return nil
 	}
@@ -135,23 +141,52 @@ func markStarted(ctx context.Context, started func(context.Context, ref.Ref) err
 	return notes
 }
 
-// An openedTask is what openTask leaves behind; fresh says this call is to
+// An OpenedTask is what openTask leaves behind; fresh says this call is to
 // start the agent, which deliver does with its first prompt.
-type openedTask struct {
-	task   ref.Ref // the task, with the riders its branch ships
-	branch string
-	path   string
-	ws     agentctl.Opened
-	dep    *launch.Dependency
-	plan   string // the task's plan the worktree reads, or "" when none was saved or no agent was started
-	fresh  bool
-	notes  []string
-	// profile is what the agent was started on, when fresh; a report names
+type OpenedTask struct {
+	Task   ref.Ref // the task, with the riders its branch ships
+	Branch string
+	Path   string
+	Ws     agentctl.Opened
+	Dep    *launch.Dependency
+	Plan   string // the task's plan the worktree reads, or "" when none was saved or no agent was started
+	Fresh  bool
+	Notes  []string
+	// Profile is what the agent was started on, when fresh; a report names
 	// it when it is not the kind's default
-	profile agentctl.Profile
+	Profile agentctl.Profile
 	// launch is the agent still to start, when fresh: it starts with the
 	// first text deliver sends, so that text never goes through its input box
 	launch *pendingLaunch
+}
+
+// Deliver sends text to the task's agent, starting it when its launch is
+// pending: on its command line when the kind takes a first prompt, else
+// typed right after. It names the agent that took the text, and typed says
+// the text went through the input box, where its Enter can be lost.
+func (o *OpenedTask) Deliver(ctx context.Context, id, suffix, text string) (string, bool, error) {
+	l := o.launch
+	if l == nil {
+		name, err := launch.PromptAgentAs(ctx, o.Path, id, suffix, text)
+
+		return name, true, err
+	}
+
+	// the prompt goes first: --add-dir takes every argument after it
+	first, argv := l.profile.PromptArgs(text)
+
+	args := slices.Concat(first, l.args)
+	if err := worktree.Agents(o.Path).StartAgent(ctx, o.Ws, l.agent, l.profile.Kind, args, l.waiting); err != nil {
+		return "", false, err
+	}
+
+	o.launch = nil
+
+	if argv {
+		return l.agent, false, nil
+	}
+
+	return l.agent, true, worktree.Agents(o.Path).Prompt(ctx, l.agent, text)
 }
 
 // A pendingLaunch is an agent openTask decided to start.
@@ -162,54 +197,25 @@ type pendingLaunch struct {
 	waiting func(waited, limit time.Duration)
 }
 
-// deliver sends text to the task's agent, starting it when its launch is
-// pending: on its command line when the kind takes a first prompt, else
-// typed right after. It names the agent that took the text, and typed says
-// the text went through the input box, where its Enter can be lost.
-func (o *openedTask) deliver(ctx context.Context, id, suffix, text string) (string, bool, error) {
-	l := o.launch
-	if l == nil {
-		name, err := launch.PromptAgentAs(ctx, o.path, id, suffix, text)
-
-		return name, true, err
-	}
-
-	// the prompt goes first: --add-dir takes every argument after it
-	first, argv := l.profile.PromptArgs(text)
-
-	args := slices.Concat(first, l.args)
-	if err := worktree.Agents(o.path).StartAgent(ctx, o.ws, l.agent, l.profile.Kind, args, l.waiting); err != nil {
-		return "", false, err
-	}
-
-	o.launch = nil
-
-	if argv {
-		return l.agent, false, nil
-	}
-
-	return l.agent, true, worktree.Agents(o.path).Prompt(ctx, l.agent, text)
-}
-
-// openTask runs everything start does short of starting and prompting the
+// OpenTask runs everything start does short of starting and prompting the
 // agent, which deliver does with the first text. Every lookup
 // that can refuse runs before the first thing is created, the worktree;
 // drive adopts main's plan too but prompts the agent itself, skill by skill.
-func openTask(ctx context.Context, in startInput) (openedTask, error) {
+func OpenTask(ctx context.Context, in StartInput) (OpenedTask, error) {
 	settled, err := branchFor(ctx, in)
 	if err != nil {
-		return openedTask{}, err
+		return OpenedTask{}, err
 	}
 
 	name, base, dep, existing := settled.name, settled.base, settled.dep, settled.existing
 
-	if in.pick == nil {
-		if in.task, err = settleBundle(ctx, in.main, in.task, existing.Name); err != nil {
-			return openedTask{}, err
+	if in.Pick == nil {
+		if in.Task, err = SettleBundle(ctx, in.Main, in.Task, existing.Name); err != nil {
+			return OpenedTask{}, err
 		}
 	}
 
-	notes := slices.Clone(in.notes)
+	notes := slices.Clone(in.Notes)
 
 	// the bare-id note explains a name this run gives; a branch that exists
 	// keeps the name it has, whatever the title would have said
@@ -227,34 +233,34 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 
 	path, notes, err := openWorktree(ctx, in, name, base, dep, existing, notes)
 	if err != nil {
-		return openedTask{}, err
+		return OpenedTask{}, err
 	}
 
 	if notes, err = recordBranchFacts(ctx, in, name, dep, existing, notes); err != nil {
-		return openedTask{}, err
+		return OpenedTask{}, err
 	}
 
-	ws, wsNotes, err := worktree.Agents(in.main).Open(ctx, path, name)
+	ws, wsNotes, err := worktree.Agents(in.Main).Open(ctx, path, name)
 	if err != nil {
-		return openedTask{}, err
+		return OpenedTask{}, err
 	}
 
 	notes = append(notes, wsNotes...)
 
-	o := openedTask{task: in.task, branch: name, path: path, ws: ws, dep: dep}
+	o := OpenedTask{Task: in.Task, Branch: name, Path: path, Ws: ws, Dep: dep}
 
-	agent := agentctl.AgentName(in.task.ID, in.suffix, path)
+	agent := agentctl.AgentName(in.Task.ID, in.Suffix, path)
 
 	launched, note, err := needsAgent(ctx, path, ws)
 	if err != nil {
-		return openedTask{}, err
+		return OpenedTask{}, err
 	}
 
-	profile := in.profile.Over(agentctl.Profile{})
+	profile := in.Profile.Over(agentctl.Profile{})
 
 	if launched {
 		if profile, notes, err = prepareLaunch(ctx, in, &o, name, path, agent, ws, profile, notes); err != nil {
-			return openedTask{}, err
+			return OpenedTask{}, err
 		}
 	}
 
@@ -266,7 +272,7 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 		notes = append(notes, "agent profile "+profile.Short()+" ignored: no agent was started")
 	}
 
-	o.notes = notes
+	o.Notes = notes
 
 	return o, nil
 }
@@ -275,31 +281,31 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 // new one, made from base when the branch is new, and returns its path.
 func openWorktree(
 	ctx context.Context,
-	in startInput,
+	in StartInput,
 	name string,
 	base baseRef,
 	dep *launch.Dependency,
 	existing stack.FoundBranch,
 	notes []string,
 ) (string, []string, error) {
-	wts, err := gitx.Worktrees(ctx, in.main)
+	wts, err := gitx.Worktrees(ctx, in.Main)
 	if err != nil {
 		return "", nil, err
 	}
 
 	if dep != nil {
-		notes = append(notes, locatePlan(dep, in.storage)...)
+		notes = append(notes, locatePlan(dep, in.Storage)...)
 	}
 
 	path := stack.WorktreeOf(wts, name)
 
-	if in.pick != nil && !in.pick.Landed() && !existing.Remote {
-		note, err := syncPickup(ctx, in.main, name, path != "")
+	if in.Pick != nil && !in.Pick.Landed() && !existing.Remote {
+		note, err := SyncPickup(ctx, in.Main, name, path != "")
 		if err != nil {
 			return "", nil, err
 		}
 
-		notes = appendNote(notes, note)
+		notes = finish.AppendNote(notes, note)
 	}
 
 	switch {
@@ -307,24 +313,24 @@ func openWorktree(
 		notes = append(notes, "reused the existing worktree")
 	case existing.Name != "":
 		if existing.Remote {
-			if err := gitx.TrackBranch(ctx, in.main, name, false); err != nil {
+			if err := gitx.TrackBranch(ctx, in.Main, name, false); err != nil {
 				return "", nil, err
 			}
 
 			notes = append(notes, "created "+name+" tracking origin/"+name)
 		}
 
-		if path, err = worktree.Checkout(ctx, in.main, name, "", false); err != nil {
+		if path, err = worktree.Checkout(ctx, in.Main, name, "", false); err != nil {
 			return "", nil, err
 		}
 	default:
 		// a base at the default branch's commit changes nothing, which is
 		// otherwise indistinguishable from no base at all
-		if n := sameAsDefaultNote(ctx, in.main, base, dep); n != "" {
+		if n := sameAsDefaultNote(ctx, in.Main, base, dep); n != "" {
 			notes = append(notes, n)
 		}
 
-		if path, err = worktree.Checkout(ctx, in.main, name, base.ref, true); err != nil {
+		if path, err = worktree.Checkout(ctx, in.Main, name, base.ref, true); err != nil {
 			return "", nil, err
 		}
 	}
@@ -336,7 +342,7 @@ func openWorktree(
 // dependency, a picked-up PR's task and a bundle's riders.
 func recordBranchFacts(
 	ctx context.Context,
-	in startInput,
+	in StartInput,
 	name string,
 	dep *launch.Dependency,
 	existing stack.FoundBranch,
@@ -345,23 +351,23 @@ func recordBranchFacts(
 	// the dependency is recorded once the branch exists, made or found: a
 	// branch started without --after can still be stacked by a second start
 	if dep != nil {
-		if err := recordDependency(ctx, in.main, name, dep); err != nil {
+		if err := recordDependency(ctx, in.Main, name, dep); err != nil {
 			return nil, err
 		}
 	}
 
-	if in.pick != nil {
-		if err := branchmeta.Set(ctx, in.main, name, branchmeta.Task, in.task.ID); err != nil {
-			return nil, fmt.Errorf("linking %s to %s: %w", name, in.task.ID, err)
+	if in.Pick != nil {
+		if err := branchmeta.Set(ctx, in.Main, name, branchmeta.Task, in.Task.ID); err != nil {
+			return nil, fmt.Errorf("linking %s to %s: %w", name, in.Task.ID, err)
 		}
 	}
 
-	if in.pick != nil && in.pick.Landed() {
+	if in.Pick != nil && in.Pick.Landed() {
 		notes = append(notes, landedNotes(ctx, in, name, existing.Name == "")...)
 	}
 
-	if len(in.task.Riders()) > 0 {
-		if err := recordBundle(ctx, in.main, name, in.task); err != nil {
+	if len(in.Task.Riders()) > 0 {
+		if err := recordBundle(ctx, in.Main, name, in.Task); err != nil {
 			return nil, err
 		}
 	}
@@ -374,23 +380,23 @@ func recordBranchFacts(
 // profile it settled on.
 func prepareLaunch(
 	ctx context.Context,
-	in startInput,
-	o *openedTask,
+	in StartInput,
+	o *OpenedTask,
 	name, path, agent string,
 	ws agentctl.Opened,
 	profile agentctl.Profile,
 	notes []string,
 ) (agentctl.Profile, []string, error) {
 	// the agent reads the plan in place: only a prompted agent is told of it
-	o.plan = planIf(in.storage.Plan(in.task.ID))
+	o.Plan = planIf(in.Storage.Plan(in.Task.ID))
 
-	if err := makeStorageDirs(in.storage); err != nil {
+	if err := makeStorageDirs(in.Storage); err != nil {
 		return profile, nil, err
 	}
 
 	// a rerun keeps the profile the branch records, unless a flag chose one
-	if !in.profileFlagged {
-		recorded, err := runplan.RecordedProfile(ctx, in.main, name)
+	if !in.ProfileFlagged {
+		recorded, err := runplan.RecordedProfile(ctx, in.Main, name)
 		if err != nil {
 			return profile, nil, err
 		}
@@ -403,22 +409,22 @@ func prepareLaunch(
 	o.launch = &pendingLaunch{
 		agent:   agent,
 		profile: profile,
-		args:    agentArgs(profile, in.storage, path),
-		waiting: shellWait(in.progress, ws.Slot),
+		args:    AgentArgs(profile, in.Storage, path),
+		waiting: shellWait(in.Progress, ws.Slot),
 	}
-	o.fresh = true
-	o.profile = profile
+	o.Fresh = true
+	o.Profile = profile
 
 	// the flow is the branch's fact from here on: status lists its gates,
 	// and a rerun of drive keeps it
-	if !in.flowKept && in.flow.Recorded() != "" {
-		if err := branchmeta.Set(ctx, in.main, name, branchmeta.Flow, in.flow.Recorded()); err != nil {
+	if !in.FlowKept && in.Flow.Recorded() != "" {
+		if err := branchmeta.Set(ctx, in.Main, name, branchmeta.Flow, in.Flow.Recorded()); err != nil {
 			notes = append(notes, "the flow was not recorded on the branch: "+err.Error())
 		}
 	}
 
-	if !in.flowKept && in.pace != "" {
-		if err := branchmeta.Set(ctx, in.main, name, branchmeta.Pace, in.pace); err != nil {
+	if !in.FlowKept && in.Pace != "" {
+		if err := branchmeta.Set(ctx, in.Main, name, branchmeta.Pace, in.Pace); err != nil {
 			notes = append(notes, "the pace was not recorded on the branch: "+err.Error())
 		}
 	}
@@ -427,7 +433,7 @@ func prepareLaunch(
 	// reader of the branch (f10 board); a failed write loses nothing
 	// the agent needs
 	if !profile.IsDefault() {
-		if err := branchmeta.Set(ctx, in.main, name, branchmeta.Agent, profile.String()); err != nil {
+		if err := branchmeta.Set(ctx, in.Main, name, branchmeta.Agent, profile.String()); err != nil {
 			notes = append(notes, "the agent profile was not recorded on the branch: "+err.Error())
 		}
 	}
@@ -447,18 +453,18 @@ type settledBranch struct {
 // branchFor settles the branch before anything is created. An open PR's
 // branch and base are the PR's, so only whether it is local yet is open; a
 // landed one gets the task's branch at the commit it landed as.
-func branchFor(ctx context.Context, in startInput) (settledBranch, error) {
+func branchFor(ctx context.Context, in StartInput) (settledBranch, error) {
 	switch {
-	case in.pick != nil && in.pick.Landed():
+	case in.Pick != nil && in.Pick.Landed():
 		return landedBranchFor(ctx, in)
-	case in.pick != nil:
-		name := in.pick.Branch
-		local := stack.RefSHA(ctx, in.main, "refs/heads/"+name) != ""
+	case in.Pick != nil:
+		name := in.Pick.Branch
+		local := stack.RefSHA(ctx, in.Main, "refs/heads/"+name) != ""
 
 		return settledBranch{name: name, existing: stack.FoundBranch{Name: name, Remote: !local}}, nil
 	}
 
-	name, slugNote, err := stack.BranchName(ctx, in.driver, in.task, in.suffix, in.title)
+	name, slugNote, err := stack.BranchName(ctx, in.Driver, in.Task, in.Suffix, in.Title)
 	if err != nil {
 		return settledBranch{}, err
 	}
@@ -468,12 +474,12 @@ func branchFor(ctx context.Context, in startInput) (settledBranch, error) {
 		return settledBranch{}, err
 	}
 
-	x, err := stack.LoadBranchIndex(ctx, in.main)
+	x, err := stack.LoadBranchIndex(ctx, in.Main)
 	if err != nil {
 		return settledBranch{}, err
 	}
 
-	existing, err := x.Find(ctx, name, in.task.ID, in.suffix, stack.PolicyLocalOrOrigin)
+	existing, err := x.Find(ctx, name, in.Task.ID, in.Suffix, stack.PolicyLocalOrOrigin)
 	if err != nil {
 		return settledBranch{}, err
 	}
@@ -487,18 +493,18 @@ func branchFor(ctx context.Context, in startInput) (settledBranch, error) {
 // it landed, and a branch the task has here is reused as it is. The base
 // carries no sha: the landed commit at the default branch's tip is nothing
 // to note.
-func landedBranchFor(ctx context.Context, in startInput) (settledBranch, error) {
-	name, slugNote, err := stack.BranchName(ctx, in.driver, in.task, "", in.title)
+func landedBranchFor(ctx context.Context, in StartInput) (settledBranch, error) {
+	name, slugNote, err := stack.BranchName(ctx, in.Driver, in.Task, "", in.Title)
 	if err != nil {
 		return settledBranch{}, err
 	}
 
-	x, err := stack.LoadBranchIndex(ctx, in.main)
+	x, err := stack.LoadBranchIndex(ctx, in.Main)
 	if err != nil {
 		return settledBranch{}, err
 	}
 
-	existing, err := x.Find(ctx, name, in.task.ID, "", stack.PolicyLocal)
+	existing, err := x.Find(ctx, name, in.Task.ID, "", stack.PolicyLocal)
 	if err != nil {
 		return settledBranch{}, err
 	}
@@ -506,7 +512,7 @@ func landedBranchFor(ctx context.Context, in startInput) (settledBranch, error) 
 	return settledBranch{
 		name:     name,
 		slugNote: slugNote,
-		base:     baseRef{ref: in.pick.SHA, flag: in.pick.URL + "'s landed commit"},
+		base:     baseRef{ref: in.Pick.SHA, flag: in.Pick.URL + "'s landed commit"},
 		existing: existing,
 	}, nil
 }
@@ -516,20 +522,20 @@ func landedBranchFor(ctx context.Context, in startInput) (settledBranch, error) 
 // would report that as news every time. A branch the task already had keeps
 // its watch, since its own work may still be live. A failed write is a note,
 // since the worktree is the result.
-func landedNotes(ctx context.Context, in startInput, name string, created bool) []string {
+func landedNotes(ctx context.Context, in StartInput, name string, created bool) []string {
 	if !created {
 		return []string{fmt.Sprintf("%s is %s: %s is reused at its own tip and stays watched",
-			in.pick.URL, in.pick.State, name)}
+			in.Pick.URL, in.Pick.State, name)}
 	}
 
 	var notes []string
 
-	if err := branchmeta.Set(ctx, in.main, name, branchmeta.Watch, "false"); err != nil {
+	if err := branchmeta.Set(ctx, in.Main, name, branchmeta.Watch, "false"); err != nil {
 		notes = append(notes, "the watcher was not told to leave "+name+" alone: "+err.Error())
 	}
 
 	return append(notes, fmt.Sprintf("%s is %s: %s is local only at %s, and the watcher leaves it alone "+
-		"(f10 watch on %s undoes that)", in.pick.URL, in.pick.State, name, gitx.ShortSHA(in.pick.SHA), in.task.ID))
+		"(f10 watch on %s undoes that)", in.Pick.URL, in.Pick.State, name, gitx.ShortSHA(in.Pick.SHA), in.Task.ID))
 }
 
 // shellWait reports a wait for the pane's shell to finish starting, so a

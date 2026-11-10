@@ -1,4 +1,4 @@
-package main
+package finish
 
 import (
 	"cmp"
@@ -17,13 +17,13 @@ import (
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
-// finish runs in the order the refusals need: every refusal before anything
+// Finish runs in the order the refusals need: every refusal before anything
 // changes, the report before anything local goes, and the workspace close
 // last, since on the self-close path the close ends this process.
-func finish(ctx context.Context, w io.Writer, in finishInput) error {
+func Finish(ctx context.Context, w io.Writer, in FinishInput) error {
 	// read before the merge archives the series, which raises the count
-	if in.change == "" {
-		in.change = archive.ChangeOf(in.storage.Reviews(in.task.ID))
+	if in.Change == "" {
+		in.Change = archive.ChangeOf(in.Storage.Reviews(in.Task.ID))
 	}
 
 	d, err := decideFinish(ctx, in)
@@ -83,8 +83,8 @@ func (d finishDecision) stays() string {
 // decideFinish runs every refusal, so nothing has changed when one fires.
 // A branch with no worktree and a merged PR completes a finish that stopped
 // halfway; no branch at all returns the goneError for finishBranchless.
-func decideFinish(ctx context.Context, in finishInput) (finishDecision, error) {
-	name, path, onMain, err := finishTarget(ctx, in)
+func decideFinish(ctx context.Context, in FinishInput) (finishDecision, error) {
+	name, path, onMain, err := FinishTarget(ctx, in)
 	if gone := (goneError{}); errors.As(err, &gone) && gone.branch != "" {
 		return decideGone(ctx, in, gone)
 	}
@@ -100,46 +100,46 @@ func decideFinish(ctx context.Context, in finishInput) (finishDecision, error) {
 
 	// a spike's worktree holds its experiment uncommitted, which the close
 	// discards; main's tree may hold anything, so it stays refused
-	d.spike = taskSpike(path, in.storage, in.task.ID)
+	d.spike = TaskSpike(path, in.Storage, in.Task.ID)
 
 	switch {
-	case in.flags.keep && d.spike == "":
-		return d, fmt.Errorf("--keep keeps a spike's experiment, and %s has no spike report", in.task.ID)
+	case in.Flags.Keep && d.spike == "":
+		return d, fmt.Errorf("--keep keeps a spike's experiment, and %s has no spike report", in.Task.ID)
 	case d.spike == "" || onMain:
 		if err := refuseDirty(ctx, path); err != nil {
 			return d, err
 		}
 	}
 
-	wss, err := worktree.Agents(in.main).Workspaces(ctx)
+	wss, err := worktree.Agents(in.Main).Workspaces(ctx)
 	if err != nil {
 		return d, err
 	}
 
 	if !onMain {
-		d.ws, d.mainWS = workspaceAt(wss, path), workspaceAt(wss, in.main)
-		d.self = gitx.Inside(in.cwd, path) || (d.ws != nil && in.workspace != "" && in.workspace == d.ws.ID)
+		d.ws, d.mainWS = WorkspaceAt(wss, path), WorkspaceAt(wss, in.Main)
+		d.self = gitx.Inside(in.Cwd, path) || (d.ws != nil && in.Workspace != "" && in.Workspace == d.ws.ID)
 	}
 
-	if d.self && !in.flags.yes {
+	if d.self && !in.Flags.Yes {
 		return d, fmt.Errorf("f10 finish %s would close its own workspace (%s): "+
 			"run it from the main checkout, or pass --yes to close this workspace after the report",
-			in.task.ID, cmp.Or(workspaceLabel(d.ws), name))
+			in.Task.ID, cmp.Or(WorkspaceLabel(d.ws), name))
 	}
 
-	if d.def, err = stack.LocalDefault(ctx, in.main); err != nil {
+	if d.def, err = stack.LocalDefault(ctx, in.Main); err != nil {
 		return d, err
 	}
 
-	d.pull, err = in.host.PR(ctx, name)
+	d.pull, err = in.Host.PR(ctx, name)
 
 	unpushed, err := neverPushed(ctx, in, name, err)
 	if err != nil {
 		return d, err
 	}
 
-	if in.flags.mergedOnly && (unpushed || d.pull.Status != forge.Merged) {
-		return d, errNotMerged
+	if in.Flags.MergedOnly && (unpushed || d.pull.Status != forge.Merged) {
+		return d, ErrNotMerged
 	}
 
 	// a spike with a PR finishes the normal way, and its tree must be clean
@@ -157,8 +157,8 @@ func decideFinish(ctx context.Context, in finishInput) (finishDecision, error) {
 		}
 	}
 
-	if in.flags.keep && !closeSpike {
-		return d, fmt.Errorf("--keep keeps a spike's experiment, and %s has a PR: finish it the normal way", in.task.ID)
+	if in.Flags.Keep && !closeSpike {
+		return d, fmt.Errorf("--keep keeps a spike's experiment, and %s has a PR: finish it the normal way", in.Task.ID)
 	}
 
 	var leave bool
@@ -177,7 +177,7 @@ func decideFinish(ctx context.Context, in finishInput) (finishDecision, error) {
 	case leave:
 		d.kind = landingLeftOpen
 
-		return d, refuseUnpushed(ctx, in.main, name)
+		return d, refuseUnpushed(ctx, in.Main, name)
 	case unpushed:
 		d.kind = landingUnpushed
 	default:
@@ -194,13 +194,13 @@ func decideFinish(ctx context.Context, in finishInput) (finishDecision, error) {
 
 // decideGone takes over a branch with no worktree only when its PR merged;
 // anything else keeps the refusal, which guards branches start never made.
-func decideGone(ctx context.Context, in finishInput, gone goneError) (finishDecision, error) {
-	p, err := in.host.PR(ctx, gone.branch)
+func decideGone(ctx context.Context, in FinishInput, gone goneError) (finishDecision, error) {
+	p, err := in.Host.PR(ctx, gone.branch)
 	if err != nil || p.Status != forge.Merged {
 		return finishDecision{}, gone.err
 	}
 
-	def, err := stack.LocalDefault(ctx, in.main)
+	def, err := stack.LocalDefault(ctx, in.Main)
 	if err != nil {
 		return finishDecision{}, err
 	}
@@ -211,9 +211,9 @@ func decideGone(ctx context.Context, in finishInput, gone goneError) (finishDeci
 }
 
 // refuseRiders stops a bundle's merge until the riders it closes are known.
-func refuseRiders(in finishInput) error {
-	if len(in.task.Riders()) > 0 && in.close == nil {
-		return ridersError{task: in.task}
+func refuseRiders(in FinishInput) error {
+	if len(in.Task.Riders()) > 0 && in.Close == nil {
+		return RidersError{task: in.Task}
 	}
 
 	return nil
@@ -267,23 +267,23 @@ func (a *cleanupErrs) done(id, ended string) error {
 
 // appendClosed adds the riders the merge closed; a tracker that is not the
 // host closes nothing on merge.
-func appendClosed(rows []render.Fact, in finishInput, unpushed bool) []render.Fact {
-	if len(in.close) == 0 || !in.hostCloses || unpushed {
+func appendClosed(rows []render.Fact, in FinishInput, unpushed bool) []render.Fact {
+	if len(in.Close) == 0 || !in.HostCloses || unpushed {
 		return rows
 	}
 
-	return append(rows, render.Fact{Label: "closed", Value: strings.Join(in.close, ", ")})
+	return append(rows, render.Fact{Label: "closed", Value: strings.Join(in.Close, ", ")})
 }
 
-func (in finishInput) step(action string) {
-	if in.progress != nil {
-		in.progress(action)
+func (in FinishInput) step(action string) {
+	if in.Progress != nil {
+		in.Progress(action)
 	}
 }
 
-func (in finishInput) sweepNow(ctx context.Context) {
-	if in.sweep != nil {
-		in.sweep(ctx)
+func (in FinishInput) sweepNow(ctx context.Context) {
+	if in.Sweep != nil {
+		in.Sweep(ctx)
 	}
 }
 
@@ -313,13 +313,13 @@ func switchMain(ctx context.Context, main, def, branch, kept string) error {
 // leaveOpen reports whether finish leaves the PR as it is. A merged PR always
 // takes the full path; someone else's open one, with neither flag, is a
 // refusal that changes nothing; a closed one is left only with --local.
-func (in finishInput) leaveOpen(ctx context.Context, p forge.PR) (bool, error) {
+func (in FinishInput) leaveOpen(ctx context.Context, p forge.PR) (bool, error) {
 	switch {
 	case p.Status == forge.Merged:
 		return false, nil
-	case in.flags.leaveOpen:
+	case in.Flags.LeaveOpen:
 		return true, nil
-	case in.flags.merge || p.Status != forge.Open:
+	case in.Flags.Merge || p.Status != forge.Open:
 		return false, nil
 	}
 
@@ -328,13 +328,13 @@ func (in finishInput) leaveOpen(ctx context.Context, p forge.PR) (bool, error) {
 		return false, nil
 	}
 
-	me, err := in.host.Login(ctx)
+	me, err := in.Host.Login(ctx)
 	if err != nil {
 		return false, fmt.Errorf("telling whose PR %s is: %w", p.URL, err)
 	}
 
 	if !strings.EqualFold(author, me) {
-		return false, foreignPullError{url: p.URL, author: author}
+		return false, ForeignPullError{Url: p.URL, Author: author}
 	}
 
 	return false, nil
@@ -356,7 +356,7 @@ func refuseUnpushed(ctx context.Context, main, branch string) error {
 		"since leaving the PR open deletes the local branch", branch, branch)
 }
 
-func appendNote(notes []string, note string) []string {
+func AppendNote(notes []string, note string) []string {
 	if note == "" {
 		return notes
 	}
@@ -364,14 +364,14 @@ func appendNote(notes []string, note string) []string {
 	return append(notes, note)
 }
 
-// finishTarget is the task's branch and the checkout holding it, main's or a
+// FinishTarget is the task's branch and the checkout holding it, main's or a
 // worktree's. A branch checked out nowhere is a refusal: finish cleans up
 // only what start made.
-func finishTarget(ctx context.Context, in finishInput) (string, string, bool, error) {
-	name, path, err := in.branch, "", error(nil)
+func FinishTarget(ctx context.Context, in FinishInput) (string, string, bool, error) {
+	name, path, err := in.Branch, "", error(nil)
 	if name == "" {
-		name, path, err = stack.TaskCheckout(ctx, in.main, in.driver, in.task, in.suffix)
-	} else if wts, werr := gitx.Worktrees(ctx, in.main); werr != nil {
+		name, path, err = stack.TaskCheckout(ctx, in.Main, in.Driver, in.Task, in.Suffix)
+	} else if wts, werr := gitx.Worktrees(ctx, in.Main); werr != nil {
 		err = werr
 	} else {
 		path = stack.WorktreeOf(wts, name)
@@ -381,7 +381,7 @@ func finishTarget(ctx context.Context, in finishInput) (string, string, bool, er
 	case err != nil:
 		return "", "", false, err
 	case name == "":
-		return "", "", false, goneError{fmt.Errorf("%s has no branch here: nothing to finish", in.task.ID), ""}
+		return "", "", false, goneError{fmt.Errorf("%s has no branch here: nothing to finish", in.Task.ID), ""}
 	case path == "":
 		return "", "", false, goneError{
 			fmt.Errorf("branch %s has no worktree here: finish removes only what start created", name),
@@ -389,7 +389,7 @@ func finishTarget(ctx context.Context, in finishInput) (string, string, bool, er
 		}
 	}
 
-	return name, path, gitx.SamePath(path, in.main), nil
+	return name, path, gitx.SamePath(path, in.Main), nil
 }
 
 // refuseDirty has no --force: the work is the user's to commit or drop.
@@ -414,7 +414,7 @@ func refuseDirty(ctx context.Context, path string) error {
 	return errors.New(b.String())
 }
 
-func workspaceAt(wss []agentctl.Workspace, path string) *agentctl.Workspace {
+func WorkspaceAt(wss []agentctl.Workspace, path string) *agentctl.Workspace {
 	for i := range wss {
 		if wss[i].Path != "" && gitx.SamePath(wss[i].Path, path) {
 			return &wss[i]
@@ -424,7 +424,7 @@ func workspaceAt(wss []agentctl.Workspace, path string) *agentctl.Workspace {
 	return nil
 }
 
-func workspaceByID(wss []agentctl.Workspace, id string) *agentctl.Workspace {
+func WorkspaceByID(wss []agentctl.Workspace, id string) *agentctl.Workspace {
 	for i := range wss {
 		if wss[i].ID == id {
 			return &wss[i]
@@ -434,7 +434,7 @@ func workspaceByID(wss []agentctl.Workspace, id string) *agentctl.Workspace {
 	return nil
 }
 
-func workspaceLabel(ws *agentctl.Workspace) string {
+func WorkspaceLabel(ws *agentctl.Workspace) string {
 	if ws == nil {
 		return ""
 	}

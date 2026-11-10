@@ -56,17 +56,18 @@ var Table = []Rule{
 	{Prefix: "internal/command/board", Rank: 4},
 	{Prefix: "internal/command/status", Rank: 4},
 
-	// finish, start (which sweeps finished tasks), then the drive over both
+	// finish, start (which sweeps finished tasks), then the drive over both;
+	// each command sits just above the core it parses flags for
 	{Prefix: "internal/finish", Rank: 5},
-	{Prefix: "internal/command/finish", Rank: 5},
-	{Prefix: "internal/start", Rank: 6},
-	{Prefix: "internal/command/start", Rank: 6},
-	{Prefix: "internal/drive", Rank: 7},
-	{Prefix: "internal/command/drive", Rank: 7},
-	{Prefix: "internal/command/daemon", Rank: 7},
+	{Prefix: "internal/command/finish", Rank: 6},
+	{Prefix: "internal/start", Rank: 7},
+	{Prefix: "internal/command/start", Rank: 8},
+	{Prefix: "internal/drive", Rank: 9},
+	{Prefix: "internal/command/drive", Rank: 10},
+	{Prefix: "internal/command/daemon", Rank: 10},
 
-	{Prefix: "cmd/f10", Rank: 9},
-	{Prefix: "cmd/f10eval", Rank: 9},
+	{Prefix: "cmd/f10", Rank: 11},
+	{Prefix: "cmd/f10eval", Rank: 11},
 }
 
 // A Violation is one import the table forbids, or a package it does not rank.

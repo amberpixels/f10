@@ -1,4 +1,4 @@
-package main
+package finish
 
 import (
 	"context"
@@ -14,10 +14,10 @@ import (
 // cleanup archives the task's files, prints the report, then removes what
 // the task's checkout place holds. The report goes out before anything
 // local does, and the workspace closes last.
-func cleanup(ctx context.Context, w io.Writer, in finishInput, d finishDecision, l landing, errs *cleanupErrs) error {
+func cleanup(ctx context.Context, w io.Writer, in FinishInput, d finishDecision, l landing, errs *cleanupErrs) error {
 	in.step("archiving the plan")
 
-	a, err := archiveTask(in.storage, in.task.ID, l.end, errs.check)
+	a, err := archiveTask(in.Storage, in.Task.ID, l.end, errs.check)
 	if err != nil {
 		return err
 	}
@@ -27,9 +27,9 @@ func cleanup(ctx context.Context, w io.Writer, in finishInput, d finishDecision,
 		errs.keep = d.stays() + ", since the plan is not archived"
 	}
 
-	notes := appendNote(l.notes, a.missing)
-	notes = appendNote(notes, a.images)
-	notes = appendNote(notes, seriesLore(&in, l.end))
+	notes := AppendNote(l.notes, a.missing)
+	notes = AppendNote(notes, a.images)
+	notes = AppendNote(notes, seriesLore(&in, l.end))
 
 	rows := l.rows
 
@@ -52,7 +52,7 @@ func cleanup(ctx context.Context, w io.Writer, in finishInput, d finishDecision,
 	early := d.spike != "" && d.place == inWorktree && gitx.Inside(d.spike, d.path)
 
 	if d.spike != "" {
-		spikeDst, err = spikeArchiveName(in.storage, in.task.ID)
+		spikeDst, err = spikeArchiveName(in.Storage, in.Task.ID)
 		if err == nil && early {
 			err = copySpike(d.spike, spikeDst)
 		}
@@ -81,7 +81,7 @@ func cleanup(ctx context.Context, w io.Writer, in finishInput, d finishDecision,
 	case inMainCheckout:
 		notes = append(notes, fmt.Sprintf("%s is checked out in the main checkout at %s: after this report "+
 			"main switches to %s and the branch is deleted; no worktree removed, no workspace closed",
-			d.name, in.main, d.def))
+			d.name, in.Main, d.def))
 		rows = append(rows, render.Fact{Label: "path", Value: d.path})
 	case noWorktree:
 		keepForRerun(errs, d)
@@ -97,7 +97,7 @@ func cleanup(ctx context.Context, w io.Writer, in finishInput, d finishDecision,
 		} else {
 			notes = append(
 				notes,
-				"no "+worktree.Agents(in.main).Name()+" workspace shows the worktree, so nothing to close",
+				"no "+worktree.Agents(in.Main).Name()+" workspace shows the worktree, so nothing to close",
 			)
 		}
 
@@ -120,19 +120,19 @@ func cleanup(ctx context.Context, w io.Writer, in finishInput, d finishDecision,
 		return fmt.Errorf("%s, but %w", l.ended, err)
 	}
 
-	if in.handoff != nil && l.hand != nil {
-		in.handoff(l.hand)
+	if in.Handoff != nil && l.hand != nil {
+		in.Handoff(l.hand)
 	}
 
 	keepForRerun(errs, d)
 
 	if errs.keep != "" {
-		return errs.done(in.task.ID, l.ended)
+		return errs.done(in.Task.ID, l.ended)
 	}
 
 	switch d.place {
 	case inMainCheckout:
-		if err := errs.check("", switchMain(ctx, in.main, d.def, d.name, l.kept)); err != nil {
+		if err := errs.check("", switchMain(ctx, in.Main, d.def, d.name, l.kept)); err != nil {
 			return fmt.Errorf("%s, but %w", l.ended, err)
 		}
 
@@ -145,16 +145,16 @@ func cleanup(ctx context.Context, w io.Writer, in finishInput, d finishDecision,
 		finishRecords(w, in, d.name)
 		in.sweepNow(ctx)
 
-		return errs.done(in.task.ID, l.ended)
+		return errs.done(in.Task.ID, l.ended)
 	case noWorktree:
 		in.step("deleting " + d.name)
 
-		_ = errs.check("deleting branch "+d.name, gitx.DeleteBranch(ctx, in.main, d.name))
+		_ = errs.check("deleting branch "+d.name, gitx.DeleteBranch(ctx, in.Main, d.name))
 
 		finishRecords(w, in, d.name)
 		in.sweepNow(ctx)
 
-		return errs.done(in.task.ID, l.ended)
+		return errs.done(in.Task.ID, l.ended)
 	case inWorktree:
 	}
 
@@ -172,7 +172,7 @@ func keepForRerun(errs *cleanupErrs, d finishDecision) {
 // removeWorktree is the last of a worktree's cleanup: removing the checkout
 // deletes the branch, and the record with it, and closing the workspace may
 // end this process.
-func removeWorktree(ctx context.Context, w io.Writer, in finishInput, d finishDecision, l landing,
+func removeWorktree(ctx context.Context, w io.Writer, in FinishInput, d finishDecision, l landing,
 	errs *cleanupErrs, archiveLate func() error,
 ) error {
 	in.step("removing worktree")
@@ -196,22 +196,22 @@ func removeWorktree(ctx context.Context, w io.Writer, in finishInput, d finishDe
 	if d.self && len(errs.failed) > 0 {
 		errs.keep = "this workspace stays open"
 
-		return errs.done(in.task.ID, l.ended)
+		return errs.done(in.Task.ID, l.ended)
 	}
 
 	if d.self && d.mainWS != nil {
-		err := worktree.Agents(in.main).Focus(ctx, d.mainWS.ID)
+		err := worktree.Agents(in.Main).Focus(ctx, d.mainWS.ID)
 		if err := errs.check("focusing the main workspace", err); err != nil {
 			return err
 		}
 	}
 
 	if d.ws != nil {
-		err := worktree.Agents(in.main).Close(ctx, d.ws.ID)
+		err := worktree.Agents(in.Main).Close(ctx, d.ws.ID)
 		if err := errs.check("closing workspace "+d.ws.ID, err); err != nil {
 			return err
 		}
 	}
 
-	return errs.done(in.task.ID, l.ended)
+	return errs.done(in.Task.ID, l.ended)
 }

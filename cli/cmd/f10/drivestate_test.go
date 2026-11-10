@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -265,7 +266,7 @@ func TestCatchupAttemptsCountTheFingerprint(t *testing.T) {
 	in := &driveInput{
 		now: func() time.Time { return time.Unix(1_800_000_000, 0) },
 	}
-	r := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-1"}}, o: openedTask{path: "/code/repo.GH-1"}}
+	r := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-1"}}, o: start.OpenedTask{Path: "/code/repo.GH-1"}}
 
 	var out bytes.Buffer
 

@@ -1,4 +1,4 @@
-package main
+package finish
 
 import (
 	"cmp"
@@ -16,16 +16,16 @@ import (
 // neverPushed proves a branch has no request, no copy on origin and no
 // upstream before finish merges it here: an upstream origin lacks may be a
 // request merged there that the host no longer lists (glab lists open only).
-func neverPushed(ctx context.Context, in finishInput, branch string, pullErr error) (bool, error) {
+func neverPushed(ctx context.Context, in FinishInput, branch string, pullErr error) (bool, error) {
 	if pullErr == nil {
 		return false, nil
 	}
 
-	if !errors.Is(pullErr, forge.ErrNotFound) || in.flags.leaveOpen {
+	if !errors.Is(pullErr, forge.ErrNotFound) || in.Flags.LeaveOpen {
 		return false, pullErr
 	}
 
-	pushed, err := gitx.RemoteBranchExists(ctx, in.main, branch)
+	pushed, err := gitx.RemoteBranchExists(ctx, in.Main, branch)
 
 	switch {
 	case err != nil:
@@ -35,7 +35,7 @@ func neverPushed(ctx context.Context, in finishInput, branch string, pullErr err
 			pullErr, branch)
 	}
 
-	upstream, err := gitx.Config(ctx, in.main, "branch."+branch+".merge")
+	upstream, err := gitx.Config(ctx, in.Main, "branch."+branch+".merge")
 
 	switch {
 	case err != nil:
@@ -48,9 +48,9 @@ func neverPushed(ctx context.Context, in finishInput, branch string, pullErr err
 	return true, nil
 }
 
-// landingBase is the local default branch, or origin's copy when the local
+// LandingBase is the local default branch, or origin's copy when the local
 // one is only behind it, so origin's commits are never folded into the merge.
-func landingBase(ctx context.Context, dir, def string) (string, error) {
+func LandingBase(ctx context.Context, dir, def string) (string, error) {
 	local, err := gitx.Ref(ctx, dir, "refs/heads/"+def)
 	if err != nil {
 		return "", err
@@ -69,21 +69,21 @@ func landingBase(ctx context.Context, dir, def string) (string, error) {
 // touched, then moves the default branch. A conflict, or a rebase that is
 // not a fast-forward, is left to a catchup; a rerun lands nothing. The last
 // note says whether the commit closes the task or the tracker must.
-func landUnpushed(ctx context.Context, in finishInput, branch, def string) (string, []string, error) {
+func landUnpushed(ctx context.Context, in FinishInput, branch, def string) (string, []string, error) {
 	defRef, head := "refs/heads/"+def, "refs/heads/"+branch
 	// old is the compare-and-swap value the ref moves from: an unread one
 	// would move it unchecked
-	old, err := gitx.Ref(ctx, in.main, defRef)
+	old, err := gitx.Ref(ctx, in.Main, defRef)
 	if err != nil {
 		return "", nil, err
 	}
 
-	base, err := landingBase(ctx, in.main, def)
+	base, err := LandingBase(ctx, in.Main, def)
 	if err != nil {
 		return "", nil, err
 	}
 
-	tip, err := gitx.Ref(ctx, in.main, head)
+	tip, err := gitx.Ref(ctx, in.Main, head)
 	if err != nil {
 		return "", nil, err
 	}
@@ -92,7 +92,7 @@ func landUnpushed(ctx context.Context, in finishInput, branch, def string) (stri
 		return "", nil, fmt.Errorf("cannot read %s here", branch)
 	}
 
-	tree, err := gitx.MergeTree(ctx, in.main, base, head)
+	tree, err := gitx.MergeTree(ctx, in.Main, base, head)
 	if err != nil {
 		return "", nil, fmt.Errorf("%s conflicts with %s: run /f10:catchup in its worktree, then finish again",
 			branch, def)
@@ -100,31 +100,31 @@ func landUnpushed(ctx context.Context, in finishInput, branch, def string) (stri
 
 	notes := []string{fmt.Sprintf("%s was never pushed: merged into %s here, nothing pushed", branch, def)}
 
-	if tree == gitx.Out(ctx, in.main, "rev-parse", base+"^{tree}") {
+	if tree == gitx.Out(ctx, in.Main, "rev-parse", base+"^{tree}") {
 		// a rerun after a landing: the unpushed commit may already close the task
 		note := unclosedNote(in)
-		if closing := closingLines(in); closing != "" && strings.Contains(
-			gitx.Out(ctx, in.main, "log", "--format=%B", "refs/remotes/origin/"+def+"..refs/heads/"+def), closing) {
+		if closing := ClosingLines(in); closing != "" && strings.Contains(
+			gitx.Out(ctx, in.Main, "log", "--format=%B", "refs/remotes/origin/"+def+"..refs/heads/"+def), closing) {
 			note = closesOnPush(in, def)
 		}
 
 		return base, append(notes, branch+" was already in "+def, note), nil
 	}
 
-	method, note, err := in.host.MergeMethod(ctx, in.method)
+	method, note, err := in.Host.MergeMethod(ctx, in.Method)
 	if err != nil {
 		return "", nil, err
 	}
 
-	notes = appendNote(notes, note)
+	notes = AppendNote(notes, note)
 
 	var sha string
 
-	closing := closingLines(in)
+	closing := ClosingLines(in)
 
 	switch method {
 	case "--rebase":
-		ff, err := gitx.IsAncestor(ctx, in.main, base, head)
+		ff, err := gitx.IsAncestor(ctx, in.Main, base, head)
 		if err != nil {
 			return "", nil, err
 		}
@@ -136,20 +136,20 @@ func landUnpushed(ctx context.Context, in finishInput, branch, def string) (stri
 
 		sha, closing = tip, ""
 	case "--squash":
-		sha, err = gitx.CommitTree(ctx, in.main, tree, []string{base}, squashMessage(ctx, in, base, head)...)
+		sha, err = gitx.CommitTree(ctx, in.Main, tree, []string{base}, squashMessage(ctx, in, base, head)...)
 	default: // --merge, or glab's plain merge
-		sha, err = gitx.CommitTree(ctx, in.main, tree, []string{base, tip},
-			paragraphs("Merge branch '"+branch+"'", cmp.Or(mergeBody(in, closing, method), closing))...)
+		sha, err = gitx.CommitTree(ctx, in.Main, tree, []string{base, tip},
+			paragraphs("Merge branch '"+branch+"'", cmp.Or(MergeBody(in, closing, method), closing))...)
 	}
 
 	if err != nil {
 		return "", nil, fmt.Errorf("merging %s into %s: %w", branch, def, err)
 	}
 
-	if gitx.CurrentBranch(ctx, in.main) == def {
-		_, err = gitx.Exec(ctx, in.main, "merge", "--ff-only", sha)
+	if gitx.CurrentBranch(ctx, in.Main) == def {
+		_, err = gitx.Exec(ctx, in.Main, "merge", "--ff-only", sha)
 	} else {
-		err = gitx.UpdateRef(ctx, in.main, defRef, sha, old)
+		err = gitx.UpdateRef(ctx, in.Main, defRef, sha, old)
 	}
 
 	if err != nil {
@@ -163,7 +163,7 @@ func landUnpushed(ctx context.Context, in finishInput, branch, def string) (stri
 	return sha, append(notes, closesOnPush(in, def)), nil
 }
 
-func closesOnPush(in finishInput, def string) string {
+func closesOnPush(in FinishInput, def string) string {
 	return strings.Join(closedIDs(in), ", ") + " closes when " + def + " reaches origin"
 }
 
@@ -177,13 +177,13 @@ func alreadyLanded(ctx context.Context, dir, base, head string) bool {
 
 // squashMessage shapes the commit as a PR squash would: the task and title
 // as subject, the branch's subjects as body, and the trailers with traces on.
-func squashMessage(ctx context.Context, in finishInput, base, head string) []string {
-	subjects := strings.Split(gitx.Out(ctx, in.main, "log", "--reverse", "--format=%s", base+".."+head), "\n")
+func squashMessage(ctx context.Context, in FinishInput, base, head string) []string {
+	subjects := strings.Split(gitx.Out(ctx, in.Main, "log", "--reverse", "--format=%s", base+".."+head), "\n")
 	subject := subjects[0]
 
-	if in.title != nil {
-		if title, err := in.title(ctx); err == nil && title != "" {
-			subject = in.task.Label() + ": " + title
+	if in.Title != nil {
+		if title, err := in.Title(ctx); err == nil && title != "" {
+			subject = in.Task.Label() + ": " + title
 		}
 	}
 
@@ -192,9 +192,9 @@ func squashMessage(ctx context.Context, in finishInput, base, head string) []str
 		list = "- " + strings.Join(subjects, "\n- ")
 	}
 
-	description := strings.Join(paragraphs(list, closingLines(in)), "\n\n")
+	description := strings.Join(paragraphs(list, ClosingLines(in)), "\n\n")
 
-	return paragraphs(subject, cmp.Or(mergeBody(in, description, "--squash"), description))
+	return paragraphs(subject, cmp.Or(MergeBody(in, description, "--squash"), description))
 }
 
 func paragraphs(parts ...string) []string {
@@ -210,28 +210,28 @@ func paragraphs(parts ...string) []string {
 }
 
 // unclosedNote: no request closes a locally merged task, so the tracker must.
-func unclosedNote(in finishInput) string {
+func unclosedNote(in FinishInput) string {
 	return "no PR closes " + strings.Join(closedIDs(in), ", ") + ": close it on the tracker"
 }
 
-func closedIDs(in finishInput) []string {
-	return append([]string{in.task.ID}, in.close...)
+func closedIDs(in FinishInput) []string {
+	return append([]string{in.Task.ID}, in.Close...)
 }
 
-// closingLines closes the lead and the riders --close names once the commit
+// ClosingLines closes the lead and the riders --close names once the commit
 // reaches origin's default branch; written whatever traces says, since it is
 // the task's own reference. Other trackers, a driver's included, are not
 // closed by a commit, as on the PR path.
-func closingLines(in finishInput) string {
-	if !in.hostCloses {
+func ClosingLines(in FinishInput) string {
+	if !in.HostCloses {
 		return ""
 	}
 
 	var lines []string
 
-	for _, m := range in.task.MemberRefs() {
-		if m.ID == in.task.ID || slices.Contains(in.close, m.ID) {
-			lines = append(lines, closingLine(m.Number))
+	for _, m := range in.Task.MemberRefs() {
+		if m.ID == in.Task.ID || slices.Contains(in.Close, m.ID) {
+			lines = append(lines, ClosingLine(m.Number))
 		}
 	}
 

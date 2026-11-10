@@ -22,6 +22,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
@@ -226,7 +227,7 @@ func runWatchPass(ctx context.Context, cmd *cli.Command, t *target.Target) error
 		main:     main,
 		root:     root,
 		mode:     t.Effective.Watch,
-		jan:      janitorFor(t),
+		jan:      finish.JanitorFor(t),
 		stateDir: state.Dir(),
 		ttl:      state.TTL(),
 		now:      time.Now,
@@ -256,7 +257,7 @@ func runWatchPass(ctx context.Context, cmd *cli.Command, t *target.Target) error
 		}
 	}
 
-	if in.mode == "finish" && in.jan.host != nil {
+	if in.mode == "finish" && in.jan.Host != nil {
 		in.finish = func(ctx context.Context, task watchedTask) error {
 			return watcherFinish(ctx, cmd.Writer, t, main, root, task)
 		}
@@ -269,8 +270,8 @@ func runWatchPass(ctx context.Context, cmd *cli.Command, t *target.Target) error
 
 	// the janitor deletes branches: an act, which only watch: finish allows
 	if in.mode == "finish" {
-		sweepIfDue(ctx, cmd.Writer, filepath.Join(root, janitorStamp), time.Now(),
-			func(ctx context.Context) ([]string, error) { return janitor(ctx, janitorFor(t)) })
+		finish.SweepIfDue(ctx, cmd.Writer, filepath.Join(root, finish.JanitorStamp), time.Now(),
+			func(ctx context.Context) ([]string, error) { return finish.Janitor(ctx, finish.JanitorFor(t)) })
 	}
 
 	if !watching {
@@ -285,7 +286,7 @@ func runWatchPass(ctx context.Context, cmd *cli.Command, t *target.Target) error
 type watchInput struct {
 	main, root string
 	mode       string // watch: report or finish
-	jan        janitorInput
+	jan        finish.JanitorInput
 	agents     agentctl.Backend // nil when this process cannot reach one
 	stateDir   string
 	ttl        time.Duration
@@ -417,7 +418,7 @@ func (in watchInput) retryPull(ctx context.Context, store map[string]watchReport
 		return false
 	}
 
-	line, pending := retryPendingPull(ctx, in.root, in.main)
+	line, pending := finish.RetryPendingPull(ctx, in.root, in.main)
 	if !pending {
 		if line != "" {
 			in.warnf("%s", line)
@@ -654,15 +655,15 @@ func runStopText(run *state.Run) string {
 }
 
 func collectWatched(ctx context.Context, in watchInput) ([]watchedTask, int, error) {
-	def, err := janitorDefault(ctx, in.main)
+	def, err := finish.JanitorDefault(ctx, in.main)
 	if err != nil {
 		return nil, 0, err
 	}
 
 	local := in.jan
-	local.localOnly = true
+	local.LocalOnly = true
 
-	branches, held, err := taskBranches(ctx, local, def)
+	branches, held, err := finish.TaskBranches(ctx, local, def)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -690,22 +691,22 @@ func collectWatched(ctx context.Context, in watchInput) ([]watchedTask, int, err
 		listed = err == nil
 	}
 
-	j := &sweeper{in: in.jan, def: def}
+	j := &finish.Sweeper{In: in.jan, Def: def}
 
 	var tasks []watchedTask
 
 	for _, b := range branches {
-		path := stack.WorktreeOf(wts, b.name)
-		if !held[b.name] || path == "" || gitx.SamePath(path, in.main) {
+		path := stack.WorktreeOf(wts, b.Name)
+		if !held[b.Name] || path == "" || gitx.SamePath(path, in.main) {
 			continue
 		}
 
-		task := watchedTask{id: b.ids[0], branch: b.name, path: path, localSHA: b.localSHA, listed: listed}
+		task := watchedTask{id: b.Ids[0], branch: b.Name, path: path, localSHA: b.LocalSHA, listed: listed}
 
 		if h, ok := drives.Probe(in.root, task.id); ok {
 			task.owner = h.String()
 		} else {
-			task.off = in.handedBack(ctx, b.name)
+			task.off = in.handedBack(ctx, b.Name)
 		}
 
 		if task.owner != "" || task.off {
@@ -714,8 +715,8 @@ func collectWatched(ctx context.Context, in watchInput) ([]watchedTask, int, err
 			continue
 		}
 
-		if in.jan.host != nil {
-			task.pr, task.hostErr = j.request(ctx, b)
+		if in.jan.Host != nil {
+			task.pr, task.hostErr = j.Request(ctx, b)
 		}
 
 		if runs := statusview.InRoot(live, path); len(runs) > 0 {
@@ -723,8 +724,8 @@ func collectWatched(ctx context.Context, in watchInput) ([]watchedTask, int, err
 			task.background = backgroundAt(in.stateDir, task.run)
 		}
 
-		if ws := workspaceAt(wss, path); ws != nil {
-			task.agent, task.ws = ws.Status, workspaceLabel(ws)
+		if ws := finish.WorkspaceAt(wss, path); ws != nil {
+			task.agent, task.ws = ws.Status, finish.WorkspaceLabel(ws)
 		}
 
 		tasks = append(tasks, task)
@@ -759,13 +760,13 @@ func watcherFinish(ctx context.Context, w io.Writer, t *target.Target, main, roo
 
 	var buf bytes.Buffer
 
-	in := finishInputFor(t, main, h, r)
-	in.branch, in.flags.mergedOnly = task.branch, true
+	in := finish.InputFor(t, main, h, r)
+	in.Branch, in.Flags.MergedOnly = task.branch, true
 	// never processPlace: the self-close path would end the daemon, and its
 	// directory may be a worktree since removed, where getwd fails
-	in.cwd = main
+	in.Cwd = main
 
-	err = finish(ctx, &buf, in)
+	err = finish.Finish(ctx, &buf, in)
 
 	for line := range strings.SplitSeq(strings.TrimSpace(buf.String()), "\n") {
 		if line != "" {
@@ -774,7 +775,7 @@ func watcherFinish(ctx context.Context, w io.Writer, t *target.Target, main, roo
 	}
 
 	if err == nil {
-		recordAt(ctx, main, finishedEvent(task.id, "watch", time.Now()))
+		recordAt(ctx, main, finish.FinishedEvent(task.id, "watch", time.Now()))
 	}
 
 	return err
@@ -816,8 +817,8 @@ func recheckFinish(ctx context.Context, b agentctl.Backend, main string, task wa
 		return fmt.Errorf("listing workspaces: %w", err)
 	}
 
-	if ws := workspaceAt(wss, task.path); ws != nil && ws.Status == agentctl.StatusWorking {
-		return fmt.Errorf("its agent in workspace %s is working", workspaceLabel(ws))
+	if ws := finish.WorkspaceAt(wss, task.path); ws != nil && ws.Status == agentctl.StatusWorking {
+		return fmt.Errorf("its agent in workspace %s is working", finish.WorkspaceLabel(ws))
 	}
 
 	return nil
@@ -1262,7 +1263,7 @@ func (in watchInput) worktreeBusy(ctx context.Context, task watchedTask) bool {
 			return true
 		}
 
-		if ws := workspaceAt(wss, task.path); ws != nil && ws.Status == agentctl.StatusWorking {
+		if ws := finish.WorkspaceAt(wss, task.path); ws != nil && ws.Status == agentctl.StatusWorking {
 			return true
 		}
 	}

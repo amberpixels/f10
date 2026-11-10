@@ -1,4 +1,4 @@
-package main
+package start
 
 import (
 	"cmp"
@@ -14,22 +14,24 @@ import (
 	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
 	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
-// The start verb replaces three hand-offs across three tools, each a place
+// Command is the start verb, which replaces three hand-offs across three tools, each a place
 // to lose the suffix, the base or the "keep it local" words. Outside Herdr
 // it refuses before touching anything rather than degrade to a plain claude.
-func startCommand() *cli.Command {
+func Command() *cli.Command {
 	return &cli.Command{
 		Name:      "start",
 		Usage:     "start a task: a worktree, a Herdr workspace and a prompted agent",
@@ -74,7 +76,7 @@ func startCommand() *cli.Command {
 // --plan stops after the plan; --discuss after the fetch, for a task the
 // user talks through in the agent's own pane.
 const (
-	modeDefault = ""
+	ModeDefault = ""
 )
 
 func runStart(ctx context.Context, cmd *cli.Command) error {
@@ -97,17 +99,17 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	pick, pr, err := pickupFor(ctx, t, token)
+	pick, pr, err := start.PickupFor(ctx, t, token)
 	if err != nil {
 		return err
 	}
 
 	note := strings.TrimSpace(strings.Join(cmd.Args().Tail(), " "))
-	if err := refuseNote(mode, pick, note); err != nil {
+	if err := RefuseNote(mode, pick, note); err != nil {
 		return err
 	}
 
-	if err := refuseLandedPlan(mode, pick); err != nil {
+	if err := RefuseLandedPlan(mode, pick); err != nil {
 		return err
 	}
 
@@ -116,31 +118,31 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	in := startInput{
-		main:    cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot),
-		driver:  t.Driver(),
-		task:    r,
-		suffix:  suffix,
-		mode:    mode,
-		flow:    fl,
-		pace:    strings.ToLower(strings.TrimSpace(cmd.String("pace"))),
-		base:    base,
-		storage: t.Layout.StorageRoot,
-		title:   worktree.TitleLookup(t, r.Number),
-		pick:    pick,
-		note:    note,
+	in := start.StartInput{
+		Main:    cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot),
+		Driver:  t.Driver(),
+		Task:    r,
+		Suffix:  suffix,
+		Mode:    mode,
+		Flow:    fl,
+		Pace:    strings.ToLower(strings.TrimSpace(cmd.String("pace"))),
+		Base:    base,
+		Storage: t.Layout.StorageRoot,
+		Title:   worktree.TitleLookup(t, r.Number),
+		Pick:    pick,
+		Note:    note,
 	}
 
-	if checksParent(mode, pick) {
-		in.children = stack.TrackerFor(t).Children
+	if start.ChecksParent(mode, pick) {
+		in.Children = stack.TrackerFor(t).Children
 	}
 
 	if pick == nil {
-		in.started = startedMove(t)
+		in.Started = start.StartedMove(t)
 	}
 
 	// before the body's After: line, whose own refusal would hide this one
-	if err := refuseStartParent(ctx, in); err != nil {
+	if err := start.RefuseStartParent(ctx, in); err != nil {
 		return err
 	}
 
@@ -152,9 +154,9 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	in.progress = cmd.ErrWriter
+	in.Progress = cmd.ErrWriter
 
-	if err := start(ctx, cmd.Writer, in); err != nil {
+	if err := start.Start(ctx, cmd.Writer, in); err != nil {
 		return err
 	}
 
@@ -176,7 +178,7 @@ func startFlags(cmd *cli.Command) (string, string, string, string, error) {
 		return "", "", "", "", err
 	}
 
-	if flowName != "" && mode != modeDefault {
+	if flowName != "" && mode != ModeDefault {
 		return "", "", "", "", fmt.Errorf(
 			"--flow %s and --%s are exclusive: --%s stops before ship, which runs the flow",
 			flowName,
@@ -234,13 +236,13 @@ func startRef(
 		err    error
 	)
 
-	if task, err = pickedTask(t.Effective.IDPrefix, t.HostIssues(), pick, pr, task); err != nil {
+	if task, err = start.PickedTask(t.Effective.IDPrefix, t.HostIssues(), pick, pr, task); err != nil {
 		return ref.Ref{}, "", err
 	}
 
 	switch {
 	case pick != nil:
-		if err := refusePickupFlags(flowName, after, base); err != nil {
+		if err := RefusePickupFlags(flowName, after, base); err != nil {
 			return ref.Ref{}, "", err
 		}
 
@@ -278,7 +280,7 @@ func startRef(
 func startDependency(
 	ctx context.Context,
 	t *target.Target,
-	in *startInput,
+	in *start.StartInput,
 	r ref.Ref,
 	pick *hostops.Pickup,
 	after, base string,
@@ -287,7 +289,7 @@ func startDependency(
 
 	switch {
 	case pick != nil:
-		if err := fetchPickup(ctx, in.main, pick); err != nil {
+		if err := start.FetchPickup(ctx, in.Main, pick); err != nil {
 			return err
 		}
 	case after != "":
@@ -296,9 +298,9 @@ func startDependency(
 			return fmt.Errorf("--after: %w", err)
 		}
 
-		in.after = afterRef.Head().ID
+		in.After = afterRef.Head().ID
 	case base == "":
-		if in.after, in.notes, err = afterFromBody(ctx, stack.TrackerFor(t), in.main, r); err != nil {
+		if in.After, in.Notes, err = start.AfterFromBody(ctx, stack.TrackerFor(t), in.Main, r); err != nil {
 			return err
 		}
 	}
@@ -308,7 +310,7 @@ func startDependency(
 
 // startProfile resolves the agent profile from --agent or --model over the
 // project's default.
-func startProfile(ctx context.Context, cmd *cli.Command, t *target.Target, in *startInput) error {
+func startProfile(ctx context.Context, cmd *cli.Command, t *target.Target, in *start.StartInput) error {
 	flag, err := runplan.ProfileFlag(cmd.String("agent"), cmd.String("model"))
 	if err != nil {
 		return err
@@ -325,8 +327,8 @@ func startProfile(ctx context.Context, cmd *cli.Command, t *target.Target, in *s
 	}
 
 	resolved := layers.ProfileFor(facts.AgentKeyDefault, "")
-	in.profile, in.profileFlagged = resolved.Profile, flag != ""
-	in.notes = append(resolved.Lines(runplan.ClaudeSettingsPath()), in.notes...)
+	in.Profile, in.ProfileFlagged = resolved.Profile, flag != ""
+	in.Notes = append(resolved.Lines(runplan.ClaudeSettingsPath()), in.Notes...)
 
 	return nil
 }
@@ -343,14 +345,14 @@ func afterStart(ctx context.Context, cmd *cli.Command, t *target.Target, r ref.R
 
 	driverec.WatchProject(ctx, cmd.ErrWriter, t)
 
-	sweepIfDue(ctx, cmd.ErrWriter, filepath.Join(t.Layout.StorageRoot.Path(), janitorStamp), time.Now(),
-		func(ctx context.Context) ([]string, error) { return janitor(ctx, janitorFor(t)) })
+	finish.SweepIfDue(ctx, cmd.ErrWriter, filepath.Join(t.Layout.StorageRoot.Path(), finish.JanitorStamp), time.Now(),
+		func(ctx context.Context) ([]string, error) { return finish.Janitor(ctx, finish.JanitorFor(t)) })
 }
 
-// refuseNote stops a note no prompt can carry: only the prompts that stop
+// RefuseNote stops a note no prompt can carry: only the prompts that stop
 // and wait are plain text, and a driven chain's arguments belong to its
 // skills.
-func refuseNote(mode string, pick *hostops.Pickup, note string) error {
+func RefuseNote(mode string, pick *hostops.Pickup, note string) error {
 	if note == "" || mode == launch.ModeDiscuss || (pick != nil && mode != launch.ModePlan) {
 		return nil
 	}
@@ -359,9 +361,9 @@ func refuseNote(mode string, pick *hostops.Pickup, note string) error {
 		"a driven run takes its instructions from the task", note)
 }
 
-// refuseLandedPlan stops --plan on a merged or closed PR: its diff is no
+// RefuseLandedPlan stops --plan on a merged or closed PR: its diff is no
 // starting point once it landed, and going on from it is a task of its own.
-func refuseLandedPlan(mode string, pick *hostops.Pickup) error {
+func RefuseLandedPlan(mode string, pick *hostops.Pickup) error {
 	if pick == nil || !pick.Landed() || mode != launch.ModePlan {
 		return nil
 	}
@@ -370,9 +372,9 @@ func refuseLandedPlan(mode string, pick *hostops.Pickup) error {
 		pick.URL, pick.State)
 }
 
-// refusePickupFlags stops the flags a picked-up PR has no use for: its
+// RefusePickupFlags stops the flags a picked-up PR has no use for: its
 // branch and base are the PR's, and nobody ships someone else's PR unread.
-func refusePickupFlags(flow, after, base string) error {
+func RefusePickupFlags(flow, after, base string) error {
 	switch {
 	case after != "" || base != "":
 		return errors.New("--after and --base do not apply to a PR: its branch and its base are the PR's")
@@ -396,7 +398,7 @@ func startMode(cmd *cli.Command) (string, error) {
 
 	switch len(set) {
 	case 0:
-		return modeDefault, nil
+		return ModeDefault, nil
 	case 1:
 		return strings.TrimPrefix(set[0], "--"), nil
 	default:

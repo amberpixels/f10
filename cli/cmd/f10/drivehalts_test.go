@@ -10,6 +10,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -51,8 +52,8 @@ func TestLookReListsOnlyATaskOpenedThisTick(t *testing.T) {
 	in.tick = &tickView{
 		wss: []agentctl.Workspace{{ID: "ws:GH-1", Path: "/code/repo.GH-1", Status: agentctl.StatusIdle}},
 	}
-	r := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-1"}}, o: openedTask{path: "/code/repo.GH-1"}}
-	r.o.ws.ID = "ws:GH-1"
+	r := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-1"}}, o: start.OpenedTask{Path: "/code/repo.GH-1"}}
+	r.o.Ws.ID = "ws:GH-1"
 
 	if _, _, err := in.look(t.Context(), r); err != nil || f.called(wsList) {
 		t.Fatalf("look = %v, listed %v: want the tick's look", err, f.called(wsList))

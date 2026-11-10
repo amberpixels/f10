@@ -1,4 +1,4 @@
-package main
+package finish
 
 import (
 	"context"
@@ -18,18 +18,18 @@ import (
 // A spike's run ends at its report with the experiment uncommitted and no
 // PR, so finish closes it without a merge.
 
-// taskSpike is the task's spike report, "" for none: the shared one, else
+// TaskSpike is the task's spike report, "" for none: the shared one, else
 // one the checkout keeps in its own storage. A plan that is not a spike's
 // wins over a report, so a report left from an earlier spike never closes a
 // task planned again as something else.
-func taskSpike(checkout string, root storage.Root, id string) string {
+func TaskSpike(checkout string, root storage.Root, id string) string {
 	for _, dir := range []string{root.Spikes(), storage.InRepo(checkout).Spikes()} {
 		p := filepath.Join(dir, id+".md")
 		if !fsx.Exists(p) {
 			continue
 		}
 
-		if plan := root.Plan(id); fsx.Exists(plan) && !spikePlan(plan) {
+		if plan := root.Plan(id); fsx.Exists(plan) && !SpikePlan(plan) {
 			return ""
 		}
 
@@ -42,7 +42,7 @@ func taskSpike(checkout string, root storage.Root, id string) string {
 // kindSpike matches a plan's kind line in the shapes plans write it.
 var kindSpike = regexp.MustCompile(`(?i)^(- )?kind\s*:\s*spike\b`)
 
-func spikePlan(path string) bool {
+func SpikePlan(path string) bool {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return false
@@ -93,7 +93,7 @@ func copySpike(report, target string) error {
 	return nil
 }
 
-func spikeNotes(ctx context.Context, in finishInput, name, def, kept string, dirty []string) []string {
+func spikeNotes(ctx context.Context, in FinishInput, name, def, kept string, dirty []string) []string {
 	notes := []string{unclosedNote(in)}
 
 	if kept != "" {
@@ -104,8 +104,8 @@ func spikeNotes(ctx context.Context, in finishInput, name, def, kept string, dir
 		notes = append(notes, "the experiment is discarded: "+strings.Join(trimStatus(dirty), ", "))
 	}
 
-	if n := gitx.Out(ctx, in.main, "rev-list", "--count", "refs/heads/"+def+"..refs/heads/"+name); n != "" && n != "0" {
-		tip := gitx.Out(ctx, in.main, "rev-parse", "--short", "refs/heads/"+name)
+	if n := gitx.Out(ctx, in.Main, "rev-list", "--count", "refs/heads/"+def+"..refs/heads/"+name); n != "" && n != "0" {
+		tip := gitx.Out(ctx, in.Main, "rev-parse", "--short", "refs/heads/"+name)
 		notes = append(notes, fmt.Sprintf("%s's %s commit(s) go with it: git branch %s %s brings them back",
 			name, n, name, tip))
 	}
@@ -125,9 +125,9 @@ func trimStatus(lines []string) []string {
 	return paths
 }
 
-// keptName is kept/ and the branch's name with the task's ids taken out, so
+// KeptName is kept/ and the branch's name with the task's ids taken out, so
 // no task lookup finds it; numbered when taken.
-func keptName(ctx context.Context, main, branch string, ids []string) string {
+func KeptName(ctx context.Context, main, branch string, ids []string) string {
 	slug := branch
 	for _, id := range ids {
 		slug = idPattern(id).ReplaceAllString(slug, "")
@@ -218,14 +218,14 @@ func createKept(ctx context.Context, main, branch, kept string) error {
 
 func removeTaskCheckout(
 	ctx context.Context,
-	in finishInput,
+	in FinishInput,
 	path, name, kept string,
 	dirty []string,
 	spike bool,
 ) error {
 	switch {
 	case !spike:
-		return worktree.RemoveCheckout(ctx, in.main, path, name)
+		return worktree.RemoveCheckout(ctx, in.Main, path, name)
 	case kept == "":
 		if len(dirty) > 0 {
 			if err := discardExperiment(ctx, path); err != nil {
@@ -233,22 +233,22 @@ func removeTaskCheckout(
 			}
 		}
 
-		return worktree.RemoveCheckout(ctx, in.main, path, name)
+		return worktree.RemoveCheckout(ctx, in.Main, path, name)
 	}
 
 	// the kept branch exists before the worktree goes, so a failed removal
 	// leaves the worktree a rerun can still finish
-	if err := commitExperiment(ctx, path, in.task.ID, dirty); err != nil {
+	if err := commitExperiment(ctx, path, in.Task.ID, dirty); err != nil {
 		return err
 	}
 
-	if err := createKept(ctx, in.main, name, kept); err != nil {
+	if err := createKept(ctx, in.Main, name, kept); err != nil {
 		return err
 	}
 
-	if err := gitx.RemoveWorktree(ctx, in.main, path); err != nil {
+	if err := gitx.RemoveWorktree(ctx, in.Main, path); err != nil {
 		return err
 	}
 
-	return gitx.DeleteBranch(ctx, in.main, name)
+	return gitx.DeleteBranch(ctx, in.Main, name)
 }

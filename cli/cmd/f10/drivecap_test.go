@@ -26,8 +26,8 @@ func capRuns(n int) []*driveRun {
 // openRun marks r open in its own workspace, its chain under way.
 func openRun(r *driveRun) {
 	r.phase = atRunning
-	r.o.path = "/code/repo." + r.task.ref.ID
-	r.o.ws.ID = "ws:" + r.task.ref.ID
+	r.o.Path = "/code/repo." + r.task.ref.ID
+	r.o.Ws.ID = "ws:" + r.task.ref.ID
 }
 
 // liveGate is a cap gate over the workspaces of every opened run.
@@ -36,7 +36,7 @@ func liveGate(in *driveInput) *openGate {
 
 	for _, r := range in.runs {
 		if r.opened() {
-			g.wss = append(g.wss, agentctl.Workspace{ID: r.o.ws.ID, Path: r.o.path, Status: agentctl.StatusIdle})
+			g.wss = append(g.wss, agentctl.Workspace{ID: r.o.Ws.ID, Path: r.o.Path, Status: agentctl.StatusIdle})
 		}
 	}
 
@@ -88,7 +88,7 @@ func TestCapHoldsTenTasksToFour(t *testing.T) {
 		for _, r := range in.runs {
 			if r.holdsSlot() {
 				r.end = &driveResult{row: "finished"}
-				r.o.path = ""
+				r.o.Path = ""
 
 				break
 			}

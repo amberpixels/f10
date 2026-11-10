@@ -183,6 +183,17 @@ type fieldLayout struct {
 	blockNameW     int
 }
 
+// width is the widest inline row the layout prints. Stanzas wrap to the
+// page, key/value sub-rows included, so they do not count.
+func (l fieldLayout) width() int {
+	widest := 0
+	for _, e := range l.rows {
+		widest = max(widest, l.nameW+2+l.originW+2+lipgloss.Width(e.value))
+	}
+
+	return widest
+}
+
 // layoutFields puts scalar values that fit in rows and the rest in stanzas:
 // one table cannot serve both, since a three-column prefix leaves a
 // paragraph a ribbon of the terminal and a paragraph gives a scalar nothing.
@@ -214,17 +225,6 @@ func layoutFields(fields []facts.Field, limit int) fieldLayout {
 	}
 
 	return l
-}
-
-// width is the widest inline row the layout prints. Stanzas wrap to the
-// page, key/value sub-rows included, so they do not count.
-func (l fieldLayout) width() int {
-	widest := 0
-	for _, e := range l.rows {
-		widest = max(widest, l.nameW+2+l.originW+2+lipgloss.Width(e.value))
-	}
-
-	return widest
 }
 
 func renderFields(w io.Writer, l fieldLayout, page int) {

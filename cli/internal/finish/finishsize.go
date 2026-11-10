@@ -1,4 +1,4 @@
-package main
+package finish
 
 import (
 	"context"
@@ -13,17 +13,17 @@ import (
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
-// branchSize is what a task changed, lockfiles, generated code and
+// BranchSize is what a task changed, lockfiles, generated code and
 // snapshots left out.
-type branchSize struct {
-	lines, md, files int
-	base             string
+type BranchSize struct {
+	Lines, Md, Files int
+	Base             string
 }
 
 // measureBranch reads the size before the branch lands, since landing moves
 // the merge base to the tip and the diff reads zero; a PR the host already
 // merged with a merge commit measures from that commit's first parent.
-func measureBranch(ctx context.Context, dir, branch, def string, unpushed bool) (branchSize, bool) {
+func measureBranch(ctx context.Context, dir, branch, def string, unpushed bool) (BranchSize, bool) {
 	bases := []string{"origin/" + def}
 	if unpushed {
 		bases = []string{def}
@@ -42,7 +42,7 @@ func measureBranch(ctx context.Context, dir, branch, def string, unpushed bool) 
 		}
 
 		s := numstatSize(out, base)
-		if s.files == 0 && !unpushed {
+		if s.Files == 0 && !unpushed {
 			if merge, _, _ := strings.Cut(gitx.Out(ctx, dir, "rev-list", "--ancestry-path", "--merges",
 				"--reverse", head+".."+base), "\n"); merge != "" {
 				if out, err := gitx.Exec(
@@ -61,12 +61,12 @@ func measureBranch(ctx context.Context, dir, branch, def string, unpushed bool) 
 		return s, true
 	}
 
-	return branchSize{}, false
+	return BranchSize{}, false
 }
 
 // numstatSize sums `git diff --numstat`; a binary file's `-` counts zero.
-func numstatSize(out, base string) branchSize {
-	s := branchSize{base: base}
+func numstatSize(out, base string) BranchSize {
+	s := BranchSize{Base: base}
 
 	for line := range strings.SplitSeq(out, "\n") {
 		fields := strings.SplitN(line, "\t", 3)
@@ -77,19 +77,19 @@ func numstatSize(out, base string) branchSize {
 		added, _ := strconv.Atoi(fields[0])
 		deleted, _ := strconv.Atoi(fields[1])
 
-		s.files++
-		s.lines += added + deleted
+		s.Files++
+		s.Lines += added + deleted
 
 		if strings.HasSuffix(fields[2], ".md") {
-			s.md += added + deleted
+			s.Md += added + deleted
 		}
 	}
 
 	return s
 }
 
-// recordSize puts the size in the ledger for `f10 stats`; a test swaps it.
-var recordSize = func(ctx context.Context, dir, branch, task string, s branchSize) {
+// RecordSize puts the size in the ledger for `f10 stats`; a test swaps it.
+var RecordSize = func(ctx context.Context, dir, branch, task string, s BranchSize) {
 	place := ledger.Where(ctx, dir)
 
 	ledger.Record(ledger.Event{
@@ -103,18 +103,18 @@ var recordSize = func(ctx context.Context, dir, branch, task string, s branchSiz
 		Kind:         ledger.TaskSized,
 		Source:       ledger.Observed,
 		Payload: ledger.NewPayload(ledger.Payload{
-			"lines": s.lines, "md_lines": s.md, "files": s.files, "base": s.base,
+			"lines": s.Lines, "md_lines": s.Md, "files": s.Files, "base": s.Base,
 		}),
 	})
 }
 
 // sizeRecorder measures the branch while it still differs from its base and
 // returns what records it, run only once the merge has landed.
-func sizeRecorder(ctx context.Context, in finishInput, branch, def string, unpushed bool) func() {
-	size, sized := measureBranch(ctx, in.main, branch, def, unpushed)
-	if !sized || size.files == 0 {
+func sizeRecorder(ctx context.Context, in FinishInput, branch, def string, unpushed bool) func() {
+	size, sized := measureBranch(ctx, in.Main, branch, def, unpushed)
+	if !sized || size.Files == 0 {
 		return func() {}
 	}
 
-	return func() { recordSize(ctx, in.main, branch, in.task.ID, size) }
+	return func() { RecordSize(ctx, in.Main, branch, in.Task.ID, size) }
 }

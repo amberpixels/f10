@@ -8,6 +8,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/driverec"
+	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -22,18 +23,18 @@ import (
 // since the host merges that; one origin lacks against the local default,
 // since finish merges it here.
 func (in *driveInput) readyToMerge(ctx context.Context, r *driveRun) error {
-	id, branch := r.task.ref.ID, r.o.branch
+	id, branch := r.task.ref.ID, r.o.Branch
 
 	def, err := stack.LocalDefault(ctx, in.main)
 	if err != nil {
 		return halt(id, "finish", err.Error())
 	}
 
-	if _, err := gitx.Exec(ctx, r.o.path, "fetch", "origin"); err != nil {
+	if _, err := gitx.Exec(ctx, r.o.Path, "fetch", "origin"); err != nil {
 		return halt(id, "finish", err.Error())
 	}
 
-	pushed, err := gitx.Ref(ctx, r.o.path, "origin/"+branch)
+	pushed, err := gitx.Ref(ctx, r.o.Path, "origin/"+branch)
 	if err != nil {
 		return halt(id, "finish", err.Error())
 	}
@@ -41,7 +42,7 @@ func (in *driveInput) readyToMerge(ctx context.Context, r *driveRun) error {
 	base, head := "origin/"+def, pushed
 
 	if pushed == "" {
-		if base, err = landingBase(ctx, in.main, def); err != nil {
+		if base, err = finish.LandingBase(ctx, in.main, def); err != nil {
 			return halt(id, "finish", err.Error())
 		}
 
@@ -50,7 +51,7 @@ func (in *driveInput) readyToMerge(ctx context.Context, r *driveRun) error {
 
 	// every read before a push halts on a git that cannot answer: a wrong
 	// "not an ancestor" would pick the lease and rewrite origin's branch
-	clean, err := gitx.MergesCleanly(ctx, r.o.path, base, head)
+	clean, err := gitx.MergesCleanly(ctx, r.o.Path, base, head)
 	if err != nil {
 		return halt(id, "finish", err.Error())
 	}
@@ -61,7 +62,7 @@ func (in *driveInput) readyToMerge(ctx context.Context, r *driveRun) error {
 
 	caughtUp := false
 	if pushed != "" {
-		if caughtUp, err = gitx.IsAncestor(ctx, r.o.path, base, "HEAD"); err != nil {
+		if caughtUp, err = gitx.IsAncestor(ctx, r.o.Path, base, "HEAD"); err != nil {
 			return halt(id, "finish", err.Error())
 		}
 	}
@@ -69,7 +70,7 @@ func (in *driveInput) readyToMerge(ctx context.Context, r *driveRun) error {
 	// after a catchup, origin's copy is the tree before it: HEAD is what the
 	// catchup left and what the push would send, so HEAD is what is tried
 	if !caughtUp && pushed != "" && r.lastCatchup != nil {
-		if caughtUp, err = gitx.MergesCleanly(ctx, r.o.path, base, "HEAD"); err != nil {
+		if caughtUp, err = gitx.MergesCleanly(ctx, r.o.Path, base, "HEAD"); err != nil {
 			return halt(id, "finish", err.Error())
 		}
 	}
@@ -111,21 +112,21 @@ type driveFinish struct {
 	deferred func(string)
 }
 
-func driveFinishInput(t *target.Target, main string, h hostops.Host, req driveFinish) (finishInput, error) {
-	in := finishInputFor(t, main, h, req.task)
+func driveFinishInput(t *target.Target, main string, h hostops.Host, req driveFinish) (finish.FinishInput, error) {
+	in := finish.InputFor(t, main, h, req.task)
 
 	var err error
-	if in.cwd, in.workspace, err = processPlace(); err != nil {
-		return finishInput{}, err
+	if in.Cwd, in.Workspace, err = finish.ProcessPlace(); err != nil {
+		return finish.FinishInput{}, err
 	}
 
-	in.suffix, in.branch = req.suffix, req.branch
-	in.flags.merge, in.flags.leaveOpen = req.pr == finishMerge, req.pr == finishLeaveOpen
-	in.progress, in.handoff, in.deferred = req.progress, req.handoff, req.deferred
+	in.Suffix, in.Branch = req.suffix, req.branch
+	in.Flags.Merge, in.Flags.LeaveOpen = req.pr == finishMerge, req.pr == finishLeaveOpen
+	in.Progress, in.Handoff, in.Deferred = req.progress, req.handoff, req.deferred
 	// a driven finish asks no second question, since a resume carries only
 	// the latest answer: a bundle's riders stay open, the reversible choice,
 	// and the report names them
-	in.close = []string{}
+	in.Close = []string{}
 
 	return in, nil
 }
@@ -151,15 +152,15 @@ func (in *driveInput) runFinish(ctx context.Context, r *driveRun) driveResult {
 
 	buf := &render.LinkBuffer{Links: render.LinkTerminal(in.out)}
 
-	in.finishStep(ctx, r.o.branch, branchmeta.FinishRunning, "starting")
+	in.finishStep(ctx, r.o.Branch, branchmeta.FinishRunning, "starting")
 
 	err = in.finish(ctx, buf, driveFinish{
 		task:   task.ref,
 		suffix: task.suffix,
-		branch: r.o.branch,
+		branch: r.o.Branch,
 		pr:     pr,
 		progress: func(action string) {
-			in.finishStep(ctx, r.o.branch, branchmeta.FinishRunning, action)
+			in.finishStep(ctx, r.o.Branch, branchmeta.FinishRunning, action)
 		},
 		handoff:  func(lines []string) { hand = lines },
 		deferred: func(note string) { pulled, in.pullLine = note, note },
@@ -170,8 +171,8 @@ func (in *driveInput) runFinish(ctx context.Context, r *driveRun) driveResult {
 		fmt.Fprintf(in.out, "  %s\n", sc.Text())
 	}
 
-	if fp := (foreignPullError{}); errors.As(err, &fp) {
-		ask := fmt.Sprintf("1. %s was opened by %s: [%s | %s]", fp.url, fp.author, finishLeaveOpen, finishMerge)
+	if fp := (finish.ForeignPullError{}); errors.As(err, &fp) {
+		ask := fmt.Sprintf("1. %s was opened by %s: [%s | %s]", fp.Url, fp.Author, finishLeaveOpen, finishMerge)
 
 		return driveResult{
 			row:   "asked at finish",
@@ -186,7 +187,7 @@ func (in *driveInput) runFinish(ctx context.Context, r *driveRun) driveResult {
 	}
 
 	if in.record != nil {
-		in.record(ctx, in.main, finishedEvent(id, "", in.now()))
+		in.record(ctx, in.main, finish.FinishedEvent(id, "", in.now()))
 	}
 
 	var lines []string
@@ -206,7 +207,7 @@ func (in *driveInput) retryPull(ctx context.Context) {
 		return
 	}
 
-	line, _ := retryPendingPull(ctx, in.root, in.main)
+	line, _ := finish.RetryPendingPull(ctx, in.root, in.main)
 	if line == "" || line == in.pullLine {
 		return
 	}
@@ -236,6 +237,6 @@ func (in *driveInput) parkFinish(ctx context.Context, r *driveRun) {
 		return
 	}
 
-	_ = branchmeta.Set(ctx, in.main, r.o.branch, branchmeta.Finish,
+	_ = branchmeta.Set(ctx, in.main, r.o.Branch, branchmeta.Finish,
 		branchmeta.DriveFinish{State: branchmeta.FinishQueued}.Format()) // a view only
 }

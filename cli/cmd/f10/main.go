@@ -19,12 +19,14 @@ import (
 	askscmd "github.com/amberpixels/f10/cli/internal/command/asks"
 	boardcmd "github.com/amberpixels/f10/cli/internal/command/board"
 	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
+	finishcmd "github.com/amberpixels/f10/cli/internal/command/finish"
 	hookcmd "github.com/amberpixels/f10/cli/internal/command/hook"
 	ledgercmd "github.com/amberpixels/f10/cli/internal/command/ledger"
 	lorecmd "github.com/amberpixels/f10/cli/internal/command/lore"
 	prcmd "github.com/amberpixels/f10/cli/internal/command/pr"
 	reviewcmd "github.com/amberpixels/f10/cli/internal/command/review"
 	standupcmd "github.com/amberpixels/f10/cli/internal/command/standup"
+	startcmd "github.com/amberpixels/f10/cli/internal/command/start"
 	statecmd "github.com/amberpixels/f10/cli/internal/command/state"
 	statscmd "github.com/amberpixels/f10/cli/internal/command/stats"
 	statuscmd "github.com/amberpixels/f10/cli/internal/command/status"
@@ -72,14 +74,14 @@ func newApp() *cli.Command {
 			statuscmd.Command(),
 			standupcmd.Command(),
 			boardcmd.Command(),
-			startCommand(),
-			forwardCommand(),
+			startcmd.Command(),
+			startcmd.ForwardCommand(),
 			driveCommand(),
 			daemonCommand(),
 			askscmd.Command(),
 			watchCommand(),
-			finishCommand(),
-			janitorCommand(),
+			finishcmd.Command(),
+			finishcmd.JanitorCommand(),
 			hookcmd.Command(),
 			statecmd.Command(),
 			ledgercmd.Command(),

@@ -8,6 +8,7 @@ import (
 	"slices"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ui"
 	"github.com/amberpixels/f10/cli/internal/worktree"
@@ -30,7 +31,7 @@ func (in *driveInput) slotFree(r *driveRun) bool {
 		return true
 	}
 
-	ws := workspaceByID(in.wss, r.o.ws.ID)
+	ws := finish.WorkspaceByID(in.wss, r.o.Ws.ID)
 
 	return ws != nil && ws.Status == agentctl.StatusWorking
 }
@@ -133,7 +134,7 @@ func (in *driveInput) openGate(ctx context.Context, runs []*driveRun, wss []agen
 
 // workspace is the one showing r's checkout, nil for none.
 func (g *openGate) workspace(r *driveRun) *agentctl.Workspace {
-	path := r.o.path
+	path := r.o.Path
 	if !r.opened() && r.task.branch != "" {
 		path = g.trees[r.task.branch]
 	}
@@ -142,7 +143,7 @@ func (g *openGate) workspace(r *driveRun) *agentctl.Workspace {
 		return nil
 	}
 
-	return workspaceAt(g.wss, path)
+	return finish.WorkspaceAt(g.wss, path)
 }
 
 // order puts the tasks with an agent already open first, since they add no

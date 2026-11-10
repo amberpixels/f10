@@ -9,11 +9,13 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
+	startcmd "github.com/amberpixels/f10/cli/internal/command/start"
 	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/runplan"
+	"github.com/amberpixels/f10/cli/internal/start"
 )
 
 // paceRepo is a checkout whose project.md declares frontmatter, with the
@@ -214,7 +216,7 @@ func TestStartRecordsThePace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got := launch.Prompt(modeDefault, ultra, "GH-1", nil, "", nil, ""); strings.Contains(got, "/f10:plan") {
+	if got := launch.Prompt(startcmd.ModeDefault, ultra, "GH-1", nil, "", nil, ""); strings.Contains(got, "/f10:plan") {
 		t.Errorf("ultra's prompt = %q, want ship alone", got)
 	}
 
@@ -233,14 +235,21 @@ func TestStartRecordsThePace(t *testing.T) {
 
 	dep := &launch.Dependency{Task: "GH-7", Branch: "GH-7/base", Plan: testStorage.Plan("GH-7")}
 	f.script(
-		"herdr agent prompt "+agentOf("GH-1")+" "+launch.Prompt(modeDefault, ultra, "GH-1", dep, "", nil, ""),
+		"herdr agent prompt "+agentOf("GH-1")+" "+launch.Prompt(startcmd.ModeDefault, ultra, "GH-1", dep, "", nil, ""),
 		"{}",
 	)
 
 	var out bytes.Buffer
 
-	in := startInput{main: "/code/repo", storage: testStorage, task: gh1, flow: ultra, pace: "ultra", after: "GH-7"}
-	if err := start(t.Context(), &out, in); err != nil {
+	in := start.StartInput{
+		Main:    "/code/repo",
+		Storage: testStorage,
+		Task:    gh1,
+		Flow:    ultra,
+		Pace:    "ultra",
+		After:   "GH-7",
+	}
+	if err := start.Start(t.Context(), &out, in); err != nil {
 		t.Fatal(err)
 	}
 

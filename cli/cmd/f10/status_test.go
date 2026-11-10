@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/amberpixels/f10/cli/internal/archive"
+	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/render"
@@ -488,7 +489,10 @@ func TestShipFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := closeSeries(filepath.Join(storage, "reviews", "FT-1"), archive.SeriesEnd{Pr: "#7"}); err != nil {
+	if _, err := finish.CloseSeries(
+		filepath.Join(storage, "reviews", "FT-1"),
+		archive.SeriesEnd{Pr: "#7"},
+	); err != nil {
 		t.Fatal(err)
 	}
 

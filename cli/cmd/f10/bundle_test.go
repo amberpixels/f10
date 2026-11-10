@@ -12,12 +12,14 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	ledgercmd "github.com/amberpixels/f10/cli/internal/command/ledger"
 	"github.com/amberpixels/f10/cli/internal/driverec"
+	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/start"
 )
 
 var bundle12 = ref.Ref{ID: "GH-1", Number: "1", Origin: ref.OriginExplicit, Bundle: []string{"GH-1", "GH-2"}}
@@ -57,8 +59,13 @@ func TestStartABundle(t *testing.T) {
 
 	var out bytes.Buffer
 
-	in := startInput{main: "/code/repo", storage: testStorage, task: bundle12, title: titled("Add dark mode", nil)}
-	if err := start(t.Context(), &out, in); err != nil {
+	in := start.StartInput{
+		Main:    "/code/repo",
+		Storage: testStorage,
+		Task:    bundle12,
+		Title:   titled("Add dark mode", nil),
+	}
+	if err := start.Start(t.Context(), &out, in); err != nil {
 		t.Fatal(err)
 	}
 
@@ -77,7 +84,7 @@ func TestSettleBundle(t *testing.T) {
 		f := newFakes(t)
 		f.script(refsRider, heads("GH-2/own"))
 
-		_, err := settleBundle(t.Context(), "/code/repo", bundle12, "")
+		_, err := start.SettleBundle(t.Context(), "/code/repo", bundle12, "")
 		if err == nil || !strings.Contains(err.Error(), "GH-2 is already on branch GH-2/own") {
 			t.Errorf("err = %v, want the rider's branch named", err)
 		}
@@ -88,7 +95,7 @@ func TestSettleBundle(t *testing.T) {
 		f.meta.Seed("GH-3+GH-2/x", branchmeta.Riders, "GH-2")
 		f.script(refsRider, "")
 
-		_, err := settleBundle(t.Context(), "/code/repo", bundle12, "")
+		_, err := start.SettleBundle(t.Context(), "/code/repo", bundle12, "")
 		if err == nil || !strings.Contains(err.Error(), "GH-3+GH-2/x") {
 			t.Errorf("err = %v, want the other bundle's branch named", err)
 		}
@@ -101,7 +108,7 @@ func TestSettleBundle(t *testing.T) {
 		f.script(refsRider, "")
 		f.script(riderKey("refs/remotes/origin/", "GH-2"), "refs/remotes/origin/GH-5+GH-2/x\n")
 
-		_, err := settleBundle(t.Context(), "/code/repo", bundle12, "")
+		_, err := start.SettleBundle(t.Context(), "/code/repo", bundle12, "")
 		if err == nil || !strings.Contains(err.Error(), "GH-2 is already on branch GH-5+GH-2/x") {
 			t.Errorf("err = %v, want the remote bundle named", err)
 		}
@@ -112,7 +119,7 @@ func TestSettleBundle(t *testing.T) {
 		f.meta.Seed("GH-1+GH-3/x", branchmeta.Riders, "GH-3")
 		f.meta.Seed("GH-1+GH-3/x", branchmeta.Task, "GH-1")
 
-		_, err := settleBundle(t.Context(), "/code/repo", bundle12, "GH-1+GH-3/x")
+		_, err := start.SettleBundle(t.Context(), "/code/repo", bundle12, "GH-1+GH-3/x")
 		if err == nil || !strings.Contains(err.Error(), "ships GH-1+GH-3; riders are fixed at start") {
 			t.Errorf("err = %v, want the recorded bundle named", err)
 		}
@@ -121,7 +128,7 @@ func TestSettleBundle(t *testing.T) {
 	t.Run("the task rides in another bundle", func(t *testing.T) {
 		newFakes(t)
 
-		_, err := settleBundle(t.Context(), "/code/repo", bundle12, "GH-5+GH-1/x")
+		_, err := start.SettleBundle(t.Context(), "/code/repo", bundle12, "GH-5+GH-1/x")
 		if err == nil || !strings.Contains(err.Error(), "GH-1 is already on branch GH-5+GH-1/x, led by GH-5") {
 			t.Errorf("err = %v, want the branch's own lead named", err)
 		}
@@ -135,7 +142,7 @@ func TestSettleBundle(t *testing.T) {
 		f.meta.Seed("GH-1+GH-2/x", branchmeta.Riders, "GH-2")
 		f.script(refsRider, "")
 
-		if _, err := settleBundle(t.Context(), "/code/repo", bundle12, "GH-1+GH-2/x"); err != nil {
+		if _, err := start.SettleBundle(t.Context(), "/code/repo", bundle12, "GH-1+GH-2/x"); err != nil {
 			t.Errorf("err = %v reopening the bundle's own branch", err)
 		}
 	})
@@ -144,7 +151,7 @@ func TestSettleBundle(t *testing.T) {
 		f := newFakes(t)
 		f.script(refsRider, "")
 
-		got, err := settleBundle(t.Context(), "/code/repo", gh1, "GH-1+GH-2/x")
+		got, err := start.SettleBundle(t.Context(), "/code/repo", gh1, "GH-1+GH-2/x")
 		if err != nil || got.Label() != "GH-1+GH-2" {
 			t.Errorf("settleBundle = %s, %v; want the bundle GH-1+GH-2", got.Label(), err)
 		}
@@ -153,7 +160,7 @@ func TestSettleBundle(t *testing.T) {
 	t.Run("a task alone is never refused", func(t *testing.T) {
 		newFakes(t)
 
-		if got, err := settleBundle(t.Context(), "/code/repo", gh1, ""); err != nil || got.Bundle != nil {
+		if got, err := start.SettleBundle(t.Context(), "/code/repo", gh1, ""); err != nil || got.Bundle != nil {
 			t.Errorf("settleBundle = %+v, %v for a single task", got, err)
 		}
 	})
@@ -189,9 +196,9 @@ func TestStartRefusesABundleWithAParent(t *testing.T) {
 		return nil, nil
 	}
 
-	err := refuseStartParent(
+	err := start.RefuseStartParent(
 		t.Context(),
-		startInput{main: "/code/repo", storage: testStorage, task: bundle12, children: kids},
+		start.StartInput{Main: "/code/repo", Storage: testStorage, Task: bundle12, Children: kids},
 	)
 	if err == nil || !strings.Contains(err.Error(), "GH-2 is a parent of GH-5") {
 		t.Errorf("err = %v, want GH-2 named as the parent", err)
@@ -284,11 +291,11 @@ func TestSkillPromptForABundle(t *testing.T) {
 func TestFinishAsksWhichRidersClose(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.openPR()
-	fx.in.task = bundle12
+	fx.in.Task = bundle12
 
 	_, err := fx.run(t)
 
-	var re ridersError
+	var re finish.RidersError
 	if !errors.As(err, &re) || !strings.Contains(err.Error(), "riders GH-2") {
 		t.Fatalf("err = %v, want the riders asked", err)
 	}
@@ -312,7 +319,7 @@ func TestFinishKeepsARiderOpen(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			fx := newFinishFixture(t)
 			fx.openPR()
-			fx.in.task, fx.in.close, fx.in.hostCloses = bundle12, tc.close, true
+			fx.in.Task, fx.in.Close, fx.in.HostCloses = bundle12, tc.close, true
 			fx.f.script("gh pr view GH-1 --json body", `{"body":"Closes #1\nCloses #2"}`)
 			fx.f.absent = append(fx.f.absent, "gh pr edit GH-1 --body-file ")
 
@@ -343,7 +350,7 @@ func TestFinishReopensAKeptRiderAfterTheMerge(t *testing.T) {
 	fx.f.script(ghView, prMerged)
 	fx.f.script(lsRem, "")
 	fx.f.script("gh issue reopen 2", "")
-	fx.in.task, fx.in.close, fx.in.hostCloses = bundle12, []string{}, true
+	fx.in.Task, fx.in.Close, fx.in.HostCloses = bundle12, []string{}, true
 
 	out, err := fx.run(t)
 	if err != nil {
@@ -359,7 +366,7 @@ func TestKeepOpen(t *testing.T) {
 	body := "Closes #12\nfixes: #12\nResolved https://github.com/a/b/issues/12\nCloses #123\nSee #12\nCloses #3"
 	want := "Part of #12\nPart of #12\nPart of https://github.com/a/b/issues/12\nCloses #123\nSee #12\nCloses #3"
 
-	if got := keepOpen(body, "12"); got != want {
+	if got := finish.KeepOpen(body, "12"); got != want {
 		t.Errorf("keepOpen =\n%s\nwant\n%s", got, want)
 	}
 }
@@ -371,13 +378,13 @@ func TestCloseChoice(t *testing.T) {
 	}
 
 	for value, want := range map[string]string{"all": "GH-2 GH-3", "none": "", "3": "GH-3", "gh-2, 3": "GH-2 GH-3"} {
-		got, err := closeChoice(task, value, resolve)
+		got, err := finish.CloseChoice(task, value, resolve)
 		if err != nil || strings.Join(got, " ") != want || got == nil {
 			t.Errorf("closeChoice(%q) = %v, %v; want [%s]", value, got, err, want)
 		}
 	}
 
-	if _, err := closeChoice(task, "GH-1", resolve); err == nil {
+	if _, err := finish.CloseChoice(task, "GH-1", resolve); err == nil {
 		t.Error("the lead was taken as a rider")
 	}
 }
@@ -408,10 +415,10 @@ func TestFinishWithATrackerDriverClosesNothing(t *testing.T) {
 	for _, withDriver := range []bool{true, false} {
 		fx := newFinishFixture(t)
 		fx.openPR()
-		fx.in.task, fx.in.close = bundle12, []string{"GH-2"}
+		fx.in.Task, fx.in.Close = bundle12, []string{"GH-2"}
 
 		if withDriver {
-			fx.in.driver = fakeDriver(t)
+			fx.in.Driver = fakeDriver(t)
 			fx.f.fail("driver branch 1", shell.Result{Code: 3})
 		}
 
@@ -432,12 +439,12 @@ func TestFinishWithATrackerDriverClosesNothing(t *testing.T) {
 
 // A rerun after a failed merge closes a rider an earlier run kept open.
 func TestCloseAgain(t *testing.T) {
-	body := keepOpen("Closes #1\nCloses #2", "2")
-	if got := closeAgain(body, "2"); got != "Closes #1\nCloses #2" {
+	body := finish.KeepOpen("Closes #1\nCloses #2", "2")
+	if got := finish.CloseAgain(body, "2"); got != "Closes #1\nCloses #2" {
 		t.Errorf("closeAgain = %q, want the keyword back", got)
 	}
 
-	if got := closeAgain("Part of #22", "2"); got != "Part of #22" {
+	if got := finish.CloseAgain("Part of #22", "2"); got != "Part of #22" {
 		t.Errorf("closeAgain touched another issue: %q", got)
 	}
 }

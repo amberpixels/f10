@@ -12,6 +12,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -266,7 +267,7 @@ func TestCollectWatched(t *testing.T) {
 	}
 	defer lease.Release()
 
-	in := watchInput{main: fx.in.main, root: root, jan: fx.in, stateDir: t.TempDir(), ttl: time.Hour, now: time.Now}
+	in := watchInput{main: fx.in.Main, root: root, jan: fx.in, stateDir: t.TempDir(), ttl: time.Hour, now: time.Now}
 
 	tasks, local, err := collectWatched(t.Context(), in)
 	if err != nil {
@@ -382,7 +383,7 @@ func TestCollectWatchedSkipsAnUnreadableMark(t *testing.T) {
 	var warned []string
 
 	in := watchInput{
-		main: fx.in.main, root: t.TempDir(), jan: fx.in, stateDir: t.TempDir(), ttl: time.Hour, now: time.Now,
+		main: fx.in.Main, root: t.TempDir(), jan: fx.in, stateDir: t.TempDir(), ttl: time.Hour, now: time.Now,
 		warn: func(line string) { warned = append(warned, line) },
 	}
 
@@ -411,7 +412,7 @@ func TestWatchRetriesADeferredPull(t *testing.T) {
 	f := newFakes(t)
 	main, root := t.TempDir(), t.TempDir()
 
-	if err := os.WriteFile(filepath.Join(root, pendingPullFile), []byte("main m3rge\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, finish.PendingPullFile), []byte("main m3rge\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 

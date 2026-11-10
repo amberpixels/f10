@@ -67,13 +67,6 @@ type View struct {
 	Roots           []string             `json:"roots,omitempty"` // F10_ROOTS; empty means -C takes paths only
 }
 
-// A paceEntry is one pace key with its dials and the layer that set it.
-type paceEntry struct {
-	Key    string       `json:"key"` // <pace>.<step>, or pace for the default
-	Value  string       `json:"value"`
-	Origin facts.Origin `json:"origin"`
-}
-
 // withAgents and withPaces list the merged agents map and every pace key,
 // the user's file and the built-ins included; facts already holds each as a
 // fact and each problem.
@@ -119,6 +112,13 @@ func (v *View) withPaces(eff *facts.Effective) {
 			Key: "ceiling.except", Value: strings.Join(set.Except, ", "), Origin: set.ExceptOrigin,
 		})
 	}
+}
+
+// A paceEntry is one pace key with its dials and the layer that set it.
+type paceEntry struct {
+	Key    string       `json:"key"` // <pace>.<step>, or pace for the default
+	Value  string       `json:"value"`
+	Origin facts.Origin `json:"origin"`
 }
 
 func Command() *cli.Command {

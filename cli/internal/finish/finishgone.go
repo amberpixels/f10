@@ -1,4 +1,4 @@
-package main
+package finish
 
 import (
 	"context"
@@ -25,17 +25,17 @@ func (e goneError) Unwrap() error { return e.err }
 
 // finishBranchless ends a task with no branch here: already finished when
 // its plan is archived, else a parent its subtasks delivered.
-func finishBranchless(ctx context.Context, w io.Writer, in finishInput, gone goneError) error {
-	if !in.storage.PlanArchived(in.task.ID) {
+func finishBranchless(ctx context.Context, w io.Writer, in FinishInput, gone goneError) error {
+	if !in.Storage.PlanArchived(in.Task.ID) {
 		return finishParent(ctx, w, in, gone)
 	}
 
-	if err := render.WriteReport(w, []render.Fact{render.TaskFact(ctx, w, in.main, in.task.Label())},
-		[]string{in.task.ID + " has no branch and its plan is archived: already finished"}); err != nil {
+	if err := render.WriteReport(w, []render.Fact{render.TaskFact(ctx, w, in.Main, in.Task.Label())},
+		[]string{in.Task.ID + " has no branch and its plan is archived: already finished"}); err != nil {
 		return err
 	}
 
-	finishRecords(w, in, in.branch)
+	finishRecords(w, in, in.Branch)
 
 	return nil
 }
@@ -43,18 +43,18 @@ func finishBranchless(ctx context.Context, w io.Writer, in finishInput, gone gon
 // finishParent closes a parent its subtasks delivered: it never had a branch
 // or a plan of its own, so every subtask closed and branchless is the proof.
 // A task with no subtasks keeps the refusal.
-func finishParent(ctx context.Context, w io.Writer, in finishInput, gone goneError) error {
-	if in.subtasks == nil {
+func finishParent(ctx context.Context, w io.Writer, in FinishInput, gone goneError) error {
+	if in.Subtasks == nil {
 		return gone.err
 	}
 
-	kids, err := in.subtasks(ctx, in.task)
+	kids, err := in.Subtasks(ctx, in.Task)
 	if errors.Is(err, hostops.ErrNoParentLink) || (err == nil && len(kids) == 0) {
 		return gone.err
 	}
 
 	if err != nil {
-		return fmt.Errorf("%s: reading its subtasks: %w", in.task.ID, err)
+		return fmt.Errorf("%s: reading its subtasks: %w", in.Task.ID, err)
 	}
 
 	var unfinished, ids []string
@@ -77,7 +77,7 @@ func finishParent(ctx context.Context, w io.Writer, in finishInput, gone goneErr
 
 		// a tracking ref the host deleted but this clone never pruned counts too,
 		// so the ref is named for the user to prune
-		x, err := stack.LoadBranchIndex(ctx, in.main)
+		x, err := stack.LoadBranchIndex(ctx, in.Main)
 		if err != nil {
 			return err
 		}
@@ -93,31 +93,31 @@ func finishParent(ctx context.Context, w io.Writer, in finishInput, gone goneErr
 	}
 
 	if len(unfinished) > 0 {
-		return fmt.Errorf("%s has subtasks not finished: %s; it stays open", in.task.ID, strings.Join(unfinished, ", "))
+		return fmt.Errorf("%s has subtasks not finished: %s; it stays open", in.Task.ID, strings.Join(unfinished, ", "))
 	}
 
 	note := "closed: delivered by " + strings.Join(ids, ", ")
 
-	if in.closeTask == nil {
+	if in.CloseTask == nil {
 		note = "every subtask is done (" + strings.Join(ids, ", ") + "), and the tracker is not the host: close " +
-			in.task.ID + " there"
+			in.Task.ID + " there"
 	} else {
-		in.step("closing " + in.task.ID)
+		in.step("closing " + in.Task.ID)
 
-		if err := in.closeTask(ctx, in.task); err != nil {
-			return fmt.Errorf("closing %s: %w", in.task.ID, err)
+		if err := in.CloseTask(ctx, in.Task); err != nil {
+			return fmt.Errorf("closing %s: %w", in.Task.ID, err)
 		}
 	}
 
 	if err := render.WriteReport(
 		w,
-		[]render.Fact{render.TaskFact(ctx, w, in.main, in.task.Label())},
+		[]render.Fact{render.TaskFact(ctx, w, in.Main, in.Task.Label())},
 		[]string{note},
 	); err != nil {
 		return err
 	}
 
-	finishRecords(w, in, in.branch)
+	finishRecords(w, in, in.Branch)
 
 	return nil
 }

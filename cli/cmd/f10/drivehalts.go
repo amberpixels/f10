@@ -94,7 +94,7 @@ func (in *driveInput) recordHalt(ctx context.Context, r *driveRun, res driveResu
 		return
 	}
 
-	in.record(ctx, cmp.Or(r.o.path, in.main), ledger.Event{
+	in.record(ctx, cmp.Or(r.o.Path, in.main), ledger.Event{
 		At:      in.now(),
 		Task:    r.task.ref.ID,
 		Kind:    ledger.TaskHalted,
@@ -129,7 +129,7 @@ func recordAt(ctx context.Context, dir string, e ledger.Event) {
 // baseHead is the base branch's head, "none" for no branch, or why git
 // could not read it.
 func (in *driveInput) baseHead(ctx context.Context, b *driveRun) (string, string) {
-	head, err := gitx.Ref(ctx, in.main, "refs/heads/"+b.o.branch)
+	head, err := gitx.Ref(ctx, in.main, "refs/heads/"+b.o.Branch)
 	if err != nil {
 		return "", "reading " + b.task.ref.ID + "'s branch: " + err.Error()
 	}

@@ -19,12 +19,14 @@ import (
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/worktree"
@@ -209,7 +211,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		driver:          drv,
 		tracker:         stack.TrackerFor(t),
 		title:           func(r ref.Ref) func(context.Context) (string, error) { return worktree.TitleLookup(t, r.Number) },
-		started:         startedMove(t),
+		started:         start.StartedMove(t),
 		record:          recordAt,
 		finish: func(ctx context.Context, w io.Writer, req driveFinish) error {
 			fin, err := driveFinishInput(t, main, h, req)
@@ -217,7 +219,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 				return err
 			}
 
-			return finish(ctx, w, fin)
+			return finish.Finish(ctx, w, fin)
 		},
 		now:    time.Now,
 		notify: asknotify.AskNotifier,

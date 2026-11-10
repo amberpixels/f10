@@ -20,6 +20,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/launch"
@@ -28,6 +29,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
@@ -209,7 +211,7 @@ func (fx *driveFixture) opensOn(id, ws, pane, profile string) {
 
 	var p agentctl.Profile
 
-	start := "herdr agent start " + agent + " --kind claude --pane " + pane
+	started := "herdr agent start " + agent + " --kind claude --pane " + pane
 	if profile != "" {
 		parsed, err := agentctl.ParseProfile(profile)
 		if err != nil {
@@ -217,13 +219,13 @@ func (fx *driveFixture) opensOn(id, ws, pane, profile string) {
 		}
 
 		p, _, _ = parsed.Resolve()
-		start += " -- " + strings.Join(p.Args(), " ")
+		started += " -- " + strings.Join(p.Args(), " ")
 	}
 
 	fx.f.script("wt switch --no-cd --yes --format json --create "+id, "{}")
 	fx.f.script("herdr worktree open --cwd /code/repo --path /code/repo."+id+" --label "+id,
 		`{"result":{"workspace":{"workspace_id":"`+ws+`"},"root_pane":{"pane_id":"`+pane+`"},"already_open":false}}`)
-	fx.f.script(start, "{}")
+	fx.f.script(started, "{}")
 }
 
 // expects scripts the prompt for one skill and the record of it done.
@@ -1475,7 +1477,7 @@ func TestDriveTakesASavedPlanAsPlanned(t *testing.T) {
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	// the shared storage root sits outside the worktree, so the agent may write there
-	addDir := " -- " + strings.Join(agentArgs(agentctl.Profile{}, fx.in.storage, "/code/repo.GH-1"), " ")
+	addDir := " -- " + strings.Join(start.AgentArgs(agentctl.Profile{}, fx.in.storage, "/code/repo.GH-1"), " ")
 	fx.f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:1"+addDir, "{}")
 	fx.expects("GH-1", "judge")
 	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
@@ -1512,8 +1514,11 @@ func TestDrivePositionCountsTheWorktreesPlan(t *testing.T) {
 			fx := newDriveFixture(t, "GH-1")
 			fx.f.meta.Seed("GH-1", branchmeta.Drive, tc.recorded)
 
-			pos, err := fx.in.position(t.Context(), openedTask{branch: "GH-1", path: "/code/repo.GH-1", plan: tc.plan},
-				tc.chain)
+			pos, err := fx.in.position(
+				t.Context(),
+				start.OpenedTask{Branch: "GH-1", Path: "/code/repo.GH-1", Plan: tc.plan},
+				tc.chain,
+			)
 			if err != nil || pos != tc.want {
 				t.Errorf("position = %d, %v; want %d", pos, err, tc.want)
 			}
@@ -2934,7 +2939,7 @@ func TestDriveFinishAsksForSomeoneElsesPR(t *testing.T) {
 		finish: func(_ context.Context, _ io.Writer, req driveFinish) error {
 			got = append(got, req.pr)
 			if req.pr == "" {
-				return foreignPullError{url: "https://gh/pr/9", author: "alice"}
+				return finish.ForeignPullError{Url: "https://gh/pr/9", Author: "alice"}
 			}
 
 			return nil
@@ -2991,7 +2996,7 @@ func TestDriveFinishPassesTheRunsBranch(t *testing.T) {
 	}
 	in.out = io.Discard
 
-	run := &driveRun{task: driveTask{ref: gh1, suffix: "b"}, o: openedTask{branch: "GH-1-b"}}
+	run := &driveRun{task: driveTask{ref: gh1, suffix: "b"}, o: start.OpenedTask{Branch: "GH-1-b"}}
 
 	if res := in.runFinish(t.Context(), run); res.code != 0 {
 		t.Fatalf("runFinish = %+v, want finished", res)
@@ -3026,25 +3031,25 @@ func TestDriveFinishInputTakesTheSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !in.traces || in.method != "squash" || in.gate != "block" || in.loreStore == nil || in.title == nil {
+	if !in.Traces || in.Method != "squash" || in.Gate != "block" || in.LoreStore == nil || in.Title == nil {
 		t.Errorf("settings = traces %v, method %q, gate %q, lore %v; want them all from project.md",
-			in.traces, in.method, in.gate, in.loreStore)
+			in.Traces, in.Method, in.Gate, in.LoreStore)
 	}
 
-	if in.task.ID != "DM-1" || in.suffix != "b" || in.branch != "DM-1-b" || !in.flags.merge || in.flags.leaveOpen {
+	if in.Task.ID != "DM-1" || in.Suffix != "b" || in.Branch != "DM-1-b" || !in.Flags.Merge || in.Flags.LeaveOpen {
 		t.Errorf("run = %s %q %q merge %v local %v; want the lead DM-1, the run's suffix and branch, a merge",
-			in.task.ID, in.suffix, in.branch, in.flags.merge, in.flags.leaveOpen)
+			in.Task.ID, in.Suffix, in.Branch, in.Flags.Merge, in.Flags.LeaveOpen)
 	}
 
-	if in.close == nil || len(in.close) != 0 {
-		t.Errorf("close = %v, want riders left open, never nil", in.close)
+	if in.Close == nil || len(in.Close) != 0 {
+		t.Errorf("close = %v, want riders left open, never nil", in.Close)
 	}
 }
 
 // The watcher's finish record says who ran it; the drive's carries none.
 func TestFinishedEvent(t *testing.T) {
 	for _, by := range []string{"", "watch"} {
-		e := finishedEvent("GH-1", by, time.Time{})
+		e := finish.FinishedEvent("GH-1", by, time.Time{})
 		got, set := e.Payload.Val["by"]
 
 		if e.Kind != ledger.TaskFinished || e.Source != ledger.Observed || e.Task != "GH-1" ||
@@ -3230,7 +3235,7 @@ func TestDriveReleasedCountsOnlyTheBasesOwnCommits(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1")
 	fx.oneAttempt(t)
 	fx.f.script(headRef, "origin/main")
-	b := &driveRun{phase: atRunning, o: openedTask{branch: "GH-2"}}
+	b := &driveRun{phase: atRunning, o: start.OpenedTask{Branch: "GH-2"}}
 
 	fx.f.meta.Seed("GH-2", branchmeta.AfterBranch, "GH-1")
 	fx.f.script("git rev-parse -q --verify refs/remotes/origin/main", "o1")
@@ -3362,7 +3367,7 @@ func spikeDrive(t *testing.T, args ...string) *driveFixture {
 		path := "/code/repo." + id
 		pairs = append(pairs, id, path)
 		fx.opens(id, "ws:"+id, fmt.Sprintf("pane:%d", i))
-		addDir := " -- " + strings.Join(agentArgs(agentctl.Profile{}, fx.in.storage, path), " ")
+		addDir := " -- " + strings.Join(start.AgentArgs(agentctl.Profile{}, fx.in.storage, path), " ")
 		fx.f.script(fmt.Sprintf("herdr agent start %s --kind claude --pane pane:%d%s", agentOf(id), i, addDir), "{}")
 		fx.expects(id, "ship")
 	}
@@ -3445,7 +3450,7 @@ func TestDriveStartsADependentOfAClosedSpike(t *testing.T) {
 func TestDriveSpikeShortcutNeedsABranchNeverPushed(t *testing.T) {
 	fx := spikeDrive(t, "GH-1", "ship")
 	r := &driveRun{task: driveTask{ref: ref.Ref{ID: "GH-1"}}, pos: 1}
-	r.o.path, r.o.branch = "/code/repo.GH-1", "GH-1"
+	r.o.Path, r.o.Branch = "/code/repo.GH-1", "GH-1"
 
 	if done, _ := fx.in.spikeDone(t.Context(), r); !done {
 		t.Error("a spike never pushed took no shortcut")
@@ -3527,7 +3532,7 @@ func TestDriveWithoutFinishWritesNoRecord(t *testing.T) {
 // finished one's went with its branch.
 func TestDriveEndParksFinishRecord(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1")
-	r := &driveRun{phase: atRunning, finishes: true, o: openedTask{branch: "GH-1"}}
+	r := &driveRun{phase: atRunning, finishes: true, o: start.OpenedTask{Branch: "GH-1"}}
 
 	fx.in.end(t.Context(), r, driveResult{row: "asked at finish", code: ui.ExitAsk})
 
@@ -3777,8 +3782,13 @@ func TestDriveParksAShipOnItsBaseUntilOriginHasIt(t *testing.T) {
 // ship goes again at pr, which then targets the default branch.
 func TestDriveResendsAnOriginWaitOnceItsBaseFinished(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1")
-	b := &driveRun{phase: atRunning, o: openedTask{branch: "GH-1"}, task: driveTask{ref: ref.Ref{ID: "GH-1"}}}
-	r := &driveRun{phase: atRunning, base: b, o: openedTask{branch: "GH-2"}, task: driveTask{ref: ref.Ref{ID: "GH-2"}}}
+	b := &driveRun{phase: atRunning, o: start.OpenedTask{Branch: "GH-1"}, task: driveTask{ref: ref.Ref{ID: "GH-1"}}}
+	r := &driveRun{
+		phase: atRunning,
+		base:  b,
+		o:     start.OpenedTask{Branch: "GH-2"},
+		task:  driveTask{ref: ref.Ref{ID: "GH-2"}},
+	}
 	fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", "")
 
 	run := &state.Run{Ship: "blocked", Leaf: "pr", Wait: "GH-1"}
@@ -3854,14 +3864,18 @@ func TestDriveHaltsAnOriginWaitThatStopsAgain(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			fx := newDriveFixture(t, "GH-2", "ship")
-			b := &driveRun{phase: atRunning, o: openedTask{branch: "GH-1"}, task: driveTask{ref: ref.Ref{ID: "GH-1"}}}
+			b := &driveRun{
+				phase: atRunning,
+				o:     start.OpenedTask{Branch: "GH-1"},
+				task:  driveTask{ref: ref.Ref{ID: "GH-1"}},
+			}
 			if tc.through {
 				b.end = &driveResult{row: "done: ship"}
 			}
 
 			r := &driveRun{
 				phase: atRunning, base: b, skill: "ship", waitHead: tc.waitHead,
-				o:    openedTask{branch: "GH-2", path: "/code/repo.GH-2"},
+				o:    start.OpenedTask{Branch: "GH-2", Path: "/code/repo.GH-2"},
 				task: driveTask{ref: ref.Ref{ID: "GH-2"}},
 			}
 			fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", tc.origin)
@@ -3881,10 +3895,10 @@ func TestDriveHaltsAnOriginWaitThatStopsAgain(t *testing.T) {
 // alone does not read as a base ready to resend to.
 func TestDriveHoldsAResumedOriginWait(t *testing.T) {
 	fx := newDriveFixture(t, "GH-2", "ship")
-	b := &driveRun{phase: atRunning, o: openedTask{branch: "GH-1"}, task: driveTask{ref: ref.Ref{ID: "GH-1"}}}
+	b := &driveRun{phase: atRunning, o: start.OpenedTask{Branch: "GH-1"}, task: driveTask{ref: ref.Ref{ID: "GH-1"}}}
 	r := &driveRun{
 		phase: atRunning, base: b,
-		o:    openedTask{branch: "GH-2", path: "/code/repo.GH-2"},
+		o:    start.OpenedTask{Branch: "GH-2", Path: "/code/repo.GH-2"},
 		task: driveTask{ref: ref.Ref{ID: "GH-2"}},
 	}
 	fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", "")
@@ -3947,8 +3961,8 @@ func TestDriveResendsAShipWhoseBaseCommittedFirst(t *testing.T) {
 // stop it cannot resume, and ship's own guard brings the base in anyway.
 func TestDriveMarksNoParkedTask(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1")
-	b := &driveRun{phase: atRunning, o: openedTask{branch: "GH-1"}}
-	r := &driveRun{phase: atParked, base: b, o: openedTask{branch: "GH-2"}}
+	b := &driveRun{phase: atRunning, o: start.OpenedTask{Branch: "GH-1"}}
+	r := &driveRun{phase: atParked, base: b, o: start.OpenedTask{Branch: "GH-2"}}
 
 	if err := fx.in.markMoved(t.Context(), []*driveRun{b, r}, nil); err != nil {
 		t.Fatal(err)
@@ -4112,7 +4126,7 @@ func TestDriveRetriesADeferredPull(t *testing.T) {
 	f := newFakes(t)
 	main, root := t.TempDir(), t.TempDir()
 
-	if err := os.WriteFile(filepath.Join(root, pendingPullFile), []byte("main m3rge\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, finish.PendingPullFile), []byte("main m3rge\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -4152,7 +4166,7 @@ func TestDriveRetriesADeferredPull(t *testing.T) {
 		t.Errorf("retry after the pull lands:\n%s", out.String())
 	}
 
-	if def, _ := readPendingPull(root); def != "" {
+	if def, _ := finish.ReadPendingPull(root); def != "" {
 		t.Error("the pending pull outlived the pull")
 	}
 }
@@ -4184,7 +4198,7 @@ func TestResumeShownUsesTheLabel(t *testing.T) {
 // cancelled drive leaves no test suite running behind it.
 func TestDriveEndStopsARunningVerify(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1")
-	r := &driveRun{phase: atRunning, o: openedTask{branch: "GH-1"}}
+	r := &driveRun{phase: atRunning, o: start.OpenedTask{Branch: "GH-1"}}
 
 	log := filepath.Join(t.TempDir(), "verify.log")
 	r.job = startVerifyJob(t.Context(), func(ctx context.Context) (stack.VerifyRun, error) {

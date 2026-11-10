@@ -1,4 +1,4 @@
-package main
+package start
 
 import (
 	"fmt"
@@ -8,11 +8,11 @@ import (
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
-// agentArgs is the agent's command line: the profile's flags through its
+// AgentArgs is the agent's command line: the profile's flags through its
 // kind, and each task-file dir of the storage root when that root sits
 // outside the worktree, so writing plans and findings there asks no
 // permission.
-func agentArgs(p agentctl.Profile, root storage.Root, worktree string) []string {
+func AgentArgs(p agentctl.Profile, root storage.Root, worktree string) []string {
 	args := p.Args()
 	if !root.Outside(worktree) {
 		return args

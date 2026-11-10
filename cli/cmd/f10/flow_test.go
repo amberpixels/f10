@@ -10,6 +10,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
+	startcmd "github.com/amberpixels/f10/cli/internal/command/start"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/launch"
@@ -159,7 +160,7 @@ func TestFlowByArea(t *testing.T) {
 		t.Errorf("a named flow wins over the area map: %+v", named)
 	}
 
-	if got := launch.Prompt(modeDefault, fl, "GH-1", nil, "", nil, ""); got != "/f10:ship GH-1 --driven" {
+	if got := launch.Prompt(startcmd.ModeDefault, fl, "GH-1", nil, "", nil, ""); got != "/f10:ship GH-1 --driven" {
 		t.Errorf("prompt = %q, want ship alone", got)
 	}
 

@@ -19,6 +19,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/branchmeta/branchmetatest"
+	startcmd "github.com/amberpixels/f10/cli/internal/command/start"
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
@@ -30,6 +31,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -200,12 +202,12 @@ func (f *fakes) argvLaunch(name string, args []string) (shell.Result, bool) {
 		return shell.Result{}, false
 	}
 
-	start := slices.Concat(args[:sep], args[sep+2:])
+	started := slices.Concat(args[:sep], args[sep+2:])
 	if sep+2 < len(args) {
-		start = slices.Concat(args[:sep+1], args[sep+2:])
+		started = slices.Concat(args[:sep+1], args[sep+2:])
 	}
 
-	res := f.answer(name + " " + strings.Join(start, " "))
+	res := f.answer(name + " " + strings.Join(started, " "))
 	if res.Code != 0 {
 		return res, true
 	}
@@ -796,10 +798,10 @@ func TestPrompt(t *testing.T) {
 		fl   runplan.ShipFlow
 		want string
 	}{
-		{modeDefault, runplan.ShipFlow{}, "/f10:plan GH-1 && /f10:ship GH-1 --driven"},
+		{startcmd.ModeDefault, runplan.ShipFlow{}, "/f10:plan GH-1 && /f10:ship GH-1 --driven"},
 		{launch.ModePlan, runplan.ShipFlow{}, "/f10:plan GH-1 --driven"},
-		{modeDefault, local, "/f10:plan GH-1 && /f10:ship local: GH-1 --driven"},
-		{modeDefault, direct, "/f10:ship direct: GH-1 --driven"}, // a planless flow never plans
+		{startcmd.ModeDefault, local, "/f10:plan GH-1 && /f10:ship local: GH-1 --driven"},
+		{startcmd.ModeDefault, direct, "/f10:ship direct: GH-1 --driven"}, // a planless flow never plans
 	} {
 		if got := launch.Prompt(c.mode, c.fl, "GH-1", nil, "", nil, ""); got != c.want {
 			t.Errorf("prompt(%q, %+v) = %q, want %q", c.mode, c.fl, got, c.want)
@@ -826,9 +828,9 @@ func TestPrompt(t *testing.T) {
 		fl   runplan.ShipFlow
 		want string
 	}{
-		{modeDefault, runplan.ShipFlow{}, "/f10:ship GH-1 --driven"},
+		{startcmd.ModeDefault, runplan.ShipFlow{}, "/f10:ship GH-1 --driven"},
 		{launch.ModePlan, runplan.ShipFlow{}, "/f10:plan GH-1 --driven"},
-		{modeDefault, local, "/f10:ship local: GH-1 --driven"},
+		{startcmd.ModeDefault, local, "/f10:ship local: GH-1 --driven"},
 	} {
 		if got := launch.Prompt(c.mode, c.fl, "GH-1", nil, plan, nil, ""); got != c.want {
 			t.Errorf("prompt(%q, %+v) with a plan = %q, want %q", c.mode, c.fl, got, c.want)
@@ -838,7 +840,7 @@ func TestPrompt(t *testing.T) {
 	want = "/f10:ship GH-1 && GH-1 depends on GH-7, whose plan is at " +
 		"/code/repo.GH-7-base/.f10/plans/GH-7.md --driven"
 
-	if got := launch.Prompt(modeDefault, runplan.ShipFlow{}, "GH-1", dep, plan, nil, ""); got != want {
+	if got := launch.Prompt(startcmd.ModeDefault, runplan.ShipFlow{}, "GH-1", dep, plan, nil, ""); got != want {
 		t.Errorf("prompt with a plan and a dependency = %q, want %q", got, want)
 	}
 }
@@ -889,7 +891,7 @@ func TestPromptNote(t *testing.T) {
 		Diff: "f10 pr diff 9",
 	}
 	if got := launch.Prompt(
-		modeDefault,
+		startcmd.ModeDefault,
 		runplan.ShipFlow{},
 		"GH-1",
 		nil,
@@ -913,14 +915,14 @@ func TestRefuseNote(t *testing.T) {
 		note   string
 		refuse bool
 	}{
-		{modeDefault, nil, "", false},
+		{startcmd.ModeDefault, nil, "", false},
 		{launch.ModeDiscuss, nil, "judge it first", false},
-		{modeDefault, pick, "judge it first", false},
-		{modeDefault, nil, "judge it first", true},
+		{startcmd.ModeDefault, pick, "judge it first", false},
+		{startcmd.ModeDefault, nil, "judge it first", true},
 		{launch.ModePlan, nil, "judge it first", true},
 		{launch.ModePlan, pick, "judge it first", true},
 	} {
-		if err := refuseNote(tc.mode, tc.pick, tc.note); (err != nil) != tc.refuse {
+		if err := startcmd.RefuseNote(tc.mode, tc.pick, tc.note); (err != nil) != tc.refuse {
 			t.Errorf(
 				"refuseNote(%q, pick %v, %q) = %v, want refused %v",
 				tc.mode,
@@ -1011,7 +1013,7 @@ func TestStartWithWorktrunk(t *testing.T) {
 		"herdr agent prompt "+agentOf(
 			"GH-1",
 		)+" "+launch.Prompt(
-			modeDefault,
+			startcmd.ModeDefault,
 			runplan.ShipFlow{},
 			"GH-1",
 			nil,
@@ -1024,7 +1026,7 @@ func TestStartWithWorktrunk(t *testing.T) {
 
 	var out bytes.Buffer
 
-	err := start(t.Context(), &out, startInput{main: "/code/repo", storage: testStorage, task: gh1})
+	err := start.Start(t.Context(), &out, start.StartInput{Main: "/code/repo", Storage: testStorage, Task: gh1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1063,7 +1065,7 @@ func TestStartMarksStarted(t *testing.T) {
 			"herdr agent prompt "+agentOf(
 				"GH-1",
 			)+" "+launch.Prompt(
-				modeDefault,
+				startcmd.ModeDefault,
 				runplan.ShipFlow{},
 				"GH-1",
 				nil,
@@ -1087,10 +1089,10 @@ func TestStartMarksStarted(t *testing.T) {
 
 		var out bytes.Buffer
 
-		if err := start(
+		if err := start.Start(
 			t.Context(),
 			&out,
-			startInput{main: "/code/repo", storage: testStorage, task: gh1, started: started},
+			start.StartInput{Main: "/code/repo", Storage: testStorage, Task: gh1, Started: started},
 		); err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
@@ -1125,16 +1127,16 @@ func TestStartWithGitAlone(t *testing.T) {
 	dep := &launch.Dependency{Task: "GH-7", Branch: "GH-7/base", Plan: testStorage.Plan("GH-7")}
 	local := runplan.ShipFlow{Name: "local"}
 	f.script(
-		"herdr agent prompt "+agentOf("GH-1")+" "+launch.Prompt(modeDefault, local, "GH-1", dep, "", nil, ""),
+		"herdr agent prompt "+agentOf("GH-1")+" "+launch.Prompt(startcmd.ModeDefault, local, "GH-1", dep, "", nil, ""),
 		"{}",
 	)
 
 	var out bytes.Buffer
 
-	err := start(
+	err := start.Start(
 		t.Context(),
 		&out,
-		startInput{main: "/code/repo", storage: testStorage, task: gh1, flow: local, after: "GH-7"},
+		start.StartInput{Main: "/code/repo", Storage: testStorage, Task: gh1, Flow: local, After: "GH-7"},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -1210,7 +1212,7 @@ func TestStartAfterCitesThePlan(t *testing.T) {
 		"herdr agent prompt "+agentOf(
 			"GH-1",
 		)+" "+launch.Prompt(
-			modeDefault,
+			startcmd.ModeDefault,
 			runplan.ShipFlow{},
 			"GH-1",
 			dep,
@@ -1223,7 +1225,7 @@ func TestStartAfterCitesThePlan(t *testing.T) {
 
 	var out bytes.Buffer
 
-	err := start(t.Context(), &out, startInput{main: "/code/repo", storage: root, task: gh1, after: "GH-7"})
+	err := start.Start(t.Context(), &out, start.StartInput{Main: "/code/repo", Storage: root, Task: gh1, After: "GH-7"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1240,7 +1242,7 @@ func TestStartAfterCitesThePlan(t *testing.T) {
 // sharedStorage scripts the agent start a shared storage root adds its dirs
 // to, and returns the root.
 func sharedStorage(f *fakes, root storage.Root) storage.Root {
-	addDir := " -- " + strings.Join(agentArgs(agentctl.Profile{}, root, "/code/repo.GH-1"), " ")
+	addDir := " -- " + strings.Join(start.AgentArgs(agentctl.Profile{}, root, "/code/repo.GH-1"), " ")
 	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7"+addDir, "{}")
 
 	return root
@@ -1259,7 +1261,7 @@ func TestStartAfterWithoutAPlanYet(t *testing.T) {
 		"herdr agent prompt "+agentOf(
 			"GH-1",
 		)+" "+launch.Prompt(
-			modeDefault,
+			startcmd.ModeDefault,
 			runplan.ShipFlow{},
 			"GH-1",
 			dep,
@@ -1272,7 +1274,7 @@ func TestStartAfterWithoutAPlanYet(t *testing.T) {
 
 	var out bytes.Buffer
 
-	err := start(t.Context(), &out, startInput{main: "/code/repo", storage: root, task: gh1, after: "GH-7"})
+	err := start.Start(t.Context(), &out, start.StartInput{Main: "/code/repo", Storage: root, Task: gh1, After: "GH-7"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1303,7 +1305,7 @@ func TestStartAfterOutOfTreePlan(t *testing.T) {
 		"herdr agent prompt "+agentOf(
 			"GH-1",
 		)+" "+launch.Prompt(
-			modeDefault,
+			startcmd.ModeDefault,
 			runplan.ShipFlow{},
 			"GH-1",
 			dep,
@@ -1314,10 +1316,10 @@ func TestStartAfterOutOfTreePlan(t *testing.T) {
 		"{}",
 	)
 
-	err := start(
+	err := start.Start(
 		t.Context(),
 		&bytes.Buffer{},
-		startInput{main: "/code/repo", storage: root, task: gh1, after: "GH-7"},
+		start.StartInput{Main: "/code/repo", Storage: root, Task: gh1, After: "GH-7"},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -1334,7 +1336,7 @@ func TestStartAfterEqualsDefault(t *testing.T) {
 		"herdr agent prompt "+agentOf(
 			"GH-1",
 		)+" "+launch.Prompt(
-			modeDefault,
+			startcmd.ModeDefault,
 			runplan.ShipFlow{},
 			"GH-1",
 			dep,
@@ -1347,7 +1349,7 @@ func TestStartAfterEqualsDefault(t *testing.T) {
 
 	var out bytes.Buffer
 
-	err := start(t.Context(), &out, startInput{main: "/code/repo", storage: root, task: gh1, after: "GH-7"})
+	err := start.Start(t.Context(), &out, start.StartInput{Main: "/code/repo", Storage: root, Task: gh1, After: "GH-7"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1365,10 +1367,10 @@ func TestStartRefusesMissingAfter(t *testing.T) {
 	f.script(refsAfter, "")
 	f.script(refsAfterO, "")
 
-	err := start(
+	err := start.Start(
 		t.Context(),
 		&bytes.Buffer{},
-		startInput{main: "/code/repo", storage: testStorage, task: gh1, after: "GH-7"},
+		start.StartInput{Main: "/code/repo", Storage: testStorage, Task: gh1, After: "GH-7"},
 	)
 	if err == nil || !strings.Contains(err.Error(), "no branch") {
 		t.Fatalf("err = %v, want the missing base refused", err)
@@ -1395,7 +1397,7 @@ func TestStartWithBase(t *testing.T) {
 		"herdr agent prompt "+agentOf(
 			"GH-1",
 		)+" "+launch.Prompt(
-			modeDefault,
+			startcmd.ModeDefault,
 			runplan.ShipFlow{},
 			"GH-1",
 			nil,
@@ -1408,10 +1410,10 @@ func TestStartWithBase(t *testing.T) {
 
 	var out bytes.Buffer
 
-	err := start(
+	err := start.Start(
 		t.Context(),
 		&out,
-		startInput{main: "/code/repo", storage: testStorage, task: gh1, base: "release/1.2"},
+		start.StartInput{Main: "/code/repo", Storage: testStorage, Task: gh1, Base: "release/1.2"},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -1443,7 +1445,7 @@ func TestStartBaseEqualsDefault(t *testing.T) {
 		"herdr agent prompt "+agentOf(
 			"GH-1",
 		)+" "+launch.Prompt(
-			modeDefault,
+			startcmd.ModeDefault,
 			runplan.ShipFlow{},
 			"GH-1",
 			nil,
@@ -1456,7 +1458,11 @@ func TestStartBaseEqualsDefault(t *testing.T) {
 
 	var out bytes.Buffer
 
-	err := start(t.Context(), &out, startInput{main: "/code/repo", storage: testStorage, task: gh1, base: "main"})
+	err := start.Start(
+		t.Context(),
+		&out,
+		start.StartInput{Main: "/code/repo", Storage: testStorage, Task: gh1, Base: "main"},
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1486,7 +1492,7 @@ func TestStartBaseIgnoredOnExistingBranch(t *testing.T) {
 		"herdr agent prompt "+agentOf(
 			"GH-1",
 		)+" "+launch.Prompt(
-			modeDefault,
+			startcmd.ModeDefault,
 			runplan.ShipFlow{},
 			"GH-1",
 			nil,
@@ -1499,10 +1505,10 @@ func TestStartBaseIgnoredOnExistingBranch(t *testing.T) {
 
 	var out bytes.Buffer
 
-	err := start(
+	err := start.Start(
 		t.Context(),
 		&out,
-		startInput{main: "/code/repo", storage: testStorage, task: gh1, base: "release/1.2"},
+		start.StartInput{Main: "/code/repo", Storage: testStorage, Task: gh1, Base: "release/1.2"},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -1524,10 +1530,10 @@ func TestStartRefusesMissingBase(t *testing.T) {
 	f.fail(shaRemote, missing)
 	f.fail(shaOrigin, missing)
 
-	err := start(
+	err := start.Start(
 		t.Context(),
 		&bytes.Buffer{},
-		startInput{main: "/code/repo", storage: testStorage, task: gh1, base: "release/1.2"},
+		start.StartInput{Main: "/code/repo", Storage: testStorage, Task: gh1, Base: "release/1.2"},
 	)
 	if err == nil || !strings.Contains(err.Error(), "no branch") {
 		t.Fatalf("err = %v, want the missing base refused", err)
@@ -1554,10 +1560,10 @@ func TestStartReusesTheWorktreeAndWorkspace(t *testing.T) {
 
 	var out bytes.Buffer
 
-	err := start(
+	err := start.Start(
 		t.Context(),
 		&out,
-		startInput{main: "/code/repo", storage: testStorage, task: gh1, mode: launch.ModePlan, after: "GH-7"},
+		start.StartInput{Main: "/code/repo", Storage: testStorage, Task: gh1, Mode: launch.ModePlan, After: "GH-7"},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -1601,7 +1607,11 @@ func TestStartAdoptsTheWorkspaceHerdrShows(t *testing.T) {
 
 	var out bytes.Buffer
 
-	if err := start(t.Context(), &out, startInput{main: "/code/repo", storage: testStorage, task: gh1}); err != nil {
+	if err := start.Start(
+		t.Context(),
+		&out,
+		start.StartInput{Main: "/code/repo", Storage: testStorage, Task: gh1},
+	); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1635,7 +1645,7 @@ func TestStartRecoversAWorkspaceWithNoAgent(t *testing.T) {
 		"herdr agent prompt "+agentOf(
 			"GH-1",
 		)+" "+launch.Prompt(
-			modeDefault,
+			startcmd.ModeDefault,
 			runplan.ShipFlow{},
 			"GH-1",
 			nil,
@@ -1648,7 +1658,11 @@ func TestStartRecoversAWorkspaceWithNoAgent(t *testing.T) {
 
 	var out bytes.Buffer
 
-	if err := start(t.Context(), &out, startInput{main: "/code/repo", storage: testStorage, task: gh1}); err != nil {
+	if err := start.Start(
+		t.Context(),
+		&out,
+		start.StartInput{Main: "/code/repo", Storage: testStorage, Task: gh1},
+	); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1678,7 +1692,11 @@ func TestStartLeavesABusyPaneAlone(t *testing.T) {
 
 	var out bytes.Buffer
 
-	if err := start(t.Context(), &out, startInput{main: "/code/repo", storage: testStorage, task: gh1}); err != nil {
+	if err := start.Start(
+		t.Context(),
+		&out,
+		start.StartInput{Main: "/code/repo", Storage: testStorage, Task: gh1},
+	); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1716,7 +1734,7 @@ func TestStartWaitsForTheShell(t *testing.T) {
 		"herdr agent prompt "+agentOf(
 			"GH-1",
 		)+" "+launch.Prompt(
-			modeDefault,
+			startcmd.ModeDefault,
 			runplan.ShipFlow{},
 			"GH-1",
 			nil,
@@ -1729,10 +1747,10 @@ func TestStartWaitsForTheShell(t *testing.T) {
 
 	var progress bytes.Buffer
 
-	if err := start(
+	if err := start.Start(
 		t.Context(),
 		io.Discard,
-		startInput{main: "/code/repo", storage: testStorage, task: gh1, progress: &progress},
+		start.StartInput{Main: "/code/repo", Storage: testStorage, Task: gh1, Progress: &progress},
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -1773,7 +1791,7 @@ func TestStartSlugsTheBranch(t *testing.T) {
 			"",
 			"/code/repo.GH-1-add-dark-mode",
 		)+" "+launch.Prompt(
-			modeDefault,
+			startcmd.ModeDefault,
 			runplan.ShipFlow{},
 			"GH-1",
 			nil,
@@ -1786,10 +1804,10 @@ func TestStartSlugsTheBranch(t *testing.T) {
 
 	var out bytes.Buffer
 
-	err := start(
+	err := start.Start(
 		t.Context(),
 		&out,
-		startInput{main: "/code/repo", storage: testStorage, task: gh1, title: titled("Add dark mode", nil)},
+		start.StartInput{Main: "/code/repo", Storage: testStorage, Task: gh1, Title: titled("Add dark mode", nil)},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -1820,7 +1838,7 @@ func TestStartWithoutATitle(t *testing.T) {
 		"herdr agent prompt "+agentOf(
 			"GH-1",
 		)+" "+launch.Prompt(
-			modeDefault,
+			startcmd.ModeDefault,
 			runplan.ShipFlow{},
 			"GH-1",
 			nil,
@@ -1833,8 +1851,13 @@ func TestStartWithoutATitle(t *testing.T) {
 
 	var out bytes.Buffer
 
-	in := startInput{main: "/code/repo", storage: testStorage, task: gh1, title: titled("", errors.New("gh: offline"))}
-	if err := start(t.Context(), &out, in); err != nil {
+	in := start.StartInput{
+		Main:    "/code/repo",
+		Storage: testStorage,
+		Task:    gh1,
+		Title:   titled("", errors.New("gh: offline")),
+	}
+	if err := start.Start(t.Context(), &out, in); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1856,10 +1879,15 @@ func TestStartReusesABareBranchOverTheSlug(t *testing.T) {
 
 	var out bytes.Buffer
 
-	err := start(
+	err := start.Start(
 		t.Context(),
 		&out,
-		startInput{main: "/code/repo", storage: testStorage, task: gh1, title: titled("", errors.New("gh: offline"))},
+		start.StartInput{
+			Main:    "/code/repo",
+			Storage: testStorage,
+			Task:    gh1,
+			Title:   titled("", errors.New("gh: offline")),
+		},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -1886,7 +1914,7 @@ func TestStartOpensAClosedWorktree(t *testing.T) {
 		"herdr agent prompt "+agentOf(
 			"GH-1",
 		)+" "+launch.Prompt(
-			modeDefault,
+			startcmd.ModeDefault,
 			runplan.ShipFlow{},
 			"GH-1",
 			nil,
@@ -1897,10 +1925,10 @@ func TestStartOpensAClosedWorktree(t *testing.T) {
 		"{}",
 	)
 
-	if err := start(
+	if err := start.Start(
 		t.Context(),
 		&bytes.Buffer{},
-		startInput{main: "/code/repo", storage: testStorage, task: gh1},
+		start.StartInput{Main: "/code/repo", Storage: testStorage, Task: gh1},
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -1927,15 +1955,23 @@ func TestStartReadsMainsPlanInPlace(t *testing.T) {
 	f.script(worktrees, porcelain("GH-1", wt))
 	f.script("herdr worktree open --cwd "+main+" --path "+wt+" --label GH-1", opened)
 	f.script("herdr agent start "+agent+" --kind claude --pane pane:7 -- "+
-		strings.Join(agentArgs(agentctl.Profile{}, root, wt), " "), "{}")
+		strings.Join(start.AgentArgs(agentctl.Profile{}, root, wt), " "), "{}")
 	f.script(
-		"herdr agent prompt "+agent+" "+launch.Prompt(modeDefault, runplan.ShipFlow{}, "GH-1", nil, src, nil, ""),
+		"herdr agent prompt "+agent+" "+launch.Prompt(
+			startcmd.ModeDefault,
+			runplan.ShipFlow{},
+			"GH-1",
+			nil,
+			src,
+			nil,
+			"",
+		),
 		"{}",
 	)
 
 	var out bytes.Buffer
 
-	if err := start(t.Context(), &out, startInput{main: main, task: gh1, storage: root}); err != nil {
+	if err := start.Start(t.Context(), &out, start.StartInput{Main: main, Task: gh1, Storage: root}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1969,14 +2005,14 @@ func TestStartChecksOutAnExistingBranch(t *testing.T) {
 	)
 	f.script(
 		"herdr agent prompt "+agentctl.AgentName("GH-1", "", "/code/repo.GH-1-slug")+" "+
-			launch.Prompt(modeDefault, runplan.ShipFlow{}, "GH-1", nil, "", nil, ""),
+			launch.Prompt(startcmd.ModeDefault, runplan.ShipFlow{}, "GH-1", nil, "", nil, ""),
 		"{}",
 	)
 
-	if err := start(
+	if err := start.Start(
 		t.Context(),
 		&bytes.Buffer{},
-		startInput{main: "/code/repo", storage: testStorage, task: gh1},
+		start.StartInput{Main: "/code/repo", Storage: testStorage, Task: gh1},
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -2051,8 +2087,8 @@ func TestStartRefusesAParent(t *testing.T) {
 		var asked bool
 
 		rows := []stack.ChildRow{{ID: "GH-2"}, {ID: "GH-3", Finished: true}, {ID: "GH-4"}}
-		in := startInput{main: "/code/repo", storage: testStorage, task: gh1, children: kidsOf(rows, nil, &asked)}
-		err := refuseStartParent(t.Context(), in)
+		in := start.StartInput{Main: "/code/repo", Storage: testStorage, Task: gh1, Children: kidsOf(rows, nil, &asked)}
+		err := start.RefuseStartParent(t.Context(), in)
 
 		var coder cli.ExitCoder
 		if !errors.As(err, &coder) || coder.ExitCode() != ui.ExitParent {
@@ -2090,13 +2126,13 @@ func TestStartRefusesAParent(t *testing.T) {
 
 			var asked bool
 
-			in := startInput{
-				main:     "/code/repo",
-				storage:  testStorage,
-				task:     gh1,
-				children: kidsOf(tc.rows, tc.err, &asked),
+			in := start.StartInput{
+				Main:     "/code/repo",
+				Storage:  testStorage,
+				Task:     gh1,
+				Children: kidsOf(tc.rows, tc.err, &asked),
 			}
-			if err := refuseStartParent(t.Context(), in); err != nil || !asked {
+			if err := start.RefuseStartParent(t.Context(), in); err != nil || !asked {
 				t.Errorf("err = %v, asked = %v; want a pass after asking", err, asked)
 			}
 		})
@@ -2108,13 +2144,13 @@ func TestStartRefusesAParent(t *testing.T) {
 
 		var asked bool
 
-		in := startInput{
-			main:     "/code/repo",
-			storage:  testStorage,
-			task:     gh1,
-			children: kidsOf([]stack.ChildRow{{ID: "GH-2"}}, nil, &asked),
+		in := start.StartInput{
+			Main:     "/code/repo",
+			Storage:  testStorage,
+			Task:     gh1,
+			Children: kidsOf([]stack.ChildRow{{ID: "GH-2"}}, nil, &asked),
 		}
-		if err := refuseStartParent(t.Context(), in); err != nil || asked {
+		if err := start.RefuseStartParent(t.Context(), in); err != nil || asked {
 			t.Errorf("err = %v, asked = %v; a started task is never a parent", err, asked)
 		}
 	})
@@ -2122,9 +2158,9 @@ func TestStartRefusesAParent(t *testing.T) {
 	t.Run("no check", func(t *testing.T) {
 		newFakes(t)
 
-		if err := refuseStartParent(
+		if err := start.RefuseStartParent(
 			t.Context(),
-			startInput{main: "/code/repo", storage: testStorage, task: gh1},
+			start.StartInput{Main: "/code/repo", Storage: testStorage, Task: gh1},
 		); err != nil {
 			t.Errorf("err = %v with no children lookup", err)
 		}
@@ -2133,17 +2169,17 @@ func TestStartRefusesAParent(t *testing.T) {
 
 // Every mode but --discuss refuses a parent; a PR pickup never does.
 func TestChecksParent(t *testing.T) {
-	for _, mode := range []string{modeDefault, launch.ModePlan} {
-		if !checksParent(mode, nil) {
+	for _, mode := range []string{startcmd.ModeDefault, launch.ModePlan} {
+		if !start.ChecksParent(mode, nil) {
 			t.Errorf("mode %q skips the parent check", mode)
 		}
 	}
 
-	if checksParent(launch.ModeDiscuss, nil) {
+	if start.ChecksParent(launch.ModeDiscuss, nil) {
 		t.Error("--discuss refuses a parent")
 	}
 
-	if checksParent(modeDefault, pickGH) || checksParent(launch.ModePlan, pickGH) {
+	if start.ChecksParent(startcmd.ModeDefault, pickGH) || start.ChecksParent(launch.ModePlan, pickGH) {
 		t.Error("a PR pickup refuses a parent")
 	}
 }

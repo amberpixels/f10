@@ -140,6 +140,21 @@ type loreEnv struct {
 	top   string // the repository root; cwd outside git
 }
 
+// repoPath is the repo-relative, slash-separated form anchors use.
+func (l *loreEnv) repoPath(p string) (string, error) {
+	abs := p
+	if !filepath.IsAbs(abs) {
+		abs = filepath.Join(l.cwd, p)
+	}
+
+	rel, err := filepath.Rel(gitx.Resolved(l.top), gitx.Resolved(abs))
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("%s is outside the repository at %s", p, l.top)
+	}
+
+	return filepath.ToSlash(rel), nil
+}
+
 func loreFor(ctx context.Context, cmd *cli.Command) (*loreEnv, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -214,21 +229,6 @@ func LoreNote(store *lore.Store, change string) string {
 	}
 
 	return "lore: " + strings.Join(parts, ", ")
-}
-
-// repoPath is the repo-relative, slash-separated form anchors use.
-func (l *loreEnv) repoPath(p string) (string, error) {
-	abs := p
-	if !filepath.IsAbs(abs) {
-		abs = filepath.Join(l.cwd, p)
-	}
-
-	rel, err := filepath.Rel(gitx.Resolved(l.top), gitx.Resolved(abs))
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("%s is outside the repository at %s", p, l.top)
-	}
-
-	return filepath.ToSlash(rel), nil
 }
 
 func runLoreAdd(ctx context.Context, cmd *cli.Command) error {

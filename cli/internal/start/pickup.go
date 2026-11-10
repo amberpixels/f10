@@ -1,10 +1,11 @@
-package main
+package start
 
 import (
 	"context"
 	"fmt"
 	"strings"
 
+	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
@@ -19,16 +20,16 @@ import (
 // branch worth tracking: its worktree is made at the commit it landed as, on
 // a branch named for the task, for a post-merge review.
 
-// pickupTask prefers a closing keyword's issue (this repository's only) on a
+// PickupTask prefers a closing keyword's issue (this repository's only) on a
 // host-issues tracker, else an id in the body, title or branch, in that order.
-func pickupTask(prefix string, hostIssues bool, p forge.PR) string {
+func PickupTask(prefix string, hostIssues bool, p forge.PR) string {
 	if hostIssues && prefix != "" {
 		repo := p.URL
 		if i := worktree.PullPathRE.FindStringIndex(repo); i != nil {
 			repo = strings.TrimSuffix(repo[:i[0]], "/-")
 		}
 
-		for _, m := range closingRE.FindAllStringSubmatch(p.Body, -1) {
+		for _, m := range finish.ClosingRE.FindAllStringSubmatch(p.Body, -1) {
 			issue := m[1]
 
 			if !strings.HasPrefix(issue, "#") {
@@ -53,7 +54,7 @@ func pickupTask(prefix string, hostIssues bool, p forge.PR) string {
 	return ""
 }
 
-func refusePull(p forge.PR) error {
+func RefusePull(p forge.PR) error {
 	switch {
 	case p.Fork:
 		return fmt.Errorf("%s comes from a fork: PRs from forks are not supported yet", p.URL)
@@ -70,9 +71,9 @@ func refusePull(p forge.PR) error {
 	return nil
 }
 
-// syncPickup fast-forwards a local branch start found only when it is behind
+// SyncPickup fast-forwards a local branch start found only when it is behind
 // and checked out nowhere; otherwise a note says how it differs.
-func syncPickup(ctx context.Context, main, branch string, checkedOut bool) (string, error) {
+func SyncPickup(ctx context.Context, main, branch string, checkedOut bool) (string, error) {
 	local, remote := "refs/heads/"+branch, "refs/remotes/origin/"+branch
 
 	upToDate, err := gitx.IsAncestor(ctx, main, remote, local)
@@ -101,10 +102,10 @@ func syncPickup(ctx context.Context, main, branch string, checkedOut bool) (stri
 	return fmt.Sprintf("fast-forwarded %s to origin/%s", branch, branch), nil
 }
 
-// fetchPickup: a handover has not fetched the request's branch yet. A landed
+// FetchPickup: a handover has not fetched the request's branch yet. A landed
 // request's commit must be here before its worktree is made, and a closed
 // request's head comes only through the host's own ref for it.
-func fetchPickup(ctx context.Context, main string, pick *hostops.Pickup) error {
+func FetchPickup(ctx context.Context, main string, pick *hostops.Pickup) error {
 	if err := gitx.Fetch(ctx, main); err != nil {
 		return fmt.Errorf("fetching %s for %s: %w", pick.Branch, pick.URL, err)
 	}

@@ -73,6 +73,57 @@ type agentLine struct {
 	Notes   []string          `json:"notes,omitempty"`
 }
 
+// String is the line: `review: claude:opus:high  (model: default (declared
+// (user, ~/.f10/agents.md)), effort: review (declared (main, frontmatter)))
+// Agent tool: model opus, effort high  - the blind reviewer, a subagent`.
+func (l agentLine) String() string {
+	name := l.Step
+	if l.Kind != "" {
+		name += "." + l.Kind
+	}
+
+	var b strings.Builder
+
+	b.WriteString(name + ": " + l.Profile)
+
+	var from []string
+
+	for _, seg := range []string{"model", "effort"} {
+		if s := l.Sources[seg]; s != "" {
+			from = append(from, seg+": "+s)
+		}
+	}
+
+	if len(from) > 0 {
+		b.WriteString("  (" + strings.Join(from, ", ") + ")")
+	} else {
+		b.WriteString("  (the kind's default: no flag passed)")
+	}
+
+	if l.Reach != AgentReachNone {
+		var tool []string
+		if l.Tool.Model != "" {
+			tool = append(tool, "model "+l.Tool.Model)
+		}
+
+		if l.Tool.Effort != "" {
+			tool = append(tool, "effort "+l.Tool.Effort)
+		}
+
+		if len(tool) > 0 {
+			b.WriteString("  Agent tool: " + strings.Join(tool, ", "))
+		}
+	}
+
+	b.WriteString("  - " + l.Reach)
+
+	for _, n := range l.Notes {
+		b.WriteString("\n  " + n)
+	}
+
+	return b.String()
+}
+
 // An agentTool is the profile as the Agent tool takes it.
 type agentTool struct {
 	Model  string `json:"model,omitempty"`
@@ -162,57 +213,6 @@ func AgentLineFor(m runplan.AgentMap, step, kind, settings string) agentLine {
 		Reach:   reach,
 		Notes:   r.Lines(settings),
 	}
-}
-
-// String is the line: `review: claude:opus:high  (model: default (declared
-// (user, ~/.f10/agents.md)), effort: review (declared (main, frontmatter)))
-// Agent tool: model opus, effort high  - the blind reviewer, a subagent`.
-func (l agentLine) String() string {
-	name := l.Step
-	if l.Kind != "" {
-		name += "." + l.Kind
-	}
-
-	var b strings.Builder
-
-	b.WriteString(name + ": " + l.Profile)
-
-	var from []string
-
-	for _, seg := range []string{"model", "effort"} {
-		if s := l.Sources[seg]; s != "" {
-			from = append(from, seg+": "+s)
-		}
-	}
-
-	if len(from) > 0 {
-		b.WriteString("  (" + strings.Join(from, ", ") + ")")
-	} else {
-		b.WriteString("  (the kind's default: no flag passed)")
-	}
-
-	if l.Reach != AgentReachNone {
-		var tool []string
-		if l.Tool.Model != "" {
-			tool = append(tool, "model "+l.Tool.Model)
-		}
-
-		if l.Tool.Effort != "" {
-			tool = append(tool, "effort "+l.Tool.Effort)
-		}
-
-		if len(tool) > 0 {
-			b.WriteString("  Agent tool: " + strings.Join(tool, ", "))
-		}
-	}
-
-	b.WriteString("  - " + l.Reach)
-
-	for _, n := range l.Notes {
-		b.WriteString("\n  " + n)
-	}
-
-	return b.String()
 }
 
 // PrintAgentMap prints the merged map, one key per line with its origin.

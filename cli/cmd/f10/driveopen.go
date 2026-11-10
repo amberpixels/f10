@@ -9,12 +9,14 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -32,18 +34,18 @@ func (in *driveInput) open(ctx context.Context, r *driveRun) error {
 		title = in.title(task.ref)
 	}
 
-	o, err := openTask(ctx, startInput{
-		main:           in.main,
-		driver:         in.driver,
-		task:           task.ref,
-		suffix:         task.suffix,
-		after:          after,
-		storage:        in.storage,
-		title:          title,
-		profile:        task.profile,
-		profileFlagged: task.flagged,
-		progress:       in.out,
-		flowKept:       true,
+	o, err := start.OpenTask(ctx, start.StartInput{
+		Main:           in.main,
+		Driver:         in.driver,
+		Task:           task.ref,
+		Suffix:         task.suffix,
+		After:          after,
+		Storage:        in.storage,
+		Title:          title,
+		Profile:        task.profile,
+		ProfileFlagged: task.flagged,
+		Progress:       in.out,
+		FlowKept:       true,
 	})
 	if err != nil {
 		return err
@@ -53,32 +55,32 @@ func (in *driveInput) open(ctx context.Context, r *driveRun) error {
 		in.out,
 		"%s: branch %s at %s, workspace %s%s\n",
 		in.id(task.ref.ID),
-		o.branch,
-		o.path,
-		o.ws.ID,
+		o.Branch,
+		o.Path,
+		o.Ws.ID,
 		onProfile(o),
 	)
 
-	if o.fresh {
-		o.notes = append(o.notes, markStarted(ctx, in.started, o.task)...)
+	if o.Fresh {
+		o.Notes = append(o.Notes, start.MarkStarted(ctx, in.started, o.Task)...)
 	}
 
-	fl, flowNote, err := in.keepFlow(ctx, o.branch)
+	fl, flowNote, err := in.keepFlow(ctx, o.Branch)
 	if err != nil {
 		return err
 	}
 
 	if flowNote != "" {
-		o.notes = append(o.notes, flowNote)
+		o.Notes = append(o.Notes, flowNote)
 	}
 
-	fl, paceNote, err := in.keepPace(ctx, o.branch, fl)
+	fl, paceNote, err := in.keepPace(ctx, o.Branch, fl)
 	if err != nil {
 		return err
 	}
 
 	if paceNote != "" {
-		o.notes = append(o.notes, paceNote)
+		o.Notes = append(o.Notes, paceNote)
 	}
 
 	// status reads the finish record as drive finishing the branch; a rerun
@@ -87,15 +89,15 @@ func (in *driveInput) open(ctx context.Context, r *driveRun) error {
 
 	finishes := slices.Contains(skills, "finish")
 	if finishes {
-		in.finishStep(ctx, o.branch, branchmeta.FinishQueued, "")
+		in.finishStep(ctx, o.Branch, branchmeta.FinishQueued, "")
 	} else {
-		_ = branchmeta.Unset(ctx, in.main, o.branch, branchmeta.Finish) // absent is fine
+		_ = branchmeta.Unset(ctx, in.main, o.Branch, branchmeta.Finish) // absent is fine
 	}
 
 	// drives before the skills were read off the flow stored them here
-	_ = branchmeta.Unset(ctx, in.main, o.branch, branchmeta.Chain) // absent is fine
+	_ = branchmeta.Unset(ctx, in.main, o.Branch, branchmeta.Chain) // absent is fine
 
-	for _, n := range appendNote(o.notes, note) {
+	for _, n := range finish.AppendNote(o.Notes, note) {
 		fmt.Fprintf(in.out, "  %s\n", n)
 	}
 
@@ -107,7 +109,7 @@ func (in *driveInput) open(ctx context.Context, r *driveRun) error {
 	r.o, r.pos, r.flow, r.finishes = o, pos, fl, finishes
 	in.view().justOpened(r)
 	in.enter(r, atRunning)
-	if o.fresh {
+	if o.Fresh {
 		r.freshAt = in.now().Truncate(time.Second) // the state file keeps whole seconds
 	}
 
@@ -193,10 +195,10 @@ func (in *driveInput) keepPace(
 // position: a skill drive recorded on the branch wins; else a plan the
 // worktree reads counts as plan done, so driven ship takes it rather than
 // planning again.
-func (in *driveInput) position(ctx context.Context, o openedTask, skills []string) (int, error) {
-	last, err := branchmeta.Get(ctx, in.main, o.branch, branchmeta.Drive)
+func (in *driveInput) position(ctx context.Context, o start.OpenedTask, skills []string) (int, error) {
+	last, err := branchmeta.Get(ctx, in.main, o.Branch, branchmeta.Drive)
 	if err != nil {
-		return 0, fmt.Errorf("reading where the drive left %s: %w", o.branch, err)
+		return 0, fmt.Errorf("reading where the drive left %s: %w", o.Branch, err)
 	}
 
 	if last != "" {
@@ -207,11 +209,11 @@ func (in *driveInput) position(ctx context.Context, o openedTask, skills []strin
 
 	pos := 0
 
-	if i := slices.Index(skills, "plan"); i >= 0 && o.plan != "" {
+	if i := slices.Index(skills, "plan"); i >= 0 && o.Plan != "" {
 		pos = i + 1
 	}
 
-	run, err := in.run(o.path)
+	run, err := in.run(o.Path)
 	if err != nil || run == nil {
 		return pos, err
 	}
@@ -257,7 +259,7 @@ func (in *driveInput) next(ctx context.Context, r *driveRun) error {
 
 	// a drive resumed onto a ship stopped before pr waits for origin, not code
 	if skill == "ship" && r.base != nil && r.phase != atParked {
-		if run, _ := in.run(r.o.path); originWait(run) {
+		if run, _ := in.run(r.o.Path); originWait(run) {
 			r.parkedOrigin = true
 		}
 	}
@@ -287,7 +289,7 @@ func (in *driveInput) next(ctx context.Context, r *driveRun) error {
 				in.id(r.task.ref.ID),
 				in.id(r.base.task.ref.ID),
 			)
-			in.finishStep(ctx, r.o.branch, branchmeta.FinishQueued, "waiting for "+r.base.task.ref.ID)
+			in.finishStep(ctx, r.o.Branch, branchmeta.FinishQueued, "waiting for "+r.base.task.ref.ID)
 		}
 
 		in.enter(r, atWaiting)
@@ -355,13 +357,13 @@ func (in *driveInput) next(ctx context.Context, r *driveRun) error {
 // a pushed one finishes through its PR.
 func (in *driveInput) spikeDone(ctx context.Context, r *driveRun) (bool, error) {
 	i := slices.Index(in.skills(r), "ship")
-	if i < 0 || r.pos <= i || taskSpike(r.o.path, in.storage, r.task.ref.ID) == "" {
+	if i < 0 || r.pos <= i || finish.TaskSpike(r.o.Path, in.storage, r.task.ref.ID) == "" {
 		return false, nil
 	}
 
-	pushed, err := gitx.Ref(ctx, in.main, "refs/remotes/origin/"+r.o.branch)
+	pushed, err := gitx.Ref(ctx, in.main, "refs/remotes/origin/"+r.o.Branch)
 	if err != nil {
-		return false, fmt.Errorf("reading whether %s was pushed: %w", r.o.branch, err)
+		return false, fmt.Errorf("reading whether %s was pushed: %w", r.o.Branch, err)
 	}
 
 	return pushed == "", nil
@@ -372,7 +374,7 @@ func (in *driveInput) spikeDone(ctx context.Context, r *driveRun) (bool, error) 
 // keeps its dependents on an empty base. status reads the finish record.
 func (in *driveInput) closeAfterShip(ctx context.Context, r *driveRun) {
 	r.finishes = true
-	in.finishStep(ctx, r.o.branch, branchmeta.FinishQueued, "")
+	in.finishStep(ctx, r.o.Branch, branchmeta.FinishQueued, "")
 }
 
 // baseReady reports the base's code there for a skill: released, and
@@ -391,7 +393,7 @@ func (in *driveInput) baseReady(ctx context.Context, r *driveRun) bool {
 		return true
 	}
 
-	head, err := gitx.Ref(ctx, in.main, "refs/heads/"+r.base.o.branch)
+	head, err := gitx.Ref(ctx, in.main, "refs/heads/"+r.base.o.Branch)
 
 	return err == nil && head != "" && head != r.parkedHead
 }
@@ -442,7 +444,7 @@ func (in *driveInput) parkForOrigin(ctx context.Context, r *driveRun) error {
 		if r.waitHead == "through" {
 			return halt(r.task.ref.ID, r.skill,
 				fmt.Sprintf("%s ended in this drive, yet its pr step still found %s not on origin",
-					in.id(b.task.ref.ID), b.o.branch))
+					in.id(b.task.ref.ID), b.o.Branch))
 		}
 
 		r.waitHead = "through"
@@ -458,7 +460,7 @@ func (in *driveInput) parkForOrigin(ctx context.Context, r *driveRun) error {
 	if sha != "" {
 		if r.waitHead == "origin "+sha {
 			why = fmt.Sprintf("its pr step found %s not on origin though origin/%s is at %s",
-				b.o.branch, b.o.branch, sha)
+				b.o.Branch, b.o.Branch, sha)
 			return halt(r.task.ref.ID, r.skill, why)
 		}
 
@@ -486,9 +488,9 @@ func (in *driveInput) onOrigin(ctx context.Context, b *driveRun) bool {
 // originHead is origin's copy of b's branch, "" when origin lacks it, and why
 // when git cannot say.
 func (in *driveInput) originHead(ctx context.Context, b *driveRun) (string, string) {
-	sha, err := gitx.Ref(ctx, in.main, "refs/remotes/origin/"+b.o.branch)
+	sha, err := gitx.Ref(ctx, in.main, "refs/remotes/origin/"+b.o.Branch)
 	if err != nil {
-		return "", "reading origin/" + b.o.branch + ": " + err.Error()
+		return "", "reading origin/" + b.o.Branch + ": " + err.Error()
 	}
 
 	return sha, ""
@@ -513,7 +515,7 @@ func (r *driveRun) waitsFor() string {
 // boundary before skill: its work stays on its branch.
 func baseHalted(r *driveRun, skill string) driveResult {
 	id, base := r.task.ref.ID, r.base.task.ref.ID
-	reason := fmt.Sprintf("base %s halted, its work stays on %s", base, r.o.branch)
+	reason := fmt.Sprintf("base %s halted, its work stays on %s", base, r.o.Branch)
 
 	return driveResult{
 		row:    "halted: base " + base + " halted",
@@ -527,7 +529,7 @@ func baseHalted(r *driveRun, skill string) driveResult {
 // skillPrompt: plan is bare and ship names only a non-default flow, since
 // driven mode takes every gap on its default and reuses a saved plan; every
 // skill but plan and ship takes a bundle's lead, which finds the branch.
-func skillPrompt(skill, id string, dep *launch.Dependency, fl runplan.ShipFlow, finish bool) string {
+func skillPrompt(skill, id string, dep *launch.Dependency, fl runplan.ShipFlow, finishing bool) string {
 	var p string
 
 	if skill != "plan" && skill != "ship" {
@@ -547,7 +549,7 @@ func skillPrompt(skill, id string, dep *launch.Dependency, fl runplan.ShipFlow, 
 		p += " && " + launch.DependencyClause(id, dep)
 	}
 
-	if finish && skill == "ship" {
+	if finishing && skill == "ship" {
 		p += " && " + finishClause
 	}
 
@@ -559,10 +561,10 @@ const finishClause = "drive finishes it after ship and removes this worktree"
 
 // onProfile is the open line's tail naming the profile a fresh agent
 // started on, "" for the kind's default or an agent left as it was.
-func onProfile(o openedTask) string {
-	if !o.fresh || o.profile.IsDefault() {
+func onProfile(o start.OpenedTask) string {
+	if !o.Fresh || o.Profile.IsDefault() {
 		return ""
 	}
 
-	return " on " + o.profile.Short()
+	return " on " + o.Profile.Short()
 }

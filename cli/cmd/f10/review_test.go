@@ -149,14 +149,14 @@ func TestAwaitReviewGivesUpWithinBudget(t *testing.T) {
 	rv := ghReviewer(t, f, stickyFacts())
 	f.script(commentsPath, `[]`)
 
-	start := time.Now()
+	started := time.Now()
 
 	_, err := reviewcmd.AwaitReview(t.Context(), rv, time.Time{}, 40*time.Millisecond, 5*time.Millisecond)
 	if err == nil {
 		t.Fatal("wait returned a review from an empty thread")
 	}
 
-	if elapsed := time.Since(start); elapsed > 2*time.Second {
+	if elapsed := time.Since(started); elapsed > 2*time.Second {
 		t.Errorf("wait took %s on a 40ms budget", elapsed)
 	}
 

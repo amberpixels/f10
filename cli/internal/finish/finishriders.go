@@ -1,4 +1,4 @@
-package main
+package finish
 
 import (
 	"context"
@@ -18,18 +18,18 @@ const (
 	closeNone = "none"
 )
 
-// A ridersError is a bundle finished without --close: nothing changed.
-type ridersError struct {
+// A RidersError is a bundle finished without --close: nothing changed.
+type RidersError struct {
 	task ref.Ref
 }
 
-func (e ridersError) Error() string {
+func (e RidersError) Error() string {
 	return fmt.Sprintf("%s ships with riders %s: pass --close with the riders this PR delivers "+
 		"(ids, %s or %s); the rest stay open", e.task.ID, strings.Join(e.task.Riders(), ", "), closeAll, closeNone)
 }
 
-// closeChoice reads --close; a token outside the bundle is a typo, refused.
-func closeChoice(task ref.Ref, value string, resolve func(string) (ref.Ref, error)) ([]string, error) {
+// CloseChoice reads --close; a token outside the bundle is a typo, refused.
+func CloseChoice(task ref.Ref, value string, resolve func(string) (ref.Ref, error)) ([]string, error) {
 	riders := task.Riders()
 
 	tokens := strings.FieldsFunc(value, func(r rune) bool { return r == ',' || r == ' ' })
@@ -64,11 +64,11 @@ func closeChoice(task ref.Ref, value string, resolve func(string) (ref.Ref, erro
 // settleRiders makes the merge close only the chosen riders: before the
 // merge by editing the body's keywords, after one by reopening. A tracker
 // that is not the host closes nothing, so the notes say what to close by hand.
-func settleRiders(ctx context.Context, in finishInput, branch string, merged bool) ([]string, error) {
+func settleRiders(ctx context.Context, in FinishInput, branch string, merged bool) ([]string, error) {
 	var kept, closing []ref.Ref
 
-	for _, m := range in.task.MemberRefs()[1:] {
-		if slices.Contains(in.close, m.ID) {
+	for _, m := range in.Task.MemberRefs()[1:] {
+		if slices.Contains(in.Close, m.ID) {
 			closing = append(closing, m)
 		} else {
 			kept = append(kept, m)
@@ -77,26 +77,26 @@ func settleRiders(ctx context.Context, in finishInput, branch string, merged boo
 
 	var notes []string
 
-	if !in.hostCloses {
+	if !in.HostCloses {
 		if len(closing) > 0 {
 			notes = append(notes, "the tracker is not the host, so the merge closes no rider: close "+
 				strings.Join(refIDs(closing), ", ")+" there")
 		}
 
-		return appendNote(notes, keptNote(kept)), nil
+		return AppendNote(notes, keptNote(kept)), nil
 	}
 
 	switch {
 	case merged && len(kept) > 0:
 		for _, m := range kept {
-			if err := in.host.SetIssueOpen(ctx, m.Number, true); err != nil {
+			if err := in.Host.SetIssueOpen(ctx, m.Number, true); err != nil {
 				return nil, fmt.Errorf("reopening %s, which the merge closed: %w", m.ID, err)
 			}
 		}
 
 		notes = append(notes, "reopened "+strings.Join(refIDs(kept), ", ")+", which the merge had closed")
 	case !merged:
-		body, err := in.host.PRBody(ctx, branch)
+		body, err := in.Host.PRBody(ctx, branch)
 		if err != nil {
 			return nil, err
 		}
@@ -104,21 +104,21 @@ func settleRiders(ctx context.Context, in finishInput, branch string, merged boo
 		// a rerun after a failed merge may close a rider an earlier run kept
 		edited := body
 		for _, m := range kept {
-			edited = keepOpen(edited, m.Number)
+			edited = KeepOpen(edited, m.Number)
 		}
 
 		for _, m := range closing {
-			edited = closeAgain(edited, m.Number)
+			edited = CloseAgain(edited, m.Number)
 		}
 
 		if edited != body {
-			if err := in.host.EditPull(ctx, branch, "", edited); err != nil {
+			if err := in.Host.EditPull(ctx, branch, "", edited); err != nil {
 				return nil, fmt.Errorf("editing the closing keywords in the PR body: %w", err)
 			}
 		}
 	}
 
-	return appendNote(notes, keptNote(kept)), nil
+	return AppendNote(notes, keptNote(kept)), nil
 }
 
 func keptNote(kept []ref.Ref) string {

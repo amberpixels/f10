@@ -9,6 +9,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/runplan"
+	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
@@ -188,11 +189,11 @@ func TestAgentArgs(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := strings.Join(agentArgs(c.profile, c.root, c.worktree), " "); got != c.want {
+			if got := strings.Join(start.AgentArgs(c.profile, c.root, c.worktree), " "); got != c.want {
 				t.Errorf("agentArgs = %q, want %q", got, c.want)
 			}
 
-			if strings.Contains(strings.Join(agentArgs(c.profile, c.root, c.worktree), " "), "instructions") {
+			if strings.Contains(strings.Join(start.AgentArgs(c.profile, c.root, c.worktree), " "), "instructions") {
 				t.Error("the instructions dir was added")
 			}
 		})
@@ -209,7 +210,7 @@ func TestAgentArgsResolvesSymlinks(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got := agentArgs(agentctl.Profile{}, storage.InRepo(target), link); len(got) != 0 {
+	if got := start.AgentArgs(agentctl.Profile{}, storage.InRepo(target), link); len(got) != 0 {
 		t.Errorf("agentArgs = %q, want nothing added", got)
 	}
 }
@@ -281,7 +282,7 @@ func TestWithBranchReadsTheRecord(t *testing.T) {
 // demo writes <storage>/demo/<id>/report.html, so a worktree agent needs it
 // added or every demo asks for permission.
 func TestAgentArgsAddsDemo(t *testing.T) {
-	got := strings.Join(agentArgs(agentctl.Profile{}, storage.InRepo("/code/repo"), "/code/repo.GH-1"), " ")
+	got := strings.Join(start.AgentArgs(agentctl.Profile{}, storage.InRepo("/code/repo"), "/code/repo.GH-1"), " ")
 	if !strings.Contains(got, "--add-dir /code/repo/.f10/demo") {
 		t.Fatalf("agentArgs = %q, want the demo dir added", got)
 	}

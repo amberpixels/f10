@@ -11,6 +11,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
@@ -47,7 +48,7 @@ func (in *driveInput) send(ctx context.Context, r *driveRun, skill string) error
 		r.begun, r.attached = true, true
 
 		// the turn began at its prompt: a catchup may have reported before now
-		if p, ok := state.LastPrompt(in.stateDir, r.o.path); ok && !p.At.After(r.sentAt) {
+		if p, ok := state.LastPrompt(in.stateDir, r.o.Path); ok && !p.At.After(r.sentAt) {
 			r.sentAt = p.At.Truncate(time.Second)
 		}
 
@@ -71,7 +72,7 @@ func (in *driveInput) send(ctx context.Context, r *driveRun, skill string) error
 		if answer == "" {
 			// a catchup clears a mark but restores the ship stop it noted, so
 			// git, not the note, says whether that stop still holds
-			if at := resumeAt(skill, run); at != "" && stack.BranchUnsettled(ctx, in.main, r.o.path, r.o.branch) == "" {
+			if at := resumeAt(skill, run); at != "" && stack.BranchUnsettled(ctx, in.main, r.o.Path, r.o.Branch) == "" {
 				why := "stopped for a catchup, the branch is settled"
 				switch {
 				case originWait(run):
@@ -128,16 +129,16 @@ func (in *driveInput) prompt(
 
 	// an idle agent on a run still running waits on something in its pane,
 	// a permission dialog among others: text typed there could answer it
-	if err := refuseStalled(
+	if err := start.RefuseStalled(
 		in.stallCheck(r),
 		ws,
-		agentctl.AgentName(id, r.task.suffix, r.o.path),
-		r.o.path,
+		agentctl.AgentName(id, r.task.suffix, r.o.Path),
+		r.o.Path,
 	); err != nil {
 		return halt(id, skill, err.Error())
 	}
 
-	p := steered(skillPrompt(skill, r.task.ref.Label(), r.o.dep, r.flow, r.finishes), steering)
+	p := steered(skillPrompt(skill, r.task.ref.Label(), r.o.Dep, r.flow, r.finishes), steering)
 	if err := in.deliver(ctx, r, p); err != nil {
 		return err
 	}
@@ -150,7 +151,7 @@ func (in *driveInput) prompt(
 // deliver sends text to the task's agent, the first text starting it, and
 // keeps the text when it was typed, for the poll's Enter check.
 func (in *driveInput) deliver(ctx context.Context, r *driveRun, text string) error {
-	name, typed, err := r.o.deliver(ctx, r.task.ref.ID, r.task.suffix, text)
+	name, typed, err := r.o.Deliver(ctx, r.task.ref.ID, r.task.suffix, text)
 	if err != nil {
 		return err
 	}
@@ -172,7 +173,7 @@ func (in *driveInput) retryEnter(ctx context.Context, r *driveRun) {
 
 	r.enterRetried = true
 
-	if note := launch.RetryEnter(ctx, worktree.Agents(r.o.path), r.typedTo, r.typed); note != "" {
+	if note := launch.RetryEnter(ctx, worktree.Agents(r.o.Path), r.typedTo, r.typed); note != "" {
 		fmt.Fprintf(in.out, "%s %s: %s\n", in.id(r.task.ref.ID), r.skill, note)
 	}
 }

@@ -1,4 +1,4 @@
-package main
+package start
 
 import (
 	"context"
@@ -20,9 +20,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
-// afterFromBody reads the task's body for an After: line. A body that
+// AfterFromBody reads the task's body for an After: line. A body that
 // cannot be read is a note, never a refusal: --after stays the explicit way.
-func afterFromBody(ctx context.Context, tr stack.Tracker, main string, task ref.Ref) (string, []string, error) {
+func AfterFromBody(ctx context.Context, tr stack.Tracker, main string, task ref.Ref) (string, []string, error) {
 	info, err := tr.Info(ctx, task)
 	if err != nil {
 		return "", []string{fmt.Sprintf("no body read for %s (%v), so no After: line applies", task.ID, err)}, nil
@@ -45,28 +45,28 @@ type baseRef struct {
 	sha  string
 }
 
-// checksParent reports whether start refuses a parent: a PR pickup is
+// ChecksParent reports whether start refuses a parent: a PR pickup is
 // someone else's branch, and talking an umbrella task through before
 // splitting it is what --discuss is for.
-func checksParent(mode string, pick *hostops.Pickup) bool {
+func ChecksParent(mode string, pick *hostops.Pickup) bool {
 	return pick == nil && mode != launch.ModeDiscuss
 }
 
-// refuseStartParent stops a parent with unfinished subtasks before anything
+// RefuseStartParent stops a parent with unfinished subtasks before anything
 // is created, since its agent would ship the whole umbrella on one branch.
 // A task with a branch was started already and reopens.
-func refuseStartParent(ctx context.Context, in startInput) error {
-	if in.children == nil {
+func RefuseStartParent(ctx context.Context, in StartInput) error {
+	if in.Children == nil {
 		return nil
 	}
 
-	branched, err := stack.HasTaskBranch(ctx, in.main, in.task.ID)
+	branched, err := stack.HasTaskBranch(ctx, in.Main, in.Task.ID)
 	if err != nil || branched {
 		return err
 	}
 
-	for _, m := range in.task.MemberRefs() {
-		open, err := taskcmd.OpenSubtasks(ctx, stack.Tracker{Children: in.children}, m)
+	for _, m := range in.Task.MemberRefs() {
+		open, err := taskcmd.OpenSubtasks(ctx, stack.Tracker{Children: in.Children}, m)
 		if err != nil {
 			return err
 		}
@@ -80,10 +80,10 @@ func refuseStartParent(ctx context.Context, in startInput) error {
 	return nil
 }
 
-// settleBundle refuses what would split a task across two branches, a rider
+// SettleBundle refuses what would split a task across two branches, a rider
 // another branch ships or a branch reopened with other riders than typed,
 // since riders are fixed at start; a task alone takes its branch's riders.
-func settleBundle(ctx context.Context, main string, task ref.Ref, existing string) (ref.Ref, error) {
+func SettleBundle(ctx context.Context, main string, task ref.Ref, existing string) (ref.Ref, error) {
 	x, err := stack.LoadBranchIndex(ctx, main)
 	if err != nil {
 		return ref.Ref{}, err
@@ -148,25 +148,25 @@ func recordBundle(ctx context.Context, dir, branch string, task ref.Ref) error {
 // baseFor turns --after or --base into the ref the worktree is created
 // from, and for --after the dependency to record. Neither given is an empty
 // base, which lets git choose.
-func baseFor(ctx context.Context, in startInput) (baseRef, *launch.Dependency, error) {
+func baseFor(ctx context.Context, in StartInput) (baseRef, *launch.Dependency, error) {
 	switch {
-	case in.after != "":
-		x, err := stack.LoadBranchIndex(ctx, in.main)
+	case in.After != "":
+		x, err := stack.LoadBranchIndex(ctx, in.Main)
 		if err != nil {
 			return baseRef{}, nil, err
 		}
 
-		branch, err := x.After(ctx, in.after)
+		branch, err := x.After(ctx, in.After)
 		if err != nil {
 			return baseRef{}, nil, err
 		}
 
-		base := baseRef{ref: branch, flag: "--after", sha: stack.RefSHA(ctx, in.main, branch)}
-		dep := &launch.Dependency{Task: in.after, Branch: strings.TrimPrefix(branch, "origin/")}
+		base := baseRef{ref: branch, flag: "--after", sha: stack.RefSHA(ctx, in.Main, branch)}
+		dep := &launch.Dependency{Task: in.After, Branch: strings.TrimPrefix(branch, "origin/")}
 
 		return base, dep, nil
-	case in.base != "":
-		branch, sha, err := stack.NamedRef(ctx, in.main, in.base)
+	case in.Base != "":
+		branch, sha, err := stack.NamedRef(ctx, in.Main, in.Base)
 		if err != nil {
 			return baseRef{}, nil, err
 		}

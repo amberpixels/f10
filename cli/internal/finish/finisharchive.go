@@ -1,4 +1,4 @@
-package main
+package finish
 
 import (
 	"fmt"
@@ -38,13 +38,13 @@ func archiveTask(root storage.Root, id string, end *archive.SeriesEnd,
 
 	// a plan still live keeps the images its text links to
 	if !a.planFailed {
-		a.images = removeImages(root, id)
+		a.images = RemoveImages(root, id)
 	}
 
 	a.handoffSrc, a.handoff = taskcmd.HandoffTarget(root, id)
 
 	if end != nil {
-		a.reviews, err = closeSeries(root.Reviews(id), *end)
+		a.reviews, err = CloseSeries(root.Reviews(id), *end)
 	} else {
 		a.reviews, err = archive.ArchiveReviews(root.Reviews(id), archive.SeriesEnd{})
 	}
@@ -78,9 +78,9 @@ func archivePlan(root storage.Root, id string) (string, string, error) {
 	return target, "", nil
 }
 
-// removeImages drops the images `task read` downloaded for the task; a
+// RemoveImages drops the images `task read` downloaded for the task; a
 // failure is a note, since the task is finished either way.
-func removeImages(root storage.Root, id string) string {
+func RemoveImages(root storage.Root, id string) string {
 	dir := root.Images(id)
 	if err := os.RemoveAll(dir); err != nil {
 		return fmt.Sprintf("the task's images at %s stay: %v", dir, err)

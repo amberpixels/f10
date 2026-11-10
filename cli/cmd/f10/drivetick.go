@@ -17,6 +17,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/render"
@@ -333,7 +334,7 @@ func (in *driveInput) released(ctx context.Context, b *driveRun) bool {
 		return false
 	}
 
-	return stack.BaseHasCode(ctx, in.main, b.o.branch, def)
+	return stack.BaseHasCode(ctx, in.main, b.o.Branch, def)
 }
 
 // markMoved marks a running dependent whose base branch moved past it, read
@@ -351,16 +352,16 @@ func (in *driveInput) markMoved(ctx context.Context, runs []*driveRun, wss []age
 		}
 
 		if b.end == nil {
-			if ws := workspaceByID(wss, b.o.ws.ID); ws == nil || ws.Status == agentctl.StatusWorking {
+			if ws := finish.WorkspaceByID(wss, b.o.Ws.ID); ws == nil || ws.Status == agentctl.StatusWorking {
 				continue
 			}
 		}
 
 		// a read git cannot answer skips the task for this poll: the next
 		// poll reads again, and a wrong "moved" would send a catchup
-		head, err := gitx.Ref(ctx, in.main, "refs/heads/"+b.o.branch)
+		head, err := gitx.Ref(ctx, in.main, "refs/heads/"+b.o.Branch)
 		if err != nil {
-			fmt.Fprintf(in.out, "%s: skipped this poll, reading %s: %v\n", in.id(r.task.ref.ID), b.o.branch, err)
+			fmt.Fprintf(in.out, "%s: skipped this poll, reading %s: %v\n", in.id(r.task.ref.ID), b.o.Branch, err)
 
 			continue
 		}
@@ -369,18 +370,18 @@ func (in *driveInput) markMoved(ctx context.Context, runs []*driveRun, wss []age
 			continue
 		}
 
-		if has, err := gitx.IsAncestor(ctx, in.main, head, "refs/heads/"+r.o.branch); has || err != nil {
+		if has, err := gitx.IsAncestor(ctx, in.main, head, "refs/heads/"+r.o.Branch); has || err != nil {
 			if err != nil {
-				fmt.Fprintf(in.out, "%s: skipped this poll, reading %s: %v\n", in.id(r.task.ref.ID), r.o.branch, err)
+				fmt.Fprintf(in.out, "%s: skipped this poll, reading %s: %v\n", in.id(r.task.ref.ID), r.o.Branch, err)
 			}
 
 			continue
 		}
 
-		marked, err := branchmeta.Get(ctx, in.main, r.o.branch, branchmeta.Moved)
+		marked, err := branchmeta.Get(ctx, in.main, r.o.Branch, branchmeta.Moved)
 		if err != nil {
 			fmt.Fprintf(in.out, "%s: skipped this poll, reading %s: %v\n",
-				in.id(r.task.ref.ID), branchmeta.Moved.For(r.o.branch), err)
+				in.id(r.task.ref.ID), branchmeta.Moved.For(r.o.Branch), err)
 
 			continue
 		}
@@ -389,11 +390,11 @@ func (in *driveInput) markMoved(ctx context.Context, runs []*driveRun, wss []age
 			continue
 		}
 
-		if err := branchmeta.Set(ctx, in.main, r.o.branch, branchmeta.Moved, head); err != nil {
-			return fmt.Errorf("%s: marking %s moved: %w", r.task.ref.ID, b.o.branch, err)
+		if err := branchmeta.Set(ctx, in.main, r.o.Branch, branchmeta.Moved, head); err != nil {
+			return fmt.Errorf("%s: marking %s moved: %w", r.task.ref.ID, b.o.Branch, err)
 		}
 
-		fmt.Fprintf(in.out, "%s: base %s moved, catching up before the next skill\n", in.id(r.task.ref.ID), b.o.branch)
+		fmt.Fprintf(in.out, "%s: base %s moved, catching up before the next skill\n", in.id(r.task.ref.ID), b.o.Branch)
 	}
 
 	return nil
@@ -403,7 +404,7 @@ func (in *driveInput) markMoved(ctx context.Context, runs []*driveRun, wss []age
 // at the boundary before its next skill, so the open PR never sits behind; a
 // listed base still in flight is markMoved's, and finish has readyToMerge.
 func (in *driveInput) markBehind(ctx context.Context, r *driveRun) error {
-	id, branch := r.task.ref.ID, r.o.branch
+	id, branch := r.task.ref.ID, r.o.Branch
 
 	if r.base != nil && !r.base.through() {
 		return nil
@@ -463,7 +464,7 @@ func (in *driveInput) markBehind(ctx context.Context, r *driveRun) error {
 			if st, err := stack.ReadTarget(ctx, in.main, aim, pr.Base, "", ""); err == nil && st.Retargeted {
 				return fmt.Errorf("%s targets %s, not %s, which %s was started on: retarget it back, "+
 					"or catch it up by hand with /f10:catchup in %s", pr.URL, pr.Base,
-					strings.TrimPrefix(aim.Name, "origin/"), branch, r.o.path)
+					strings.TrimPrefix(aim.Name, "origin/"), branch, r.o.Path)
 			}
 		}
 	}

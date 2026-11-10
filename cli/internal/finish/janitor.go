@@ -1,4 +1,4 @@
-package main
+package finish
 
 import (
 	"cmp"
@@ -12,8 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
@@ -32,57 +30,22 @@ import (
 // in the host's UI, a worktree removed by hand. Every keep rule is checked
 // before anything is deleted, and one branch failing never stops the next.
 
-// janitorEvery is how long start and finish wait between two janitor runs.
-const janitorEvery = 6 * time.Hour
+// JanitorEvery is how long start and finish wait between two janitor runs.
+const JanitorEvery = 6 * time.Hour
 
-// janitorStamp's mtime is the last run.
-const janitorStamp = "janitor.stamp"
+// JanitorStamp's mtime is the last run.
+const JanitorStamp = "janitor.stamp"
 
-func janitorCommand() *cli.Command {
-	return &cli.Command{
-		Name: "janitor",
-		Usage: "remove task branches whose PR merged or closed, locally and on origin, and archive their plans; " +
-			"f10 start and f10 finish run it every few hours",
-		Flags: []cli.Flag{
-			&cli.BoolFlag{Name: "dry-run", Usage: "list what would be removed and change nothing"},
-		},
-		Action: runJanitor,
-	}
-}
-
-func runJanitor(ctx context.Context, cmd *cli.Command) error {
-	t, err := target.For(ctx, cmd)
-	if err != nil {
-		return err
-	}
-
-	in := janitorFor(t)
-	in.dry = cmd.Bool("dry-run")
-
-	if !in.dry {
-		if err := touchStamp(filepath.Join(t.Layout.StorageRoot.Path(), janitorStamp), time.Now()); err != nil {
-			return err
-		}
-	}
-
-	lines, err := janitor(ctx, in)
-	for _, l := range lines {
-		fmt.Fprintln(cmd.Writer, l)
-	}
-
-	return err
-}
-
-// sweepIfDue never fails the command that ran it: an error is one warning.
+// SweepIfDue never fails the command that ran it: an error is one warning.
 // The stamp moves first, so commands in quick succession run it once.
-func sweepIfDue(ctx context.Context, w io.Writer, stamp string, now time.Time,
+func SweepIfDue(ctx context.Context, w io.Writer, stamp string, now time.Time,
 	run func(context.Context) ([]string, error),
 ) {
-	if !janitorDue(stamp, now) {
+	if !JanitorDue(stamp, now) {
 		return
 	}
 
-	if err := touchStamp(stamp, now); err != nil {
+	if err := TouchStamp(stamp, now); err != nil {
 		fmt.Fprintf(w, "janitor: warning: %v\n", err)
 
 		return
@@ -98,13 +61,13 @@ func sweepIfDue(ctx context.Context, w io.Writer, stamp string, now time.Time,
 	}
 }
 
-func janitorDue(stamp string, now time.Time) bool {
+func JanitorDue(stamp string, now time.Time) bool {
 	fi, err := os.Stat(stamp)
 
-	return err != nil || now.Sub(fi.ModTime()) >= janitorEvery
+	return err != nil || now.Sub(fi.ModTime()) >= JanitorEvery
 }
 
-func touchStamp(stamp string, now time.Time) error {
+func TouchStamp(stamp string, now time.Time) error {
 	if err := os.MkdirAll(filepath.Dir(stamp), 0o750); err != nil {
 		return fmt.Errorf("writing the janitor stamp: %w", err)
 	}
@@ -116,75 +79,75 @@ func touchStamp(stamp string, now time.Time) error {
 	return os.Chtimes(stamp, now, now)
 }
 
-// janitorInput is everything the janitor needs, so it runs in a test
+// JanitorInput is everything the janitor needs, so it runs in a test
 // without a checkout.
-type janitorInput struct {
-	main    string
-	host    *hostops.Host // nil without a host CLI: only branches never pushed qualify
-	prefix  string
-	storage storage.Root
-	dry     bool
-	// localOnly: the watcher asks the network nothing before the host
-	localOnly bool
+type JanitorInput struct {
+	Main    string
+	Host    *hostops.Host // nil without a host CLI: only branches never pushed qualify
+	Prefix  string
+	Storage storage.Root
+	Dry     bool
+	// LocalOnly: the watcher asks the network nothing before the host
+	LocalOnly bool
 }
 
-func janitorFor(t *target.Target) janitorInput {
+func JanitorFor(t *target.Target) JanitorInput {
 	main := cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot)
-	in := janitorInput{main: main, prefix: t.Effective.IDPrefix, storage: t.Layout.StorageRoot}
+	in := JanitorInput{Main: main, Prefix: t.Effective.IDPrefix, Storage: t.Layout.StorageRoot}
 
 	if h, err := hostops.HostOf(t); err == nil {
 		h = h.In(main)
-		in.host = &h
+		in.Host = &h
 	}
 
 	return in
 }
 
-type staleBranch struct {
-	name                string
-	ids                 []string // the tasks it ships, a bundle's lead first
-	localSHA, originSHA string   // "" where the branch is not
+type StaleBranch struct {
+	Name                string
+	Ids                 []string // the tasks it ships, a bundle's lead first
+	LocalSHA, originSHA string   // "" where the branch is not
 	unread              error    // the local tip git failed to read, which keeps the branch
 }
 
-// janitor reports a line per removal, and per branch kept for a reason worth
+// Janitor reports a line per removal, and per branch kept for a reason worth
 // knowing.
-func janitor(ctx context.Context, in janitorInput) ([]string, error) {
-	def, err := janitorDefault(ctx, in.main)
+func Janitor(ctx context.Context, in JanitorInput) ([]string, error) {
+	def, err := JanitorDefault(ctx, in.Main)
 	if err != nil {
 		return nil, err
 	}
 
-	branches, held, err := taskBranches(ctx, in, def)
+	branches, held, err := TaskBranches(ctx, in, def)
 	if err != nil {
 		return nil, err
 	}
 
-	j := &sweeper{in: in, def: def}
+	j := &Sweeper{In: in, Def: def}
 
 	removed := map[string]time.Time{}
 
 	for _, b := range branches {
-		if held[b.name] {
+		if held[b.Name] {
 			continue
 		}
 
 		if ended, ok := j.sweep(ctx, b); ok {
-			removed[b.name] = ended
+			removed[b.Name] = ended
 		}
 	}
 
 	j.archive(branches, removed)
 
-	if len(j.lines) == 0 {
-		j.lines = append(j.lines, "nothing to clear")
+	if len(j.Lines) == 0 {
+		j.Lines = append(j.Lines, "nothing to clear")
 	}
 
-	return j.lines, nil
+	return j.Lines, nil
 }
 
-// janitorDefault falls back to the main checkout's branch only with no origin.
-func janitorDefault(ctx context.Context, main string) (string, error) {
+// JanitorDefault falls back to the main checkout's branch only with no origin.
+func JanitorDefault(ctx context.Context, main string) (string, error) {
 	if def, err := stack.LocalDefault(ctx, main); err == nil {
 		return def, nil
 	}
@@ -204,24 +167,24 @@ func janitorDefault(ctx context.Context, main string) (string, error) {
 	return "", errors.New("cannot tell the default branch: origin has no HEAD here (git remote set-head origin -a)")
 }
 
-// taskBranches reads a branch as finish does: its link or recorded bundle,
+// TaskBranches reads a branch as finish does: its link or recorded bundle,
 // else its name. On origin a bare id counts only in the shapes start creates,
 // so a name merely mentioning one is someone else's. held is every branch a
 // checkout has, main's included.
-func taskBranches(ctx context.Context, in janitorInput, def string) ([]staleBranch, map[string]bool, error) {
-	locals, err := gitx.Refs(ctx, in.main, "refs/heads/")
+func TaskBranches(ctx context.Context, in JanitorInput, def string) ([]StaleBranch, map[string]bool, error) {
+	locals, err := gitx.Refs(ctx, in.Main, "refs/heads/")
 	if err != nil {
 		return nil, nil, err
 	}
 
 	var origin map[string]string
-	if !in.localOnly {
-		if origin, err = gitx.RemoteBranches(ctx, in.main); err != nil {
+	if !in.LocalOnly {
+		if origin, err = gitx.RemoteBranches(ctx, in.Main); err != nil {
 			return nil, nil, err
 		}
 	}
 
-	wts, err := gitx.Worktrees(ctx, in.main)
+	wts, err := gitx.Worktrees(ctx, in.Main)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -231,15 +194,15 @@ func taskBranches(ctx context.Context, in janitorInput, def string) ([]staleBran
 		held[wt.Branch] = true
 	}
 
-	x, err := stack.LoadBranchIndex(ctx, in.main)
+	x, err := stack.LoadBranchIndex(ctx, in.Main)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	match := ref.Matcher(in.prefix)
-	byName := map[string]*staleBranch{}
+	match := ref.Matcher(in.Prefix)
+	byName := map[string]*StaleBranch{}
 
-	add := func(name string, local bool) *staleBranch {
+	add := func(name string, local bool) *StaleBranch {
 		if b, ok := byName[name]; ok {
 			return b
 		}
@@ -250,7 +213,7 @@ func taskBranches(ctx context.Context, in janitorInput, def string) ([]staleBran
 
 		// a link with no riders still names the task, as a picked-up PR's
 		// branch may carry no id at all
-		lead, rest := x.Bundle(name, in.prefix)
+		lead, rest := x.Bundle(name, in.Prefix)
 		if lead == "" {
 			lead = x.Record(name).Task
 		}
@@ -274,7 +237,7 @@ func taskBranches(ctx context.Context, in janitorInput, def string) ([]staleBran
 			return nil
 		}
 
-		byName[name] = &staleBranch{name: name, ids: ids}
+		byName[name] = &StaleBranch{Name: name, Ids: ids}
 
 		return byName[name]
 	}
@@ -282,7 +245,7 @@ func taskBranches(ctx context.Context, in janitorInput, def string) ([]staleBran
 	for _, name := range locals {
 		if b := add(name, true); b != nil {
 			// a failed read is not an absent branch, which would let origin's copy go unchecked
-			b.localSHA, b.unread = gitx.Ref(ctx, in.main, "refs/heads/"+name)
+			b.LocalSHA, b.unread = gitx.Ref(ctx, in.Main, "refs/heads/"+name)
 		}
 	}
 
@@ -292,83 +255,31 @@ func taskBranches(ctx context.Context, in janitorInput, def string) ([]staleBran
 		}
 	}
 
-	out := make([]staleBranch, 0, len(byName))
+	out := make([]StaleBranch, 0, len(byName))
 	for _, b := range byName {
 		out = append(out, *b)
 	}
 
-	slices.SortFunc(out, func(a, b staleBranch) int { return strings.Compare(a.name, b.name) })
+	slices.SortFunc(out, func(a, b StaleBranch) int { return strings.Compare(a.Name, b.Name) })
 
 	return out, held, nil
 }
 
-// A sweeper is one janitor run: its lines, and the host login read once.
-type sweeper struct {
-	in    janitorInput
-	def   string
-	lines []string
+// A Sweeper is one janitor run: its lines, and the host login read once.
+type Sweeper struct {
+	In    JanitorInput
+	Def   string
+	Lines []string
 	login *string
 	prs   map[string]int // a removed branch's request, which closes its task's series
 }
 
-func (j *sweeper) say(format string, args ...any) {
-	j.lines = append(j.lines, fmt.Sprintf(format, args...))
-}
-
-// sweep reports whether b was (or, dry, would be) removed, and when its
-// request ended.
-func (j *sweeper) sweep(ctx context.Context, b staleBranch) (time.Time, bool) {
-	var (
-		p   *forge.PR
-		err error
-	)
-
-	if b.unread != nil {
-		j.say("kept %s: reading its tip failed: %v", b.name, b.unread)
-
-		return time.Time{}, false
-	}
-
-	if j.in.host != nil {
-		if p, err = j.request(ctx, b); err != nil {
-			j.say("kept %s: %v", b.name, err)
-
-			return time.Time{}, false
-		}
-	}
-
-	if p == nil {
-		return j.sweepUnpushed(ctx, b)
-	}
-
-	if p.Status == forge.Open {
-		return time.Time{}, false
-	}
-
-	if reason := j.keep(ctx, b, p); reason != "" {
-		j.say("kept %s: %s", b.name, reason)
-
-		return time.Time{}, false
-	}
-
-	removed := j.remove(ctx, b, p)
-	if removed {
-		if j.prs == nil {
-			j.prs = map[string]int{}
-		}
-
-		j.prs[b.name] = p.Number
-	}
-
-	return cmp.Or(p.MergedAt, p.ClosedAt), removed
-}
-
-// request is the request that decides b: an open one when any is, else
+// Request is the request that decides b: an open one when any is, else
 // the newest; nil when there is none.
-func (j *sweeper) request(ctx context.Context, b staleBranch) (*forge.PR, error) {
-	prs, err := j.in.host.PullsByHead(ctx, b.name)
+func (j *Sweeper) Request(ctx context.Context, b StaleBranch) (*forge.PR, error) {
+	prs, err := j.In.Host.PullsByHead(ctx, b.Name)
 	if err != nil {
-		return nil, fmt.Errorf("%s did not list its requests: %w", j.in.host.Name, err)
+		return nil, fmt.Errorf("%s did not list its requests: %w", j.In.Host.Name, err)
 	}
 
 	if len(prs) == 0 {
@@ -384,9 +295,87 @@ func (j *sweeper) request(ctx context.Context, b staleBranch) (*forge.PR, error)
 	return &prs[0], nil
 }
 
+// SweepUnpushed removes a branch finish would read as never pushed once its
+// changes are in the default branch; its work ended with its last commit.
+func (j *Sweeper) SweepUnpushed(ctx context.Context, b StaleBranch) (time.Time, bool) {
+	if b.LocalSHA == "" || b.originSHA != "" {
+		return time.Time{}, false
+	}
+
+	// an upstream git cannot read keeps the branch for this pass
+	upstream, err := gitx.Config(ctx, j.In.Main, "branch."+b.Name+".merge")
+
+	switch {
+	case err != nil:
+		j.say("%s kept: reading its upstream failed: %v", b.Name, err)
+
+		return time.Time{}, false
+	case upstream != "":
+		return time.Time{}, false
+	case !alreadyLanded(ctx, j.In.Main, "refs/heads/"+j.Def, "refs/heads/"+b.Name):
+		return time.Time{}, false
+	}
+
+	ended, _ := time.Parse(time.RFC3339, gitx.Out(ctx, j.In.Main, "log", "-1", "--format=%cI", b.LocalSHA))
+
+	return ended, j.remove(ctx, b, nil)
+}
+
+func (j *Sweeper) say(format string, args ...any) {
+	j.Lines = append(j.Lines, fmt.Sprintf(format, args...))
+}
+
+// sweep reports whether b was (or, dry, would be) removed, and when its
+// request ended.
+func (j *Sweeper) sweep(ctx context.Context, b StaleBranch) (time.Time, bool) {
+	var (
+		p   *forge.PR
+		err error
+	)
+
+	if b.unread != nil {
+		j.say("kept %s: reading its tip failed: %v", b.Name, b.unread)
+
+		return time.Time{}, false
+	}
+
+	if j.In.Host != nil {
+		if p, err = j.Request(ctx, b); err != nil {
+			j.say("kept %s: %v", b.Name, err)
+
+			return time.Time{}, false
+		}
+	}
+
+	if p == nil {
+		return j.SweepUnpushed(ctx, b)
+	}
+
+	if p.Status == forge.Open {
+		return time.Time{}, false
+	}
+
+	if reason := j.keep(ctx, b, p); reason != "" {
+		j.say("kept %s: %s", b.Name, reason)
+
+		return time.Time{}, false
+	}
+
+	removed := j.remove(ctx, b, p)
+	if removed {
+		if j.prs == nil {
+			j.prs = map[string]int{}
+		}
+
+		j.prs[b.Name] = p.Number
+	}
+
+	return cmp.Or(p.MergedAt, p.ClosedAt), removed
+}
+
 // keep is why a branch whose request merged or closed stays, or "".
-func (j *sweeper) keep(ctx context.Context, b staleBranch, p *forge.PR) string {
-	for _, tip := range []struct{ sha, whose string }{{b.localSHA, "its"}, {b.originSHA, "origin's"}} {
+func (j *Sweeper) keep(ctx context.Context, b StaleBranch, p *forge.PR) string {
+	for _, tip := range []struct{ sha, whose string }{{b.LocalSHA, "its"}, {b.originSHA, "origin's"}} {
 		if tip.sha == "" || tip.sha == p.HeadSHA {
 			continue
 		}
@@ -401,7 +390,7 @@ func (j *sweeper) keep(ctx context.Context, b staleBranch, p *forge.PR) string {
 		}
 	}
 
-	stacked, err := j.in.host.StackedPRs(ctx, b.name)
+	stacked, err := j.In.Host.StackedPRs(ctx, b.Name)
 	if err != nil {
 		return "listing the requests based on it failed: " + err.Error()
 	}
@@ -411,7 +400,7 @@ func (j *sweeper) keep(ctx context.Context, b staleBranch, p *forge.PR) string {
 	}
 
 	if p.Status != forge.Merged {
-		deps, err := dependentsOf(ctx, j.in.main, b.name)
+		deps, err := dependentsOf(ctx, j.In.Main, b.Name)
 		if err != nil {
 			return "reading the branches started --after it failed: " + err.Error()
 		}
@@ -429,65 +418,25 @@ func (j *sweeper) keep(ctx context.Context, b staleBranch, p *forge.PR) string {
 // A tip that only merged main in, or one behind a head a colleague pushed, has
 // none. A head the clone never saw (its branch deleted on origin after
 // someone else's push) is fetched by sha first.
-func (j *sweeper) unlanded(ctx context.Context, tip string, p *forge.PR) ([]gitx.Cherry, error) {
-	def := "refs/heads/" + j.def
+func (j *Sweeper) unlanded(ctx context.Context, tip string, p *forge.PR) ([]gitx.Cherry, error) {
+	def := "refs/heads/" + j.Def
 
-	lost, err := gitx.Unlanded(ctx, j.in.main, def, tip, p.HeadSHA)
+	lost, err := gitx.Unlanded(ctx, j.In.Main, def, tip, p.HeadSHA)
 	if err == nil || !gitx.UnknownObject(err) {
 		return lost, err
 	}
 
-	if err := gitx.FetchCommit(ctx, j.in.main, p.HeadSHA); err != nil {
+	if err := gitx.FetchCommit(ctx, j.In.Main, p.HeadSHA); err != nil {
 		return nil, fmt.Errorf("fetching its head %s: %w", gitx.ShortSHA(p.HeadSHA), err)
 	}
 
-	return gitx.Unlanded(ctx, j.in.main, def, tip, p.HeadSHA)
-}
-
-// describeLost names the oldest lost commit, and counts the rest.
-func describeLost(lost []gitx.Cherry) string {
-	first := fmt.Sprintf("%q (%s)", lost[0].Subject, gitx.ShortSHA(lost[0].SHA))
-
-	switch len(lost) {
-	case 1:
-		return first
-	case 2:
-		return first + " and 1 more commit"
-	default:
-		return fmt.Sprintf("%s and %d more commits", first, len(lost)-1)
-	}
-}
-
-// sweepUnpushed removes a branch finish would read as never pushed once its
-// changes are in the default branch; its work ended with its last commit.
-func (j *sweeper) sweepUnpushed(ctx context.Context, b staleBranch) (time.Time, bool) {
-	if b.localSHA == "" || b.originSHA != "" {
-		return time.Time{}, false
-	}
-
-	// an upstream git cannot read keeps the branch for this pass
-	upstream, err := gitx.Config(ctx, j.in.main, "branch."+b.name+".merge")
-
-	switch {
-	case err != nil:
-		j.say("%s kept: reading its upstream failed: %v", b.name, err)
-
-		return time.Time{}, false
-	case upstream != "":
-		return time.Time{}, false
-	case !alreadyLanded(ctx, j.in.main, "refs/heads/"+j.def, "refs/heads/"+b.name):
-		return time.Time{}, false
-	}
-
-	ended, _ := time.Parse(time.RFC3339, gitx.Out(ctx, j.in.main, "log", "-1", "--format=%cI", b.localSHA))
-
-	return ended, j.remove(ctx, b, nil)
+	return gitx.Unlanded(ctx, j.In.Main, def, tip, p.HeadSHA)
 }
 
 // remove drops origin's copy only for the user's own request. A step failing
 // is a line, and the branch counts as kept.
-func (j *sweeper) remove(ctx context.Context, b staleBranch, p *forge.PR) bool {
-	why := "never pushed, already in " + j.def
+func (j *Sweeper) remove(ctx context.Context, b StaleBranch, p *forge.PR) bool {
+	why := "never pushed, already in " + j.Def
 	if p != nil {
 		why = p.URL + " " + p.Status
 	}
@@ -498,14 +447,14 @@ func (j *sweeper) remove(ctx context.Context, b staleBranch, p *forge.PR) bool {
 	if dropOrigin && !j.own(ctx, p) {
 		dropOrigin = false
 
-		if b.localSHA == "" {
+		if b.LocalSHA == "" {
 			return false
 		}
 
-		j.say("kept origin/%s: %s was opened by %s", b.name, p.URL, cmp.Or(p.Author, "someone else"))
+		j.say("kept origin/%s: %s was opened by %s", b.Name, p.URL, cmp.Or(p.Author, "someone else"))
 	}
 
-	if b.localSHA != "" {
+	if b.LocalSHA != "" {
 		gone = append(gone, "local branch")
 	}
 
@@ -513,59 +462,59 @@ func (j *sweeper) remove(ctx context.Context, b staleBranch, p *forge.PR) bool {
 		gone = append(gone, "origin")
 	}
 
-	if j.in.dry {
-		j.say("would remove %s (%s): %s", b.name, why, strings.Join(gone, ", "))
+	if j.In.Dry {
+		j.say("would remove %s (%s): %s", b.Name, why, strings.Join(gone, ", "))
 
 		return true
 	}
 
 	if p != nil && p.Status == forge.Merged {
-		released, err := releaseDependents(ctx, j.in.main, b.name, j.def, true)
+		released, err := ReleaseDependents(ctx, j.In.Main, b.Name, j.Def, true)
 		if err != nil {
-			j.say("kept %s: %v", b.name, err)
+			j.say("kept %s: %v", b.Name, err)
 
 			return false
 		}
 
-		j.lines = append(j.lines, released...)
+		j.Lines = append(j.Lines, released...)
 	}
 
 	if dropOrigin {
-		if err := j.in.host.DeleteBranch(ctx, b.name); err != nil {
-			j.say("kept %s: deleting origin/%s failed: %v", b.name, b.name, err)
+		if err := j.In.Host.DeleteBranch(ctx, b.Name); err != nil {
+			j.say("kept %s: deleting origin/%s failed: %v", b.Name, b.Name, err)
 
 			return false
 		}
 	}
 
 	if dropOrigin {
-		if err := gitx.DeleteRemoteRef(ctx, j.in.main, b.name); err != nil {
-			j.say("origin/%s is gone but its local copy is not: %v", b.name, err)
+		if err := gitx.DeleteRemoteRef(ctx, j.In.Main, b.Name); err != nil {
+			j.say("origin/%s is gone but its local copy is not: %v", b.Name, err)
 		}
 	}
 
-	if b.localSHA != "" {
-		if err := gitx.DeleteBranch(ctx, j.in.main, b.name); err != nil {
-			j.say("kept %s: deleting the local branch failed: %v", b.name, err)
+	if b.LocalSHA != "" {
+		if err := gitx.DeleteBranch(ctx, j.In.Main, b.Name); err != nil {
+			j.say("kept %s: deleting the local branch failed: %v", b.Name, err)
 
 			return false
 		}
 	}
 
-	j.say("removed %s (%s): %s", b.name, why, strings.Join(gone, ", "))
+	j.say("removed %s (%s): %s", b.Name, why, strings.Join(gone, ", "))
 
 	return true
 }
 
 // own reports whether the signed-in host user opened p. A login the host
 // will not tell, or a request with no author, is someone else's.
-func (j *sweeper) own(ctx context.Context, p *forge.PR) bool {
+func (j *Sweeper) own(ctx context.Context, p *forge.PR) bool {
 	if p == nil || p.Author == "" {
 		return false
 	}
 
 	if j.login == nil {
-		login, err := j.in.host.Login(ctx)
+		login, err := j.In.Host.Login(ctx)
 		if err != nil {
 			login = ""
 		}
@@ -579,23 +528,23 @@ func (j *sweeper) own(ctx context.Context, p *forge.PR) bool {
 // archive keeps the plan of a task with a branch left (a second attempt may
 // still read it) and one written after the request ended (the task was
 // planned again); a kept plan keeps its images.
-func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) {
+func (j *Sweeper) archive(branches []StaleBranch, removed map[string]time.Time) {
 	left := map[string][]string{}
 	cleared := map[string]time.Time{}
 	ends := map[string]archive.SeriesEnd{} // what closes each task's series: its removed branch
 
 	for _, b := range branches {
-		ended, ok := removed[b.name]
+		ended, ok := removed[b.Name]
 
-		for _, id := range b.ids {
+		for _, id := range b.Ids {
 			if ok {
 				cleared[id] = laterOf(cleared[id], ended)
-				ends[id] = archive.SeriesEnd{Pr: "none", Head: cmp.Or(b.localSHA, b.originSHA)}
-				if n := j.prs[b.name]; n > 0 {
+				ends[id] = archive.SeriesEnd{Pr: "none", Head: cmp.Or(b.LocalSHA, b.originSHA)}
+				if n := j.prs[b.Name]; n > 0 {
 					ends[id] = archive.SeriesEnd{Pr: "#" + strconv.Itoa(n), Head: ends[id].Head}
 				}
 			} else {
-				left[id] = append(left[id], b.name)
+				left[id] = append(left[id], b.Name)
 			}
 		}
 	}
@@ -608,7 +557,7 @@ func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) 
 	slices.Sort(ids)
 
 	for _, id := range ids {
-		plan := j.in.storage.Plan(id)
+		plan := j.In.Storage.Plan(id)
 		live := fsx.Exists(plan)
 
 		switch {
@@ -618,8 +567,8 @@ func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) 
 			}
 		case live && writtenAfter(plan, cleared[id]):
 			j.say("kept the plan for %s: it was written after its branch's work ended", id)
-		case j.in.dry:
-			for _, p := range []string{plan, j.in.storage.Reviews(id), archive.TaskHandoff(j.in.storage, id)} {
+		case j.In.Dry:
+			for _, p := range []string{plan, j.In.Storage.Reviews(id), archive.TaskHandoff(j.In.Storage, id)} {
 				if fsx.Exists(p) {
 					j.say("would archive %s", p)
 				}
@@ -633,10 +582,10 @@ func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) 
 // clear archives a task whose branches are all gone; closing its review
 // series lets a later PR on the task start at round 1 with its own lore
 // change. A failed step is a line, and the rest still run.
-func (j *sweeper) clear(id string, end archive.SeriesEnd) {
-	plan := j.in.storage.Plan(id)
+func (j *Sweeper) clear(id string, end archive.SeriesEnd) {
+	plan := j.In.Storage.Plan(id)
 
-	a, _ := archiveTask(j.in.storage, id, &end, func(_ string, err error) error {
+	a, _ := archiveTask(j.In.Storage, id, &end, func(_ string, err error) error {
 		j.say("%v", err)
 
 		return nil
@@ -659,6 +608,20 @@ func (j *sweeper) clear(id string, end archive.SeriesEnd) {
 
 	if a.images != "" {
 		j.say("%s", a.images)
+	}
+}
+
+// describeLost names the oldest lost commit, and counts the rest.
+func describeLost(lost []gitx.Cherry) string {
+	first := fmt.Sprintf("%q (%s)", lost[0].Subject, gitx.ShortSHA(lost[0].SHA))
+
+	switch len(lost) {
+	case 1:
+		return first
+	case 2:
+		return first + " and 1 more commit"
+	default:
+		return fmt.Sprintf("%s and %d more commits", first, len(lost)-1)
 	}
 }
 

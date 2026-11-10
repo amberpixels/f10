@@ -10,6 +10,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	prcmd "github.com/amberpixels/f10/cli/internal/command/pr"
+	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -558,7 +559,7 @@ func TestReleaseDependentsRecordsTip(t *testing.T) {
 	r, tip := newStackedRepo(t)
 	r.at(later, "config", "--unset", branchmeta.Tip.For("FT-1/a"))
 
-	if _, err := releaseDependents(t.Context(), r.dir, "FT-2/b", "main", true); err != nil {
+	if _, err := finish.ReleaseDependents(t.Context(), r.dir, "FT-2/b", "main", true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -597,7 +598,7 @@ func TestCatchupBaseRewrittenOutranks(t *testing.T) {
 func TestReleaseDependentsSpikeClearsTip(t *testing.T) {
 	r, _ := newStackedRepo(t)
 
-	if _, err := releaseDependents(t.Context(), r.dir, "FT-2/b", "main", false); err != nil {
+	if _, err := finish.ReleaseDependents(t.Context(), r.dir, "FT-2/b", "main", false); err != nil {
 		t.Fatal(err)
 	}
 

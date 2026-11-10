@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	startcmd "github.com/amberpixels/f10/cli/internal/command/start"
 	"github.com/amberpixels/f10/cli/internal/launch"
+	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
@@ -115,10 +117,10 @@ func TestStartAndForwardThroughAnotherBackend(t *testing.T) {
 	f.script(worktrees, porcelain(), porcelain("GH-1", fwdWT))
 	f.script("wt switch --no-cd --yes --format json --create GH-1", "{}")
 
-	if err := start(
+	if err := start.Start(
 		t.Context(),
 		&bytes.Buffer{},
-		startInput{main: fwdMain, storage: testStorage, task: gh1},
+		start.StartInput{Main: fwdMain, Storage: testStorage, Task: gh1},
 	); err != nil {
 		t.Fatal(err)
 	}
@@ -133,8 +135,15 @@ func TestStartAndForwardThroughAnotherBackend(t *testing.T) {
 
 	var out bytes.Buffer
 
-	fwd := forwardInput{main: fwdMain, here: fwdMain, task: gh1, text: fwdText, stateDir: t.TempDir(), now: time.Now()}
-	if err := forward(t.Context(), &out, fwd); err != nil {
+	fwd := startcmd.ForwardInput{
+		Main:     fwdMain,
+		Here:     fwdMain,
+		Task:     gh1,
+		Text:     fwdText,
+		StateDir: t.TempDir(),
+		Now:      time.Now(),
+	}
+	if err := startcmd.Forward(t.Context(), &out, fwd); err != nil {
 		t.Fatal(err)
 	}
 
