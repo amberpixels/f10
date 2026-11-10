@@ -15,16 +15,22 @@ import (
 
 // shipment is the facts block a ship report opens with, reprinted from what
 // f10 holds locally; only a pushed task with no PR recorded asks the host.
+// --json carries it whole under `shipment`.
 type shipment struct {
-	task, title, url, branch, pr, commit, plan, handoff string
+	Task    string `json:"task"`
+	Title   string `json:"title,omitempty"`
+	URL     string `json:"url,omitempty"`
+	Branch  string `json:"branch,omitempty"`
+	PR      string `json:"pr,omitempty"`
+	PRState string `json:"pr_state,omitempty"` // when the host was asked
+	Commit  string `json:"commit,omitempty"`
+	Plan    string `json:"plan,omitempty"`
+	Handoff string `json:"handoff,omitempty"`
 
-	prState string // the PR's state, when the host was asked
-	pulled  bool   // the host was asked for the PR, so the fallback asks no more
+	Verdicts []verdictPath `json:"verdicts,omitempty"`
+	Reviews  []reviewPath  `json:"reviews,omitempty"`
 
-	verdicts []verdictPath
-	reviews  []reviewPath
-
-	link bool // the file paths link on a terminal; off for --plain
+	pulled bool // the host was asked for the PR, so nothing asks it again
 }
 
 // verdictPath is a judge verdict file the facts block links, by its subject.
@@ -40,35 +46,37 @@ type reviewPath struct {
 }
 
 // facts is the block's rows in the ship report's order, empty ones left out.
-func (s shipment) facts() []fact {
+// link puts a terminal link on the file paths; --plain passes false, since
+// writeReport links a path fact on any terminal.
+func (s *shipment) facts(link bool) []fact {
 	rows := []fact{
-		{label: "task", value: s.task},
-		{label: "title", value: s.title},
-		{label: "url", value: s.url, url: true},
-		{label: "branch", value: s.branch},
-		{label: "pr", value: s.pr, url: true},
-		{label: "commit", value: s.commit},
-		{label: "plan", value: s.plan, path: s.link},
-		{label: "handoff", value: s.handoff, path: s.link},
+		{label: "task", value: s.Task},
+		{label: "title", value: s.Title},
+		{label: "url", value: s.URL, url: true},
+		{label: "branch", value: s.Branch},
+		{label: "pr", value: s.PR, url: true},
+		{label: "commit", value: s.Commit},
+		{label: "plan", value: s.Plan, path: link},
+		{label: "handoff", value: s.Handoff, path: link},
 	}
 
 	// a subject judged twice takes each file's number, so every label names one file
 	seen := map[string]int{}
-	for _, v := range s.verdicts {
+	for _, v := range s.Verdicts {
 		seen[v.Subject]++
 	}
 
-	for _, v := range s.verdicts {
+	for _, v := range s.Verdicts {
 		label := "judge " + v.Subject
 		if seen[v.Subject] > 1 {
 			label += " " + strings.TrimSuffix(filepath.Base(v.Path), ".md")
 		}
 
-		rows = append(rows, fact{label: label, value: v.Path, path: s.link})
+		rows = append(rows, fact{label: label, value: v.Path, path: link})
 	}
 
-	for _, r := range s.reviews {
-		rows = append(rows, fact{label: "review " + r.Round, value: r.Path, path: s.link})
+	for _, r := range s.Reviews {
+		rows = append(rows, fact{label: "review " + r.Round, value: r.Path, path: link})
 	}
 
 	return slices.DeleteFunc(rows, func(f fact) bool { return f.value == "" })
@@ -77,45 +85,57 @@ func (s shipment) facts() []fact {
 // readShipment fills the shipment from the ledger's task ref and PR, git and
 // the storage root. The commit row waits for a commit of the task's own:
 // before one, HEAD is the base's.
+//
+//nolint:lostfield // PRState comes from askPR, only for a pushed task
 func readShipment(ctx context.Context, in taskStatusInput, events []ledger.Event, known ledger.TaskRef) shipment {
 	lt := ledgerFor(events, in.id, func(token string) string { return token })
 
 	s := shipment{
-		task:   in.id,
-		title:  known.Title,
-		url:    known.URL,
-		branch: in.branch,
-		pr:     lt.pr,
+		Task:   in.id,
+		Title:  known.Title,
+		URL:    known.URL,
+		Branch: in.branch,
+		PR:     lt.pr,
 	}
 
 	// a PR opened by a script around the host CLI leaves no pr_opened; only a
 	// pushed task asks the host, so a status before the PR stays local
-	if s.pr == "" && lt.pushed && in.host != nil && in.branch != "" {
-		s.pulled = true
-		if p, err := in.host.PR(ctx, in.branch); err == nil {
-			s.pr, s.prState = p.URL, p.Status
-		}
+	if s.PR == "" && lt.pushed {
+		s.askPR(ctx, in)
 	}
 
 	if in.storage != "" {
-		s.verdicts, s.reviews = shipFiles(in.storage, in.id)
+		s.Verdicts, s.Reviews = shipFiles(in.storage, in.id)
 	}
 
 	if in.main != "" && in.branch != "" {
 		if def, err := localDefault(ctx, in.main); err == nil && baseHasCode(ctx, in.main, in.branch, def) {
-			s.commit = gitx.Out(ctx, in.main, "rev-parse", "--short", "refs/heads/"+in.branch)
+			s.Commit = gitx.Out(ctx, in.main, "rev-parse", "--short", "refs/heads/"+in.branch)
 		}
 	}
 
 	if fsx.Exists(in.plan) {
-		s.plan = in.plan
+		s.Plan = in.plan
 	}
 
 	if fsx.Exists(in.handoff) {
-		s.handoff = in.handoff
+		s.Handoff = in.handoff
 	}
 
 	return s
+}
+
+// askPR reads the branch's PR from the host, once: a PR the host does not
+// know leaves the ledger's url standing.
+func (s *shipment) askPR(ctx context.Context, in taskStatusInput) {
+	if s.pulled || in.host == nil || in.branch == "" {
+		return
+	}
+
+	s.pulled = true
+	if p, err := in.host.PR(ctx, in.branch); err == nil && p.URL != "" {
+		s.PR, s.PRState = p.URL, p.Status
+	}
 }
 
 // shipFiles is the task's verdict and findings files. Verdicts from before

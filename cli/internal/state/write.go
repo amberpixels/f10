@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -18,7 +17,6 @@ import (
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/taskid"
-	"github.com/amberpixels/f10/cli/internal/textx"
 )
 
 // Upcoming is a phase or step in the run's flow that the run has not reached:
@@ -653,31 +651,6 @@ func OpensPhase(skill string) bool {
 
 func settled(status string) bool {
 	return status == "done" || status == "prior" || status == "partial"
-}
-
-// Show prints the run one `label value` line per fact, in `f10 status`
-// order. A phase carries its glyph and, for ship, its step.
-func (r *Run) Show(w io.Writer, now time.Time) {
-	row := func(label, value string) { fmt.Fprintf(w, "%-8s %s\n", label, value) }
-
-	row("task", textx.OrDash(r.Task))
-	row("url", textx.OrDash(r.URL))
-
-	if r.Root != "" {
-		row("root", r.Root)
-	}
-
-	for _, p := range Phases {
-		row(p, Glyph(r.Status(p))+" "+r.PhaseText(p))
-	}
-
-	for _, kv := range [][2]string{{"note", r.Note}, {"next", r.Next}, {"ask", r.Ask}, {"wait", r.Wait}, {"final", r.FinalShown()}} {
-		if kv[1] != "" {
-			row(kv[0], kv[1])
-		}
-	}
-
-	row("updated", textx.Age(now, r.Updated)+" ago")
 }
 
 // Glyph is the status line's default shape for a status; the renderer's

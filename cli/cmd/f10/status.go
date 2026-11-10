@@ -8,16 +8,15 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/urfave/cli/v3"
 
-	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/layout"
-	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/textx"
@@ -46,42 +45,67 @@ func statusCommand() *cli.Command {
 }
 
 func runStatus(ctx context.Context, cmd *cli.Command) error {
-	dir := state.Dir()
-	now := time.Now()
 	all := cmd.Bool("all")
 	token := strings.TrimSpace(cmd.Args().First())
-	sid := state.Session()
+	v := statusView{w: cmd.Writer, warn: cmd.ErrWriter, json: cmd.Bool("json"), plain: cmd.Bool("plain")}
 
-	if token != "" {
-		if all {
-			return errors.New("status takes a task id or --all, not both: the id already picks a checkout")
-		}
-
-		t, err := targetFor(ctx, cmd)
+	if token == "" {
+		dir, scoped, err := rootDir(cmd)
 		if err != nil {
 			return err
 		}
 
-		_, err = taskStatus(ctx, cmd, t, token, false)
+		_, err = bareStatus(ctx, v, dir, scoped, state.Session(), all)
 
 		return err
 	}
 
+	if all {
+		return errors.New("status takes a task id or --all, not both: the id already picks a checkout")
+	}
+
+	t, err := targetFor(ctx, cmd)
+	if err != nil {
+		return err
+	}
+
+	rd, err := newStatusReader(t, time.Now())
+	if err != nil {
+		return err
+	}
+
+	_, err = rd.task(ctx, v, token, false)
+
+	return err
+}
+
+// bareStatus is what `status` with no task id prints, and whether it
+// printed a question a driven agent waits on.
+func bareStatus(ctx context.Context, v statusView, dir string, scoped bool, sid string, all bool) (bool, error) {
+	now := time.Now()
+
+	// the listing below reads the reader's runs when the guesses built one
+	var rd *statusReader
+
 	// the session run's task before the checkout's, the reverse of ref.Lookup,
 	// since the run is what status reports; in a checkout naming no task the
 	// launches come first, as the session run's task would hide them
-	if !all {
-		if t, err := targetFor(ctx, cmd); err == nil && !t.scoped {
+	if !all && !scoped {
+		if t, err := targetAt(ctx, dir, false, "status"); err == nil {
+			if rd, err = newStatusReader(t, now); err != nil {
+				return false, err
+			}
+
 			here := checkoutTaskID(ctx, t)
 			if here == "" && sid != "" {
-				if done, err := launchStatus(ctx, cmd, t, sid); done {
-					return err
+				if p, err := rd.launches(ctx, v, sid); p.printed {
+					return p.asks, err
 				}
 			}
 
 			if id := cmp.Or(sessionTaskID(sid), here); id != "" {
-				if done, err := taskStatus(ctx, cmd, t, id, true); done {
-					return err
+				if p, err := rd.task(ctx, v, id, true); p.printed {
+					return p.asks, err
 				}
 			}
 		}
@@ -94,50 +118,57 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 
 	switch {
 	case sid != "" && !all:
-		r, err := state.Load(state.Path(dir, sid))
+		r, err := state.Load(state.Path(state.Dir(), sid))
 		if errors.Is(err, os.ErrNotExist) {
-			_, err = fmt.Fprintln(cmd.Writer, "no f10 run in this session")
+			_, err = fmt.Fprintln(v.w, "no f10 run in this session")
 
-			return err
+			return false, err
 		}
 
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		runs = []*state.Run{r}
 	default:
-		live, err := state.List(dir, now, state.TTL())
+		live, err := liveRuns(rd, now)
 		if err != nil {
-			return err
+			return false, err
 		}
 
 		showRoot = true
 		runs = live
 
 		if !all {
-			root, err := checkoutRoot(ctx, cmd)
-			if err != nil {
-				return err
-			}
-
+			root := layout.Locate(ctx, dir).CheckoutRoot
 			runs = inRoot(live, root)
 
 			if len(runs) == 0 {
-				_, err = fmt.Fprintf(cmd.Writer, "no live f10 run in %s (--all lists every session)\n", root)
+				_, err = fmt.Fprintf(v.w, "no live f10 run in %s (--all lists every session)\n", root)
 
-				return err
+				return false, err
 			}
 		}
 
 		if len(runs) == 0 {
-			_, err = fmt.Fprintln(cmd.Writer, "no live f10 run on this machine")
+			_, err = fmt.Fprintln(v.w, "no live f10 run on this machine")
 
-			return err
+			return false, err
 		}
 	}
 
-	return writeRuns(cmd, runs, make([][]gate, len(runs)), nil, showRoot, "", now)
+	asks := slices.ContainsFunc(runs, func(r *state.Run) bool { return r.Ask != "" })
+
+	return asks, writeRuns(v, runs, make([][]gate, len(runs)), nil, showRoot, "", now)
+}
+
+// liveRuns is the reader's runs, else a fresh read of the state dir.
+func liveRuns(rd *statusReader, now time.Time) ([]*state.Run, error) {
+	if rd != nil {
+		return rd.live, nil
+	}
+
+	return state.List(state.Dir(), now, state.TTL())
 }
 
 // sessionTaskID is the task the session's run names, "" for none.
@@ -168,73 +199,6 @@ func checkoutTaskID(ctx context.Context, t *target) string {
 	return ref.Match(t.eff.IDPrefix, filepath.Base(t.lay.CheckoutRoot))
 }
 
-// taskStatus prints what `status <token>` prints, reporting whether it
-// printed. A guessed token whose task has no checkout here asks the host
-// nothing and prints nothing, so the bare output stands.
-func taskStatus(ctx context.Context, cmd *cli.Command, t *target, token string, guessed bool) (bool, error) {
-	id, suffix := ref.SplitSuffix(token)
-
-	r, err := t.reference(ctx, id)
-	if err != nil {
-		return false, err
-	}
-
-	route := taskRoute{
-		status:   func() (taskStatusInput, error) { return taskStatusFor(ctx, t, r, suffix) },
-		children: func() ([]taskRow, error) { return parentRows(ctx, t, r) },
-		finished: func() (*taskRow, error) { return finishedRow(ctx, t, r.Head()) },
-	}
-
-	if guessed {
-		route.children = func() ([]taskRow, error) { return nil, nil }
-		route.finished = func() (*taskRow, error) { return nil, nil }
-	}
-
-	in, rows, err := routeTask(cmd.ErrWriter, route)
-
-	switch {
-	case err != nil:
-		return false, err
-	case in == nil:
-		return true, writeTaskRows(cmd, rows, r.ID)
-	}
-
-	now := time.Now()
-
-	live, err := state.List(state.Dir(), now, state.TTL())
-	if err != nil {
-		return false, err
-	}
-
-	runs, others := taskRuns(inRoot(live, in.root), in.id)
-
-	events := readLedger(ctx, cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot))
-	known := ledger.LookupRefs(ctx, t.refProject(ctx), []string{in.id})[in.id]
-	ship := readShipment(ctx, *in, events, known)
-
-	if len(runs) == 0 {
-		fb := taskFallback(ctx, *in, others, ship)
-
-		if cmd.Bool("json") {
-			return true, ui.JSON(cmd.Writer, fb)
-		}
-
-		fb.render(cmd.Writer, ui.Width(cmd.Writer), linksFor(cmd.Writer, cmd.Bool("plain")).on)
-
-		return true, nil
-	}
-
-	// every skill call reseeds its run, which drops the url fetch recorded
-	for _, r := range runs {
-		r.URL = cmp.Or(r.URL, known.URL)
-	}
-
-	ship.url = cmp.Or(runs[0].URL, ship.url)
-	ship.link = linksFor(cmd.Writer, cmd.Bool("plain")).on
-
-	return true, writeRuns(cmd, runs, runGates(ctx, t, *in, events, runs), &ship, true, in.agent, now)
-}
-
 // taskStatusInput is what `status <id>` knows about a task before reading
 // any run.
 type taskStatusInput struct {
@@ -247,47 +211,6 @@ type taskStatusInput struct {
 	storage string // the storage root holding the task's verdicts and findings
 	host    *host  // nil without a host CLI: no PR row
 	agent   string // the profile the branch records, as typed; "" for the kind's default
-}
-
-// taskRoute is what `status <id>` can report on a task, read lazily.
-type taskRoute struct {
-	status   func() (taskStatusInput, error)
-	children func() ([]taskRow, error)
-	finished func() (*taskRow, error)
-}
-
-// routeTask reads the task's own checkout first, so a task with a run never
-// waits on the host. With no run to read, a parent reports its children
-// and a finished task its done row; anything else keeps the error.
-func routeTask(warn io.Writer, rt taskRoute) (*taskStatusInput, []taskRow, error) {
-	in, err := rt.status()
-	if !errors.Is(err, errNoRunToRead) {
-		if err != nil {
-			return nil, nil, err
-		}
-
-		return &in, nil, nil
-	}
-
-	rows, cerr := rt.children()
-
-	switch {
-	case cerr == nil && len(rows) > 0:
-		return nil, rows, nil
-	case cerr != nil && !errors.Is(cerr, errNoParentLink):
-		ui.Warnf(warn, "reading the subtasks: %v", cerr)
-	}
-
-	row, ferr := rt.finished()
-	if ferr != nil {
-		return nil, nil, ferr
-	}
-
-	if row == nil {
-		return nil, nil, err
-	}
-
-	return nil, []taskRow{*row}, nil
 }
 
 // errNoRunToRead is a task with no branch, or a branch checked out
@@ -357,6 +280,7 @@ func taskRuns(runs []*state.Run, id string) ([]*state.Run, []*state.Run) {
 
 // fallback is what `status <id>` reports for a task no live run is about:
 // the runs in its checkout, which are on something else, then what is durable.
+// The flat keys predate the shipment and repeat what it holds.
 type fallback struct {
 	Task    string       `json:"task"`
 	Root    string       `json:"root"`
@@ -368,31 +292,17 @@ type fallback struct {
 	Verdicts []verdictPath `json:"verdicts,omitempty"`
 	Reviews  []reviewPath  `json:"reviews,omitempty"`
 
-	ship shipment // the facts block render opens with; the JSON keeps its keys
+	Shipment *shipment `json:"shipment,omitempty"`
 }
 
-// taskFallback gathers the fallback around the task's shipment. Status only
-// reads, so a host that cannot answer drops the PR rather than failing the report.
-func taskFallback(ctx context.Context, in taskStatusInput, others []*state.Run, ship shipment) fallback {
+// taskFallback lays the task's shipment out as the fallback.
+func taskFallback(in taskStatusInput, others []*state.Run, ship shipment) fallback {
 	fb := fallback{
-		Task: in.id, Root: in.root, Others: others, PR: ship.pr,
-		Verdicts: ship.verdicts, Reviews: ship.reviews, ship: ship,
+		Task: in.id, Root: in.root, Others: others, Plan: ship.Plan, PR: ship.PR, PRState: ship.PRState,
+		Verdicts: ship.Verdicts, Reviews: ship.Reviews, Shipment: &ship,
 	}
 	if fb.Others == nil {
 		fb.Others = []*state.Run{} // an empty list, not null, for a JSON reader
-	}
-
-	if fsx.Exists(in.plan) {
-		fb.Plan = in.plan
-	}
-
-	switch {
-	case ship.pulled:
-		fb.PRState = ship.prState
-	case in.host != nil:
-		if p, err := in.host.PR(ctx, in.branch); err == nil && p.URL != "" {
-			fb.PR, fb.PRState = p.URL, p.Status
-		}
 	}
 
 	return fb
@@ -402,10 +312,12 @@ func (fb fallback) render(w io.Writer, limit int, link bool) {
 	plain := lipgloss.NewStyle()
 	faint := lipgloss.NewStyle().Faint(true)
 
-	s := fb.ship
-	s.task, s.plan, s.pr, s.link = fb.Task, fb.Plan, cmp.Or(fb.PR, s.pr), link
+	var rows []fact
+	if fb.Shipment != nil {
+		rows = fb.Shipment.facts(link)
+	}
 
-	rows := append(s.facts(), runFact("run", "none for "+fb.Task+" in "+fb.Root, faint))
+	rows = append(rows, runFact("run", "none for "+fb.Task+" in "+fb.Root, faint))
 
 	for _, r := range fb.Others {
 		rows = append(rows, runFact("agent", textx.OrDash(r.Task)+" · "+currentPhase(r), plain))
@@ -420,35 +332,24 @@ func (fb fallback) render(w io.Writer, limit int, link bool) {
 
 // writeTaskRows prints task rows as a tree, headed by parent unless the
 // one row is a finished task alone, or encodes them under --json.
-func writeTaskRows(cmd *cli.Command, rows []taskRow, parent string) error {
-	if cmd.Bool("json") {
-		return ui.JSON(cmd.Writer, rows)
+func writeTaskRows(v statusView, rows []taskRow, parent string) error {
+	if v.json {
+		return ui.JSON(v.w, rows)
 	}
 
-	v := rowView{parent: parent, plain: cmd.Bool("plain")}
+	rv := rowView{parent: parent, plain: v.plain}
 	if len(rows) == 1 && rows[0].full {
-		v.parent = ""
+		rv.parent = ""
 	}
 
 	switch {
-	case v.plain:
-		v.width = ui.PlainWidth()
-	case ui.IsTerminal(cmd.Writer):
-		v.term, v.width = true, ui.Width(cmd.Writer)
+	case rv.plain:
+		rv.width = ui.PlainWidth()
+	case ui.IsTerminal(v.w):
+		rv.term, rv.width = true, ui.Width(v.w)
 	}
 
-	return renderRows(cmd.Writer, rows, v)
-}
-
-// checkoutRoot is the repo a plain terminal asks about: -C's target or the
-// cwd, in physical form, the way the seed hook recorded root.
-func checkoutRoot(ctx context.Context, cmd *cli.Command) (string, error) {
-	dir, _, err := rootDir(cmd)
-	if err != nil {
-		return "", err
-	}
-
-	return layout.Locate(ctx, dir).CheckoutRoot, nil
+	return renderRows(v.w, rows, rv)
 }
 
 // inRoot keeps the runs recorded against root. The hook stores git's

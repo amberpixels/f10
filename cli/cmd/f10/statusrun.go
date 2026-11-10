@@ -1,19 +1,13 @@
 package main
 
 import (
-	"cmp"
-	"context"
 	"fmt"
 	"io"
 	"slices"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/urfave/cli/v3"
 
-	"github.com/amberpixels/f10/cli/internal/layout"
-	"github.com/amberpixels/f10/cli/internal/ledger"
-	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/textx"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -23,33 +17,33 @@ import (
 // head is the task's shipment, printed once above the runs in place of each
 // run's task and url rows; nil for runs listed without a task. agent is the
 // profile the task's branch records, "" for the kind's default.
-func writeRuns(cmd *cli.Command, runs []*state.Run, gates [][]gate, head *shipment, showRoot bool, agent string,
+func writeRuns(v statusView, runs []*state.Run, gates [][]gate, head *shipment, showRoot bool, agent string,
 	now time.Time,
 ) error {
-	if cmd.Bool("json") {
+	if v.json {
 		out := make([]runJSON, len(runs))
 		for i, r := range runs {
-			out[i] = runJSON{Run: r, Agent: agent, Gates: gates[i]}
+			out[i] = runJSON{Run: r, Agent: agent, Gates: gates[i], Shipment: head}
 			if head != nil {
-				out[i].Verdicts, out[i].Reviews = head.verdicts, head.reviews
+				out[i].Verdicts, out[i].Reviews = head.Verdicts, head.Reviews
 			}
 		}
 
-		return ui.JSON(cmd.Writer, out)
+		return ui.JSON(v.w, out)
 	}
 
-	limit := ui.Width(cmd.Writer)
+	limit := ui.Width(v.w)
 
 	if head != nil {
-		return writeRunsUnder(cmd.Writer, head.facts(), runs, gates, showRoot, agent, now, limit)
+		return writeRunsUnder(v.w, head.facts(linksFor(v.w, v.plain).on), runs, gates, showRoot, agent, now, limit)
 	}
 
 	for i, r := range runs {
 		if i > 0 {
-			fmt.Fprintln(cmd.Writer)
+			fmt.Fprintln(v.w)
 		}
 
-		renderRun(cmd.Writer, r, gates[i], showRoot, agent, now, limit)
+		runRows(v.w, r, runView{gates: gates[i], showRoot: showRoot, agent: agent, now: now, limit: limit})
 	}
 
 	return nil
@@ -63,7 +57,7 @@ func writeRunsUnder(w io.Writer, head []fact, runs []*state.Run, gates [][]gate,
 ) error {
 	blocks := make([][]fact, max(1, len(runs)))
 	for i, r := range runs {
-		blocks[i] = runRows(r, gates[i], showRoot, agent, now)
+		blocks[i] = runFacts(r, runView{gates: gates[i], showRoot: showRoot, agent: agent, now: now, headed: true})
 	}
 
 	// the plan phase row takes the key `plan`, so the plan file's row names itself
@@ -112,62 +106,34 @@ type runJSON struct {
 	Agent string `json:"agent,omitempty"`
 	Gates []gate `json:"gates,omitempty"`
 
-	// the task's files, repeated per run as the agent is
+	// the task's files and facts, repeated per run as the agent is; the
+	// files predate the shipment and repeat what it holds
 	Verdicts []verdictPath `json:"verdicts,omitempty"`
 	Reviews  []reviewPath  `json:"reviews,omitempty"`
+	Shipment *shipment     `json:"shipment,omitempty"`
 }
 
-// runGates is each of the task's runs' gates, from the ledger's events.
-func runGates(ctx context.Context, t *target, in taskStatusInput, events []ledger.Event, runs []*state.Run) [][]gate {
-	src := newGateSource(t, events, in.host)
-	out := make([][]gate, len(runs))
-
-	for i, r := range runs {
-		out[i] = src.gatesOf(ctx, in.id, in.branch, in.root, layout.Locate(ctx, r.Root).StorageRoot.Path(), r)
-	}
-
-	return out
+// runView is how one run block prints.
+type runView struct {
+	gates    []gate
+	showRoot bool   // listing runs: for one session the root is the directory you are in
+	agent    string // the profile the task's branch records, "" for the kind's default
+	now      time.Time
+	limit    int
+	headed   bool // a shipment block above holds the task and url rows
 }
 
-// newGateSource binds the gate reads to this target.
-func newGateSource(t *target, events []ledger.Event, h *host) gateSource {
-	src := gateSource{
-		events: events,
-		main:   cmp.Or(t.lay.MainRoot, t.lay.CheckoutRoot),
-		eff:    t.eff,
-		review: t.eff.Review,
-		store:  &lore.Store{Root: loreRootFor(t)},
-		host:   h,
-	}
-
-	src.shared = t.lay.StorageRoot.Path()
-	src.driveFlows = driveFlows(src.shared)
-
-	return src
-}
-
-// renderRun prints one run in the order `f10 state show` prints the same
-// facts, the task's gates under ship when it has them. The root row appears
-// only when listing: for one session it is the directory you are in.
-func renderRun(w io.Writer, r *state.Run, gates []gate, showRoot bool, agent string, now time.Time, limit int) {
-	plain := lipgloss.NewStyle()
-
-	headerRow(w, "task", textx.OrDash(r.Task), limit, plain)
-	headerRow(w, "url", textx.OrDash(r.URL), limit, plain)
-	renderRunRows(w, r, gates, showRoot, agent, now, limit)
-}
-
-// renderRunRows is a run's rows after its task and url, in renderRun's
-// colon-less shape.
-func renderRunRows(w io.Writer, r *state.Run, gates []gate, showRoot bool, agent string, now time.Time, limit int) {
-	for _, f := range runRows(r, gates, showRoot, agent, now) {
-		headerRow(w, f.label, f.value, limit, f.style)
+// runRows prints one run in the headless colon-less shape; every run block
+// without a facts head, `f10 state show` included, prints through it.
+func runRows(w io.Writer, r *state.Run, v runView) {
+	for _, f := range runFacts(r, v) {
+		headerRow(w, f.label, f.value, v.limit, f.style)
 	}
 }
 
-// runRows is a run's rows after its task and url: the step rows a shipment
-// block heads, each styled by its status.
-func runRows(r *state.Run, gates []gate, showRoot bool, agent string, now time.Time) []fact {
+// runFacts is a run's rows as data, each styled by its status, the task's
+// gates under ship when it has them.
+func runFacts(r *state.Run, v runView) []fact {
 	plain := lipgloss.NewStyle()
 	faint := lipgloss.NewStyle().Faint(true)
 
@@ -177,11 +143,16 @@ func runRows(r *state.Run, gates []gate, showRoot bool, agent string, now time.T
 		rows = append(rows, runFact(label, value, style))
 	}
 
-	if agent != "" {
-		add("agent", agent, faint)
+	if !v.headed {
+		add("task", textx.OrDash(r.Task), plain)
+		add("url", textx.OrDash(r.URL), plain)
 	}
 
-	if showRoot {
+	if v.agent != "" {
+		add("agent", v.agent, faint)
+	}
+
+	if v.showRoot {
 		add("root", textx.OrDash(r.Root), faint)
 	}
 
@@ -189,24 +160,14 @@ func runRows(r *state.Run, gates []gate, showRoot bool, agent string, now time.T
 		add(p, r.PhaseText(p), statusStyle(r.Status(p)))
 	}
 
-	for _, g := range gates {
+	for _, g := range v.gates {
 		add("  "+g.shown(), g.text(), statusStyle(g.style()))
 	}
 
-	if r.Note != "" {
-		add("note", r.Note, plain)
-	}
-
-	if r.Next != "" {
-		add("next", r.Next, plain)
-	}
-
-	if r.Ask != "" {
-		add("ask", r.Ask, plain)
-	}
-
-	if r.Wait != "" {
-		add("wait", r.Wait, plain)
+	for _, kv := range [][2]string{{"note", r.Note}, {"next", r.Next}, {"ask", r.Ask}, {"wait", r.Wait}} {
+		if kv[1] != "" {
+			add(kv[0], kv[1], plain)
+		}
 	}
 
 	if final := r.FinalShown(); final != "" {
@@ -215,10 +176,10 @@ func runRows(r *state.Run, gates []gate, showRoot bool, agent string, now time.T
 
 	age := "unknown"
 	if !r.Updated.IsZero() {
-		age = textx.Age(now, r.Updated) + " ago"
+		age = textx.Age(v.now, r.Updated) + " ago"
 	}
 
-	if !r.Live(now, state.TTL()) {
+	if !r.Live(v.now, state.TTL()) {
 		age += " (stale)"
 	}
 

@@ -76,7 +76,11 @@ func TestWriteReportLinksPaths(t *testing.T) {
 
 // The plan row sits in the facts block, which links it once and never wraps.
 func TestStatusFallbackLinksPlan(t *testing.T) {
-	fb := fallback{Task: "GH-1", Root: "/tmp", Plan: "/tmp/.f10/plans/GH-1.md"}
+	fb := taskFallback(
+		taskStatusInput{id: "GH-1", root: "/tmp"},
+		nil,
+		shipment{Task: "GH-1", Plan: "/tmp/.f10/plans/GH-1.md"},
+	)
 
 	withTerminal(t, true)
 
