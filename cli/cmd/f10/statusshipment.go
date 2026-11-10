@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/findings"
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
@@ -145,16 +146,16 @@ func (s *shipment) askPR(ctx context.Context, in taskStatusInput) {
 // the open series are an earlier PR's, dropped as the judge row drops them.
 func shipFiles(root, id string) ([]verdictPath, []reviewPath) {
 	reviews := storage.Root(root).Reviews(id)
-	since := seriesStart(reviews)
+	since := archive.SeriesStart(reviews)
 
 	var (
 		verdicts []verdictPath
 		rounds   []reviewPath
 	)
 
-	for _, v := range judgeFiles(root, id) {
-		if !v.at.Before(since) {
-			verdicts = append(verdicts, verdictPath{Subject: v.judged, Path: v.path})
+	for _, v := range archive.JudgeFiles(root, id) {
+		if !v.At.Before(since) {
+			verdicts = append(verdicts, verdictPath{Subject: v.Judged, Path: v.Path})
 		}
 	}
 

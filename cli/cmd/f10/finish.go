@@ -23,6 +23,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // The finish verb is start's inverse. Nothing local moves until the merge
@@ -93,7 +94,7 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 		return errors.New("--keep keeps a spike's experiment, which has no PR to --merge or leave --local")
 	}
 
-	if err := agents("").Available(); err != nil {
+	if err := worktree.Agents("").Available(); err != nil {
 		return err
 	}
 
@@ -265,7 +266,7 @@ func finishInputFor(t *target.Target, main string, h hostops.Host, task ref.Ref)
 		loreStore:  &lore.Store{Root: loreRootFor(t)},
 		gate:       t.Effective.LoreGate,
 		storage:    t.Layout.StorageRoot,
-		title:      titleLookup(t, task.Number),
+		title:      worktree.TitleLookup(t, task.Number),
 		subtasks:   stack.TrackerFor(t).AllChildren,
 		closeTask:  closeTaskFor(t, h.In(main)),
 	}

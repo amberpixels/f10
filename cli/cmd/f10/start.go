@@ -11,14 +11,18 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // The start verb replaces three hand-offs across three tools, each a place
@@ -37,7 +41,7 @@ func startCommand() *cli.Command {
 			},
 			&cli.BoolFlag{Name: "local", Usage: "ship through the project's local flow: --flow local"},
 			flowFlag(),
-			paceFlag(),
+			runplan.PaceFlag(),
 			&cli.StringFlag{
 				Name:  "after",
 				Usage: "base the branch on `TASK-ID`'s branch and record the dependency: ship rebases onto it, the PR stacks on it; default: the task body's After: line",
@@ -70,8 +74,6 @@ func startCommand() *cli.Command {
 // user talks through in the agent's own pane.
 const (
 	modeDefault = ""
-	modePlan    = "plan"
-	modeDiscuss = "discuss"
 )
 
 func runStart(ctx context.Context, cmd *cli.Command) error {
@@ -80,7 +82,7 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	if err := agents("").Available(); err != nil {
+	if err := worktree.Agents("").Available(); err != nil {
 		return err
 	}
 
@@ -123,7 +125,7 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 		pace:    strings.ToLower(strings.TrimSpace(cmd.String("pace"))),
 		base:    base,
 		storage: t.Layout.StorageRoot,
-		title:   titleLookup(t, r.Number),
+		title:   worktree.TitleLookup(t, r.Number),
 		pick:    pick,
 		note:    note,
 	}
@@ -193,20 +195,20 @@ func startFlags(cmd *cli.Command) (string, string, string, string, error) {
 }
 
 // startTarget reads the project and the flow the run's pace resolves.
-func startTarget(ctx context.Context, cmd *cli.Command, flowName string) (*target.Target, shipFlow, error) {
+func startTarget(ctx context.Context, cmd *cli.Command, flowName string) (*target.Target, runplan.ShipFlow, error) {
 	t, err := target.For(ctx, cmd)
 	if err != nil {
-		return nil, shipFlow{}, err
+		return nil, runplan.ShipFlow{}, err
 	}
 
-	run, err := resolveRun(ctx, t.Effective, runInput{pace: cmd.String("pace")})
+	run, err := runplan.ResolveRun(ctx, t.Effective, runplan.RunInput{Pace: cmd.String("pace")})
 	if err != nil {
-		return nil, shipFlow{}, err
+		return nil, runplan.ShipFlow{}, err
 	}
 
-	fl, err := run.flow(flowName)
+	fl, err := run.Flow(flowName)
 	if err != nil {
-		return nil, shipFlow{}, err
+		return nil, runplan.ShipFlow{}, err
 	}
 
 	return t, fl, nil
@@ -306,24 +308,24 @@ func startDependency(
 // startProfile resolves the agent profile from --agent or --model over the
 // project's default.
 func startProfile(ctx context.Context, cmd *cli.Command, t *target.Target, in *startInput) error {
-	flag, err := profileFlag(cmd.String("agent"), cmd.String("model"))
+	flag, err := runplan.ProfileFlag(cmd.String("agent"), cmd.String("model"))
 	if err != nil {
 		return err
 	}
 
-	run, err := resolveRun(ctx, t.Effective, runInput{pace: cmd.String("pace"), profile: flag})
+	run, err := runplan.ResolveRun(ctx, t.Effective, runplan.RunInput{Pace: cmd.String("pace"), Profile: flag})
 	if err != nil {
 		return err
 	}
 
-	layers, err := run.agents(ctx)
+	layers, err := run.Agents(ctx)
 	if err != nil {
 		return err
 	}
 
-	resolved := layers.profileFor(facts.AgentKeyDefault, "")
+	resolved := layers.ProfileFor(facts.AgentKeyDefault, "")
 	in.profile, in.profileFlagged = resolved.Profile, flag != ""
-	in.notes = append(resolved.lines(claudeSettingsPath()), in.notes...)
+	in.notes = append(resolved.Lines(runplan.ClaudeSettingsPath()), in.notes...)
 
 	return nil
 }
@@ -333,12 +335,12 @@ func startProfile(ctx context.Context, cmd *cli.Command, t *target.Target, in *s
 func afterStart(ctx context.Context, cmd *cli.Command, t *target.Target, r ref.Ref, suffix string) {
 	// the task is already open, so a failed launch record is a line, not a
 	// failed start
-	launch := state.Launch{Kind: state.LaunchStart, Value: r.Label() + suffixOf(suffix)}
-	if err := state.AppendLaunch(state.Dir(), state.Session(), launch); err != nil {
+	launched := state.Launch{Kind: state.LaunchStart, Value: r.Label() + worktree.SuffixOf(suffix)}
+	if err := state.AppendLaunch(state.Dir(), state.Session(), launched); err != nil {
 		ui.Warnf(cmd.ErrWriter, "recording the launch: %v", err)
 	}
 
-	watchProject(ctx, cmd.ErrWriter, t)
+	driverec.WatchProject(ctx, cmd.ErrWriter, t)
 
 	sweepIfDue(ctx, cmd.ErrWriter, filepath.Join(t.Layout.StorageRoot.Path(), janitorStamp), time.Now(),
 		func(ctx context.Context) ([]string, error) { return janitor(ctx, janitorFor(t)) })
@@ -348,7 +350,7 @@ func afterStart(ctx context.Context, cmd *cli.Command, t *target.Target, r ref.R
 // and wait are plain text, and a driven chain's arguments belong to its
 // skills.
 func refuseNote(mode string, pick *hostops.Pickup, note string) error {
-	if note == "" || mode == modeDiscuss || (pick != nil && mode != modePlan) {
+	if note == "" || mode == launch.ModeDiscuss || (pick != nil && mode != launch.ModePlan) {
 		return nil
 	}
 
@@ -359,7 +361,7 @@ func refuseNote(mode string, pick *hostops.Pickup, note string) error {
 // refuseLandedPlan stops --plan on a merged or closed PR: its diff is no
 // starting point once it landed, and going on from it is a task of its own.
 func refuseLandedPlan(mode string, pick *hostops.Pickup) error {
-	if pick == nil || !pick.Landed() || mode != modePlan {
+	if pick == nil || !pick.Landed() || mode != launch.ModePlan {
 		return nil
 	}
 
@@ -385,7 +387,7 @@ func refusePickupFlags(flow, after, base string) error {
 func startMode(cmd *cli.Command) (string, error) {
 	var set []string
 
-	for _, m := range []string{modePlan, modeDiscuss} {
+	for _, m := range []string{launch.ModePlan, launch.ModeDiscuss} {
 		if cmd.Bool(m) {
 			set = append(set, "--"+m)
 		}

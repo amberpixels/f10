@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
@@ -36,10 +37,10 @@ func (k landingKind) landed() bool {
 type landing struct {
 	rows  []render.Fact
 	notes []string
-	ended string     // what already happened, for an error after it
-	end   *seriesEnd // what closes the review series; nil moves the rounds unclosed
-	hand  []string   // the handoff printed under the report, set only on a merge
-	kept  string     // the kept/ branch a spike's experiment goes to, "" to discard it
+	ended string             // what already happened, for an error after it
+	end   *archive.SeriesEnd // what closes the review series; nil moves the rounds unclosed
+	hand  []string           // the handoff printed under the report, set only on a merge
+	kept  string             // the kept/ branch a spike's experiment goes to, "" to discard it
 }
 
 func land(ctx context.Context, w io.Writer, in finishInput, d finishDecision, errs *cleanupErrs) (landing, error) {
@@ -106,7 +107,7 @@ func landMerge(ctx context.Context, w io.Writer, in finishInput, d finishDecisio
 	l := landing{
 		ended: p.URL + " merged",
 		// read before the merge, while the branch tip it was written at still exists
-		hand: handoffLines(taskHandoff(in.storage, in.task.ID), in.task.ID, branchTip(ctx, in.main, name, p)),
+		hand: handoffLines(archive.TaskHandoff(in.storage, in.task.ID), in.task.ID, branchTip(ctx, in.main, name, p)),
 	}
 
 	recordLanded := sizeRecorder(ctx, in, name, def, unpushed)
@@ -142,9 +143,9 @@ func landMerge(ctx context.Context, w io.Writer, in finishInput, d finishDecisio
 		sha = p.Landed
 	}
 
-	l.end = &seriesEnd{pr: "none", head: sha}
+	l.end = &archive.SeriesEnd{Pr: "none", Head: sha}
 	if !unpushed {
-		l.end.pr = pullNumber(p.URL)
+		l.end.Pr = pullNumber(p.URL)
 	}
 
 	notes = appendNote(notes, d.loreNote)

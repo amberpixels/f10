@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,10 +11,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/facts"
-	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/scope"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -23,10 +23,6 @@ import (
 // init registers a project by writing its project.md: the file's existence is
 // the membership rule, since no filesystem heuristic tells a vendored fork
 // from a checkout someone works in.
-
-// excludeLine is spelled as a repo that did it by hand would, so an existing
-// entry is found.
-const excludeLine = ".f10/"
 
 func initCommand() *cli.Command {
 	return &cli.Command{
@@ -59,8 +55,8 @@ func runInit(ctx context.Context, cmd *cli.Command) error {
 	var excluded string
 
 	if t.Effective.Storage == "in-repo" && t.Effective.Visibility == "stealth" {
-		if excluded, err = excludeF10(ctx, lay.CheckoutRoot); err != nil {
-			return fmt.Errorf("excluding %s: %w", excludeLine, err)
+		if excluded, err = archive.ExcludeF10(ctx, lay.CheckoutRoot); err != nil {
+			return fmt.Errorf("excluding %s: %w", archive.ExcludeLine, err)
 		}
 	}
 
@@ -113,52 +109,6 @@ func writeNew(path, content string) error {
 	return f.Close()
 }
 
-// excludeF10 appends the entry to info/exclude rather than .gitignore, so the
-// ignore itself is never committed.
-func excludeF10(ctx context.Context, root string) (string, error) {
-	named := gitx.Out(ctx, root, "rev-parse", "--git-path", "info/exclude")
-	if named == "" {
-		return "", errors.New("git could not name info/exclude")
-	}
-
-	path := named
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(root, named)
-	}
-
-	data, err := os.ReadFile(path)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return "", fmt.Errorf("reading %s: %w", path, err)
-	}
-
-	for line := range strings.SplitSeq(string(data), "\n") {
-		if strings.TrimSpace(line) == excludeLine {
-			return "already in " + path, nil
-		}
-	}
-
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-		return "", fmt.Errorf("creating %s: %w", filepath.Dir(path), err)
-	}
-
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
-	if err != nil {
-		return "", fmt.Errorf("opening %s: %w", path, err)
-	}
-	defer f.Close()
-
-	entry := excludeLine + "\n"
-	if len(data) > 0 && !strings.HasSuffix(string(data), "\n") {
-		entry = "\n" + entry
-	}
-
-	if _, err := f.WriteString(entry); err != nil {
-		return "", fmt.Errorf("appending to %s: %w", path, err)
-	}
-
-	return excludeLine + " in " + path, f.Close()
-}
-
 // report's last row is the one fact no probe reaches: a human still owes the
 // project its one-liner.
 func report(w io.Writer, path, excluded string, d *facts.Draft) {
@@ -166,19 +116,19 @@ func report(w io.Writer, path, excluded string, d *facts.Draft) {
 	faint := lipgloss.NewStyle().Faint(true)
 	limit := ui.Width(w)
 
-	linkedHeaderRow(w, "wrote", path, wroteLink(w, path), limit, plain)
-	headerRow(w, "sections", strings.Join(d.Sections, ", "), limit, plain)
+	scope.LinkedHeaderRow(w, "wrote", path, wroteLink(w, path), limit, plain)
+	scope.HeaderRow(w, "sections", strings.Join(d.Sections, ", "), limit, plain)
 
 	if excluded != "" {
-		headerRow(w, "excluded", excluded, limit, plain)
+		scope.HeaderRow(w, "excluded", excluded, limit, plain)
 	}
 
 	if len(d.Omitted) > 0 {
-		headerRow(w, "left out", strings.Join(d.Omitted, ", ")+" - undeclared, so the contract's defaults hold",
+		scope.HeaderRow(w, "left out", strings.Join(d.Omitted, ", ")+" - undeclared, so the contract's defaults hold",
 			limit, faint)
 	}
 
-	headerRow(w, "next", "write the Project line: what this project is, in a sentence", limit, plain)
+	scope.HeaderRow(w, "next", "write the Project line: what this project is, in a sentence", limit, plain)
 }
 
 // wroteLink is the file:// url of the written project.md, on a terminal only.

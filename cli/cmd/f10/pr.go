@@ -14,6 +14,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/reviews"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -142,31 +143,31 @@ func runPRBase(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	s, err := resolvePRSubject(ctx, t, cmd.Args().First())
+	s, err := reviews.ResolvePRSubject(ctx, t, cmd.Args().First())
 	if err != nil {
 		return err
 	}
 
-	if s.lookupErr != nil {
-		ui.Warnf(cmd.ErrWriter, "no PR read (%v), so the base is the recorded or default branch", s.lookupErr)
+	if s.LookupErr != nil {
+		ui.Warnf(cmd.ErrWriter, "no PR read (%v), so the base is the recorded or default branch", s.LookupErr)
 	}
 
 	// the same base diff forks from, so a step reading both sees one answer;
 	// a gone recorded base is said below as a typed line, not a warning
-	base, err := s.base(ctx, io.Discard)
+	base, err := s.Base(ctx, io.Discard)
 	if err != nil {
 		return err
 	}
 
-	if cmd.Bool("origin") && stack.RefSHA(ctx, s.main, "refs/remotes/origin/"+base) == "" {
+	if cmd.Bool("origin") && stack.RefSHA(ctx, s.Main, "refs/remotes/origin/"+base) == "" {
 		return fmt.Errorf("the base %s is not on origin: push it first", base)
 	}
 
 	out := base + "\n"
 
-	if s.target == "" {
+	if s.Target == "" {
 		// the same found: value pr catchup prints, so both steps key off one word
-		after, sha, err := stack.RecordedBase(ctx, s.main, s.branch)
+		after, sha, err := stack.RecordedBase(ctx, s.Main, s.Branch)
 		if err != nil {
 			return err
 		}
@@ -189,24 +190,24 @@ func runPRDiff(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	s, err := resolvePRSubject(ctx, t, cmd.Args().First())
+	s, err := reviews.ResolvePRSubject(ctx, t, cmd.Args().First())
 	if err != nil {
 		return err
 	}
 
-	if s.lookupErr != nil {
-		ui.Warnf(cmd.ErrWriter, "no PR read (%v), so the base is the recorded or default branch", s.lookupErr)
+	if s.LookupErr != nil {
+		ui.Warnf(cmd.ErrWriter, "no PR read (%v), so the base is the recorded or default branch", s.LookupErr)
 	}
 
 	var out string
 
-	if s.number > 0 && !s.here {
+	if s.Number > 0 && !s.Here {
 		h, err := hostops.HostOf(t)
 		if err != nil {
 			return err
 		}
 
-		if out, err = h.PullDiff(ctx, s.number); err != nil {
+		if out, err = h.PullDiff(ctx, s.Number); err != nil {
 			return err
 		}
 
@@ -214,26 +215,26 @@ func runPRDiff(ctx context.Context, cmd *cli.Command) error {
 			out = patchFiles(out)
 		}
 	} else {
-		base, err := s.base(ctx, cmd.ErrWriter)
+		base, err := s.Base(ctx, cmd.ErrWriter)
 		if err != nil {
 			return err
 		}
 
-		dir := cmp.Or(s.path, s.main)
+		dir := cmp.Or(s.Path, s.Main)
 
 		args := []string{"diff"}
 		if cmd.Bool("name-only") {
 			args = append(args, "--name-only")
 		}
 
-		head := s.headRef()
-		if s.here {
-			if head, err = capturedHead(ctx, dir); err != nil {
+		head := s.HeadRef()
+		if s.Here {
+			if head, err = reviews.CapturedHead(ctx, dir); err != nil {
 				return err
 			}
 		}
 
-		into, tree, err := mergedTree(ctx, dir, head, base)
+		into, tree, err := reviews.MergedTree(ctx, dir, head, base)
 		if err == nil {
 			out, err = gitx.Exec(ctx, dir, append(args, into, tree)...)
 		}
@@ -249,7 +250,7 @@ func runPRDiff(ctx context.Context, cmd *cli.Command) error {
 
 			ui.Warnf(cmd.ErrWriter,
 				"%s merged into %s shows nothing new (%s), so the diff is from where it forked",
-				s.branch, base, why)
+				s.Branch, base, why)
 
 			from, err := stack.ForkPoint(ctx, dir, head, base)
 			if err != nil {
@@ -293,33 +294,33 @@ func runPRView(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	s, err := resolvePRSubject(ctx, t, cmd.Args().First())
+	s, err := reviews.ResolvePRSubject(ctx, t, cmd.Args().First())
 	if err != nil {
 		return err
 	}
 
-	base, err := s.base(ctx, cmd.ErrWriter)
+	base, err := s.Base(ctx, cmd.ErrWriter)
 	if err != nil {
 		return err
 	}
 
 	var b strings.Builder
 
-	fmt.Fprintf(&b, "branch: %s\nbase: %s\n", s.branch, base)
+	fmt.Fprintf(&b, "branch: %s\nbase: %s\n", s.Branch, base)
 
-	if s.task != nil {
-		fmt.Fprintf(&b, "task: %s\n", s.task.Label())
+	if s.Task != nil {
+		fmt.Fprintf(&b, "task: %s\n", s.Task.Label())
 	}
 
-	if s.lookupErr != nil {
-		fmt.Fprintf(&b, "\nno PR read for %s: %v\n", s.branch, s.lookupErr)
+	if s.LookupErr != nil {
+		fmt.Fprintf(&b, "\nno PR read for %s: %v\n", s.Branch, s.LookupErr)
 		_, err = io.WriteString(cmd.Writer, b.String())
 
 		return err
 	}
 
-	if s.number == 0 {
-		fmt.Fprintf(&b, "\nno open PR for %s\n", s.branch)
+	if s.Number == 0 {
+		fmt.Fprintf(&b, "\nno open PR for %s\n", s.Branch)
 		_, err = io.WriteString(cmd.Writer, b.String())
 
 		return err
@@ -330,7 +331,7 @@ func runPRView(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	p, err := h.PR(ctx, strconv.Itoa(s.number))
+	p, err := h.PR(ctx, strconv.Itoa(s.Number))
 	if err != nil {
 		return err
 	}
@@ -347,7 +348,7 @@ func runPRView(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if cmd.Bool("comments") {
-		comments, err := h.PullComments(ctx, s.number)
+		comments, err := h.PullComments(ctx, s.Number)
 		if err != nil {
 			return err
 		}
@@ -381,17 +382,17 @@ func runPROpen(ctx context.Context, cmd *cli.Command) error {
 
 	// a bare number is a request; anything else names a task, whose open
 	// request opens, else its last one
-	if number != "" && pullNumberOf(number) == 0 {
-		s, err := resolvePRSubject(ctx, t, number)
+	if number != "" && reviews.PullNumberOf(number) == 0 {
+		s, err := reviews.ResolvePRSubject(ctx, t, number)
 		if err != nil {
 			return err
 		}
 
-		if s.number == 0 {
-			return fmt.Errorf("%s has no PR: its branch %s was never opened as one", number, s.branch)
+		if s.Number == 0 {
+			return fmt.Errorf("%s has no PR: its branch %s was never opened as one", number, s.Branch)
 		}
 
-		number = strconv.Itoa(s.number)
+		number = strconv.Itoa(s.Number)
 	}
 
 	switch {
@@ -401,7 +402,7 @@ func runPROpen(ctx context.Context, cmd *cli.Command) error {
 			return err
 		}
 
-		return writeRows(cmd.Writer, rows, "no open requests")
+		return hostops.WriteRows(cmd.Writer, rows, "no open requests")
 	case number == "":
 		url, err := h.PullsURL(ctx)
 		if err != nil {

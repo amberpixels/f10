@@ -141,7 +141,7 @@ func TestWakeReturnsOnAWrite(t *testing.T) {
 }
 
 func TestDriveEnv(t *testing.T) {
-	got := driveEnv([]string{
+	got := daemon.DriveEnv([]string{
 		"PATH=/bin", "HOME=/h", "GH_TOKEN=x", "HERDR_ENV=1", "AWS_PROFILE=p", "SECRET=s", "LC_ALL=C", "ZIG=z",
 	}, []string{"ZIG"})
 

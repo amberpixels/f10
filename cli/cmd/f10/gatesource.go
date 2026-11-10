@@ -18,6 +18,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/reviews"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
@@ -145,17 +147,17 @@ func (src gateSource) pipeline(ctx context.Context, name, branch, pace string) f
 		return declared.Ship()
 	}
 
-	in := runInput{pace: pace}
+	in := runplan.RunInput{Pace: pace}
 	if src.main != "" {
-		in.main, in.branch = src.main, branch
+		in.Main, in.Branch = src.main, branch
 	}
 
-	run, err := resolveRun(ctx, src.eff, in)
+	run, err := runplan.ResolveRun(ctx, src.eff, in)
 	if err != nil {
 		return declared.Ship()
 	}
 
-	entries, err := run.entries(name)
+	entries, err := run.Entries(name)
 	if err != nil {
 		return declared.Ship()
 	}
@@ -180,11 +182,11 @@ func readRemote(ctx context.Context, h hostops.Host, f facts.Review, branch stri
 		return remoteState{}
 	}
 
-	rv, err := newReviewer(ctx, h, f, path.Base(p.URL))
+	rv, err := reviews.NewReviewer(ctx, h, f, path.Base(p.URL))
 	if err == nil {
-		var r remoteReview
+		var r reviews.RemoteReview
 
-		r, err = rv.latest(ctx)
+		r, err = rv.Latest(ctx)
 		if err == nil {
 			return remoteState{found: true, done: r.Done, handled: r.Handled, settled: r.Settled}
 		}
@@ -193,7 +195,7 @@ func readRemote(ctx context.Context, h hostops.Host, f facts.Review, branch stri
 	switch {
 	case ctx.Err() != nil:
 		return remoteState{err: ctx.Err()}
-	case errors.Is(err, errNoReview):
+	case errors.Is(err, reviews.ErrNoReview):
 		return remoteState{}
 	}
 

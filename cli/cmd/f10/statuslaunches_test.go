@@ -265,12 +265,12 @@ func TestBareStatusBranchBaseBeatsTheDrives(t *testing.T) {
 func TestBareStatusIgnoresAFinishedBase(t *testing.T) {
 	fx := newLaunchFixture(t)
 
-	archive := filepath.Join(fx.repo, ".f10", "plans", "archive")
-	if err := os.MkdirAll(archive, 0o750); err != nil {
+	archived := filepath.Join(fx.repo, ".f10", "plans", "archive")
+	if err := os.MkdirAll(archived, 0o750); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := os.WriteFile(filepath.Join(archive, "DM-5.1.md"), []byte("# plan\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(archived, "DM-5.1.md"), []byte("# plan\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -346,12 +346,12 @@ func TestBareStatusDropsFinishedStarts(t *testing.T) {
 
 	fx.worktree(t, "DM-1", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
 
-	archive := filepath.Join(fx.repo, ".f10", "plans", "archive")
-	if err := os.MkdirAll(archive, 0o750); err != nil {
+	archived := filepath.Join(fx.repo, ".f10", "plans", "archive")
+	if err := os.MkdirAll(archived, 0o750); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := os.WriteFile(filepath.Join(archive, "DM-5.1.md"), []byte("# plan\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(archived, "DM-5.1.md"), []byte("# plan\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 

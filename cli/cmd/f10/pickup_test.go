@@ -13,8 +13,11 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/launch"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/ui"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 func TestPullToken(t *testing.T) {
@@ -35,7 +38,7 @@ func TestPullToken(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		number, probe := pullToken(c.token)
+		number, probe := worktree.PullToken(c.token)
 		if number != c.number || probe != c.probe {
 			t.Errorf("pullToken(%q) = %q, %v; want %q, %v", c.token, number, probe, c.number, c.probe)
 		}
@@ -262,27 +265,27 @@ func TestFetchPickup(t *testing.T) {
 // A picked-up PR is summarised and discussed with no driven marker, or
 // planned from its diff with --plan; never shipped.
 func TestPromptForAPickup(t *testing.T) {
-	for _, mode := range []string{modeDefault, modeDiscuss} {
-		got := prompt(mode, shipFlow{}, "GH-1", nil, "", pickGH, "")
+	for _, mode := range []string{modeDefault, launch.ModeDiscuss} {
+		got := launch.Prompt(mode, runplan.ShipFlow{}, "GH-1", nil, "", pickGH, "")
 		for _, want := range []string{"f10 task read GH-1", "f10 pr view --comments 30", "f10 pr diff 30", "stop and wait"} {
 			if !strings.Contains(got, want) {
 				t.Errorf("prompt(%q) for a PR = %q, missing %q", mode, got, want)
 			}
 		}
 
-		if strings.Contains(got, drivenMarker) || strings.Contains(got, "/f10:ship") {
+		if strings.Contains(got, launch.DrivenMarker) || strings.Contains(got, "/f10:ship") {
 			t.Errorf("prompt(%q) for a PR = %q, want plain text with no ship", mode, got)
 		}
 	}
 
-	want := "/f10:plan GH-1 continue PR " + pickGH.URL + ": its diff is the starting point " + drivenMarker
-	if got := prompt(modePlan, shipFlow{}, "GH-1", nil, "", pickGH, ""); got != want {
+	want := "/f10:plan GH-1 continue PR " + pickGH.URL + ": its diff is the starting point " + launch.DrivenMarker
+	if got := launch.Prompt(launch.ModePlan, runplan.ShipFlow{}, "GH-1", nil, "", pickGH, ""); got != want {
 		t.Errorf("prompt(plan) for a PR = %q, want %q", got, want)
 	}
 
-	if got := prompt(
+	if got := launch.Prompt(
 		modeDefault,
-		shipFlow{},
+		runplan.ShipFlow{},
 		"GH-1",
 		nil,
 		"/p/GH-1.md",
@@ -295,7 +298,7 @@ func TestPromptForAPickup(t *testing.T) {
 		t.Errorf("prompt for a PR with a plan = %q, want the plan named", got)
 	}
 
-	got := prompt(modeDefault, shipFlow{}, "GH-1", nil, "", pickMerged, "")
+	got := launch.Prompt(modeDefault, runplan.ShipFlow{}, "GH-1", nil, "", pickMerged, "")
 	if !strings.Contains(got, "that the PR is merged by alice on 2026-10-12 and what its diff does") ||
 		strings.Contains(got, "open threads") {
 		t.Errorf("prompt for a merged PR = %q, want its state named before the diff", got)
@@ -304,7 +307,7 @@ func TestPromptForAPickup(t *testing.T) {
 
 // --plan on a landed PR is refused: going on from it is a task of its own.
 func TestRefuseLandedPlan(t *testing.T) {
-	err := refuseLandedPlan(modePlan, pickMerged)
+	err := refuseLandedPlan(launch.ModePlan, pickMerged)
 	if err == nil || !strings.Contains(err.Error(), "merged by alice") {
 		t.Errorf("--plan on a merged PR = %v, want a refusal naming its state", err)
 	}
@@ -312,7 +315,7 @@ func TestRefuseLandedPlan(t *testing.T) {
 	for _, c := range []struct {
 		mode string
 		pick *hostops.Pickup
-	}{{modeDefault, pickMerged}, {modeDiscuss, pickMerged}, {modePlan, pickGH}, {modePlan, nil}} {
+	}{{modeDefault, pickMerged}, {launch.ModeDiscuss, pickMerged}, {launch.ModePlan, pickGH}, {launch.ModePlan, nil}} {
 		if err := refuseLandedPlan(c.mode, c.pick); err != nil {
 			t.Errorf("refuseLandedPlan(%q, %v) = %v, want nil", c.mode, c.pick, err)
 		}
@@ -349,9 +352,9 @@ func TestStartPicksUpAPR(t *testing.T) {
 			"GH-1",
 			"",
 			wt,
-		)+" "+prompt(
+		)+" "+launch.Prompt(
 			modeDefault,
-			shipFlow{},
+			runplan.ShipFlow{},
 			"GH-1",
 			nil,
 			"",
@@ -406,7 +409,7 @@ func TestStartPicksUpAMergedPR(t *testing.T) {
 	f.script("herdr agent start "+agentctl.AgentName("GH-1", "", wt)+" --kind claude --pane pane:7", "{}")
 	f.script(
 		"herdr agent prompt "+agentctl.AgentName("GH-1", "", wt)+" "+
-			prompt(modeDefault, shipFlow{}, "GH-1", nil, "", pickMerged, ""),
+			launch.Prompt(modeDefault, runplan.ShipFlow{}, "GH-1", nil, "", pickMerged, ""),
 		"{}",
 	)
 
@@ -456,7 +459,7 @@ func TestStartPicksUpAMergedPROnItsOwnBranch(t *testing.T) {
 	f.script("herdr agent start "+agentctl.AgentName("GH-1", "", wt)+" --kind claude --pane pane:7", "{}")
 	f.script(
 		"herdr agent prompt "+agentctl.AgentName("GH-1", "", wt)+" "+
-			prompt(modeDefault, shipFlow{}, "GH-1", nil, "", pickMerged, ""),
+			launch.Prompt(modeDefault, runplan.ShipFlow{}, "GH-1", nil, "", pickMerged, ""),
 		"{}",
 	)
 
@@ -502,9 +505,9 @@ func TestStartTracksAnOriginOnlyBranch(t *testing.T) {
 			"GH-1",
 			"",
 			wt,
-		)+" "+prompt(
+		)+" "+launch.Prompt(
 			modeDefault,
-			shipFlow{},
+			runplan.ShipFlow{},
 			"GH-1",
 			nil,
 			"",
@@ -586,7 +589,7 @@ func TestLocalPolicySkipsForeignLinksAndOrigin(t *testing.T) {
 	f.script(refsLocal, "")
 	f.script(allHeads, "refs/heads/feat/GH-1-fix\nrefs/heads/feat/GH-1-other\n")
 
-	got, err := indexOf(t).Find(t.Context(), "GH-1", "GH-1", "", policyLocal)
+	got, err := indexOf(t).Find(t.Context(), "GH-1", "GH-1", "", stack.PolicyLocal)
 	if err != nil || got != (stack.FoundBranch{Name: "feat/GH-1-other"}) {
 		t.Errorf("a name linked to another task = %+v, %v; want feat/GH-1-other alone", got, err)
 	}
@@ -594,7 +597,7 @@ func TestLocalPolicySkipsForeignLinksAndOrigin(t *testing.T) {
 	f.script(allHeads, "")
 	f.script(refsOrigin, "refs/remotes/origin/GH-1/a\n")
 
-	got, err = indexOf(t).Find(t.Context(), "GH-1", "GH-1", "", policyLocal)
+	got, err = indexOf(t).Find(t.Context(), "GH-1", "GH-1", "", stack.PolicyLocal)
 	if err != nil || got != (stack.FoundBranch{}) {
 		t.Errorf("an origin-only branch under the local policy = %+v, %v; want none", got, err)
 	}

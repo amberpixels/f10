@@ -8,6 +8,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta/branchmetatest"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/target"
 )
 
@@ -20,7 +21,7 @@ func TestResolveRunPaceOrder(t *testing.T) {
 		{flag: "Fast", recorded: "slow", def: "ultra", want: "fast", origin: "--pace"},
 		{recorded: "slow", def: "ultra", want: "slow", origin: "recorded on branch GH-1"},
 		{def: "ultra", want: "ultra", origin: "declared (user, /u/paces.md)"},
-		{want: "medium", origin: paceOriginDefault},
+		{want: "medium", origin: runplan.PaceOriginDefault},
 	} {
 		meta := branchmetatest.Use(t)
 		meta.Seed("GH-1", branchmeta.Pace, tc.recorded)
@@ -30,14 +31,18 @@ func TestResolveRunPaceOrder(t *testing.T) {
 			eff.PaceSet.Default, eff.PaceSet.DefaultOrigin = tc.def, facts.DeclaredByUser("/u/paces.md")
 		}
 
-		run, err := resolveRun(t.Context(), eff, runInput{pace: tc.flag, main: "/code/repo", branch: "GH-1"})
-		if err != nil || run.pace.name != tc.want || run.pace.origin != tc.origin {
+		run, err := runplan.ResolveRun(
+			t.Context(),
+			eff,
+			runplan.RunInput{Pace: tc.flag, Main: "/code/repo", Branch: "GH-1"},
+		)
+		if err != nil || run.Pace.Name != tc.want || run.Pace.Origin != tc.origin {
 			t.Errorf("%+v: pace %+v, %v", tc, run, err)
 		}
 	}
 
 	eff := &facts.Effective{PaceSet: facts.NewPaceSet()}
-	if _, err := resolveRun(t.Context(), eff, runInput{pace: "brisk"}); err == nil ||
+	if _, err := runplan.ResolveRun(t.Context(), eff, runplan.RunInput{Pace: "brisk"}); err == nil ||
 		!strings.Contains(err.Error(), "the paces are fast, medium, slow, ultra") {
 		t.Errorf("an unknown pace = %v", err)
 	}

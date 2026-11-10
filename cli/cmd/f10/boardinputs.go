@@ -15,11 +15,15 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/reviews"
+	"github.com/amberpixels/f10/cli/internal/scope"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
-func boardPeople(people []person) []lookaround.Person {
+func boardPeople(people []scope.Person) []lookaround.Person {
 	out := make([]lookaround.Person, 0, len(people))
 	for _, p := range people {
 		out = append(out, lookaround.Person{Name: p.Name, Tracker: p.Tracker, Host: p.Host, Emails: p.Emails})
@@ -32,16 +36,21 @@ func boardPeople(people []person) []lookaround.Person {
 // a board whose sources all failed, so the others still render. The feed's
 // span is chosen once every entry's facts are in: the day is the person's.
 func collectBoards(
-	ctx context.Context, entries []scopeEntry, warn io.Writer, now time.Time, span boardSpan, stateView, remote bool,
+	ctx context.Context,
+	entries []scope.ScopeEntry,
+	warn io.Writer,
+	now time.Time,
+	span boardSpan,
+	stateView, remote bool,
 	people []lookaround.Person,
 ) []lookaround.Board {
 	facts := make([]*lookaround.Facts, len(entries))
-	sem := make(chan struct{}, scopeParallel)
+	sem := make(chan struct{}, scope.ScopeParallel)
 
 	var wg sync.WaitGroup
 
 	for i, e := range entries {
-		if e.err != nil {
+		if e.Err != nil {
 			continue
 		}
 
@@ -50,10 +59,10 @@ func collectBoards(
 			defer func() { <-sem }()
 
 			var in lookaround.Inputs
-			if e.repo != nil {
-				in = repoInputs(*e.repo, warn, span.from())
+			if e.Repo != nil {
+				in = repoInputs(*e.Repo, warn, span.from())
 			} else {
-				in = boardInputs(ctx, e.target, warn, span.from(), remote)
+				in = boardInputs(ctx, e.Target, warn, span.from(), remote)
 			}
 
 			in.People, in.Feed = people, !stateView
@@ -89,9 +98,9 @@ func collectBoards(
 
 	for i, e := range entries {
 		switch {
-		case e.err != nil:
-			p := lookaround.Project{ID: e.id, Name: filepath.Base(e.main), Checkout: e.main}
-			boards[i] = lookaround.Unreachable(p, e.err, now, w, view)
+		case e.Err != nil:
+			p := lookaround.Project{ID: e.Id, Name: filepath.Base(e.Main), Checkout: e.Main}
+			boards[i] = lookaround.Unreachable(p, e.Err, now, w, view)
 		case stateView:
 			boards[i] = lookaround.Derive(*facts[i], now, w.Since)
 		default:
@@ -125,12 +134,12 @@ func boardInputs(
 	}
 
 	in.Tasks = func(ctx context.Context) ([]lookaround.Task, error) {
-		rows, err := taskRows(ctx, t, boardPage)
+		rows, err := stack.TaskRows(ctx, t, boardPage)
 		if err != nil {
 			return nil, err
 		}
 
-		return boardTasks(settlePriorities(rows, warn), t.Effective.IDPrefix), nil
+		return boardTasks(hostops.SettlePriorities(rows, warn), t.Effective.IDPrefix), nil
 	}
 
 	if t.Probes.RemoteURL == "" {
@@ -147,15 +156,15 @@ func boardInputs(
 
 		if t.Effective.Review.Remote() {
 			in.RemoteOpen = func(ctx context.Context, number int) (bool, error) {
-				rv, err := newReviewer(ctx, h, t.Effective.Review, strconv.Itoa(number))
+				rv, err := reviews.NewReviewer(ctx, h, t.Effective.Review, strconv.Itoa(number))
 				if err != nil {
 					return false, err
 				}
 
-				switch _, err := rv.pick(ctx); {
+				switch _, err := rv.Pick(ctx); {
 				case err == nil:
 					return true, nil
-				case errors.Is(err, errNoReview):
+				case errors.Is(err, reviews.ErrNoReview):
 					return false, nil
 				default:
 					return false, err
@@ -171,7 +180,7 @@ func boardInputs(
 			TTL:        state.TTL(),
 			LedgerPath: ledger.Path(),
 			ProjectID:  place.Project,
-			Agents:     reachableAgents(main),
+			Agents:     worktree.ReachableAgents(main),
 			SharedRoot: t.Layout.StorageRoot,
 			Resolve:    t.IDOf(ctx),
 		}
@@ -182,11 +191,11 @@ func boardInputs(
 
 // repoInputs binds the collectors to a repository with no checkout: its host
 // alone, no driver, no priority labels, nothing local, as --remote reads.
-func repoInputs(r repoRef, warn io.Writer, since time.Time) lookaround.Inputs {
-	h := hostops.Host{Name: r.CLI, Repo: r.repo()}
+func repoInputs(r scope.RepoRef, warn io.Writer, since time.Time) lookaround.Inputs {
+	h := hostops.Host{Name: r.CLI, Repo: r.Repo()}
 
 	return lookaround.Inputs{
-		Project: lookaround.Project{ID: r.id(), Name: r.name(), Host: r.CLI, Remote: true},
+		Project: lookaround.Project{ID: r.Id(), Name: r.Name(), Host: r.CLI, Remote: true},
 		Prefix:  r.Prefix,
 		Since:   since,
 		Host:    &h.Host,
@@ -196,7 +205,7 @@ func repoInputs(r repoRef, warn io.Writer, since time.Time) lookaround.Inputs {
 				return nil, err
 			}
 
-			return boardTasks(settlePriorities(rows, warn), r.Prefix), nil
+			return boardTasks(hostops.SettlePriorities(rows, warn), r.Prefix), nil
 		},
 	}
 }

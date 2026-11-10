@@ -10,6 +10,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/asknotify"
 	"github.com/amberpixels/f10/cli/internal/asks"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -153,8 +154,8 @@ func writeState(ctx context.Context, cmd *cli.Command, kind string, apply func(r
 	// every driven ask goes to the inbox, a drive's or not
 	if kind == "state_ask" {
 		if cwd, err := os.Getwd(); err == nil {
-			if a, ok := askFromRun(ctx, r, cwd); ok {
-				raiseAsk(ctx, cmd.ErrWriter, asks.Dir(), a, now, askNotifier)
+			if a, ok := asknotify.AskFromRun(ctx, r, cwd); ok {
+				asknotify.RaiseAsk(ctx, cmd.ErrWriter, asks.Dir(), a, now, asknotify.AskNotifier)
 			}
 		}
 	}

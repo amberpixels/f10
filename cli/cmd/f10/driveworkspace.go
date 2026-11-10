@@ -7,6 +7,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 func (in *driveInput) prTarget(ctx context.Context, r *driveRun) (stack.PRTarget, error) {
@@ -23,7 +24,7 @@ func (in *driveInput) look(ctx context.Context, r *driveRun) (*agentctl.Workspac
 		return ws, run, err
 	}
 
-	wss, err := agents(in.main).Workspaces(ctx)
+	wss, err := worktree.Agents(in.main).Workspaces(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -39,7 +40,12 @@ func (in *driveInput) look(ctx context.Context, r *driveRun) (*agentctl.Workspac
 }
 
 func (in *driveInput) workspaceGone(r *driveRun) error {
-	return fmt.Errorf("%s no longer shows workspace %s, which showed %s", agents(in.main).Name(), r.o.ws.ID, r.o.path)
+	return fmt.Errorf(
+		"%s no longer shows workspace %s, which showed %s",
+		worktree.Agents(in.main).Name(),
+		r.o.ws.ID,
+		r.o.path,
+	)
 }
 
 func workspaceName(ws *agentctl.Workspace) string {
@@ -61,7 +67,7 @@ type tickView struct {
 
 // lookAll is one tick's view.
 func (in *driveInput) lookAll(ctx context.Context) (*tickView, error) {
-	wss, err := agents(in.main).Workspaces(ctx)
+	wss, err := worktree.Agents(in.main).Workspaces(ctx)
 	if err != nil {
 		return nil, err
 	}

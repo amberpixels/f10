@@ -11,6 +11,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/reviews"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -96,7 +97,7 @@ func reviewCommand() *cli.Command {
 }
 
 // remoteReviewer refuses before any host call, each refusal naming what to fix.
-func remoteReviewer(ctx context.Context, cmd *cli.Command) (*reviewer, error) {
+func remoteReviewer(ctx context.Context, cmd *cli.Command) (*reviews.Reviewer, error) {
 	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return nil, err
@@ -112,7 +113,7 @@ func remoteReviewer(ctx context.Context, cmd *cli.Command) (*reviewer, error) {
 		return nil, err
 	}
 
-	return newReviewer(ctx, h, f, cmd.Args().First())
+	return reviews.NewReviewer(ctx, h, f, cmd.Args().First())
 }
 
 func runReviewPick(ctx context.Context, cmd *cli.Command) error {
@@ -121,9 +122,9 @@ func runReviewPick(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	pick := rv.pick
+	pick := rv.Pick
 	if cmd.Bool("latest") {
-		pick = rv.latest
+		pick = rv.Latest
 	}
 
 	r, err := pick(ctx)
@@ -153,12 +154,12 @@ func runReviewWait(ctx context.Context, cmd *cli.Command) error {
 // last reason when the budget expires.
 func awaitReview(
 	ctx context.Context,
-	rv *reviewer,
+	rv *reviews.Reviewer,
 	since time.Time,
 	budget, every time.Duration,
-) (remoteReview, error) {
+) (reviews.RemoteReview, error) {
 	if every <= 0 {
-		return remoteReview{}, errors.New("--every must be positive")
+		return reviews.RemoteReview{}, errors.New("--every must be positive")
 	}
 
 	deadline := time.Now().Add(budget)
@@ -166,7 +167,7 @@ func awaitReview(
 	var last string
 
 	for {
-		r, err := rv.pick(ctx)
+		r, err := rv.Pick(ctx)
 
 		switch {
 		case err == nil && !since.IsZero() && !r.UpdatedAt.After(since):
@@ -181,9 +182,9 @@ func awaitReview(
 
 		remaining := time.Until(deadline)
 		if remaining <= 0 {
-			return remoteReview{}, fmt.Errorf(
+			return reviews.RemoteReview{}, fmt.Errorf(
 				"no completed review from %s within %s: %s",
-				rv.facts.Reviewer,
+				rv.Facts.Reviewer,
 				budget,
 				last,
 			)
@@ -195,7 +196,7 @@ func awaitReview(
 		case <-ctx.Done():
 			timer.Stop()
 
-			return remoteReview{}, ctx.Err()
+			return reviews.RemoteReview{}, ctx.Err()
 		case <-timer.C:
 		}
 	}
@@ -207,7 +208,7 @@ func runReviewTrigger(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	what, url, at, err := rv.trigger(ctx)
+	what, url, at, err := rv.Trigger(ctx)
 	if err != nil {
 		return err
 	}
@@ -223,12 +224,12 @@ func runReviewAck(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	r, err := rv.ackTarget(ctx, cmd.String("id"))
+	r, err := rv.AckTarget(ctx, cmd.String("id"))
 	if err != nil {
 		return err
 	}
 
-	what, err := rv.ack(ctx, r)
+	what, err := rv.Ack(ctx, r)
 	if err != nil {
 		return err
 	}
@@ -237,10 +238,6 @@ func runReviewAck(ctx context.Context, cmd *cli.Command) error {
 
 	return err
 }
-
-// errReviewChanged is settle refusing a review rewritten since it was read:
-// a sticky comment edited by a re-review is a new, unread review.
-var errReviewChanged = errors.New("the review changed since it was read")
 
 func runReviewSettle(ctx context.Context, cmd *cli.Command) error {
 	rv, err := remoteReviewer(ctx, cmd)
@@ -248,12 +245,12 @@ func runReviewSettle(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	r, err := rv.settleTarget(ctx, cmd.String("id"), cmd.String("revision"))
+	r, err := rv.SettleTarget(ctx, cmd.String("id"), cmd.String("revision"))
 	if err != nil {
 		return err
 	}
 
-	what, err := rv.settle(ctx, r)
+	what, err := rv.Settle(ctx, r)
 	if err != nil {
 		return err
 	}
@@ -263,15 +260,15 @@ func runReviewSettle(ctx context.Context, cmd *cli.Command) error {
 	return err
 }
 
-func writeReview(ctx context.Context, cmd *cli.Command, rv *reviewer, r remoteReview) error {
+func writeReview(ctx context.Context, cmd *cli.Command, rv *reviews.Reviewer, r reviews.RemoteReview) error {
 	if cmd.Bool("json") {
 		return ui.JSON(cmd.Writer, r)
 	}
 
-	return render.WriteDoc(ctx, cmd.Writer, rv.h.Dir, reviewDoc(r))
+	return render.WriteDoc(ctx, cmd.Writer, rv.H.Dir, reviewDoc(r))
 }
 
-func reviewDoc(r remoteReview) string {
+func reviewDoc(r reviews.RemoteReview) string {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "# review by %s · %s\n\n", r.Author, r.Kind)

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/asknotify"
 	"github.com/amberpixels/f10/cli/internal/asks"
 )
 
@@ -19,7 +20,7 @@ func (in *driveInput) raise(ctx context.Context, r *driveRun, skill, text string
 		return
 	}
 
-	raiseAsk(ctx, in.out, in.asksDir, asks.Ask{
+	asknotify.RaiseAsk(ctx, in.out, in.asksDir, asks.Ask{
 		Task:     r.task.ref.ID,
 		Root:     in.root,
 		Main:     in.main,

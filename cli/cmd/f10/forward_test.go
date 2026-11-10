@@ -13,6 +13,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -277,7 +278,7 @@ func TestDriven(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		if got := driven(c.text); got != c.want {
+		if got := launch.Driven(c.text); got != c.want {
 			t.Errorf("driven(%q) = %q, want %q", c.text, got, c.want)
 		}
 	}

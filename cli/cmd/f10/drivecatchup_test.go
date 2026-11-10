@@ -613,7 +613,7 @@ func TestIntegrateBranchThenNothingLeft(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := clearMarks(t.Context(), r.dir, "FT-1/a", base); err != nil {
+	if err := stack.ClearMarks(t.Context(), r.dir, "FT-1/a", base); err != nil {
 		t.Fatal(err)
 	}
 

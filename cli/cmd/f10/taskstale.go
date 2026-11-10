@@ -7,6 +7,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -79,19 +80,19 @@ func staleness(created time.Time, staleAfter facts.StaleAfter, now time.Time, ro
 		return staleFresh
 	}
 
-	var newest verdictFile
+	var newest archive.VerdictFile
 
 	for _, root := range roots {
-		for _, v := range judgeFiles(root, id) {
-			if v.judged == "task" && v.outcome.Verdict == "proceed" && now.Sub(v.at) <= d && v.at.After(newest.at) {
+		for _, v := range archive.JudgeFiles(root, id) {
+			if v.Judged == "task" && v.Outcome.Verdict == "proceed" && now.Sub(v.At) <= d && v.At.After(newest.At) {
 				newest = v
 			}
 		}
 	}
 
-	if newest.path == "" {
+	if newest.Path == "" {
 		return staleNeeds
 	}
 
-	return staleJudged + " " + newest.path
+	return staleJudged + " " + newest.Path
 }

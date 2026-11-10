@@ -14,6 +14,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/lookaround"
+	"github.com/amberpixels/f10/cli/internal/scope"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -93,7 +94,7 @@ func runBoard(ctx context.Context, cmd *cli.Command) error {
 		arg = cmd.String("since")
 	}
 
-	span, err := resolveBoardSpan(arg, stateView, now, readWorkdays)
+	span, err := resolveBoardSpan(arg, stateView, now, scope.ReadWorkdays)
 	if err != nil {
 		return err
 	}
@@ -103,7 +104,7 @@ func runBoard(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("--by %q: rows group by person only", by)
 	}
 
-	cfg, cfgPath, err := readBoardConfig()
+	cfg, cfgPath, err := scope.ReadBoardConfig()
 	if err != nil {
 		return err
 	}
@@ -112,15 +113,15 @@ func runBoard(ctx context.Context, cmd *cli.Command) error {
 	remote := cmd.Bool("remote")
 
 	// one pipeline whatever the scope: this checkout is a scope of one
-	var entries []scopeEntry
+	var entries []scope.ScopeEntry
 
-	if scoped(cmd) {
-		items, err := scopeItems(cmd, boardConfigFile, cfg.Repos, cfgPath)
+	if scope.Scoped(cmd) {
+		items, err := scope.ScopeItems(cmd, scope.BoardConfigFile, cfg.Repos, cfgPath)
 		if err != nil {
 			return err
 		}
 
-		if entries = bindScope(ctx, items, cmd.Name); len(entries) == 0 {
+		if entries = scope.BindScope(ctx, items, cmd.Name); len(entries) == 0 {
 			return errors.New("the scope names no project: the groups and roots given matched none")
 		}
 	} else {
@@ -129,7 +130,7 @@ func runBoard(ctx context.Context, cmd *cli.Command) error {
 			return err
 		}
 
-		entries = []scopeEntry{{dir: t.Dir, target: t}}
+		entries = []scope.ScopeEntry{{Dir: t.Dir, Target: t}}
 	}
 
 	boards := collectBoards(ctx, entries, cmd.ErrWriter, now, span, stateView, remote, people)

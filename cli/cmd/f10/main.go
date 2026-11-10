@@ -12,10 +12,10 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"runtime/debug"
-	"strings"
 
 	"github.com/urfave/cli/v3"
+
+	"github.com/amberpixels/f10/cli/internal/buildinfo"
 )
 
 func main() {
@@ -30,7 +30,7 @@ func newApp() *cli.Command {
 	return &cli.Command{
 		Name:    "f10",
 		Usage:   "look around a project's f10 configuration, tasks, plans and your activity, start a task, reach its agent, drive a list and finish it",
-		Version: version(debug.ReadBuildInfo()),
+		Version: buildinfo.Version(),
 		// -C takes a path whole, commas included
 		DisableSliceFlagSeparator: true,
 		// `f10 completion <shell>` prints the script; --flow completes the declared flows
@@ -80,45 +80,5 @@ func newApp() *cli.Command {
 // plugin's bin/f10 shim and the release workflow; empty in any other build.
 var stampedVersion string
 
-// version is read from the build so no constant drifts: the stamp, else the
-// module version Go read from the `cli/vX.Y.Z` tag, else the commit with its
-// date and a dirty mark. A checkout build gets the commit even at the tag,
-// since Go derives a version from tags only for a module at the repository root.
-func version(bi *debug.BuildInfo, ok bool) string {
-	return versionOf(stampedVersion, bi, ok)
-}
-
-func versionOf(stamp string, bi *debug.BuildInfo, ok bool) string {
-	if stamp != "" {
-		return stamp
-	}
-
-	if !ok || bi == nil {
-		return "unknown"
-	}
-
-	if v := bi.Main.Version; v != "" && v != "(devel)" {
-		return strings.TrimPrefix(v, "v")
-	}
-
-	var revision, at, dirty string
-
-	for _, s := range bi.Settings {
-		switch s.Key {
-		case "vcs.revision":
-			revision = s.Value[:min(12, len(s.Value))]
-		case "vcs.time":
-			at = s.Value
-		case "vcs.modified":
-			if s.Value == "true" {
-				dirty = " dirty"
-			}
-		}
-	}
-
-	if revision == "" {
-		return "devel"
-	}
-
-	return "devel " + revision + " " + at + dirty
-}
+// the link-time stamp lands here, and every reader of the version asks buildinfo
+func init() { buildinfo.Stamp = stampedVersion }

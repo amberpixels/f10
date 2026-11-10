@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"slices"
 	"strings"
 	"time"
 
@@ -15,12 +14,14 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // The forward verb hands a command to the agent already working on a task:
@@ -36,10 +37,6 @@ func forwardCommand() *cli.Command {
 		Action:    runForward,
 	}
 }
-
-// drivenMarker tells a skill the run is driven from another session: no
-// interactive question, every ask through run state (modes/driven.md).
-const drivenMarker = "--driven"
 
 func runForward(ctx context.Context, cmd *cli.Command) error {
 	args := cmd.Args().Slice()
@@ -112,11 +109,11 @@ func forward(ctx context.Context, w io.Writer, in forwardInput) error {
 		return ui.Exit(ui.ExitDeclined, "%s", reason)
 	}
 
-	if err := agents("").Available(); err != nil {
+	if err := worktree.Agents("").Available(); err != nil {
 		return err
 	}
 
-	wss, err := agents(in.main).Workspaces(ctx)
+	wss, err := worktree.Agents(in.main).Workspaces(ctx)
 	if err != nil {
 		return err
 	}
@@ -124,16 +121,16 @@ func forward(ctx context.Context, w io.Writer, in forwardInput) error {
 	ws := workspaceAt(wss, path)
 	if ws == nil {
 		return fmt.Errorf("no %s workspace shows %s (branch %s): open it with f10 start %s",
-			agents(in.main).Name(), path, name, in.task.ID)
+			worktree.Agents(in.main).Name(), path, name, in.task.ID)
 	}
 
 	if err := refuseStalled(in.stall(), ws, agentctl.AgentName(in.task.ID, in.suffix, path), path); err != nil {
 		return err
 	}
 
-	text := driven(in.text)
+	text := launch.Driven(in.text)
 
-	note, err := promptChecked(ctx, path, in.task.ID, in.suffix, text)
+	note, err := launch.PromptChecked(ctx, path, in.task.ID, in.suffix, text)
 	if err != nil {
 		return err
 	}
@@ -201,14 +198,4 @@ func refuseStalled(in stallCheck, ws *agentctl.Workspace, agent, root string) er
 	}
 
 	return nil
-}
-
-// driven marks an f10 command as sent from outside; plain text (an answer, a
-// steering note) goes as it is, since the agent it reaches already knows.
-func driven(text string) string {
-	if !strings.HasPrefix(text, "/f10:") || slices.Contains(strings.Fields(text), drivenMarker) {
-		return text
-	}
-
-	return text + " " + drivenMarker
 }

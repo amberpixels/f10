@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/scope"
 	"github.com/amberpixels/f10/cli/internal/standup"
 	"github.com/amberpixels/f10/cli/internal/target"
 )
@@ -65,7 +66,7 @@ func collectAll(ctx context.Context, targets []*target.Target, since time.Time) 
 
 	ins := make([]standup.Input, len(targets))
 	errs := make([]error, len(targets))
-	sem := make(chan struct{}, scopeParallel)
+	sem := make(chan struct{}, scope.ScopeParallel)
 
 	var wg sync.WaitGroup
 

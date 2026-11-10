@@ -88,9 +88,9 @@ func writeParentTree(ctx context.Context, cmd *cli.Command, t *target.Target, to
 		return writeTaskFacts(cmd, token, r.ID, k)
 	}
 
-	nodes := subtaskNodes(
+	nodes := hostops.SubtaskNodes(
 		childTreeRows(kids),
-		treeOpts{head: &treeRow{ID: r.ID, Title: k.Title, URL: k.URL}, url: true},
+		hostops.TreeOpts{Head: &hostops.TreeRow{ID: r.ID, Title: k.Title, URL: k.URL}, Url: true},
 	)
 
 	stack.RememberRefsFor(ctx, t, stack.ChildRefs(kids)...)

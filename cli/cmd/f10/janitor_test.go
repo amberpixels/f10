@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/fsx"
@@ -133,7 +134,7 @@ func TestJanitorRemovesAMergedBranch(t *testing.T) {
 	plan := fx.plan(t)
 	reviews := filepath.Join(fx.in.main, ".f10", "reviews")
 	writeFile(t, filepath.Join(reviews, "GH-1", "1.md"), "task: GH-1\nround: 1\n")
-	handoff := taskHandoff(fx.in.storage, "GH-1")
+	handoff := archive.TaskHandoff(fx.in.storage, "GH-1")
 	writeFile(t, handoff, "---\nhead: abc\n---\nNothing to do after merge.\n")
 
 	out := fx.run(t)
@@ -397,7 +398,7 @@ func TestJanitorDryRun(t *testing.T) {
 	plan := fx.plan(t)
 	reviews := filepath.Join(fx.in.main, ".f10", "reviews", "GH-1")
 	writeFile(t, filepath.Join(reviews, "1.md"), "task: GH-1\nround: 1\n")
-	handoff := taskHandoff(fx.in.storage, "GH-1")
+	handoff := archive.TaskHandoff(fx.in.storage, "GH-1")
 	writeFile(t, handoff, "---\nhead: abc\n---\nNothing to do after merge.\n")
 
 	out := fx.run(t)
@@ -668,7 +669,7 @@ func TestJanitorArchivesTheRestWhenThePlanCannotMove(t *testing.T) {
 	writeFile(t, filepath.Join(fx.in.storage.Plans(), "archive"), "")
 	reviews := filepath.Join(fx.in.main, ".f10", "reviews")
 	writeFile(t, filepath.Join(reviews, "GH-1", "1.md"), "task: GH-1\nround: 1\n")
-	handoff := taskHandoff(fx.in.storage, "GH-1")
+	handoff := archive.TaskHandoff(fx.in.storage, "GH-1")
 	writeFile(t, handoff, "---\nhead: abc\n---\nNothing to do after merge.\n")
 	image := filepath.Join(fx.in.storage.Images("GH-1"), "1.png")
 	writeFile(t, image, "png")

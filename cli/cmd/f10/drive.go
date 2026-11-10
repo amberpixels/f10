@@ -13,6 +13,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/asknotify"
 	"github.com/amberpixels/f10/cli/internal/asks"
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/drives"
@@ -20,9 +21,11 @@ import (
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // The drive verb runs tasks through their flow and exits when every
@@ -122,7 +125,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	drain, unwatch := watchDrain(a.fore)
 	defer unwatch()
 
-	if err := agents("").Available(); err != nil {
+	if err := worktree.Agents("").Available(); err != nil {
 		return err
 	}
 
@@ -154,24 +157,24 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		argv = rec.Args
 	}
 
-	run, err := resolveRun(ctx, t.Effective, runInput{pace: a.pace})
+	run, err := runplan.ResolveRun(ctx, t.Effective, runplan.RunInput{Pace: a.pace})
 	if err != nil {
 		return err
 	}
 
-	fl, err := run.flow(a.flow)
+	fl, err := run.Flow(a.flow)
 	if err != nil {
 		return err
 	}
 
 	// the drive lays --agent and each task's suffix on per task
-	layers := agentMapOf(t.Effective)
+	layers := runplan.AgentMapOf(t.Effective)
 
 	main := cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot)
 	drv := t.Driver()
 	h, hostErr := hostops.HostOf(t)
 
-	if fl.finishes() && hostErr != nil {
+	if fl.Finishes() && hostErr != nil {
 		return fmt.Errorf("finish is on (the pace's finish), and finish merges through the host: %w", hostErr)
 	}
 
@@ -186,16 +189,16 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		args:    a,
 		argv:    argv,
 		flow:    fl,
-		resolve: run.flow,
-		paced: func(fl shipFlow, p string) (shipFlow, error) {
-			if fl.byArea {
-				return run.flowAt(p, "")
+		resolve: run.Flow,
+		paced: func(fl runplan.ShipFlow, p string) (runplan.ShipFlow, error) {
+			if fl.ByArea {
+				return run.FlowAt(p, "")
 			}
 
-			return run.flowAt(p, fl.recorded())
+			return run.FlowAt(p, fl.Recorded())
 		},
 		storage:         t.Layout.StorageRoot,
-		settings:        claudeSettingsPath(),
+		settings:        runplan.ClaudeSettingsPath(),
 		layers:          layers,
 		stateDir:        state.Dir(),
 		session:         state.Session(),
@@ -205,7 +208,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		pull:            pullOf,
 		driver:          drv,
 		tracker:         stack.TrackerFor(t),
-		title:           func(r ref.Ref) func(context.Context) (string, error) { return titleLookup(t, r.Number) },
+		title:           func(r ref.Ref) func(context.Context) (string, error) { return worktree.TitleLookup(t, r.Number) },
 		started:         startedMove(t),
 		record:          recordAt,
 		finish: func(ctx context.Context, w io.Writer, req driveFinish) error {
@@ -217,7 +220,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 			return finish(ctx, w, fin)
 		},
 		now:    time.Now,
-		notify: askNotifier,
+		notify: asknotify.AskNotifier,
 	}
 	in.sleep = in.wake
 	in.daemonRun = os.Getenv(daemon.ResumeEnv) != ""

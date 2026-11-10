@@ -3,7 +3,6 @@ package main
 import (
 	"cmp"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -16,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -24,197 +24,6 @@ import (
 // `default`, then `default` overlaid segment by segment by `<step>` and
 // `<step>.<kind>`. Only the task agent and the spawning steps read a key;
 // any other key is accepted and idle until a lever exists.
-
-// An agentEntry is one key of the merged map with where it came from.
-type agentEntry struct {
-	Key    string `json:"key"`
-	Value  string `json:"value"`
-	Origin string `json:"origin"`
-}
-
-// agentMap is the merged map, by key.
-type agentMap map[string]agentEntry
-
-// agentFlagOrigin is the origin of a profile a command line gave.
-const agentFlagOrigin = "--agent"
-
-// agentMapOf is the map facts merged, each key with its layer.
-func agentMapOf(eff *facts.Effective) agentMap {
-	m := agentMap{}
-
-	for key, value := range eff.Agents {
-		m[key] = agentEntry{Key: key, Value: value, Origin: eff.AgentsOrigin[key].String()}
-	}
-
-	return m
-}
-
-// agentKeyFlag holds a run's profile in the map: a key no file can declare
-// (CheckAgentKey refuses it), laid over `default` segment by segment, so
-// `--agent low` keeps the map's model.
-const agentKeyFlag = "--agent"
-
-// with is m with a run's profile on top: the flag, a drive task's own
-// suffix, or the branch's record. A later one lays over an earlier one
-// segment by segment, so `FT-1:low --agent sonnet` runs sonnet at low.
-func (m agentMap) with(value, origin string) agentMap {
-	if value = strings.TrimSpace(value); value == "" {
-		return m
-	}
-
-	out := maps.Clone(m)
-	if out == nil {
-		out = agentMap{}
-	}
-
-	if prior, ok := out[agentKeyFlag]; ok {
-		over, errOver := agentctl.ParseProfile(value)
-		under, errUnder := agentctl.ParseProfile(prior.Value)
-
-		if errOver == nil && errUnder == nil {
-			value, origin = over.Over(under).Short(), origin+" over "+prior.Origin
-		}
-	}
-
-	out[agentKeyFlag] = agentEntry{Key: agentKeyFlag, Value: value, Origin: origin}
-
-	return out
-}
-
-// withBranch lays the profile a branch records under the run, so a step's
-// subagent runs on what the task agent was started on; nothing recorded
-// leaves m as it is.
-func (m agentMap) withBranch(ctx context.Context, main, branch string) (agentMap, error) {
-	if branch == "" {
-		return m, nil
-	}
-
-	recorded, err := recordedProfile(ctx, main, branch)
-	if err != nil {
-		return nil, err
-	}
-
-	if recorded.IsDefault() {
-		return m, nil
-	}
-
-	return m.with(recorded.Short(), "recorded on branch "+branch), nil
-}
-
-// withPace lays a pace's effort dials over the step keys they name, so a
-// fast pace's judge runs at low effort on the map's judge model.
-func (m agentMap) withPace(set *facts.PaceSet, pace runPace) agentMap {
-	if pace.name == "" {
-		return m
-	}
-
-	out := maps.Clone(m)
-	if out == nil {
-		out = agentMap{}
-	}
-
-	capped, caps := set.Capped(pace.name)
-
-	for step, d := range capped.Steps {
-		if d.Effort == "" || d.Off {
-			continue
-		}
-
-		value, origin := d.Effort, "pace "+pace.name+" ("+set.Origins[pace.name+"."+step].String()+")"
-		if c, ok := caps[step+".effort"]; ok {
-			origin = c.Origin + "; " + c.Capped
-		}
-
-		if prior, ok := out[step]; ok {
-			under, err := agentctl.ParseProfile(prior.Value)
-			over, errOver := agentctl.ParseProfile(value)
-
-			if err == nil && errOver == nil {
-				value, origin = over.Over(under).Short(), origin+" over "+prior.Origin
-			}
-		}
-
-		out[step] = agentEntry{Key: step, Value: value, Origin: origin}
-	}
-
-	return out
-}
-
-// A resolvedProfile is a step's profile with the key and layer each
-// segment came from, and the model's correction or fallback, if any.
-type resolvedProfile struct {
-	Profile agentctl.Profile
-	Sources map[string]string // "model", "effort" to "<key> (<origin>)"
-	Note    string            // the model read as another name
-	Fell    string            // the model as typed that no family matched, dropped to the kind's default
-}
-
-// profileFor is the profile step runs on for a task of kind ("" for any).
-// Every value went through the vocabulary when it was read, so a parse
-// error here is a programming error, not the user's.
-func (m agentMap) profileFor(step, kind string) resolvedProfile {
-	keys := []string{facts.AgentKeyDefault, agentKeyFlag}
-	if step != "" && step != facts.AgentKeyDefault {
-		keys = append(keys, step)
-		if kind != "" {
-			keys = append(keys, step+"."+kind)
-		}
-	}
-
-	r := resolvedProfile{Sources: map[string]string{}}
-
-	var p agentctl.Profile
-
-	for _, key := range keys {
-		e, ok := m[key]
-		if !ok {
-			continue
-		}
-
-		over, err := agentctl.ParseProfile(e.Value)
-		if err != nil {
-			continue
-		}
-
-		p = over.Over(p)
-
-		from := key + " (" + e.Origin + ")"
-		if over.Model != "" {
-			r.Sources["model"] = from
-		}
-
-		if over.Effort != "" {
-			r.Sources["effort"] = from
-		}
-	}
-
-	typed := p.Model
-
-	resolved, note, ok := p.Resolve()
-	r.Profile, r.Note = resolved, note
-
-	if !ok && typed != "" {
-		r.Fell = typed
-		delete(r.Sources, "model")
-	}
-
-	return r
-}
-
-// kindsScoped lists the task kinds the map scopes step by, sorted.
-func (m agentMap) kindsScoped(step string) []string {
-	var kinds []string
-
-	for key := range m {
-		if s, kind, ok := strings.Cut(key, "."); ok && s == step {
-			kinds = append(kinds, kind)
-		}
-	}
-
-	slices.Sort(kinds)
-
-	return kinds
-}
 
 // agentReach says what runs on a step's key, or "" when nothing does yet.
 var agentReach = map[string]string{
@@ -226,35 +35,6 @@ var agentReach = map[string]string{
 
 // agentReachNone is the line for a step no lever reaches.
 const agentReachNone = "no lever yet: runs inline on the task agent's profile"
-
-// modelWarning is the line a model no family matches prints, once, before
-// the agent starts on the kind's default instead.
-func modelWarning(typed, settings string) string {
-	fallback := "claude's default model"
-	if d := claudeDefaultModel(settings); d != "" {
-		fallback = d + " (your claude default)"
-	}
-
-	warning := "!!! --model " + typed + " is not a model name f10 recognizes: the agent starts on " + fallback + " instead"
-
-	return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("3")).Render(warning)
-}
-
-// lines are what a resolved profile prints beneath a report: the model
-// read as another name, or the warning for one no family matched.
-func (r resolvedProfile) lines(settings string) []string {
-	var out []string
-
-	if r.Note != "" {
-		out = append(out, r.Note)
-	}
-
-	if r.Fell != "" {
-		out = append(out, modelWarning(r.Fell, settings))
-	}
-
-	return out
-}
 
 func agentsCommand() *cli.Command {
 	return &cli.Command{
@@ -272,7 +52,7 @@ func agentsCommand() *cli.Command {
 				Usage: "the task `KIND` (feature, bug, refactor, spike) a scoped key applies to",
 			},
 			&cli.StringFlag{Name: "agent", Usage: "a run's `PROFILE`, laid over default as f10 start --agent does"},
-			paceFlag(),
+			runplan.PaceFlag(),
 			ui.JSONFlag("emit the same lines as JSON"),
 		},
 		Action: runAgents,
@@ -310,11 +90,11 @@ func runAgents(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	run, err := resolveRun(ctx, t.Effective, runInput{
-		pace:    cmd.String("pace"),
-		profile: cmd.String("agent"),
-		main:    cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot),
-		branch:  gitx.CurrentBranch(ctx, t.Layout.CheckoutRoot),
+	run, err := runplan.ResolveRun(ctx, t.Effective, runplan.RunInput{
+		Pace:    cmd.String("pace"),
+		Profile: cmd.String("agent"),
+		Main:    cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot),
+		Branch:  gitx.CurrentBranch(ctx, t.Layout.CheckoutRoot),
 	})
 	if err != nil {
 		return err
@@ -322,7 +102,7 @@ func runAgents(ctx context.Context, cmd *cli.Command) error {
 
 	// no flag: the branch's record is what the task agent started on, so a
 	// spawning step's subagent follows it
-	m, err := run.agents(ctx)
+	m, err := run.Agents(ctx)
 	if err != nil {
 		return err
 	}
@@ -342,11 +122,11 @@ func runAgents(ctx context.Context, cmd *cli.Command) error {
 
 		kinds := []string{kind}
 		if kind == "" {
-			kinds = append(kinds, m.kindsScoped(step)...)
+			kinds = append(kinds, m.KindsScoped(step)...)
 		}
 
 		for _, k := range kinds {
-			lines = append(lines, agentLineFor(m, step, k, claudeSettingsPath()))
+			lines = append(lines, agentLineFor(m, step, k, runplan.ClaudeSettingsPath()))
 		}
 	}
 
@@ -361,8 +141,8 @@ func runAgents(ctx context.Context, cmd *cli.Command) error {
 	return nil
 }
 
-func agentLineFor(m agentMap, step, kind, settings string) agentLine {
-	r := m.profileFor(step, kind)
+func agentLineFor(m runplan.AgentMap, step, kind, settings string) agentLine {
+	r := m.ProfileFor(step, kind)
 	toolModel, toolEffort := r.Profile.Tool()
 
 	reach, ok := agentReach[step]
@@ -380,7 +160,7 @@ func agentLineFor(m agentMap, step, kind, settings string) agentLine {
 		Tool:    agentTool{Model: toolModel, Effort: toolEffort},
 		Sources: r.Sources,
 		Reach:   reach,
-		Notes:   r.lines(settings),
+		Notes:   r.Lines(settings),
 	}
 }
 
@@ -436,11 +216,11 @@ func (l agentLine) String() string {
 }
 
 // printAgentMap prints the merged map, one key per line with its origin.
-func printAgentMap(w io.Writer, m agentMap, asJSON bool) error {
+func printAgentMap(w io.Writer, m runplan.AgentMap, asJSON bool) error {
 	keys := slices.Sorted(maps.Keys(m))
 
 	if asJSON {
-		entries := make([]agentEntry, 0, len(keys))
+		entries := make([]runplan.AgentEntry, 0, len(keys))
 		for _, k := range keys {
 			entries = append(entries, m[k])
 		}
@@ -466,31 +246,4 @@ func printAgentMap(w io.Writer, m agentMap, asJSON bool) error {
 	}
 
 	return nil
-}
-
-// errBothAgentFlags is --model beside --agent: two defaults for one run.
-var errBothAgentFlags = errors.New("--model and --agent both name the agent's profile: give one " +
-	"(--model is the one-segment --agent, a model alone)")
-
-// profileFlag is the profile a command line names: --agent as given, or
-// --model, which reads a model only, never an effort word.
-func profileFlag(agent, model string) (string, error) {
-	agent, model = strings.TrimSpace(agent), strings.TrimSpace(model)
-
-	switch {
-	case agent != "" && model != "":
-		return "", errBothAgentFlags
-	case agent != "":
-		return agent, nil
-	case model == "":
-		return "", nil
-	case strings.Contains(model, ":"):
-		return "", fmt.Errorf("--model %s: a model alone; a kind or an effort goes on --agent %s", model, model)
-	}
-
-	if p, err := agentctl.ParseProfile(model); err == nil && p.Effort != "" {
-		return "", fmt.Errorf("--model %s names an effort, not a model: --agent %s sets the effort", model, model)
-	}
-
-	return model, nil
 }

@@ -3,8 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
+	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
@@ -23,7 +23,7 @@ type taskArchive struct {
 
 // archiveTask is the cleanup every finished task gets, from finish and from
 // the janitor. check rules on each failed step: a non-nil return stops here.
-func archiveTask(root storage.Root, id string, end *seriesEnd,
+func archiveTask(root storage.Root, id string, end *archive.SeriesEnd,
 	check func(step string, err error) error,
 ) (taskArchive, error) {
 	var a taskArchive
@@ -45,7 +45,7 @@ func archiveTask(root storage.Root, id string, end *seriesEnd,
 	if end != nil {
 		a.reviews, err = closeSeries(root.Reviews(id), *end)
 	} else {
-		a.reviews, err = archiveReviews(root.Reviews(id), seriesEnd{})
+		a.reviews, err = archive.ArchiveReviews(root.Reviews(id), archive.SeriesEnd{})
 	}
 
 	if err := check("archiving the reviews", err); err != nil {
@@ -69,33 +69,12 @@ func archivePlan(root storage.Root, id string) (string, string, error) {
 		return "", "", fmt.Errorf("archiving the plan at %s: %w", plan, err)
 	}
 
-	target := freeArchiveName(dst, id)
+	target := archive.FreeArchiveName(dst, id)
 	if err := os.Rename(plan, target); err != nil {
 		return "", "", fmt.Errorf("archiving the plan at %s: %w", plan, err)
 	}
 
 	return target, "", nil
-}
-
-// archiveReviews moves a findings directory to reviews/archive/<id>.<N>/,
-// so the task's next PR starts its own series of rounds. N always counts
-// from 1, since a bare <id>/ under archive would read as a live directory.
-func archiveReviews(dir string, end seriesEnd) (string, error) {
-	if !fsx.Exists(dir) {
-		return "", nil
-	}
-
-	archive := storage.ArchiveOf(filepath.Dir(dir))
-	if err := os.MkdirAll(archive, 0o750); err != nil {
-		return "", fmt.Errorf("archiving the findings at %s: %w", dir, err)
-	}
-
-	target := nextSeries(archive, filepath.Base(dir))
-	if err := os.Rename(dir, target); err != nil {
-		return "", fmt.Errorf("archiving the findings at %s: %w", dir, err)
-	}
-
-	return target, end.write(target)
 }
 
 // removeImages drops the images `task read` downloaded for the task; a
@@ -107,19 +86,4 @@ func removeImages(root storage.Root, id string) string {
 	}
 
 	return ""
-}
-
-// freeArchiveName numbers `<id>.<N>.md` the way steps/plan.md does.
-func freeArchiveName(dir, id string) string {
-	candidate := filepath.Join(dir, id+".md")
-	if !fsx.Exists(candidate) {
-		return candidate
-	}
-
-	for n := 1; ; n++ {
-		candidate = filepath.Join(dir, fmt.Sprintf("%s.%d.md", id, n))
-		if !fsx.Exists(candidate) {
-			return candidate
-		}
-	}
 }

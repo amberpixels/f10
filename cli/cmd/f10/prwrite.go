@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/reviews"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/textx"
@@ -32,17 +33,17 @@ func openPull(ctx context.Context, cmd *cli.Command) (hostops.Host, forge.PR, er
 		return hostops.Host{}, forge.PR{}, err
 	}
 
-	s, err := resolvePRSubject(ctx, t, cmd.Args().First())
+	s, err := reviews.ResolvePRSubject(ctx, t, cmd.Args().First())
 	if err != nil {
 		return hostops.Host{}, forge.PR{}, err
 	}
 
-	if s.lookupErr != nil {
-		return hostops.Host{}, forge.PR{}, s.lookupErr
+	if s.LookupErr != nil {
+		return hostops.Host{}, forge.PR{}, s.LookupErr
 	}
 
-	if s.number == 0 {
-		return hostops.Host{}, forge.PR{}, fmt.Errorf("no open PR for %s", s.branch)
+	if s.Number == 0 {
+		return hostops.Host{}, forge.PR{}, fmt.Errorf("no open PR for %s", s.Branch)
 	}
 
 	h, err := hostops.HostOf(t)
@@ -50,7 +51,7 @@ func openPull(ctx context.Context, cmd *cli.Command) (hostops.Host, forge.PR, er
 		return hostops.Host{}, forge.PR{}, err
 	}
 
-	p, err := h.PR(ctx, strconv.Itoa(s.number))
+	p, err := h.PR(ctx, strconv.Itoa(s.Number))
 	if err != nil {
 		return hostops.Host{}, forge.PR{}, err
 	}
@@ -133,38 +134,38 @@ func runPRCreate(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	s, err := resolvePRSubject(ctx, t, "")
+	s, err := reviews.ResolvePRSubject(ctx, t, "")
 	if err != nil {
 		return err
 	}
 
-	if s.lookupErr != nil {
-		return fmt.Errorf("could not tell whether %s has an open PR: %w", s.branch, s.lookupErr)
+	if s.LookupErr != nil {
+		return fmt.Errorf("could not tell whether %s has an open PR: %w", s.Branch, s.LookupErr)
 	}
 
-	if s.number > 0 {
+	if s.Number > 0 {
 		h, err := hostops.HostOf(t)
 		if err != nil {
 			return err
 		}
 
-		p, err := h.PR(ctx, strconv.Itoa(s.number))
+		p, err := h.PR(ctx, strconv.Itoa(s.Number))
 		if err != nil {
 			return err
 		}
 
-		ui.Warnf(cmd.ErrWriter, "already open for %s, nothing created", s.branch)
+		ui.Warnf(cmd.ErrWriter, "already open for %s, nothing created", s.Branch)
 		_, err = fmt.Fprintln(cmd.Writer, p.URL)
 
 		return err
 	}
 
-	base, err := s.base(ctx, cmd.ErrWriter)
+	base, err := s.Base(ctx, cmd.ErrWriter)
 	if err != nil {
 		return err
 	}
 
-	if stack.RefSHA(ctx, s.main, "refs/remotes/origin/"+base) == "" {
+	if stack.RefSHA(ctx, s.Main, "refs/remotes/origin/"+base) == "" {
 		return fmt.Errorf("the base %s is not on origin: push it first", base)
 	}
 
@@ -174,10 +175,10 @@ func runPRCreate(ctx context.Context, cmd *cli.Command) error {
 		"HEAD",
 	); stack.RefSHA(
 		ctx,
-		s.main,
-		"refs/remotes/origin/"+s.branch,
+		s.Main,
+		"refs/remotes/origin/"+s.Branch,
 	) != head {
-		return fmt.Errorf("origin does not have %s at HEAD: run `git push -u origin %s` first", s.branch, s.branch)
+		return fmt.Errorf("origin does not have %s at HEAD: run `git push -u origin %s` first", s.Branch, s.Branch)
 	}
 
 	h, err := hostops.HostOf(t)
@@ -186,7 +187,7 @@ func runPRCreate(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	url, err := h.OpenPull(ctx, forge.NewPull{
-		Head: s.branch, Base: base, Title: cmd.String("title"), Body: body,
+		Head: s.Branch, Base: base, Title: cmd.String("title"), Body: body,
 		Labels: cmd.StringSlice("label"), Assignees: cmd.StringSlice("assignee"), Draft: cmd.Bool("draft"),
 	})
 	if err != nil {

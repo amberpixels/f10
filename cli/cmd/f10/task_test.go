@@ -19,6 +19,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/images"
 	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -163,7 +164,7 @@ func TestTaskRows(t *testing.T) {
 			`"body":"Some text.\n\nAfter: 12\n"}]`,
 	)
 
-	rows, err := taskRows(t.Context(), tg, hostops.IssuePage)
+	rows, err := stack.TaskRows(t.Context(), tg, hostops.IssuePage)
 	if err != nil || len(rows) != 1 || rows[0].ID != "FT-9" || rows[0].Priority != "high" {
 		t.Errorf("driver list = %+v, %v", rows, err)
 	}
@@ -175,7 +176,7 @@ func TestTaskRows(t *testing.T) {
 	}
 
 	var printed bytes.Buffer
-	if err := writeRows(&printed, rows, "none"); err != nil || strings.Contains(printed.String(), "body") {
+	if err := hostops.WriteRows(&printed, rows, "none"); err != nil || strings.Contains(printed.String(), "body") {
 		t.Errorf("printed rows = %q, %v; want no body", printed.String(), err)
 	}
 
@@ -187,14 +188,14 @@ func TestTaskRows(t *testing.T) {
 			`{"number":9,"title":"two labels","state":"OPEN","url":"https://github.com/o/r/issues/9","labels":[{"name":"p1"},{"name":"P3"}]}]`,
 	)
 
-	rows, err = taskRows(t.Context(), tg, hostops.IssuePage)
+	rows, err = stack.TaskRows(t.Context(), tg, hostops.IssuePage)
 	if err != nil || len(rows) != 3 || rows[0].ID != "FT-7" || rows[0].Status != "OPEN" || rows[0].Priority != "" {
 		t.Errorf("fallback without a map = %+v, %v", rows, err)
 	}
 
 	tg.Effective.PriorityLabels = map[string]string{"p1": "high", "p3": "low"}
 
-	rows, err = taskRows(t.Context(), tg, hostops.IssuePage)
+	rows, err = stack.TaskRows(t.Context(), tg, hostops.IssuePage)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -276,7 +277,7 @@ func TestWriteTaskListRanksAndWarns(t *testing.T) {
 func TestSettleAndRankPriorities(t *testing.T) {
 	var warn bytes.Buffer
 
-	rows := settlePriorities([]hostops.Row{
+	rows := hostops.SettlePriorities([]hostops.Row{
 		{ID: "a"},
 		{ID: "b", Priority: "Highest"},
 		{ID: "c", Priority: " LOW "},
@@ -311,7 +312,7 @@ func TestSettleAndRankPriorities(t *testing.T) {
 // one, so a project with nothing declared sees no priority key.
 func TestWriteRowsJSONPriority(t *testing.T) {
 	var out bytes.Buffer
-	if err := writeRows(
+	if err := hostops.WriteRows(
 		&out,
 		[]hostops.Row{{ID: "FT-1", Title: "a", Priority: "high"}, {ID: "FT-2", Title: "b"}},
 		"none",

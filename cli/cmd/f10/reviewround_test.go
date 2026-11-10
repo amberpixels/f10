@@ -10,6 +10,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/findings"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -267,15 +268,19 @@ func TestReviewRoundRestartKeepsTheChange(t *testing.T) {
 	}
 
 	dir := filepath.Join(repo, ".f10", "reviews", "DM-5")
-	if got := changeOf(dir); got != "DM-5" {
+	if got := archive.ChangeOf(dir); got != "DM-5" {
 		t.Errorf("after a restart: %q, want DM-5", got)
 	}
 
-	if _, err := closeSeries(dir, seriesEnd{pr: "#7", head: "abc1234"}); err != nil || changeOf(dir) != "DM-5.2" {
-		t.Errorf("after the PR merged: %q, %v, want DM-5.2", changeOf(dir), err)
+	if _, err := closeSeries(
+		dir,
+		archive.SeriesEnd{Pr: "#7", Head: "abc1234"},
+	); err != nil ||
+		archive.ChangeOf(dir) != "DM-5.2" {
+		t.Errorf("after the PR merged: %q, %v, want DM-5.2", archive.ChangeOf(dir), err)
 	}
 
-	if got, ok := closedChange(dir, seriesEnd{pr: "#7"}); !ok || got != "DM-5" {
+	if got, ok := closedChange(dir, archive.SeriesEnd{Pr: "#7"}); !ok || got != "DM-5" {
 		t.Errorf("finish run again names %q, %v; want the merged PR's DM-5", got, ok)
 	}
 }
@@ -293,7 +298,10 @@ func TestLoreChangeArchivesAMergedSeries(t *testing.T) {
 		t.Fatalf("lore change = %q, %v; want DM-5.2", out, err)
 	}
 
-	if e := readSeriesEnd(filepath.Join(repo, ".f10", "reviews", "archive", "DM-5.1")); e.pr != "#7" || e.restart {
+	if e := archive.ReadSeriesEnd(
+		filepath.Join(repo, ".f10", "reviews", "archive", "DM-5.1"),
+	); e.Pr != "#7" ||
+		e.Restart {
 		t.Errorf("the archived series records %+v", e)
 	}
 }
@@ -313,9 +321,9 @@ func TestReviewRoundKeepsTheSeriesOfAnOpenPR(t *testing.T) {
 func TestCloseSeriesCountsEveryPR(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, "reviews", "DM-5")
-	first := seriesEnd{pr: "#7", head: "abc1234"}
+	first := archive.SeriesEnd{Pr: "#7", Head: "abc1234"}
 
-	if got := changeOf(dir); got != "DM-5" {
+	if got := archive.ChangeOf(dir); got != "DM-5" {
 		t.Fatalf("no series closed: %q", got)
 	}
 
@@ -325,7 +333,7 @@ func TestCloseSeriesCountsEveryPR(t *testing.T) {
 		}
 	}
 
-	if got := changeOf(dir); got != "DM-5.2" {
+	if got := archive.ChangeOf(dir); got != "DM-5.2" {
 		t.Errorf("after one PR, twice finished: %q, want DM-5.2", got)
 	}
 
@@ -333,17 +341,17 @@ func TestCloseSeriesCountsEveryPR(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := closeSeries(dir, seriesEnd{pr: "!8", head: "def5678"})
+	got, err := closeSeries(dir, archive.SeriesEnd{Pr: "!8", Head: "def5678"})
 	if err != nil || got != filepath.Join(root, "reviews", "archive", "DM-5.2") {
 		t.Fatalf("a second PR's rounds: %q, %v", got, err)
 	}
 
-	if e := readSeriesEnd(got); e.pr != "!8" || e.head != "def5678" || e.at.IsZero() {
+	if e := archive.ReadSeriesEnd(got); e.Pr != "!8" || e.Head != "def5678" || e.At.IsZero() {
 		t.Errorf("closed file reads %+v", e)
 	}
 
-	if _, err := closeSeries(dir, seriesEnd{pr: "#8"}); err != nil || changeOf(dir) != "DM-5.3" {
-		t.Errorf("glab's !8 and gh's #8 are one PR: %q, %v", changeOf(dir), err)
+	if _, err := closeSeries(dir, archive.SeriesEnd{Pr: "#8"}); err != nil || archive.ChangeOf(dir) != "DM-5.3" {
+		t.Errorf("glab's !8 and gh's #8 are one PR: %q, %v", archive.ChangeOf(dir), err)
 	}
 }
 
@@ -353,7 +361,7 @@ func TestArchiveReviewsNumbersEachSeries(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, "reviews", "DM-5")
 
-	if got, err := archiveReviews(dir, seriesEnd{}); got != "" || err != nil {
+	if got, err := archive.ArchiveReviews(dir, archive.SeriesEnd{}); got != "" || err != nil {
 		t.Fatalf("no directory: got %q, %v", got, err)
 	}
 
@@ -362,7 +370,7 @@ func TestArchiveReviewsNumbersEachSeries(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		got, err := archiveReviews(dir, seriesEnd{})
+		got, err := archive.ArchiveReviews(dir, archive.SeriesEnd{})
 		if err != nil || got != filepath.Join(root, "reviews", "archive", want) {
 			t.Errorf("got %q, %v; want archive/%s", got, err, want)
 		}

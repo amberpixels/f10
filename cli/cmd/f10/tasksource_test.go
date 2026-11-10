@@ -12,6 +12,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -222,7 +223,7 @@ func TestFallbackOnlyOnUnsupported(t *testing.T) {
 
 	f.fail("driver list", shell.Result{Code: 1, Stderr: "tracker down"})
 
-	if _, err := taskRows(
+	if _, err := stack.TaskRows(
 		t.Context(),
 		tg,
 		hostops.IssuePage,

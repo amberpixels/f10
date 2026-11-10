@@ -23,15 +23,6 @@ import (
 // `task ref` hands them out from the ledger's task refs, which every
 // tracker read f10 makes fills, and asks the tracker only on a miss.
 
-func rowRefs(rows []hostops.Row) []ledger.TaskRef {
-	refs := make([]ledger.TaskRef, 0, len(rows))
-	for _, r := range rows {
-		refs = append(refs, ledger.TaskRef{ID: r.ID, Title: tasktitle.Clean(r.Title, r.ID), URL: r.URL})
-	}
-
-	return refs
-}
-
 func docTitle(id, doc string) string {
 	return tasktitle.Clean(hostops.TaskTitle(strings.TrimLeft(doc, " \t\r\n")), id)
 }

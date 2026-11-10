@@ -13,6 +13,7 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
+	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/flow"
@@ -372,7 +373,7 @@ func TestGatesOutcomes(t *testing.T) {
 	// a judge the flow does not declare shows once it ran
 	gates := taskGates(context.Background(), gateInput{
 		task: "FT-1", run: ship, now: time.Now(),
-		outcomes: outcomes{planJudge: &judgeOutcome{Verdict: "proceed"}},
+		outcomes: outcomes{planJudge: &archive.JudgeOutcome{Verdict: "proceed"}},
 	})
 
 	checkTexts(t, gates, map[string]string{"judge plan": "plan: proceed"})
@@ -393,8 +394,8 @@ func TestGatesOutcomes(t *testing.T) {
 		},
 		finishes: true,
 		outcomes: outcomes{
-			planJudge:   &judgeOutcome{Verdict: "proceed", Reason: "sound"},
-			changeJudge: &judgeOutcome{Verdict: "rethink", Reason: "symptom"},
+			planJudge:   &archive.JudgeOutcome{Verdict: "proceed", Reason: "sound"},
+			changeJudge: &archive.JudgeOutcome{Verdict: "rethink", Reason: "symptom"},
 		},
 	})
 
@@ -655,13 +656,13 @@ func TestGatesTaskJudge(t *testing.T) {
 	}{
 		{
 			"verdict",
-			gateInput{outcomes: outcomes{taskJudge: &judgeOutcome{Verdict: "stop", Reason: "done in FT-9"}}},
+			gateInput{outcomes: outcomes{taskJudge: &archive.JudgeOutcome{Verdict: "stop", Reason: "done in FT-9"}}},
 			"task: stop - done in FT-9",
 		},
 		{"running", gateInput{run: &state.Run{Plan: "running", Ship: "upcoming", Leaf: "judge"}}, "task: running"},
 		{"blocked", gateInput{
 			run:      &state.Run{Plan: "blocked", Ship: "upcoming", Leaf: "judge"},
-			outcomes: outcomes{taskJudge: &judgeOutcome{Verdict: "rethink"}},
+			outcomes: outcomes{taskJudge: &archive.JudgeOutcome{Verdict: "rethink"}},
 		}, "task: blocked"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -676,7 +677,7 @@ func TestGatesTaskJudge(t *testing.T) {
 
 	gates := taskGates(context.Background(), gateInput{
 		task: "FT-1", pipeline: flow.Of(gatePipeline), now: time.Now(),
-		outcomes: outcomes{taskJudge: &judgeOutcome{Verdict: "proceed"}},
+		outcomes: outcomes{taskJudge: &archive.JudgeOutcome{Verdict: "proceed"}},
 	})
 	if got := compactGates(gates); got != "󰊛 TJ proceed · 󰚔 L upcoming · R - · 󰊛 J upcoming" {
 		t.Errorf("compact = %q", got)
@@ -860,7 +861,7 @@ func TestStatusReadsTheCurrentSeries(t *testing.T) {
 		Outcome: "proceed", Gate: "judge", Commit: "abcdef1", Judged: "change", Body: "first PR",
 	})
 
-	if _, err := closeSeries(filepath.Join(storage, "reviews", "FT-1"), seriesEnd{pr: "#7"}); err != nil {
+	if _, err := closeSeries(filepath.Join(storage, "reviews", "FT-1"), archive.SeriesEnd{Pr: "#7"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -893,7 +894,7 @@ func TestJudgeDecisionText(t *testing.T) {
 		{"overridden", 0, "proceed with changes (overridden by the user) - why"},
 		{"something new", 0, "proceed with changes (something new) - why"},
 	} {
-		g := gate{Step: "judge", Judged: "change", State: gateDone, Outcome: &judgeOutcome{
+		g := gate{Step: "judge", Judged: "change", State: gateDone, Outcome: &archive.JudgeOutcome{
 			Verdict: "proceed with changes", Reason: "why", Decision: tc.decision, Changes: tc.changes,
 		}}
 

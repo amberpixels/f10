@@ -25,12 +25,15 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/herdr"
 	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // A fakes stands in for git, wt, herdr and the driver: every call recorded,
@@ -79,10 +82,10 @@ func newFakes(t *testing.T) *fakes {
 		"herdr agent read ",
 	}
 
-	prevRetry, prevPoll := enterRetry, enterPoll
-	enterRetry, enterPoll = 0, 0
+	prevRetry, prevPoll := launch.EnterRetry, launch.EnterPoll
+	launch.EnterRetry, launch.EnterPoll = 0, 0
 
-	t.Cleanup(func() { enterRetry, enterPoll = prevRetry, prevPoll })
+	t.Cleanup(func() { launch.EnterRetry, launch.EnterPoll = prevRetry, prevPoll })
 
 	prevExec, prevCapture, prevHas, prevProject := gitx.Exec, shell.Capture, shell.Has, target.ProjectOf
 
@@ -184,12 +187,12 @@ func (f *fakes) argvLaunch(name string, args []string) (shell.Result, bool) {
 		return shell.Result{}, false
 	}
 
-	launch := name + " " + strings.Join(args, " ")
+	launched := name + " " + strings.Join(args, " ")
 
 	f.mu.Lock()
-	_, scripted := f.answers[launch]
+	_, scripted := f.answers[launched]
 	if !scripted {
-		f.launches = append(f.launches, launch)
+		f.launches = append(f.launches, launched)
 	}
 	f.mu.Unlock()
 
@@ -786,33 +789,33 @@ func TestExistingBranch(t *testing.T) {
 }
 
 func TestPrompt(t *testing.T) {
-	local, direct := shipFlow{name: "local"}, shipFlow{name: "direct", planless: true}
+	local, direct := runplan.ShipFlow{Name: "local"}, runplan.ShipFlow{Name: "direct", Planless: true}
 
 	for _, c := range []struct {
 		mode string
-		fl   shipFlow
+		fl   runplan.ShipFlow
 		want string
 	}{
-		{modeDefault, shipFlow{}, "/f10:plan GH-1 && /f10:ship GH-1 --driven"},
-		{modePlan, shipFlow{}, "/f10:plan GH-1 --driven"},
+		{modeDefault, runplan.ShipFlow{}, "/f10:plan GH-1 && /f10:ship GH-1 --driven"},
+		{launch.ModePlan, runplan.ShipFlow{}, "/f10:plan GH-1 --driven"},
 		{modeDefault, local, "/f10:plan GH-1 && /f10:ship local: GH-1 --driven"},
 		{modeDefault, direct, "/f10:ship direct: GH-1 --driven"}, // a planless flow never plans
 	} {
-		if got := prompt(c.mode, c.fl, "GH-1", nil, "", nil, ""); got != c.want {
+		if got := launch.Prompt(c.mode, c.fl, "GH-1", nil, "", nil, ""); got != c.want {
 			t.Errorf("prompt(%q, %+v) = %q, want %q", c.mode, c.fl, got, c.want)
 		}
 	}
 
-	dep := &dependency{
-		task:    "GH-7",
-		branch:  "GH-7/base",
-		plan:    "/code/repo.GH-7-base/.f10/plans/GH-7.md",
-		planned: true,
+	dep := &launch.Dependency{
+		Task:    "GH-7",
+		Branch:  "GH-7/base",
+		Plan:    "/code/repo.GH-7-base/.f10/plans/GH-7.md",
+		Planned: true,
 	}
 	want := "/f10:plan GH-1 && GH-1 depends on GH-7, whose plan is at " +
 		"/code/repo.GH-7-base/.f10/plans/GH-7.md --driven"
 
-	if got := prompt(modePlan, shipFlow{}, "GH-1", dep, "", nil, ""); got != want {
+	if got := launch.Prompt(launch.ModePlan, runplan.ShipFlow{}, "GH-1", dep, "", nil, ""); got != want {
 		t.Errorf("prompt with a dependency = %q, want %q", got, want)
 	}
 
@@ -820,14 +823,14 @@ func TestPrompt(t *testing.T) {
 	plan := "/code/repo.GH-1/.f10/plans/GH-1.md"
 	for _, c := range []struct {
 		mode string
-		fl   shipFlow
+		fl   runplan.ShipFlow
 		want string
 	}{
-		{modeDefault, shipFlow{}, "/f10:ship GH-1 --driven"},
-		{modePlan, shipFlow{}, "/f10:plan GH-1 --driven"},
+		{modeDefault, runplan.ShipFlow{}, "/f10:ship GH-1 --driven"},
+		{launch.ModePlan, runplan.ShipFlow{}, "/f10:plan GH-1 --driven"},
 		{modeDefault, local, "/f10:ship local: GH-1 --driven"},
 	} {
-		if got := prompt(c.mode, c.fl, "GH-1", nil, plan, nil, ""); got != c.want {
+		if got := launch.Prompt(c.mode, c.fl, "GH-1", nil, plan, nil, ""); got != c.want {
 			t.Errorf("prompt(%q, %+v) with a plan = %q, want %q", c.mode, c.fl, got, c.want)
 		}
 	}
@@ -835,7 +838,7 @@ func TestPrompt(t *testing.T) {
 	want = "/f10:ship GH-1 && GH-1 depends on GH-7, whose plan is at " +
 		"/code/repo.GH-7-base/.f10/plans/GH-7.md --driven"
 
-	if got := prompt(modeDefault, shipFlow{}, "GH-1", dep, plan, nil, ""); got != want {
+	if got := launch.Prompt(modeDefault, runplan.ShipFlow{}, "GH-1", dep, plan, nil, ""); got != want {
 		t.Errorf("prompt with a plan and a dependency = %q, want %q", got, want)
 	}
 }
@@ -843,36 +846,36 @@ func TestPrompt(t *testing.T) {
 // The discuss prompt is plain text the user follows up on in the agent's
 // pane, so it never carries the driven marker.
 func TestDiscussPrompt(t *testing.T) {
-	got := prompt(modeDiscuss, shipFlow{}, "GH-1", nil, "", nil, "")
+	got := launch.Prompt(launch.ModeDiscuss, runplan.ShipFlow{}, "GH-1", nil, "", nil, "")
 	want := "Run `f10 task read GH-1` and summarise what it asks in a few lines. Then stop and wait."
 
 	if got != want {
 		t.Errorf("prompt(discuss) = %q, want %q", got, want)
 	}
 
-	dep := &dependency{task: "GH-7", branch: "GH-7/base", plan: "/plans/GH-7.md", planned: true}
+	dep := &launch.Dependency{Task: "GH-7", Branch: "GH-7/base", Plan: "/plans/GH-7.md", Planned: true}
 
-	got = prompt(modeDiscuss, shipFlow{}, "GH-1", dep, "", nil, "")
+	got = launch.Prompt(launch.ModeDiscuss, runplan.ShipFlow{}, "GH-1", dep, "", nil, "")
 	if !strings.Contains(got, "For context: GH-1 depends on GH-7, whose plan is at /plans/GH-7.md.") {
 		t.Errorf("prompt(discuss) with a dependency = %q, want the dependency named", got)
 	}
 
-	if strings.Contains(got, drivenMarker) {
+	if strings.Contains(got, launch.DrivenMarker) {
 		t.Errorf("prompt(discuss) = %q, want no driven marker", got)
 	}
 
-	got = prompt(modeDiscuss, shipFlow{}, "GH-1", nil, "/plans/GH-1.md", nil, "")
+	got = launch.Prompt(launch.ModeDiscuss, runplan.ShipFlow{}, "GH-1", nil, "/plans/GH-1.md", nil, "")
 	if !strings.Contains(got, "A plan for it is saved at /plans/GH-1.md; read it too.") {
 		t.Errorf("prompt(discuss) with a plan = %q, want the plan named", got)
 	}
 
-	if strings.Contains(got, drivenMarker) {
+	if strings.Contains(got, launch.DrivenMarker) {
 		t.Errorf("prompt(discuss) with a plan = %q, want no driven marker", got)
 	}
 }
 
 func TestPromptNote(t *testing.T) {
-	got := prompt(modeDiscuss, shipFlow{}, "GH-1", nil, "", nil, "/f10:judge it first.")
+	got := launch.Prompt(launch.ModeDiscuss, runplan.ShipFlow{}, "GH-1", nil, "", nil, "/f10:judge it first.")
 	want := "Run `f10 task read GH-1` and summarise what it asks in a few lines. " +
 		"Then, as the user asks: /f10:judge it first. Then stop and wait."
 
@@ -885,8 +888,18 @@ func TestPromptNote(t *testing.T) {
 		View: "f10 pr view --comments 9",
 		Diff: "f10 pr diff 9",
 	}
-	if got := prompt(modeDefault, shipFlow{}, "GH-1", nil, "", pick, "check the tests"); !strings.HasSuffix(got,
-		" Then, as the user asks: check the tests. Then stop and wait.") {
+	if got := launch.Prompt(
+		modeDefault,
+		runplan.ShipFlow{},
+		"GH-1",
+		nil,
+		"",
+		pick,
+		"check the tests",
+	); !strings.HasSuffix(
+		got,
+		" Then, as the user asks: check the tests. Then stop and wait.",
+	) {
 		t.Errorf("prompt for a PR with a note = %q, want the note before the wait", got)
 	}
 }
@@ -901,11 +914,11 @@ func TestRefuseNote(t *testing.T) {
 		refuse bool
 	}{
 		{modeDefault, nil, "", false},
-		{modeDiscuss, nil, "judge it first", false},
+		{launch.ModeDiscuss, nil, "judge it first", false},
 		{modeDefault, pick, "judge it first", false},
 		{modeDefault, nil, "judge it first", true},
-		{modePlan, nil, "judge it first", true},
-		{modePlan, pick, "judge it first", true},
+		{launch.ModePlan, nil, "judge it first", true},
+		{launch.ModePlan, pick, "judge it first", true},
 	} {
 		if err := refuseNote(tc.mode, tc.pick, tc.note); (err != nil) != tc.refuse {
 			t.Errorf(
@@ -934,7 +947,7 @@ func writePlan(t *testing.T, path string) {
 }
 
 func TestSiblingPathAndAgentName(t *testing.T) {
-	if got, want := siblingPath("/code/repo", "GH-1/slug"), "/code/repo.GH-1-slug"; got != want {
+	if got, want := worktree.SiblingPath("/code/repo", "GH-1/slug"), "/code/repo.GH-1-slug"; got != want {
 		t.Errorf("siblingPath = %q, want %q", got, want)
 	}
 
@@ -966,10 +979,10 @@ func TestResolveShipFlow(t *testing.T) {
 		"direct":  flow.Of([]string{"implement", "push"}),
 	}}
 
-	for name, want := range map[string]shipFlow{
+	for name, want := range map[string]runplan.ShipFlow{
 		"":       {},
-		"Local":  {name: "local"},
-		"direct": {name: "direct", planless: true},
+		"Local":  {Name: "local"},
+		"direct": {Name: "direct", Planless: true},
 	} {
 		if got, err := pacedFlowIn(eff, nil, "", name); err != nil || got != want {
 			t.Errorf("pacedFlow(%q) = %+v, %v; want %+v", name, got, err, want)
@@ -994,7 +1007,20 @@ func TestStartWithWorktrunk(t *testing.T) {
 	f.script("wt switch --no-cd --yes --format json --create GH-1", "{}")
 	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
-	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, shipFlow{}, "GH-1", nil, "", nil, ""), "{}")
+	f.script(
+		"herdr agent prompt "+agentOf(
+			"GH-1",
+		)+" "+launch.Prompt(
+			modeDefault,
+			runplan.ShipFlow{},
+			"GH-1",
+			nil,
+			"",
+			nil,
+			"",
+		),
+		"{}",
+	)
 
 	var out bytes.Buffer
 
@@ -1034,7 +1060,17 @@ func TestStartMarksStarted(t *testing.T) {
 		f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
 		f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
 		f.script(
-			"herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, shipFlow{}, "GH-1", nil, "", nil, ""),
+			"herdr agent prompt "+agentOf(
+				"GH-1",
+			)+" "+launch.Prompt(
+				modeDefault,
+				runplan.ShipFlow{},
+				"GH-1",
+				nil,
+				"",
+				nil,
+				"",
+			),
 			"{}",
 		)
 
@@ -1086,9 +1122,12 @@ func TestStartWithGitAlone(t *testing.T) {
 	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
 
-	dep := &dependency{task: "GH-7", branch: "GH-7/base", plan: testStorage.Plan("GH-7")}
-	local := shipFlow{name: "local"}
-	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, local, "GH-1", dep, "", nil, ""), "{}")
+	dep := &launch.Dependency{Task: "GH-7", Branch: "GH-7/base", Plan: testStorage.Plan("GH-7")}
+	local := runplan.ShipFlow{Name: "local"}
+	f.script(
+		"herdr agent prompt "+agentOf("GH-1")+" "+launch.Prompt(modeDefault, local, "GH-1", dep, "", nil, ""),
+		"{}",
+	)
 
 	var out bytes.Buffer
 
@@ -1166,8 +1205,21 @@ func TestStartAfterCitesThePlan(t *testing.T) {
 
 	f := afterFixture(t, dir, "ccc")
 	root := sharedStorage(f, storage.InRepo(dir))
-	dep := &dependency{task: "GH-7", branch: "GH-7/base", plan: plan, planned: true}
-	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, shipFlow{}, "GH-1", dep, "", nil, ""), "{}")
+	dep := &launch.Dependency{Task: "GH-7", Branch: "GH-7/base", Plan: plan, Planned: true}
+	f.script(
+		"herdr agent prompt "+agentOf(
+			"GH-1",
+		)+" "+launch.Prompt(
+			modeDefault,
+			runplan.ShipFlow{},
+			"GH-1",
+			dep,
+			"",
+			nil,
+			"",
+		),
+		"{}",
+	)
 
 	var out bytes.Buffer
 
@@ -1202,8 +1254,21 @@ func TestStartAfterWithoutAPlanYet(t *testing.T) {
 
 	f := afterFixture(t, dir, "ccc")
 	root := sharedStorage(f, storage.InRepo(dir))
-	dep := &dependency{task: "GH-7", branch: "GH-7/base", plan: plan}
-	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, shipFlow{}, "GH-1", dep, "", nil, ""), "{}")
+	dep := &launch.Dependency{Task: "GH-7", Branch: "GH-7/base", Plan: plan}
+	f.script(
+		"herdr agent prompt "+agentOf(
+			"GH-1",
+		)+" "+launch.Prompt(
+			modeDefault,
+			runplan.ShipFlow{},
+			"GH-1",
+			dep,
+			"",
+			nil,
+			"",
+		),
+		"{}",
+	)
 
 	var out bytes.Buffer
 
@@ -1233,8 +1298,21 @@ func TestStartAfterOutOfTreePlan(t *testing.T) {
 
 	f := afterFixture(t, "/code/repo.GH-7-base", "ccc")
 	sharedStorage(f, root)
-	dep := &dependency{task: "GH-7", branch: "GH-7/base", plan: plan, planned: true}
-	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, shipFlow{}, "GH-1", dep, "", nil, ""), "{}")
+	dep := &launch.Dependency{Task: "GH-7", Branch: "GH-7/base", Plan: plan, Planned: true}
+	f.script(
+		"herdr agent prompt "+agentOf(
+			"GH-1",
+		)+" "+launch.Prompt(
+			modeDefault,
+			runplan.ShipFlow{},
+			"GH-1",
+			dep,
+			"",
+			nil,
+			"",
+		),
+		"{}",
+	)
 
 	err := start(
 		t.Context(),
@@ -1251,8 +1329,21 @@ func TestStartAfterOutOfTreePlan(t *testing.T) {
 func TestStartAfterEqualsDefault(t *testing.T) {
 	f := afterFixture(t, "/code/repo.GH-7-base", "bbb")
 	root := sharedStorage(f, storage.Root(t.TempDir()))
-	dep := &dependency{task: "GH-7", branch: "GH-7/base", plan: root.Plan("GH-7")}
-	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, shipFlow{}, "GH-1", dep, "", nil, ""), "{}")
+	dep := &launch.Dependency{Task: "GH-7", Branch: "GH-7/base", Plan: root.Plan("GH-7")}
+	f.script(
+		"herdr agent prompt "+agentOf(
+			"GH-1",
+		)+" "+launch.Prompt(
+			modeDefault,
+			runplan.ShipFlow{},
+			"GH-1",
+			dep,
+			"",
+			nil,
+			"",
+		),
+		"{}",
+	)
 
 	var out bytes.Buffer
 
@@ -1300,7 +1391,20 @@ func TestStartWithBase(t *testing.T) {
 	f.script("git worktree add -b GH-1 /code/repo.GH-1 release/1.2", "")
 	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
-	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, shipFlow{}, "GH-1", nil, "", nil, ""), "{}")
+	f.script(
+		"herdr agent prompt "+agentOf(
+			"GH-1",
+		)+" "+launch.Prompt(
+			modeDefault,
+			runplan.ShipFlow{},
+			"GH-1",
+			nil,
+			"",
+			nil,
+			"",
+		),
+		"{}",
+	)
 
 	var out bytes.Buffer
 
@@ -1335,7 +1439,20 @@ func TestStartBaseEqualsDefault(t *testing.T) {
 	f.script("wt switch --no-cd --yes --format json --create --base main GH-1", "{}")
 	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
-	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, shipFlow{}, "GH-1", nil, "", nil, ""), "{}")
+	f.script(
+		"herdr agent prompt "+agentOf(
+			"GH-1",
+		)+" "+launch.Prompt(
+			modeDefault,
+			runplan.ShipFlow{},
+			"GH-1",
+			nil,
+			"",
+			nil,
+			"",
+		),
+		"{}",
+	)
 
 	var out bytes.Buffer
 
@@ -1365,7 +1482,20 @@ func TestStartBaseIgnoredOnExistingBranch(t *testing.T) {
 	f.script("wt switch --no-cd --yes --format json GH-1", "{}")
 	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
-	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, shipFlow{}, "GH-1", nil, "", nil, ""), "{}")
+	f.script(
+		"herdr agent prompt "+agentOf(
+			"GH-1",
+		)+" "+launch.Prompt(
+			modeDefault,
+			runplan.ShipFlow{},
+			"GH-1",
+			nil,
+			"",
+			nil,
+			"",
+		),
+		"{}",
+	)
 
 	var out bytes.Buffer
 
@@ -1427,7 +1557,7 @@ func TestStartReusesTheWorktreeAndWorkspace(t *testing.T) {
 	err := start(
 		t.Context(),
 		&out,
-		startInput{main: "/code/repo", storage: testStorage, task: gh1, mode: modePlan, after: "GH-7"},
+		startInput{main: "/code/repo", storage: testStorage, task: gh1, mode: launch.ModePlan, after: "GH-7"},
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -1501,7 +1631,20 @@ func TestStartRecoversAWorkspaceWithNoAgent(t *testing.T) {
 	f.script("herdr pane process-info --pane pane:7",
 		`{"result":{"process_info":{"foreground_process_group_id":42,"pane_id":"pane:7","shell_pid":42}}}`)
 	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
-	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, shipFlow{}, "GH-1", nil, "", nil, ""), "{}")
+	f.script(
+		"herdr agent prompt "+agentOf(
+			"GH-1",
+		)+" "+launch.Prompt(
+			modeDefault,
+			runplan.ShipFlow{},
+			"GH-1",
+			nil,
+			"",
+			nil,
+			"",
+		),
+		"{}",
+	)
 
 	var out bytes.Buffer
 
@@ -1569,7 +1712,20 @@ func TestStartWaitsForTheShell(t *testing.T) {
 		},
 		{Stdout: "{}"},
 	}
-	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, shipFlow{}, "GH-1", nil, "", nil, ""), "{}")
+	f.script(
+		"herdr agent prompt "+agentOf(
+			"GH-1",
+		)+" "+launch.Prompt(
+			modeDefault,
+			runplan.ShipFlow{},
+			"GH-1",
+			nil,
+			"",
+			nil,
+			"",
+		),
+		"{}",
+	)
 
 	var progress bytes.Buffer
 
@@ -1616,9 +1772,9 @@ func TestStartSlugsTheBranch(t *testing.T) {
 			"GH-1",
 			"",
 			"/code/repo.GH-1-add-dark-mode",
-		)+" "+prompt(
+		)+" "+launch.Prompt(
 			modeDefault,
-			shipFlow{},
+			runplan.ShipFlow{},
 			"GH-1",
 			nil,
 			"",
@@ -1660,7 +1816,20 @@ func TestStartWithoutATitle(t *testing.T) {
 	f.script("wt switch --no-cd --yes --format json --create GH-1", "{}")
 	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
-	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, shipFlow{}, "GH-1", nil, "", nil, ""), "{}")
+	f.script(
+		"herdr agent prompt "+agentOf(
+			"GH-1",
+		)+" "+launch.Prompt(
+			modeDefault,
+			runplan.ShipFlow{},
+			"GH-1",
+			nil,
+			"",
+			nil,
+			"",
+		),
+		"{}",
+	)
 
 	var out bytes.Buffer
 
@@ -1713,7 +1882,20 @@ func TestStartOpensAClosedWorktree(t *testing.T) {
 	f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
 	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
-	f.script("herdr agent prompt "+agentOf("GH-1")+" "+prompt(modeDefault, shipFlow{}, "GH-1", nil, "", nil, ""), "{}")
+	f.script(
+		"herdr agent prompt "+agentOf(
+			"GH-1",
+		)+" "+launch.Prompt(
+			modeDefault,
+			runplan.ShipFlow{},
+			"GH-1",
+			nil,
+			"",
+			nil,
+			"",
+		),
+		"{}",
+	)
 
 	if err := start(
 		t.Context(),
@@ -1746,7 +1928,10 @@ func TestStartReadsMainsPlanInPlace(t *testing.T) {
 	f.script("herdr worktree open --cwd "+main+" --path "+wt+" --label GH-1", opened)
 	f.script("herdr agent start "+agent+" --kind claude --pane pane:7 -- "+
 		strings.Join(agentArgs(agentctl.Profile{}, root, wt), " "), "{}")
-	f.script("herdr agent prompt "+agent+" "+prompt(modeDefault, shipFlow{}, "GH-1", nil, src, nil, ""), "{}")
+	f.script(
+		"herdr agent prompt "+agent+" "+launch.Prompt(modeDefault, runplan.ShipFlow{}, "GH-1", nil, src, nil, ""),
+		"{}",
+	)
 
 	var out bytes.Buffer
 
@@ -1784,7 +1969,7 @@ func TestStartChecksOutAnExistingBranch(t *testing.T) {
 	)
 	f.script(
 		"herdr agent prompt "+agentctl.AgentName("GH-1", "", "/code/repo.GH-1-slug")+" "+
-			prompt(modeDefault, shipFlow{}, "GH-1", nil, "", nil, ""),
+			launch.Prompt(modeDefault, runplan.ShipFlow{}, "GH-1", nil, "", nil, ""),
 		"{}",
 	)
 
@@ -1948,17 +2133,17 @@ func TestStartRefusesAParent(t *testing.T) {
 
 // Every mode but --discuss refuses a parent; a PR pickup never does.
 func TestChecksParent(t *testing.T) {
-	for _, mode := range []string{modeDefault, modePlan} {
+	for _, mode := range []string{modeDefault, launch.ModePlan} {
 		if !checksParent(mode, nil) {
 			t.Errorf("mode %q skips the parent check", mode)
 		}
 	}
 
-	if checksParent(modeDiscuss, nil) {
+	if checksParent(launch.ModeDiscuss, nil) {
 		t.Error("--discuss refuses a parent")
 	}
 
-	if checksParent(modeDefault, pickGH) || checksParent(modePlan, pickGH) {
+	if checksParent(modeDefault, pickGH) || checksParent(launch.ModePlan, pickGH) {
 		t.Error("a PR pickup refuses a parent")
 	}
 }

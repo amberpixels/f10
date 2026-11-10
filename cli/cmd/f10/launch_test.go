@@ -7,6 +7,8 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/launch"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 )
 
 // A fresh start hands the agent its first prompt on its command line, ahead
@@ -19,9 +21,9 @@ func TestStartLaunchesWithTheFirstPrompt(t *testing.T) {
 	f.script("wt switch --no-cd --yes --format json --create GH-1", "{}")
 	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
 
-	launch := "herdr agent start " + agentOf("GH-1") + " --kind claude --pane pane:7 -- " +
-		prompt(modeDefault, shipFlow{}, "GH-1", nil, "", nil, "") + " --effort high"
-	f.script(launch, "{}")
+	launched := "herdr agent start " + agentOf("GH-1") + " --kind claude --pane pane:7 -- " +
+		launch.Prompt(modeDefault, runplan.ShipFlow{}, "GH-1", nil, "", nil, "") + " --effort high"
+	f.script(launched, "{}")
 
 	in := startInput{
 		main:           "/code/repo",
@@ -34,7 +36,7 @@ func TestStartLaunchesWithTheFirstPrompt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !f.called(launch) {
+	if !f.called(launched) {
 		t.Errorf("the agent was not launched with its prompt: %q", f.calls)
 	}
 
@@ -54,10 +56,16 @@ func TestStartTypesAPromptWithANewline(t *testing.T) {
 	f.script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", opened)
 	f.script("herdr agent start "+agentOf("GH-1")+" --kind claude --pane pane:7", "{}")
 
-	text := prompt(modeDiscuss, shipFlow{}, "GH-1", nil, "", nil, "first\nsecond")
+	text := launch.Prompt(launch.ModeDiscuss, runplan.ShipFlow{}, "GH-1", nil, "", nil, "first\nsecond")
 	f.script("herdr agent prompt "+agentOf("GH-1")+" "+text, "{}")
 
-	in := startInput{main: "/code/repo", storage: testStorage, task: gh1, mode: modeDiscuss, note: "first\nsecond"}
+	in := startInput{
+		main:    "/code/repo",
+		storage: testStorage,
+		task:    gh1,
+		mode:    launch.ModeDiscuss,
+		note:    "first\nsecond",
+	}
 	if err := start(t.Context(), &bytes.Buffer{}, in); err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +90,7 @@ func TestDriveLaunchesWithTheFirstSkill(t *testing.T) {
 	}
 
 	want := "herdr agent start " + agentOf("GH-1") + " --kind claude --pane pane:1 -- " +
-		skillPrompt("judge", "GH-1", nil, shipFlow{}, false)
+		skillPrompt("judge", "GH-1", nil, runplan.ShipFlow{}, false)
 	if len(fx.f.launches) != 1 || fx.f.launches[0] != want {
 		t.Errorf("launches = %q, want %q", fx.f.launches, want)
 	}
@@ -112,12 +120,12 @@ func TestHoldsPrompt(t *testing.T) {
 	}
 
 	for name, c := range cases {
-		if got := holdsPrompt(c.screen, sentText); got != c.want {
+		if got := launch.HoldsPrompt(c.screen, sentText); got != c.want {
 			t.Errorf("%s: holdsPrompt = %v, want %v", name, got, c.want)
 		}
 	}
 
-	if !holdsPrompt(screenWith("❯ [Pasted text #1 +2 lines]"), "first\nsecond") {
+	if !launch.HoldsPrompt(screenWith("❯ [Pasted text #1 +2 lines]"), "first\nsecond") {
 		t.Error("a multi-line prompt pasted as a block reads as submitted")
 	}
 }
@@ -137,7 +145,7 @@ func TestPromptCheckedResendsEnterOnce(t *testing.T) {
 		m.started = []string{agentOf("GH-1")}
 		m.screens = c.screens
 
-		note, err := promptChecked(t.Context(), fwdWT, "GH-1", "", sentText)
+		note, err := launch.PromptChecked(t.Context(), fwdWT, "GH-1", "", sentText)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -154,10 +162,10 @@ func TestDriveRetriesEnterOnceForATypedSend(t *testing.T) {
 	m := useAgents(t)
 	m.screens = []string{screenWith("❯ " + sentText)}
 
-	prev := enterRetry
-	enterRetry = 10 * time.Second
+	prev := launch.EnterRetry
+	launch.EnterRetry = 10 * time.Second
 
-	t.Cleanup(func() { enterRetry = prev })
+	t.Cleanup(func() { launch.EnterRetry = prev })
 
 	now := time.Now()
 	in := &driveInput{

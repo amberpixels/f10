@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ledger"
@@ -39,7 +40,7 @@ func (in *driveInput) end(ctx context.Context, r *driveRun, res driveResult) {
 	}
 
 	// a finished task's branch took the record with it
-	if res.row != rowFinished {
+	if res.row != driverec.RowFinished {
 		in.parkFinish(ctx, r)
 	}
 
@@ -65,7 +66,7 @@ func (in *driveInput) end(ctx context.Context, r *driveRun, res driveResult) {
 
 	// a finished task's lines are its handoff, which finish's report just
 	// printed; they wait for the drive's report
-	if len(res.lines) == 0 || res.row == rowFinished {
+	if len(res.lines) == 0 || res.row == driverec.RowFinished {
 		fmt.Fprintf(in.out, "%s: %s\n", in.id(r.task.ref.ID), res.row)
 
 		return

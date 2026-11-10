@@ -12,6 +12,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // newCatchupRepo is a clone with main pushed and FT-1/a branched from it;
@@ -620,7 +621,7 @@ func TestRecordTipTakesTheNewerBase(t *testing.T) {
 	r.at(later, "branch", "-f", "FT-2/b", "FT-2/b~1")
 	r.at(later, "merge", "-q", "--no-edit", "origin/FT-2/b")
 
-	if err := recordTip(t.Context(), r.dir, "FT-1/a", "FT-2/b"); err != nil {
+	if err := worktree.RecordTip(t.Context(), r.dir, "FT-1/a", "FT-2/b"); err != nil {
 		t.Fatal(err)
 	}
 

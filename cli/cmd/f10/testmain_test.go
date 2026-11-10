@@ -8,9 +8,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/amberpixels/f10/cli/internal/asknotify"
 	"github.com/amberpixels/f10/cli/internal/asks"
 	"github.com/amberpixels/f10/cli/internal/daemon"
+	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/ledger"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
@@ -76,10 +79,10 @@ func TestMain(m *testing.M) {
 		_ = os.Setenv(name, value)
 	}
 
-	askNotifier = nil
+	asknotify.AskNotifier = nil
 
 	// a start or a drive run here hands nothing to a real daemon
-	watchProject = func(context.Context, io.Writer, *target.Target) {}
+	driverec.WatchProject = func(context.Context, io.Writer, *target.Target) {}
 
 	code := m.Run()
 
@@ -108,7 +111,7 @@ func TestUserDirsStayInTheTestRoot(t *testing.T) {
 		"asks dir":        asks.Dir(),
 		"ledger":          ledger.Path(),
 		"user f10 dir":    userDir,
-		"claude settings": claudeSettingsPath(),
+		"claude settings": runplan.ClaudeSettingsPath(),
 	} {
 		if !strings.HasPrefix(path, testRoot+string(filepath.Separator)) {
 			t.Errorf("%s = %q, outside the test root %q", name, path, testRoot)

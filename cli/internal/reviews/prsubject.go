@@ -1,4 +1,4 @@
-package main
+package reviews
 
 import (
 	"cmp"
@@ -16,31 +16,55 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // A prSubject is the change a step reads: a branch, where it is checked
 // out, the task it belongs to, and its request. Every step that names a PR,
 // a task or "this branch" resolves it here, so none parses a branch itself.
 type prSubject struct {
-	main   string
-	branch string
+	Main   string
+	Branch string
 	remote bool   // only origin has the branch
-	path   string // the checkout holding it, "" when none does
-	here   bool   // checked out in the checkout the command runs in
-	task   *ref.Ref
-	number int    // the request: one named, else the branch's open one; 0 for none
-	target string // the request's own base branch, which wins over the recorded one
+	Path   string // the checkout holding it, "" when none does
+	Here   bool   // checked out in the checkout the command runs in
+	Task   *ref.Ref
+	Number int    // the request: one named, else the branch's open one; 0 for none
+	Target string // the request's own base branch, which wins over the recorded one
 
-	// lookupErr is a failed host lookup for a branch checked out here, whose
+	// LookupErr is a failed host lookup for a branch checked out here, whose
 	// diff is local and goes on against the git-only base
-	lookupErr error
+	LookupErr error
 }
 
-// pullNumberOf is the request a token names, or 0: a url, #n, !n, or a bare
+// Base is the branch the subject is diffed against: its open request's
+// target, else the one prBase reads from git.
+func (s prSubject) Base(ctx context.Context, warn io.Writer) (string, error) {
+	if s.Target != "" {
+		return s.Target, nil
+	}
+
+	return stack.PRBase(ctx, warn, s.Main, s.Branch)
+}
+
+// HeadRef is the ref git reads the subject's branch at.
+func (s prSubject) HeadRef() string {
+	if s.Here {
+		return "HEAD"
+	}
+
+	if s.remote {
+		return "refs/remotes/origin/" + s.Branch
+	}
+
+	return "refs/heads/" + s.Branch
+}
+
+// PullNumberOf is the request a token names, or 0: a url, #n, !n, or a bare
 // number, always a request here; a task is named with its prefix or url.
-func pullNumberOf(token string) int {
-	number, _ := pullToken(token)
-	if number == "" && digits(token) {
+func PullNumberOf(token string) int {
+	number, _ := worktree.PullToken(token)
+	if number == "" && worktree.Digits(token) {
 		number = token
 	}
 
@@ -49,15 +73,15 @@ func pullNumberOf(token string) int {
 	return n
 }
 
-// resolvePRSubject turns a PR, a task id or nothing (the current branch) into
+// ResolvePRSubject turns a PR, a task id or nothing (the current branch) into
 // a subject, with the branch's open request looked up on the host, whose
 // target then wins over the base git records.
-func resolvePRSubject(ctx context.Context, t *target.Target, token string) (prSubject, error) {
-	s := prSubject{main: cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot)}
+func ResolvePRSubject(ctx context.Context, t *target.Target, token string) (prSubject, error) {
+	s := prSubject{Main: cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot)}
 	token = strings.TrimSpace(token)
 	withPull := true
 
-	switch n := pullNumberOf(token); {
+	switch n := PullNumberOf(token); {
 	case n > 0:
 		h, err := hostops.HostOf(t)
 		if err != nil {
@@ -69,20 +93,20 @@ func resolvePRSubject(ctx context.Context, t *target.Target, token string) (prSu
 			return s, err
 		}
 
-		if s.branch = p.Head; s.branch == "" {
+		if s.Branch = p.Head; s.Branch == "" {
 			return s, fmt.Errorf("%s returned no head branch for #%d", h.Name, n)
 		}
 
-		s.number, s.target, withPull = n, p.Base, false
-		s.remote = stack.RefSHA(ctx, s.main, "refs/heads/"+s.branch) == ""
-		s.task = branchTask(ctx, t, s.main, s.branch)
+		s.Number, s.Target, withPull = n, p.Base, false
+		s.remote = stack.RefSHA(ctx, s.Main, "refs/heads/"+s.Branch) == ""
+		s.Task = BranchTask(ctx, t, s.Main, s.Branch)
 	case token == "":
-		if s.branch = gitx.CurrentBranch(ctx, t.Dir); s.branch == "" {
+		if s.Branch = gitx.CurrentBranch(ctx, t.Dir); s.Branch == "" {
 			return s, errors.New("HEAD is detached: name a PR or a task")
 		}
 
 		if r, err := t.Reference(ctx, ""); err == nil && r.Origin != ref.OriginSession {
-			s.task = &r
+			s.Task = &r
 		}
 	default:
 		r, err := t.Reference(ctx, token)
@@ -91,7 +115,7 @@ func resolvePRSubject(ctx context.Context, t *target.Target, token string) (prSu
 		}
 
 		r = r.Head()
-		s.task = &r
+		s.Task = &r
 
 		// origin too, unlike taskCheckout: a branch pushed from another
 		// machine is only on origin, and still names the change
@@ -100,7 +124,7 @@ func resolvePRSubject(ctx context.Context, t *target.Target, token string) (prSu
 			return s, err
 		}
 
-		x, err := stack.LoadBranchIndex(ctx, s.main)
+		x, err := stack.LoadBranchIndex(ctx, s.Main)
 		if err != nil {
 			return s, err
 		}
@@ -113,7 +137,7 @@ func resolvePRSubject(ctx context.Context, t *target.Target, token string) (prSu
 		if found.Name == "" {
 			// a finished task's branch is deleted; its last request still
 			// holds the change, which explain and judge read after the merge
-			p, err := lastPullOf(ctx, t, want)
+			p, err := LastPullOf(ctx, t, want)
 			if err != nil {
 				return s, err
 			}
@@ -122,43 +146,43 @@ func resolvePRSubject(ctx context.Context, t *target.Target, token string) (prSu
 				return s, fmt.Errorf("%s has no branch here or on origin and no PR: start it first", r.ID)
 			}
 
-			s.branch, s.remote, s.number, s.target = want, true, p.Number, p.Base
+			s.Branch, s.remote, s.Number, s.Target = want, true, p.Number, p.Base
 
 			return s, nil
 		}
 
-		s.branch, s.remote = found.Name, found.Remote
+		s.Branch, s.remote = found.Name, found.Remote
 	}
 
 	if !s.remote {
-		wts, err := gitx.Worktrees(ctx, s.main)
+		wts, err := gitx.Worktrees(ctx, s.Main)
 		if err != nil {
 			return s, err
 		}
 
-		s.path = stack.WorktreeOf(wts, s.branch)
-		s.here = s.path != "" && gitx.SamePath(s.path, t.Layout.CheckoutRoot)
+		s.Path = stack.WorktreeOf(wts, s.Branch)
+		s.Here = s.Path != "" && gitx.SamePath(s.Path, t.Layout.CheckoutRoot)
 	}
 
 	if withPull {
-		p, err := openPullOf(ctx, t, s.branch)
+		p, err := OpenPullOf(ctx, t, s.Branch)
 
 		switch {
-		case err != nil && s.here:
-			s.lookupErr = err
+		case err != nil && s.Here:
+			s.LookupErr = err
 		case err != nil:
 			return s, err
 		}
 
-		s.number, s.target = p.Number, p.Base
+		s.Number, s.Target = p.Number, p.Base
 	}
 
 	return s, nil
 }
 
-// branchTask is the task a PR's head branch belongs to: its link, else the
+// BranchTask is the task a PR's head branch belongs to: its link, else the
 // id in its name; nil when neither names one the tracker resolves.
-func branchTask(ctx context.Context, t *target.Target, main, branch string) *ref.Ref {
+func BranchTask(ctx context.Context, t *target.Target, main, branch string) *ref.Ref {
 	id, _ := branchmeta.Get(ctx, main, branch, branchmeta.Task)
 	if id == "" && t.Effective != nil {
 		id = ref.Matcher(t.Effective.IDPrefix)(branch)
@@ -178,20 +202,10 @@ func branchTask(ctx context.Context, t *target.Target, main, branch string) *ref
 	return &r
 }
 
-// base is the branch the subject is diffed against: its open request's
-// target, else the one prBase reads from git.
-func (s prSubject) base(ctx context.Context, warn io.Writer) (string, error) {
-	if s.target != "" {
-		return s.target, nil
-	}
-
-	return stack.PRBase(ctx, warn, s.main, s.branch)
-}
-
-// openPullOf is the newest open request whose head is branch, or 0: a merged
+// OpenPullOf is the newest open request whose head is branch, or 0: a merged
 // or closed one is history, not the change's request. A checkout with no
 // host CLI has no requests, and still diffs.
-func openPullOf(ctx context.Context, t *target.Target, branch string) (forge.PR, error) {
+func OpenPullOf(ctx context.Context, t *target.Target, branch string) (forge.PR, error) {
 	h, err := hostops.HostOf(t)
 	if err != nil {
 		return forge.PR{}, nil //nolint:nilerr // no host is no request
@@ -211,9 +225,9 @@ func openPullOf(ctx context.Context, t *target.Target, branch string) (forge.PR,
 	return forge.PR{}, nil
 }
 
-// lastPullOf is the newest request of any state whose head is branch, or 0;
+// LastPullOf is the newest request of any state whose head is branch, or 0;
 // a checkout with no host CLI has none.
-func lastPullOf(ctx context.Context, t *target.Target, branch string) (forge.PR, error) {
+func LastPullOf(ctx context.Context, t *target.Target, branch string) (forge.PR, error) {
 	h, err := hostops.HostOf(t)
 	if err != nil {
 		return forge.PR{}, nil //nolint:nilerr // no host is no request
@@ -227,10 +241,10 @@ func lastPullOf(ctx context.Context, t *target.Target, branch string) (forge.PR,
 	return prs[0], nil
 }
 
-// mergedTree is head merged in memory into the newer of base's local and
+// MergedTree is head merged in memory into the newer of base's local and
 // origin refs, and that ref. Diffed against the ref it holds only what main
 // lacks, which a merge base misses once the branch's earlier PR was squashed.
-func mergedTree(ctx context.Context, dir, head, base string) (string, string, error) {
+func MergedTree(ctx context.Context, dir, head, base string) (string, string, error) {
 	var into string
 
 	for _, r := range []string{"refs/heads/" + base, "refs/remotes/origin/" + base} {
@@ -259,27 +273,14 @@ func mergedTree(ctx context.Context, dir, head, base string) (string, string, er
 	return into, tree, nil
 }
 
-// capturedHead is HEAD with the tracked work in the tree on top, as a commit
+// CapturedHead is HEAD with the tracked work in the tree on top, as a commit
 // no ref points at: `git stash create` touches neither the stash list nor
 // the index, and prints nothing for a clean tree.
-func capturedHead(ctx context.Context, dir string) (string, error) {
+func CapturedHead(ctx context.Context, dir string) (string, error) {
 	sha, err := gitx.Exec(ctx, dir, "stash", "create")
 	if err != nil || sha != "" {
 		return sha, err
 	}
 
 	return gitx.Exec(ctx, dir, "rev-parse", "HEAD")
-}
-
-// headRef is the ref git reads the subject's branch at.
-func (s prSubject) headRef() string {
-	if s.here {
-		return "HEAD"
-	}
-
-	if s.remote {
-		return "refs/remotes/origin/" + s.branch
-	}
-
-	return "refs/heads/" + s.branch
 }

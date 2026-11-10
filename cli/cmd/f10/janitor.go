@@ -15,6 +15,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/fsx"
@@ -580,7 +581,7 @@ func (j *sweeper) own(ctx context.Context, p *forge.PR) bool {
 func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) {
 	left := map[string][]string{}
 	cleared := map[string]time.Time{}
-	ends := map[string]seriesEnd{} // what closes each task's series: its removed branch
+	ends := map[string]archive.SeriesEnd{} // what closes each task's series: its removed branch
 
 	for _, b := range branches {
 		ended, ok := removed[b.name]
@@ -588,9 +589,9 @@ func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) 
 		for _, id := range b.ids {
 			if ok {
 				cleared[id] = laterOf(cleared[id], ended)
-				ends[id] = seriesEnd{pr: "none", head: cmp.Or(b.localSHA, b.originSHA)}
+				ends[id] = archive.SeriesEnd{Pr: "none", Head: cmp.Or(b.localSHA, b.originSHA)}
 				if n := j.prs[b.name]; n > 0 {
-					ends[id] = seriesEnd{pr: "#" + strconv.Itoa(n), head: ends[id].head}
+					ends[id] = archive.SeriesEnd{Pr: "#" + strconv.Itoa(n), Head: ends[id].Head}
 				}
 			} else {
 				left[id] = append(left[id], b.name)
@@ -617,7 +618,7 @@ func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) 
 		case live && writtenAfter(plan, cleared[id]):
 			j.say("kept the plan for %s: it was written after its branch's work ended", id)
 		case j.in.dry:
-			for _, p := range []string{plan, j.in.storage.Reviews(id), taskHandoff(j.in.storage, id)} {
+			for _, p := range []string{plan, j.in.storage.Reviews(id), archive.TaskHandoff(j.in.storage, id)} {
 				if fsx.Exists(p) {
 					j.say("would archive %s", p)
 				}
@@ -631,7 +632,7 @@ func (j *sweeper) archive(branches []staleBranch, removed map[string]time.Time) 
 // clear archives a task whose branches are all gone; closing its review
 // series lets a later PR on the task start at round 1 with its own lore
 // change. A failed step is a line, and the rest still run.
-func (j *sweeper) clear(id string, end seriesEnd) {
+func (j *sweeper) clear(id string, end archive.SeriesEnd) {
 	plan := j.in.storage.Plan(id)
 
 	a, _ := archiveTask(j.in.storage, id, &end, func(_ string, err error) error {

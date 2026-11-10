@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/forge"
@@ -11,6 +10,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // Picking up someone else's PR: nothing is local, so start checks the branch
@@ -19,34 +19,12 @@ import (
 // branch worth tracking: its worktree is made at the commit it landed as, on
 // a branch named for the task, for a post-merge review.
 
-// pullPathRE matches GitHub's `/pull/12` and GitLab's `/-/merge_requests/12`.
-var pullPathRE = regexp.MustCompile(`/(?:pull|merge_requests)/(\d+)(?:[/?#]|$)`)
-
-// pullToken's probe is true for a bare `#12`, which may name a task instead:
-// ask the host before taking it (GitHub's issues and PRs share one counter).
-func pullToken(token string) (string, bool) {
-	switch {
-	case strings.Contains(token, "://"):
-		if m := pullPathRE.FindStringSubmatch(token); m != nil {
-			return m[1], false
-		}
-	case len(token) > 1 && (token[0] == '!' || token[0] == '#') && digits(token[1:]):
-		return token[1:], token[0] == '#'
-	}
-
-	return "", false
-}
-
-func digits(s string) bool {
-	return s != "" && strings.Trim(s, "0123456789") == ""
-}
-
 // pickupTask prefers a closing keyword's issue (this repository's only) on a
 // host-issues tracker, else an id in the body, title or branch, in that order.
 func pickupTask(prefix string, hostIssues bool, p forge.PR) string {
 	if hostIssues && prefix != "" {
 		repo := p.URL
-		if i := pullPathRE.FindStringIndex(repo); i != nil {
+		if i := worktree.PullPathRE.FindStringIndex(repo); i != nil {
 			repo = strings.TrimSuffix(repo[:i[0]], "/-")
 		}
 

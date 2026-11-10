@@ -11,6 +11,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/calendar"
 	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/scope"
 	"github.com/amberpixels/f10/cli/internal/standup"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -75,7 +76,7 @@ func runStandup(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
-	last, err := readLastStandup()
+	last, err := scope.ReadLastStandup()
 	if err != nil {
 		return err
 	}
@@ -90,7 +91,7 @@ func runStandup(ctx context.Context, cmd *cli.Command) error {
 		from = calendar.FallbackFrom(now)
 	}
 
-	targets, err := standupTargets(ctx, cmd)
+	targets, err := scope.StandupTargets(ctx, cmd)
 	if err != nil {
 		return err
 	}
@@ -104,7 +105,7 @@ func runStandup(ctx context.Context, cmd *cli.Command) error {
 	// fails no run that would not use it; the day is the person's, so it is
 	// found over every repository at once
 	if period == standup.PeriodLastWorkingDay {
-		workdays, err := readWorkdays()
+		workdays, err := scope.ReadWorkdays()
 		if err != nil {
 			return err
 		}
@@ -188,7 +189,7 @@ func runStandupMark(_ context.Context, cmd *cli.Command) error {
 		)
 	}
 
-	return writeLastStandup(standup.Last{At: at.UTC(), Since: since.UTC()})
+	return scope.WriteLastStandup(standup.Last{At: at.UTC(), Since: since.UTC()})
 }
 
 // parseSince reads --since. The period's other forms (since the last

@@ -10,6 +10,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/asknotify"
 	"github.com/amberpixels/f10/cli/internal/hook"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/ledger"
@@ -62,7 +63,7 @@ func runHook(ctx context.Context, cmd *cli.Command) error {
 		StorageRoot: func(ctx context.Context, cwd string) string { return layout.Locate(ctx, cwd).StorageRoot.Path() },
 		TaskID:      hookTaskID,
 		StatusText:  hookStatusText,
-		PromptTyped: paneAnswered,
+		PromptTyped: asknotify.PaneAnswered,
 		Observers:   []observe.Observer{recorder},
 	}
 

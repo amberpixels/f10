@@ -9,10 +9,12 @@ import (
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // finish runs in the order the refusals need: every refusal before anything
@@ -21,7 +23,7 @@ import (
 func finish(ctx context.Context, w io.Writer, in finishInput) error {
 	// read before the merge archives the series, which raises the count
 	if in.change == "" {
-		in.change = changeOf(in.storage.Reviews(in.task.ID))
+		in.change = archive.ChangeOf(in.storage.Reviews(in.task.ID))
 	}
 
 	d, err := decideFinish(ctx, in)
@@ -109,7 +111,7 @@ func decideFinish(ctx context.Context, in finishInput) (finishDecision, error) {
 		}
 	}
 
-	wss, err := agents(in.main).Workspaces(ctx)
+	wss, err := worktree.Agents(in.main).Workspaces(ctx)
 	if err != nil {
 		return d, err
 	}

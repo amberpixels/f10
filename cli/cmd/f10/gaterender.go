@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -83,7 +82,7 @@ func (g gate) stateText() string {
 		return g.State + " " + g.Action
 	case g.State == gateDone && g.Outcome != nil:
 		text := g.Outcome.Verdict
-		if done := g.Outcome.done(); done != "" {
+		if done := g.Outcome.Done(); done != "" {
 			text += " (" + done + ")"
 		}
 
@@ -95,33 +94,6 @@ func (g gate) stateText() string {
 	}
 
 	return g.State
-}
-
-// done is what the ship run did with the verdict, from the decision line;
-// continue and a file with no line say nothing, and a new word shows as is.
-func (j *judgeOutcome) done() string {
-	switch j.Decision {
-	case "", "continue":
-		return ""
-	case "built":
-		if j.Changes > 0 {
-			return strconv.Itoa(j.Changes) + " built"
-		}
-
-		return "built"
-	case "refactor as agreed":
-		return "refactor built"
-	case "folded":
-		return "folded into plan"
-	case "block", "stop":
-		return "blocked"
-	case "asked":
-		return "waiting on an answer"
-	case "overridden":
-		return "overridden by the user"
-	}
-
-	return j.Decision
 }
 
 func (h *reviewHalf) text() string {

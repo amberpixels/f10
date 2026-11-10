@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ledger"
@@ -285,9 +286,18 @@ func TestRenderRows(t *testing.T) {
 			Step: "finish", PR: gh("pull", 216), PRState: "merged",
 		},
 		{
-			ID: "FT-212", URL: gh("issues", 212), Title: "Run drives in a per-user daemon", Depth: 1,
-			After: "FT-210", Stage: stageReviewing, Step: "review", PR: gh("pull", 219), PRState: forge.Open,
-			Gates: []gate{{Step: "judge", Judged: "plan", State: gateDone, Outcome: &judgeOutcome{Verdict: "proceed"}}},
+			ID:      "FT-212",
+			URL:     gh("issues", 212),
+			Title:   "Run drives in a per-user daemon",
+			Depth:   1,
+			After:   "FT-210",
+			Stage:   stageReviewing,
+			Step:    "review",
+			PR:      gh("pull", 219),
+			PRState: forge.Open,
+			Gates: []gate{
+				{Step: "judge", Judged: "plan", State: gateDone, Outcome: &archive.JudgeOutcome{Verdict: "proceed"}},
+			},
 		},
 		{
 			ID: "FT-213", URL: gh("issues", 213), Title: "Keep asks in an inbox the user is told about",
@@ -349,7 +359,7 @@ func TestRenderFinishedRow(t *testing.T) {
 		ID: "FT-210", URL: "https://github.com/a/b/issues/210", Title: "Keep a drive as a record",
 		Stage: stageDone, Step: "finish", PR: "https://github.com/a/b/pull/216", PRState: "merged", full: true,
 		Gates: []gate{
-			{Step: "judge", Judged: "plan", State: gateDone, Outcome: &judgeOutcome{Verdict: "proceed"}},
+			{Step: "judge", Judged: "plan", State: gateDone, Outcome: &archive.JudgeOutcome{Verdict: "proceed"}},
 			{Step: "implement", State: gateDone},
 			{Step: "cleanup", State: gateDone},
 			{Step: "pr", State: gateDone},

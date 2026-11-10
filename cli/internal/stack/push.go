@@ -1,4 +1,4 @@
-package main
+package stack
 
 import (
 	"context"
@@ -9,24 +9,18 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/gitx"
-	"github.com/amberpixels/f10/cli/internal/stack"
 )
 
-// The catchup engine, shared by drive and the watcher: git integrates, the
-// binary verifies where it can, and the agent is prompted only for what git
-// or verify could not settle. One record (drives.Catchup), one progress
-// fingerprint and one leased push serve both callers.
-
-// clearMarks unsets the catchup marks once the base is in and verify is
+// ClearMarks unsets the catchup marks once the base is in and verify is
 // green, and records the base the branch now stands on, as the step does.
-func clearMarks(ctx context.Context, main, branch string, p stack.CatchupPlan) error {
+func ClearMarks(ctx context.Context, main, branch string, p CatchupPlan) error {
 	for _, key := range []branchmeta.Key{branchmeta.Landed, branchmeta.Moved} {
 		if err := branchmeta.UnsetIfSet(ctx, main, branch, key); err != nil {
 			return fmt.Errorf("clearing the %s mark on %s: %w", key, branch, err)
 		}
 	}
 
-	if p.Found == stack.FoundAfter {
+	if p.Found == FoundAfter {
 		return branchmeta.Set(ctx, main, branch, branchmeta.Tip, p.SHA)
 	}
 
@@ -38,12 +32,12 @@ func clearMarks(ctx context.Context, main, branch string, p stack.CatchupPlan) e
 // the PR), a PR retargeted by hand (git's base would carry another
 // branch's commits into it), or a local tip that is not origin's.
 type targetState struct {
-	unpushedBase, retargeted, diverged bool
+	UnpushedBase, Retargeted, Diverged bool
 }
 
-// readTarget reads t against the PR's base and the branch's local and
+// ReadTarget reads t against the PR's base and the branch's local and
 // origin tips; a prBase of "" skips the retarget check.
-func readTarget(ctx context.Context, main string, t stack.PRTarget, prBase, local, origin string) (targetState, error) {
+func ReadTarget(ctx context.Context, main string, t PRTarget, prBase, local, origin string) (targetState, error) {
 	var s targetState
 
 	if t.Key == branchmeta.Moved {
@@ -52,41 +46,41 @@ func readTarget(ctx context.Context, main string, t stack.PRTarget, prBase, loca
 			return s, fmt.Errorf("reading origin/%s: %w", t.Name, err)
 		}
 
-		s.unpushedBase = !on
+		s.UnpushedBase = !on
 	}
 
-	s.retargeted = prBase != "" && prBase != strings.TrimPrefix(t.Name, "origin/")
-	s.diverged = local != origin
+	s.Retargeted = prBase != "" && prBase != strings.TrimPrefix(t.Name, "origin/")
+	s.Diverged = local != origin
 
 	return s, nil
 }
 
-// errBaseNotPushed is a push held back because the base the catchup brought
+// ErrBaseNotPushed is a push held back because the base the catchup brought
 // in is not on origin yet: the push would carry its commits into the PR.
-var errBaseNotPushed = errors.New("its base is not on origin yet")
+var ErrBaseNotPushed = errors.New("its base is not on origin yet")
 
-// originMovedError refuses a force-push that could drop commits pushed to
+// OriginMovedError refuses a force-push that could drop commits pushed to
 // the branch while its catchup ran: origin moved, or, unseen, nothing
 // recorded what origin held when the catchup went out.
-type originMovedError struct {
-	branch, base, path string
-	unseen             bool
+type OriginMovedError struct {
+	Branch, base, Path string
+	Unseen             bool
 }
 
-func (e originMovedError) Error() string {
-	if e.unseen {
+func (e OriginMovedError) Error() string {
+	if e.Unseen {
 		return fmt.Sprintf("%s caught up with %s, not pushed: the drive did not read origin/%s when the catchup "+
-			"went out, so a force-push could drop commits pushed since", e.branch, e.base, e.branch)
+			"went out, so a force-push could drop commits pushed since", e.Branch, e.base, e.Branch)
 	}
 
-	return fmt.Sprintf("%s caught up with %s, and origin/%s moved meanwhile: not pushed", e.branch, e.base, e.branch)
+	return fmt.Sprintf("%s caught up with %s, and origin/%s moved meanwhile: not pushed", e.Branch, e.base, e.Branch)
 }
 
-// pushCatchup is the one push after a clean catchup of a branch origin has:
+// PushCatchup is the one push after a clean catchup of a branch origin has:
 // plain when it fast-forwards origin, leased against rec's origin tip after
 // a rewrite, and never carrying a base origin lacks. A rewrite with no live
 // lease is refused as unseen; a push or a refusal spends the lease.
-func pushCatchup(ctx context.Context, dir, branch string, rec *drives.Catchup) (string, error) {
+func PushCatchup(ctx context.Context, dir, branch string, rec *drives.Catchup) (string, error) {
 	tracking := "refs/remotes/origin/" + branch
 
 	pushed, err := gitx.Ref(ctx, dir, tracking)
@@ -120,11 +114,11 @@ func pushCatchup(ctx context.Context, dir, branch string, rec *drives.Catchup) (
 		}
 
 		if !seen {
-			return "", errBaseNotPushed
+			return "", ErrBaseNotPushed
 		}
 	}
 
-	refused := originMovedError{branch: branch, base: base, path: dir}
+	refused := OriginMovedError{Branch: branch, base: base, Path: dir}
 
 	fastForward, err := gitx.IsAncestor(ctx, dir, pushed, "HEAD")
 	if err != nil {
@@ -136,7 +130,7 @@ func pushCatchup(ctx context.Context, dir, branch string, rec *drives.Catchup) (
 	switch {
 	case fastForward:
 	case rec == nil || rec.Spent:
-		refused.unseen = true
+		refused.Unseen = true
 
 		return "", refused
 	case pushed != rec.Origin:

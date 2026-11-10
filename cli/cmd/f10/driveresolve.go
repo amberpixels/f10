@@ -10,6 +10,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // resolveTasks skips a range member the tracker does not know as a task,
@@ -178,7 +179,7 @@ func (in *driveInput) span(ctx context.Context) (ref.Ref, ref.Ref, error) {
 	b, _ := strconv.Atoi(to.Number)
 
 	switch {
-	case prefixOf(from) != prefixOf(to):
+	case worktree.PrefixOf(from) != worktree.PrefixOf(to):
 		return ref.Ref{}, ref.Ref{}, fmt.Errorf("a range stays in one id format: %s -- %s", from.ID, to.ID)
 	case b < a:
 		return ref.Ref{}, ref.Ref{}, fmt.Errorf("a range runs upwards: %s -- %s", from.ID, to.ID)
@@ -198,7 +199,7 @@ func (in *driveInput) span(ctx context.Context) (ref.Ref, ref.Ref, error) {
 func spanRefs(from, to ref.Ref) []ref.Ref {
 	a, _ := strconv.Atoi(from.Number)
 	b, _ := strconv.Atoi(to.Number)
-	prefix := prefixOf(from)
+	prefix := worktree.PrefixOf(from)
 
 	refs := make([]ref.Ref, 0, b-a+1)
 
@@ -208,10 +209,6 @@ func spanRefs(from, to ref.Ref) []ref.Ref {
 	}
 
 	return refs
-}
-
-func prefixOf(r ref.Ref) string {
-	return strings.TrimSuffix(r.ID, r.Number)
 }
 
 func (in *driveInput) baseFinished(ctx context.Context, id string) (bool, error) {

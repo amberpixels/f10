@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -32,29 +33,11 @@ func flowCommand() *cli.Command {
 			"else the project's pace:, else the user's; with none, every flow runs as declared, " +
 			"an optional CI review (ci?) settled.",
 		Flags: []cli.Flag{
-			paceFlag(),
+			runplan.PaceFlag(),
 			ui.JSONFlag("emit the same list as JSON"),
 		},
 		Action: runFlow,
 	}
-}
-
-type flowRow struct {
-	Name     string          `json:"name"`
-	Entries  []string        `json:"entries"`          // as declared, labels cut
-	Labels   []string        `json:"labels,omitempty"` // each entry's display label by index; nil when none has one
-	Run      []string        `json:"run,omitempty"`    // what runs under the pace
-	Selected []string        `json:"selectedBy"`
-	Resolved *facts.Resolved `json:"resolved,omitempty"` // the entries under the pace; nil when nothing changes them, or the pace breaks the flow
-	Broken   string          `json:"broken,omitempty"`   // why the pace does not resolve on this flow
-}
-
-type flowView struct {
-	Pace       string            `json:"pace,omitempty"`
-	PaceOrigin string            `json:"paceOrigin,omitempty"`
-	Ceiling    string            `json:"ceiling,omitempty"` // the cap on the pace, or why it does not apply
-	Flows      []flowRow         `json:"flows"`
-	FlowByArea map[string]string `json:"flowByArea,omitempty"`
 }
 
 func runFlow(ctx context.Context, cmd *cli.Command) error {
@@ -63,23 +46,23 @@ func runFlow(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	run, err := resolveRun(ctx, t.Effective, runInput{
-		pace:   cmd.String("pace"),
-		main:   cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot),
-		branch: gitx.CurrentBranch(ctx, t.Layout.CheckoutRoot),
+	run, err := runplan.ResolveRun(ctx, t.Effective, runplan.RunInput{
+		Pace:   cmd.String("pace"),
+		Main:   cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot),
+		Branch: gitx.CurrentBranch(ctx, t.Layout.CheckoutRoot),
 	})
 	if err != nil {
 		return err
 	}
 
-	v := pacedFlowsView(t.Effective, t.Effective.PaceSet, run.pace)
+	v := runplan.PacedFlowsView(t.Effective, t.Effective.PaceSet, run.Pace)
 
 	if name := strings.ToLower(strings.TrimSpace(cmd.Args().First())); name != "" {
-		if _, err := pacedFlow(t.Effective, "", name); err != nil {
+		if _, err := runplan.PacedFlow(t.Effective, "", name); err != nil {
 			return err
 		}
 
-		i := slices.IndexFunc(v.Flows, func(r flowRow) bool { return strings.EqualFold(r.Name, name) })
+		i := slices.IndexFunc(v.Flows, func(r runplan.FlowRow) bool { return strings.EqualFold(r.Name, name) })
 		if i < 0 {
 			return fmt.Errorf("no flow %s", name)
 		}
@@ -99,66 +82,12 @@ func runFlow(ctx context.Context, cmd *cli.Command) error {
 		return ui.JSON(cmd.Writer, v)
 	}
 
-	return writeFlows(cmd.Writer, v)
-}
-
-func flowsView(eff *facts.Effective) flowView {
-	return pacedFlowsView(eff, uncapped(eff.PaceSet), runPace{})
-}
-
-// uncapped is the set without its ceiling: a flow under no pace runs as
-// declared, which a cap would change.
-func uncapped(set *facts.PaceSet) *facts.PaceSet {
-	s := *set
-	s.Ceiling, s.CeilingOrigins, s.Except = facts.Pace{}, nil, nil
-
-	return &s
-}
-
-// pacedFlowsView is every flow with its entries under pace; a flow the
-// pace breaks keeps its declared entries and says why.
-func pacedFlowsView(eff *facts.Effective, set *facts.PaceSet, pace runPace) flowView {
-	v := flowView{FlowByArea: eff.FlowByArea, Pace: pace.name, PaceOrigin: pace.origin}
-	v.Ceiling = ceilingShown(set, pace.name)
-
-	for _, name := range eff.FlowNames() {
-		f := eff.Flows[name]
-		row := flowRow{Name: name, Entries: f.Strings(), Labels: f.Labels(), Selected: selectors(name)}
-
-		if r, err := set.ResolveFlow(name, f, pace.name); err != nil {
-			row.Broken = err.Error()
-		} else if pace.name != "" || r.Changed() {
-			row.Resolved, row.Run = &r, r.Run()
-		}
-
-		v.Flows = append(v.Flows, row)
-	}
-
-	return v
-}
-
-// ceilingShown is the ceiling's dials with their layers, or why it leaves
-// the pace alone; "" with no ceiling.
-func ceilingShown(set *facts.PaceSet, pace string) string {
-	if set.Ceiling.Empty() {
-		return ""
-	}
-
-	if set.Exempt(pace) {
-		return "not applied: pace " + pace + " is in except (" + set.ExceptOrigin.String() + ")"
-	}
-
-	var parts []string
-	for _, key := range set.Ceiling.Keys() {
-		parts = append(parts, key+" "+set.Ceiling.Shown(key)+" ("+set.CeilingOrigins[key].String()+")")
-	}
-
-	return strings.Join(parts, ", ")
+	return runplan.WriteFlows(cmd.Writer, v)
 }
 
 // writeFlowEntries is one flow, an entry per line with its dials, then the
 // pace's finish; the list /f10:ship runs.
-func writeFlowEntries(w io.Writer, v flowView) error {
+func writeFlowEntries(w io.Writer, v runplan.FlowView) error {
 	f := v.Flows[0]
 
 	var b strings.Builder
@@ -235,194 +164,18 @@ func dialSource(d facts.Dial) string {
 	return "(" + d.Origin + ")"
 }
 
-// localFlow is the flow --local selects on start and drive; finish's
-// --local (leave the PR open) and a never-pushed branch's merge here are
-// unrelated.
-const localFlow = "local"
-
-func selectors(name string) []string {
-	switch name {
-	case "default":
-		return []string{"f10 start", "f10 drive"}
-	case localFlow:
-		return []string{"--local", "--flow " + localFlow}
-	default:
-		return []string{"--flow " + name}
-	}
-}
-
-func writeFlows(w io.Writer, v flowView) error {
-	width := len("flow_by_area")
-	if v.Ceiling != "" {
-		width = max(width, len("ceiling"))
-	}
-	for _, f := range v.Flows {
-		width = max(width, len(f.Name))
-	}
-
-	var b strings.Builder
-
-	if v.Pace != "" {
-		fmt.Fprintf(&b, "%-*s  %s (%s)\n", width, "pace", v.Pace, v.PaceOrigin)
-	}
-
-	if v.Ceiling != "" {
-		fmt.Fprintf(&b, "%-*s  %s\n", width, "ceiling", v.Ceiling)
-	}
-
-	for _, f := range v.Flows {
-		entries := flow.Zip(f.Entries, f.Labels).Written()
-		if f.Resolved != nil {
-			entries = f.Resolved.Labeled()
-		}
-
-		fmt.Fprintf(&b, "%-*s  %s\n%-*s  (%s)\n", width, f.Name, strings.Join(entries, " "),
-			width, "", strings.Join(f.Selected, ", "))
-
-		if f.Broken != "" {
-			fmt.Fprintf(&b, "%-*s  does not run at this pace: %s\n", width, "", f.Broken)
-		}
-
-		if f.Resolved != nil && f.Resolved.Finish != nil {
-			from := "the pace"
-			if f.Resolved.Finish.Capped != "" {
-				from = "the ceiling; " + f.Resolved.Finish.Capped
-			}
-
-			fmt.Fprintf(&b, "%-*s  finish %s, from %s\n", width, "", f.Resolved.Finish.Value, from)
-		}
-	}
-
-	for _, area := range sortedKeys(v.FlowByArea) {
-		fmt.Fprintf(&b, "%-*s  %s runs %s\n", width, "flow_by_area", area, v.FlowByArea[area])
-	}
-
-	_, err := io.WriteString(w, b.String())
-
-	return err
-}
-
-func sortedKeys(m map[string]string) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-
-	slices.Sort(keys)
-
-	return keys
-}
-
-// A shipFlow is the flow a started task ships through. byArea is no flow
-// named on a project declaring flow_by_area: ship picks the flow from the
-// task's area, so it is told none and nothing is recorded on the branch.
-type shipFlow struct {
-	name     string
-	planless bool
-	byArea   bool
-	pace     string // the pace it runs at, "" for none
-	finish   string // the pace's finish for a run ending at a PR: on, off, or "" for none
-}
-
-// finishes says whether drive ends the task with finish: the pace's word
-// when it has one, else on, so a drive merges what it ships.
-func (f shipFlow) finishes() bool {
-	return f.finish != "off"
-}
-
-func (f shipFlow) word() string {
-	if f.name == "" {
-		return ""
-	}
-
-	return f.name + ": "
-}
-
-func (f shipFlow) recorded() string {
-	switch {
-	case f.byArea:
-		return ""
-	case f.name == "":
-		return "default"
-	default:
-		return f.name
-	}
-}
-
-func (f shipFlow) label() string {
-	if f.byArea {
-		return "flow the task's area picks"
-	}
-
-	return f.recorded()
-}
-
-func (f shipFlow) plans() bool { return !f.planless && !f.byArea }
-
 func flowFlags(cmd *cli.Command) (string, error) {
 	name := strings.ToLower(strings.TrimSpace(cmd.String("flow")))
 
 	if cmd.Bool("local") {
-		if name != "" && name != localFlow {
+		if name != "" && name != runplan.LocalFlow {
 			return "", fmt.Errorf("--local and --flow %s name two flows", name)
 		}
 
-		name = localFlow
+		name = runplan.LocalFlow
 	}
 
 	return name, nil
-}
-
-// pacedFlow is the named flow under pace: an entry the pace skips does not
-// run, so `plan: off` makes the flow planless. "" is no pace, the flow as
-// declared.
-func pacedFlow(eff *facts.Effective, pace, name string) (shipFlow, error) {
-	set := eff.PaceSet
-	if pace == "" {
-		set = uncapped(set)
-	}
-
-	if name == "" && len(eff.FlowByArea) > 0 {
-		// ship picks the flow, so whether it ends at a PR, and so whether
-		// the pace's finish applies, is unknown: drive finishes, unless the
-		// ceiling forbids finishing, which holds whatever the flow
-		fl := shipFlow{byArea: true, pace: pace}
-		if _, caps := set.Capped(pace); caps[facts.PaceFinishKey].Value == "off" {
-			fl.finish = "off"
-		}
-
-		return fl, nil
-	}
-
-	lookup := strings.ToLower(name)
-	if lookup == "" {
-		lookup = "default"
-	}
-
-	declared, ok := eff.Flow(lookup)
-	if !ok {
-		var b strings.Builder
-		_ = writeFlows(&b, flowsView(eff))
-
-		return shipFlow{}, fmt.Errorf("--flow %s: project.md declares no such flow; it declares:\n%s", name,
-			strings.TrimRight(b.String(), "\n"))
-	}
-
-	r, err := set.ResolveFlow(lookup, declared, pace)
-	if err != nil {
-		return shipFlow{}, err
-	}
-
-	fl := shipFlow{planless: !flow.Of(r.Run()).Plans(), pace: pace}
-	if r.Finish != nil {
-		fl.finish = r.Finish.Value
-	}
-
-	if lookup != "default" {
-		fl.name = lookup
-	}
-
-	return fl, nil
 }
 
 func flowFlag() cli.Flag {

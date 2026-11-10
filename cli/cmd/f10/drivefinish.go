@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -194,7 +195,7 @@ func (in *driveInput) runFinish(ctx context.Context, r *driveRun) driveResult {
 		lines = append(lines, id+" finished; "+pulled)
 	}
 
-	return driveResult{row: rowFinished, lines: append(lines, handoffBlock(id, hand)...)}
+	return driveResult{row: driverec.RowFinished, lines: append(lines, handoffBlock(id, hand)...)}
 }
 
 // retryPull retries a pull a finish deferred, once a tick, in a drive that

@@ -17,12 +17,15 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -96,7 +99,7 @@ func newDriveFixture(t *testing.T, args ...string) *driveFixture {
 		storage:  testStorage,
 		args:     a,
 		argv:     args,
-		sequence: func(shipFlow) []string { return chain },
+		sequence: func(runplan.ShipFlow) []string { return chain },
 		stateDir: t.TempDir(),
 		ttl:      state.DefaultTTL,
 		tracker: stack.Tracker{
@@ -225,7 +228,13 @@ func (fx *driveFixture) opensOn(id, ws, pane, profile string) {
 
 // expects scripts the prompt for one skill and the record of it done.
 func (fx *driveFixture) expects(id, skill string) {
-	prompt := skillPrompt(skill, id, nil, shipFlow{}, slices.Contains(fx.in.sequenceOf(shipFlow{}), "finish"))
+	prompt := skillPrompt(
+		skill,
+		id,
+		nil,
+		runplan.ShipFlow{},
+		slices.Contains(fx.in.sequenceOf(runplan.ShipFlow{}), "finish"),
+	)
 	fx.f.script("herdr agent prompt "+agentOf(id)+" "+prompt, "{}")
 }
 
@@ -506,7 +515,10 @@ func TestDriveExitsOnAnAsk(t *testing.T) {
 	fx.f.meta.Seed("GH-1", branchmeta.Chain, "judge") // an older drive's
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
-	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, shipFlow{}, false), "{}")
+	fx.f.script(
+		"herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, runplan.ShipFlow{}, false),
+		"{}",
+	)
 	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
 	fx.onTick[2] = func() { fx.writeRun(t, "blocked", "judge", "", "1. Rethink: [proceed | stop]") }
 
@@ -878,7 +890,7 @@ func TestDriveSettlesAShipGuardConflict(t *testing.T) {
 				fx.f.script(wsList, unopened, idle, working, idle, working, idle)
 				tick = 0
 			} else {
-				ship := skillPrompt("ship", "GH-1", nil, shipFlow{}, false)
+				ship := skillPrompt("ship", "GH-1", nil, runplan.ShipFlow{}, false)
 				fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+ship, "{}")
 				fx.onTick[2] = func() {
 					fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
@@ -1308,7 +1320,10 @@ func TestDriveHaltsOnAJudgeStop(t *testing.T) {
 	fx.f.script(headRef, "origin/main") // GH-1 has no commit, so GH-2 waits
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
-	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, shipFlow{}, false), "{}")
+	fx.f.script(
+		"herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, runplan.ShipFlow{}, false),
+		"{}",
+	)
 	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
 	fx.onTick[2] = func() { fx.writeRun(t, "blocked", "judge", "stop: duplicate of GH-9", "") }
 
@@ -1348,7 +1363,10 @@ func TestDriveHaltsOnAnAgentThatStoppedWithoutReporting(t *testing.T) {
 	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
-	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("ship", "GH-1", nil, shipFlow{}, false), "{}")
+	fx.f.script(
+		"herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("ship", "GH-1", nil, runplan.ShipFlow{}, false),
+		"{}",
+	)
 	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
 	fx.onTick[1] = func() { fx.writeRun(t, "running", "implement", "", "") }
 
@@ -1823,14 +1841,14 @@ func TestParseDriveArgs(t *testing.T) {
 // A flow with no pace finish word finishes; only finish off stops at ship.
 func TestDriveChain(t *testing.T) {
 	for _, c := range []struct {
-		fl   shipFlow
+		fl   runplan.ShipFlow
 		want string
 	}{
-		{shipFlow{}, "plan ship finish"},
-		{shipFlow{finish: "on"}, "plan ship finish"},
-		{shipFlow{finish: "off"}, "plan ship"},
-		{shipFlow{name: "direct", planless: true}, "ship finish"},
-		{shipFlow{name: "direct", planless: true, finish: "off"}, "ship"},
+		{runplan.ShipFlow{}, "plan ship finish"},
+		{runplan.ShipFlow{Finish: "on"}, "plan ship finish"},
+		{runplan.ShipFlow{Finish: "off"}, "plan ship"},
+		{runplan.ShipFlow{Name: "direct", Planless: true}, "ship finish"},
+		{runplan.ShipFlow{Name: "direct", Planless: true, Finish: "off"}, "ship"},
 	} {
 		if got := strings.Join(driveSkills(c.fl), " "); got != c.want {
 			t.Errorf("%+v = %q, want %q", c.fl, got, c.want)
@@ -1864,14 +1882,14 @@ func TestDriveSkillsFinishByDefault(t *testing.T) {
 }
 
 func TestSkillPrompt(t *testing.T) {
-	dep := &dependency{task: "GH-7", branch: "GH-7/base"}
+	dep := &launch.Dependency{Task: "GH-7", Branch: "GH-7/base"}
 
 	cases := map[string]string{
-		skillPrompt("plan", "GH-1", nil, shipFlow{}, false):              "/f10:plan GH-1 --driven",
-		skillPrompt("ship", "GH-1", nil, shipFlow{}, false):              "/f10:ship GH-1 --driven",
-		skillPrompt("ship", "GH-1", nil, shipFlow{name: "local"}, false): "/f10:ship local: GH-1 --driven",
-		skillPrompt("plan", "GH-1", nil, shipFlow{name: "local"}, false): "/f10:plan GH-1 --driven",
-		skillPrompt("judge", "GH-1", dep, shipFlow{}, false):             "/f10:judge GH-1 --driven",
+		skillPrompt("plan", "GH-1", nil, runplan.ShipFlow{}, false):              "/f10:plan GH-1 --driven",
+		skillPrompt("ship", "GH-1", nil, runplan.ShipFlow{}, false):              "/f10:ship GH-1 --driven",
+		skillPrompt("ship", "GH-1", nil, runplan.ShipFlow{Name: "local"}, false): "/f10:ship local: GH-1 --driven",
+		skillPrompt("plan", "GH-1", nil, runplan.ShipFlow{Name: "local"}, false): "/f10:plan GH-1 --driven",
+		skillPrompt("judge", "GH-1", dep, runplan.ShipFlow{}, false):             "/f10:judge GH-1 --driven",
 	}
 
 	for got, want := range cases {
@@ -1880,7 +1898,7 @@ func TestSkillPrompt(t *testing.T) {
 		}
 	}
 
-	if p := skillPrompt("ship", "GH-1", dep, shipFlow{}, false); !strings.Contains(p, "GH-1 depends on GH-7") {
+	if p := skillPrompt("ship", "GH-1", dep, runplan.ShipFlow{}, false); !strings.Contains(p, "GH-1 depends on GH-7") {
 		t.Errorf("a dependent ship carries no contract: %q", p)
 	}
 }
@@ -2365,7 +2383,7 @@ func TestDriveCatchesUpAConflictingPullBeforeFinish(t *testing.T) {
 func TestDriveCatchesUpAPushedBranchWhenItsTargetMoves(t *testing.T) {
 	landed := "set branch.GH-1." + string(branchmeta.Landed) + " main"
 	moved := "set branch.GH-1." + string(branchmeta.Moved) + " b2"
-	ship := "herdr agent prompt " + agentOf("GH-1") + " " + skillPrompt("ship", "GH-1", nil, shipFlow{}, true)
+	ship := "herdr agent prompt " + agentOf("GH-1") + " " + skillPrompt("ship", "GH-1", nil, runplan.ShipFlow{}, true)
 	catchup := catchupTurn("GH-1")
 	push := "git push --force-with-lease=refs/heads/GH-1:p1 origin HEAD:refs/heads/GH-1"
 
@@ -2608,7 +2626,7 @@ func TestDriveHaltsAShipThatFailedUnderAWatcherMark(t *testing.T) {
 	fx.oneAttempt(t)
 	fx.adoptsGH1()
 
-	ship := skillPrompt("ship", "GH-1", nil, shipFlow{}, false)
+	ship := skillPrompt("ship", "GH-1", nil, runplan.ShipFlow{}, false)
 	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+ship, "{}")
 	fx.onTick[2] = func() {
 		fx.writeShipStop(t, "failed", "implement", 2, "fix the two red tests, then rerun")
@@ -2876,7 +2894,10 @@ func TestDriveBoundsTheWaitForAnAgent(t *testing.T) {
 	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
-	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, shipFlow{}, false), "{}")
+	fx.f.script(
+		"herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, runplan.ShipFlow{}, false),
+		"{}",
+	)
 	fx.f.script(wsList, unopened, listing("GH-1", "unknown"))
 
 	err := fx.drive(t)
@@ -3541,7 +3562,7 @@ func TestResumeAtSteering(t *testing.T) {
 		t.Errorf("a plan resumes at %q", got)
 	}
 
-	p := steered(skillPrompt("ship", "GH-1", nil, shipFlow{}, true), "resume at pr")
+	p := steered(skillPrompt("ship", "GH-1", nil, runplan.ShipFlow{}, true), "resume at pr")
 	if want := "/f10:ship GH-1 resume at pr && " + finishClause + " --driven"; p != want {
 		t.Errorf("steered = %q, want %q", p, want)
 	}
@@ -3550,12 +3571,18 @@ func TestResumeAtSteering(t *testing.T) {
 // A ship drive finishes after names it, so the report says nothing is
 // owed in that pane; no other prompt carries it.
 func TestSkillPromptNamesDriveFinish(t *testing.T) {
-	if p := skillPrompt("ship", "GH-1", nil, shipFlow{}, true); p != "/f10:ship GH-1 && "+finishClause+" --driven" {
+	if p := skillPrompt(
+		"ship",
+		"GH-1",
+		nil,
+		runplan.ShipFlow{},
+		true,
+	); p != "/f10:ship GH-1 && "+finishClause+" --driven" {
 		t.Errorf("ship with finish = %q", p)
 	}
 
 	for _, skill := range []string{"plan", "judge", "catchup"} {
-		if p := skillPrompt(skill, "GH-1", nil, shipFlow{}, true); strings.Contains(p, finishClause) {
+		if p := skillPrompt(skill, "GH-1", nil, runplan.ShipFlow{}, true); strings.Contains(p, finishClause) {
 			t.Errorf("%s prompt names finish: %q", skill, p)
 		}
 	}
@@ -3626,7 +3653,7 @@ func TestDriveParksAShipOnItsBasesCode(t *testing.T) {
 	fx.expects("GH-1", "ship")
 	fx.expects("GH-2", "ship")
 	fx.f.script("herdr agent prompt "+agentOf("GH-2")+" "+
-		steered(skillPrompt("ship", "GH-2", nil, shipFlow{}, false), "resume at implement"), "{}")
+		steered(skillPrompt("ship", "GH-2", nil, runplan.ShipFlow{}, false), "resume at implement"), "{}")
 	// the head the park read, then the commit that releases it
 	fx.f.script("git rev-parse -q --verify refs/heads/GH-1", "a1", "a2")
 	fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
@@ -3683,7 +3710,7 @@ func TestDriveParksAShipOnItsBaseUntilOriginHasIt(t *testing.T) {
 	fx.expects("GH-1", "ship")
 	fx.expects("GH-2", "ship")
 	fx.f.script("herdr agent prompt "+agentOf("GH-2")+" "+
-		steered(skillPrompt("ship", "GH-2", nil, shipFlow{}, false), "resume at pr"), "{}")
+		steered(skillPrompt("ship", "GH-2", nil, runplan.ShipFlow{}, false), "resume at pr"), "{}")
 	fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", "")
 	fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
 	fx.f.script("git status --porcelain", "")
@@ -3766,7 +3793,7 @@ func TestDriveResendsAnOriginWaitTheBasePushedFirst(t *testing.T) {
 	fx.expects("GH-1", "ship")
 	fx.expects("GH-2", "ship")
 	fx.f.script("herdr agent prompt "+agentOf("GH-2")+" "+
-		steered(skillPrompt("ship", "GH-2", nil, shipFlow{}, false), "resume at pr"), "{}")
+		steered(skillPrompt("ship", "GH-2", nil, runplan.ShipFlow{}, false), "resume at pr"), "{}")
 	fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
 	fx.f.script("git status --porcelain", "")
 
@@ -3873,7 +3900,7 @@ func TestDriveResendsAShipWhoseBaseCommittedFirst(t *testing.T) {
 	fx.expects("GH-1", "ship")
 	fx.expects("GH-2", "ship")
 	fx.f.script("herdr agent prompt "+agentOf("GH-2")+" "+
-		steered(skillPrompt("ship", "GH-2", nil, shipFlow{}, false), "resume at implement"), "{}")
+		steered(skillPrompt("ship", "GH-2", nil, runplan.ShipFlow{}, false), "resume at implement"), "{}")
 	fx.f.script("git rev-parse -q --verify refs/heads/GH-1", "a1")
 	fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
 	fx.f.script("git status --porcelain", "")
@@ -3932,7 +3959,10 @@ func TestDriveHaltsAShipWaitingOnABaseOutsideIt(t *testing.T) {
 	fx.task("GH-2", hostops.TaskInfo{Body: "x"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-2", "/code/repo.GH-2"))
 	fx.opens("GH-2", "ws:GH-2", "pane:1")
-	fx.f.script("herdr agent prompt "+agentOf("GH-2")+" "+skillPrompt("ship", "GH-2", nil, shipFlow{}, false), "{}")
+	fx.f.script(
+		"herdr agent prompt "+agentOf("GH-2")+" "+skillPrompt("ship", "GH-2", nil, runplan.ShipFlow{}, false),
+		"{}",
+	)
 	fx.f.script(wsList, unopened, listing("GH-2", "idle"), listing("GH-2", "working"), listing("GH-2", "idle"))
 	fx.onTick[2] = func() { fx.writeWait(t) }
 
@@ -3999,7 +4029,7 @@ func TestPushCatchupOnlyOverWhatTheCatchupSaw(t *testing.T) {
 
 			rec := &drives.Catchup{Base: "origin/main", Origin: "p1", Spent: !tc.held}
 
-			_, err := pushCatchup(context.Background(), "/code/repo.GH-1", "GH-1", rec)
+			_, err := stack.PushCatchup(context.Background(), "/code/repo.GH-1", "GH-1", rec)
 
 			if tc.push != "" {
 				if err != nil || !fx.f.called(tc.push) {
@@ -4013,7 +4043,7 @@ func TestPushCatchupOnlyOverWhatTheCatchupSaw(t *testing.T) {
 				return
 			}
 
-			if !errors.As(err, new(originMovedError)) || fx.f.called("git push") {
+			if !errors.As(err, new(stack.OriginMovedError)) || fx.f.called("git push") {
 				t.Fatalf("err = %v, want refused with no push: %q", err, fx.f.calls)
 			}
 
@@ -4059,7 +4089,7 @@ func TestDriveFinishWithADeferredPullIsFinished(t *testing.T) {
 	}()
 
 	res := in.runFinish(t.Context(), &driveRun{task: driveTask{ref: gh1}})
-	if res.row != rowFinished || res.code != 0 || len(res.lines) != 1 ||
+	if res.row != driverec.RowFinished || res.code != 0 || len(res.lines) != 1 ||
 		!strings.Contains(res.lines[0], "GH-1 finished; main not pulled") {
 		t.Errorf("runFinish = %+v, want finished with the note", res)
 	}

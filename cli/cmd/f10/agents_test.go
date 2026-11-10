@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/launch"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // memAgents is an agent backend held in memory: what a backend other than
@@ -93,10 +95,10 @@ func useAgents(t *testing.T) *memAgents {
 	t.Helper()
 
 	m := &memAgents{prompts: map[string][]string{}}
-	prev := agents
-	agents = func(string) agentctl.Backend { return m }
+	prev := worktree.Agents
+	worktree.Agents = func(string) agentctl.Backend { return m }
 
-	t.Cleanup(func() { agents = prev })
+	t.Cleanup(func() { worktree.Agents = prev })
 
 	return m
 }
@@ -155,12 +157,21 @@ func TestPromptAgentFallsBackToTheBareName(t *testing.T) {
 	m := useAgents(t)
 	m.started = []string{agentctl.BareAgentName("GH-1", "")}
 
-	name, err := promptAgentAs(t.Context(), fwdWT, "GH-1", "", "hi")
+	name, err := launch.PromptAgentAs(t.Context(), fwdWT, "GH-1", "", "hi")
 	if err != nil || name != agentctl.BareAgentName("GH-1", "") {
 		t.Fatalf("took %q, %v; want the bare name", name, err)
 	}
 
-	if _, err := promptAgentAs(t.Context(), fwdWT, "GH-2", "", "hi"); !errors.Is(err, agentctl.ErrAgentNotFound) {
+	if _, err := launch.PromptAgentAs(
+		t.Context(),
+		fwdWT,
+		"GH-2",
+		"",
+		"hi",
+	); !errors.Is(
+		err,
+		agentctl.ErrAgentNotFound,
+	) {
 		t.Errorf("unknown agent = %v, want ErrAgentNotFound", err)
 	}
 }

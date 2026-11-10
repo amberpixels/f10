@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 )
 
 // A driveFlag is one of drive's flags. The parser, its refusals, the record
@@ -211,7 +212,7 @@ func parseDriveArgs(args []string) (driveArgs, error) {
 		}
 	}
 
-	flag, err := profileFlag(a.agent, a.model)
+	flag, err := runplan.ProfileFlag(a.agent, a.model)
 	if err != nil {
 		return driveArgs{}, err
 	}
@@ -254,11 +255,11 @@ func (a *driveArgs) set(name, value string) error {
 
 		return nil
 	case "--local":
-		if a.flow != "" && a.flow != localFlow {
+		if a.flow != "" && a.flow != runplan.LocalFlow {
 			return fmt.Errorf("--local and --flow %s name two flows", a.flow)
 		}
 
-		a.flow = localFlow
+		a.flow = runplan.LocalFlow
 
 		return nil
 	case "--resume":

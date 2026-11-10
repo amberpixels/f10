@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
@@ -12,7 +13,7 @@ import (
 // of the newest of each, so a later call reads as running.
 type outcomes struct {
 	local, remote                     []reviewRound
-	taskJudge, planJudge, changeJudge *judgeOutcome
+	taskJudge, planJudge, changeJudge *archive.JudgeOutcome
 
 	localAt, remoteAt, taskAt, planAt, changeAt time.Time
 
@@ -38,7 +39,7 @@ func seriesOutcomes(store *lore.Store, storageRoot, task string, open bool) outc
 
 	if storageRoot != "" {
 		dir := storage.Root(storageRoot).Reviews(task)
-		change, since = changeOf(dir), seriesStart(dir)
+		change, since = archive.ChangeOf(dir), archive.SeriesStart(dir)
 	}
 
 	if !open {
@@ -94,7 +95,7 @@ func seriesOutcomes(store *lore.Store, storageRoot, task string, open bool) outc
 
 // withFileDecision gives a lore verdict its file's decision, which lore does
 // not record; a file with another verdict is older and describes that one.
-func withFileDecision(fromLore, file *judgeOutcome) *judgeOutcome {
+func withFileDecision(fromLore, file *archive.JudgeOutcome) *archive.JudgeOutcome {
 	if file == nil || file.Verdict != fromLore.Verdict {
 		return fromLore
 	}
@@ -191,7 +192,7 @@ func loreOutcomes(entries []lore.Entry) outcomes {
 				*at = e.At
 			}
 		case lore.KindVerdict:
-			j := &judgeOutcome{Verdict: e.Outcome, Reason: firstLine(strings.TrimSpace(e.Body))}
+			j := &archive.JudgeOutcome{Verdict: e.Outcome, Reason: firstLine(strings.TrimSpace(e.Body))}
 
 			switch {
 			case e.Judged == "task":

@@ -15,11 +15,13 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/target"
@@ -245,7 +247,7 @@ func taskStatusFor(ctx context.Context, t *target.Target, r ref.Ref, suffix stri
 		root:    path,
 		main:    main,
 		plan:    t.Layout.StorageRoot.Plan(r.ID),
-		handoff: taskHandoff(t.Layout.StorageRoot, r.ID),
+		handoff: archive.TaskHandoff(t.Layout.StorageRoot, r.ID),
 		storage: t.Layout.StorageRoot.Path(),
 	}
 
@@ -255,7 +257,7 @@ func taskStatusFor(ctx context.Context, t *target.Target, r ref.Ref, suffix stri
 	}
 
 	// a branch with no record, or one unreadable, shows no agent row
-	if p, err := recordedProfile(ctx, main, name); err == nil && !p.IsDefault() {
+	if p, err := runplan.RecordedProfile(ctx, main, name); err == nil && !p.IsDefault() {
 		in.agent = p.Short()
 	}
 

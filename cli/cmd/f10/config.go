@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/projects"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -57,7 +58,7 @@ type view struct {
 	UpkeepPaths     []string             `json:"upkeepPaths,omitempty"`
 	Verify          []facts.VerifyDecl   `json:"verify,omitempty"`
 	VerifyOrigin    facts.Origin         `json:"verifyOrigin,omitzero"`
-	Agents          []agentEntry         `json:"agents,omitempty"`  // the merged agents map, the user's file under the project's, each key with its origin
+	Agents          []runplan.AgentEntry `json:"agents,omitempty"`  // the merged agents map, the user's file under the project's, each key with its origin
 	Paces           []paceEntry          `json:"paces,omitempty"`   // every pace's keys, built-ins under the user's under the project's, each with its origin
 	Pace            *paceEntry           `json:"pace,omitempty"`    // the default pace, when any layer names one
 	Ceiling         []paceEntry          `json:"ceiling,omitempty"` // the project's cap on every pace, a key per entry, except last
@@ -79,7 +80,7 @@ type paceEntry struct {
 func (v *view) withAgents(eff *facts.Effective) {
 	for _, key := range slices.Sorted(maps.Keys(eff.Agents)) {
 		o := eff.AgentsOrigin[key]
-		v.Agents = append(v.Agents, agentEntry{Key: key, Value: eff.Agents[key], Origin: o.String()})
+		v.Agents = append(v.Agents, runplan.AgentEntry{Key: key, Value: eff.Agents[key], Origin: o.String()})
 	}
 }
 

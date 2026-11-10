@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/findings"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/timing"
-	"github.com/amberpixels/f10/cli/internal/verdict"
 )
 
 // reviewRound counts one findings file. Ask is a finding still waiting on
@@ -23,15 +23,6 @@ type reviewRound struct {
 	Fixed   int    `json:"fixed"`
 	Skipped int    `json:"skipped"`
 	Ask     int    `json:"ask"`
-}
-
-// judgeOutcome is a verdict and, from its file, what the ship run did with
-// it: the decision line and how many changes it listed.
-type judgeOutcome struct {
-	Verdict  string `json:"verdict"`
-	Reason   string `json:"reason,omitempty"`
-	Decision string `json:"decision,omitempty"`
-	Changes  int    `json:"changes,omitempty"`
 }
 
 // fileOutcomes reads the task's findings and verdict files: a round is the
@@ -52,18 +43,18 @@ func fileOutcomes(storageRoot, task string, since time.Time) outcomes {
 		}
 	}
 
-	for _, v := range judgeFiles(storageRoot, task) {
-		if v.at.Before(since) {
+	for _, v := range archive.JudgeFiles(storageRoot, task) {
+		if v.At.Before(since) {
 			continue
 		}
 
-		switch v.judged {
+		switch v.Judged {
 		case "task":
-			o.taskJudge, o.taskAt = &v.outcome, v.at
+			o.taskJudge, o.taskAt = &v.Outcome, v.At
 		case "plan":
-			o.planJudge, o.planAt = &v.outcome, v.at
+			o.planJudge, o.planAt = &v.Outcome, v.At
 		default:
-			o.changeJudge, o.changeAt = &v.outcome, v.at
+			o.changeJudge, o.changeAt = &v.Outcome, v.At
 		}
 	}
 
@@ -154,60 +145,12 @@ func reviewRounds(storageRoot, task string) []roundFile {
 				},
 				raised: t.Raised,
 				remote: isRemote,
-				at:     modTime(path),
+				at:     archive.ModTime(path),
 			})
 		}
 	}
 
 	return rounds
-}
-
-// verdictFile is one verdict file that judges the task, not an idea.
-type verdictFile struct {
-	outcome judgeOutcome
-	judged  string // task or plan when its subject is one, else change
-	at      time.Time
-	path    string
-}
-
-// judgeFiles is the task's verdict files that parse, oldest first.
-func judgeFiles(storageRoot, task string) []verdictFile {
-	var out []verdictFile
-
-	for _, path := range verdict.Series(storage.Root(storageRoot).Verdicts(task)) {
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-
-		v, err := verdict.Parse(string(raw))
-		if err != nil || v.Idea() {
-			continue
-		}
-
-		judged, _, _ := strings.Cut(v.Subject, " ")
-		if judged != "task" && judged != "plan" {
-			judged = "change"
-		}
-
-		out = append(out, verdictFile{
-			outcome: judgeOutcome{Verdict: v.Verdict, Reason: v.Reason, Decision: v.Decision, Changes: v.Changes},
-			judged:  judged,
-			at:      modTime(path),
-			path:    path,
-		})
-	}
-
-	return out
-}
-
-func modTime(path string) time.Time {
-	fi, err := os.Stat(path)
-	if err != nil {
-		return time.Time{}
-	}
-
-	return fi.ModTime()
 }
 
 // reviewText is one round's counts, or each round's, named, when there are

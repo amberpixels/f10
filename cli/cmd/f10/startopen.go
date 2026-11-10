@@ -12,11 +12,14 @@ import (
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // startInput is everything start needs once the target is settled, so
@@ -27,7 +30,7 @@ type startInput struct {
 	task     ref.Ref
 	suffix   string
 	mode     string
-	flow     shipFlow                              // the flow ship runs; zero for default
+	flow     runplan.ShipFlow                      // the flow ship runs; zero for default
 	flowKept bool                                  // drive records the flow and the pace itself, keeping what the branch has
 	pace     string                                // the --pace typed, recorded on the branch; "" records none
 	after    string                                // task id whose branch is the base and whose plan is the contract, or ""
@@ -50,15 +53,6 @@ type startInput struct {
 	started func(ctx context.Context, task ref.Ref) error
 }
 
-// titleLookup asks the host for the task's title, needed only when no driver
-// names the branch. A checkout with no host CLI answers with the reason, so
-// the note beneath the report can quote it.
-func titleLookup(t *target.Target, number string) func(context.Context) (string, error) {
-	return func(ctx context.Context) (string, error) {
-		return hostops.TasksFor(t).Title(ctx, ref.Ref{Number: number})
-	}
-}
-
 // start runs the flow: the checkout and its agent, the prompt, the report.
 // A workspace Herdr already showed keeps its agent, and nothing is
 // prompted twice; one left with no agent gets its agent and its prompt.
@@ -69,7 +63,7 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 	}
 
 	if o.fresh {
-		text := prompt(in.mode, in.flow, o.task.Label(), o.dep, o.plan, in.pick, in.note)
+		text := launch.Prompt(in.mode, in.flow, o.task.Label(), o.dep, o.plan, in.pick, in.note)
 
 		sent := time.Now()
 
@@ -79,7 +73,7 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 		}
 
 		if typed {
-			o.notes = appendNote(o.notes, watchEnter(ctx, agents(o.path), o.path, name, text, sent))
+			o.notes = appendNote(o.notes, launch.WatchEnter(ctx, worktree.Agents(o.path), o.path, name, text, sent))
 		}
 
 		o.notes = append(o.notes, markStarted(ctx, in.started, o.task)...)
@@ -92,7 +86,7 @@ func start(ctx context.Context, w io.Writer, in startInput) error {
 
 	rows = append(rows, render.Fact{Label: "branch", Value: o.branch})
 	if o.dep != nil {
-		rows = append(rows, render.Fact{Label: "after", Value: o.dep.task})
+		rows = append(rows, render.Fact{Label: "after", Value: o.dep.Task})
 	}
 
 	if o.plan != "" {
@@ -148,7 +142,7 @@ type openedTask struct {
 	branch string
 	path   string
 	ws     agentctl.Opened
-	dep    *dependency
+	dep    *launch.Dependency
 	plan   string // the task's plan the worktree reads, or "" when none was saved or no agent was started
 	fresh  bool
 	notes  []string
@@ -175,7 +169,7 @@ type pendingLaunch struct {
 func (o *openedTask) deliver(ctx context.Context, id, suffix, text string) (string, bool, error) {
 	l := o.launch
 	if l == nil {
-		name, err := promptAgentAs(ctx, o.path, id, suffix, text)
+		name, err := launch.PromptAgentAs(ctx, o.path, id, suffix, text)
 
 		return name, true, err
 	}
@@ -184,7 +178,7 @@ func (o *openedTask) deliver(ctx context.Context, id, suffix, text string) (stri
 	first, argv := l.profile.PromptArgs(text)
 
 	args := slices.Concat(first, l.args)
-	if err := agents(o.path).StartAgent(ctx, o.ws, l.agent, l.profile.Kind, args, l.waiting); err != nil {
+	if err := worktree.Agents(o.path).StartAgent(ctx, o.ws, l.agent, l.profile.Kind, args, l.waiting); err != nil {
 		return "", false, err
 	}
 
@@ -194,7 +188,7 @@ func (o *openedTask) deliver(ctx context.Context, id, suffix, text string) (stri
 		return l.agent, false, nil
 	}
 
-	return l.agent, true, agents(o.path).Prompt(ctx, l.agent, text)
+	return l.agent, true, worktree.Agents(o.path).Prompt(ctx, l.agent, text)
 }
 
 // openTask runs everything start does short of starting and prompting the
@@ -240,7 +234,7 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 		return openedTask{}, err
 	}
 
-	ws, wsNotes, err := agents(in.main).Open(ctx, path, name)
+	ws, wsNotes, err := worktree.Agents(in.main).Open(ctx, path, name)
 	if err != nil {
 		return openedTask{}, err
 	}
@@ -251,14 +245,14 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 
 	agent := agentctl.AgentName(in.task.ID, in.suffix, path)
 
-	launch, note, err := needsAgent(ctx, path, ws)
+	launched, note, err := needsAgent(ctx, path, ws)
 	if err != nil {
 		return openedTask{}, err
 	}
 
 	profile := in.profile.Over(agentctl.Profile{})
 
-	if launch {
+	if launched {
 		if profile, notes, err = prepareLaunch(ctx, in, &o, name, path, agent, ws, profile, notes); err != nil {
 			return openedTask{}, err
 		}
@@ -268,7 +262,7 @@ func openTask(ctx context.Context, in startInput) (openedTask, error) {
 		notes = append(notes, note)
 	}
 
-	if !launch && !profile.IsDefault() {
+	if !launched && !profile.IsDefault() {
 		notes = append(notes, "agent profile "+profile.Short()+" ignored: no agent was started")
 	}
 
@@ -284,7 +278,7 @@ func openWorktree(
 	in startInput,
 	name string,
 	base baseRef,
-	dep *dependency,
+	dep *launch.Dependency,
 	existing stack.FoundBranch,
 	notes []string,
 ) (string, []string, error) {
@@ -320,7 +314,7 @@ func openWorktree(
 			notes = append(notes, "created "+name+" tracking origin/"+name)
 		}
 
-		if path, err = checkout(ctx, in.main, name, "", false); err != nil {
+		if path, err = worktree.Checkout(ctx, in.main, name, "", false); err != nil {
 			return "", nil, err
 		}
 	default:
@@ -330,7 +324,7 @@ func openWorktree(
 			notes = append(notes, n)
 		}
 
-		if path, err = checkout(ctx, in.main, name, base.ref, true); err != nil {
+		if path, err = worktree.Checkout(ctx, in.main, name, base.ref, true); err != nil {
 			return "", nil, err
 		}
 	}
@@ -344,7 +338,7 @@ func recordBranchFacts(
 	ctx context.Context,
 	in startInput,
 	name string,
-	dep *dependency,
+	dep *launch.Dependency,
 	existing stack.FoundBranch,
 	notes []string,
 ) ([]string, error) {
@@ -396,7 +390,7 @@ func prepareLaunch(
 
 	// a rerun keeps the profile the branch records, unless a flag chose one
 	if !in.profileFlagged {
-		recorded, err := recordedProfile(ctx, in.main, name)
+		recorded, err := runplan.RecordedProfile(ctx, in.main, name)
 		if err != nil {
 			return profile, nil, err
 		}
@@ -417,8 +411,8 @@ func prepareLaunch(
 
 	// the flow is the branch's fact from here on: status lists its gates,
 	// and a rerun of drive keeps it
-	if !in.flowKept && in.flow.recorded() != "" {
-		if err := branchmeta.Set(ctx, in.main, name, branchmeta.Flow, in.flow.recorded()); err != nil {
+	if !in.flowKept && in.flow.Recorded() != "" {
+		if err := branchmeta.Set(ctx, in.main, name, branchmeta.Flow, in.flow.Recorded()); err != nil {
 			notes = append(notes, "the flow was not recorded on the branch: "+err.Error())
 		}
 	}
@@ -446,7 +440,7 @@ type settledBranch struct {
 	name     string
 	slugNote string
 	base     baseRef
-	dep      *dependency
+	dep      *launch.Dependency
 	existing stack.FoundBranch
 }
 
@@ -504,7 +498,7 @@ func landedBranchFor(ctx context.Context, in startInput) (settledBranch, error) 
 		return settledBranch{}, err
 	}
 
-	existing, err := x.Find(ctx, name, in.task.ID, "", policyLocal)
+	existing, err := x.Find(ctx, name, in.task.ID, "", stack.PolicyLocal)
 	if err != nil {
 		return settledBranch{}, err
 	}
@@ -559,7 +553,7 @@ func needsAgent(ctx context.Context, dir string, ws agentctl.Opened) (bool, stri
 		return true, "", nil
 	}
 
-	occ, err := agents(dir).Occupancy(ctx, ws)
+	occ, err := worktree.Agents(dir).Occupancy(ctx, ws)
 	if err != nil {
 		return false, "", err
 	}

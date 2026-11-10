@@ -1,4 +1,6 @@
-package main
+// Package worktree is a task's checkout: where its worktree goes, how it is
+// made and removed, and the names and pull tokens that point at one.
+package worktree
 
 import (
 	"cmp"
@@ -12,16 +14,12 @@ import (
 	"github.com/amberpixels/f10/cli/internal/stack"
 )
 
-// A task's worktree goes through worktrunk when `wt` is on PATH, so a
-// project's worktrunk hooks keep firing, else plain git at the sibling path
-// worktrunk would choose. Decided once, here, so start and finish agree.
-
 func worktrunk() bool {
 	return shell.Has("wt")
 }
 
-// checkout reads the new worktree's path back from git, never predicted.
-func checkout(ctx context.Context, main, branch, base string, create bool) (string, error) {
+// Checkout reads the new worktree's path back from git, never predicted.
+func Checkout(ctx context.Context, main, branch, base string, create bool) (string, error) {
 	if worktrunk() {
 		if err := wtSwitch(ctx, main, branch, base, create); err != nil {
 			return "", err
@@ -31,7 +29,7 @@ func checkout(ctx context.Context, main, branch, base string, create bool) (stri
 			base = stack.DefaultBranch(ctx, main)
 		}
 
-		if err := gitx.AddWorktree(ctx, main, siblingPath(main, branch), branch, base, create); err != nil {
+		if err := gitx.AddWorktree(ctx, main, SiblingPath(main, branch), branch, base, create); err != nil {
 			return "", err
 		}
 	}
@@ -64,9 +62,9 @@ func wtSwitch(ctx context.Context, main, branch, base string, create bool) error
 	return wt(ctx, main, append(args, branch)...)
 }
 
-// removeCheckout deletes the branch with -D: the host confirmed the merge,
+// RemoveCheckout deletes the branch with -D: the host confirmed the merge,
 // which a squash or rebase hides from git.
-func removeCheckout(ctx context.Context, main, path, branch string) error {
+func RemoveCheckout(ctx context.Context, main, path, branch string) error {
 	if worktrunk() {
 		return wt(ctx, main, "remove", "--yes", "--force-delete", "--foreground", "--format", "json", branch)
 	}
@@ -93,8 +91,8 @@ func wt(ctx context.Context, main string, args ...string) error {
 	return nil
 }
 
-// siblingPath matches worktrunk's layout, which per-project cleanup scripts
+// SiblingPath matches worktrunk's layout, which per-project cleanup scripts
 // already scan.
-func siblingPath(main, branch string) string {
+func SiblingPath(main, branch string) string {
 	return filepath.Join(filepath.Dir(main), filepath.Base(main)+"."+strings.ReplaceAll(branch, "/", "-"))
 }

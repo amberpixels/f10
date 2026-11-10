@@ -144,7 +144,7 @@ func launchBase(
 	base := recorded
 	if branched {
 		if x, err := stack.LoadBranchIndex(ctx, main); err == nil {
-			if b, err := x.Find(ctx, "", id, suffix, policyLocal); err == nil && b.Name != "" {
+			if b, err := x.Find(ctx, "", id, suffix, stack.PolicyLocal); err == nil && b.Name != "" {
 				base = cmp.Or(branchAfter(ctx, main, b.Name), base)
 			}
 		}

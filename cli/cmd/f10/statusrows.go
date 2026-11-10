@@ -357,15 +357,15 @@ func renderRows(w io.Writer, rows []taskRow, v rowView) error {
 	// plain output keeps its rows narrow: the gates go on a line beneath
 	withGates := !v.plain && slices.ContainsFunc(rows, func(r taskRow) bool { return r.gateColumn() != "" })
 
-	tr := make([]treeRow, len(rows))
+	tr := make([]hostops.TreeRow, len(rows))
 	for i, r := range rows {
-		tr[i] = treeRow{ID: r.ID, Title: r.Title, URL: r.URL, Depth: r.Depth}
+		tr[i] = hostops.TreeRow{ID: r.ID, Title: r.Title, URL: r.URL, Depth: r.Depth}
 		links.Known("", r.ID, r.URL)
 	}
 
-	nodes := subtaskNodes(tr, treeOpts{
-		titleBelow: true,
-		id: func(i int) tasktree.Cell {
+	nodes := hostops.SubtaskNodes(tr, hostops.TreeOpts{
+		TitleBelow: true,
+		Id: func(i int) tasktree.Cell {
 			c := tasktree.Cell{Text: stateGlyph(rows[i].Stage) + " " + rows[i].ID}
 			if v.term {
 				glyph, id := stateGlyph(rows[i].Stage), links.ID("", rows[i].ID)
@@ -374,7 +374,7 @@ func renderRows(w io.Writer, rows []taskRow, v rowView) error {
 
 			return c
 		},
-		extra: func(i int) ([]tasktree.Cell, []tasktree.Note) { return rows[i].cells(v, withGates, faint) },
+		Extra: func(i int) ([]tasktree.Cell, []tasktree.Note) { return rows[i].cells(v, withGates, faint) },
 	})
 
 	return tree.Write(w, nodes)

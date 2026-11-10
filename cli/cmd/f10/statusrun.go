@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/scope"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/textx"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -137,7 +138,7 @@ type runView struct {
 // without a facts head, `f10 state show` included, prints through it.
 func runRows(w io.Writer, r *state.Run, v runView) {
 	for _, f := range runFacts(r, v) {
-		headerRow(w, f.Label, f.Value, v.limit, f.Style)
+		scope.HeaderRow(w, f.Label, f.Value, v.limit, f.Style)
 	}
 }
 

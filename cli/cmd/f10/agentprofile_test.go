@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/amberpixels/f10/cli/internal/runplan"
 )
 
 // A step's line names the profile, where each segment came from, the Agent
 // tool form where a subagent runs on it, and the lever that reaches it.
 func TestAgentLines(t *testing.T) {
-	m := agentMap{
+	m := runplan.AgentMap{
 		"default":  {Key: "default", Value: "opus:high", Origin: "declared (user, ~/.f10/agents.md)"},
 		"review":   {Key: "review", Value: "sonnet", Origin: "declared (main, frontmatter)"},
 		"plan.bug": {Key: "plan.bug", Value: "medium", Origin: "declared (main, frontmatter)"},
@@ -48,12 +50,12 @@ func TestAgentLines(t *testing.T) {
 		}
 	}
 
-	line := agentLineFor(agentMap{}, "implement", "", "").String()
+	line := agentLineFor(runplan.AgentMap{}, "implement", "", "").String()
 	if !strings.Contains(line, "the kind's default: no flag passed") {
 		t.Errorf("no map: %q", line)
 	}
 
-	if kinds := m.kindsScoped("plan"); len(kinds) != 1 || kinds[0] != "bug" {
+	if kinds := m.KindsScoped("plan"); len(kinds) != 1 || kinds[0] != "bug" {
 		t.Errorf("kinds scoped for plan: %v", kinds)
 	}
 
@@ -68,7 +70,12 @@ func TestAgentLines(t *testing.T) {
 
 	b.Reset()
 
-	if err := printAgentMap(&b, agentMap{}, false); err != nil || !strings.Contains(b.String(), "none declared") {
+	if err := printAgentMap(
+		&b,
+		runplan.AgentMap{},
+		false,
+	); err != nil ||
+		!strings.Contains(b.String(), "none declared") {
 		t.Errorf("empty map: %v %q", err, b.String())
 	}
 }

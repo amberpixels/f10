@@ -16,6 +16,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
@@ -38,15 +39,15 @@ type driveConfig struct {
 	argv []string // the command line as given, for the resume command
 	// sequence is the skills a task on fl goes through; nil is driveSkills,
 	// read off the flow, and a test runs the machinery on any skill
-	sequence func(fl shipFlow) []string
-	flow     shipFlow                            // the flow typed, or default; a task's branch may record another
-	resolve  func(name string) (shipFlow, error) // a declared flow by name, at the run's pace
+	sequence func(fl runplan.ShipFlow) []string
+	flow     runplan.ShipFlow                            // the flow typed, or default; a task's branch may record another
+	resolve  func(name string) (runplan.ShipFlow, error) // a declared flow by name, at the run's pace
 	// paced is a flow at another pace, for a branch that records one; nil
 	// keeps the run's
-	paced    func(fl shipFlow, pace string) (shipFlow, error)
-	storage  storage.Root // the same root, for task files: plans, findings, verdicts
-	settings string       // claude's settings file, which names the model a bad --model falls back to
-	layers   agentMap     // the user's and the project's agents map; nil for none
+	paced    func(fl runplan.ShipFlow, pace string) (runplan.ShipFlow, error)
+	storage  storage.Root     // the same root, for task files: plans, findings, verdicts
+	settings string           // claude's settings file, which names the model a bad --model falls back to
+	layers   runplan.AgentMap // the user's and the project's agents map; nil for none
 	stateDir string
 	session  string // the session that typed the command, inherited through the daemon's environment
 	ttl      time.Duration
@@ -149,9 +150,9 @@ type driveRun struct {
 	base     *driveRun // the listed base, or nil for none or one outside the list
 	o        openedTask
 	phase    runPhase
-	flow     shipFlow // the flow this task ships through: its branch's record, else the run's
-	finishes bool     // drive ends the task with finish: the pace says so, or a spike closes
-	pos      int      // the index in its skills of the skill in flight, or the next one
+	flow     runplan.ShipFlow // the flow this task ships through: its branch's record, else the run's
+	finishes bool             // drive ends the task with finish: the pace says so, or a spike closes
+	pos      int              // the index in its skills of the skill in flight, or the next one
 	end      *driveResult
 	// freshAt is when this drive opened the task to start its agent: run
 	// state older than it was written by an agent that is gone, and is not read
@@ -270,7 +271,7 @@ func (in *driveInput) skills(r *driveRun) []string {
 	return skills
 }
 
-func (in *driveInput) sequenceOf(fl shipFlow) []string {
+func (in *driveInput) sequenceOf(fl runplan.ShipFlow) []string {
 	if in.sequence != nil {
 		return in.sequence(fl)
 	}
@@ -280,14 +281,14 @@ func (in *driveInput) sequenceOf(fl shipFlow) []string {
 
 // driveSkills reads the skills off the flow: plan when the flow leads with
 // it, ship, then finish when the pace finishes.
-func driveSkills(fl shipFlow) []string {
+func driveSkills(fl runplan.ShipFlow) []string {
 	var skills []string
-	if fl.plans() {
+	if fl.Plans() {
 		skills = append(skills, "plan")
 	}
 
 	skills = append(skills, "ship")
-	if fl.finishes() {
+	if fl.Finishes() {
 		skills = append(skills, "finish")
 	}
 

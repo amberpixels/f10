@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -21,52 +22,12 @@ import (
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasktree"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // A drive's record, under the storage root, is what a rerun of the same
 // command picks up; its leases make a second drive, or `f10 finish`, skip or
 // refuse a task it holds.
-
-// The rows a finished task ends on: finished by the drive or outside it, or
-// found finished when the drive started.
-const (
-	rowFinished        = "finished"
-	rowAlreadyFinished = "already finished"
-)
-
-func rowDone(t drives.Task) bool {
-	return t.Outcome != nil && (t.Outcome.Row == rowFinished || t.Outcome.Row == rowAlreadyFinished)
-}
-
-func setFinished(t *drives.Task) {
-	t.Skill, t.Queued, t.Phase, t.Outcome = "", false, drives.PhaseEnded, &drives.Outcome{Row: rowFinished}
-}
-
-// markFinished moves drive n's open rows that match to finished, under the
-// drive's own lease: a held one is a running drive, which owns its record,
-// so nothing is written. A row only ever moves to finished, since only a
-// rerun knows a drive's next step for a halt settled halfway.
-func markFinished(root string, n int, match func(drives.Task) bool) error {
-	l, err := drives.Acquire(root, drives.DriveKey(n), 0)
-	if held := (drives.HeldError{}); errors.As(err, &held) {
-		return nil
-	}
-
-	if err != nil {
-		return err
-	}
-	defer l.Release()
-
-	_, err = drives.Update(root, n, func(rec *drives.Record) {
-		for i := range rec.Tasks {
-			if t := &rec.Tasks[i]; !rowDone(*t) && match(*t) {
-				setFinished(t)
-			}
-		}
-	})
-
-	return err
-}
 
 // healFinished settles a stopped drive's open rows whose task finished
 // outside it, on screen always and on disk when the lease is free.
@@ -78,14 +39,14 @@ func healFinished(root string, rec *drives.Record, finished func(string) bool) {
 	hit := map[string]bool{}
 
 	for i := range rec.Tasks {
-		if t := &rec.Tasks[i]; !rowDone(*t) && finished(t.ID) {
+		if t := &rec.Tasks[i]; !driverec.RowDone(*t) && finished(t.ID) {
 			hit[t.ID] = true
-			setFinished(t)
+			driverec.SetFinished(t)
 		}
 	}
 
 	if len(hit) > 0 {
-		_ = markFinished(root, rec.Number, func(t drives.Task) bool { return hit[t.ID] })
+		_ = driverec.MarkFinished(root, rec.Number, func(t drives.Task) bool { return hit[t.ID] })
 	}
 }
 
@@ -162,7 +123,7 @@ func (in *driveInput) openRecord(tasks []driveTask) error {
 			}
 
 			in.rec.Tasks = append(in.rec.Tasks, drives.Task{
-				ID: t.ref.Label() + suffixOf(t.suffix), Agent: profile, After: t.after,
+				ID: t.ref.Label() + worktree.SuffixOf(t.suffix), Agent: profile, After: t.after,
 			})
 		}
 
@@ -232,14 +193,6 @@ func (in *driveInput) recordLaunch() error {
 		state.Launch{Kind: state.LaunchDrive, Value: strconv.Itoa(in.rec.Number)})
 }
 
-func suffixOf(s string) string {
-	if s == "" {
-		return ""
-	}
-
-	return "-" + s
-}
-
 // save applies change to the record. A failed write is a line, never a
 // halt: the branch keeps the position, the record what it cannot.
 func (in *driveInput) save(change func(*drives.Record)) {
@@ -258,7 +211,10 @@ func (in *driveInput) save(change func(*drives.Record)) {
 }
 
 func (in *driveInput) saveTask(r *driveRun, change func(*drives.Task)) {
-	ids := []string{r.task.ref.Label() + suffixOf(r.task.suffix), r.task.ref.ID + suffixOf(r.task.suffix)}
+	ids := []string{
+		r.task.ref.Label() + worktree.SuffixOf(r.task.suffix),
+		r.task.ref.ID + worktree.SuffixOf(r.task.suffix),
+	}
 
 	in.save(func(rec *drives.Record) {
 		for _, id := range ids {

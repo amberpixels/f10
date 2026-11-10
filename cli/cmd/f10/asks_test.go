@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/asknotify"
 	"github.com/amberpixels/f10/cli/internal/asks"
 	"github.com/amberpixels/f10/cli/internal/layout"
 )
@@ -191,19 +192,19 @@ func TestNotifyArgv(t *testing.T) {
 	none := func(string) (string, error) { return "", errors.New("absent") }
 	found := func(string) (string, error) { return "/usr/bin/notify-send", nil }
 
-	if got, _ := notifyArgv("off", a, "darwin", found); got != nil {
+	if got, _ := asknotify.NotifyArgv("off", a, "darwin", found); got != nil {
 		t.Errorf("off = %q", got)
 	}
 
-	if got, _ := notifyArgv("", a, "darwin", none); len(got) != 3 || got[0] != "osascript" {
+	if got, _ := asknotify.NotifyArgv("", a, "darwin", none); len(got) != 3 || got[0] != "osascript" {
 		t.Errorf("darwin = %q", got)
 	}
 
-	if got, _ := notifyArgv("", a, "linux", found); len(got) != 3 || got[0] != "notify-send" {
+	if got, _ := asknotify.NotifyArgv("", a, "linux", found); len(got) != 3 || got[0] != "notify-send" {
 		t.Errorf("linux = %q", got)
 	}
 
-	if got, _ := notifyArgv("", a, "linux", none); got != nil {
+	if got, _ := asknotify.NotifyArgv("", a, "linux", none); got != nil {
 		t.Errorf("linux without notify-send = %q", got)
 	}
 }
@@ -219,7 +220,7 @@ func TestNotifyTemplateRunsNoQuestion(t *testing.T) {
 		`printf '%s\n' {question}`,
 	} {
 		dir := t.TempDir()
-		argv, env := notifyArgv(tmpl, a, "linux", nil)
+		argv, env := asknotify.NotifyArgv(tmpl, a, "linux", nil)
 
 		cmd := exec.Command(argv[0], argv[1:]...)
 		cmd.Dir, cmd.Env = dir, append(os.Environ(), env...)
@@ -252,13 +253,13 @@ func TestPaneAnswered(t *testing.T) {
 	a := raised(t, dir, asks.Ask{Task: "FT-1", Root: "/r", Worktree: root})
 	raised(t, dir, asks.Ask{Task: "FT-2", Root: "/r", Worktree: root, Skill: "finish", Text: "1. x? [local | merge]"})
 
-	paneAnswered(context.Background(), t.TempDir(), "elsewhere")
+	asknotify.PaneAnswered(context.Background(), t.TempDir(), "elsewhere")
 
 	if open, _ := asks.Open(dir); len(open) != 2 {
 		t.Fatalf("a prompt in another checkout answered: %+v", open)
 	}
 
-	paneAnswered(context.Background(), repo, "1. wait")
+	asknotify.PaneAnswered(context.Background(), repo, "1. wait")
 
 	got, isOpen, _ := asks.Get(dir, a.Key())
 	if isOpen || got.By != asks.ByPane || got.Answer != "1. wait" || got.DeliveredAt.IsZero() || got.TakenAt.IsZero() {

@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
@@ -22,11 +23,6 @@ import (
 type handoff struct {
 	head string
 	body string
-}
-
-// taskHandoff is the task's handoff file.
-func taskHandoff(root storage.Root, id string) string {
-	return filepath.Join(root.Handoffs(), id+".md")
 }
 
 // readHandoff reads the frontmatter's head and the body after it; a missing
@@ -109,12 +105,12 @@ func branchTip(ctx context.Context, main, branch string, p forge.PR) func() stri
 // Finish names it for its report and moves the file only after printing it,
 // so a failure before the report leaves the file for the rerun to print.
 func handoffTarget(root storage.Root, id string) (string, string) {
-	src := taskHandoff(root, id)
+	src := archive.TaskHandoff(root, id)
 	if !fsx.Exists(src) {
 		return src, ""
 	}
 
-	return src, freeArchiveName(storage.ArchiveOf(root.Handoffs()), id)
+	return src, archive.FreeArchiveName(storage.ArchiveOf(root.Handoffs()), id)
 }
 
 func moveHandoff(src, target string) error {

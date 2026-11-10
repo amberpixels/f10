@@ -8,12 +8,13 @@ import (
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // pickupFor is the PR the start argument names, or nil for a task id; a
 // bare #n the host knows as no PR is a task id.
 func pickupFor(ctx context.Context, t *target.Target, token string) (*hostops.Pickup, forge.PR, error) {
-	number, probe := pullToken(token)
+	number, probe := worktree.PullToken(token)
 	if number == "" {
 		return nil, forge.PR{}, nil
 	}

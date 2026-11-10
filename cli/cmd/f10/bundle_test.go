@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/stack"
 )
@@ -271,7 +272,7 @@ func TestSkillPromptForABundle(t *testing.T) {
 		"review": "/f10:review GH-1 --driven",
 		"finish": "/f10:finish GH-1 --driven",
 	} {
-		if got := skillPrompt(skill, "GH-1+GH-2", nil, shipFlow{}, false); got != want {
+		if got := skillPrompt(skill, "GH-1+GH-2", nil, runplan.ShipFlow{}, false); got != want {
 			t.Errorf("skillPrompt(%s) = %q, want %q", skill, got, want)
 		}
 	}

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/gitx"
@@ -65,7 +66,11 @@ func (in *driveInput) catchupHere(
 	ci.ShipStopped = run != nil && (run.Status("ship") == "failed" || run.Status("ship") == "partial")
 
 	tasks := r.task.ref.Members()
-	p, stopped, err := in.catchup.Integrate(ctx, ci, in.catchup.Message(tasks, changeOf(in.storage.Reviews(tasks[0]))))
+	p, stopped, err := in.catchup.Integrate(
+		ctx,
+		ci,
+		in.catchup.Message(tasks, archive.ChangeOf(in.storage.Reviews(tasks[0]))),
+	)
 	if err != nil {
 		return in.failed(
 			ctx,
@@ -318,7 +323,7 @@ func (in *driveInput) verified(ctx context.Context, r *driveRun, job *verifyJob)
 
 	r.catchupPlan = nil
 
-	if err := clearMarks(ctx, in.main, r.o.branch, p); err != nil {
+	if err := stack.ClearMarks(ctx, in.main, r.o.branch, p); err != nil {
 		return halt(id, "catchup", err.Error())
 	}
 
@@ -416,7 +421,7 @@ func (in *driveInput) pushAfterCatchup(
 ) error {
 	id, branch := r.task.ref.ID, r.o.branch
 
-	how, err := pushCatchup(ctx, r.o.path, branch, r.lastCatchup)
+	how, err := stack.PushCatchup(ctx, r.o.path, branch, r.lastCatchup)
 	in.keepCatchup(r)
 
 	if c := r.lastCatchup; base == "" && c != nil {
@@ -426,7 +431,7 @@ func (in *driveInput) pushAfterCatchup(
 	base = cmp.Or(base, "its base")
 
 	switch {
-	case errors.Is(err, errBaseNotPushed):
+	case errors.Is(err, stack.ErrBaseNotPushed):
 		fmt.Fprintf(in.out, "%s %s: %s caught up with %s, not pushed: %s is not on origin yet\n",
 			in.id(id), skill, branch, base, base)
 
@@ -445,16 +450,16 @@ func (in *driveInput) pushAfterCatchup(
 func pushHalted(id, skill string, err error) driveResult {
 	res := halted(id, skill, err.Error())
 
-	moved := originMovedError{}
+	moved := stack.OriginMovedError{}
 
 	switch {
 	case !errors.As(err, &moved):
 		res.lines = append(res.lines, "next: rerun the drive")
-	case moved.unseen:
-		res.lines = append(res.lines, "next: check origin/"+moved.branch+" holds nothing "+moved.path+
+	case moved.Unseen:
+		res.lines = append(res.lines, "next: check origin/"+moved.Branch+" holds nothing "+moved.Path+
 			" lacks, push it with --force-with-lease yourself, then rerun the drive")
 	default:
-		res.lines = append(res.lines, "next: bring origin/"+moved.branch+" into "+moved.path+
+		res.lines = append(res.lines, "next: bring origin/"+moved.Branch+" into "+moved.Path+
 			", then /f10:catchup there, then rerun the drive")
 	}
 

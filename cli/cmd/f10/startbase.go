@@ -11,10 +11,12 @@ import (
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/ui"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // afterFromBody reads the task's body for an After: line. A body that
@@ -42,21 +44,11 @@ type baseRef struct {
 	sha  string
 }
 
-// A dependency is what --after records on the new branch: the base task,
-// its branch as a bare name (`origin/` stripped, since the pr step targets
-// a branch and ship looks it up local-first), and where its plan is.
-type dependency struct {
-	task    string
-	branch  string
-	plan    string // the plan's path, or "" when no checkout can reach it
-	planned bool   // the plan exists at that path
-}
-
 // checksParent reports whether start refuses a parent: a PR pickup is
 // someone else's branch, and talking an umbrella task through before
 // splitting it is what --discuss is for.
 func checksParent(mode string, pick *hostops.Pickup) bool {
-	return pick == nil && mode != modeDiscuss
+	return pick == nil && mode != launch.ModeDiscuss
 }
 
 // refuseStartParent stops a parent with unfinished subtasks before anything
@@ -97,7 +89,7 @@ func settleBundle(ctx context.Context, main string, task ref.Ref, existing strin
 	}
 
 	if existing != "" {
-		lead, riders := x.Bundle(existing, strings.TrimSuffix(prefixOf(task), "-"))
+		lead, riders := x.Bundle(existing, strings.TrimSuffix(worktree.PrefixOf(task), "-"))
 
 		switch {
 		case len(task.Riders()) == 0 && len(riders) > 0 && strings.EqualFold(lead, task.ID):
@@ -155,7 +147,7 @@ func recordBundle(ctx context.Context, dir, branch string, task ref.Ref) error {
 // baseFor turns --after or --base into the ref the worktree is created
 // from, and for --after the dependency to record. Neither given is an empty
 // base, which lets git choose.
-func baseFor(ctx context.Context, in startInput) (baseRef, *dependency, error) {
+func baseFor(ctx context.Context, in startInput) (baseRef, *launch.Dependency, error) {
 	switch {
 	case in.after != "":
 		x, err := stack.LoadBranchIndex(ctx, in.main)
@@ -169,7 +161,7 @@ func baseFor(ctx context.Context, in startInput) (baseRef, *dependency, error) {
 		}
 
 		base := baseRef{ref: branch, flag: "--after", sha: stack.RefSHA(ctx, in.main, branch)}
-		dep := &dependency{task: in.after, branch: strings.TrimPrefix(branch, "origin/")}
+		dep := &launch.Dependency{Task: in.after, Branch: strings.TrimPrefix(branch, "origin/")}
 
 		return base, dep, nil
 	case in.base != "":
@@ -187,19 +179,19 @@ func baseFor(ctx context.Context, in startInput) (baseRef, *dependency, error) {
 // ignoredBaseNote says the base flag did not apply because the branch
 // exists and keeps the base it was created from. A dependency is still
 // recorded, and the note says so, since it is what ship and pr act on.
-func ignoredBaseNote(base baseRef, dep *dependency, name string) string {
+func ignoredBaseNote(base baseRef, dep *launch.Dependency, name string) string {
 	if dep == nil {
 		return fmt.Sprintf("%s ignored: branch %s already exists and keeps its base", base.flag, name)
 	}
 
 	return fmt.Sprintf("%s ignored for the base: branch %s already exists and keeps it; dependency on %s recorded",
-		base.flag, name, dep.task)
+		base.flag, name, dep.Task)
 }
 
 // sameAsDefaultNote names a base that sits at the default branch's commit:
 // for --after, the base task has no code yet, which the dependent agent is
 // told to design against rather than discover.
-func sameAsDefaultNote(ctx context.Context, dir string, base baseRef, dep *dependency) string {
+func sameAsDefaultNote(ctx context.Context, dir string, base baseRef, dep *launch.Dependency) string {
 	if base.sha == "" {
 		return ""
 	}
@@ -211,7 +203,7 @@ func sameAsDefaultNote(ctx context.Context, dir string, base baseRef, dep *depen
 
 	if dep != nil {
 		return fmt.Sprintf("%s %s: branch %s is at the same commit as the default branch %s, so %s has no code yet",
-			base.flag, dep.task, base.ref, def, dep.task)
+			base.flag, dep.Task, base.ref, def, dep.Task)
 	}
 
 	return fmt.Sprintf("%s %s is at the same commit as the default branch %s", base.flag, base.ref, def)
@@ -219,14 +211,14 @@ func sameAsDefaultNote(ctx context.Context, dir string, base baseRef, dep *depen
 
 // locatePlan finds the base task's plan in the shared plans dir. The notes
 // name what was not found, so a prompt that cannot cite the plan is explained.
-func locatePlan(dep *dependency, root storage.Root) []string {
-	dep.plan = root.Plan(dep.task)
+func locatePlan(dep *launch.Dependency, root storage.Root) []string {
+	dep.Plan = root.Plan(dep.Task)
 
-	if _, err := os.Stat(dep.plan); err != nil {
-		return []string{fmt.Sprintf("%s has no plan yet at %s", dep.task, dep.plan)}
+	if _, err := os.Stat(dep.Plan); err != nil {
+		return []string{fmt.Sprintf("%s has no plan yet at %s", dep.Task, dep.Plan)}
 	}
 
-	dep.planned = true
+	dep.Planned = true
 
 	return nil
 }
@@ -242,59 +234,14 @@ func planIf(path string) string {
 
 // recordDependency writes the dependency under the branch's section of the
 // local git config: per-branch, shared by every worktree, never pushed.
-func recordDependency(ctx context.Context, dir, branch string, dep *dependency) error {
-	if err := branchmeta.Set(ctx, dir, branch, branchmeta.After, dep.task); err != nil {
-		return fmt.Errorf("recording the dependency on %s: %w", dep.task, err)
+func recordDependency(ctx context.Context, dir, branch string, dep *launch.Dependency) error {
+	if err := branchmeta.Set(ctx, dir, branch, branchmeta.After, dep.Task); err != nil {
+		return fmt.Errorf("recording the dependency on %s: %w", dep.Task, err)
 	}
 
-	if err := branchmeta.Set(ctx, dir, branch, branchmeta.AfterBranch, dep.branch); err != nil {
-		return fmt.Errorf("recording the dependency on %s: %w", dep.task, err)
+	if err := branchmeta.Set(ctx, dir, branch, branchmeta.AfterBranch, dep.Branch); err != nil {
+		return fmt.Errorf("recording the dependency on %s: %w", dep.Task, err)
 	}
 
-	return recordTip(ctx, dir, branch, dep.branch)
-}
-
-// recordTip records the base commit branch is built on, so a catchup after
-// the base's history is rewritten replays only branch's own commits. The
-// newer of the local and origin merge-bases wins: a guard integrates origin's
-// copy, which a stale local branch would hide. A base found nowhere keeps the
-// tip recorded before.
-func recordTip(ctx context.Context, dir, branch, base string) error {
-	var tip string
-
-	for _, ref := range []string{"refs/heads/" + base, "refs/remotes/origin/" + base} {
-		sha, err := gitx.MergeBase(ctx, dir, "refs/heads/"+branch, ref)
-
-		switch {
-		case gitx.UnknownObject(err):
-			continue
-		case err != nil:
-			return err
-		case sha == "" || sha == tip:
-			continue
-		}
-
-		if tip != "" {
-			older, err := gitx.IsAncestor(ctx, dir, sha, tip)
-			if err != nil {
-				return err
-			}
-
-			if older {
-				continue
-			}
-		}
-
-		tip = sha
-	}
-
-	if tip == "" {
-		return nil
-	}
-
-	if err := branchmeta.Set(ctx, dir, branch, branchmeta.Tip, tip); err != nil {
-		return fmt.Errorf("recording %s's base tip on %s: %w", branch, base, err)
-	}
-
-	return nil
+	return worktree.RecordTip(ctx, dir, branch, dep.Branch)
 }

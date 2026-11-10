@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/ref"
 )
@@ -28,11 +29,11 @@ func finishRecords(w io.Writer, in finishInput, branch string) {
 
 	for _, rec := range recs {
 		match := attemptRows(in, branch, rec.Tasks)
-		if !slices.ContainsFunc(rec.Tasks, func(t drives.Task) bool { return !rowDone(t) && match(t) }) {
+		if !slices.ContainsFunc(rec.Tasks, func(t drives.Task) bool { return !driverec.RowDone(t) && match(t) }) {
 			continue
 		}
 
-		if err := markFinished(in.root, rec.Number, match); err != nil {
+		if err := driverec.MarkFinished(in.root, rec.Number, match); err != nil {
 			fmt.Fprintf(w, "  marking drive %d: %v\n", rec.Number, err)
 		}
 	}

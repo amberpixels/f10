@@ -8,9 +8,11 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // A spike's run ends at its report with the experiment uncommitted and no
@@ -65,7 +67,7 @@ func spikeArchiveName(root storage.Root, id string) (string, error) {
 		return "", fmt.Errorf("archiving the spike report: %w", err)
 	}
 
-	return freeArchiveName(dst, id+".spike"), nil
+	return archive.FreeArchiveName(dst, id+".spike"), nil
 }
 
 func archiveSpike(report, target string) error {
@@ -223,7 +225,7 @@ func removeTaskCheckout(
 ) error {
 	switch {
 	case !spike:
-		return removeCheckout(ctx, in.main, path, name)
+		return worktree.RemoveCheckout(ctx, in.main, path, name)
 	case kept == "":
 		if len(dirty) > 0 {
 			if err := discardExperiment(ctx, path); err != nil {
@@ -231,7 +233,7 @@ func removeTaskCheckout(
 			}
 		}
 
-		return removeCheckout(ctx, in.main, path, name)
+		return worktree.RemoveCheckout(ctx, in.main, path, name)
 	}
 
 	// the kept branch exists before the worktree goes, so a failed removal

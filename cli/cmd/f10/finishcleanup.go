@@ -7,6 +7,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // cleanup archives the task's files, prints the report, then removes what
@@ -93,7 +94,10 @@ func cleanup(ctx context.Context, w io.Writer, in finishInput, d finishDecision,
 		if d.ws != nil {
 			rows = append(rows, render.Fact{Label: "workspace", Value: d.ws.ID})
 		} else {
-			notes = append(notes, "no "+agents(in.main).Name()+" workspace shows the worktree, so nothing to close")
+			notes = append(
+				notes,
+				"no "+worktree.Agents(in.main).Name()+" workspace shows the worktree, so nothing to close",
+			)
 		}
 
 		rows = append(rows, render.Fact{Label: "path", Value: d.path})
@@ -195,14 +199,14 @@ func removeWorktree(ctx context.Context, w io.Writer, in finishInput, d finishDe
 	}
 
 	if d.self && d.mainWS != nil {
-		err := agents(in.main).Focus(ctx, d.mainWS.ID)
+		err := worktree.Agents(in.main).Focus(ctx, d.mainWS.ID)
 		if err := errs.check("focusing the main workspace", err); err != nil {
 			return err
 		}
 	}
 
 	if d.ws != nil {
-		err := agents(in.main).Close(ctx, d.ws.ID)
+		err := worktree.Agents(in.main).Close(ctx, d.ws.ID)
 		if err := errs.check("closing workspace "+d.ws.ID, err); err != nil {
 			return err
 		}

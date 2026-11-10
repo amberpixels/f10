@@ -1,15 +1,15 @@
 //go:build unix
 
-package main
+package shell
 
 import (
 	"os/exec"
 	"syscall"
 )
 
-// startDetached starts exe in its own session and lets it go: it outlives
+// Detached starts exe in its own session and lets it go: it outlives
 // the hook that starts it.
-func startDetached(exe string, args ...string) error {
+func Detached(exe string, args ...string) error {
 	cmd := exec.Command(exe, args...) //nolint:noctx // this binary, outliving its caller by design
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 

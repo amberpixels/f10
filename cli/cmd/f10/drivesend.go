@@ -8,8 +8,10 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // send runs one element in the task's agent; the poll reads how it ends.
@@ -163,13 +165,13 @@ func (in *driveInput) deliver(ctx context.Context, r *driveRun, text string) err
 // left the agent's input box, pressing Enter again if it did not. A failed
 // check is printed, and the start window still decides.
 func (in *driveInput) retryEnter(ctx context.Context, r *driveRun) {
-	if r.typed == "" || r.enterRetried || in.now().Sub(r.sentAt) < enterRetry {
+	if r.typed == "" || r.enterRetried || in.now().Sub(r.sentAt) < launch.EnterRetry {
 		return
 	}
 
 	r.enterRetried = true
 
-	if note := retryEnter(ctx, agents(r.o.path), r.typedTo, r.typed); note != "" {
+	if note := launch.RetryEnter(ctx, worktree.Agents(r.o.path), r.typedTo, r.typed); note != "" {
 		fmt.Fprintf(in.out, "%s %s: %s\n", in.id(r.task.ref.ID), r.skill, note)
 	}
 }
@@ -185,8 +187,8 @@ func steered(prompt, steering string) string {
 		return prompt[:i] + " " + steering + prompt[i:]
 	}
 
-	if base, ok := strings.CutSuffix(prompt, " "+drivenMarker); ok {
-		return base + " " + steering + " " + drivenMarker
+	if base, ok := strings.CutSuffix(prompt, " "+launch.DrivenMarker); ok {
+		return base + " " + steering + " " + launch.DrivenMarker
 	}
 
 	return prompt + " " + steering

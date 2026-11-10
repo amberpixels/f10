@@ -17,17 +17,20 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // The watcher reconciles a project's tasks that no drive owns, from the
@@ -239,10 +242,10 @@ func runWatchPass(ctx context.Context, cmd *cli.Command, t *target.Target) error
 		),
 	}
 
-	if b := reachableAgents(main); b != nil {
+	if b := worktree.ReachableAgents(main); b != nil {
 		in.agents = b
 		in.prompt = func(ctx context.Context, task watchedTask, text string) error {
-			note, err := promptChecked(ctx, task.path, task.id, "", text)
+			note, err := launch.PromptChecked(ctx, task.path, task.id, "", text)
 			if note != "" {
 				in.warn(task.id + ": " + note)
 			}
@@ -274,53 +277,6 @@ func runWatchPass(ctx context.Context, cmd *cli.Command, t *target.Target) error
 
 	return nil
 }
-
-// watchProject hands the project to this user's daemon, starting one when
-// none runs. It never replaces or waits out a running daemon (f10 drive's
-// job, which can tell the user), and an error is one warning, never a failed
-// command. A variable so tests start no daemon.
-var watchProject = func(ctx context.Context, w io.Writer, t *target.Target) {
-	if !daemon.Supported || t.Effective.Watch == "off" {
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, watchHandWait)
-	defer cancel()
-
-	dir := daemon.RunDir()
-
-	rep, err := daemon.Call(ctx, dir, daemon.Request{Op: daemon.OpHello}, 0)
-
-	switch {
-	case err == nil && rep.Stopping:
-		fmt.Fprintln(w, "watch: the f10 daemon is stopping: the next f10 start or f10 drive hands this project over")
-
-		return
-	case errors.Is(err, daemon.ErrNotRunning):
-		if _, err := (&daemon.Ensurer{Dir: dir, Version: daemonVersion()}).Ensure(ctx); err != nil {
-			fmt.Fprintf(w, "watch: warning: %v\n", err)
-
-			return
-		}
-	case err != nil:
-		fmt.Fprintf(w, "watch: warning: %v\n", err)
-
-		return
-	}
-
-	_, err = daemon.Call(ctx, dir, daemon.Request{
-		Op:   daemon.OpWatch,
-		Root: t.Layout.StorageRoot.Path(),
-		Dir:  cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot),
-		Env:  driveEnv(os.Environ(), t.Effective.DriveEnv),
-	}, 0)
-	if err != nil {
-		fmt.Fprintf(w, "watch: warning: %v\n", err)
-	}
-}
-
-// watchHandWait bounds handing a project over, a daemon started included.
-const watchHandWait = 10 * time.Second
 
 // watchInput is everything a pass needs, so it runs in a test without a
 // daemon, Herdr or a host.
@@ -785,7 +741,7 @@ func watcherFinish(ctx context.Context, w io.Writer, t *target.Target, main, roo
 	}
 	defer lease.Release()
 
-	if err := recheckFinish(ctx, reachableAgents(main), main, task); err != nil {
+	if err := recheckFinish(ctx, worktree.ReachableAgents(main), main, task); err != nil {
 		return err
 	}
 
@@ -1032,9 +988,9 @@ func (in watchInput) settleCatchup(
 		return in.pushFailed(task, rec, err)
 	}
 
-	how, err := pushCatchup(ctx, task.path, task.branch, rec)
+	how, err := stack.PushCatchup(ctx, task.path, task.branch, rec)
 
-	switch moved := (originMovedError{}); {
+	switch moved := (stack.OriginMovedError{}); {
 	case errors.As(err, &moved):
 		// someone pushed to the request while the catchup ran: the branch
 		// here no longer carries it, so a push would drop their commits
@@ -1047,7 +1003,7 @@ func (in watchInput) settleCatchup(
 			Next: "bring origin/" + task.branch + " into " + task.path + ", then /f10:catchup there",
 			Key:  watchCatchup + " origin moved " + task.originSHA,
 		}
-	case errors.Is(err, errBaseNotPushed):
+	case errors.Is(err, stack.ErrBaseNotPushed):
 		return nil // a later pass, once the base is on origin
 	case err != nil:
 		return in.pushFailed(task, rec, err)
@@ -1111,21 +1067,21 @@ func (in watchInput) sendCatchup(
 		}
 	}
 
-	st, err := readTarget(ctx, in.main, aim, pr.Base, task.localSHA, task.originSHA)
+	st, err := stack.ReadTarget(ctx, in.main, aim, pr.Base, task.localSHA, task.originSHA)
 
 	switch base := strings.TrimPrefix(aim.Name, "origin/"); {
 	case err != nil:
 		in.warnf("%s skipped this pass: %v", task.id, err)
 
 		return nil
-	case st.unpushedBase:
+	case st.UnpushedBase:
 		// a stacked base read from its local branch only: its unpushed
 		// commits would ride into this request, so the catchup waits for its push
 		return nil
-	case st.retargeted:
+	case st.Retargeted:
 		return behind("retargeted", fmt.Sprintf("%s targets %s, not %s, which %s was started on: not caught up",
 			pr.URL, pr.Base, base, task.branch))
-	case st.diverged:
+	case st.Diverged:
 		// a worktree behind origin would rebase a stale branch; one ahead of
 		// it holds work the request has not seen
 		return behind("diverged", fmt.Sprintf("%s moved past %s, whose tip is not origin's: not caught up",
@@ -1225,7 +1181,7 @@ func (in watchInput) integrate(
 
 	// the review series is read only for a merge, the one method with a message
 	message := func(p stack.CatchupPlan) []string {
-		return in.engine.Message(tasks, changeOf(in.storage.Reviews(task.id)))(p)
+		return in.engine.Message(tasks, archive.ChangeOf(in.storage.Reviews(task.id)))(p)
 	}
 
 	p, stopped, err := in.engine.Integrate(ctx, in.engine.Input(in.main, task.path), message)
@@ -1248,7 +1204,11 @@ func (in watchInput) integrate(
 		steering = in.engine.ConflictSteering(p, task.branch, "the watcher", paths)
 	}
 
-	if err := in.prompt(ctx, task, steered(driven("/f10:catchup")+" && "+watchClause(rec.Head), steering)); err != nil {
+	if err := in.prompt(
+		ctx,
+		task,
+		steered(launch.Driven("/f10:catchup")+" && "+watchClause(rec.Head), steering),
+	); err != nil {
 		in.undo(ctx, task, rec.Head, stopped, p.Method)
 		unmark()
 

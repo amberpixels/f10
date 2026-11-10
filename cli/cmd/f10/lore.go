@@ -14,9 +14,11 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/lore"
+	"github.com/amberpixels/f10/cli/internal/reviews"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -467,12 +469,12 @@ func runLoreChange(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	// opened as review round opens it, so branch-only work has a change too
-	dir, _, err := openReviews(ctx, t, cmd.Args().First(), cmd.ErrWriter)
+	dir, _, err := reviews.OpenReviews(ctx, t, cmd.Args().First(), cmd.ErrWriter)
 	if err != nil {
 		return fmt.Errorf("lore change: %w", err)
 	}
 
-	_, err = fmt.Fprintln(cmd.Writer, changeOf(dir))
+	_, err = fmt.Fprintln(cmd.Writer, archive.ChangeOf(dir))
 
 	return err
 }

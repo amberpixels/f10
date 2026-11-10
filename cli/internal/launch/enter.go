@@ -1,4 +1,4 @@
-package main
+package launch
 
 import (
 	"context"
@@ -7,14 +7,15 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // A typed prompt's Enter can arrive while the input box is still busy with
 // the text, and be lost; these bound how long a typed prompt is watched for
 // that before Enter is pressed again, once.
 var (
-	enterRetry = 10 * time.Second
-	enterPoll  = 500 * time.Millisecond
+	EnterRetry = 10 * time.Second
+	EnterPoll  = 500 * time.Millisecond
 	// promptMarks is where the UserPromptSubmit hook leaves its marks
 	promptMarks = state.Dir
 )
@@ -23,10 +24,10 @@ var (
 // to tell it from the user's own typing, short enough to sit on one line.
 const promptKey = 30
 
-// holdsPrompt reports whether the input box on screen still holds text,
+// HoldsPrompt reports whether the input box on screen still holds text,
 // unsubmitted. A screen with no box found holds nothing, so no Enter is
 // pressed where f10 cannot see what it would submit.
-func holdsPrompt(screen, text string) bool {
+func HoldsPrompt(screen, text string) bool {
 	box, ok := inputBox(screen)
 	if !ok {
 		return false
@@ -72,16 +73,16 @@ func isRule(line string) bool {
 	return len([]rune(l)) >= 10 && strings.Trim(l, "─") == ""
 }
 
-// retryEnter presses Enter once when the agent's input box still holds
+// RetryEnter presses Enter once when the agent's input box still holds
 // text. It says what it did, or why it could not look, "" when the prompt
 // had gone through.
-func retryEnter(ctx context.Context, b agentctl.Backend, name, text string) string {
+func RetryEnter(ctx context.Context, b agentctl.Backend, name, text string) string {
 	screen, err := b.Screen(ctx, name)
 	if err != nil {
 		return "could not read the agent's screen to check the prompt was submitted: " + err.Error()
 	}
 
-	if !holdsPrompt(screen, text) {
+	if !HoldsPrompt(screen, text) {
 		return ""
 	}
 
@@ -92,33 +93,33 @@ func retryEnter(ctx context.Context, b agentctl.Backend, name, text string) stri
 	return "Enter resent: the prompt was still in the agent's input box"
 }
 
-// promptChecked types text into the task's agent, then waits up to
+// PromptChecked types text into the task's agent, then waits up to
 // enterRetry for the agent's prompt mark and presses Enter once if the text
 // is still in its input box. The note says what the check did; it is never
 // an error, since the prompt itself went out.
-func promptChecked(ctx context.Context, path, id, suffix, text string) (string, error) {
+func PromptChecked(ctx context.Context, path, id, suffix, text string) (string, error) {
 	sent := time.Now()
 
-	name, err := promptAgentAs(ctx, path, id, suffix, text)
+	name, err := PromptAgentAs(ctx, path, id, suffix, text)
 	if err != nil {
 		return "", err
 	}
 
-	return watchEnter(ctx, agents(path), path, name, text, sent), nil
+	return WatchEnter(ctx, worktree.Agents(path), path, name, text, sent), nil
 }
 
-// watchEnter is promptChecked's wait, for a prompt typed at sent into the
+// WatchEnter is promptChecked's wait, for a prompt typed at sent into the
 // agent in the checkout at root. Only the prompt mark ends it early: an
 // empty input box may be one that has not drawn the text yet.
-func watchEnter(ctx context.Context, b agentctl.Backend, root, name, text string, sent time.Time) string {
+func WatchEnter(ctx context.Context, b agentctl.Backend, root, name, text string, sent time.Time) string {
 	since := sent.Truncate(time.Second) // marks keep whole seconds
 
-	for deadline := sent.Add(enterRetry); time.Now().Before(deadline); {
+	for deadline := sent.Add(EnterRetry); time.Now().Before(deadline); {
 		if p, ok := state.LastPrompt(promptMarks(), root); ok && !p.At.Before(since) {
 			return ""
 		}
 
-		timer := time.NewTimer(min(enterPoll, time.Until(deadline)))
+		timer := time.NewTimer(min(EnterPoll, time.Until(deadline)))
 
 		select {
 		case <-ctx.Done():
@@ -129,5 +130,5 @@ func watchEnter(ctx context.Context, b agentctl.Backend, root, name, text string
 		}
 	}
 
-	return retryEnter(ctx, b, name, text)
+	return RetryEnter(ctx, b, name, text)
 }

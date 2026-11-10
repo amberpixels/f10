@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/calendar"
+	"github.com/amberpixels/f10/cli/internal/scope"
 	"github.com/amberpixels/f10/cli/internal/standup"
 )
 
@@ -27,7 +28,7 @@ func writeUserFile(t *testing.T, home, name, body string) {
 func TestLastStandupRoundTrip(t *testing.T) {
 	isolateEnv(t)
 
-	if last, err := readLastStandup(); err != nil || last != nil {
+	if last, err := scope.ReadLastStandup(); err != nil || last != nil {
 		t.Fatalf("no file: %v, %v, want nil, nil", last, err)
 	}
 
@@ -35,11 +36,11 @@ func TestLastStandupRoundTrip(t *testing.T) {
 		At:    time.Date(2026, 10, 12, 7, 0, 0, 0, time.UTC),
 		Since: time.Date(2026, 10, 9, 7, 0, 0, 0, time.UTC),
 	}
-	if err := writeLastStandup(want); err != nil {
+	if err := scope.WriteLastStandup(want); err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := readLastStandup()
+	got, err := scope.ReadLastStandup()
 	if err != nil || got == nil || !got.At.Equal(want.At) || !got.Since.Equal(want.Since) {
 		t.Errorf("read back %+v, %v, want %+v", got, err, want)
 	}
@@ -49,9 +50,9 @@ func TestLastStandupRoundTrip(t *testing.T) {
 // of the period.
 func TestLastStandupCorrupt(t *testing.T) {
 	home := isolateEnv(t)
-	writeUserFile(t, home, standupStateFile, "{not json")
+	writeUserFile(t, home, scope.StandupStateFile, "{not json")
 
-	if _, err := readLastStandup(); err == nil || !strings.Contains(err.Error(), standupStateFile) {
+	if _, err := scope.ReadLastStandup(); err == nil || !strings.Contains(err.Error(), scope.StandupStateFile) {
 		t.Errorf("err = %v, want one naming the file", err)
 	}
 }
@@ -77,9 +78,9 @@ func TestReadWorkdays(t *testing.T) {
 
 	for _, c := range cases {
 		home := isolateEnv(t)
-		writeUserFile(t, home, standupConfigFile, c.body)
+		writeUserFile(t, home, scope.StandupConfigFile, c.body)
 
-		got, err := readWorkdays()
+		got, err := scope.ReadWorkdays()
 		if c.wantErr != "" {
 			if err == nil || !strings.Contains(err.Error(), c.wantErr) {
 				t.Errorf("%s: err = %v, want %q", c.name, err, c.wantErr)
@@ -100,7 +101,7 @@ func TestReadWorkdays(t *testing.T) {
 
 	isolateEnv(t)
 
-	if got, err := readWorkdays(); err != nil || got != calendar.DefaultWorkdays() {
+	if got, err := scope.ReadWorkdays(); err != nil || got != calendar.DefaultWorkdays() {
 		t.Errorf("no file: %v, %v, want Monday to Friday", got, err)
 	}
 }
@@ -112,7 +113,7 @@ func TestStandupMark(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	last, err := readLastStandup()
+	last, err := scope.ReadLastStandup()
 	if err != nil || last == nil || !last.Since.Equal(time.Date(2026, 10, 9, 7, 0, 0, 0, time.UTC)) {
 		t.Fatalf("stored %+v, %v, want the given since", last, err)
 	}
@@ -132,7 +133,8 @@ func TestStandupMark(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if last, err := readLastStandup(); err != nil || !last.At.Equal(time.Date(2026, 10, 12, 6, 30, 0, 0, time.UTC)) {
+	if last, err := scope.ReadLastStandup(); err != nil ||
+		!last.At.Equal(time.Date(2026, 10, 12, 6, 30, 0, 0, time.UTC)) {
 		t.Errorf("stored %+v, %v, want at = --at", last, err)
 	}
 
@@ -145,7 +147,7 @@ func TestStandupMark(t *testing.T) {
 // Only the fallback reads standup.md: a broken one fails no other run.
 func TestStandupReadsWorkdaysOnlyOnTheFallback(t *testing.T) {
 	home := isolateEnv(t)
-	writeUserFile(t, home, standupConfigFile, "---\nworkdays: [monday]\n---\n")
+	writeUserFile(t, home, scope.StandupConfigFile, "---\nworkdays: [monday]\n---\n")
 
 	dir := initRepo(t, canonical(t, t.TempDir()), "master").dir
 
@@ -201,7 +203,7 @@ func TestStandupFallsBackToTheLastWorkingDay(t *testing.T) {
 		t.Errorf("days = %v, want [%s]", rep.Days, day.Format(time.DateOnly))
 	}
 
-	if last, err := readLastStandup(); err != nil || last != nil {
+	if last, err := scope.ReadLastStandup(); err != nil || last != nil {
 		t.Errorf("stored %+v, %v: reading a report must store nothing", last, err)
 	}
 }

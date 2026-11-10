@@ -11,6 +11,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
@@ -113,7 +114,7 @@ func runTraceTrailers(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if len(tasks) > 0 {
-		out += stack.ChangeTrailer(tasks[0], changeOf(t.Layout.StorageRoot.Reviews(tasks[0])))
+		out += stack.ChangeTrailer(tasks[0], archive.ChangeOf(t.Layout.StorageRoot.Reviews(tasks[0])))
 	}
 
 	fmt.Fprint(cmd.Writer, out)

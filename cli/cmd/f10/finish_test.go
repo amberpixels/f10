@@ -13,7 +13,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/forge"
@@ -1064,13 +1066,13 @@ func TestFinishArchiveNumbering(t *testing.T) {
 	fx.openPR()
 	fx.plan(t, "current")
 
-	archive := filepath.Join(fx.main, ".f10", "plans", "archive")
-	if err := os.MkdirAll(archive, 0o755); err != nil {
+	archived := filepath.Join(fx.main, ".f10", "plans", "archive")
+	if err := os.MkdirAll(archived, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
 	for name, body := range map[string]string{"GH-1.md": "first", "GH-1.1.md": "older"} {
-		if err := os.WriteFile(filepath.Join(archive, name), []byte(body), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(archived, name), []byte(body), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -1081,13 +1083,13 @@ func TestFinishArchiveNumbering(t *testing.T) {
 	}
 
 	for name, body := range map[string]string{"GH-1.md": "first", "GH-1.1.md": "older", "GH-1.2.md": "current"} {
-		got, err := os.ReadFile(filepath.Join(archive, name))
+		got, err := os.ReadFile(filepath.Join(archived, name))
 		if err != nil || string(got) != body {
 			t.Errorf("%s = %q, %v; want %q", name, got, err, body)
 		}
 	}
 
-	if !strings.Contains(out, filepath.Join(archive, "GH-1.2.md")) {
+	if !strings.Contains(out, filepath.Join(archived, "GH-1.2.md")) {
 		t.Errorf("report does not name the archived plan:\n%s", out)
 	}
 }
@@ -1307,7 +1309,7 @@ func TestFinishMarksDriveRecords(t *testing.T) {
 		id    string
 		want  string
 	}{
-		{1, "GH-1", rowFinished},
+		{1, "GH-1", driverec.RowFinished},
 		{1, "GH-2", "halted at catchup"},
 		{2, "GH-1", "halted at catchup"},
 		{3, "GH-1-b", "halted at catchup"},
@@ -1391,7 +1393,7 @@ func TestFinishAlreadyFinished(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if o := rec.Task("GH-1").Outcome; o == nil || o.Row != rowFinished {
+	if o := rec.Task("GH-1").Outcome; o == nil || o.Row != driverec.RowFinished {
 		t.Errorf("the drive record kept %+v", o)
 	}
 
@@ -1635,13 +1637,13 @@ func TestFinishFromTheMainCheckoutArchiveNumbering(t *testing.T) {
 	fx.openPR()
 	fx.onMain(t, "current")
 
-	archive := filepath.Join(fx.main, ".f10", "plans", "archive")
-	if err := os.MkdirAll(archive, 0o755); err != nil {
+	archived := filepath.Join(fx.main, ".f10", "plans", "archive")
+	if err := os.MkdirAll(archived, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
 	for name, body := range map[string]string{"GH-1.md": "first", "GH-1.1.md": "older"} {
-		if err := os.WriteFile(filepath.Join(archive, name), []byte(body), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(archived, name), []byte(body), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -1651,7 +1653,7 @@ func TestFinishFromTheMainCheckoutArchiveNumbering(t *testing.T) {
 	}
 
 	for name, body := range map[string]string{"GH-1.md": "first", "GH-1.1.md": "older", "GH-1.2.md": "current"} {
-		got, err := os.ReadFile(filepath.Join(archive, name))
+		got, err := os.ReadFile(filepath.Join(archived, name))
 		if err != nil || string(got) != body {
 			t.Errorf("%s = %q, %v; want %q", name, got, err, body)
 		}
@@ -2761,7 +2763,7 @@ func TestFinishPrintsAndArchivesTheHandoff(t *testing.T) {
 	fx.openPR()
 	fx.f.script("git rev-parse --verify -q refs/heads/GH-1", "abc1234567")
 
-	src := taskHandoff(fx.in.storage, "GH-1")
+	src := archive.TaskHandoff(fx.in.storage, "GH-1")
 	writeHandoffFile(t, src, "abc1234567")
 
 	var handed []string
@@ -2801,7 +2803,7 @@ func TestFinishCompletesOnAStaleOrMissingHandoff(t *testing.T) {
 
 			if name == "stale" {
 				fx.f.script("git rev-parse --verify -q refs/heads/GH-1", "def7654321")
-				writeHandoffFile(t, taskHandoff(fx.in.storage, "GH-1"), "abc1234567")
+				writeHandoffFile(t, archive.TaskHandoff(fx.in.storage, "GH-1"), "abc1234567")
 			}
 
 			out, err := fx.run(t)
@@ -2823,7 +2825,7 @@ func TestFinishLocalArchivesTheHandoffSilently(t *testing.T) {
 	fx.f.script(unpushed, "")
 	fx.in.flags.leaveOpen = true
 
-	src := taskHandoff(fx.in.storage, "GH-1")
+	src := archive.TaskHandoff(fx.in.storage, "GH-1")
 	writeHandoffFile(t, src, "abc")
 
 	out, err := fx.run(t)
@@ -2845,7 +2847,7 @@ func TestFinishMergedWithoutWorktreePrintsTheHandoff(t *testing.T) {
 	fx.f.script(lsRem, "")
 	fx.f.script("git rev-parse --verify -q refs/heads/GH-1", "abc1234567")
 
-	src := taskHandoff(fx.in.storage, "GH-1")
+	src := archive.TaskHandoff(fx.in.storage, "GH-1")
 	writeHandoffFile(t, src, "abc1234567")
 
 	var handed []string

@@ -9,6 +9,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -279,7 +280,10 @@ func TestDriveAskFreesTheSlot(t *testing.T) {
 		fx.opens(id, "ws:"+id, fmt.Sprintf("pane:%d", i+1))
 	}
 
-	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, shipFlow{}, false), "{}")
+	fx.f.script(
+		"herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, runplan.ShipFlow{}, false),
+		"{}",
+	)
 	fx.expects("GH-2", "judge")
 	fx.expects("GH-3", "judge")
 	fx.f.script(wsList,

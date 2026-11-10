@@ -8,6 +8,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
@@ -34,7 +35,7 @@ func TestClaudeDefaultModel(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		if got := claudeDefaultModel(c.path); got != c.want {
+		if got := runplan.ClaudeDefaultModel(c.path); got != c.want {
 			t.Errorf("%s: claudeDefaultModel = %q, want %q", c.name, got, c.want)
 		}
 	}
@@ -69,8 +70,8 @@ func TestFlagProfileLines(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		r := agentMap{}.with(c.raw, agentFlagOrigin).profileFor("default", "")
-		line := strings.Join(r.lines(c.settings), "\n")
+		r := runplan.AgentMap{}.With(c.raw, runplan.AgentFlagOrigin).ProfileFor("default", "")
+		line := strings.Join(r.Lines(c.settings), "\n")
 
 		if r.Profile.String() != c.profile || !strings.Contains(line, c.line) || (c.line == "" && line != "") {
 			t.Errorf("%q resolves to %q, %q; want %q, %q", c.raw, r.Profile, line, c.profile, c.line)
@@ -81,7 +82,7 @@ func TestFlagProfileLines(t *testing.T) {
 // A step's profile is default, then the step's key, then the step scoped
 // by kind, each segment from the last layer that named it.
 func TestProfileForLayersKeys(t *testing.T) {
-	m := agentMap{
+	m := runplan.AgentMap{
 		"default":  {Key: "default", Value: "opus:high", Origin: "user"},
 		"review":   {Key: "review", Value: "sonnet", Origin: "project"},
 		"plan.bug": {Key: "plan.bug", Value: "medium", Origin: "project"},
@@ -106,18 +107,18 @@ func TestProfileForLayersKeys(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		r := m.profileFor(c.step, c.kind)
+		r := m.ProfileFor(c.step, c.kind)
 		if r.Profile.String() != c.profile || r.Sources["model"] != c.model || r.Sources["effort"] != c.effort {
 			t.Errorf("%s.%s = %q from %v; want %q, model %q, effort %q",
 				c.step, c.kind, r.Profile, r.Sources, c.profile, c.model, c.effort)
 		}
 	}
 
-	if r := m.profileFor("cleanup", ""); r.Fell != "xyz" {
+	if r := m.ProfileFor("cleanup", ""); r.Fell != "xyz" {
 		t.Errorf("a model no family matches is reported as fallen: %+v", r)
 	}
 
-	if r := (agentMap{}).profileFor("review", ""); !r.Profile.IsDefault() || r.Profile.String() != "claude::" {
+	if r := (runplan.AgentMap{}).ProfileFor("review", ""); !r.Profile.IsDefault() || r.Profile.String() != "claude::" {
 		t.Errorf("no map resolves to the kind's default: %+v", r)
 	}
 }
@@ -136,7 +137,7 @@ func TestProfileFlag(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		got, err := profileFlag(c.agent, c.model)
+		got, err := runplan.ProfileFlag(c.agent, c.model)
 
 		switch {
 		case c.err != "":
@@ -216,7 +217,7 @@ func TestAgentArgsResolvesSymlinks(t *testing.T) {
 // A run's flag lays over the map's default segment by segment, so a lone
 // effort keeps the map's model, and a step's own key still wins over it.
 func TestFlagOverlaysTheMapsDefault(t *testing.T) {
-	m := agentMap{
+	m := runplan.AgentMap{
 		"default": {Key: "default", Value: "opus:high", Origin: "user"},
 		"review":  {Key: "review", Value: "sonnet", Origin: "project"},
 	}
@@ -226,20 +227,20 @@ func TestFlagOverlaysTheMapsDefault(t *testing.T) {
 	}{
 		{
 			flag: "low", step: "default", want: "claude:opus:low",
-			model: "default (user)", effort: agentKeyFlag + " (--agent)",
+			model: "default (user)", effort: runplan.AgentKeyFlag + " (--agent)",
 		},
 		{
 			flag: "sonnet", step: "implement", want: "claude:sonnet:high",
-			model: agentKeyFlag + " (--agent)", effort: "default (user)",
+			model: runplan.AgentKeyFlag + " (--agent)", effort: "default (user)",
 		},
 		{
 			flag: "haiku:max", step: "review", want: "claude:sonnet:max",
-			model: "review (project)", effort: agentKeyFlag + " (--agent)",
+			model: "review (project)", effort: runplan.AgentKeyFlag + " (--agent)",
 		},
 	}
 
 	for _, c := range cases {
-		r := m.with(c.flag, agentFlagOrigin).profileFor(c.step, "")
+		r := m.With(c.flag, runplan.AgentFlagOrigin).ProfileFor(c.step, "")
 		if r.Profile.String() != c.want || r.Sources["model"] != c.model || r.Sources["effort"] != c.effort {
 			t.Errorf("--agent %s for %s = %q from %v; want %q, model %q, effort %q",
 				c.flag, c.step, r.Profile, r.Sources, c.want, c.model, c.effort)
@@ -247,9 +248,9 @@ func TestFlagOverlaysTheMapsDefault(t *testing.T) {
 	}
 
 	// a task's own suffix lays over the run's flag segment by segment
-	own := m.with("sonnet", agentFlagOrigin).with("low", "<id>:low")
-	if r := own.profileFor("default", ""); r.Profile.String() != "claude:sonnet:low" ||
-		r.Sources["effort"] != agentKeyFlag+" (<id>:low over --agent)" {
+	own := m.With("sonnet", runplan.AgentFlagOrigin).With("low", "<id>:low")
+	if r := own.ProfileFor("default", ""); r.Profile.String() != "claude:sonnet:low" ||
+		r.Sources["effort"] != runplan.AgentKeyFlag+" (<id>:low over --agent)" {
 		t.Errorf("a task's own profile over the flag: %q from %v", r.Profile, r.Sources)
 	}
 }
@@ -260,19 +261,19 @@ func TestWithBranchReadsTheRecord(t *testing.T) {
 	f := newFakes(t)
 	f.meta.Seed("GH-1/slug", branchmeta.Agent, "claude:sonnet:low")
 
-	m := agentMap{"default": {Key: "default", Value: "opus:high", Origin: "user"}}
+	m := runplan.AgentMap{"default": {Key: "default", Value: "opus:high", Origin: "user"}}
 
-	got, err := m.withBranch(t.Context(), "/code/repo", "GH-1/slug")
+	got, err := m.WithBranch(t.Context(), "/code/repo", "GH-1/slug")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if r := got.profileFor("review", ""); r.Profile.String() != "claude:sonnet:low" ||
-		r.Sources["model"] != agentKeyFlag+" (recorded on branch GH-1/slug)" {
+	if r := got.ProfileFor("review", ""); r.Profile.String() != "claude:sonnet:low" ||
+		r.Sources["model"] != runplan.AgentKeyFlag+" (recorded on branch GH-1/slug)" {
 		t.Errorf("review on a recorded profile = %q from %v", r.Profile, r.Sources)
 	}
 
-	if got, err = m.withBranch(t.Context(), "/code/repo", ""); err != nil || len(got) != 1 {
+	if got, err = m.WithBranch(t.Context(), "/code/repo", ""); err != nil || len(got) != 1 {
 		t.Errorf("no branch leaves the map: %v %v", got, err)
 	}
 }

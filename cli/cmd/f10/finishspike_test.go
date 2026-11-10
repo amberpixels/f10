@@ -33,7 +33,7 @@ func (fx *finishFixture) spike(t *testing.T) string {
 func TestFinishClosesASpike(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.noPull()
-	archive := fx.spike(t)
+	archived := fx.spike(t)
 	fx.f.script("git reset --hard", "")
 	fx.f.script("git clean -fd", "")
 	released := fx.dependent()
@@ -44,7 +44,7 @@ func TestFinishClosesASpike(t *testing.T) {
 	}
 
 	for _, name := range []string{"GH-1.md", "GH-1.spike.md"} {
-		if !fsx.Exists(filepath.Join(archive, name)) {
+		if !fsx.Exists(filepath.Join(archived, name)) {
 			t.Errorf("%s is not archived", name)
 		}
 	}
@@ -115,14 +115,14 @@ func TestFinishASpikeWithAPR(t *testing.T) {
 	t.Run("clean", func(t *testing.T) {
 		fx := newFinishFixture(t)
 		fx.openPR()
-		archive := fx.spike(t)
+		archived := fx.spike(t)
 		fx.f.script("git status --porcelain", "")
 
 		if out, err := fx.run(t); err != nil {
 			t.Fatalf("%v\n%s", err, out)
 		}
 
-		if !fx.f.called(ghMerge) || !fsx.Exists(filepath.Join(archive, "GH-1.spike.md")) {
+		if !fx.f.called(ghMerge) || !fsx.Exists(filepath.Join(archived, "GH-1.spike.md")) {
 			t.Errorf("calls = %q", fx.f.calls)
 		}
 	})

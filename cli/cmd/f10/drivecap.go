@@ -10,6 +10,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ui"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // defaultParallel is a drive's cap with no --parallel: half the cores, since
@@ -95,7 +96,7 @@ func (in *driveInput) openGate(ctx context.Context, runs []*driveRun, wss []agen
 
 	if wss == nil {
 		var err error
-		if wss, err = agents(in.main).Workspaces(ctx); err != nil {
+		if wss, err = worktree.Agents(in.main).Workspaces(ctx); err != nil {
 			return nil, err
 		}
 

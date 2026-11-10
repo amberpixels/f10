@@ -9,15 +9,14 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"runtime/debug"
-	"slices"
-	"strings"
 	"syscall"
 	"time"
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/buildinfo"
 	"github.com/amberpixels/f10/cli/internal/daemon"
+	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/storage"
@@ -57,15 +56,13 @@ func daemonCommand() *cli.Command {
 	}
 }
 
-func daemonVersion() string { return version(debug.ReadBuildInfo()) }
-
 func runDaemon(ctx context.Context, cmd *cli.Command) error {
 	ctx, stop := signal.NotifyContext(ctx, syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
 	s := &daemon.Server{
 		Dir:     daemon.RunDir(),
-		Version: daemonVersion(),
+		Version: buildinfo.Version(),
 		Log:     log.New(cmd.ErrWriter, "", log.LstdFlags),
 	}
 
@@ -228,7 +225,7 @@ func runDaemonLogs(ctx context.Context, cmd *cli.Command) error {
 }
 
 func driveThroughDaemon(ctx context.Context, w io.Writer, t *target.Target, argv []string, a driveArgs) error {
-	dir, ver := daemon.RunDir(), daemonVersion()
+	dir, ver := daemon.RunDir(), buildinfo.Version()
 
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -240,7 +237,7 @@ func driveThroughDaemon(ctx context.Context, w io.Writer, t *target.Target, argv
 		Argv: argv,
 		Dir:  cwd,
 		Root: t.Layout.StorageRoot.Path(),
-		Env:  driveEnv(os.Environ(), t.Effective.DriveEnv),
+		Env:  daemon.DriveEnv(os.Environ(), t.Effective.DriveEnv),
 	}
 
 	// a rerun may attach to the drive still running, which reads its cap
@@ -261,7 +258,7 @@ func driveThroughDaemon(ctx context.Context, w io.Writer, t *target.Target, argv
 	defer stop()
 
 	// a task the drive leaves unfinished is watched once the drive ends
-	watchProject(ctx, w, t)
+	driverec.WatchProject(ctx, w, t)
 
 	return followDrive(ctx, w, dir, ver, req, nil)
 }
@@ -418,32 +415,4 @@ func runningDrive(dir, logPath string) int {
 	}
 
 	return 0
-}
-
-// driveEnvPrefixes and driveEnvKeys are the environment a drive passes to
-// its commands: what git, gh, glab, Herdr, claude and f10 itself read.
-var (
-	driveEnvPrefixes = []string{"LC_", "XDG_", "GH_", "GLAB_", "HERDR_", "F10_", "CLAUDE_"}
-	driveEnvKeys     = []string{
-		"PATH", "HOME", "USER", "LOGNAME", "SHELL", "TMPDIR", "LANG", "TERM", "SSH_AUTH_SOCK",
-		"GITHUB_TOKEN", "GITLAB_TOKEN",
-	}
-)
-
-func driveEnv(environ, extra []string) []string {
-	var out []string
-
-	for _, kv := range environ {
-		key, _, ok := strings.Cut(kv, "=")
-		if !ok {
-			continue
-		}
-
-		if slices.Contains(driveEnvKeys, key) || slices.Contains(extra, key) ||
-			slices.ContainsFunc(driveEnvPrefixes, func(p string) bool { return strings.HasPrefix(key, p) }) {
-			out = append(out, kv)
-		}
-	}
-
-	return out
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -28,7 +29,10 @@ func TestDriveCatchesUpAShipTypedByHand(t *testing.T) {
 	catchup := catchupTurn("GH-1")
 	resume := "herdr agent prompt " + agentOf("GH-1") + " /f10:ship GH-1 resume at pr (entry 4) --driven"
 
-	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("plan", "GH-1", nil, shipFlow{}, false), "{}")
+	fx.f.script(
+		"herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("plan", "GH-1", nil, runplan.ShipFlow{}, false),
+		"{}",
+	)
 
 	fx.f.script(catchup, "{}")
 	fx.f.script(resume, "{}")

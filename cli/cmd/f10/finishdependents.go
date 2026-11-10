@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // releaseDependents clears other branches' `start --after` dependency on the
@@ -52,7 +53,7 @@ func releaseDependents(ctx context.Context, dir, branch, def string, merged bool
 // leaves none: an onto from it would drop the base's code from the dependent.
 func releaseTip(ctx context.Context, dir, dependent, branch string, merged bool) error {
 	if merged {
-		return recordTip(ctx, dir, dependent, branch)
+		return worktree.RecordTip(ctx, dir, dependent, branch)
 	}
 
 	tip, err := branchmeta.Get(ctx, dir, dependent, branchmeta.Tip)

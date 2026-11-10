@@ -7,13 +7,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime/debug"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/buildinfo"
 	"github.com/amberpixels/f10/cli/internal/doctor"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -42,12 +43,12 @@ func runDoctor(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	results := doctor.Run(ctx, &doctor.Env{
-		ClaudeDir:   filepath.Dir(claudeSettingsPath()),
+		ClaudeDir:   filepath.Dir(runplan.ClaudeSettingsPath()),
 		Home:        home,
 		Layout:      t.Layout,
 		Probes:      t.Probes,
 		Facts:       t.Effective,
-		Version:     version(debug.ReadBuildInfo()),
+		Version:     buildinfo.Version(),
 		Driver:      t.Driver(),
 		NeedsDriver: !t.HostIssues(),
 		Getenv:      os.Getenv,

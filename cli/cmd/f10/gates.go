@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
@@ -49,15 +50,15 @@ var remoteTimeout = 5 * time.Second
 
 // A gate is one row of a task's flow: a plain step, its review or a judge.
 type gate struct {
-	Step    string        `json:"step"`
-	Label   string        `json:"label,omitempty"`  // the entry's display name, shown in place of Step
-	State   string        `json:"state,omitempty"`  // plain steps and judges
-	Via     string        `json:"via,omitempty"`    // a running gate: in ship, driven or manual
-	Action  string        `json:"action,omitempty"` // drive's finish: what it is doing
-	Judged  string        `json:"judged,omitempty"` // a judge: task, plan or change
-	Outcome *judgeOutcome `json:"outcome,omitempty"`
-	Local   *reviewHalf   `json:"local,omitempty"`
-	Remote  *reviewHalf   `json:"remote,omitempty"`
+	Step    string                `json:"step"`
+	Label   string                `json:"label,omitempty"`  // the entry's display name, shown in place of Step
+	State   string                `json:"state,omitempty"`  // plain steps and judges
+	Via     string                `json:"via,omitempty"`    // a running gate: in ship, driven or manual
+	Action  string                `json:"action,omitempty"` // drive's finish: what it is doing
+	Judged  string                `json:"judged,omitempty"` // a judge: task, plan or change
+	Outcome *archive.JudgeOutcome `json:"outcome,omitempty"`
+	Local   *reviewHalf           `json:"local,omitempty"`
+	Remote  *reviewHalf           `json:"remote,omitempty"`
 }
 
 type reviewHalf struct {

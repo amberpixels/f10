@@ -9,6 +9,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/probe"
+	"github.com/amberpixels/f10/cli/internal/reviews"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
 )
@@ -144,7 +145,7 @@ func TestPullNumberOf(t *testing.T) {
 		"https://github.com/o/r/issues/12": 0,
 		"":                                 0,
 	} {
-		if got := pullNumberOf(token); got != want {
+		if got := reviews.PullNumberOf(token); got != want {
 			t.Errorf("pullNumberOf(%q) = %d, want %d", token, got, want)
 		}
 	}
@@ -160,7 +161,7 @@ func TestOpenPullOfSkipsClosed(t *testing.T) {
 
 	tg := &target.Target{Dir: t.TempDir(), Probes: &probe.Probes{CLI: probe.Signal{Value: "gh"}}}
 
-	if p, err := openPullOf(t.Context(), tg, "feat"); err != nil || p.Number != 5 {
+	if p, err := reviews.OpenPullOf(t.Context(), tg, "feat"); err != nil || p.Number != 5 {
 		t.Errorf("openPullOf = %d, %v; want 5", p.Number, err)
 	}
 }
@@ -176,7 +177,7 @@ func TestLastPullOfTakesTheNewestAnyState(t *testing.T) {
 
 	tg := &target.Target{Dir: t.TempDir(), Probes: &probe.Probes{CLI: probe.Signal{Value: "gh"}}}
 
-	if p, err := lastPullOf(t.Context(), tg, "REPO-7"); err != nil || p.Number != 5 || p.Base != "main" {
+	if p, err := reviews.LastPullOf(t.Context(), tg, "REPO-7"); err != nil || p.Number != 5 || p.Base != "main" {
 		t.Errorf("lastPullOf = #%d on %q, %v; want #5 on main", p.Number, p.Base, err)
 	}
 }
@@ -230,7 +231,7 @@ func TestBranchTask(t *testing.T) {
 
 	for branch, want := range map[string]string{"picked-up": "REPO-3", named + "/slug": named, "other": ""} {
 		got := ""
-		if r := branchTask(t.Context(), tg, dir, branch); r != nil {
+		if r := reviews.BranchTask(t.Context(), tg, dir, branch); r != nil {
 			got = r.ID
 		}
 

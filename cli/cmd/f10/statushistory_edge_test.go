@@ -6,6 +6,8 @@ import (
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/amberpixels/f10/cli/internal/archive"
 )
 
 // The edge fixture's off-vocabulary verdicts (`asked`, `ask+reply`) count as
@@ -46,8 +48,8 @@ func TestJudgeFilesOrderAndSkips(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "notes.md"), "task: FT-1\nverdict: stop\n")
 
 	var got []string
-	for _, v := range judgeFiles(root, "FT-1") {
-		got = append(got, filepath.Base(v.path)+" "+v.judged)
+	for _, v := range archive.JudgeFiles(root, "FT-1") {
+		got = append(got, filepath.Base(v.Path)+" "+v.Judged)
 	}
 
 	if want := []string{"9.md plan", "10.md change"}; !slices.Equal(got, want) {

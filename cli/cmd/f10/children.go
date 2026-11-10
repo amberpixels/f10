@@ -94,34 +94,37 @@ func writeTree(w io.Writer, rows []stack.ChildRow) error {
 		return err
 	}
 
-	nodes := subtaskNodes(childTreeRows(rows), treeOpts{extra: func(i int) ([]tasktree.Cell, []tasktree.Note) {
-		r := rows[i]
+	nodes := hostops.SubtaskNodes(
+		childTreeRows(rows),
+		hostops.TreeOpts{Extra: func(i int) ([]tasktree.Cell, []tasktree.Note) {
+			r := rows[i]
 
-		var cells []tasktree.Cell
+			var cells []tasktree.Cell
 
-		if r.After != "" {
-			cells = append(cells, tasktree.Cell{Text: "after " + r.After})
-		}
+			if r.After != "" {
+				cells = append(cells, tasktree.Cell{Text: "after " + r.After})
+			}
 
-		if slices.Contains(r.Labels, "draft") {
-			cells = append(cells, tasktree.Cell{Text: "draft"})
-		}
+			if slices.Contains(r.Labels, "draft") {
+				cells = append(cells, tasktree.Cell{Text: "draft"})
+			}
 
-		if r.Finished {
-			cells = append(cells, tasktree.Cell{Text: "finished"})
-		}
+			if r.Finished {
+				cells = append(cells, tasktree.Cell{Text: "finished"})
+			}
 
-		return cells, nil
-	}})
+			return cells, nil
+		}},
+	)
 
 	return tasktree.Tree{}.Write(w, nodes)
 }
 
 // childTreeRows is the subtasks as subtask tree rows.
-func childTreeRows(rows []stack.ChildRow) []treeRow {
-	out := make([]treeRow, len(rows))
+func childTreeRows(rows []stack.ChildRow) []hostops.TreeRow {
+	out := make([]hostops.TreeRow, len(rows))
 	for i, r := range rows {
-		out[i] = treeRow{ID: r.ID, Title: r.Title, URL: r.URL, Depth: r.Depth}
+		out[i] = hostops.TreeRow{ID: r.ID, Title: r.Title, URL: r.URL, Depth: r.Depth}
 	}
 
 	return out

@@ -12,6 +12,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/images"
@@ -275,7 +276,7 @@ func withImages(ctx context.Context, doc, dir string, d images.Downloader) strin
 // may be the first thing to create it.
 func imagesDirFor(ctx context.Context, t *target.Target, id string) string {
 	if !t.OutOfTree() && t.Effective.Visibility == "stealth" {
-		_, _ = excludeF10(ctx, t.Layout.CheckoutRoot)
+		_, _ = archive.ExcludeF10(ctx, t.Layout.CheckoutRoot)
 	}
 
 	return t.Layout.StorageRoot.Images(strings.ToUpper(id))
@@ -356,19 +357,12 @@ func taskListURL(ctx context.Context, t *target.Target) (string, error) {
 }
 
 func writeTaskList(ctx context.Context, t *target.Target, w, warn io.Writer) error {
-	rows, err := taskRows(ctx, t, hostops.IssuePage)
+	rows, err := stack.TaskRows(ctx, t, hostops.IssuePage)
 	if err != nil {
 		return err
 	}
 
-	return writeRows(w, rankRows(settlePriorities(rows, warn)), "no open tasks")
-}
-
-func taskRows(ctx context.Context, t *target.Target, limit int) ([]hostops.Row, error) {
-	rows, err := hostops.TasksFor(t).List(ctx, limit)
-	stack.RememberRefsFor(ctx, t, rowRefs(rows)...)
-
-	return rows, err
+	return hostops.WriteRows(w, rankRows(hostops.SettlePriorities(rows, warn)), "no open tasks")
 }
 
 func runTaskSearch(ctx context.Context, cmd *cli.Command) error {
@@ -388,42 +382,7 @@ func runTaskSearch(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	// search keeps the tracker's relevance order; only the open list ranks
-	return writeRows(cmd.Writer, settlePriorities(rows, cmd.ErrWriter), "no matches")
-}
-
-// settlePriorities warns once per distinct unknown value: a driver emitting
-// its tracker's own word does so on every row of the page.
-func settlePriorities(rows []hostops.Row, warn io.Writer) []hostops.Row {
-	var (
-		unknown []string
-		count   = map[string]int{}
-	)
-
-	for i, r := range rows {
-		if r.Priority == "" {
-			continue
-		}
-
-		if rank, ok := driver.PriorityRank(r.Priority); ok {
-			rows[i].Priority = driver.Priorities[rank]
-
-			continue
-		}
-
-		if count[r.Priority] == 0 {
-			unknown = append(unknown, r.Priority)
-		}
-
-		count[r.Priority]++
-		rows[i].Priority = ""
-	}
-
-	for _, v := range unknown {
-		ui.Warnf(warn, "priority %q on %d row(s) is not one of %s; ignored",
-			v, count[v], strings.Join(driver.Priorities, ", "))
-	}
-
-	return rows
+	return hostops.WriteRows(cmd.Writer, hostops.SettlePriorities(rows, cmd.ErrWriter), "no matches")
 }
 
 // rankRows is stable, so the tracker's order holds inside a level.
@@ -443,69 +402,9 @@ func rankRows(rows []hostops.Row) []hostops.Row {
 
 func searchRows(ctx context.Context, t *target.Target, query string) ([]hostops.Row, error) {
 	rows, err := hostops.TasksFor(t).Search(ctx, query)
-	stack.RememberRefsFor(ctx, t, rowRefs(rows)...)
+	stack.RememberRefsFor(ctx, t, hostops.RowRefs(rows)...)
 
 	return rows, err
-}
-
-// writeRows applies the rule reading a task does: a terminal gets a table,
-// anything else the JSON. f10 never picks a winner among rows: choosing is
-// fzf's job in a shell and the agent's in a turn.
-func writeRows(w io.Writer, rows []hostops.Row, none string) error {
-	if !ui.IsTerminal(w) {
-		for i := range rows {
-			rows[i].Body = ""
-		}
-
-		return ui.JSON(w, rows)
-	}
-
-	if len(rows) == 0 {
-		_, err := fmt.Fprintln(w, none)
-
-		return err
-	}
-
-	idW, statusW, priorityW := 0, 0, 0
-	for _, r := range rows {
-		idW = max(idW, len(r.ID))
-		statusW = max(statusW, len(r.Status))
-		priorityW = max(priorityW, len(r.Priority))
-	}
-
-	links := render.LinksOn(true)
-
-	for _, r := range rows {
-		// ↗ marks a row that opens, as in the report blocks; it is one cell wide
-		marker := "  "
-		if r.URL != "" {
-			marker = render.Hyperlink(r.URL, "↗") + " "
-		}
-
-		links.Known("", r.ID, r.URL)
-		shown := render.PadRight(links.ID("", r.ID), idW)
-		title := render.Hyperlink(r.URL, r.Title)
-
-		priority := ""
-		if priorityW > 0 {
-			priority = fmt.Sprintf("%-*s  ", priorityW, r.Priority)
-		}
-
-		if _, err := fmt.Fprintf(
-			w,
-			"%s%s  %-*s  %s%s\n",
-			marker,
-			shown,
-			statusW,
-			r.Status,
-			priority,
-			title,
-		); err != nil {
-			return fmt.Errorf("writing rows: %w", err)
-		}
-	}
-
-	return nil
 }
 
 // runTaskCreate sends the task on stdin to the driver's create, else makes it

@@ -14,14 +14,17 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/daemon"
+	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // drive runs the flow; nothing is created or prompted before the graph
@@ -93,7 +96,7 @@ func drive(ctx context.Context, w io.Writer, in *driveInput) (err error) {
 	for _, i := range order {
 		r := &driveRun{task: tasks[i], lastCatchup: in.savedCatchup(tasks[i])}
 		if r.task.finished {
-			in.end(ctx, r, driveResult{row: rowAlreadyFinished})
+			in.end(ctx, r, driveResult{row: driverec.RowAlreadyFinished})
 		}
 
 		runs = append(runs, r)
@@ -220,17 +223,17 @@ func (in *driveInput) id(id string) string {
 func (in *driveInput) resolveProfiles() {
 	in.profiles = map[string]agentctl.Profile{}
 
-	base := in.layers.with(in.args.agent, agentFlagOrigin)
+	base := in.layers.With(in.args.agent, runplan.AgentFlagOrigin)
 
 	for _, raw := range append([]string{""}, in.args.profiles...) {
 		if _, done := in.profiles[raw]; done {
 			continue
 		}
 
-		r := base.with(raw, "<id>:"+raw).profileFor(facts.AgentKeyDefault, "")
+		r := base.With(raw, "<id>:"+raw).ProfileFor(facts.AgentKeyDefault, "")
 		in.profiles[raw] = r.Profile
 
-		for _, line := range r.lines(in.settings) {
+		for _, line := range r.Lines(in.settings) {
 			fmt.Fprintln(in.out, line)
 		}
 	}
@@ -457,7 +460,7 @@ func (in *driveInput) markBehind(ctx context.Context, r *driveRun) error {
 	// branch's commits into it
 	if in.pull != nil {
 		if pr, err := in.pull(ctx, branch); err == nil && pr.Status == forge.Open {
-			if st, err := readTarget(ctx, in.main, aim, pr.Base, "", ""); err == nil && st.retargeted {
+			if st, err := stack.ReadTarget(ctx, in.main, aim, pr.Base, "", ""); err == nil && st.Retargeted {
 				return fmt.Errorf("%s targets %s, not %s, which %s was started on: retarget it back, "+
 					"or catch it up by hand with /f10:catchup in %s", pr.URL, pr.Base,
 					strings.TrimPrefix(aim.Name, "origin/"), branch, r.o.path)
@@ -481,7 +484,7 @@ func (in *driveInput) savedCatchup(t driveTask) *drives.Catchup {
 		return nil
 	}
 
-	for _, id := range []string{t.ref.Label() + suffixOf(t.suffix), t.ref.ID + suffixOf(t.suffix)} {
+	for _, id := range []string{t.ref.Label() + worktree.SuffixOf(t.suffix), t.ref.ID + worktree.SuffixOf(t.suffix)} {
 		if rt := in.rec.Task(id); rt != nil && rt.Catchup != nil {
 			c := *rt.Catchup
 

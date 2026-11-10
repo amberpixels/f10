@@ -11,7 +11,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -115,18 +117,18 @@ func (in *driveInput) open(ctx context.Context, r *driveRun) error {
 // keepFlow prefers the flow a branch already records over the run's, since
 // switching mid-run would rerun or skip entries ship already declared; one
 // project.md no longer declares gives way to the run's, with a note.
-func (in *driveInput) keepFlow(ctx context.Context, branch string) (shipFlow, string, error) {
+func (in *driveInput) keepFlow(ctx context.Context, branch string) (runplan.ShipFlow, string, error) {
 	recorded, err := branchmeta.Get(ctx, in.main, branch, branchmeta.Flow)
 	if err != nil {
-		return shipFlow{}, "", fmt.Errorf("reading the recorded flow: %w", err)
+		return runplan.ShipFlow{}, "", fmt.Errorf("reading the recorded flow: %w", err)
 	}
 
-	if recorded == in.flow.recorded() {
+	if recorded == in.flow.Recorded() {
 		return in.flow, "", nil
 	}
 
 	// an area picks the flow in ship, so a branch with none stays without
-	if recorded == "" && in.flow.byArea {
+	if recorded == "" && in.flow.ByArea {
 		return in.flow, "", nil
 	}
 
@@ -135,19 +137,19 @@ func (in *driveInput) keepFlow(ctx context.Context, branch string) (shipFlow, st
 	if recorded != "" && in.resolve != nil {
 		if fl, err := in.resolve(recorded); err == nil {
 			return fl, fmt.Sprintf("kept the %s flow its branch records; the run's %s does not apply to it",
-				recorded, in.flow.label()), nil
+				recorded, in.flow.Label()), nil
 		}
 	}
 
-	if !in.flow.byArea {
-		if err := branchmeta.Set(ctx, in.main, branch, branchmeta.Flow, in.flow.recorded()); err != nil {
-			return shipFlow{}, "", fmt.Errorf("recording the flow: %w", err)
+	if !in.flow.ByArea {
+		if err := branchmeta.Set(ctx, in.main, branch, branchmeta.Flow, in.flow.Recorded()); err != nil {
+			return runplan.ShipFlow{}, "", fmt.Errorf("recording the flow: %w", err)
 		}
 	}
 
 	if recorded != "" {
 		return in.flow, fmt.Sprintf("its branch recorded the %s flow, which project.md no longer declares; running %s",
-			recorded, in.flow.label()), nil
+			recorded, in.flow.Label()), nil
 	}
 
 	return in.flow, "", nil
@@ -156,32 +158,36 @@ func (in *driveInput) keepFlow(ctx context.Context, branch string) (shipFlow, st
 // keepPace: a run's --pace wins and is recorded on the branch, since a
 // rerun that slows down must be able to take finish off; with none typed,
 // the branch's record wins over the project's default.
-func (in *driveInput) keepPace(ctx context.Context, branch string, fl shipFlow) (shipFlow, string, error) {
-	recorded, err := recordedPace(ctx, in.main, branch)
+func (in *driveInput) keepPace(
+	ctx context.Context,
+	branch string,
+	fl runplan.ShipFlow,
+) (runplan.ShipFlow, string, error) {
+	recorded, err := runplan.RecordedPace(ctx, in.main, branch)
 	if err != nil {
-		return shipFlow{}, "", err
+		return runplan.ShipFlow{}, "", err
 	}
 
 	switch {
 	case in.args.pace != "":
 		if recorded != in.args.pace {
 			if err := branchmeta.Set(ctx, in.main, branch, branchmeta.Pace, in.args.pace); err != nil {
-				return shipFlow{}, "", fmt.Errorf("recording the pace: %w", err)
+				return runplan.ShipFlow{}, "", fmt.Errorf("recording the pace: %w", err)
 			}
 		}
 
 		return fl, "", nil
-	case recorded == "" || recorded == fl.pace || in.paced == nil:
+	case recorded == "" || recorded == fl.Pace || in.paced == nil:
 		return fl, "", nil
 	}
 
 	kept, err := in.paced(fl, recorded)
 	if err != nil {
 		return fl, fmt.Sprintf("its branch records the %s pace, which does not resolve (%v); running %s",
-			recorded, err, cmp.Or(fl.pace, "no pace")), nil
+			recorded, err, cmp.Or(fl.Pace, "no pace")), nil
 	}
 
-	return kept, fmt.Sprintf("kept the %s pace its branch records over %s", recorded, cmp.Or(fl.pace, "no pace")), nil
+	return kept, fmt.Sprintf("kept the %s pace its branch records over %s", recorded, cmp.Or(fl.Pace, "no pace")), nil
 }
 
 // position: a skill drive recorded on the branch wins; else a plan the
@@ -521,7 +527,7 @@ func baseHalted(r *driveRun, skill string) driveResult {
 // skillPrompt: plan is bare and ship names only a non-default flow, since
 // driven mode takes every gap on its default and reuses a saved plan; every
 // skill but plan and ship takes a bundle's lead, which finds the branch.
-func skillPrompt(skill, id string, dep *dependency, fl shipFlow, finish bool) string {
+func skillPrompt(skill, id string, dep *launch.Dependency, fl runplan.ShipFlow, finish bool) string {
 	var p string
 
 	if skill != "plan" && skill != "ship" {
@@ -530,7 +536,7 @@ func skillPrompt(skill, id string, dep *dependency, fl shipFlow, finish bool) st
 
 	switch skill {
 	case "ship":
-		p = "/f10:ship " + fl.word() + id
+		p = "/f10:ship " + fl.Word() + id
 	case "catchup":
 		p = "/f10:catchup" // it catches up the branch its session stands on, and takes no id
 	default:
@@ -538,14 +544,14 @@ func skillPrompt(skill, id string, dep *dependency, fl shipFlow, finish bool) st
 	}
 
 	if dep != nil && (skill == "plan" || skill == "ship") {
-		p += " && " + dependencyClause(id, dep)
+		p += " && " + launch.DependencyClause(id, dep)
 	}
 
 	if finish && skill == "ship" {
 		p += " && " + finishClause
 	}
 
-	return driven(p)
+	return launch.Driven(p)
 }
 
 // finishClause tells a driven ship that drive finishes the task after it.

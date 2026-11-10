@@ -12,10 +12,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -63,7 +65,10 @@ func TestDriveRecordIsPickedUpByTheSameCommand(t *testing.T) {
 	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, "")
 	fx.f.script(worktrees, porcelain(), porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
-	fx.f.script("herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, shipFlow{}, false), "{}")
+	fx.f.script(
+		"herdr agent prompt "+agentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, runplan.ShipFlow{}, false),
+		"{}",
+	)
 	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
 	fx.onTick[2] = func() { fx.writeRun(t, "blocked", "judge", "", "1. Rethink: [proceed | stop]") }
 
@@ -349,7 +354,7 @@ func TestDriveListHealsRowsFinishedOutside(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for id, want := range map[string]string{"GH-1": rowFinished, "GH-2": "halted at catchup", "GH-3": rowFinished} {
+	for id, want := range map[string]string{"GH-1": driverec.RowFinished, "GH-2": "halted at catchup", "GH-3": driverec.RowFinished} {
 		if o := got.Task(id).Outcome; o == nil || o.Row != want {
 			t.Errorf("%s recorded %+v, want %q", id, o, want)
 		}

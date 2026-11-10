@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
@@ -71,18 +72,18 @@ func archiveHandoff(root storage.Root, id string) (string, error) {
 
 func TestArchiveHandoffNumbers(t *testing.T) {
 	main := t.TempDir()
-	src := taskHandoff(storage.InRepo(main), "GH-1")
-	archive := filepath.Join(filepath.Dir(src), "archive")
+	src := archive.TaskHandoff(storage.InRepo(main), "GH-1")
+	archived := filepath.Join(filepath.Dir(src), "archive")
 
 	if got, err := archiveHandoff(storage.InRepo(main), "GH-1"); err != nil || got != "" {
 		t.Fatalf("missing file = %q, %v", got, err)
 	}
 
-	writeFile(t, filepath.Join(archive, "GH-1.md"), "first PR")
+	writeFile(t, filepath.Join(archived, "GH-1.md"), "first PR")
 	writeHandoffFile(t, src, "abc")
 
 	got, err := archiveHandoff(storage.InRepo(main), "GH-1")
-	if err != nil || got != filepath.Join(archive, "GH-1.1.md") || fsx.Exists(src) {
+	if err != nil || got != filepath.Join(archived, "GH-1.1.md") || fsx.Exists(src) {
 		t.Fatalf("archived = %q, %v", got, err)
 	}
 

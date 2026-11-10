@@ -13,8 +13,10 @@ import (
 	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // writeDriver puts an executable driver in a storage root.
@@ -127,7 +129,7 @@ func TestDeclinedVerbOnNonHostTracker(t *testing.T) {
 	f.fail("driver list", shell.Result{Code: driver.ExitUnsupported})
 	f.fail("driver search index", shell.Result{Code: driver.ExitUnsupported})
 
-	_, listErr := taskRows(t.Context(), tg, hostops.IssuePage)
+	_, listErr := stack.TaskRows(t.Context(), tg, hostops.IssuePage)
 	_, searchErr := searchRows(t.Context(), tg, "index")
 
 	for verb, err := range map[string]error{"list": listErr, "search": searchErr} {
@@ -164,7 +166,13 @@ func TestDeclinedVerbRefusalNamesTheNeed(t *testing.T) {
 		t.Errorf("list need = %q", hostops.VerbNeeds[driver.VerbList])
 	}
 
-	if _, err := titleLookup(tg, "7")(t.Context()); err == nil || strings.Contains(err.Error(), "none was found") {
+	if _, err := worktree.TitleLookup(
+		tg,
+		"7",
+	)(
+		t.Context(),
+	); err == nil ||
+		strings.Contains(err.Error(), "none was found") {
 		t.Errorf("title lookup = %v, want the declined branch, not a missing driver", err)
 	}
 }
@@ -181,7 +189,12 @@ func TestDeclinedVerbOnHostTrackerFallsBack(t *testing.T) {
 		`[{"number":7,"title":"host issue","state":"OPEN","url":"https://github.com/o/r/issues/7","labels":[]}]`,
 	)
 
-	if rows, err := taskRows(t.Context(), tg, hostops.IssuePage); err != nil || len(rows) != 1 || rows[0].ID != "FT-7" {
+	if rows, err := stack.TaskRows(
+		t.Context(),
+		tg,
+		hostops.IssuePage,
+	); err != nil || len(rows) != 1 ||
+		rows[0].ID != "FT-7" {
 		t.Errorf("fallback = %+v, %v; want the host issue", rows, err)
 	}
 }

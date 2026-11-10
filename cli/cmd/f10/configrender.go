@@ -11,11 +11,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/mdline"
 	"github.com/amberpixels/f10/cli/internal/projects"
 	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/scope"
 )
-
-// headerIndent is the value column of the header block: the widest label,
-// "checkout root", plus the gap.
-const headerIndent = 16
 
 const (
 	pageMin = 60
@@ -91,13 +88,13 @@ func renderHuman(w io.Writer, v *view, limit int) {
 
 	widest := max(factTable.width(), sections.width(), unrecognized.width())
 	for _, h := range header {
-		widest = max(widest, headerIndent+lipgloss.Width(h.value))
+		widest = max(widest, scope.HeaderIndent+lipgloss.Width(h.value))
 	}
 
 	page := pageWidth(widest, limit)
 
 	for _, h := range header {
-		headerRow(w, h.label, h.value, limit, h.style)
+		scope.HeaderRow(w, h.label, h.value, limit, h.style)
 	}
 
 	fmt.Fprintln(w)
@@ -161,24 +158,6 @@ func renderProblems(w io.Writer, problems []facts.Problem) {
 		if !p.Error {
 			fmt.Fprintln(w, lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Render("warning: "+p.Message))
 		}
-	}
-}
-
-func headerRow(w io.Writer, label, value string, limit int, style lipgloss.Style) {
-	linkedHeaderRow(w, label, value, "", limit, style)
-}
-
-// linkedHeaderRow links each wrapped line to target, since wrapping a value
-// that already holds a link's escapes would cut them apart.
-func linkedHeaderRow(w io.Writer, label, value, target string, limit int, style lipgloss.Style) {
-	faint := lipgloss.NewStyle().Faint(true)
-
-	segments := render.Wrap(value, limit-headerIndent)
-	fmt.Fprintf(w, "%s%s\n", faint.Render(fmt.Sprintf("%-*s", headerIndent, label)),
-		render.Hyperlink(target, style.Render(segments[0])))
-
-	for _, s := range segments[1:] {
-		fmt.Fprintf(w, "%-*s%s\n", headerIndent, "", render.Hyperlink(target, style.Render(s)))
 	}
 }
 
