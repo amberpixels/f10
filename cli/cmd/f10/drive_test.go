@@ -3720,6 +3720,87 @@ func TestDriveResendsAnOriginWaitOnceItsBaseFinished(t *testing.T) {
 	}
 }
 
+// A ship that stops before pr while origin already holds the base (the push
+// landed between its look and the drive's read) is sent again at once.
+func TestDriveResendsAnOriginWaitTheBasePushedFirst(t *testing.T) {
+	fx := chained(t, "GH-1", "GH-2", "ship")
+	fx.expects("GH-1", "ship")
+	fx.expects("GH-2", "ship")
+	fx.f.script("herdr agent prompt "+agentOf("GH-2")+" "+
+		steered(skillPrompt("ship", "GH-2", nil, shipFlow{}, false), "resume at pr"), "{}")
+	fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
+	fx.f.script("git status --porcelain", "")
+
+	fx.f.script(wsList,
+		unopened, all("idle", "GH-1"),
+		unopened, all("idle", "GH-1", "GH-2"),
+		all("working", "GH-1", "GH-2"),
+		listing("GH-1", "working", "GH-2", "idle"), // GH-2's stop
+		listing("GH-1", "working", "GH-2", "idle"), // the look before the resend
+		all("working", "GH-1", "GH-2"),
+		all("idle", "GH-1", "GH-2"))
+	fx.onTick[2] = func() {
+		fx.writeWaitAt(t, "pr", "its branch is not on origin yet")
+		fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", "o1")
+	}
+	fx.onTick[4] = func() {
+		fx.writeRunFor(t, "GH-1", "done", "", "", "")
+		fx.writeRunFor(t, "GH-2", "done", "", "", "")
+	}
+
+	if err := fx.drive(t); err != nil {
+		t.Fatalf("%v\n%s", err, fx.out.String())
+	}
+
+	out := fx.out.String()
+	if strings.Count(out, "resume at pr") != 1 || strings.Contains(out, "waiting on GH-1 for origin") {
+		t.Errorf("ship was not sent again at once:\n%s", out)
+	}
+}
+
+// The origin wait's resends are bounded: the same origin sha stopping pr
+// again, or a base done in this drive stopping it twice, halts the task.
+func TestDriveHaltsAnOriginWaitThatStopsAgain(t *testing.T) {
+	cases := map[string]struct {
+		waitHead, origin, reason string
+		through                  bool
+	}{
+		"same origin sha": {
+			waitHead: "origin o1", origin: "o1",
+			reason: "its pr step found GH-1 not on origin though origin/GH-1 is at o1",
+		},
+		"base done, unpushed": {
+			waitHead: "through", through: true,
+			reason: "GH-1 ended in this drive, yet its pr step still found GH-1 not on origin",
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			fx := newDriveFixture(t, "GH-2", "ship")
+			b := &driveRun{opened: true, o: openedTask{branch: "GH-1"}, task: driveTask{ref: ref.Ref{ID: "GH-1"}}}
+			if tc.through {
+				b.end = &driveResult{row: "done: ship"}
+			}
+
+			r := &driveRun{
+				opened: true, base: b, skill: "ship", waitHead: tc.waitHead,
+				o:    openedTask{branch: "GH-2", path: "/code/repo.GH-2"},
+				task: driveTask{ref: ref.Ref{ID: "GH-2"}},
+			}
+			fx.f.script("git rev-parse -q --verify refs/remotes/origin/GH-1", tc.origin)
+
+			if err := fx.in.parkForOrigin(t.Context(), io.Discard, r); err != nil {
+				t.Fatal(err)
+			}
+
+			if r.end == nil || r.end.code != ui.ExitHalted || r.end.reason != tc.reason {
+				t.Errorf("end = %+v, want a halt: %s", r.end, tc.reason)
+			}
+		})
+	}
+}
+
 // A drive resumed onto a ship already stopped for origin holds it: the stop
 // alone does not read as a base ready to resend to.
 func TestDriveHoldsAResumedOriginWait(t *testing.T) {

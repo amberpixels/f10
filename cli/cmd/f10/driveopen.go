@@ -426,7 +426,20 @@ func (in *driveInput) parkForOrigin(ctx context.Context, w io.Writer, r *driveRu
 	b := r.base
 	r.parkedOrigin = true
 
+	// a base done in this drive is resent to once: a finish deleted its branch
+	// and pr then targets the default branch, while a base that ended unpushed
+	// stops pr the same way again, and nothing here will push it
 	if b.through() {
+		if r.waitHead == "through" {
+			in.end(ctx, w, r, halted(r.task.ref.ID, r.skill,
+				fmt.Sprintf("%s ended in this drive, yet its pr step still found %s not on origin",
+					in.id(b.task.ref.ID), b.o.branch)))
+
+			return nil
+		}
+
+		r.waitHead = "through"
+
 		return in.next(ctx, w, r)
 	}
 
