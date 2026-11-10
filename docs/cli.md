@@ -486,18 +486,19 @@ A project whose PR adapter runs a script around `gh` leaves no such event, so fo
 Each judge verdict and each review findings file gets a row of its own after `plan` and `handoff`: `judge <subject>` (task, plan or change), with the file's number added when a subject was judged twice, and `review <round>`.
 Verdicts from before the open series are an earlier PR's and stay out, as the judge gate drops them.
 `--json` carries the same files as `verdicts` (`subject`, `path`) and `reviews` (`round`, `path`).
-The run's step rows follow it after a blank line, and `--plain` prints the same block.
+The run's step rows go on under it as `label: value`, in the same value column, so the whole block reads as one table, and `--plain` prints the same block.
+With a run under it, the plan file's row is `plan file`, because the run's `plan` row holds the plan phase.
 
 `f10 status <id>` lists the task's **gates** under the `ship` row, while the run is going and after it finished, and the one `done` row of a task with no branch left prints them as lines under it:
 
 ```
-ship            running: review:local
-  implement     done
-  cleanup       done
-  pr            done
-  review        local: round 1 running (in ship) · remote: upcoming
-  judge         change: upcoming
-  pr            upcoming
+ship:           running: review:local
+  implement:    done
+  cleanup:      done
+  pr:           done
+  review:       local: round 1 running (in ship) · remote: upcoming
+  judge:        change: upcoming
+  pr:           upcoming
 ```
 
 - **The flow** is ship's entries as `f10 state pipeline` recorded them, else the entries after `plan` of the flow the branch records (`branch.<name>.f10-flow`), else the flow of the newest drive record holding the task that is neither cancelled nor done (a stopped drive's only while the task has no branch), else `default`, followed by `finish` when the branch carries the finish record `f10 drive` writes (`branch.<name>.f10-finish`, below): a `judge` before `implement` is the **plan** judge, any later one the **change** judge, and `plan` and `resolve` are no rows of their own.

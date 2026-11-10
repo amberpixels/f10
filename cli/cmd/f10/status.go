@@ -404,18 +404,18 @@ func (fb fallback) render(w io.Writer, limit int, link bool) {
 
 	s := fb.ship
 	s.task, s.plan, s.pr, s.link = fb.Task, fb.Plan, cmp.Or(fb.PR, s.pr), link
-	_ = writeReport(w, s.facts(), nil)
 
-	fmt.Fprintln(w)
-	headerRow(w, "run", "none for "+fb.Task+" in "+fb.Root, limit, faint)
+	rows := append(s.facts(), runFact("run", "none for "+fb.Task+" in "+fb.Root, faint))
 
 	for _, r := range fb.Others {
-		headerRow(w, "agent", textx.OrDash(r.Task)+" · "+currentPhase(r), limit, plain)
+		rows = append(rows, runFact("agent", textx.OrDash(r.Task)+" · "+currentPhase(r), plain))
 	}
 
 	if fb.PRState != "" {
-		headerRow(w, "pr state", fb.PRState, limit, plain)
+		rows = append(rows, runFact("pr state", fb.PRState, plain))
 	}
+
+	_ = writeFacts(w, rows, labelWidth(rows), limit)
 }
 
 // writeTaskRows prints task rows as a tree, headed by parent unless the

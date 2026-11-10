@@ -27,6 +27,7 @@ Never reorder it, summarise it, or turn it into a table, because the binary alre
 
 1. Run `f10 status <task-id> --plain`.
    Print the output verbatim in a fenced block, as the rule above says.
+   Print nothing above the block, not even a summary line, because the block is the answer and a sentence over it only restates it.
    A run's block, and the `run none for <id>` block, open with the facts block (`task:`, `title:`, `url:` and so on), so they go in a ```` ```yaml ```` fence, which colors them as the ship report is colored.
    A tree (a parent's, a finished task's, `launched here`) goes in a plain fence, because its titles break the highlighting.
    A failure is printed as is and ends the turn.
