@@ -258,24 +258,108 @@ func TestSchemaUsesKnownKeywords(t *testing.T) {
 	walk(readSchema(t), "schema")
 }
 
-func TestSpecExampleFitsSchema(t *testing.T) {
-	t.Parallel()
+// specBlock returns the first fenced block of the given language in docs/atlas.md.
+func specBlock(t *testing.T, lang string) string {
+	t.Helper()
 
 	raw, err := os.ReadFile(docsPath("atlas.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, rest, ok := strings.Cut(string(raw), "```json\n")
-	example, _, closed := strings.Cut(rest, "\n```")
+	_, rest, ok := strings.Cut(string(raw), "```"+lang+"\n")
+	block, _, closed := strings.Cut(rest, "\n```")
 
 	if !ok || !closed {
-		t.Fatal("docs/atlas.md has no json example")
+		t.Fatalf("docs/atlas.md has no %s example", lang)
 	}
 
-	for _, e := range validate(t, readSchema(t), "Atlas", decode(t, []byte(example))) {
+	return block
+}
+
+// The rules the schema cannot express: the node and edge order, and an
+// anonymous node's edges never naming the manifest that would give away its
+// language.
+func checkRules(doc any) []string {
+	var errs []string
+
+	m, _ := doc.(map[string]any)
+	nodes, _ := m["nodes"].([]any)
+	edges, _ := m["edges"].([]any)
+
+	nodeKey := func(n map[string]any) string {
+		if n["kind"] == "public" {
+			return "0" + fmt.Sprint(n["name"])
+		}
+
+		return "1" + fmt.Sprint(n["alias"])
+	}
+
+	edgeKey := func(e map[string]any) []string {
+		last, _ := e["manifest"].(string)
+		if rel, ok := e["relation"].(string); ok {
+			last = rel
+		}
+
+		return []string{fmt.Sprint(e["from"]), fmt.Sprint(e["to"]), fmt.Sprint(e["kind"]), last}
+	}
+
+	for i := 1; i < len(nodes); i++ {
+		a, b := nodeKey(nodes[i-1].(map[string]any)), nodeKey(nodes[i].(map[string]any))
+		if a >= b {
+			errs = append(errs, fmt.Sprintf("nodes[%d] is out of order", i))
+		}
+	}
+
+	for i, item := range edges {
+		e := item.(map[string]any)
+
+		if from, _ := e["from"].(string); strings.HasPrefix(from, "anon/") {
+			for _, key := range []string{"manifest", "dev"} {
+				if _, ok := e[key]; ok {
+					errs = append(errs, fmt.Sprintf("edges[%d] from an anonymous node carries %s", i, key))
+				}
+			}
+		}
+
+		if i > 0 && slices.Compare(edgeKey(edges[i-1].(map[string]any)), edgeKey(e)) >= 0 {
+			errs = append(errs, fmt.Sprintf("edges[%d] is out of order", i))
+		}
+	}
+
+	return errs
+}
+
+func TestSpecExampleFitsSchema(t *testing.T) {
+	t.Parallel()
+
+	s := readSchema(t)
+	example := decode(t, []byte(specBlock(t, "json")))
+
+	for _, e := range append(validate(t, s, "Atlas", example), checkRules(example)...) {
 		t.Error(e)
 	}
+
+	declared := strings.TrimSuffix(strings.TrimPrefix(specBlock(t, "yaml"), "---\n"), "\n---")
+	for _, e := range validate(t, s, "Declared", yamlAsJSON(t, declared)) {
+		t.Errorf("declared example: %s", e)
+	}
+}
+
+func yamlAsJSON(t *testing.T, front string) any {
+	t.Helper()
+
+	var doc any
+	if err := yaml.Unmarshal([]byte(front), &doc); err != nil {
+		t.Fatal(err)
+	}
+
+	asJSON, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return decode(t, asJSON)
 }
 
 func TestFixturesFitSchema(t *testing.T) {
@@ -294,7 +378,8 @@ func TestFixturesFitSchema(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		for _, e := range validate(t, s, "Atlas", decode(t, raw)) {
+		doc := decode(t, raw)
+		for _, e := range append(validate(t, s, "Atlas", doc), checkRules(doc)...) {
 			t.Errorf("%s: %s", filepath.Base(path), e)
 		}
 	}
@@ -325,17 +410,7 @@ func TestDeclaredFitsSchema(t *testing.T) {
 			t.Fatalf("%s has no frontmatter", path)
 		}
 
-		var doc any
-		if err := yaml.Unmarshal([]byte(front), &doc); err != nil {
-			t.Fatal(err)
-		}
-
-		asJSON, err := json.Marshal(doc)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		for _, e := range validate(t, s, "Declared", decode(t, asJSON)) {
+		for _, e := range validate(t, s, "Declared", yamlAsJSON(t, front)) {
 			t.Errorf("%s: %s", filepath.Base(path), e)
 		}
 	}
@@ -364,6 +439,30 @@ func TestSchemaRejects(t *testing.T) {
 	} {
 		if errs := validate(t, s, "Atlas", decode(t, []byte(raw))); len(errs) == 0 {
 			t.Errorf("%s: the schema accepts it", name)
+		}
+	}
+}
+
+// checkRules must catch each rule it stands in for, or the fixture tests
+// above pass on nothing.
+func TestRulesReject(t *testing.T) {
+	t.Parallel()
+
+	pub := func(name string) string { return `{"kind": "public", "name": "` + name + `"}` }
+	edge := func(from, to string) string {
+		return `{"from": "` + from + `", "to": "` + to + `", "kind": "depends", "source": "manifest"}`
+	}
+
+	for name, raw := range map[string]string{
+		"anonymous edge names its manifest": `{"edges": [{"from": "anon/x", "to": "local/g", "kind": "depends", "source": "manifest", "manifest": "go.mod"}]}`,
+		"anonymous edge marked dev":         `{"edges": [{"from": "anon/x", "to": "local/g", "kind": "depends", "source": "manifest", "dev": true}]}`,
+		"public nodes out of order":         `{"nodes": [` + pub("widgets") + `, ` + pub("gears") + `]}`,
+		"anonymous before public":           `{"nodes": [{"kind": "anonymous", "alias": "a"}, ` + pub("gears") + `]}`,
+		"edges out of order":                `{"edges": [` + edge("local/b", "local/a") + `, ` + edge("local/a", "local/b") + `]}`,
+		"duplicate edge":                    `{"edges": [` + edge("local/a", "local/b") + `, ` + edge("local/a", "local/b") + `]}`,
+	} {
+		if errs := checkRules(decode(t, []byte(raw))); len(errs) == 0 {
+			t.Errorf("%s: the rules accept it", name)
 		}
 	}
 }

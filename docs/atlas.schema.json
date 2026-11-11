@@ -178,7 +178,7 @@
     },
     "ManifestEdge": {
       "type": "object",
-      "description": "from depends on to, read from a manifest.",
+      "description": "from depends on to, read from a manifest; manifest and dev are absent when from is an anonymous node.",
       "properties": {
         "from": {
           "type": "string"
@@ -209,8 +209,7 @@
         "from",
         "to",
         "kind",
-        "source",
-        "manifest"
+        "source"
       ],
       "additionalProperties": false
     },
