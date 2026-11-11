@@ -11,6 +11,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -25,7 +27,7 @@ import (
 func Command() *cli.Command {
 	return &cli.Command{
 		Name: "atlas",
-		Usage: "your public projects with what ~/.f10/atlas.md declares and what their git history says " +
+		Usage: "your public projects and the edges between them, from ~/.f10/atlas.md, their git history and their manifests " +
 			"(this project, or several with -C, --group, --all)",
 		Flags: []cli.Flag{
 			&cli.StringSliceFlag{
@@ -125,7 +127,8 @@ func scoped(ctx context.Context, cmd *cli.Command) ([]atlas.Checkout, error) {
 }
 
 // render is a line per node: name, status, language, last commit, tagline,
-// with a failed read's error where the tagline goes.
+// with a failed read's error where the tagline goes. A node with edges gets
+// a second line naming what it depends on and what depends on it.
 func render(w io.Writer, doc atlas.Document, declared string) {
 	if len(doc.Nodes) == 0 {
 		fmt.Fprintf(w, "no public project in scope: give its entry in %s public: true\n", declared)
@@ -133,7 +136,11 @@ func render(w io.Writer, doc atlas.Document, declared string) {
 		return
 	}
 
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	// the table is aligned before the edge lines go in, because a tab-free
+	// line between two rows would end the tabwriter's column block
+	var table bytes.Buffer
+
+	tw := tabwriter.NewWriter(&table, 0, 0, 2, ' ', 0)
 
 	for _, n := range doc.Nodes {
 		last := "-"
@@ -150,6 +157,58 @@ func render(w io.Writer, doc atlas.Document, declared string) {
 	}
 
 	_ = tw.Flush()
+
+	names := map[string]string{}
+	for _, n := range doc.Nodes {
+		names[n.ID] = n.Name
+	}
+
+	rows := strings.Split(strings.TrimSuffix(table.String(), "\n"), "\n")
+	for i, n := range doc.Nodes {
+		fmt.Fprintln(w, strings.TrimRight(rows[i], " "))
+
+		if line := edgeLine(n.ID, doc.Edges, names); line != "" {
+			fmt.Fprintln(w, "  "+line)
+		}
+	}
+}
+
+// edgeLine is "depends on: a, b (dev), c (plugin for); used by: d", each part
+// left out when empty.
+func edgeLine(id string, edges []atlas.Edge, names map[string]string) string {
+	var out, in []string
+
+	label := func(name string, e atlas.Edge) string {
+		switch {
+		case e.Relation != "":
+			return name + " (" + e.Relation + ")"
+		case e.Dev:
+			return name + " (dev)"
+		}
+
+		return name
+	}
+
+	for _, e := range edges {
+		if e.From == id && !slices.Contains(out, label(names[e.To], e)) {
+			out = append(out, label(names[e.To], e))
+		}
+
+		if e.To == id && !slices.Contains(in, label(names[e.From], e)) {
+			in = append(in, label(names[e.From], e))
+		}
+	}
+
+	var parts []string
+	if len(out) > 0 {
+		parts = append(parts, "depends on: "+strings.Join(out, ", "))
+	}
+
+	if len(in) > 0 {
+		parts = append(parts, "used by: "+strings.Join(in, ", "))
+	}
+
+	return strings.Join(parts, "; ")
 }
 
 func dash(s string) string {
