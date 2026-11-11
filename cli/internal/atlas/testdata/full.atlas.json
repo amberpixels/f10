@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "generated_at": "2026-11-11T12:00:00Z",
+  "nodes": [
+    {
+      "id": "github.com/acme/gears",
+      "kind": "public",
+      "name": "gears",
+      "role": "Go library",
+      "status": "stable",
+      "tagline": "Small reflection helpers for everyday Go.",
+      "language": "go",
+      "first_commit": "2026-08-03T09:14:00Z",
+      "last_commit": "2026-10-28T17:40:00Z",
+      "commits_per_month": [
+        { "month": "2026-08", "commits": 31 },
+        { "month": "2026-09", "commits": 0 },
+        { "month": "2026-10", "commits": 4 },
+        { "month": "2026-11", "commits": 0 }
+      ],
+      "latest_tag": { "name": "v0.3.0", "at": "2026-10-28T17:40:00Z" }
+    },
+    {
+      "id": "local/notes",
+      "kind": "public",
+      "name": "notes",
+      "role": "scripts",
+      "status": "parked",
+      "error": "git log: fatal: bad default revision 'HEAD'"
+    },
+    {
+      "id": "github.com/acme/linter",
+      "kind": "public",
+      "name": "linter",
+      "status": "active",
+      "language": "go",
+      "first_commit": "2026-11-01T10:00:00Z",
+      "last_commit": "2026-11-09T10:00:00Z",
+      "commits_per_month": [{ "month": "2026-11", "commits": 7 }]
+    },
+    {
+      "id": "github.com/acme/widgets",
+      "kind": "public",
+      "name": "widgets",
+      "role": "CLI",
+      "status": "archived",
+      "language": "javascript",
+      "first_commit": "2026-10-01T08:00:00Z",
+      "last_commit": "2026-10-10T21:05:00Z",
+      "commits_per_month": [
+        { "month": "2026-10", "commits": 58 },
+        { "month": "2026-11", "commits": 0 }
+      ]
+    },
+    { "id": "anon/client-app", "kind": "anonymous", "alias": "client-app" },
+    { "id": "anon/ops-2", "kind": "anonymous", "alias": "ops-2" }
+  ],
+  "edges": [
+    { "from": "anon/client-app", "to": "github.com/acme/gears", "kind": "depends", "source": "manifest", "manifest": "go.mod" },
+    { "from": "anon/client-app", "to": "github.com/acme/linter", "kind": "depends", "source": "manifest", "manifest": "go.mod", "dev": true },
+    { "from": "anon/ops-2", "to": "github.com/acme/widgets", "kind": "link", "source": "declared", "relation": "replaces" },
+    { "from": "github.com/acme/widgets", "to": "github.com/acme/gears", "kind": "depends", "source": "manifest", "manifest": "package.json" },
+    { "from": "github.com/acme/widgets", "to": "github.com/acme/gears", "kind": "link", "source": "declared", "relation": "showcase for" }
+  ]
+}
