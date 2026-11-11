@@ -76,6 +76,10 @@ func renderProject(b *strings.Builder, links *render.TaskLinks, p standup.Projec
 		h := forge.Host{}
 
 		i := slices.IndexFunc(p.Repos, func(r standup.Repo) bool { return r.Name == repo })
+		if i < 0 && len(p.Repos) == 1 {
+			i = 0
+		}
+
 		if i >= 0 && p.Repos[i].Host != nil {
 			h.Name = *p.Repos[i].Host
 		}

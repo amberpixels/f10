@@ -5,6 +5,7 @@ package lookaround
 
 import (
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/forge"
@@ -46,6 +47,10 @@ type Project struct {
 
 // Ref is request n as the project's host writes it: #12, or !12 on GitLab.
 func (p Project) Ref(n int) string { return forge.Host{Name: p.Host}.Ref(n) }
+
+// requestKey reports a row keyed by its request, #12 or !12, because no
+// task names it.
+func requestKey(key string) bool { return strings.HasPrefix(key, "#") || strings.HasPrefix(key, "!") }
 
 // Window is the period the board covers: the feed's span, or the time
 // since which the state view's done rows count.

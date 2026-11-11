@@ -392,3 +392,28 @@ func TestDeriveFeedWritesGitLabRequests(t *testing.T) {
 		t.Errorf("FT-3 = %q, want the follow-up written !30", s)
 	}
 }
+
+// On the state board a GitLab request no task names is keyed !n, and like
+// #n on GitHub it gets a sentence for next, never a command naming !n.
+func TestDeriveKeysGitLabRequestsWithNoTask(t *testing.T) {
+	t.Parallel()
+
+	f := Facts{
+		Prefix:  "FT",
+		Project: Project{Host: "glab"},
+		PRs: []PR{NewPR(forge.PR{
+			Number: 12, Title: "fix a typo", Head: "fix-typo", Status: forge.Open, CreatedAt: hourToday(9),
+		})},
+	}
+
+	b := Derive(f, feedNow, feedToday.Since)
+
+	i := slices.IndexFunc(b.Rows, func(r Row) bool { return r.Key == "!12" })
+	if i < 0 {
+		t.Fatalf("no row keyed !12: %+v", b.Rows)
+	}
+
+	if n := b.Rows[i].Next; n.Command != "" || n.Text == "" {
+		t.Errorf("next = %+v, want a sentence, no command", n)
+	}
+}

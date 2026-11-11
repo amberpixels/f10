@@ -269,7 +269,7 @@ func local(f Facts, find func(string) *row, all func() []*row) {
 			}
 
 			// the one agent in a bundle's worktree is named after the lead
-			if !strings.HasPrefix(r.Key, "#") {
+			if !requestKey(r.Key) {
 				r.Who.Agent = AgentFor(cmp.Or(r.Lead, r.Key), r.Where.Branch, r.Worktree.Path)
 			}
 		}

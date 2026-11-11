@@ -277,6 +277,19 @@ type rendered struct {
 func renderUnderNode(t *testing.T) map[string]rendered {
 	t.Helper()
 
+	return renderBoardsUnderNode(t, htmlBoards(t))
+}
+
+// renderBoardUnderNode is one board's markup as the page draws it.
+func renderBoardUnderNode(t *testing.T, b lookaround.Board) string {
+	t.Helper()
+
+	return renderBoardsUnderNode(t, map[string]lookaround.Board{"one": b})["one"].HTML
+}
+
+func renderBoardsUnderNode(t *testing.T, boards map[string]lookaround.Board) map[string]rendered {
+	t.Helper()
+
 	node, err := exec.LookPath("node")
 	if err != nil {
 		t.Skip("node is not on PATH: the page's renderer is checked only where it is")
@@ -296,7 +309,7 @@ func renderUnderNode(t *testing.T) map[string]rendered {
 
 	out := map[string]rendered{}
 
-	for name, b := range htmlBoards(t) {
+	for name, b := range boards {
 		raw, err := json.Marshal(b)
 		if err != nil {
 			t.Fatal(err)
@@ -527,5 +540,25 @@ func TestBoardPageColorsFollowTheTerminal(t *testing.T) {
 		if n := strings.Count(page, "--"+look.Color.CSS+":"); n != 3 {
 			t.Errorf("--%s is defined %d times, want once per theme (3)", look.Color.CSS, n)
 		}
+	}
+}
+
+// On GitLab the terminal and the page write a row's requests as !n.
+func TestBoardDrawsGitLabRequests(t *testing.T) {
+	b := htmlBoards(t)["feed-edges"]
+	b.Project.Host = "glab"
+
+	var buf bytes.Buffer
+
+	boardcmd.RenderBoard(&buf, b, 0)
+
+	if !strings.Contains(buf.String(), "!1 + !2") {
+		t.Errorf("the terminal draws no !n parts:\n%s", buf.String())
+	}
+
+	want := `<a class="pr" href="https://x.io/pull/1" rel="noopener">!1</a> + ` +
+		`<a class="pr" href="https://x.io/pull/2" rel="noopener">!2</a>`
+	if html := renderBoardUnderNode(t, b); !strings.Contains(html, want) {
+		t.Errorf("%q is not in the markup:\n%s", want, html)
 	}
 }
