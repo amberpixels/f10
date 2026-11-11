@@ -322,7 +322,7 @@ func TestScrubRemovesEveryLocalPath(t *testing.T) {
 		".gitconfig",
 	)
 
-	got := scrub(t.Context(), text, Checkout{Main: r.Dir, Name: "gears"}, "gears")
+	got := scrub(t.Context(), text, Checkout{Main: r.Dir, Name: "gears"})
 	if strings.Contains(got, r.Dir) || strings.Contains(got, home) || !strings.Contains(got, "gears/.git/index") {
 		t.Errorf("scrub = %q", got)
 	}

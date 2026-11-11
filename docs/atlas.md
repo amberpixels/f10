@@ -94,6 +94,8 @@ Only `id`, `kind` and `name` are always present; every other field is absent whe
 **An anonymous node** is a private project whose declared entry gives an `alias`.
 It carries exactly `id`, `kind` (`anonymous`) and `alias`, and its edges.
 It has no name, role, tagline, language, date, commit count or tag, because a commit rhythm, a start date or a language can identify a private project to someone who knows its author.
+It has no `error` field either, so when one of its manifests does not read, it draws no `depends` edge of its own, and the run says so on stderr under its alias alone.
+The names its manifests that did read still declare are kept, so a public project's dependency on it is still an edge.
 
 **An edge** says that `from` depends on, or relates to, `to`.
 

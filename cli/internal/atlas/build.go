@@ -103,7 +103,7 @@ func Build(ctx context.Context, entries map[string]Entry, scope []Checkout, now 
 			if e := entries[c.Main]; e.Public {
 				reads[i] = readNode(ctx, c, e, now)
 			} else {
-				reads[i] = readAnonymous(ctx, c, e)
+				reads[i] = readAnonymous(c, e)
 			}
 		})
 	}
@@ -154,7 +154,7 @@ func readNode(ctx context.Context, c Checkout, e Entry, now time.Time) read {
 	m, merr := readManifests(c.Main)
 	// one line, because the terminal view prints the error in a table row
 	if err = errors.Join(err, merr); err != nil {
-		n.Error = scrub(ctx, strings.ReplaceAll(err.Error(), "\n", "; "), c, c.Name)
+		n.Error = scrub(ctx, strings.ReplaceAll(err.Error(), "\n", "; "), c)
 	}
 
 	return read{checkout: c, node: n, m: m, links: e.Links}
@@ -162,30 +162,32 @@ func readNode(ctx context.Context, c Checkout, e Entry, now time.Time) read {
 
 // readAnonymous builds the node from the alias alone and reads only the
 // manifests, so no field can carry the project's name, remote or history.
-func readAnonymous(ctx context.Context, c Checkout, e Entry) read {
+func readAnonymous(c Checkout, e Entry) read {
 	n := Node{ID: "anon/" + e.Alias, Kind: kindAnonymous, Alias: e.Alias}
 
 	m, err := readManifests(c.Main)
 
 	r := read{checkout: c, node: n, m: m, links: e.Links}
 	if err != nil {
-		// a partial read could draw some edges and not others, so none is drawn
-		r.m = manifests{}
-		r.warning = e.Alias + ": " + scrub(ctx, strings.ReplaceAll(err.Error(), "\n", "; "), c, e.Alias)
+		// a partial read could draw some of its own edges and not others, so none
+		// is drawn; its names stay, so public projects' edges into it still match
+		r.m = manifests{names: m.names}
+		// fixed text: the error would name a manifest, and so the language or the
+		// project itself (a gemspec's file name)
+		r.warning = e.Alias + ": a manifest did not read, so its depends edges are left out"
 	}
 
 	return r
 }
 
 // scrub takes every local path out of a read's error, because nothing in the
-// atlas names one: the git directory, the checkout, then the home directory,
-// each replaced by name.
-func scrub(ctx context.Context, text string, c Checkout, name string) string {
+// atlas names one: the git directory, the checkout, then the home directory.
+func scrub(ctx context.Context, text string, c Checkout) string {
 	if gitDir := gitx.Out(ctx, c.Main, "rev-parse", "--path-format=absolute", "--git-common-dir"); gitDir != "" {
-		text = strings.ReplaceAll(text, gitDir, name+"/.git")
+		text = strings.ReplaceAll(text, gitDir, c.Name+"/.git")
 	}
 
-	text = strings.ReplaceAll(text, c.Main, name)
+	text = strings.ReplaceAll(text, c.Main, c.Name)
 
 	if home, err := os.UserHomeDir(); err == nil && home != "" {
 		text = strings.ReplaceAll(text, home, "~")

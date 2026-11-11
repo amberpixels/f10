@@ -251,3 +251,32 @@ func TestAtlasPrintsTheEdges(t *testing.T) {
 		t.Errorf("a private project is named:\n%s\n%s", out, text)
 	}
 }
+
+// A broken manifest on an aliased checkout is a stderr warning under its
+// alias, and --json stays one valid document.
+func TestAtlasWarnsOnAnAnonymousNodesBrokenManifest(t *testing.T) {
+	home := isolateEnv(t)
+	root := canonical(t, t.TempDir())
+	gears := scopeRepo(t, root, "gears")
+	secret := scopeRepo(t, root, "secret")
+
+	if err := os.WriteFile(filepath.Join(secret, "package.json"), []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	writeDeclared(t, home, "projects:\n  gears: {public: true}\n  secret: {alias: client}\n")
+
+	out, errOut, err := runApp(t, "-C", gears, "-C", secret, "atlas", "--json").streams()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var doc atlas.Document
+	if err := json.Unmarshal([]byte(out), &doc); err != nil || len(doc.Nodes) != 2 {
+		t.Fatalf("stdout is not the two-node document (%v):\n%s", err, out)
+	}
+
+	if want := "warning: client: a manifest did not read, so its depends edges are left out\n"; errOut != want {
+		t.Errorf("stderr = %q, want %q", errOut, want)
+	}
+}

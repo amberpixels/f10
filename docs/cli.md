@@ -1144,7 +1144,7 @@ An edge to a dropped project, or to one outside the scope, is left out.
 
 **The history** is the default branch's: origin's `HEAD`, else a local `main` or `master`, else `HEAD`.
 A checkout whose history does not read gets an `error` on its node, with its path removed, and every other project still prints.
-An anonymous node has no `error` field, so a malformed manifest there prints a `warning:` line on stderr under its alias, with no path, and the node keeps its declared links but draws no `depends` edge.
+An anonymous node has no `error` field, so a malformed manifest there prints a fixed `warning:` line on stderr under its alias, naming neither the manifest nor a path, and the node keeps its declared links but draws no `depends` edge of its own.
 
 - With no flag, a line per project: name, status, language, last commit date and tagline, or the error; anonymous nodes follow, each as its alias and `anonymous`.
 - `--json` prints the document; over several projects it is still one document.

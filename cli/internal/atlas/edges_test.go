@@ -160,7 +160,8 @@ func TestCollapseMergesDevAndDropsSelfEdges(t *testing.T) {
 
 // Edges with an anonymous end: no manifest or dev mark from one, a go.mod and
 // a package.json naming one project as one edge, links both ways, nothing
-// between two anonymous nodes, and a broken manifest warned under the alias.
+// between two anonymous nodes, and a broken manifest warned under the alias,
+// its node still matched by the names that did read.
 func TestBuildDerivesEdgesWithAnAnonymousEnd(t *testing.T) {
 	t.Parallel()
 
@@ -181,7 +182,7 @@ func TestBuildDerivesEdgesWithAnAnonymousEnd(t *testing.T) {
 	}
 
 	add("gears", "", Entry{Public: true}, map[string]string{
-		"go.mod":       "module github.com/acme/gears\n",
+		"go.mod":       "module github.com/acme/gears\n\nrequire github.com/acme/half v0.1.0\n",
 		"package.json": `{"name": "gears-js"}`,
 	})
 	add("widgets", "", Entry{Public: true, Links: []Link{{To: "client-secret", Relation: "plugin for"}}}, nil)
@@ -197,6 +198,10 @@ func TestBuildDerivesEdgesWithAnAnonymousEnd(t *testing.T) {
 	})
 	broken := add("broken-secret", "", Entry{Alias: "broken-co", Links: []Link{{To: "gears", Relation: "uses"}}},
 		map[string]string{"go.mod": "module github.com/acme/broken\nrequire (\n"})
+	half := add("half-secret", "", Entry{Alias: "half-co"}, map[string]string{
+		"go.mod":       "module github.com/acme/half\n\nrequire github.com/acme/gears v0.1.0\n",
+		"package.json": "{",
+	})
 
 	doc, warnings := Build(t.Context(), entries, scope, buildNow)
 	fits(t, doc)
@@ -205,14 +210,26 @@ func TestBuildDerivesEdgesWithAnAnonymousEnd(t *testing.T) {
 		{From: "anon/broken-co", To: "local/gears", Kind: edgeLink, Source: "declared", Relation: "uses"},
 		{From: "anon/client-app", To: "local/gears", Kind: edgeDepends, Source: "manifest"},
 		{From: "anon/client-app", To: "local/gears", Kind: edgeLink, Source: "declared", Relation: "showcase for"},
+		{From: "local/gears", To: "anon/half-co", Kind: edgeDepends, Source: "manifest", Manifest: manifestGoMod},
 		{From: "local/widgets", To: "anon/client-app", Kind: edgeLink, Source: "declared", Relation: "plugin for"},
 	}
 	if !slices.Equal(doc.Edges, want) {
 		t.Errorf("edges =\n%+v\nwant\n%+v", doc.Edges, want)
 	}
 
-	if len(warnings) != 1 || !strings.HasPrefix(warnings[0], "broken-co: ") ||
-		strings.Contains(warnings[0], "broken-secret") || strings.Contains(warnings[0], broken) {
-		t.Errorf("warnings = %q, want one under the alias naming no checkout", warnings)
+	wantWarnings := []string{
+		"broken-co: a manifest did not read, so its depends edges are left out",
+		"half-co: a manifest did not read, so its depends edges are left out",
+	}
+	if !slices.Equal(warnings, wantWarnings) {
+		t.Errorf("warnings = %q, want %q", warnings, wantWarnings)
+	}
+
+	for _, w := range warnings {
+		for _, leak := range []string{"secret", broken, half, "go.mod", "package.json"} {
+			if strings.Contains(w, leak) {
+				t.Errorf("warning %q names %q", w, leak)
+			}
+		}
 	}
 }
