@@ -167,7 +167,7 @@ var (
 	gemspecDep  = regexp.MustCompile(`\.add_(runtime_|development_)?dependency\s*\(?\s*["']([^"']+)["']`)
 	gemfileGem  = regexp.MustCompile(`^gem\s*\(?\s*["']([^"']+)["'](.*)$`)
 	gemfileGrp  = regexp.MustCompile(`^group\s*\(?(.*?)\)?\s+do\b`)
-	inlineGroup = regexp.MustCompile(`\bgroups?:\s*(\[[^\]]*\]|:\w+|["']\w+["'])`)
+	inlineGroup = regexp.MustCompile(`\bgroups?(?::|"?\s*=>)\s*(\[[^\]]*\]|:\w+|["']\w+["'])`)
 	groupName   = regexp.MustCompile(`:(\w+)|["'](\w+)["']`)
 	opensBlock  = regexp.MustCompile(`(\bdo(\s*\|[^|]*\|)?|^(if|unless|case|begin|while|until)\b.*)$`)
 	closesBlock = regexp.MustCompile(`^end\b`)

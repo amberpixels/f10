@@ -117,8 +117,9 @@ func readNode(ctx context.Context, c Checkout, e Entry, now time.Time) read {
 	err := readGit(ctx, c.Main, now, &n)
 
 	m, merr := readManifests(c.Main)
+	// one line, because the terminal view prints the error in a table row
 	if err = errors.Join(err, merr); err != nil {
-		n.Error = scrub(ctx, err.Error(), c)
+		n.Error = scrub(ctx, strings.ReplaceAll(err.Error(), "\n", "; "), c)
 	}
 
 	return read{checkout: c, node: n, m: m, links: e.Links}

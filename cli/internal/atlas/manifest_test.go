@@ -103,9 +103,12 @@ group :production, :development do
 end
 gem "pry", group: :development
 gem "rake", groups: [:development, :default]
+gem "rubocop", :group => :development
+gem "simplecov", :groups => [:test]
 `},
 			deps: []string{
-				"Gemfile:debug(dev)", "Gemfile:pry(dev)", "Gemfile:puma", "Gemfile:rails", "Gemfile:rake", "Gemfile:rspec(dev)",
+				"Gemfile:debug(dev)", "Gemfile:pry(dev)", "Gemfile:puma", "Gemfile:rails", "Gemfile:rake",
+				"Gemfile:rspec(dev)", "Gemfile:rubocop(dev)", "Gemfile:simplecov(dev)",
 			},
 		},
 	} {

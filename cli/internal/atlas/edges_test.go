@@ -41,13 +41,18 @@ require (
 	github.com/up/gears v0.1.0
 	github.com/acme/kit v0.1.0
 	github.com/acme/secret v0.1.0
+	github.com/acme/forked v0.1.0
 )
+
+replace github.com/acme/forked => ../secret
 
 replace github.com/up/gears => github.com/acme/gears v0.0.1
 
 replace github.com/acme/kit => ../kit
 `})
 	add("jsonish", "", public, map[string]string{"go.mod": "module github.com/acme/json\n"})
+	// replaced by the private checkout, so widgets builds no code of it
+	add("forked", "", public, map[string]string{"go.mod": "module github.com/acme/forked\n"})
 	add("deep", "", public, map[string]string{"go.mod": "module github.com/acme/deep\n"})
 	add("kit", "", public, map[string]string{"go.mod": "module github.com/acme/kit\n"})
 	// a fork that kept the upstream module path, beside the upstream itself

@@ -257,3 +257,18 @@ func TestScrubRemovesEveryLocalPath(t *testing.T) {
 		t.Errorf("scrub = %q", got)
 	}
 }
+
+// Two failed reads give one error line, because the terminal view prints it
+// in a table row.
+func TestBuildKeepsTheErrorOnOneLine(t *testing.T) {
+	t.Parallel()
+
+	r := gitxtest.Init(t, filepath.Join(t.TempDir(), "broken"), "main")
+	r.Commit("2026-11-01T08:00:00Z", "a", "1", "start")
+	writeFiles(t, r.Dir, map[string]string{"go.mod": "module\nrequire (\n", "package.json": "{"})
+
+	n := buildOne(t, Checkout{Main: r.Dir, Name: "broken", Local: true}, Entry{Public: true})
+	if !strings.Contains(n.Error, "; ") || strings.Contains(n.Error, "\n") {
+		t.Errorf("error = %q, want both reads on one line", n.Error)
+	}
+}

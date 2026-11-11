@@ -130,16 +130,16 @@ func deriveEdges(reads []read) []Edge {
 	return collapse(all)
 }
 
-// manifestEdges sends a replaced requirement to its replacement, and draws a
-// replace whose target is in scope even when nothing requires it directly.
+// manifestEdges sends a replaced requirement to its replacement only, since
+// that is the code the project builds: a replacement that is no node drops
+// the edge. A replace whose target is a node is drawn even when nothing
+// requires it directly.
 func (ix nodeIndex) manifestEdges(r read) []Edge {
 	from := r.node.ID
 	replaced := map[string]string{}
 
 	for _, rep := range r.m.replaces {
-		if to := ix.byReplace(r.checkout.Main, rep); to != "" {
-			replaced[rep.old] = to
-		}
+		replaced[rep.old] = ix.byReplace(r.checkout.Main, rep)
 	}
 
 	var out []Edge
@@ -163,6 +163,10 @@ func (ix nodeIndex) manifestEdges(r read) []Edge {
 	}
 
 	for _, to := range replaced {
+		if to == "" {
+			continue
+		}
+
 		out = append(out, Edge{From: from, To: to, Kind: edgeDepends, Source: "manifest", Manifest: manifestGoMod})
 	}
 
