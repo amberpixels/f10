@@ -42,10 +42,8 @@ build:
     go build ./...
 # <<< justx:build
 
-# >>> justx:ci (managed) - `j @upgrade` re-syncs; remove these fences to take over
-# run all checks - read-only, safe for CI
-ci: lint test
-# <<< justx:ci
+# run all checks - read-only, safe for CI; unfenced so the race check survives `j @upgrade`
+ci: lint test test-race
 
 # race-check the daemon, whose drain reads drive state other goroutines write;
 # cgo is on because -race needs it on linux, where CI runs with it off
