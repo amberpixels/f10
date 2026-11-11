@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "generated_at": "2026-11-11T12:00:00Z",
+  "nodes": [
+    {
+      "id": "github.com/acme/gears",
+      "kind": "public",
+      "name": "gears",
+      "role": "Go library",
+      "status": "stable",
+      "language": "go",
+      "first_commit": "2026-08-03T09:14:00Z",
+      "last_commit": "2026-10-28T17:40:00Z",
+      "commits_per_month": [
+        { "month": "2026-08", "commits": 31 },
+        { "month": "2026-09", "commits": 12 },
+        { "month": "2026-10", "commits": 4 },
+        { "month": "2026-11", "commits": 0 }
+      ]
+    },
+    {
+      "id": "gitlab.com/acme/tools/stamp",
+      "kind": "public",
+      "name": "stamp",
+      "language": "ruby",
+      "first_commit": "2026-09-14T08:00:00Z",
+      "last_commit": "2026-09-14T08:00:00Z",
+      "commits_per_month": [
+        { "month": "2026-09", "commits": 1 },
+        { "month": "2026-10", "commits": 0 },
+        { "month": "2026-11", "commits": 0 }
+      ],
+      "latest_tag": { "name": "v1.0.0", "at": "2026-09-14T08:00:00Z" }
+    }
+  ],
+  "edges": []
+}

@@ -1,0 +1,312 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/amberpixels/f10/docs/atlas.schema.json",
+  "title": "Atlas",
+  "description": "Every project in scope as a node and the links between them as edges; docs/atlas.md is the spec. $defs/Declared describes the frontmatter of ~/.f10/atlas.md.",
+  "$ref": "#/$defs/Atlas",
+  "$defs": {
+    "Atlas": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "generated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/PublicNode"
+              },
+              {
+                "$ref": "#/$defs/AnonymousNode"
+              }
+            ]
+          }
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/ManifestEdge"
+              },
+              {
+                "$ref": "#/$defs/LinkEdge"
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "version",
+        "generated_at",
+        "nodes",
+        "edges"
+      ],
+      "additionalProperties": false
+    },
+    "PublicNode": {
+      "type": "object",
+      "description": "A project declared public, exported in full.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^(local/[^/]+|[^/]+(/[^/]+)+)$",
+          "description": "The normalised remote, else local/<name>."
+        },
+        "kind": {
+          "const": "public"
+        },
+        "name": {
+          "type": "string",
+          "description": "The main checkout's basename."
+        },
+        "role": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "stable",
+            "parked",
+            "archived"
+          ]
+        },
+        "tagline": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string",
+          "enum": [
+            "go",
+            "ruby",
+            "javascript"
+          ]
+        },
+        "first_commit": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "last_commit": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "commits_per_month": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Month"
+          }
+        },
+        "latest_tag": {
+          "$ref": "#/$defs/Tag"
+        },
+        "error": {
+          "type": "string",
+          "description": "Why reading the checkout failed, its path removed."
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "AnonymousNode": {
+      "type": "object",
+      "description": "A private project with a declared alias: its alias and kind, nothing else.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^anon/[a-z0-9][a-z0-9-]*$"
+        },
+        "kind": {
+          "const": "anonymous"
+        },
+        "alias": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "alias"
+      ],
+      "additionalProperties": false
+    },
+    "Month": {
+      "type": "object",
+      "properties": {
+        "month": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$"
+        },
+        "commits": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "month",
+        "commits"
+      ],
+      "additionalProperties": false
+    },
+    "Tag": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "name",
+        "at"
+      ],
+      "additionalProperties": false
+    },
+    "ManifestEdge": {
+      "type": "object",
+      "description": "from depends on to, read from a manifest; manifest and dev are absent when from is an anonymous node.",
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "depends"
+        },
+        "source": {
+          "const": "manifest"
+        },
+        "manifest": {
+          "type": "string",
+          "enum": [
+            "go.mod",
+            "package.json",
+            "gemspec",
+            "Gemfile"
+          ]
+        },
+        "dev": {
+          "const": true
+        }
+      },
+      "required": [
+        "from",
+        "to",
+        "kind",
+        "source"
+      ],
+      "additionalProperties": false
+    },
+    "LinkEdge": {
+      "type": "object",
+      "description": "A relation the declared file states, in the user's words.",
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "link"
+        },
+        "source": {
+          "const": "declared"
+        },
+        "relation": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "from",
+        "to",
+        "kind",
+        "source",
+        "relation"
+      ],
+      "additionalProperties": false
+    },
+    "Declared": {
+      "type": "object",
+      "description": "The frontmatter of ~/.f10/atlas.md.",
+      "properties": {
+        "projects": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/DeclaredEntry"
+          }
+        }
+      },
+      "required": [
+        "projects"
+      ],
+      "additionalProperties": false
+    },
+    "DeclaredEntry": {
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "stable",
+            "parked",
+            "archived"
+          ]
+        },
+        "tagline": {
+          "type": "string"
+        },
+        "public": {
+          "type": "boolean"
+        },
+        "alias": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DeclaredLink"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "DeclaredLink": {
+      "type": "object",
+      "properties": {
+        "to": {
+          "type": "string"
+        },
+        "relation": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "to",
+        "relation"
+      ],
+      "additionalProperties": false
+    }
+  }
+}
