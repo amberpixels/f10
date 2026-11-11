@@ -217,12 +217,18 @@ func (in WatchInput) ReadTargets(ctx context.Context, tasks []WatchedTask, store
 	var want []int
 
 	for i, t := range tasks {
-		if t.Owner != "" || t.Off || t.HostErr != nil || !t.Listed || in.atWork(t) || WaitingOnAsk(t.Run) {
+		if t.Owner != "" || t.Off || t.HostErr != nil || !t.Listed || t.Agent == agentctl.StatusWorking ||
+			WaitingOnAsk(t.Run) {
 			continue
 		}
 
 		rec := store[t.ID].Catchup
 		if rec == nil && (t.Pr == nil || t.Pr.Status != forge.Open) {
+			continue
+		}
+
+		// a catchup in flight is read from git whatever the mark says
+		if (rec == nil || rec.Failed) && in.parked(t) {
 			continue
 		}
 
@@ -299,15 +305,16 @@ func (in WatchInput) handedBack(ctx context.Context, branch string) bool {
 	return v == "false"
 }
 
-// atWork reports an agent that is working, or idle only because its turn
-// ended on background work (a verify it will come back to), as the drive
-// reads it: a catchup is neither sent to it nor settled under it.
-func (in WatchInput) atWork(t WatchedTask) bool {
-	return t.Agent == agentctl.StatusWorking || backgroundPending(t.Background, in.Now())
+// parked reports an idle agent whose last turn launched background work (a
+// verify it may come back to). The mark outlives work that already ended, so
+// it never holds back a catchup git shows clean: no catchup is sent under it,
+// and one that did not end clean is not failed under it.
+func (in WatchInput) parked(t WatchedTask) bool {
+	return backgroundPending(t.Background, in.Now())
 }
 
 func (in WatchInput) catchupStep(ctx context.Context, task WatchedTask, store map[string]WatchReport) *WatchReport {
-	if !task.fetched || in.atWork(task) || WaitingOnAsk(task.Run) {
+	if !task.fetched || task.Agent == agentctl.StatusWorking || WaitingOnAsk(task.Run) {
 		return nil
 	}
 
@@ -320,6 +327,10 @@ func (in WatchInput) catchupStep(ctx context.Context, task WatchedTask, store ma
 	rec := store[task.ID].Catchup
 	if rec != nil && !rec.Failed {
 		return in.settleCatchup(ctx, task, rec, store)
+	}
+
+	if in.parked(task) {
+		return nil
 	}
 
 	return in.sendCatchup(ctx, task, rec, store)
@@ -351,6 +362,10 @@ func (in WatchInput) settleCatchup(
 	}
 
 	if reason != "" {
+		if in.parked(task) {
+			return nil // the turn may still come back to it
+		}
+
 		rec.Failed = true
 		in.failedAt(ctx, task, rec)
 

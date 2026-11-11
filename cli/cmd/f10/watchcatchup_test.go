@@ -346,6 +346,18 @@ func TestWatchSettlesASentCatchup(t *testing.T) {
 		"agent on background work": {script: func(fx *janitorFixture) {
 			fx.f.meta.Seed("GH-1/x", branchmeta.Landed, "main")
 		}, task: func(w *drive.WatchedTask) { w.Background = watchNow.Add(-time.Minute) }, kept: true},
+		// the mark outlives background work that already ended, so a catchup
+		// git shows clean is pushed under it
+		"ended clean on background work": {
+			task: func(w *drive.WatchedTask) { w.Background = watchNow.Add(-time.Minute) },
+			push: plain, kind: drive.WatchCatchup,
+		},
+		// past the bound the mark says nothing, and what is left is a failure
+		"background work past its bound": {script: func(fx *janitorFixture) {
+			fx.f.meta.Seed("GH-1/x", branchmeta.Landed, "main")
+		}, task: func(w *drive.WatchedTask) {
+			w.Background = watchNow.Add(-stack.VerifyLimit)
+		}, kind: drive.WatchCatchup, kept: true, failed: true},
 		"mark still set": {script: func(fx *janitorFixture) {
 			fx.f.meta.Seed("GH-1/x", branchmeta.Landed, "main")
 		}, kind: drive.WatchCatchup, kept: true, failed: true},
