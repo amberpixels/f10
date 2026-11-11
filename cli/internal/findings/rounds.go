@@ -24,6 +24,15 @@ const (
 	Exhausted Decline = "exhausted"
 	// Merged is a branch whose content main already holds.
 	Merged Decline = "merged"
+	// OnDefault is a sweep on the default branch, where resolve would commit
+	// its fixes straight to it.
+	OnDefault Decline = "default-branch"
+	// Swept is a sweep on a branch whose task is swept, or is the parent of
+	// a swept task, so its findings would be filed under that task.
+	Swept Decline = "swept"
+	// Started is a sweep on a branch whose directory already holds a round:
+	// a sweep starts a series of its own.
+	Started Decline = "started"
 )
 
 // Status is a findings directory read for the next review: the latest round
@@ -40,6 +49,10 @@ type Status struct {
 	PR string `json:"pr,omitempty"`
 	// Archived is where a finished series moved before this round.
 	Archived string `json:"archived,omitempty"`
+	// Branch is the branch a sweep of the range runs on (`--since` only).
+	Branch string `json:"branch,omitempty"`
+	// Detail is a sweep decline's reason, naming the tasks.
+	Detail string `json:"detail,omitempty"`
 }
 
 // Open is a finding a decline names, with why it is still open: `no
