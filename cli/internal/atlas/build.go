@@ -149,8 +149,11 @@ func language(root string) string {
 // pushed rather than cloned repository has no origin HEAD, and a main
 // checkout can sit on a feature branch.
 func defaultRef(ctx context.Context, dir string) string {
+	// symbolic-ref does not resolve the target, and a prune can leave it dangling
 	if def := gitx.Out(ctx, dir, "symbolic-ref", "--short", "refs/remotes/origin/HEAD"); def != "" {
-		return def
+		if sha, err := gitx.Ref(ctx, dir, "refs/remotes/"+def); err == nil && sha != "" {
+			return def
+		}
 	}
 
 	for _, b := range []string{"main", "master"} {
@@ -166,13 +169,15 @@ func defaultRef(ctx context.Context, dir string) string {
 func readGit(ctx context.Context, dir string, now time.Time, n *Node) error {
 	ref := defaultRef(ctx, dir)
 
-	out, err := gitx.Exec(ctx, dir, "log", "--format=%cI", ref)
-	if err != nil {
-		return fmt.Errorf("reading the history of %s: %w", ref, err)
+	// an unborn branch has no commits, which leaves the fields absent rather than failed
+	if sha, err := gitx.Ref(ctx, dir, ref); err != nil || sha == "" {
+		return err
 	}
 
-	if out == "" {
-		return fmt.Errorf("%s has no commits", ref)
+	// signatures off, so log.showSignature adds no lines to parse
+	out, err := gitx.Exec(ctx, dir, "log", "--no-show-signature", "--format=%cI", ref)
+	if err != nil {
+		return fmt.Errorf("reading the history of %s: %w", ref, err)
 	}
 
 	var first, last time.Time
@@ -180,6 +185,10 @@ func readGit(ctx context.Context, dir string, now time.Time, n *Node) error {
 	perMonth := map[string]int{}
 
 	for line := range strings.Lines(out) {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+
 		at, err := time.Parse(time.RFC3339, strings.TrimSpace(line))
 		if err != nil {
 			return fmt.Errorf("reading a commit date: %w", err)

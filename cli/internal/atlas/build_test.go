@@ -115,16 +115,73 @@ func TestBuildReadsMainOverAFeatureBranch(t *testing.T) {
 func TestBuildReportsAFailedReadWithoutThePath(t *testing.T) {
 	t.Parallel()
 
-	r := gitxtest.Init(t, filepath.Join(t.TempDir(), "empty"), "main")
+	r := gitxtest.Init(t, filepath.Join(t.TempDir(), "broken"), "main")
+	r.Commit("2026-10-01T08:00:00Z", "a", "1", "start")
 
-	n := buildOne(t, Checkout{Main: r.Dir, Name: "empty", ID: "github.com/acme/empty"},
+	// a missing commit object fails the history read itself
+	sha := strings.TrimSpace(r.Git("rev-parse", "HEAD"))
+	if err := os.Remove(filepath.Join(r.Dir, ".git", "objects", sha[:2], sha[2:])); err != nil {
+		t.Fatal(err)
+	}
+
+	n := buildOne(t, Checkout{Main: r.Dir, Name: "broken", ID: "github.com/acme/broken"},
 		Entry{Public: true, Status: "parked", Tagline: "Nothing yet."})
 
 	home, _ := os.UserHomeDir()
 	if n.Error == "" || strings.Contains(n.Error, r.Dir) || (home != "" && strings.Contains(n.Error, home)) ||
-		n.Status != "parked" ||
-		n.Tagline != "Nothing yet." {
+		n.Status != "parked" || n.Tagline != "Nothing yet." {
 		t.Errorf("node = %+v, want an error without %s and the declared fields kept", n, r.Dir)
+	}
+}
+
+// A repository with no commits yet is not a failed read: its dates are absent.
+func TestBuildLeavesAnEmptyRepositoryUndated(t *testing.T) {
+	t.Parallel()
+
+	r := gitxtest.Init(t, filepath.Join(t.TempDir(), "empty"), "main")
+
+	n := buildOne(t, Checkout{Main: r.Dir, Name: "empty", Local: true}, Entry{Public: true})
+	if n.Error != "" || n.FirstCommit != "" || n.CommitsPerMonth != nil {
+		t.Errorf("node = %+v, want no error and no dates", n)
+	}
+}
+
+// log.showSignature puts signature lines in git log's output unless asked not to.
+func TestBuildReadsHistoryWithShowSignature(t *testing.T) {
+	t.Parallel()
+
+	r := gitxtest.Init(t, filepath.Join(t.TempDir(), "signed"), "main")
+	r.Commit("2026-10-01T08:00:00Z", "a", "1", "start")
+
+	// a signature header git cannot check still makes it print "No signature"
+	signed := strings.Replace(r.Git("cat-file", "commit", "HEAD"), "\n\n",
+		"\ngpgsig -----BEGIN SSH SIGNATURE-----\n AAAA\n -----END SSH SIGNATURE-----\n\n", 1)
+	body := filepath.Join(t.TempDir(), "commit")
+
+	if err := os.WriteFile(body, []byte(signed), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	r.Git("update-ref", "refs/heads/main", strings.TrimSpace(r.Git("hash-object", "-t", "commit", "-w", body)))
+	r.Git("config", "log.showSignature", "true")
+
+	if n := buildOne(t, Checkout{Main: r.Dir, Name: "signed", Local: true}, Entry{Public: true}); n.Error != "" ||
+		n.FirstCommit != "2026-10-01T08:00:00Z" {
+		t.Errorf("node = %+v, want the history read", n)
+	}
+}
+
+// An origin HEAD whose target a prune removed falls back to the local branch.
+func TestBuildSkipsADanglingOriginHead(t *testing.T) {
+	t.Parallel()
+
+	r := gitxtest.Init(t, filepath.Join(t.TempDir(), "renamed"), "main")
+	r.Commit("2026-10-01T08:00:00Z", "a", "1", "start")
+	r.Git("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/master")
+
+	if n := buildOne(t, Checkout{Main: r.Dir, Name: "renamed", Local: true}, Entry{Public: true}); n.Error != "" ||
+		n.LastCommit != "2026-10-01T08:00:00Z" {
+		t.Errorf("node = %+v, want main's history", n)
 	}
 }
 

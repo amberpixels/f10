@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/atlas"
+	"github.com/amberpixels/f10/cli/internal/gitx/gitxtest"
 	"github.com/amberpixels/f10/cli/internal/projects"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
@@ -129,5 +130,41 @@ func TestAtlasScopeErrors(t *testing.T) {
 	if _, err := runApp(t, "-C", gears, "atlas", "--out", "x.json").outErr(); err == nil ||
 		!strings.Contains(err.Error(), "--json") {
 		t.Errorf("--out alone: err = %v", err)
+	}
+}
+
+// A linked worktree is its main checkout: the node takes the main checkout's
+// name, the normalised remote as its id, and origin HEAD's history.
+func TestAtlasReadsAWorktreeAsItsMainCheckout(t *testing.T) {
+	home := isolateEnv(t)
+	r := gitxtest.Clone(t, "gears")
+	r.Commit("2026-10-01T08:00:00Z", "go.mod", "module github.com/acme/gears\n", "start")
+	r.Git("push", "-q", "origin", "main")
+	r.Git("remote", "set-head", "origin", "main")
+	r.Git("remote", "set-url", "origin", "git@github.com:acme/gears.git")
+
+	wt := filepath.Join(filepath.Dir(r.Dir), "gears.feature")
+	r.Git("worktree", "add", "-q", "-b", "feature", wt)
+	gitxtest.Repo{T: t, Dir: wt}.Commit("2026-11-01T08:00:00Z", "b", "2", "feature work")
+
+	writeDeclared(t, home, "projects:\n  gears: {public: true}\n")
+
+	out, err := runApp(t, "-C", wt, "atlas", "--json").outErr()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var doc atlas.Document
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+
+	if len(doc.Nodes) != 1 {
+		t.Fatalf("nodes = %+v, want one", doc.Nodes)
+	}
+
+	if n := doc.Nodes[0]; n.ID != "github.com/acme/gears" || n.Name != "gears" || n.Language != "go" ||
+		n.LastCommit != "2026-10-01T08:00:00Z" {
+		t.Errorf("node = %+v, want gears by its remote with main's tip", n)
 	}
 }
