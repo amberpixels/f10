@@ -378,8 +378,8 @@ func TestArchiveReviewsNumbersEachSeries(t *testing.T) {
 	}
 }
 
-// The coherence lens reviews on a fresh branch cut from main: nothing past
-// main yet is not merged, so it still gets round 1.
+// A fresh branch cut from main, with nothing past main yet, is not merged,
+// so it still gets round 1.
 func TestReviewRoundGivesAFreshBranchRoundOne(t *testing.T) {
 	repo := roundRepo(t)
 	git(t, repo, "reset", "-q", "--hard", "main")

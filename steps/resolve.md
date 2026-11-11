@@ -62,7 +62,6 @@ So after such an entry, resolve runs only point 5, on the review that entry ackn
    If no block is left to settle (a clean file counts), the step ends normally.
    Before it ends, it still runs points 10 and 11 when their conditions hold and the sha that point 10 would mark has no `review (local)` status yet.
 2. **Read what was asked**: the task and the plan.
-   A block with a `tasks:` line came from the coherence lens, so also read those tasks' plans and `f10 lore show <id>` for each.
    When the user stated a choice, it beats the reviewer.
 3. **Re-find each finding** in the code, in file order, by its file, title and summary.
    If the file's `reviewed:` sha is not HEAD, or it says `dirty`, the line numbers are only advisory.
@@ -75,8 +74,6 @@ So after such an entry, resolve runs only point 5, on the review that entry ackn
      The finding's proposed fix is only a suggestion.
    - **`skip`**: give an argued `reason:` in a line or two, because the next round's reviewer reads it.
      A finding whose fix would undo what the task asked for is a `skip`, and the reason cites the ask.
-     A block marked `size: own task` is a `skip` with the reason `follow-up: <its title>`.
-     The exception is when the code shows the fix is small: then it is a `fix`.
    - **`ask`**: the call is the user's.
      That covers a real fork, a finding that disputes the task, and a fix whose scope is not yours.
      Every `ask` is collected for point 7.
@@ -183,7 +180,7 @@ So after such an entry, resolve runs only point 5, on the review that entry ackn
     The facts block has a `findings` row, and a `commit` row when point 9 committed.
     It has a `status` row (the sha and its state) and a `comment` row (its url) when point 10 posted them.
     It has a `settled` row, holding what `settle` printed, when the **CI review** section marked the review.
-    Beneath the block, give the verdict counts, what the fixes changed, which asks were answered, and each `follow-up:` title, for the user to capture.
+    Beneath the block, give the verdict counts, what the fixes changed, and which asks were answered.
 
 **On failure:** red verify after a fix, a findings file that names a task this checkout lacks, or a malformed file.
 Report and stop, keeping the verdicts written so far.
