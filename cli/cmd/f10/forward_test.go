@@ -285,7 +285,7 @@ func TestDriven(t *testing.T) {
 	}
 }
 
-// taskCheckout is the lookup forward, status and finish share: the branch
+// TaskCheckout is the lookup forward, status and finish share: the branch
 // as start would find it, and the checkout that has it, or neither.
 func TestTaskCheckout(t *testing.T) {
 	f := newFakes(t)

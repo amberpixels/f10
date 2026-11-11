@@ -8,13 +8,13 @@ import (
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/archive"
-	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/stack"
-	"github.com/amberpixels/f10/cli/internal/statusview"
+	"github.com/amberpixels/f10/cli/internal/textx"
 	"github.com/amberpixels/f10/cli/internal/trace"
 )
 
@@ -109,10 +109,10 @@ func landMerge(ctx context.Context, w io.Writer, in FinishInput, d finishDecisio
 	l := landing{
 		ended: p.URL + " merged",
 		// read before the merge, while the branch tip it was written at still exists
-		hand: taskcmd.HandoffLines(
+		hand: archive.HandoffLines(
 			archive.TaskHandoff(in.Storage, in.Task.ID),
 			in.Task.ID,
-			taskcmd.BranchTip(ctx, in.Main, name, p),
+			archive.BranchTip(ctx, in.Main, name, p),
 		),
 	}
 
@@ -127,7 +127,7 @@ func landMerge(ctx context.Context, w io.Writer, in FinishInput, d finishDecisio
 			return landing{}, err
 		}
 	} else {
-		in.step("merging " + statusview.PullNumber(p.URL))
+		in.step("merging " + in.Host.Ref(p.Number))
 
 		if p, notes, err = landPull(ctx, in, name, def, p); err != nil {
 			return landing{}, err
@@ -139,7 +139,7 @@ func landMerge(ctx context.Context, w io.Writer, in FinishInput, d finishDecisio
 
 		note, deferred := pullMain(ctx, in.Root, in.Main, def, p.Landed)
 		if d.place != inMainCheckout || deferred {
-			notes = AppendNote(notes, note)
+			notes = textx.AppendNote(notes, note)
 		}
 
 		if deferred && in.Deferred != nil {
@@ -151,10 +151,10 @@ func landMerge(ctx context.Context, w io.Writer, in FinishInput, d finishDecisio
 
 	l.end = &archive.SeriesEnd{Pr: "none", Head: sha}
 	if !unpushed {
-		l.end.Pr = statusview.PullNumber(p.URL)
+		l.end.Pr = in.Host.Ref(p.Number)
 	}
 
-	notes = AppendNote(notes, d.loreNote)
+	notes = textx.AppendNote(notes, d.loreNote)
 
 	recordLanded()
 
@@ -198,7 +198,7 @@ func landPull(ctx context.Context, in FinishInput, name, def string, p forge.PR)
 			return forge.PR{}, nil, err
 		}
 
-		notes = AppendNote(notes, note)
+		notes = textx.AppendNote(notes, note)
 
 		// settleRiders may have just rewritten the description's closing
 		// keywords, and the body under the commit must be the host's current one
@@ -210,7 +210,7 @@ func landPull(ctx context.Context, in FinishInput, name, def string, p forge.PR)
 				return forge.PR{}, nil, err
 			}
 
-			notes = AppendNote(notes, note)
+			notes = textx.AppendNote(notes, note)
 		}
 
 		if p, err = in.Host.MergePR(ctx, p, name, method, MergeBody(in, description, method)); err != nil {
@@ -307,7 +307,7 @@ func putLastState(ctx context.Context, in FinishInput, branch, body string) (str
 		Step:   "finish",
 		Task:   in.Task.ID,
 		Riders: in.Task.Riders(),
-		After:  statusview.BranchAfter(ctx, in.Main, branch),
+		After:  branchmeta.Out(ctx, in.Main, branch, branchmeta.After),
 	})
 	if err != nil || out == body {
 		return body, err

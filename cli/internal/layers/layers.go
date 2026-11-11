@@ -24,6 +24,23 @@ type Rule struct {
 
 // Table ranks the module, inner to outer; the longest matching prefix wins.
 var Table = []Rule{
+	// leaves: text, files, git, the shell and the terminal, which read no
+	// project state, so nothing of the domain may reach into them
+	{Prefix: "internal/textx", Rank: -2},
+	{Prefix: "internal/fsx", Rank: -2},
+	{Prefix: "internal/taskid", Rank: -2},
+	{Prefix: "internal/shell", Rank: -2},
+	{Prefix: "internal/gitx", Rank: -2},
+	{Prefix: "internal/flock", Rank: -2},
+	{Prefix: "internal/seam", Rank: -2},
+	{Prefix: "internal/buildinfo", Rank: -2},
+	{Prefix: "internal/calendar", Rank: -2},
+	{Prefix: "internal/mdline", Rank: -2},
+	{Prefix: "internal/tasktitle", Rank: -2},
+	{Prefix: "internal/ui", Rank: -1},
+	{Prefix: "internal/tasktree", Rank: -1},
+
+	// the domain packages, which Go's own cycle check keeps acyclic
 	{Prefix: "internal", Rank: 0, Peers: true},
 	{Prefix: "internal/layers", Rank: 0, Peers: true},
 	{Prefix: "internal/target", Rank: 1},
@@ -87,6 +104,10 @@ func (v Violation) String() string {
 	return v.From + " imports " + v.To + ": " + v.Why
 }
 
+// commandRoot holds the commands, which parse flags and print: only another
+// command or a binary may import one, so a service never depends on a flag.
+const commandRoot = "internal/command"
+
 // Check returns every violation in imports, a map from each module package,
 // relative to the module root, to the module packages it imports.
 func Check(imports map[string][]string, table []Rule) []Violation {
@@ -107,6 +128,11 @@ func Check(imports map[string][]string, table []Rule) []Violation {
 			}
 
 			switch {
+			case strings.HasPrefix(to, commandRoot+"/") && strings.HasPrefix(from, "internal/") &&
+				from != commandRoot && !strings.HasPrefix(from, commandRoot+"/"):
+				out = append(out, Violation{
+					From: from, To: to, Why: "a service imports a command; move the helper down to a service",
+				})
 			case tr.Rank > fr.Rank:
 				out = append(out, Violation{
 					From: from, To: to,

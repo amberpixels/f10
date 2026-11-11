@@ -90,6 +90,17 @@ func TestWindows(t *testing.T) {
 			want: []got{{"implement", 6}},
 		},
 		{
+			name: "a debug run begins a run of its own, ending the step before it",
+			events: join(
+				run(0, "ship"),
+				claim(0, "ship", "running", "implement"),
+				wait(2, 4, "question"),
+				run(6, "debug"),
+				claim(12, "ship", "done"),
+			),
+			want: []got{{"implement", 4}},
+		},
+		{
 			name: "overlapping waits subtract once",
 			events: join(
 				run(0, "ship"),

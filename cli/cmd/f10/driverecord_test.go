@@ -208,7 +208,7 @@ func TestOpenRecordKeepsAnswersNotTaken(t *testing.T) {
 }
 
 // A bare answer whose text holds "=" stays bare: the rerun's replaces the
-// kept one, or takeAnswers sees two bare answers and refuses.
+// kept one, or TakeAnswers sees two bare answers and refuses.
 func TestOpenRecordReplacesABareAnswerHoldingEquals(t *testing.T) {
 	root := t.TempDir()
 
@@ -586,7 +586,7 @@ func TestTaskStandingWaiting(t *testing.T) {
 	}
 }
 
-// drive list decides a row by finishedTask, asking the tracker only when the
+// drive list decides a row by FinishedTask, asking the tracker only when the
 // branch and the plans dir leave it open.
 func TestFinishedLazily(t *testing.T) {
 	cases := []struct {

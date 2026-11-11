@@ -153,7 +153,7 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 			)
 		}
 
-		field := VerifyFieldIn(eff.Fields)
+		field := facts.VerifyFieldIn(eff.Fields)
 
 		line := VerifyLine(field)
 		if eff.Verify != nil {

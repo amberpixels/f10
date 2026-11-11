@@ -351,20 +351,22 @@ func StatusOnce(
 	return line, h.SetStatus(ctx, head, s)
 }
 
-// MineLine says whether the signed-in user opened p. A failed login read is
-// unknown, never no, so a step guarding someone else's PR stops on it; the
-// view itself goes on, since explain and demo need none of it.
+// MineLine says whether the signed-in user opened p. A failed login read or
+// a request with no author is unknown, never no, so a step guarding someone
+// else's PR stops on it; the view itself goes on, since explain and demo need
+// none of it.
 func MineLine(ctx context.Context, warn io.Writer, h hostops.Host, p forge.PR) string {
-	login, err := h.Login(ctx)
-
-	switch {
-	case err != nil:
+	owner, err := h.Owner(ctx, p)
+	if err != nil {
 		ui.Warnf(warn, "who is signed in is unknown: %v", err)
+	}
 
-		return "mine: unknown\n"
-	case strings.EqualFold(p.Author, login):
+	switch owner {
+	case forge.OwnerMine:
 		return "mine: yes\n"
-	default:
+	case forge.OwnerOther:
 		return "mine: no\n"
+	default:
+		return "mine: unknown\n"
 	}
 }

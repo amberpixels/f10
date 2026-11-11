@@ -719,17 +719,17 @@ func assertOneColumn(t *testing.T, out string) {
 func TestReadShipmentCommitRow(t *testing.T) {
 	r := newCatchupRepo(t)
 
-	r.at(before, "checkout", "-q", "-b", "FT-2/b", "origin/main")
+	r.At(before, "checkout", "-q", "-b", "FT-2/b", "origin/main")
 
-	in := statusview.TaskStatusInput{ID: "FT-2", Branch: "FT-2/b", Main: r.dir}
+	in := statusview.TaskStatusInput{ID: "FT-2", Branch: "FT-2/b", Main: r.Dir}
 
 	if s := statusview.ReadShipment(t.Context(), in, nil, ledger.TaskRef{}); s.Commit != "" {
 		t.Errorf("a fresh branch has commit %q, want none", s.Commit)
 	}
 
-	r.commit(during, "c.go", "package main // c\n", "c")
+	r.Commit(during, "c.go", "package main // c\n", "c")
 
-	want := r.at(during, "rev-parse", "--short", "HEAD")
+	want := r.At(during, "rev-parse", "--short", "HEAD")
 	if s := statusview.ReadShipment(t.Context(), in, nil, ledger.TaskRef{}); s.Commit != want {
 		t.Errorf("commit = %q, want the branch head %q", s.Commit, want)
 	}

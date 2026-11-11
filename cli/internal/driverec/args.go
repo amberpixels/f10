@@ -13,7 +13,7 @@ import (
 )
 
 // A DriveFlag is one of drive's flags. The parser, its refusals, the record
-// match and the usage line all read driveFlags, so a new flag is one row.
+// match and the usage line all read DriveFlags, so a new flag is one row.
 type DriveFlag struct {
 	Name  string
 	Value string // the value's word in the usage, "" for a switch

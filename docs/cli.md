@@ -113,7 +113,7 @@ It changes nothing, so it is always safe to run; `-C` points it at another check
 | `herdr` | `herdr` on PATH; scoped to `start`, `forward`, `drive` and `finish` | install Herdr |
 | `host` | the `gh` or `glab` the remote routes to, installed and `auth status` green for the host; `not needed here` without a remote | `<cli> auth login --hostname <host>` |
 | `driver` | the `f10-drivers` the `.f10/driver` shim runs (the shim itself, or the path or bare name its text gives): its `--version` against the oldest release this binary works with, v0.4.0, the first that takes `--set` on `task create`; a too-old one, or one that predates `--version`, is scoped to `task create --set`; a custom driver is not compared; a tracker that reads only through a driver (Notion, Jira) with no `.f10/driver` is a problem scoped to `task`, `start` and `drive`, and a host-issues tracker without a driver gets no row | `go install github.com/amberpixels/f10-drivers/cmd/f10-drivers@latest`, or add the shim per [the driver contract](driver-contract.md) |
-| `project` | `project.md` frontmatter: no unknown keys or values; `not needed here` outside a project | edit the named `project.md`; `f10 config` shows every fact |
+| `project` | `project.md` frontmatter and the user's own files in `~/.f10` (`agents.md`, `paces.md`): no unknown keys or values; `not needed here` outside a project when the user's files are clean | edit the named file; `f10 config` shows every fact |
 
 Inside a session the plugin judged is the one on the session's PATH (a directory marketplace or `--plugin-dir` included); outside one, the install `installed_plugins.json` records.
 
@@ -443,7 +443,9 @@ A row is a glyph for the stage (`✓` done or shipped, `✗` halted, `?` asking,
 A task's run block gains an `agent` row, the profile its branch records (`opus:high`), when that is not the kind's default; `--json` carries it as `agent`.
 The title goes on the line beneath, cut to fit; the ask, the halt reason and what unblocks it (`next`) follow as labelled lines.
 A finished task alone prints as a one-row tree with no heading, every gate a labelled line.
-Each row reads the child's live run in its worktree, else the ledger's last record of it, which outlives the worktree `f10 finish` removes; the PR comes from the host, by branch or by the url the ledger kept.
+Each row reads the child's live run in its worktree, else the ledger's last record of it, which outlives the worktree `f10 finish` removes.
+The PRs come from one host search for every row.
+A row reads its PR on its own only when the search missed it, by its branch or by the url the ledger kept.
 On a terminal the id and the PR are links (OSC 8).
 `--plain` prints the same tree with no color and no urls, its gates as a `gates` line under the title; titles, halt and next lines are cut to `$COLUMNS`, else 100, and an ask is never cut.
 A model that needs a url runs `f10 task open <id> --link` or `f10 pr open <n> --link`.
@@ -460,7 +462,7 @@ It applies only to the tree; a run's block prints as without it.
 | `reviewing`, `resolving` | ship running review, resolve | orange |
 | `judging`, `planning` | ship running judge; capture or plan under way | blue |
 | `planned` | the plan is saved, ship not begun | faint blue |
-| `waiting` | no run yet, its `After:` base is not done, and a running drive lists it (a bundle's riders included), so the drive holds it for that base; or the record of a running drive this session launched says it parked the task for its base's code (step `on <id>`) or holds its finish until the base is through (step `to finish after <id>`) | faint |
+| `waiting` | no run yet, its `After:` base is not done, and a running drive lists it (a bundle's riders included), so the drive holds it for that base; or the record of a running drive this session launched says it parked the task for its base's code or its push (step `on <id>`) or holds its finish until the base is through (step `to finish after <id>`) | faint |
 | `not started` | nothing recorded; a task no drive lists keeps `after <id>` as its step while its base is not done | faint |
 
 Color is off when stdout is not a terminal or `NO_COLOR` is set.
@@ -504,7 +506,9 @@ ship:           running: review:local
   pr:           upcoming
 ```
 
-- **The flow** is ship's entries as `f10 state pipeline` recorded them, else the entries after `plan` of the flow the branch records (`branch.<name>.f10-flow`), else the flow of the newest drive record holding the task that is neither cancelled nor done (a stopped drive's only while the task has no branch), else `default`, followed by `finish` when the branch carries the finish record `f10 drive` writes (`branch.<name>.f10-finish`, below): a `judge` before `implement` is the **plan** judge, any later one the **change** judge, and `plan` and `resolve` are no rows of their own.
+- **The flow** is ship's entries as `f10 state pipeline` recorded them, else the entries after `plan` of the flow the branch records (`branch.<name>.f10-flow`), else the flow of the newest drive record holding the task that is neither cancelled nor done (a stopped drive's only while the task has no branch), else `default`, followed by `finish` when the branch carries the finish record `f10 drive` writes (`branch.<name>.f10-finish`, below).
+  The flow is read at the pace the branch records (`branch.<name>.f10-pace`), else the pace of the drive record holding the task, else the default, so an entry that pace skips is no row.
+  A `judge` before `implement` is the **plan** judge, any later one the **change** judge, and `plan` and `resolve` are no rows of their own.
 - **A plain step** is `done` before the step ship is on, that step takes the run's status (`running`, `blocked`, ...), the rest are `upcoming` (in this run's flow, not reached, nothing running or waiting); once ship is done, a step it never entered is `skipped`.
   A driven ship parked on its base (`f10 state wait`) reads `waiting on <id>` at that step, and the parent's row `waiting` with step `on <id>`.
 - **Review** has a local and a remote review, each `upcoming`, `running` (its round, and `in ship`, `driven` or `manual`; `resolve running` while a resolve settles it, and in `review:local+ci` `round N in, waiting for the other review` once its own findings landed), `open` (`N open of M found`, or `open (not handled)` on the host), `settled` (`3 found (2 fixed, 1 skipped)`, `clean`), or `unknown`.
@@ -671,13 +675,16 @@ A cancelled record is never picked up again: the same command line starts a new 
    - **blocked with an ask** - the question is printed with its options and kept in the asks inbox (**Asks** below), naming this drive.
      The driver keeps driving every other task: a guard stop still gets its catchup, a base still releases its dependents.
      Once nothing else can move (every other task ended, asking, or held on its base), it prints every task's ask and the command that answers them all, and exits **4**;
-   - **blocked waiting on its base** (`f10 state wait`, a driven ship that found its base without code) - the task parks, with no ask and no halt, and its row reads `waiting on <id>`.
-     Once the base is released and its branch head has moved past the one the ship found, ship is sent again with `resume at implement`; the same head never sends it twice.
+   - **blocked waiting on its base** (`f10 state wait`: a driven ship that found its base without code before `implement`, or not on origin before `pr`) - the task parks, with no ask and no halt, and its row reads `waiting on <id>`.
+     A wait for code ends once the base is released and its branch head has moved past the one the ship found, and ship is sent again with `resume at implement`; the same head never sends it twice.
+     A wait at `pr` ends once the base's branch is on origin or the base has finished, and ship is sent again with `resume at pr`.
      A wait on a base this drive does not run, or one already through, halts the task with the run's note;
    - **blocked without one** (a judge stop, a stale task's verdict) - a decision, not breakage: the task halts with the run's note and next, since sending the skill again would only roll the decision again;
    - **failed** or **partial** - the driver reads the branch, since the turn may not be the one it sent (a ship typed by hand while it followed plan): each skill the branch shows done is recorded and passed, so a ship stopped by its guard gets its catchup.
      A stop the branch does not get past is a failed attempt of the skill in flight;
-   - **still running** under plan or ship, or a catchup with no `done catchup` signal since its prompt, a minute after the agent went idle - the agent stopped without reporting; the driver reads the branch the same way, so a branch with its plan, commits of its own, a settled tree and an open PR carrying them counts as shipped.
+   - **still running** under plan or ship, or a catchup with no `done catchup` signal since its prompt, a minute after the agent went idle - the agent stopped without reporting.
+     An agent whose session launched background work its hooks still count as pending (a background command, a Monitor, a subagent) is not idle: it reads as working for up to 30 minutes from that launch, so a long verify or a wait on a subagent is no stall.
+     Past that, or with no background work, the driver reads the branch the same way, so a branch with its plan, commits of its own, a settled tree and an open PR carrying them counts as shipped.
      Anything less halts the task naming the workspace, because the agent is usually waiting on a permission dialog in its pane, and typing the skill again could answer it.
      Found at prompt time, a run still running halts the same way and says how to leave a cancelled run: quit that agent and rerun, and a new one is started in its place;
    - anything else - the skill is done, recorded on the branch, and the next one is sent.
@@ -697,7 +704,7 @@ A cancelled record is never picked up again: the same command line starts a new 
    A `plan` or `ship` its run already shows `done` (or `prior`) is counted done and recorded with no prompt, as when a driver stopped mid-ship and the agent finished the step before the rerun saw it.
 7. **The report.**
    Progress lines as it goes, an end included: a halt or an ask is printed the moment the driver sees it, not only beneath the report.
-   Then one row per task in graph order: `already finished`, `finished`, `done: <skills>`, `waiting on <id>` (parked for its base's code), `waiting for <id>` (its finish waits on its base), `asked at <skill>`, `halted at <skill>`, `halted: base <id> halted`, `owned by drive <n> (pid …)`, `cancelled`, `not reached`.
+   Then one row per task in graph order: `already finished`, `finished`, `done: <skills>`, `waiting on <id>` (parked for its base's code, or for its branch on origin), `waiting for <id>` (its finish waits on its base), `asked at <skill>`, `halted at <skill>`, `halted: base <id> halted`, `owned by drive <n> (pid …)`, `cancelled`, `not reached`.
    Exit 0 when every task went through its skills, 4 when any task asks, else 5 when any halted.
    Exit 6 is a drive stopped for a daemon upgrade, and exit 8 a drive asking its daemon to start it again; only the daemon and the command following it see them.
 
@@ -709,7 +716,7 @@ A drive whose task was answered after it last looked, while it still held its le
 `f10 drive cancel <n>` closes the drive's open asks.
 An agent found mid-turn is attached to rather than prompted again.
 The turn is read by what it reports: one that turns out to be a catchup is followed like a catchup the drive sent, so a clean one resumes ship at the entry its stop names.
-A ship the catchup guard stopped before `implement`, `pr` or a `judge` (its next naming `/f10:catchup`), or a driven catchup left `failed`, is prompted again on a rerun once a catchup settled the branch, by the same checks as point 5 (no mark, no merge or rebase in progress, a clean tree), with `resume at <entry>` so ship starts where it stopped; a branch still marked gets the catchup first.
+A ship the catchup guard stopped before `implement`, `pr` or a `judge` (told by the `stop guard` kind its run records, never by the wording of its next), or a driven catchup left `failed`, is prompted again on a rerun once a catchup settled the branch, by the same checks as point 5 (no mark, no merge or rebase in progress, a clean tree), with `resume at <entry>` so ship starts where it stopped; a branch still marked gets the catchup first.
 A task halted for another reason stays halted until its run changes: settle it in that workspace, or send steering through `--answer`.
 
 `/f10:drive` runs the command in the background, answers an exit 4 through `/f10:asks` (the questions in one questionnaire, the answers written to the inbox, the drive resumed), and prints the final report.

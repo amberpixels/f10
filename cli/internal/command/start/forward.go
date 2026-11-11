@@ -14,7 +14,6 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/command"
 	"github.com/amberpixels/f10/cli/internal/driver"
-	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -23,6 +22,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/textx"
 	"github.com/amberpixels/f10/cli/internal/ui"
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
@@ -125,7 +125,7 @@ func Forward(ctx context.Context, w io.Writer, in ForwardInput) error {
 		return err
 	}
 
-	ws := finish.WorkspaceAt(wss, path)
+	ws := worktree.WorkspaceAt(wss, path)
 	if ws == nil {
 		return fmt.Errorf("no %s workspace shows %s (branch %s): open it with f10 start %s",
 			worktree.Agents(in.Main).Name(), path, name, in.Task.ID)
@@ -146,7 +146,7 @@ func Forward(ctx context.Context, w io.Writer, in ForwardInput) error {
 		render.TaskFact(ctx, w, in.Main, in.Task.ID),
 		{Label: "workspace", Value: ws.ID},
 		{Label: "sent", Value: text},
-	}, finish.AppendNote(nil, note))
+	}, textx.AppendNote(nil, note))
 }
 
 func hereReason(in ForwardInput, name, path string) string {

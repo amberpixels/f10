@@ -8,10 +8,15 @@ import (
 
 // A FetchOnce fetches origin at most once, a tick's or a watcher pass's:
 // every worktree shares the main checkout's remote refs, so one fetch serves
-// them all. A failed fetch is not kept, so the next caller tries again.
+// them all. A failed fetch is not kept, so the next caller tries again. A
+// nil one, a caller outside any tick, fetches every time.
 type FetchOnce struct{ Done bool }
 
 func (f *FetchOnce) Fetch(ctx context.Context, dir string) error {
+	if f == nil {
+		return gitx.Fetch(ctx, dir)
+	}
+
 	if f.Done {
 		return nil
 	}

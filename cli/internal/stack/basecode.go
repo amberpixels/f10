@@ -15,7 +15,7 @@ func BaseHasCode(ctx context.Context, main, branch, def string) bool {
 	return hasCodeAt(ctx, main, "refs/heads/"+branch, branch, def, createdAt(ctx, main, branch))
 }
 
-// OriginBaseHasCode is baseHasCode for a base only origin holds: with no
+// OriginBaseHasCode is BaseHasCode for a base only origin holds: with no
 // reflog there is no creation commit, so the base's own base is read on
 // origin too.
 func OriginBaseHasCode(ctx context.Context, main, branch, def string) bool {

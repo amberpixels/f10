@@ -15,7 +15,6 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
-	statuscmd "github.com/amberpixels/f10/cli/internal/command/status"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/flow"
@@ -460,7 +459,7 @@ func TestOutcomesPreferLore(t *testing.T) {
 	store := &lore.Store{Root: root}
 
 	// no lore entries: the files answer
-	if o := statuscmd.ReadOutcomes(
+	if o := statusview.ReadOutcomes(
 		store,
 		storage,
 		"FT-1",
@@ -476,7 +475,7 @@ func TestOutcomesPreferLore(t *testing.T) {
 		Severity: "minor", Status: "fixed", Resolution: "abcdef1", Source: "local", Body: "old",
 	})
 
-	if o := statuscmd.ReadOutcomes(
+	if o := statusview.ReadOutcomes(
 		&lore.Store{Root: stale},
 		storage,
 		"FT-1",
@@ -508,7 +507,7 @@ func TestOutcomesPreferLore(t *testing.T) {
 		},
 	)
 
-	o := statuscmd.ReadOutcomes(store, storage, "FT-1")
+	o := statusview.ReadOutcomes(store, storage, "FT-1")
 
 	if want := (statusview.ReviewRound{Round: "1", Found: 2, Fixed: 1, Skipped: 1}); len(o.Local) != 1 ||
 		o.Local[0] != want {
@@ -555,14 +554,14 @@ func TestOutcomesRoundTwo(t *testing.T) {
 	short := t.TempDir()
 	writeLore(t, short, entry("fixed"), entry("open"))
 
-	if o := statuscmd.ReadOutcomes(&lore.Store{Root: short}, storage, "FT-1"); len(o.Local) != 2 {
+	if o := statusview.ReadOutcomes(&lore.Store{Root: short}, storage, "FT-1"); len(o.Local) != 2 {
 		t.Errorf("lore missing a finding answered: %+v", o.Local)
 	}
 
 	whole := t.TempDir()
 	writeLore(t, whole, entry("fixed"), entry("open"), entry("open"))
 
-	o := statuscmd.ReadOutcomes(&lore.Store{Root: whole}, storage, "FT-1")
+	o := statusview.ReadOutcomes(&lore.Store{Root: whole}, storage, "FT-1")
 	if want := (statusview.ReviewRound{Round: "2", Found: 3, Fixed: 1, Ask: 2}); len(o.Local) != 1 ||
 		o.Local[0] != want {
 		t.Errorf("lore with every finding = %+v, want %+v", o.Local, want)
@@ -721,7 +720,7 @@ func TestOutcomesTaskJudge(t *testing.T) {
 	writeFile(t, filepath.Join(storage, "verdicts", "FT-1", "1.md"),
 		"task: FT-1\nsubject: task FT-1\nverdict: stop\nreason: solved\nrun: before plan\n")
 
-	o := statuscmd.ReadOutcomes(nil, storage, "FT-1")
+	o := statusview.ReadOutcomes(nil, storage, "FT-1")
 	if o.TaskJudge == nil || o.TaskJudge.Verdict != "stop" || o.ChangeJudge != nil {
 		t.Errorf("file = %+v", o)
 	}
@@ -732,7 +731,7 @@ func TestOutcomesTaskJudge(t *testing.T) {
 		Outcome: "proceed", Gate: "judge", Commit: "abcdef1", Judged: "task", Body: "still real",
 	})
 
-	o = statuscmd.ReadOutcomes(&lore.Store{Root: root}, "", "FT-2")
+	o = statusview.ReadOutcomes(&lore.Store{Root: root}, "", "FT-2")
 	if o.TaskJudge == nil || o.TaskJudge.Verdict != "proceed" || o.ChangeJudge != nil {
 		t.Errorf("lore = %+v", o)
 	}
@@ -751,7 +750,7 @@ func TestOutcomesTaskJudge(t *testing.T) {
 			Outcome: "proceed", Gate: "judge", Commit: "abcdef1", Judged: "task", Body: "still real",
 		})
 
-		if o := statuscmd.ReadOutcomes(&lore.Store{Root: both}, storage, "FT-1"); o.TaskJudge == nil ||
+		if o := statusview.ReadOutcomes(&lore.Store{Root: both}, storage, "FT-1"); o.TaskJudge == nil ||
 			o.TaskJudge.Verdict != tc.want {
 			t.Errorf("lore at %v over the file = %+v, want %s", tc.at, o.TaskJudge, tc.want)
 		}
@@ -980,7 +979,7 @@ func TestOutcomesKeepTheFileDecision(t *testing.T) {
 	same := t.TempDir()
 	writeLore(t, same, verdictEntry("proceed with changes"))
 
-	j := statuscmd.ReadOutcomes(&lore.Store{Root: same}, storage, "FT-1").ChangeJudge
+	j := statusview.ReadOutcomes(&lore.Store{Root: same}, storage, "FT-1").ChangeJudge
 	if j == nil || j.Reason != "from lore" || j.Decision != "built" || j.Changes != 2 {
 		t.Errorf("lore verdict lost the file's decision: %+v", j)
 	}
@@ -988,7 +987,7 @@ func TestOutcomesKeepTheFileDecision(t *testing.T) {
 	other := t.TempDir()
 	writeLore(t, other, verdictEntry("proceed"))
 
-	j = statuscmd.ReadOutcomes(&lore.Store{Root: other}, storage, "FT-1").ChangeJudge
+	j = statusview.ReadOutcomes(&lore.Store{Root: other}, storage, "FT-1").ChangeJudge
 	if j == nil || j.Verdict != "proceed" || j.Decision != "" {
 		t.Errorf("a different lore verdict took the file's decision: %+v", j)
 	}

@@ -157,7 +157,7 @@ func windows(evs []ledger.Event) []Window {
 		switch e.Kind {
 		case ledger.RunStarted:
 			skill := e.Skill()
-			if !slices.Contains(state.Phases, skill) {
+			if !state.OpensPhase(skill) {
 				continue // a step's own skill, resolve or catchup, runs inside the run
 			}
 
@@ -263,7 +263,7 @@ func segments(evs []ledger.Event) []Window {
 		switch e.Kind {
 		case ledger.RunStarted:
 			skill := e.Skill()
-			if !slices.Contains(state.Phases, skill) {
+			if !state.OpensPhase(skill) {
 				continue
 			}
 

@@ -8,7 +8,6 @@ import (
 	"slices"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
-	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ui"
 	"github.com/amberpixels/f10/cli/internal/worktree"
@@ -31,7 +30,7 @@ func (in *DriveInput) SlotFree(r *DriveRun) bool {
 		return true
 	}
 
-	ws := finish.WorkspaceByID(in.Wss, r.O.Ws.ID)
+	ws := worktree.WorkspaceByID(in.Wss, r.O.Ws.ID)
 
 	return ws != nil && ws.Status == agentctl.StatusWorking
 }
@@ -97,7 +96,7 @@ func (g *OpenGate) Workspace(r *DriveRun) *agentctl.Workspace {
 		return nil
 	}
 
-	return finish.WorkspaceAt(g.Wss, path)
+	return worktree.WorkspaceAt(g.Wss, path)
 }
 
 // Order puts the tasks with an agent already open first, since they add no

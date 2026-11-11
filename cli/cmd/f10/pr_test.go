@@ -20,7 +20,7 @@ import (
 func prRepo(t *testing.T) string {
 	t.Helper()
 
-	dir := cloneRepo(t, "repo").dir
+	dir := cloneRepo(t, "repo").Dir
 	commitFile(t, dir, "main.txt")
 	git(t, dir, "push", "-q", "origin", "main")
 	git(t, dir, "remote", "set-head", "origin", "-a")

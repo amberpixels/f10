@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -52,7 +51,7 @@ func runDoctor(ctx context.Context, cmd *cli.Command) error {
 		Driver:      t.Driver(),
 		NeedsDriver: !t.HostIssues(),
 		Getenv:      os.Getenv,
-		LookPath:    exec.LookPath,
+		LookPath:    shell.LookPath,
 		Run:         shell.Capture,
 	})
 

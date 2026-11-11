@@ -3,6 +3,8 @@ package worktree
 import (
 	"regexp"
 	"strings"
+
+	"github.com/amberpixels/f10/cli/internal/taskid"
 )
 
 // PullPathRE matches GitHub's `/pull/12` and GitLab's `/-/merge_requests/12`.
@@ -16,13 +18,9 @@ func PullToken(token string) (string, bool) {
 		if m := PullPathRE.FindStringSubmatch(token); m != nil {
 			return m[1], false
 		}
-	case len(token) > 1 && (token[0] == '!' || token[0] == '#') && Digits(token[1:]):
+	case len(token) > 1 && (token[0] == '!' || token[0] == '#') && taskid.IsNumber(token[1:]):
 		return token[1:], token[0] == '#'
 	}
 
 	return "", false
-}
-
-func Digits(s string) bool {
-	return s != "" && strings.Trim(s, "0123456789") == ""
 }

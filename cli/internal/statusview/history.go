@@ -3,7 +3,6 @@ package statusview
 import (
 	"fmt"
 	"os"
-	"slices"
 	"strings"
 	"time"
 
@@ -77,7 +76,7 @@ func ShipSteps(events []ledger.Event, session string, until time.Time) []string 
 		switch e.Kind {
 		case ledger.RunStarted:
 			skill := e.Skill()
-			if !slices.Contains(state.Phases, skill) {
+			if !state.OpensPhase(skill) {
 				continue
 			}
 

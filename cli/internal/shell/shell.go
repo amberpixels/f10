@@ -89,9 +89,12 @@ var Pipe = func(ctx context.Context, dir, input, name string, args ...string) er
 	return cmd.Run()
 }
 
+// LookPath finds name on PATH, as exec.LookPath does.
+var LookPath = exec.LookPath
+
 // Has reports whether name is on PATH.
 var Has = func(name string) bool {
-	_, err := exec.LookPath(name)
+	_, err := LookPath(name)
 
 	return err == nil
 }

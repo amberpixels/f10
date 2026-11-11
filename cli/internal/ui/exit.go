@@ -38,6 +38,9 @@ func Exit(code int, format string, args ...any) cli.ExitCoder {
 	return cli.Exit(prefix+fmt.Sprintf(format, args...), code)
 }
 
+// Prefixed is msg as every f10 message opens: "f10: <msg>".
+func Prefixed(msg string) string { return prefix + msg }
+
 // Warnf writes one warning line carrying the f10 prefix.
 func Warnf(w io.Writer, format string, args ...any) {
 	fmt.Fprintf(w, prefix+format+"\n", args...)

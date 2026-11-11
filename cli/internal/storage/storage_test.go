@@ -121,3 +121,17 @@ func TestEmptyRootPanics(t *testing.T) {
 
 	_ = Root("").Plans()
 }
+
+// The ledger, the daemon and out-of-tree roots read UserDir, the user's
+// files UserFilesDir; both honour the override.
+func TestUserDirHonoursTheOverride(t *testing.T) {
+	t.Setenv(UserDirEnv, "/elsewhere/f10")
+
+	if got := UserDir("/home/me"); got != "/elsewhere/f10" {
+		t.Errorf("UserDir = %s", got)
+	}
+
+	if got, err := UserFilesDir(); err != nil || got != "/elsewhere/f10" {
+		t.Errorf("UserFilesDir = %s, %v", got, err)
+	}
+}

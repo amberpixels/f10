@@ -549,7 +549,7 @@ func (in GateInput) started(skill string, remote bool, since time.Time) *startMa
 				mark = nil
 			}
 
-			if slices.Contains(state.Phases, s) {
+			if state.OpensPhase(s) {
 				inShip[e.Session] = s == "ship"
 
 				continue

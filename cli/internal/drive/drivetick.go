@@ -17,7 +17,6 @@ import (
 	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/facts"
-	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/render"
@@ -54,7 +53,7 @@ func Drive(ctx context.Context, w io.Writer, in *DriveInput) (err error) {
 		notes = append(notes, "the drive was not recorded as this session's launch: "+err.Error())
 	}
 
-	// runs after releaseAll: an answer claimed while this drive still held
+	// runs after ReleaseAll: an answer claimed while this drive still held
 	// its lease is seen here, or by its claimer once the lease is free
 	defer func() {
 		if !in.resumeAnswered(tasks) {
@@ -352,7 +351,7 @@ func (in *DriveInput) MarkMoved(ctx context.Context, runs []*DriveRun, wss []age
 		}
 
 		if b.End == nil {
-			if ws := finish.WorkspaceByID(wss, b.O.Ws.ID); ws == nil || ws.Status == agentctl.StatusWorking {
+			if ws := worktree.WorkspaceByID(wss, b.O.Ws.ID); ws == nil || ws.Status == agentctl.StatusWorking {
 				continue
 			}
 		}
@@ -402,7 +401,7 @@ func (in *DriveInput) MarkMoved(ctx context.Context, runs []*DriveRun, wss []age
 
 // MarkBehind marks a pushed branch whose pull request's target moved past it,
 // at the boundary before its next skill, so the open PR never sits behind; a
-// listed base still in flight is markMoved's, and finish has readyToMerge.
+// listed base still in flight is MarkMoved's, and finish has readyToMerge.
 func (in *DriveInput) MarkBehind(ctx context.Context, r *DriveRun) error {
 	id, branch := r.Task.Ref.ID, r.O.Branch
 

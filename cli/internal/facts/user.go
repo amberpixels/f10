@@ -45,16 +45,16 @@ func (l *layered) mergeUser(dir string) []Problem {
 
 	var problems []Problem
 
-	fail := func(format string, args ...any) {
-		problems = append(problems, Problem{Error: true, Message: fmt.Sprintf(format, args...)})
+	fail := func(file, format string, args ...any) {
+		problems = append(problems, Problem{Error: true, File: file, Message: fmt.Sprintf(format, args...)})
 	}
 
 	var agents userAgents
 	if path, ok, err := ReadUserFile(dir, UserAgentsFile, &agents); err != nil {
-		fail("%v", err)
+		fail(path, "%v", err)
 	} else if ok {
 		if err := checkUserAgents(agents.Agents); err != nil {
-			fail("%s: %v", path, err)
+			fail(path, "%s: %v", path, err)
 		} else {
 			l.mergeUserLayer(Declared{Agents: agents.Agents}, path)
 		}
@@ -62,10 +62,10 @@ func (l *layered) mergeUser(dir string) []Problem {
 
 	var paces userPaces
 	if path, ok, err := ReadUserFile(dir, UserPacesFile, &paces); err != nil {
-		fail("%v", err)
+		fail(path, "%v", err)
 	} else if ok {
 		if bad := checkUserPaces(paces); len(bad) > 0 {
-			fail("%s: %s", path, strings.Join(bad, "; "))
+			fail(path, "%s: %s", path, strings.Join(bad, "; "))
 		} else {
 			l.mergeUserLayer(Declared{Paces: paces.Paces, Pace: paces.Pace}, path)
 		}

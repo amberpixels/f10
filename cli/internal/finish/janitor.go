@@ -9,13 +9,11 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
-	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
@@ -303,14 +301,12 @@ func (j *Sweeper) SweepUnpushed(ctx context.Context, b StaleBranch) (time.Time, 
 	}
 
 	// an upstream git cannot read keeps the branch for this pass
-	upstream, err := gitx.Config(ctx, j.In.Main, "branch."+b.Name+".merge")
-
-	switch {
+	switch why, err := pushedSign(ctx, j.In.Main, b.Name, false); {
 	case err != nil:
 		j.say("%s kept: reading its upstream failed: %v", b.Name, err)
 
 		return time.Time{}, false
-	case upstream != "":
+	case why != "":
 		return time.Time{}, false
 	case !alreadyLanded(ctx, j.In.Main, "refs/heads/"+j.Def, "refs/heads/"+b.Name):
 		return time.Time{}, false
@@ -522,7 +518,7 @@ func (j *Sweeper) own(ctx context.Context, p *forge.PR) bool {
 		j.login = &login
 	}
 
-	return *j.login != "" && strings.EqualFold(*j.login, p.Author)
+	return forge.OwnerOf(p.Author, *j.login) == forge.OwnerMine
 }
 
 // archive keeps the plan of a task with a branch left (a second attempt may
@@ -541,7 +537,7 @@ func (j *Sweeper) archive(branches []StaleBranch, removed map[string]time.Time) 
 				cleared[id] = laterOf(cleared[id], ended)
 				ends[id] = archive.SeriesEnd{Pr: "none", Head: cmp.Or(b.LocalSHA, b.originSHA)}
 				if n := j.prs[b.Name]; n > 0 {
-					ends[id] = archive.SeriesEnd{Pr: "#" + strconv.Itoa(n), Head: ends[id].Head}
+					ends[id] = archive.SeriesEnd{Pr: j.In.Host.Ref(n), Head: ends[id].Head}
 				}
 			} else {
 				left[id] = append(left[id], b.Name)
@@ -599,7 +595,7 @@ func (j *Sweeper) clear(id string, end archive.SeriesEnd) {
 		j.say("archived %s's findings to %s", id, a.reviews)
 	}
 
-	switch err := taskcmd.MoveHandoff(a.handoffSrc, a.handoff); {
+	switch err := archive.MoveHandoff(a.handoffSrc, a.handoff); {
 	case err != nil:
 		j.say("%v", err)
 	case a.handoff != "":

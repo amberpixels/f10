@@ -64,7 +64,7 @@ func watchEngine(stopped bool) *stack.CatchupEngine {
 	}
 }
 
-// A pass under watch_catchup: on, as watchPass runs it after collecting.
+// A pass under watch_catchup: on, as WatchPass runs it after collecting.
 func catchupPass(
 	t *testing.T,
 	in drive.WatchInput,

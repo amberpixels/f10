@@ -12,8 +12,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
-// verifyLimit bounds one verify command the drive runs itself, and
-// verifyWaitDelay how long its output is read once it was killed.
+// VerifyLimit bounds one verify command the drive runs itself, and
+// VerifyWaitDelay how long its output is read once it was killed.
 var (
 	VerifyLimit     = 30 * time.Minute
 	VerifyWaitDelay = 5 * time.Second

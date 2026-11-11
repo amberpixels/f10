@@ -5,8 +5,6 @@ import (
 	"os"
 
 	"github.com/amberpixels/f10/cli/internal/archive"
-	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
-	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
@@ -29,7 +27,7 @@ func archiveTask(root storage.Root, id string, end *archive.SeriesEnd,
 ) (taskArchive, error) {
 	var a taskArchive
 
-	plan, note, err := archivePlan(root, id)
+	plan, note, err := archive.ArchivePlan(root, id)
 	if err := check("archiving the plan", err); err != nil {
 		return a, err
 	}
@@ -41,7 +39,7 @@ func archiveTask(root storage.Root, id string, end *archive.SeriesEnd,
 		a.images = RemoveImages(root, id)
 	}
 
-	a.handoffSrc, a.handoff = taskcmd.HandoffTarget(root, id)
+	a.handoffSrc, a.handoff = archive.HandoffTarget(root, id)
 
 	if end != nil {
 		a.reviews, err = CloseSeries(root.Reviews(id), *end)
@@ -54,28 +52,6 @@ func archiveTask(root storage.Root, id string, end *archive.SeriesEnd,
 	}
 
 	return a, nil
-}
-
-// archivePlan moves the plan into the shared archive. A missing plan is a
-// note, since a task shipped without one still needs cleaning up; one that
-// cannot move is an error, since removing the worktree would delete it.
-func archivePlan(root storage.Root, id string) (string, string, error) {
-	plan, dst := root.Plan(id), root.Archive()
-
-	if !fsx.Exists(plan) {
-		return "", fmt.Sprintf("no plan at %s, nothing archived", plan), nil
-	}
-
-	if err := os.MkdirAll(dst, 0o750); err != nil {
-		return "", "", fmt.Errorf("archiving the plan at %s: %w", plan, err)
-	}
-
-	target := archive.FreeArchiveName(dst, id)
-	if err := os.Rename(plan, target); err != nil {
-		return "", "", fmt.Errorf("archiving the plan at %s: %w", plan, err)
-	}
-
-	return target, "", nil
 }
 
 // RemoveImages drops the images `task read` downloaded for the task; a

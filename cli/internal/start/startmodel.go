@@ -25,7 +25,7 @@ func AgentArgs(p agentctl.Profile, root storage.Root, worktree string) []string 
 	return args
 }
 
-// makeStorageDirs creates the task-file dirs agentArgs names, since claude
+// makeStorageDirs creates the task-file dirs AgentArgs names, since claude
 // may refuse --add-dir on a missing one.
 func makeStorageDirs(root storage.Root) error {
 	for _, d := range root.TaskFileDirs() {

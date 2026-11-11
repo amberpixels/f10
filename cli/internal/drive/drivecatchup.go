@@ -64,6 +64,7 @@ func (in *DriveInput) catchupHere(
 	}
 
 	ci := in.Catchup.Input(in.Main, dir)
+	ci.Fetched = &in.View().fetch
 	ci.ShipStopped = run != nil && (run.Status("ship") == "failed" || run.Status("ship") == "partial")
 
 	tasks := r.Task.Ref.Members()

@@ -12,13 +12,13 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/archive"
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/command"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
-	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/trace"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -181,15 +181,21 @@ func runTraceState(ctx context.Context, cmd *cli.Command) error {
 		return nil
 	}
 
-	login, err := h.Login(ctx)
+	owner, err := h.Owner(ctx, p)
 	if err != nil {
 		return err
 	}
 
-	if !strings.EqualFold(p.Author, login) {
+	switch owner {
+	case forge.OwnerOther:
 		ui.Warnf(errWriter(cmd), "%s was opened by %s: its body is left alone", p.URL, p.Author)
 
 		return nil
+	case forge.OwnerUnknown:
+		ui.Warnf(errWriter(cmd), "%s names no author: its body is left alone", p.URL)
+
+		return nil
+	case forge.OwnerMine:
 	}
 
 	if !t.Effective.Traces {
@@ -203,7 +209,7 @@ func runTraceState(ctx context.Context, cmd *cli.Command) error {
 
 	u := trace.Update{
 		Step:  cmd.String("step"),
-		After: statusview.BranchAfter(ctx, t.Dir, branch),
+		After: branchmeta.Out(ctx, t.Dir, branch, branchmeta.After),
 		Round: countFlag(cmd, "round"),
 		Open:  countFlag(cmd, "open"),
 		Asks:  countFlag(cmd, "asks"),

@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/trace"
 )
 
 // Derive is the board from facts: one row per task or taskless request,
@@ -347,14 +348,40 @@ func (r *row) fill() {
 		}
 	}
 
-	switch {
-	case r.Branch != nil && r.Branch.After != "":
-		r.Base, r.BaseFrom = r.Branch.After, FromLocal
-	case r.PR != nil && r.PR.Block != nil && r.PR.Block.After != "":
-		r.Base, r.BaseFrom = r.PR.Block.After, FromTrace
-	case r.Task != nil && r.Task.After != "":
-		r.Base, r.BaseFrom = r.Task.After, FromGuessed
+	var branchAfter, taskAfter string
+	if r.Branch != nil {
+		branchAfter = r.Branch.After
 	}
+
+	if r.Task != nil {
+		taskAfter = r.Task.After
+	}
+
+	r.Base, r.BaseFrom = BaseOf(branchAfter, r.PR, taskAfter)
+}
+
+// BaseOf settles a task's base for status and the board alike: the base the
+// branch records, else the request's state block, else the task's After line.
+// A request read without its block has it parsed from the body here.
+func BaseOf(branchAfter string, pr *PR, taskAfter string) (string, string) {
+	block := (*trace.State)(nil)
+	if pr != nil {
+		block = pr.Block
+		if s, ok := trace.ParseState(pr.Body); block == nil && ok {
+			block = &s
+		}
+	}
+
+	switch {
+	case branchAfter != "":
+		return branchAfter, FromLocal
+	case block != nil && block.After != "":
+		return block.After, FromTrace
+	case taskAfter != "":
+		return taskAfter, FromGuessed
+	}
+
+	return "", ""
 }
 
 func (r *row) commit(email string) {

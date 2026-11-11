@@ -208,7 +208,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 			return finish.Finish(ctx, w, fin)
 		},
 		Now:    time.Now,
-		Notify: asknotify.AskNotifier,
+		Notify: asknotify.Notify,
 	}
 	in.Sleep = in.Wake
 	in.DaemonRun = os.Getenv(daemon.ResumeEnv) != ""

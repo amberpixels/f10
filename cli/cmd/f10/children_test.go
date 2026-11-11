@@ -235,7 +235,7 @@ func TestOpenSubtasks(t *testing.T) {
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
-			got, err := taskcmd.OpenSubtasks(t.Context(), stack.Tracker{Children: tc.children}, r)
+			got, err := stack.OpenSubtasks(t.Context(), stack.Tracker{Children: tc.children}, r)
 
 			switch {
 			case tc.err != "" && (err == nil || err.Error() != tc.err):

@@ -4,6 +4,7 @@ package textx
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/mattn/go-runewidth"
@@ -47,4 +48,29 @@ func Age(now, then time.Time) string {
 	default:
 		return fmt.Sprintf("%dd", int(d.Hours()/24))
 	}
+}
+
+// Plural is one for a count of 1, else many.
+func Plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+
+	return many
+}
+
+// AppendNote appends note unless it is empty.
+func AppendNote(notes []string, note string) []string {
+	if note == "" {
+		return notes
+	}
+
+	return append(notes, note)
+}
+
+// FirstLine is s up to its first newline.
+func FirstLine(s string) string {
+	line, _, _ := strings.Cut(s, "\n")
+
+	return line
 }

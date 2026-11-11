@@ -18,6 +18,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // Command is the hook noun: what hooks/hooks.json runs; hidden, since nobody types it.
@@ -97,7 +98,7 @@ func hookTaskID(ctx context.Context, cwd, url string) string {
 func HookStatusText(ctx context.Context, session string) (string, bool) {
 	dir, err := os.Getwd()
 	if err != nil {
-		return "f10: " + err.Error(), false
+		return ui.Prefixed(err.Error()), false
 	}
 
 	return statusview.StatusText(ctx, dir, session)

@@ -12,6 +12,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	startcmd "github.com/amberpixels/f10/cli/internal/command/start"
 	"github.com/amberpixels/f10/cli/internal/launch"
+	"github.com/amberpixels/f10/cli/internal/seam"
 	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
@@ -97,10 +98,7 @@ func useAgents(t *testing.T) *memAgents {
 	t.Helper()
 
 	m := &memAgents{prompts: map[string][]string{}}
-	prev := worktree.Agents
-	worktree.Agents = func(string) agentctl.Backend { return m }
-
-	t.Cleanup(func() { worktree.Agents = prev })
+	seam.Swap(t, &worktree.Agents, func(string) agentctl.Backend { return m })
 
 	return m
 }

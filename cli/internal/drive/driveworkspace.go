@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
-	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -21,7 +20,7 @@ func (in *DriveInput) prTarget(ctx context.Context, r *DriveRun) (stack.PRTarget
 // show in more than one; one gone mid-run took the agent with it.
 func (in *DriveInput) Look(ctx context.Context, r *DriveRun) (*agentctl.Workspace, *state.Run, error) {
 	// a task opened this tick is not in the tick's look
-	if ws := finish.WorkspaceByID(in.View().Wss, r.O.Ws.ID); ws != nil && !in.View().opened[r] {
+	if ws := worktree.WorkspaceByID(in.View().Wss, r.O.Ws.ID); ws != nil && !in.View().opened[r] {
 		run, err := in.run(r.O.Path)
 
 		return ws, run, err
@@ -32,7 +31,7 @@ func (in *DriveInput) Look(ctx context.Context, r *DriveRun) (*agentctl.Workspac
 		return nil, nil, err
 	}
 
-	ws := finish.WorkspaceByID(wss, r.O.Ws.ID)
+	ws := worktree.WorkspaceByID(wss, r.O.Ws.ID)
 	if ws == nil {
 		return nil, nil, in.workspaceGone(r)
 	}

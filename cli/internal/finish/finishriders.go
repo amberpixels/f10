@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/textx"
 )
 
 // A bundle's riders at finish. The PR body carries a closing keyword per
@@ -83,7 +84,7 @@ func settleRiders(ctx context.Context, in FinishInput, branch string, merged boo
 				strings.Join(refIDs(closing), ", ")+" there")
 		}
 
-		return AppendNote(notes, keptNote(kept)), nil
+		return textx.AppendNote(notes, keptNote(kept)), nil
 	}
 
 	switch {
@@ -118,7 +119,7 @@ func settleRiders(ctx context.Context, in FinishInput, branch string, merged boo
 		}
 	}
 
-	return AppendNote(notes, keptNote(kept)), nil
+	return textx.AppendNote(notes, keptNote(kept)), nil
 }
 
 func keptNote(kept []ref.Ref) string {

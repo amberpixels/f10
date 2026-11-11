@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
 	"github.com/amberpixels/f10/cli/internal/doctor"
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // A broken project.md stops every command that acts on facts, but doctor
@@ -66,7 +66,7 @@ func TestDoctorReportsABrokenUserFile(t *testing.T) {
 	t.Setenv("CLAUDECODE", "")
 
 	user := filepath.Join(home, ".f10")
-	t.Setenv(configcmd.UserDirEnv, user)
+	t.Setenv(storage.UserDirEnv, user)
 
 	if err := os.MkdirAll(user, 0o750); err != nil {
 		t.Fatal(err)

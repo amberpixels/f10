@@ -28,3 +28,44 @@ func TestPRReadsBothCLIs(t *testing.T) {
 		t.Errorf("an MR from its own project = %+v, %v", same, err)
 	}
 }
+
+// A request's number reads the same from its host and from its url alone,
+// so a GitLab series is closed with !12, as review round wrote it.
+func TestRequestRefFollowsTheHost(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		host, url, want string
+	}{
+		{"gh", "https://github.com/o/r/pull/12", "#12"},
+		{"glab", "https://gitlab.com/o/r/-/merge_requests/12", "!12"},
+	} {
+		if got := (Host{Name: tc.host}).Ref(12); got != tc.want {
+			t.Errorf("%s Ref(12) = %q, want %q", tc.host, got, tc.want)
+		}
+
+		if got := PullNumber(tc.url); got != tc.want {
+			t.Errorf("PullNumber(%s) = %q, want %q", tc.url, got, tc.want)
+		}
+	}
+}
+
+// An empty author or login is unknown, never mine or someone else's, so
+// finish, pr view, trace and the janitor read it alike.
+func TestOwnerOfAnEmptyAuthorIsUnknown(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		author, login string
+		want          Owner
+	}{
+		{"Alice", "alice", OwnerMine},
+		{"bob", "alice", OwnerOther},
+		{"", "alice", OwnerUnknown},
+		{"alice", "", OwnerUnknown},
+	} {
+		if got := OwnerOf(tc.author, tc.login); got != tc.want {
+			t.Errorf("OwnerOf(%q, %q) = %v, want %v", tc.author, tc.login, got, tc.want)
+		}
+	}
+}

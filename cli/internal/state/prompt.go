@@ -110,8 +110,8 @@ func FileRoot(dir, name string) string {
 		if r, err := Load(path); err == nil {
 			return r.Root
 		}
-	case strings.HasSuffix(name, ".wait"):
-		session := strings.TrimSuffix(name, ".wait")
+	case strings.HasSuffix(name, waitExt):
+		session := strings.TrimSuffix(name, waitExt)
 		if p, ok := readPrompt(filepath.Join(dir, session+promptExt)); ok {
 			return p.Root
 		}

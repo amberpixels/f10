@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"io"
 
-	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
+	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/textx"
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
@@ -27,9 +28,9 @@ func cleanup(ctx context.Context, w io.Writer, in FinishInput, d finishDecision,
 		errs.keep = d.stays() + ", since the plan is not archived"
 	}
 
-	notes := AppendNote(l.notes, a.missing)
-	notes = AppendNote(notes, a.images)
-	notes = AppendNote(notes, seriesLore(&in, l.end))
+	notes := textx.AppendNote(l.notes, a.missing)
+	notes = textx.AppendNote(notes, a.images)
+	notes = textx.AppendNote(notes, seriesLore(&in, l.end))
 
 	rows := l.rows
 
@@ -112,11 +113,11 @@ func cleanup(ctx context.Context, w io.Writer, in FinishInput, d finishDecision,
 		return err
 	}
 
-	if err := taskcmd.WriteHandoff(w, l.hand); err != nil {
+	if err := archive.WriteHandoff(w, l.hand); err != nil {
 		return err
 	}
 
-	if err := errs.check("", taskcmd.MoveHandoff(a.handoffSrc, a.handoff)); err != nil {
+	if err := errs.check("", archive.MoveHandoff(a.handoffSrc, a.handoff)); err != nil {
 		return fmt.Errorf("%s, but %w", l.ended, err)
 	}
 

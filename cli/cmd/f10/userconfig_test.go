@@ -149,7 +149,7 @@ func TestStandupReadsWorkdaysOnlyOnTheFallback(t *testing.T) {
 	home := isolateEnv(t)
 	writeUserFile(t, home, scope.StandupConfigFile, "---\nworkdays: [monday]\n---\n")
 
-	dir := initRepo(t, canonical(t, t.TempDir()), "master").dir
+	dir := initRepo(t, canonical(t, t.TempDir()), "master").Dir
 
 	if _, err := runApp(t, "-C", dir, "standup", "--json", "--week").outErr(); err != nil {
 		t.Errorf("--week: %v, want standup.md unread", err)
@@ -177,13 +177,13 @@ func TestStandupFallsBackToTheLastWorkingDay(t *testing.T) {
 	isolateEnv(t)
 
 	r := initRepo(t, canonical(t, t.TempDir()), "master")
-	dir := r.dir
+	dir := r.Dir
 
 	now := time.Now()
 	day := calendar.LastActiveWorkday(now, calendar.DefaultWorkdays(), nil)
 	worked := day.Add(10 * time.Hour)
 
-	r.at(worked.Format(time.RFC3339), "commit", "-q", "--allow-empty", "-m", "work")
+	r.At(worked.Format(time.RFC3339), "commit", "-q", "--allow-empty", "-m", "work")
 
 	out, err := runApp(t, "-C", dir, "standup", "--json").outErr()
 	if err != nil {

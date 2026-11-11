@@ -27,11 +27,11 @@ Never run ` + "`just eval`" + `.
 `
 
 // A repo on a feature branch off main, origin/HEAD pointing at main, so
-// verifyDiff finds its base the way it does in a task's worktree.
+// VerifyDiff finds its base the way it does in a task's worktree.
 func verifyRepo(t *testing.T) (*layout.Layout, *facts.Effective) {
 	t.Helper()
 
-	repo := initRepo(t, t.TempDir(), "main").dir
+	repo := initRepo(t, t.TempDir(), "main").Dir
 	writeTestFile(t, filepath.Join(repo, "README.md"), "x\n")
 	git(t, repo, "add", ".")
 	git(t, repo, "commit", "-q", "-m", "root")
@@ -119,7 +119,7 @@ func TestScopedVerify(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			got := configcmd.ScopedVerifyLine(eff, configcmd.VerifyFieldIn(eff.Fields), base, changed, nil)
+			got := configcmd.ScopedVerifyLine(eff, facts.VerifyFieldIn(eff.Fields), base, changed, nil)
 
 			for _, w := range tc.want {
 				if !strings.Contains(got, w) {

@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
-	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
 	startcmd "github.com/amberpixels/f10/cli/internal/command/start"
 	"github.com/amberpixels/f10/cli/internal/drive"
 	"github.com/amberpixels/f10/cli/internal/driverec"
@@ -17,6 +16,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/start"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // paceRepo is a checkout whose project.md declares frontmatter, with the
@@ -25,7 +25,7 @@ func paceRepo(t *testing.T, frontmatter, user string) string {
 	t.Helper()
 
 	home := isolateEnv(t)
-	t.Setenv(configcmd.UserDirEnv, filepath.Join(home, ".f10"))
+	t.Setenv(storage.UserDirEnv, filepath.Join(home, ".f10"))
 
 	repo := mkRepo(t)
 	path := filepath.Join(repo, ".f10", "instructions", "project.md")

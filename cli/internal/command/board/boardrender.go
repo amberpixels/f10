@@ -130,7 +130,7 @@ func RenderSummary(w io.Writer, boards []lookaround.Board, now time.Time, limit 
 		case failed != "":
 			parts = append(
 				parts,
-				red.Render("failed")+"  "+faint.Render(cutError(statusview.FirstLine(failed), limit, limit-nameW-10)),
+				red.Render("failed")+"  "+faint.Render(cutError(textx.FirstLine(failed), limit, limit-nameW-10)),
 			)
 		case b.View == lookaround.ViewFeed:
 			parts = append(parts, feedCounts(b, faint)...)
@@ -152,7 +152,7 @@ func RenderSummary(w io.Writer, boards []lookaround.Board, now time.Time, limit 
 						red.Render(
 							s.Name+" failed",
 						)+"  "+faint.Render(
-							cutError(statusview.FirstLine(s.Error), limit, limit-nameW-40),
+							cutError(textx.FirstLine(s.Error), limit, limit-nameW-40),
 						),
 					)
 				}

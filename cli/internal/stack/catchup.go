@@ -15,7 +15,7 @@ import (
 
 // CatchupEngine is how a branch is caught up from outside its agent.
 type CatchupEngine struct {
-	// Policy holds the catchup keys; dir, main and shipStopped are set per task
+	// Policy holds the catchup keys; dir, main and ShipStopped are set per task
 	Policy CatchupInput
 	traces bool
 	// AgentVerifies says why the agent runs verify after a clean integration
@@ -106,7 +106,7 @@ func (e *CatchupEngine) VerifyClause() string {
 	return ", then run verify and clear the catchup marks once it is green"
 }
 
-// Left reads what keeps the branch from being caught up with p (treeState's
+// Left reads what keeps the branch from being caught up with p (TreeState's
 // left), and when the agent verifies, whether a mark is still set.
 func (e *CatchupEngine) Left(ctx context.Context, main, dir, branch string, p CatchupPlan) (TreeState, error) {
 	t, err := ReadTree(ctx, dir)
@@ -126,40 +126,50 @@ func (e *CatchupEngine) Left(ctx context.Context, main, dir, branch string, p Ca
 }
 
 // IntegrateBranch decides the base and method as f10 pr catchup does and
-// integrates; stopped is a conflict left in progress. A failed fetch decides
-// on the refs at hand, as the step does.
+// integrates; stopped is a conflict left in progress.
 func IntegrateBranch(
 	ctx context.Context,
 	in CatchupInput,
 	message func(CatchupPlan) []string,
 ) (CatchupPlan, bool, error) {
-	_ = gitx.Fetch(ctx, in.Main)
+	return IntegrateWith(ResolveCatchup)(ctx, in, message)
+}
 
-	p, err := ResolveCatchup(ctx, in)
-	if err != nil {
-		return p, false, err
-	}
+// IntegrateWith is IntegrateBranch deciding the base with resolve, which a
+// test scripts. A failed fetch decides on the refs at hand, as the step does:
+// an integration needs some base, where originTip needs origin's real tip.
+func IntegrateWith(
+	resolve func(context.Context, CatchupInput) (CatchupPlan, error),
+) func(context.Context, CatchupInput, func(CatchupPlan) []string) (CatchupPlan, bool, error) {
+	return func(ctx context.Context, in CatchupInput, message func(CatchupPlan) []string) (CatchupPlan, bool, error) {
+		_ = in.Fetched.Fetch(ctx, in.Main)
 
-	if p.Found == FoundGone {
-		for _, key := range []branchmeta.Key{branchmeta.After, branchmeta.AfterBranch} {
-			if err := branchmeta.UnsetIfSet(ctx, in.Main, p.Branch, key); err != nil {
-				return p, false, err
+		p, err := resolve(ctx, in)
+		if err != nil {
+			return p, false, err
+		}
+
+		if p.Found == FoundGone {
+			for _, key := range []branchmeta.Key{branchmeta.After, branchmeta.AfterBranch} {
+				if err := branchmeta.UnsetIfSet(ctx, in.Main, p.Branch, key); err != nil {
+					return p, false, err
+				}
 			}
 		}
+
+		if p.Method == MethodNone || p.Method == MethodSkip {
+			return p, false, nil
+		}
+
+		var msg []string
+		if p.Method == MethodMerge {
+			msg = message(p)
+		}
+
+		stopped, err := gitx.Integrate(ctx, in.Dir, p.Method, p.SHA, p.Upstream, msg...)
+
+		return p, stopped, err
 	}
-
-	if p.Method == MethodNone || p.Method == MethodSkip {
-		return p, false, nil
-	}
-
-	var msg []string
-	if p.Method == MethodMerge {
-		msg = message(p)
-	}
-
-	stopped, err := gitx.Integrate(ctx, in.Dir, p.Method, p.SHA, p.Upstream, msg...)
-
-	return p, stopped, err
 }
 
 func ListOrNone(paths []string) string {
@@ -277,7 +287,7 @@ func TreeBusy(ctx context.Context, dir string) string {
 var ErrOpUnread = errors.New("could not tell whether a merge or rebase is in progress")
 
 // A TreeState is what git shows of a worktree a catchup acts on: an
-// operation in progress and the uncommitted paths, and once withBase ran,
+// operation in progress and the uncommitted paths, and once WithBase ran,
 // whether the branch holds the base and the conflict markers left past it.
 type TreeState struct {
 	dir     string
@@ -318,7 +328,7 @@ func (t TreeState) Busy() string {
 	return ""
 }
 
-// BaseLost reports a branch that no longer holds the base withBase read.
+// BaseLost reports a branch that no longer holds the base WithBase read.
 func (t TreeState) BaseLost() bool {
 	return t.base.SHA != "" && t.Op.Kind == "" && t.Dirty == 0 && !t.held
 }
@@ -403,17 +413,29 @@ func CatchupConflict(ctx context.Context, main, dir, branch string, key branchme
 		return "", "", err
 	}
 
-	conflicts, err := gitx.Conflicts(ctx, dir, target, "HEAD")
+	fp, paths, err := ConflictFingerprint(ctx, dir, target)
 	if err != nil {
 		return "", "", fmt.Errorf("reading what %s conflicts on: %w", branch, err)
 	}
 
-	return drives.Fingerprint(target, ConflictWay(conflicts), ""), conflictPaths(conflicts), nil
+	return fp, paths, nil
 }
 
-// ConflictWay identifies conflicts by path and the blobs each side brought,
+// ConflictFingerprint is the fingerprint of the conflict the worktree at dir
+// meets merging target, and the files it conflicts on; the drive and the
+// watcher compare these, so both build them here.
+func ConflictFingerprint(ctx context.Context, dir, target string) (string, string, error) {
+	conflicts, err := gitx.Conflicts(ctx, dir, target, "HEAD")
+	if err != nil {
+		return "", "", err
+	}
+
+	return drives.Fingerprint(target, conflictWay(conflicts), ""), conflictPaths(conflicts), nil
+}
+
+// conflictWay identifies conflicts by path and the blobs each side brought,
 // so the same path with another blob on either side is a new conflict.
-func ConflictWay(conflicts []gitx.Conflict) string {
+func conflictWay(conflicts []gitx.Conflict) string {
 	keys := make([]string, 0, len(conflicts))
 	for _, c := range conflicts {
 		keys = append(keys, c.Key())

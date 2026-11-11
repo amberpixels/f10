@@ -31,6 +31,10 @@ const (
 	claudeSessionEnv = "CLAUDE_CODE_SESSION_ID"
 	fileExt          = ".state"
 	lockExt          = ".lock" // beside the session's .state, which Update holds
+	startedExt       = ".started"
+	modelExt         = ".model"
+	waitExt          = ".wait"
+	backgroundExt    = ".background"
 )
 
 // Phases in the order the badge draws them.
@@ -114,13 +118,13 @@ func Path(dir, session string) string {
 // StartedPath marks when the session loaded the plugin, for doctor to compare
 // with the install's update time.
 func StartedPath(dir, session string) string {
-	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+".started")
+	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+startedExt)
 }
 
 // ModelPath holds the model the session started on, from its SessionStart
 // payload; lore reads it to name the agent behind an entry.
 func ModelPath(dir, session string) string {
-	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+".model")
+	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+modelExt)
 }
 
 // SessionModel is the model ModelPath recorded, "" when none was.
@@ -139,7 +143,7 @@ func SessionModel(dir, session string) string {
 
 // WaitPath is the wait a session has open: what on and since when.
 func WaitPath(dir, session string) string {
-	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+".wait")
+	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+waitExt)
 }
 
 // Wait is the marker WaitPath holds: the reason, and for a dialog, the tool
@@ -167,7 +171,7 @@ func OpenWait(dir, session string) (Wait, bool) {
 // not a run field, because writing the run moves Updated, which a drive
 // reads as a turn beginning.
 func BackgroundPath(dir, session string) string {
-	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+".background")
+	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+backgroundExt)
 }
 
 // Background is the marker BackgroundPath holds. Parked is set once the

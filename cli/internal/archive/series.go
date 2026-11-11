@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/storage"
-	"github.com/amberpixels/f10/cli/internal/worktree"
+	"github.com/amberpixels/f10/cli/internal/taskid"
 )
 
 // A SeriesEnd is what an archived series records in its closed file: the PR
@@ -45,7 +45,7 @@ func (e SeriesEnd) Write(dir string) error {
 
 // Same compares by PR number, so gh's #7 and glab's !7 match, else by head.
 func (e SeriesEnd) Same(o SeriesEnd) bool {
-	if n := strings.TrimLeft(e.Pr, "#!"); worktree.Digits(n) && n == strings.TrimLeft(o.Pr, "#!") {
+	if n := strings.TrimLeft(e.Pr, "#!"); taskid.IsNumber(n) && n == strings.TrimLeft(o.Pr, "#!") {
 		return true
 	}
 

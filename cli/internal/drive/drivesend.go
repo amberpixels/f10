@@ -163,7 +163,7 @@ func (in *DriveInput) deliver(ctx context.Context, r *DriveRun, text string) err
 	return nil
 }
 
-// RetryEnter checks, once and enterRetry after a typed send, that the text
+// RetryEnter checks, once and EnterRetry after a typed send, that the text
 // left the agent's input box, pressing Enter again if it did not. A failed
 // check is printed, and the start window still decides.
 func (in *DriveInput) RetryEnter(ctx context.Context, r *DriveRun) {

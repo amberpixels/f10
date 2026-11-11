@@ -27,7 +27,7 @@ func KeepOpen(body, number string) string {
 	return re.ReplaceAllString(body, "Part of $1")
 }
 
-// CloseAgain undoes keepOpen.
+// CloseAgain undoes KeepOpen.
 func CloseAgain(body, number string) string {
 	re := regexp.MustCompile(fmt.Sprintf(`\bPart of `+issueRef, regexp.QuoteMeta(number)))
 

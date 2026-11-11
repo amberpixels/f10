@@ -14,6 +14,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/layout"
+	"github.com/amberpixels/f10/cli/internal/state"
 )
 
 // Check names, in the order Run reports them.
@@ -304,7 +305,7 @@ func checkHooks(env *Env, p plugin, in *install, reason string, set settings) Re
 // every start re-points: an older plugin writes no marker.
 func lastStart(env *Env) (time.Time, string, bool) {
 	if sid := sessionID(env); sid != "" {
-		if fi, err := os.Stat(filepath.Join(stateDir(env), sid+".started")); err == nil {
+		if fi, err := os.Stat(state.StartedPath(stateDir(env), sid)); err == nil {
 			return fi.ModTime(), "this session started", true
 		}
 	}
@@ -446,11 +447,18 @@ func checkHost(ctx context.Context, env *Env) Result {
 func checkProject(env *Env) Result {
 	r := Result{Name: CheckProject}
 
-	var errs, warnings []string
+	var (
+		errs, warnings []string
+		errFile        string // the user's file the first error is in
+	)
 
 	if env.Facts != nil {
 		for _, p := range env.Facts.Problems {
 			if p.Error {
+				if len(errs) == 0 {
+					errFile = p.File
+				}
+
 				errs = append(errs, p.Message)
 			} else {
 				warnings = append(warnings, p.Message)
@@ -475,7 +483,7 @@ func checkProject(env *Env) Result {
 			r.Detail += " (+" + strconv.Itoa(len(errs)-1) + " more)"
 		}
 
-		file := fileNamed(errs[0])
+		file := errFile
 		if file == "" && !noProject {
 			file = projectFile(env.Layout)
 		}
@@ -498,17 +506,6 @@ func checkProject(env *Env) Result {
 	}
 
 	return r
-}
-
-// fileNamed is the file a problem opens with (`/home/me/.f10/paces.md: ...`),
-// "" when it names none.
-func fileNamed(msg string) string {
-	path, _, ok := strings.Cut(msg, ": ")
-	if !ok || !filepath.IsAbs(path) || !strings.HasSuffix(path, ".md") {
-		return ""
-	}
-
-	return path
 }
 
 // projectFile is the project.md of the layer that wins.

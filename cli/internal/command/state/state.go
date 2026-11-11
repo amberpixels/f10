@@ -156,7 +156,7 @@ func writeState(ctx context.Context, cmd *cli.Command, kind string, apply func(r
 	if kind == "state_ask" {
 		if cwd, err := os.Getwd(); err == nil {
 			if a, ok := asknotify.AskFromRun(ctx, r, cwd); ok {
-				asknotify.RaiseAsk(ctx, cmd.ErrWriter, asks.Dir(), a, now, asknotify.AskNotifier)
+				asknotify.RaiseAsk(ctx, cmd.ErrWriter, asks.Dir(), a, now, asknotify.Notify)
 			}
 		}
 	}

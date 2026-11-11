@@ -410,9 +410,9 @@ When there is no task to name, `f10 status` in a terminal lists this repo's live
 When a task is named, `--json` takes the shape that `f10 status <id>` prints: a run list, the fallback object, or task rows.
 
 Inside a session, `! f10 status` already has the session id.
-`/f10:status` is answered by the plugin's hook before a model runs, so it costs no tokens.
-The exception is a `launched here` tree that holds a question a driven agent waits on.
-That goes to the model, which puts the question to you and sends your answer.
+A bare `/f10:status` is answered by the plugin's hook before a model runs, so it costs no tokens.
+Two cases go to the model instead: `/f10:status <id>`, and a status that prints a question a driven agent waits on.
+The model puts the question to you and sends your answer.
 
 `f10 status 1042` reads another run, the one in the worktree that has the task's branch.
 An agent there runs **driven** ([modes/driven.md](modes/driven.md)).

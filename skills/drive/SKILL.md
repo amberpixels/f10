@@ -76,7 +76,7 @@ f10 drive <arguments>
    The user settles a halt in that workspace, then reruns the same command, which resumes where each task stands.
    The drive reads each task's state from git, its PR and its files, so a turn typed by hand, a turn shorter than a poll, or an agent that never reported does not halt it.
    A failed or partial turn is sent again, and the task halts when the same action failed three times in a row with nothing changed, the lines listing each attempt; a blocked stop (a judge's, a stale task's), a stall the branch does not explain, and a failure of the drive's own environment (a git read, a workspace gone, a base that halted) halt at once.
-   A task whose run stopped (a `next:` line under its halt) is prompted again on a rerun only when it stopped for a catchup (its `next:` names `/f10:catchup`, or a catchup failed) and a later catchup ended clean; any other needs steering through `--answer`.
+   A task whose run stopped (a `next:` line under its halt) is prompted again on a rerun only when it stopped for a catchup (its run carries the guard's `stop guard` kind, or a catchup failed) and a later catchup ended clean; any other needs steering through `--answer`.
    A ship stopped by its catchup guard gets a catchup from the drive each time its base moves and resumes without a halt.
    The drive runs a catchup itself (git, then verify, then the push) and prompts the agent only for a conflict or a red verify, or for verify itself when the project's Verify heading is prose; a catchup git does not show settled after that turn is a failed attempt under the same rule.
    A task whose branch is on origin is caught up whenever its PR's target moves, at its next skill boundary, and the drive pushes the caught-up branch.

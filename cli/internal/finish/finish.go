@@ -19,7 +19,6 @@ import (
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
-	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/worktree"
@@ -88,7 +87,7 @@ type FinishInput struct {
 	Host   hostops.Host
 	Method string // the merge method project.md declares, "" for none
 	Traces bool   // traces: on; the squash or merge commit's body ends in the task's trailers
-	// HostCloses: a merge's closing keyword closes the task (target.hostCloses)
+	// HostCloses: a merge's closing keyword closes the task (target.HostCloses)
 	HostCloses bool
 	// LoreStore feeds the report's lore line and the pre-merge check (nil reads
 	// nothing); gate is lore_gate: warn notes a failing check, block refuses
@@ -113,7 +112,7 @@ type FinishInput struct {
 	// Deferred takes a deferred pull's note, for drive's report; nil for none
 	Deferred func(string)
 	// Subtasks is every subtask, closed ones kept, for a parent with no branch;
-	// nil, like errNoParentLink, is a tracker with no parent link
+	// nil, like ErrNoParentLink, is a tracker with no parent link
 	Subtasks func(context.Context, ref.Ref) ([]stack.ChildRow, error)
 	// CloseTask closes a parent its subtasks delivered; nil where the tracker is
 	// not the host, which f10 has no "done" word for
@@ -145,7 +144,7 @@ func InputFor(t *target.Target, main string, h hostops.Host, task ref.Ref) Finis
 		Method:     t.Effective.MergeMethod,
 		Traces:     t.Effective.Traces,
 		HostCloses: t.HostCloses(),
-		LoreStore:  &lore.Store{Root: statusview.LoreRootFor(t)},
+		LoreStore:  &lore.Store{Root: t.LoreRoot()},
 		Gate:       t.Effective.LoreGate,
 		Storage:    t.Layout.StorageRoot,
 		Title:      worktree.TitleLookup(t, task.Number),

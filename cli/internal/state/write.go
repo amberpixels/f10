@@ -253,7 +253,7 @@ func Prune(dir string, now time.Time) {
 		if e.IsDir() ||
 			!slices.ContainsFunc(
 				[]string{
-					fileExt, lockExt, ".conventions", ".started", ".model", ".wait", ".background",
+					fileExt, lockExt, ".conventions", startedExt, modelExt, waitExt, backgroundExt,
 					promptExt, launchesExt, asksExt,
 				},
 				func(ext string) bool { return strings.HasSuffix(name, ext) },

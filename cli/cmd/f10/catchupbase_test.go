@@ -27,43 +27,43 @@ func newCatchupRepo(t *testing.T) gitRepo {
 	}
 
 	r := cloneRepo(t, "work")
-	r.at(before, "checkout", "-q", "-b", "main")
-	r.commit(before, "main.go", "package main\n", "init")
-	r.at(before, "push", "-q", "-u", "origin", "main")
-	r.at(before, "remote", "set-head", "origin", "main")
+	r.At(before, "checkout", "-q", "-b", "main")
+	r.Commit(before, "main.go", "package main\n", "init")
+	r.At(before, "push", "-q", "-u", "origin", "main")
+	r.At(before, "remote", "set-head", "origin", "main")
 
-	r.at(before, "checkout", "-q", "-b", "FT-1/a")
-	r.commit(before, "a.go", "package main // a\n", "a")
+	r.At(before, "checkout", "-q", "-b", "FT-1/a")
+	r.Commit(before, "a.go", "package main // a\n", "a")
 
-	r.at(before, "checkout", "-q", "main")
-	r.commit(during, "b.go", "package main // b\n", "b")
-	r.at(during, "push", "-q", "origin", "main")
-	r.at(during, "checkout", "-q", "FT-1/a")
+	r.At(before, "checkout", "-q", "main")
+	r.Commit(during, "b.go", "package main // b\n", "b")
+	r.At(during, "push", "-q", "origin", "main")
+	r.At(during, "checkout", "-q", "FT-1/a")
 
 	return r
 }
 
 func (r gitRepo) input(guard string) stack.CatchupInput {
 	return stack.CatchupInput{
-		Dir: r.dir, Main: r.dir, Guard: guard,
+		Dir: r.Dir, Main: r.Dir, Guard: guard,
 		Catchup: "rebase", CatchupDefault: true, Stacked: "merge", StackedDefault: true,
 	}
 }
 
 func (r gitRepo) resolve(in stack.CatchupInput) stack.CatchupPlan {
-	r.t.Helper()
+	r.T.Helper()
 
-	p, err := stack.ResolveCatchup(r.t.Context(), in)
+	p, err := stack.ResolveCatchup(r.T.Context(), in)
 	if err != nil {
-		r.t.Fatal(err)
+		r.T.Fatal(err)
 	}
 
 	return p
 }
 
 func (r gitRepo) sha(ref string) string {
-	r.t.Helper()
-	return r.at(before, "rev-parse", ref)
+	r.T.Helper()
+	return r.At(before, "rev-parse", ref)
 }
 
 func wantPlan(t *testing.T, got stack.CatchupPlan, base, found, method string) {
@@ -92,7 +92,7 @@ func TestCatchupBaseDefaultBranch(t *testing.T) {
 
 func TestCatchupBaseNothingToBringIn(t *testing.T) {
 	r := newCatchupRepo(t)
-	r.at(during, "merge", "-q", "--no-edit", "origin/main")
+	r.At(during, "merge", "-q", "--no-edit", "origin/main")
 
 	p := r.resolve(r.input(""))
 	wantPlan(t, p, "origin/main", stack.FoundDefault, stack.MethodNone)
@@ -104,17 +104,17 @@ func TestCatchupBaseNothingToBringIn(t *testing.T) {
 
 func TestCatchupBaseLanded(t *testing.T) {
 	r := newCatchupRepo(t)
-	r.at(during, "config", branchmeta.Landed.For("FT-1/a"), "main")
-	r.at(during, "branch", "-f", "main", "main~1")
+	r.At(during, "config", branchmeta.Landed.For("FT-1/a"), "main")
+	r.At(during, "branch", "-f", "main", "main~1")
 
 	// local main behind origin's: origin's
 	wantPlan(t, r.resolve(r.input("")), "origin/main", stack.FoundLanded, stack.MethodRebase)
 
 	// local main holding origin's and more (a local finish): local
-	r.at(during, "checkout", "-q", "main")
-	r.at(during, "merge", "-q", "--ff-only", "origin/main")
-	r.commit(later, "c.go", "package main // c\n", "c, never pushed")
-	r.at(later, "checkout", "-q", "FT-1/a")
+	r.At(during, "checkout", "-q", "main")
+	r.At(during, "merge", "-q", "--ff-only", "origin/main")
+	r.Commit(later, "c.go", "package main // c\n", "c, never pushed")
+	r.At(later, "checkout", "-q", "FT-1/a")
 
 	wantPlan(t, r.resolve(r.input("")), "main", stack.FoundLanded, stack.MethodRebase)
 
@@ -125,12 +125,12 @@ func TestCatchupBaseLanded(t *testing.T) {
 func TestCatchupBaseRecordedBranch(t *testing.T) {
 	r := newCatchupRepo(t)
 
-	r.at(during, "checkout", "-q", "-b", "FT-2/b", "origin/main")
-	r.commit(during, "base.go", "package main // base\n", "base")
-	r.at(during, "push", "-q", "-u", "origin", "FT-2/b")
-	r.commit(later, "base.go", "package main // base, unpushed\n", "base, unpushed")
-	r.at(later, "checkout", "-q", "FT-1/a")
-	r.at(later, "config", branchmeta.AfterBranch.For("FT-1/a"), "FT-2/b")
+	r.At(during, "checkout", "-q", "-b", "FT-2/b", "origin/main")
+	r.Commit(during, "base.go", "package main // base\n", "base")
+	r.At(during, "push", "-q", "-u", "origin", "FT-2/b")
+	r.Commit(later, "base.go", "package main // base, unpushed\n", "base, unpushed")
+	r.At(later, "checkout", "-q", "FT-1/a")
+	r.At(later, "config", branchmeta.AfterBranch.For("FT-1/a"), "FT-2/b")
 
 	p := r.resolve(r.input(""))
 	wantPlan(t, p, "FT-2/b", stack.FoundAfter, stack.MethodMerge)
@@ -146,8 +146,8 @@ func TestCatchupBaseRecordedBranch(t *testing.T) {
 	wantPlan(t, r.resolve(in), "FT-2/b", stack.FoundAfter, stack.MethodRebase)
 
 	// a base never pushed is no PR target yet
-	r.at(later, "push", "-q", "origin", "--delete", "FT-2/b")
-	r.at(later, "fetch", "-q", "--prune")
+	r.At(later, "push", "-q", "origin", "--delete", "FT-2/b")
+	r.At(later, "fetch", "-q", "--prune")
 	wantPlan(t, r.resolve(r.input("pr")), "", stack.FoundAfter, stack.MethodSkip)
 }
 
@@ -156,15 +156,15 @@ func TestCatchupBaseRecordedBranch(t *testing.T) {
 func TestCatchupBaseMovedMarkNamesTheSha(t *testing.T) {
 	r := newCatchupRepo(t)
 
-	r.at(during, "checkout", "-q", "-b", "FT-2/b", "origin/main")
-	r.commit(during, "base.go", "package main // base\n", "base")
-	r.at(during, "push", "-q", "-u", "origin", "FT-2/b")
-	r.commit(later, "base.go", "package main // base, unpushed\n", "base, unpushed")
-	r.at(later, "checkout", "-q", "FT-1/a")
-	r.at(later, "config", branchmeta.AfterBranch.For("FT-1/a"), "FT-2/b")
+	r.At(during, "checkout", "-q", "-b", "FT-2/b", "origin/main")
+	r.Commit(during, "base.go", "package main // base\n", "base")
+	r.At(during, "push", "-q", "-u", "origin", "FT-2/b")
+	r.Commit(later, "base.go", "package main // base, unpushed\n", "base, unpushed")
+	r.At(later, "checkout", "-q", "FT-1/a")
+	r.At(later, "config", branchmeta.AfterBranch.For("FT-1/a"), "FT-2/b")
 
 	pushed := r.sha("origin/FT-2/b")
-	r.at(later, "config", branchmeta.Moved.For("FT-1/a"), pushed)
+	r.At(later, "config", branchmeta.Moved.For("FT-1/a"), pushed)
 
 	for _, guard := range []string{"", "implement"} {
 		p := r.resolve(r.input(guard))
@@ -184,17 +184,17 @@ func TestCatchupBaseMovedMarkNamesTheSha(t *testing.T) {
 
 	// the drive marks a local head; a later local commit stays out
 	marked := r.sha("FT-2/b")
-	r.at(later, "config", branchmeta.Moved.For("FT-1/a"), marked)
-	r.at(later, "checkout", "-q", "FT-2/b")
-	r.commit(later, "base.go", "package main // base, after the mark\n", "base, after the mark")
-	r.at(later, "checkout", "-q", "FT-1/a")
+	r.At(later, "config", branchmeta.Moved.For("FT-1/a"), marked)
+	r.At(later, "checkout", "-q", "FT-2/b")
+	r.Commit(later, "base.go", "package main // base, after the mark\n", "base, after the mark")
+	r.At(later, "checkout", "-q", "FT-1/a")
 
 	if p := r.resolve(r.input("")); p.SHA != marked {
 		t.Errorf("sha %q, want the marked local head %s", p.SHA, marked)
 	}
 
 	// a marked sha already in the branch is nothing to bring in
-	r.at(later, "merge", "-q", "--no-edit", marked)
+	r.At(later, "merge", "-q", "--no-edit", marked)
 
 	p := r.resolve(r.input(""))
 	if p.Method != stack.MethodNone || p.Mark != "" {
@@ -202,19 +202,19 @@ func TestCatchupBaseMovedMarkNamesTheSha(t *testing.T) {
 	}
 
 	// a base rewritten since the mark no longer holds it: its old commits stay out
-	r.at(later, "checkout", "-q", "FT-2/b")
-	r.commit(later, "base.go", "package main // base, dropped\n", "base, dropped")
+	r.At(later, "checkout", "-q", "FT-2/b")
+	r.Commit(later, "base.go", "package main // base, dropped\n", "base, dropped")
 	dropped := r.sha("HEAD")
-	r.at(later, "reset", "-q", "--hard", "HEAD~1")
-	r.at(later, "checkout", "-q", "FT-1/a")
-	r.at(later, "config", branchmeta.Moved.For("FT-1/a"), dropped)
+	r.At(later, "reset", "-q", "--hard", "HEAD~1")
+	r.At(later, "checkout", "-q", "FT-1/a")
+	r.At(later, "config", branchmeta.Moved.For("FT-1/a"), dropped)
 
 	_, err := stack.ResolveCatchup(t.Context(), r.input(""))
 	if err == nil || !strings.Contains(err.Error(), "no longer holds") {
 		t.Errorf("a mark the base no longer holds: err %v, want it refused", err)
 	}
 
-	r.at(later, "config", branchmeta.Moved.For("FT-1/a"), strings.Repeat("0", len(marked)))
+	r.At(later, "config", branchmeta.Moved.For("FT-1/a"), strings.Repeat("0", len(marked)))
 
 	if _, err := stack.ResolveCatchup(
 		t.Context(),
@@ -227,7 +227,7 @@ func TestCatchupBaseMovedMarkNamesTheSha(t *testing.T) {
 
 func TestCatchupBaseRecordedBranchGone(t *testing.T) {
 	r := newCatchupRepo(t)
-	r.at(during, "config", branchmeta.AfterBranch.For("FT-1/a"), "FT-9/gone")
+	r.At(during, "config", branchmeta.AfterBranch.For("FT-1/a"), "FT-9/gone")
 
 	p := r.resolve(r.input("implement"))
 	wantPlan(t, p, "origin/main", stack.FoundGone, stack.MethodRebase)
@@ -258,7 +258,7 @@ func TestCatchupMethod(t *testing.T) {
 		}
 	}
 
-	r.at(during, "push", "-q", "-u", "origin", "FT-1/a")
+	r.At(during, "push", "-q", "-u", "origin", "FT-1/a")
 
 	stopped := r.input("")
 	stopped.ShipStopped = true
@@ -280,7 +280,7 @@ func TestCatchupMethod(t *testing.T) {
 		}
 	}
 
-	r.at(during, "checkout", "-q", "main")
+	r.At(during, "checkout", "-q", "main")
 
 	if got := r.resolve(r.input("pr")); got.Method != stack.MethodSkip || got.Why != "on the default branch" {
 		t.Errorf("guard on main: %q %q", got.Method, got.Why)
@@ -289,7 +289,7 @@ func TestCatchupMethod(t *testing.T) {
 
 func TestCatchupBaseDetached(t *testing.T) {
 	r := newCatchupRepo(t)
-	r.at(during, "checkout", "-q", "--detach")
+	r.At(during, "checkout", "-q", "--detach")
 
 	if _, err := stack.ResolveCatchup(
 		t.Context(),
@@ -345,8 +345,8 @@ func TestCatchupBaseOutput(t *testing.T) {
 
 func TestCatchupGuardOffStillPrintsTheBase(t *testing.T) {
 	r := newCatchupRepo(t)
-	r.at(during, "branch", "FT-2/b", "origin/main")
-	r.at(during, "config", branchmeta.AfterBranch.For("FT-1/a"), "FT-2/b")
+	r.At(during, "branch", "FT-2/b", "origin/main")
+	r.At(during, "config", branchmeta.AfterBranch.For("FT-1/a"), "FT-2/b")
 
 	in := r.input("implement")
 	in.Catchup, in.CatchupDefault = "off", false
@@ -363,24 +363,24 @@ func TestCatchupGuardOffStillPrintsTheBase(t *testing.T) {
 // base's own base is no code, a commit of its own is.
 func TestCatchupBaseCodeRow(t *testing.T) {
 	r := newCatchupRepo(t)
-	r.at(during, "branch", "FT-2/b", "FT-1/a")
-	r.at(during, "config", branchmeta.AfterBranch.For("FT-2/b"), "FT-1/a")
-	r.at(during, "checkout", "-q", "-b", "FT-3/c", "FT-2/b")
-	r.at(during, "config", branchmeta.AfterBranch.For("FT-3/c"), "FT-2/b")
+	r.At(during, "branch", "FT-2/b", "FT-1/a")
+	r.At(during, "config", branchmeta.AfterBranch.For("FT-2/b"), "FT-1/a")
+	r.At(during, "checkout", "-q", "-b", "FT-3/c", "FT-2/b")
+	r.At(during, "config", branchmeta.AfterBranch.For("FT-3/c"), "FT-2/b")
 
-	r.at(during, "checkout", "-q", "FT-1/a")
-	r.commit(during, "a2.go", "package main // a2\n", "a2")
-	r.at(during, "checkout", "-q", "FT-2/b")
-	r.at(during, "merge", "-q", "--no-ff", "--no-edit", "FT-1/a")
-	r.at(during, "checkout", "-q", "FT-3/c")
+	r.At(during, "checkout", "-q", "FT-1/a")
+	r.Commit(during, "a2.go", "package main // a2\n", "a2")
+	r.At(during, "checkout", "-q", "FT-2/b")
+	r.At(during, "merge", "-q", "--no-ff", "--no-edit", "FT-1/a")
+	r.At(during, "checkout", "-q", "FT-3/c")
 
 	if p := r.resolve(r.input("implement")); p.Found != stack.FoundAfter || p.Code != stack.CodeNone {
 		t.Errorf("merge only: found %q code %q, want %q %q", p.Found, p.Code, stack.FoundAfter, stack.CodeNone)
 	}
 
-	r.at(during, "checkout", "-q", "FT-2/b")
-	r.commit(during, "b2.go", "package main // b2\n", "b2")
-	r.at(during, "checkout", "-q", "FT-3/c")
+	r.At(during, "checkout", "-q", "FT-2/b")
+	r.Commit(during, "b2.go", "package main // b2\n", "b2")
+	r.At(during, "checkout", "-q", "FT-3/c")
 
 	if p := r.resolve(r.input("implement")); p.Code != stack.CodeYes {
 		t.Errorf("own commit: code %q, want %q", p.Code, stack.CodeYes)
@@ -392,7 +392,7 @@ func TestCatchupBaseCodeRow(t *testing.T) {
 	}
 
 	// a landed base prints none: its code is in the default branch
-	r.at(during, "config", branchmeta.Landed.For("FT-3/c"), "main")
+	r.At(during, "config", branchmeta.Landed.For("FT-3/c"), "main")
 
 	if p := r.resolve(r.input("")); p.Code != "" {
 		t.Errorf("landed: code %q, want none printed", p.Code)
@@ -403,8 +403,8 @@ func TestCatchupBaseCodeRow(t *testing.T) {
 // than guess main on a repo whose default may be master.
 func TestCatchupBaseWithoutOriginHeadFails(t *testing.T) {
 	r := newCatchupRepo(t)
-	r.at(during, "config", branchmeta.Landed.For("FT-1/a"), "main")
-	r.at(during, "remote", "set-head", "origin", "-d")
+	r.At(during, "config", branchmeta.Landed.For("FT-1/a"), "main")
+	r.At(during, "remote", "set-head", "origin", "-d")
 
 	_, err := stack.ResolveCatchup(t.Context(), r.input(""))
 	if err == nil || !strings.Contains(err.Error(), "set-head origin -a") {
@@ -415,7 +415,7 @@ func TestCatchupBaseWithoutOriginHeadFails(t *testing.T) {
 func TestCatchupBaseCommand(t *testing.T) {
 	r := newCatchupRepo(t)
 
-	dir := filepath.Join(r.dir, ".f10", "instructions")
+	dir := filepath.Join(r.Dir, ".f10", "instructions")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -426,7 +426,7 @@ func TestCatchupBaseCommand(t *testing.T) {
 	}
 
 	run := func(args ...string) (string, error) {
-		return runApp(t, append([]string{"-C", r.dir, "pr", "catchup", "--no-fetch"}, args...)...).outErr()
+		return runApp(t, append([]string{"-C", r.Dir, "pr", "catchup", "--no-fetch"}, args...)...).outErr()
 	}
 
 	for _, guard := range [][]string{nil, {"--guard", "judge"}} {
@@ -453,15 +453,15 @@ func newStackedRepo(t *testing.T) (gitRepo, string) {
 	t.Helper()
 
 	r := newCatchupRepo(t)
-	r.at(during, "checkout", "-q", "-b", "FT-2/b", "main")
-	r.commit(during, "help.go", "package main // help\n", "help")
-	r.at(during, "checkout", "-q", "-B", "FT-1/a", "FT-2/b")
-	r.commit(during, "a.go", "package main // a\n", "a")
-	r.at(during, "config", branchmeta.After.For("FT-1/a"), "FT-2")
-	r.at(during, "config", branchmeta.AfterBranch.For("FT-1/a"), "FT-2/b")
+	r.At(during, "checkout", "-q", "-b", "FT-2/b", "main")
+	r.Commit(during, "help.go", "package main // help\n", "help")
+	r.At(during, "checkout", "-q", "-B", "FT-1/a", "FT-2/b")
+	r.Commit(during, "a.go", "package main // a\n", "a")
+	r.At(during, "config", branchmeta.After.For("FT-1/a"), "FT-2")
+	r.At(during, "config", branchmeta.AfterBranch.For("FT-1/a"), "FT-2/b")
 
 	tip := r.sha("FT-2/b")
-	r.at(during, "config", branchmeta.Tip.For("FT-1/a"), tip)
+	r.At(during, "config", branchmeta.Tip.For("FT-1/a"), tip)
 
 	return r, tip
 }
@@ -472,9 +472,9 @@ func TestCatchupBaseRewritten(t *testing.T) {
 	r, tip := newStackedRepo(t)
 
 	// FT-2/b rebased onto origin/main, which moved on
-	r.at(later, "checkout", "-q", "-B", "FT-2/b", "origin/main")
-	r.commit(later, "help.go", "package main // help, rebased\n", "help")
-	r.at(later, "checkout", "-q", "FT-1/a")
+	r.At(later, "checkout", "-q", "-B", "FT-2/b", "origin/main")
+	r.Commit(later, "help.go", "package main // help, rebased\n", "help")
+	r.At(later, "checkout", "-q", "FT-1/a")
 
 	for _, guard := range []string{"", "implement"} {
 		p := r.resolve(r.input(guard))
@@ -486,7 +486,7 @@ func TestCatchupBaseRewritten(t *testing.T) {
 	}
 
 	// the guard before pr keeps a branch on origin merging, so its push never forces
-	r.at(later, "push", "-q", "-u", "origin", "FT-1/a", "FT-2/b")
+	r.At(later, "push", "-q", "-u", "origin", "FT-1/a", "FT-2/b")
 
 	if p := r.resolve(r.input("pr")); p.Method != stack.MethodMerge || p.Upstream != "" {
 		t.Errorf("pr guard on origin: method %q upstream %q, want merge and none", p.Method, p.Upstream)
@@ -497,14 +497,14 @@ func TestCatchupBaseSquashLanded(t *testing.T) {
 	r, tip := newStackedRepo(t)
 
 	// FT-2/b squash-merged into main, then finished
-	r.at(later, "checkout", "-q", "main")
-	r.at(later, "merge", "-q", "--ff-only", "origin/main")
-	r.at(later, "merge", "-q", "--squash", "FT-2/b")
-	r.at(later, "commit", "-q", "-m", "FT-2 squashed")
-	r.at(later, "push", "-q", "origin", "main")
-	r.at(later, "checkout", "-q", "FT-1/a")
-	r.at(later, "config", "--unset", branchmeta.AfterBranch.For("FT-1/a"))
-	r.at(later, "config", branchmeta.Landed.For("FT-1/a"), "main")
+	r.At(later, "checkout", "-q", "main")
+	r.At(later, "merge", "-q", "--ff-only", "origin/main")
+	r.At(later, "merge", "-q", "--squash", "FT-2/b")
+	r.At(later, "commit", "-q", "-m", "FT-2 squashed")
+	r.At(later, "push", "-q", "origin", "main")
+	r.At(later, "checkout", "-q", "FT-1/a")
+	r.At(later, "config", "--unset", branchmeta.AfterBranch.For("FT-1/a"))
+	r.At(later, "config", branchmeta.Landed.For("FT-1/a"), "main")
 
 	p := r.resolve(r.input(""))
 	wantPlan(t, p, "main", stack.FoundLanded, stack.MethodOnto)
@@ -518,21 +518,21 @@ func TestCatchupBaseTipNotRewritten(t *testing.T) {
 	r, _ := newStackedRepo(t)
 
 	// the base only moved on: today's method
-	r.at(later, "checkout", "-q", "FT-2/b")
-	r.commit(later, "b2.go", "package main // b2\n", "b2")
-	r.at(later, "checkout", "-q", "FT-1/a")
+	r.At(later, "checkout", "-q", "FT-2/b")
+	r.Commit(later, "b2.go", "package main // b2\n", "b2")
+	r.At(later, "checkout", "-q", "FT-1/a")
 
 	if p := r.resolve(r.input("")); p.Method != stack.MethodMerge || p.Upstream != "" {
 		t.Errorf("moved on: method %q upstream %q, want merge and none", p.Method, p.Upstream)
 	}
 
 	// a tip the branch does not hold is stale: ignored
-	r.at(later, "checkout", "-q", "-b", "elsewhere", "origin/main")
-	r.commit(later, "x.go", "package main // x\n", "x")
-	r.at(later, "checkout", "-q", "-B", "FT-2/b", "origin/main")
-	r.commit(later, "help.go", "package main // help, rebased\n", "help")
-	r.at(later, "checkout", "-q", "FT-1/a")
-	r.at(later, "config", branchmeta.Tip.For("FT-1/a"), r.sha("elsewhere"))
+	r.At(later, "checkout", "-q", "-b", "elsewhere", "origin/main")
+	r.Commit(later, "x.go", "package main // x\n", "x")
+	r.At(later, "checkout", "-q", "-B", "FT-2/b", "origin/main")
+	r.Commit(later, "help.go", "package main // help, rebased\n", "help")
+	r.At(later, "checkout", "-q", "FT-1/a")
+	r.At(later, "config", branchmeta.Tip.For("FT-1/a"), r.sha("elsewhere"))
 
 	if p := r.resolve(r.input("")); p.Method == stack.MethodOnto {
 		t.Errorf("stale tip: method %q, want today's", p.Method)
@@ -557,13 +557,13 @@ func TestCatchupBaseOutputUpstream(t *testing.T) {
 // its catchup can drop the squashed commits.
 func TestReleaseDependentsRecordsTip(t *testing.T) {
 	r, tip := newStackedRepo(t)
-	r.at(later, "config", "--unset", branchmeta.Tip.For("FT-1/a"))
+	r.At(later, "config", "--unset", branchmeta.Tip.For("FT-1/a"))
 
-	if _, err := finish.ReleaseDependents(t.Context(), r.dir, "FT-2/b", "main", true); err != nil {
+	if _, err := finish.ReleaseDependents(t.Context(), r.Dir, "FT-2/b", "main", true); err != nil {
 		t.Fatal(err)
 	}
 
-	if got := r.at(later, "config", branchmeta.Tip.For("FT-1/a")); got != tip {
+	if got := r.At(later, "config", branchmeta.Tip.For("FT-1/a")); got != tip {
 		t.Errorf("tip %q, want %s", got, tip)
 	}
 }
@@ -572,10 +572,10 @@ func TestReleaseDependentsRecordsTip(t *testing.T) {
 // drive sends after a guard conflict, and a merge there conflicts again.
 func TestCatchupBaseRewrittenOutranks(t *testing.T) {
 	r, _ := newStackedRepo(t)
-	r.at(later, "push", "-q", "-u", "origin", "FT-1/a")
-	r.at(later, "checkout", "-q", "-B", "FT-2/b", "origin/main")
-	r.commit(later, "help.go", "package main // help, rebased\n", "help")
-	r.at(later, "checkout", "-q", "FT-1/a")
+	r.At(later, "push", "-q", "-u", "origin", "FT-1/a")
+	r.At(later, "checkout", "-q", "-B", "FT-2/b", "origin/main")
+	r.Commit(later, "help.go", "package main // help, rebased\n", "help")
+	r.At(later, "checkout", "-q", "FT-1/a")
 
 	stopped := r.input("")
 	stopped.ShipStopped = true
@@ -598,11 +598,11 @@ func TestCatchupBaseRewrittenOutranks(t *testing.T) {
 func TestReleaseDependentsSpikeClearsTip(t *testing.T) {
 	r, _ := newStackedRepo(t)
 
-	if _, err := finish.ReleaseDependents(t.Context(), r.dir, "FT-2/b", "main", false); err != nil {
+	if _, err := finish.ReleaseDependents(t.Context(), r.Dir, "FT-2/b", "main", false); err != nil {
 		t.Fatal(err)
 	}
 
-	if got, err := gitx.Config(t.Context(), r.dir, branchmeta.Tip.For("FT-1/a")); err != nil || got != "" {
+	if got, err := gitx.Config(t.Context(), r.Dir, branchmeta.Tip.For("FT-1/a")); err != nil || got != "" {
 		t.Errorf("tip %q (%v) after a spike closed, want none", got, err)
 	}
 
@@ -615,19 +615,19 @@ func TestReleaseDependentsSpikeClearsTip(t *testing.T) {
 func TestRecordTipTakesTheNewerBase(t *testing.T) {
 	r, _ := newStackedRepo(t)
 
-	r.at(later, "checkout", "-q", "FT-2/b")
-	r.commit(later, "b2.go", "package main // b2\n", "b2")
-	r.at(later, "push", "-q", "-u", "origin", "FT-2/b")
+	r.At(later, "checkout", "-q", "FT-2/b")
+	r.Commit(later, "b2.go", "package main // b2\n", "b2")
+	r.At(later, "push", "-q", "-u", "origin", "FT-2/b")
 	newer := r.sha("FT-2/b")
-	r.at(later, "checkout", "-q", "FT-1/a")
-	r.at(later, "branch", "-f", "FT-2/b", "FT-2/b~1")
-	r.at(later, "merge", "-q", "--no-edit", "origin/FT-2/b")
+	r.At(later, "checkout", "-q", "FT-1/a")
+	r.At(later, "branch", "-f", "FT-2/b", "FT-2/b~1")
+	r.At(later, "merge", "-q", "--no-edit", "origin/FT-2/b")
 
-	if err := worktree.RecordTip(t.Context(), r.dir, "FT-1/a", "FT-2/b"); err != nil {
+	if err := worktree.RecordTip(t.Context(), r.Dir, "FT-1/a", "FT-2/b"); err != nil {
 		t.Fatal(err)
 	}
 
-	if got := r.at(later, "config", branchmeta.Tip.For("FT-1/a")); got != newer {
+	if got := r.At(later, "config", branchmeta.Tip.For("FT-1/a")); got != newer {
 		t.Errorf("tip %q, want origin's %s", got, newer)
 	}
 }

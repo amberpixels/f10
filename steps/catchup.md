@@ -159,7 +159,7 @@ The guard differs from the run above in these ways:
   Then run `git merge --abort` or `git rebase --abort`, so the branch is as it was, with any mark kept.
   Put `/f10:catchup` in the `next` row.
   Run `f10-state.sh stop guard` after the failing `set`, so `f10 drive` reads the stop as the guard's.
-  `f10 drive` reads the mark and that kind, never the note, to decide to send a catchup.
+  `f10 drive` reads the mark and that kind, never the note or the `next` row, to decide to send a catchup.
 - **Verify** runs when commits came in, except before implement, because implement runs its own verify next.
   Red verify is a semantic conflict that the guard leaves to `/f10:catchup`.
   Run `git reset --hard` to the sha read before integrating, which is safe because the tree was clean, then mark and fail as for a conflict, the `stop guard` call included.
@@ -223,6 +223,7 @@ The report says which of the two ran.
 The watcher reads a mark that is still set as a catchup that did not end, and it reports it once.
 
 A clean end after a failure restores the noted ship status beside the signal, in either order.
+The restore keeps the guard's `stop guard` kind, because only a `running` set clears it, so no second `stop guard` call is needed.
 A stop status keeps the signal.
 A clean end that never stopped writes the signal alone.
 
