@@ -68,7 +68,7 @@ f10 review pick [n] [--latest] [--json]               # the latest unhandled rem
 f10 review wait [n] [--budget 10m] [--every 20s]      # poll it to done within a budget
 f10 review ack [n] [--id <id>]                        # leave the declared handled marker on it, or on the review --id names
 f10 review settle [n] --id <id> --revision <rev>      # leave the declared settled marker, unless it was rewritten
-f10 review round [task-id] [--json]                   # the findings directory, its latest round and the next, or the decline (exit 3)
+f10 review round [task-id] [--since <ref>] [--json]   # the findings directory, its latest round and the next, or the decline (exit 3)
 f10 trace trailers --step <step> [--task <id>] [--round n --fixed n --skipped n]   # the Task:, Step: and Review: lines a step's commit ends in; nothing with traces off
 f10 trace state --step <step> [--round n] [--open n] [--asks n] [--task <id>] [--body-file <file>]   # rewrite the hidden state block in the branch's open PR body, or put it into a drafted body; nothing with traces off
 f10 status [id] [--all] [--json | --plain]   # where the run is: a task's in its worktree (bare: the session's task, else the branch's, with that output's --json shape; in the main checkout, a `launched here` tree of what the session started or drove that is still live, nested by `After:` as a parent's children are, task rows under --json), else this session's, every live one, or a row per child of a parent
@@ -826,6 +826,9 @@ Both CLIs are spoken: gh's issue comments, pull reviews and check runs; glab's n
 
 `f10 review round` is the one local verb: it reads the storage root's findings files and needs no remote review declared.
 The directory is `reviews/<task id>` (a bundle's lead), else `reviews/<branch>` with `/` as `-` for work no task names.
+The task comes from the argument or the branch, never from the task this session's run recorded.
+`--since <ref>` makes the round a coherence sweep's, and declines on the default branch, on a branch whose task the range sweeps or is the parent of a swept task, and on a directory that already holds a round.
+Each of those declines names the sweep's branch, `sweep/<ref>-to-<HEAD's short sha>`, with the ref's short sha in place of a ref that makes no branch name (`HEAD~20`).
 A directory holds one series of rounds, and a series belongs to one PR, named on each round's `pr:` header line.
 For a branch checked out here, the command checks whether the series has ended before it counts rounds.
 A series ends when the latest round's PR merged or closed on the host.

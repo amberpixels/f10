@@ -44,9 +44,15 @@ func OpenReviews(ctx context.Context, t *target.Target, explicit string, warn io
 }
 
 // reviewsKey names a task's findings directory: the task id (a bundle's
-// lead), else the branch with `/` as `-` for work no task names.
+// lead), else the branch with `/` as `-` for work no task names. The task
+// this session recorded never keys it, or a sweep branch would file its
+// findings under whatever task the session last ran.
 func reviewsKey(ctx context.Context, t *target.Target, explicit string) (string, error) {
 	r, err := t.Reference(ctx, explicit)
+	if err == nil && r.Origin == ref.OriginSession {
+		err = ref.ErrNoReference
+	}
+
 	if err == nil {
 		return r.Head().ID, nil
 	}

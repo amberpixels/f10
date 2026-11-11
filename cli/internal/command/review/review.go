@@ -88,10 +88,17 @@ func Command() *cli.Command {
 			{
 				Name: "round",
 				Usage: "print the task's findings directory, its latest round and the next one, or why none is " +
-					"allowed (exit 3)",
+					"allowed (exit 3); with --since, a coherence sweep's round, refused on the default branch " +
+					"or on a branch whose task the range sweeps",
 				ArgsUsage: "[task-id]",
-				Flags:     []cli.Flag{ui.JSONFlag("emit the rounds as JSON")},
-				Action:    runReviewRound,
+				Flags: []cli.Flag{
+					ui.JSONFlag("emit the rounds as JSON"),
+					&cli.StringFlag{
+						Name:  "since",
+						Usage: "the ref a coherence sweep starts at: the round is that sweep's",
+					},
+				},
+				Action: runReviewRound,
 			},
 		},
 	}
