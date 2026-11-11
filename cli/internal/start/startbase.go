@@ -243,5 +243,5 @@ func recordDependency(ctx context.Context, dir, branch string, dep *launch.Depen
 		return fmt.Errorf("recording the dependency on %s: %w", dep.Task, err)
 	}
 
-	return worktree.RecordTip(ctx, dir, branch, dep.Branch)
+	return stack.RecordTip(ctx, dir, branch, dep.Branch)
 }

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/gitx/gitxtest"
 	"github.com/amberpixels/f10/cli/internal/seam"
 )
 
@@ -174,13 +175,11 @@ func TestMergesCleanlyReadsTheExitCode(t *testing.T) {
 // MergesCleanly against a real git, since a conflict is read from the exit
 // code alone and git's flags have changed what it means before.
 func TestMergesCleanlyOnARealConflict(t *testing.T) {
-	dir := t.TempDir()
+	repo := gitxtest.Init(t, t.TempDir(), "main")
+	dir := repo.Dir
 	run := func(args ...string) {
 		t.Helper()
-
-		if _, err := Exec(t.Context(), dir, args...); err != nil {
-			t.Fatal(err)
-		}
+		repo.Git(args...)
 	}
 	write := func(body string) {
 		t.Helper()
@@ -190,9 +189,6 @@ func TestMergesCleanlyOnARealConflict(t *testing.T) {
 		}
 	}
 
-	run("init", "-q", "-b", "main")
-	run("config", "user.email", "t@t")
-	run("config", "user.name", "t")
 	write("base\n")
 	run("add", "f")
 	run("commit", "-qm", "base")
@@ -395,13 +391,11 @@ func TestConflictsNamesThePathsAndTheirBlobs(t *testing.T) {
 // Conflicts against a real git: the paths come from merge-tree's stdout,
 // which Exec keeps on the exit error.
 func TestConflictsOnARealConflict(t *testing.T) {
-	dir := t.TempDir()
+	repo := gitxtest.Init(t, t.TempDir(), "main")
+	dir := repo.Dir
 	run := func(args ...string) {
 		t.Helper()
-
-		if _, err := Exec(t.Context(), dir, args...); err != nil {
-			t.Fatal(err)
-		}
+		repo.Git(args...)
 	}
 	write := func(name, body string) {
 		t.Helper()
@@ -411,9 +405,6 @@ func TestConflictsOnARealConflict(t *testing.T) {
 		}
 	}
 
-	run("init", "-q", "-b", "main")
-	run("config", "user.email", "t@t")
-	run("config", "user.name", "t")
 	write("f", "base\n")
 	write("g", "base\n")
 	run("add", "f", "g")
@@ -450,10 +441,7 @@ func TestPullFFWaitsOutARefLock(t *testing.T) {
 	origin, clone := filepath.Join(root, "origin"), filepath.Join(root, "clone")
 	run := func(dir string, args ...string) {
 		t.Helper()
-
-		if _, err := Exec(t.Context(), dir, args...); err != nil {
-			t.Fatal(err)
-		}
+		gitxtest.Run(t, dir, args...)
 	}
 
 	run(root, "init", "-q", "-b", "main", origin)
@@ -563,10 +551,7 @@ func TestPullFFOnADivergedBranchIsDiverged(t *testing.T) {
 	origin, clone := filepath.Join(root, "origin"), filepath.Join(root, "clone")
 	run := func(dir string, args ...string) {
 		t.Helper()
-
-		if _, err := Exec(t.Context(), dir, args...); err != nil {
-			t.Fatal(err)
-		}
+		gitxtest.Run(t, dir, args...)
 	}
 	commit := func(dir, msg string) {
 		t.Helper()
@@ -588,13 +573,11 @@ func TestPullFFOnADivergedBranchIsDiverged(t *testing.T) {
 // A rebase that stopped on a conflict and was continued to the end leaves
 // REBASE_HEAD behind; only the state directory says a rebase is running.
 func TestInProgressIgnoresALeftoverRebaseHead(t *testing.T) {
-	dir := t.TempDir()
+	repo := gitxtest.Init(t, t.TempDir(), "main")
+	dir := repo.Dir
 	run := func(args ...string) {
 		t.Helper()
-
-		if _, err := Exec(t.Context(), dir, args...); err != nil {
-			t.Fatal(err)
-		}
+		repo.Git(args...)
 	}
 	write := func(body string) {
 		t.Helper()
@@ -614,9 +597,6 @@ func TestInProgressIgnoresALeftoverRebaseHead(t *testing.T) {
 		return op.Kind == "rebase"
 	}
 
-	run("init", "-q", "-b", "main")
-	run("config", "user.email", "t@t")
-	run("config", "user.name", "t")
 	write("base\n")
 	run("add", "f")
 	run("commit", "-qm", "base")
@@ -651,15 +631,9 @@ func TestInProgressIgnoresALeftoverRebaseHead(t *testing.T) {
 
 // Branch tells a detached HEAD, which is no branch, from a git that failed.
 func TestBranchTellsDetachedFromFailed(t *testing.T) {
-	dir := t.TempDir()
-	for _, args := range [][]string{
-		{"init", "-q", "-b", "main"},
-		{"-c", "user.email=t@t", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "init"},
-	} {
-		if _, err := Exec(t.Context(), dir, args...); err != nil {
-			t.Fatal(err)
-		}
-	}
+	repo := gitxtest.Init(t, t.TempDir(), "main")
+	repo.Git("commit", "-q", "--allow-empty", "-m", "init")
+	dir := repo.Dir
 
 	if got, err := Branch(t.Context(), dir); got != "main" || err != nil {
 		t.Errorf("on main = %q, %v", got, err)

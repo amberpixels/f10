@@ -434,6 +434,7 @@ func (in *DriveInput) pushAfterCatchup(
 
 	switch {
 	case errors.Is(err, stack.ErrBaseNotPushed):
+		// the drive's side of stack's UnpushedBase rule: integrated, push held
 		fmt.Fprintf(in.Out, "%s %s: %s caught up with %s, not pushed: %s is not on origin yet\n",
 			in.id(id), skill, branch, base, base)
 

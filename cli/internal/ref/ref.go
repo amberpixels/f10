@@ -221,9 +221,11 @@ func (r Lookup) exhausted(ctx context.Context) error {
 		why = append(why, fmt.Sprintf("branch %q carries no %s-<n>", branch, r.Prefix))
 	}
 
-	if cmp.Or(os.Getenv("F10_SESSION_ID"), os.Getenv("CLAUDE_CODE_SESSION_ID")) == "" {
+	switch {
+	case r.NoSession:
+	case cmp.Or(os.Getenv("F10_SESSION_ID"), os.Getenv("CLAUDE_CODE_SESSION_ID")) == "":
 		why = append(why, "no agent session to have recorded one")
-	} else {
+	default:
 		why = append(why, "this session has recorded no task")
 	}
 

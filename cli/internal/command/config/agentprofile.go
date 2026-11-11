@@ -25,14 +25,9 @@ import (
 // `<step>.<kind>`. Only the task agent and the spawning steps read a key;
 // any other key is accepted and idle until a lever exists.
 
-// agentReach says what runs on a step's key, or "" when nothing does yet.
-var agentReach = map[string]string{
-	facts.AgentKeyDefault: "the task's agent (f10 start, f10 drive)",
-	"review":              "the blind reviewer, a subagent",
-	"judge":               "the blind judge (judge --blind), a subagent",
-	"cleanup":             "the rules check, a subagent",
-	"audit":               "the audit's reviewers, subagents",
-}
+// defaultReach is what runs on the default key; a spawning step's is
+// facts.SpawnerReach.
+const defaultReach = "the task's agent (f10 start, f10 drive)"
 
 // AgentReachNone is the line for a step no lever reaches.
 const AgentReachNone = "no lever yet: runs inline on the task agent's profile"
@@ -197,8 +192,12 @@ func AgentLineFor(m runplan.AgentMap, step, kind, settings string) agentLine {
 	r := m.ProfileFor(step, kind)
 	toolModel, toolEffort := r.Profile.Tool()
 
-	reach, ok := agentReach[step]
-	if !ok {
+	reach, ok := facts.SpawnerReach[step]
+
+	switch {
+	case step == facts.AgentKeyDefault:
+		reach = defaultReach
+	case !ok:
 		reach = AgentReachNone
 	}
 

@@ -157,7 +157,7 @@ func feedLine(r lookaround.FeedRow) BoardLine {
 
 	switch {
 	case r.Abandoned:
-		line.Stage = "abandoned"
+		line.Stage = lookaround.StageAbandoned
 	case r.Group == lookaround.GroupNewTasks:
 		line.Stage = "new"
 	}

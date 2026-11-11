@@ -895,7 +895,7 @@ func TestStatusReadsTheCurrentSeries(t *testing.T) {
 
 	if _, err := finish.CloseSeries(
 		filepath.Join(storage, "reviews", "FT-1"),
-		archive.SeriesEnd{Pr: "#7"},
+		archive.SeriesEnd{PR: 7},
 	); err != nil {
 		t.Fatal(err)
 	}

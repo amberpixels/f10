@@ -3,11 +3,12 @@ package lookaround
 import (
 	"testing"
 
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/trace"
 )
 
-// A request read without its state block still gives the block's base,
-// parsed from its body, so status and the board settle a base alike.
+// A request built by NewPR gives its state block's base, parsed from its
+// body, so status and the board settle a base alike.
 func TestBaseOfReadsTheBlockFromABody(t *testing.T) {
 	t.Parallel()
 
@@ -16,8 +17,8 @@ func TestBaseOfReadsTheBlockFromABody(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pr := &PR{}
-	pr.Body = body
+	read := NewPR(forge.PR{Body: body})
+	pr := &read
 
 	for _, tc := range []struct {
 		branch     string

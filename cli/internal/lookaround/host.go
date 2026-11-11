@@ -63,13 +63,9 @@ const pullParallel = 8
 // readPull is one request with what the board reads beyond the list.
 // branches is every branch the host has, nil when it was not listed.
 func readPull(ctx context.Context, in Inputs, p forge.PR, branches map[string]bool) (PR, []string) {
-	pr := PR{PR: p}
+	pr := NewPR(p)
 
 	var notes []string
-
-	if s, ok := trace.ParseState(p.Body); ok {
-		pr.Block = &s
-	}
 
 	// the commits add only the trailers' task to the join, so they are
 	// read only for a request nothing else names a task for
@@ -77,7 +73,7 @@ func readPull(ctx context.Context, in Inputs, p forge.PR, branches map[string]bo
 		ref.Match(in.Prefix, p.Head) == "" && ref.Match(in.Prefix, p.Title) == "" {
 		commits, err := in.Host.PullCommits(ctx, p.Number)
 		if err != nil {
-			notes = append(notes, fmt.Sprintf("#%d: commits not read: %v", p.Number, err))
+			notes = append(notes, fmt.Sprintf("%s: commits not read: %v", in.Host.Ref(p.Number), err))
 		}
 
 		pr.Commits = commits
@@ -96,7 +92,7 @@ func readPull(ctx context.Context, in Inputs, p forge.PR, branches map[string]bo
 	case p.Status == forge.Open && in.RemoteOpen != nil:
 		open, err := in.RemoteOpen(ctx, p.Number)
 		if err != nil {
-			notes = append(notes, fmt.Sprintf("#%d: remote review not read: %v", p.Number, err))
+			notes = append(notes, fmt.Sprintf("%s: remote review not read: %v", in.Host.Ref(p.Number), err))
 		}
 
 		pr.RemoteOpen = open
@@ -139,11 +135,7 @@ func collectActivity(ctx context.Context, in Inputs) (*forge.Activity, map[strin
 // feedPR is a touched request in the shape membersOf reads: its state
 // block and the trailers on the commits its timeline lists.
 func feedPR(t forge.Touched) PR {
-	pr := PR{PR: t.PR}
-
-	if s, ok := trace.ParseState(t.Body); ok {
-		pr.Block = &s
-	}
+	pr := NewPR(t.PR)
 
 	for _, e := range t.Events {
 		if e.Kind != forge.EventCommit && e.Kind != forge.EventMergeFromBase {

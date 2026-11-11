@@ -83,15 +83,13 @@
     border-bottom: 1px solid var(--line);
   }
   .key { font-weight: 600; white-space: nowrap; }
-  .stage { font-weight: 600; white-space: nowrap; }
+  .stage { white-space: nowrap; }
   .from { color: var(--faint); white-space: nowrap; }
   .title { overflow-wrap: anywhere; }
   .tail { grid-column: 1 / -1; color: var(--faint); font-size: 13px; display: flex; flex-wrap: wrap; gap: 4px 14px; }
   .tail code { color: var(--fg); }
   .stage { color: var(--faint); }
 __STAGE_COLORS__
-  .stage[data-stage="done"], .stage[data-stage="planned"], .stage[data-stage="next"],
-  .stage[data-stage="finished"], .stage[data-stage="abandoned"], .stage[data-stage="new"] { font-weight: 400; }
   .window { font-weight: 600; color: var(--fg); margin-top: 4px; }
   .quiet { margin: 16px 0 0; color: var(--faint); font-size: 14px; }
   @media (max-width: 640px) {
@@ -143,12 +141,13 @@ function who(row) {
   return w.author || "";
 }
 
-// a request titled "<key>: ..." repeats the key the row already shows
+// afterKey is boardmodel.go's TitleAfterKey: a request titled "<key>: ..."
+// repeats the key the row shows, and a bundle's "(+riders)" tag goes too
 function afterKey(title, key) {
   if (!key || title.indexOf(key) !== 0) return title;
   var rest = title.slice(key.length);
   if (rest[0] !== ":" && rest[0] !== " ") return title;
-  return rest.replace(/^[: -]+/, "") || title;
+  return rest.replace(/^\s*\(\+[^)]*\)/, "").replace(/^[: -]+/, "") || title;
 }
 
 // plural is lookaround.Plural: "-sh" takes "es"
@@ -174,7 +173,7 @@ function feedLine(r) {
   var pr = r.pr;
   var w = r.who || {};
   var stage = r.group;
-  if (r.abandoned) stage = "abandoned";
+  if (r.abandoned) stage = "abandoned"; // lookaround.StageAbandoned
   else if (r.group === "new-tasks") stage = "new";
   var title = (r.task && r.task.title) || "";
   var url = (r.task && r.task.url) || "";
@@ -271,6 +270,7 @@ function link(url, text, cls) {
 
 function render(board, m) {
   var p = board.project || {};
+  var sigil = p.host === "glab" ? "!" : "#"; // forge.Host.Sigil
   var meta = [p.id, p.host, p.remote ? "remote view" : "", p.local_only ? "local only" : "",
     "generated " + new Date(board.generated_at).toLocaleString(),
     m.header ? "" : "done since " + localDate(board.window.since)].filter(Boolean);
@@ -305,8 +305,8 @@ function render(board, m) {
     }
     var tail = [];
     if (r.pr) {
-      var prs = (r.parts || []).map(function (p) { return link(p.url, "#" + p.number, "pr"); });
-      prs.push(link(r.pr_url, "#" + r.pr, "pr"));
+      var prs = (r.parts || []).map(function (p) { return link(p.url, sigil + p.number, "pr"); });
+      prs.push(link(r.pr_url, sigil + r.pr, "pr"));
       tail.push(prs.join(" + "));
     }
     if (r.who) tail.push('<span class="who">' + esc(r.who) + "</span>");

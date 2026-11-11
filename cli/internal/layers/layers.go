@@ -32,13 +32,21 @@ var Table = []Rule{
 	{Prefix: "internal/shell", Rank: -2},
 	{Prefix: "internal/gitx", Rank: -2},
 	{Prefix: "internal/flock", Rank: -2},
-	{Prefix: "internal/seam", Rank: -3}, // the test swap, which every package's tests may import
+	{Prefix: "internal/seam", Rank: -3},          // the test swap, which every package's tests may import
+	{Prefix: "internal/gitx/gitxtest", Rank: -3}, // test repos, gitx's own tests included
 	{Prefix: "internal/buildinfo", Rank: -2},
 	{Prefix: "internal/calendar", Rank: -2},
 	{Prefix: "internal/mdline", Rank: -2},
 	{Prefix: "internal/tasktitle", Rank: -2},
+	{Prefix: "internal/flow", Rank: -2},
+	{Prefix: "internal/trace", Rank: -2},
+	{Prefix: "internal/agentctl", Rank: -2},
+	{Prefix: "internal/images", Rank: -2},
+	{Prefix: "internal/projects", Rank: -2},
 	{Prefix: "internal/ui", Rank: -1},
 	{Prefix: "internal/tasktree", Rank: -1},
+	{Prefix: "internal/driver", Rank: -1}, // imports shell
+	{Prefix: "internal/asks", Rank: -1},   // imports fsx
 
 	// the domain packages, which Go's own cycle check keeps acyclic
 	{Prefix: "internal", Rank: 0, Peers: true},

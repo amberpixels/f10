@@ -356,8 +356,9 @@ func (in *DriveInput) MarkMoved(ctx context.Context, runs []*DriveRun, wss []age
 			}
 		}
 
-		// a read git cannot answer skips the task for this poll: the next
-		// poll reads again, and a wrong "moved" would send a catchup
+		// the base's local branch, pushed or not, by stack's UnpushedBase
+		// rule; a read git cannot answer skips the task for this poll, since
+		// a wrong "moved" would send a catchup
 		head, err := gitx.Ref(ctx, in.Main, "refs/heads/"+b.O.Branch)
 		if err != nil {
 			fmt.Fprintf(in.Out, "%s: skipped this poll, reading %s: %v\n", in.id(r.Task.Ref.ID), b.O.Branch, err)

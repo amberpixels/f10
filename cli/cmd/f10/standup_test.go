@@ -309,3 +309,35 @@ func TestRenderStandupChainsOnlyStackedPRs(t *testing.T) {
 		}
 	}
 }
+
+// A GitLab repository's merge requests read !n, alone or beside a GitHub
+// repository's #n in one project.
+func TestRenderStandupWritesGitLabRequests(t *testing.T) {
+	glab, gh := "glab", "gh"
+	r := standup.Standup{Since: standupSince, Projects: []standup.Project{
+		{
+			Name:  "ACME",
+			Repos: []standup.Repo{{Name: "svc-a", Host: &glab}, {Name: "svc-b", Host: &gh}},
+			Tasks: []standup.Task{{ID: "ACME-1", State: standup.StateInReview, PRs: []standup.PR{
+				{Repo: "svc-a", Number: 12}, {Repo: "svc-b", Number: 40},
+			}}},
+		},
+		{
+			Name:     "r3",
+			Repos:    []standup.Repo{{Name: "r3", Host: &glab}},
+			Tasks:    []standup.Task{{ID: "R3-2", State: standup.StateShipped, PRs: []standup.PR{{Number: 5}}}},
+			Reviewed: []standup.ReviewedPR{{Number: 9, Title: "theirs", Author: "bob"}},
+		},
+	}}
+
+	var out bytes.Buffer
+	if err := standupcmd.RenderStandup(&out, nil, r); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, want := range []string{"svc-a!12, svc-b#40", "R3-2       shipped      !5", "!9 theirs (bob)"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("render missing %q:\n%s", want, out.String())
+		}
+	}
+}

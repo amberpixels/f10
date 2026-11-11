@@ -12,6 +12,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
+	"github.com/amberpixels/f10/cli/internal/textx"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -133,9 +134,7 @@ func retitleOne(ctx context.Context, t *target.Target, number string) error {
 }
 
 func TaskTitle(doc string) string {
-	line, _, _ := strings.Cut(doc, "\n")
-
-	title, ok := strings.CutPrefix(strings.TrimSpace(line), "# ")
+	title, ok := strings.CutPrefix(strings.TrimSpace(textx.FirstLine(doc)), "# ")
 	if !ok {
 		return ""
 	}

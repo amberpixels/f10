@@ -106,7 +106,7 @@ func ResolvePRSubject(ctx context.Context, t *target.Target, token string) (prSu
 			return s, errors.New("HEAD is detached: name a PR or a task")
 		}
 
-		if r, err := t.Reference(ctx, ""); err == nil && r.Origin != ref.OriginSession {
+		if r, err := t.BranchReference(ctx, ""); err == nil {
 			s.Task = &r
 		}
 	default:

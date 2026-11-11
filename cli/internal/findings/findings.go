@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/amberpixels/f10/cli/internal/taskid"
 )
 
 // File is one findings file.
@@ -17,7 +19,7 @@ type File struct {
 	Task       string
 	Round      string
 	Reviewed   string // the sha, plus ` dirty` when the tree differed
-	PR         string // the PR reviewed (`#204`), `none`, or empty in a file older than the line
+	PR         int    // the PR reviewed, written #204 or !204; 0 for none or a file older than the line
 	Reviewer   string // `local`, a remote identity, or both: `local, claude[bot]`
 	Verdict    string // clean or findings
 	Categories map[string]int
@@ -85,7 +87,7 @@ func Parse(text string) (*File, error) {
 			case "reviewed":
 				f.Reviewed = value
 			case "pr":
-				f.PR = value
+				f.PR = taskid.RequestNumber(value)
 			case "reviewer":
 				f.Reviewer = value
 			case "verdict":

@@ -52,7 +52,8 @@ Any commit this step makes follows `conventions/context.md` → Commits, with `-
    - On a host that closes issues on merge, the body carries one line per member, each on a line of its own.
      The lead and each rider the PR delivers get `Closes #12`.
      A rider the PR delivers only in part gets `Part of #12`, judged against that rider's criteria in the plan's `## Riders` section.
-     `f10 finish` follows these lines: a rider under `Closes` closes on merge, and one under `Part of` stays open.
+     A drive's or the watcher's finish follows these lines unasked: a rider under `Closes` closes on merge, and one under `Part of` stays open.
+     An interactive `f10 finish` offers the same choice as its default and asks for it with `--close` (exit 7 without it).
    - A **marker** is a word the run's pace hands this entry as a `marker <word>` dial (`f10 flow <name>`), such as `fast`.
      The project's `pr` overlay says what it means, for example a title tag that makes CI run a short pipeline, and the draft applies it.
      When no overlay gives the marker a meaning, the PR opens without it, and the report says so in one line.

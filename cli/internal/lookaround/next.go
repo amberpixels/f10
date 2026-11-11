@@ -24,7 +24,7 @@ const (
 
 func (r *row) next() {
 	id := ""
-	if !strings.HasPrefix(r.Key, "#") {
+	if !requestKey(r.Key) {
 		id = r.Key
 	}
 

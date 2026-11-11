@@ -20,7 +20,6 @@ import (
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/reviews"
 	"github.com/amberpixels/f10/cli/internal/state"
-	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/textx"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -349,7 +348,7 @@ func runLoreShow(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	series := statusview.LoreSeries(changes, change)
+	series := archive.LoreSeries(changes, change)
 	all := []lore.Entry{}
 
 	for i, c := range series {

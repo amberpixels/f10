@@ -168,7 +168,7 @@ func TaskRequests(ctx context.Context, h *forge.Host, prefix string, ids []strin
 
 	for _, id := range ids {
 		for _, p := range found[id] {
-			pr := PR{PR: p}
+			pr := NewPR(p)
 			if slices.ContainsFunc(membersOf(prefix, pr), func(m string) bool { return strings.EqualFold(m, id) }) {
 				out[id] = append(out[id], pr)
 			}

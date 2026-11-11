@@ -88,14 +88,11 @@ func (e *Effective) ErrorProblems() []Problem {
 	return out
 }
 
-// Errors are the problems that stop a command, joined for its message.
+// Errors are ErrorProblems' messages, one per line.
 func (e *Effective) Errors() string {
 	var msgs []string
-
-	for _, p := range e.Problems {
-		if p.Error {
-			msgs = append(msgs, p.Message)
-		}
+	for _, p := range e.ErrorProblems() {
+		msgs = append(msgs, p.Message)
 	}
 
 	return strings.Join(msgs, "\n")

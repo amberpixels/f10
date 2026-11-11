@@ -8,17 +8,13 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/branchmeta/branchmetatest"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/gitx/gitxtest"
 )
 
 func gitRepo(t *testing.T) string {
 	t.Helper()
 
-	dir := t.TempDir()
-	if _, err := gitx.Exec(t.Context(), dir, "init", "-q", "-b", "main"); err != nil {
-		t.Fatal(err)
-	}
-
-	return dir
+	return gitxtest.Init(t, t.TempDir(), "main").Dir
 }
 
 // writes is one scenario both backends run, so the answers can be compared.

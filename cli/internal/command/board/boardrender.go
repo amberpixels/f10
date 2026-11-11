@@ -45,7 +45,7 @@ func RenderBoard(w io.Writer, b lookaround.Board, limit int) {
 
 	nodes := make([]tasktree.Node, len(m.Rows))
 	for i, r := range m.Rows {
-		nodes[i] = BoardNode(r, "", false, links)
+		nodes[i] = BoardNode(r, b.Project, false, links)
 	}
 
 	tree := tasktree.Tree{Align: true, Width: limit}
@@ -216,7 +216,7 @@ func unreachable(b lookaround.Board) string {
 
 func RenderByPerson(w io.Writer, boards []lookaround.Board, limit int) {
 	type entry struct {
-		project string
+		project lookaround.Project
 		line    BoardLine
 		rank    int
 		at      time.Time
@@ -224,7 +224,7 @@ func RenderByPerson(w io.Writer, boards []lookaround.Board, limit int) {
 
 	by := map[string][]entry{}
 
-	add := func(project, person string, e entry) {
+	add := func(project lookaround.Project, person string, e entry) {
 		e.project = project
 		by[person] = append(by[person], e)
 	}
@@ -238,14 +238,14 @@ func RenderByPerson(w io.Writer, boards []lookaround.Board, limit int) {
 		renderSources(w, b, label)
 
 		for _, r := range b.Rows {
-			add(b.Project.Name, r.Who.Person, entry{
+			add(b.Project, r.Who.Person, entry{
 				line: lineOf(r), rank: lookaround.StateRank(r), at: r.LastActivity,
 			})
 		}
 
 		if b.Feed != nil {
 			for _, r := range b.Feed.Rows {
-				add(b.Project.Name, r.Who.Person, entry{
+				add(b.Project, r.Who.Person, entry{
 					line: feedLine(r), rank: slices.Index(lookaround.Groups, r.Group), at: r.At,
 				})
 			}
@@ -307,18 +307,18 @@ func cutError(s string, limit, n int) string {
 
 // BoardNode is a board line as a tree row: the title fills what the
 // terminal leaves, and the tail (PRs, who, next) follows it.
-func BoardNode(r BoardLine, project string, withProject bool, links *render.TaskLinks) tasktree.Node {
+func BoardNode(r BoardLine, p lookaround.Project, withProject bool, links *render.TaskLinks) tasktree.Node {
 	faint := func(s string) string { return lipgloss.NewStyle().Faint(true).Render(s) }
 
 	var tail []string
 
 	if r.PR != 0 {
 		var prs []string
-		for _, p := range r.Parts {
-			prs = append(prs, fmt.Sprintf("#%d", p.Number))
+		for _, part := range r.Parts {
+			prs = append(prs, p.Ref(part.Number))
 		}
 
-		tail = append(tail, strings.Join(append(prs, fmt.Sprintf("#%d", r.PR)), " + "))
+		tail = append(tail, strings.Join(append(prs, p.Ref(r.PR)), " + "))
 	}
 
 	if r.Who != "" {
@@ -340,15 +340,15 @@ func BoardNode(r BoardLine, project string, withProject bool, links *render.Task
 		from = r.StageFrom
 	}
 
-	links.Known(project, r.Key, r.URL)
+	links.Known(p.Name, r.Key, r.URL)
 
 	var cells []tasktree.Cell
 	if withProject {
-		cells = append(cells, tasktree.Cell{Text: project, Render: faint})
+		cells = append(cells, tasktree.Cell{Text: p.Name, Render: faint})
 	}
 
 	cells = append(cells,
-		tasktree.Cell{Text: r.Key, Render: func(string) string { return links.ID(project, r.Key) }},
+		tasktree.Cell{Text: r.Key, Render: func(string) string { return links.ID(p.Name, r.Key) }},
 		tasktree.Cell{Text: r.Stage, Render: func(s string) string { return statusview.StageStyle(r.Stage).Render(s) }},
 		tasktree.Cell{Text: from, Render: faint},
 		tasktree.Cell{Text: r.Title, Fill: true},

@@ -3,9 +3,11 @@ package standup
 import (
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/standup"
 )
@@ -68,13 +70,25 @@ func repoNames(p standup.Project) string {
 }
 
 func renderProject(b *strings.Builder, links *render.TaskLinks, p standup.Project) {
-	// a number names a PR only within its repository
+	// a number names a PR only within its repository, written as its host
+	// writes it
 	label := func(repo string, n int) string {
-		if len(p.Repos) > 1 {
-			return fmt.Sprintf("%s#%d", repo, n)
+		h := forge.Host{}
+
+		i := slices.IndexFunc(p.Repos, func(r standup.Repo) bool { return r.Name == repo })
+		if i < 0 && len(p.Repos) == 1 {
+			i = 0
 		}
 
-		return fmt.Sprintf("#%d", n)
+		if i >= 0 && p.Repos[i].Host != nil {
+			h.Name = *p.Repos[i].Host
+		}
+
+		if len(p.Repos) > 1 {
+			return repo + h.Ref(n)
+		}
+
+		return h.Ref(n)
 	}
 
 	if len(p.Tasks) > 0 {

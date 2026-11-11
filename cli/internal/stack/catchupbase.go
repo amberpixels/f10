@@ -255,12 +255,12 @@ func CatchupPolicy(eff *facts.Effective) CatchupInput {
 	return CatchupInput{
 		Catchup:        eff.Catchup,
 		Stacked:        eff.CatchupStacked,
-		CatchupDefault: FactDefault(eff, "catchup"),
-		StackedDefault: FactDefault(eff, "catchup_stacked"),
+		CatchupDefault: factDefault(eff, "catchup"),
+		StackedDefault: factDefault(eff, "catchup_stacked"),
 	}
 }
 
-func FactDefault(eff *facts.Effective, key string) bool {
+func factDefault(eff *facts.Effective, key string) bool {
 	for _, f := range eff.Facts {
 		if f.Key == key {
 			return f.Origin.Kind == facts.OriginDefault
@@ -327,6 +327,24 @@ func ResolveCatchup(ctx context.Context, in CatchupInput) (CatchupPlan, error) {
 	}
 
 	return p, nil
+}
+
+// RecordTip records the base commit branch is built on, so a catchup after
+// the base's history is rewritten replays only branch's own commits. The
+// newer of the local and origin merge-bases wins: a guard integrates origin's
+// copy, which a stale local branch would hide. A base found nowhere keeps the
+// tip recorded before.
+func RecordTip(ctx context.Context, dir, branch, base string) error {
+	tip, err := NewerMergeBase(ctx, dir, "refs/heads/"+branch, base)
+	if err != nil || tip == "" {
+		return err
+	}
+
+	if err := branchmeta.Set(ctx, dir, branch, branchmeta.Tip, tip); err != nil {
+		return fmt.Errorf("recording %s's base tip on %s: %w", branch, base, err)
+	}
+
+	return nil
 }
 
 // baseRewritten is the recorded base tip when the branch holds it and the

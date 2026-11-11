@@ -1,7 +1,6 @@
 package archive
 
 import (
-	"cmp"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -19,9 +18,10 @@ import (
 // ended by a rebase before any PR existed: still the same PR, so it counts
 // for no lore change.
 type SeriesEnd struct {
-	Pr, Head string
-	At       time.Time
-	Restart  bool
+	PR      int // 0 for none
+	Head    string
+	At      time.Time
+	Restart bool
 }
 
 func (e SeriesEnd) Write(dir string) error {
@@ -30,8 +30,12 @@ func (e SeriesEnd) Write(dir string) error {
 		at = time.Now()
 	}
 
-	body := fmt.Sprintf("pr: %s\nhead: %s\nclosed: %s\n",
-		cmp.Or(e.Pr, "none"), e.Head, at.UTC().Format(time.RFC3339))
+	pr := "none"
+	if e.PR > 0 {
+		pr = strconv.Itoa(e.PR)
+	}
+
+	body := fmt.Sprintf("pr: %s\nhead: %s\nclosed: %s\n", pr, e.Head, at.UTC().Format(time.RFC3339))
 	if e.Restart {
 		body += "restart: yes\n"
 	}
@@ -43,9 +47,9 @@ func (e SeriesEnd) Write(dir string) error {
 	return nil
 }
 
-// Same compares by PR number, so gh's #7 and glab's !7 match, else by head.
+// Same compares by PR number, else by head.
 func (e SeriesEnd) Same(o SeriesEnd) bool {
-	if n := strings.TrimLeft(e.Pr, "#!"); taskid.IsNumber(n) && n == strings.TrimLeft(o.Pr, "#!") {
+	if e.PR > 0 && e.PR == o.PR {
 		return true
 	}
 
@@ -68,7 +72,7 @@ func ReadSeriesEnd(dir string) SeriesEnd {
 
 		switch value = strings.TrimSpace(value); key {
 		case "pr":
-			e.Pr = value
+			e.PR = taskid.RequestNumber(value) // #7 or !7 in a file older than the bare number
 		case "head":
 			e.Head = value
 		case "closed":
@@ -81,6 +85,18 @@ func ReadSeriesEnd(dir string) SeriesEnd {
 	return e
 }
 
+// seriesName is <id>.<n>, the name of an archived series and of a later
+// PR's lore change alike.
+func seriesName(id string, n int) string { return id + "." + strconv.Itoa(n) }
+
+// seriesNumber is n from a name seriesName wrote for id.
+func seriesNumber(name, id string) (int, bool) {
+	rest, ok := strings.CutPrefix(name, id+".")
+	n, err := strconv.Atoi(rest)
+
+	return n, ok && err == nil && n > 0
+}
+
 // SeriesNumbers is the archived series of id, ascending.
 func SeriesNumbers(archived, id string) []int {
 	entries, _ := os.ReadDir(archived)
@@ -88,8 +104,7 @@ func SeriesNumbers(archived, id string) []int {
 	var out []int
 
 	for _, e := range entries {
-		rest, ok := strings.CutPrefix(e.Name(), id+".")
-		if n, err := strconv.Atoi(rest); ok && e.IsDir() && err == nil && n > 0 {
+		if n, ok := seriesNumber(e.Name(), id); ok && e.IsDir() {
 			out = append(out, n)
 		}
 	}
@@ -105,7 +120,7 @@ func NextSeries(archived, id string) string {
 		n = have[len(have)-1] + 1
 	}
 
-	return filepath.Join(archived, fmt.Sprintf("%s.%d", id, n))
+	return filepath.Join(archived, seriesName(id, n))
 }
 
 // ClosedPRs is the archived series that each ended a PR, oldest first: a
@@ -116,7 +131,7 @@ func ClosedPRs(dir string) []string {
 	var out []string
 
 	for _, n := range SeriesNumbers(archived, id) {
-		path := filepath.Join(archived, fmt.Sprintf("%s.%d", id, n))
+		path := filepath.Join(archived, seriesName(id, n))
 		if !ReadSeriesEnd(path).Restart {
 			out = append(out, path)
 		}
@@ -136,7 +151,30 @@ func SeriesChange(id string, n int) string {
 		return id
 	}
 
-	return fmt.Sprintf("%s.%d", id, n)
+	return seriesName(id, n)
+}
+
+// LoreSeries is the changes a show of id reads: every <id>.<n> newest first,
+// then id itself; a change named with its number, or a task with one PR,
+// is that change alone.
+func LoreSeries(changes []string, id string) []string {
+	var later []int
+
+	for _, c := range changes {
+		if n, ok := seriesNumber(c, id); ok && n > 1 {
+			later = append(later, n)
+		}
+	}
+
+	slices.Sort(later)
+	slices.Reverse(later)
+
+	out := make([]string, 0, len(later)+1)
+	for _, n := range later {
+		out = append(out, seriesName(id, n))
+	}
+
+	return append(out, id)
 }
 
 // SeriesStart is when the task's open series began, the newest archived

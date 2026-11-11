@@ -149,9 +149,9 @@ func landMerge(ctx context.Context, w io.Writer, in FinishInput, d finishDecisio
 		sha = p.Landed
 	}
 
-	l.end = &archive.SeriesEnd{Pr: "none", Head: sha}
+	l.end = &archive.SeriesEnd{Head: sha}
 	if !unpushed {
-		l.end.Pr = in.Host.Ref(p.Number)
+		l.end.PR = p.Number
 	}
 
 	notes = textx.AppendNote(notes, d.loreNote)

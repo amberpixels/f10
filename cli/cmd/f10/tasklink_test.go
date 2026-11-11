@@ -21,6 +21,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/layers"
 	"github.com/amberpixels/f10/cli/internal/ledger"
+	"github.com/amberpixels/f10/cli/internal/lookaround"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/seam"
@@ -282,7 +283,7 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 
 			nodes := make([]tasktree.Node, len(lines))
 			for i, l := range lines {
-				nodes[i] = boardcmd.BoardNode(l, "", false, links)
+				nodes[i] = boardcmd.BoardNode(l, lookaround.Project{}, false, links)
 			}
 
 			if err := (tasktree.Tree{Align: true, Width: limit}).Write(&out, nodes); err != nil {
