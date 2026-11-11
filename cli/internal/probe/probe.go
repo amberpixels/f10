@@ -52,26 +52,35 @@ func Run(ctx context.Context, lay *layout.Layout) *Probes {
 	p.CLI = routeCLI(p.RemoteURL, p.Host)
 
 	root := lay.CheckoutRoot
-	for _, m := range []struct{ file, stack string }{
-		{file: "go.mod", stack: "Go"},
-		{file: "Gemfile", stack: "Ruby"},
-		{file: "package.json", stack: "JS/TS"},
-	} {
-		if fileExists(filepath.Join(root, m.file)) {
-			p.Stack = append(p.Stack, Signal{Value: m.stack, Evidence: m.file})
-		}
-	}
-
-	if specs, _ := filepath.Glob(filepath.Join(root, "*.gemspec")); len(specs) > 0 {
-		p.Stack = append(p.Stack, Signal{Value: "Ruby gem", Evidence: filepath.Base(specs[0])})
-	}
-
+	p.Stack = Stack(root)
 	p.Verify = verifySignals(root, p.Stack)
 
 	p.Review = reviewWorkflow(root)
 	p.Plans = planNames(p.PlansDir)
 
 	return p
+}
+
+// Stack is the stacks the manifests at root name, in this order: go.mod,
+// Gemfile, package.json, a gemspec.
+func Stack(root string) []Signal {
+	var out []Signal
+
+	for _, m := range []struct{ file, stack string }{
+		{file: "go.mod", stack: "Go"},
+		{file: "Gemfile", stack: "Ruby"},
+		{file: "package.json", stack: "JS/TS"},
+	} {
+		if fileExists(filepath.Join(root, m.file)) {
+			out = append(out, Signal{Value: m.stack, Evidence: m.file})
+		}
+	}
+
+	if specs, _ := filepath.Glob(filepath.Join(root, "*.gemspec")); len(specs) > 0 {
+		out = append(out, Signal{Value: "Ruby gem", Evidence: filepath.Base(specs[0])})
+	}
+
+	return out
 }
 
 // hostOf is a git remote url's hostname, read as the script's host_of reads

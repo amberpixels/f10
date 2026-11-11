@@ -4,6 +4,7 @@ What each of your projects is and how they connect: one node per project, with w
 `f10 atlas --json` prints the **Atlas JSON** this file specifies, `docs/atlas.schema.json` is its JSON Schema, and `~/.f10/atlas.md` is the **declared file** where you write what no checkout can say.
 A renderer, such as a personal website, draws the document; f10 draws nothing.
 Version 1 reads local checkouts only, with no host call, so a run takes about a second and a logged-out host CLI cannot fail it.
+Today the command prints public nodes only: edges and anonymous nodes are specified here but not yet derived, so `edges` is `[]`.
 
 ## Shape
 

@@ -17,6 +17,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/buildinfo"
 	askscmd "github.com/amberpixels/f10/cli/internal/command/asks"
+	atlascmd "github.com/amberpixels/f10/cli/internal/command/atlas"
 	boardcmd "github.com/amberpixels/f10/cli/internal/command/board"
 	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
 	daemoncmd "github.com/amberpixels/f10/cli/internal/command/daemon"
@@ -76,6 +77,7 @@ func newApp() *cli.Command {
 			statuscmd.Command(),
 			standupcmd.Command(),
 			boardcmd.Command(),
+			atlascmd.Command(),
 			startcmd.Command(),
 			startcmd.ForwardCommand(),
 			drivecmd.Command(),

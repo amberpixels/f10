@@ -151,6 +151,21 @@ func ScopeItems(cmd *cli.Command, groupsFile string, repos []repoEntry, reposPat
 	return items, nil
 }
 
+// ItemsOrHere is what the flags name, else the checkout -C or the cwd is,
+// for a command that reads checkouts and binds no target.
+func ItemsOrHere(cmd *cli.Command, groupsFile string) ([]scopeItem, error) {
+	if Scoped(cmd) {
+		return ScopeItems(cmd, groupsFile, nil, "")
+	}
+
+	dir, _, err := target.RootDir(cmd)
+	if err != nil {
+		return nil, err
+	}
+
+	return []scopeItem{{Dir: dir}}, nil
+}
+
 // Scoped reports whether the flags name a scope at all.
 func Scoped(cmd *cli.Command) bool {
 	return len(target.CheckoutFlags(cmd))+len(cmd.StringSlice("group")) > 0 || cmd.Bool("all")
@@ -161,16 +176,18 @@ func Scoped(cmd *cli.Command) bool {
 type ScopeEntry struct {
 	Dir    string
 	Main   string // the main checkout, for a board of a checkout that would not bind
-	ID     string // its project id, the normalised remote
+	ID     string // its project id, the normalised remote; the main checkout's path when Local
+	Local  bool   // no remote names the project
 	Target *target.Target
 	Repo   *RepoRef
 	Err    error
 }
 
-// BindScope reads one repository once across its main checkout and worktrees,
-// and drops a repository named outright that a checkout covers, since the
-// checkout knows more; checkouts bind first so every id is known by then.
-func BindScope(ctx context.Context, items []scopeItem, cmdName string) []ScopeEntry {
+// Checkouts keeps one entry per repository across its main checkout and
+// worktrees, and drops a repository named outright that a checkout covers,
+// since the checkout knows more; checkouts go first so every id is known by
+// then. It binds no target, for a command that reads git alone.
+func Checkouts(ctx context.Context, items []scopeItem) []ScopeEntry {
 	entries := make([]ScopeEntry, len(items))
 	keep := make([]bool, len(items))
 
@@ -190,14 +207,9 @@ func BindScope(ctx context.Context, items []scopeItem, cmdName string) []ScopeEn
 
 		roots[main] = true
 
-		e := ScopeEntry{Dir: it.Dir, Main: main, ID: ledger.Where(ctx, main).Project}
-		ids[e.ID] = true
-
-		if e.Target, e.Err = target.At(ctx, it.Dir, true, cmdName); e.Err != nil {
-			e.Err = fmt.Errorf("%s: %w", it.Dir, e.Err)
-		}
-
-		entries[i], keep[i] = e, true
+		place := ledger.Where(ctx, main)
+		entries[i], keep[i] = ScopeEntry{Dir: it.Dir, Main: main, ID: place.Project, Local: place.ProjectLocal}, true
+		ids[place.Project] = true
 	}
 
 	for i, it := range items {
@@ -218,6 +230,25 @@ func BindScope(ctx context.Context, items []scopeItem, cmdName string) []ScopeEn
 	}
 
 	return out
+}
+
+// BindScope is Checkouts with a target bound to each checkout.
+func BindScope(ctx context.Context, items []scopeItem, cmdName string) []ScopeEntry {
+	entries := Checkouts(ctx, items)
+
+	for i, e := range entries {
+		if e.Repo != nil {
+			continue
+		}
+
+		if e.Target, e.Err = target.At(ctx, e.Dir, true, cmdName); e.Err != nil {
+			e.Err = fmt.Errorf("%s: %w", e.Dir, e.Err)
+		}
+
+		entries[i] = e
+	}
+
+	return entries
 }
 
 // StandupTargets fails on a checkout that fails, named: dropping it would
