@@ -828,7 +828,7 @@ Both CLIs are spoken: gh's issue comments, pull reviews and check runs; glab's n
 The directory is `reviews/<task id>` (a bundle's lead), else `reviews/<branch>` with `/` as `-` for work no task names.
 The task comes from the argument or the branch, never from the task this session's run recorded.
 `--since <ref>` makes the round a coherence sweep's, and declines on the default branch, on a branch whose task the range sweeps or is the parent of a swept task, and on a directory that already holds a round.
-Each of those declines names the sweep's branch, `sweep/<ref>-to-<HEAD's short sha>`.
+Each of those declines names the sweep's branch, `sweep/<ref>-to-<HEAD's short sha>`, with the ref's short sha in place of a ref that makes no branch name (`HEAD~20`).
 A directory holds one series of rounds, and a series belongs to one PR, named on each round's `pr:` header line.
 For a branch checked out here, the command checks whether the series has ended before it counts rounds.
 A series ends when the latest round's PR merged or closed on the host.

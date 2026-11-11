@@ -25,7 +25,7 @@ The argument only says which task the change belongs to:
 When the branch of that task or PR is not the current one, decline in one line.
 Name the worktree that holds the branch (`git worktree list`), or say that none does.
 That decline is a normal end.
-`since [<ref>]` reviews a range of tasks instead (**The coherence lens**), on a branch of the sweep's own.
+`since [<ref>]` reviews a range of tasks instead (**The coherence lens**), on a branch that no swept task owns.
 
 ## The findings file
 
@@ -308,13 +308,14 @@ The range starts at the ref given, else at the last tag reachable from HEAD (`gi
 With neither, decline in one line, asking for a ref.
 Then run `f10 review round --since <ref>` before anything else.
 A sweep's findings, lore and PR are filed under whatever task the branch names, so the sweep needs a branch that no swept task owns.
-The command declines with exit 3 in three cases, and each decline's `branch:` row names the sweep's branch, `sweep/<ref>-to-<HEAD's short sha>`:
+The command declines with exit 3 in three cases, and each decline's `branch:` row names the sweep's branch, `sweep/<ref>-to-<HEAD's short sha>`, or the ref's short sha in place of a ref such as `HEAD~20` that makes no branch name:
 
 - **On the default branch**, because resolve would commit the fixes straight to it.
   With a clean tree, run `git switch -c <branch>` and the round again in one call, then go on.
   A dirty tree declines in one line, because the switch would carry unrelated work onto the sweep's branch.
 - **On a branch whose task is swept, or is the parent of a swept task**, because the parent would then carry the sweep's findings, lore and PR.
 - **On a branch whose directory already holds a round**, because a sweep starts a series of its own.
+  On the sweep's own branch, the decline says the range already has its sweep there.
 
 In the other two cases, print the `decline:` line and end.
 When the command does not decline, the findings go to round one of the sweep branch's directory, so `/f10:resolve` settles them as it settles any round.

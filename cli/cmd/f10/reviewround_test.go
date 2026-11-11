@@ -477,7 +477,32 @@ func TestReviewRoundSweepOnItsOwnBranch(t *testing.T) {
 	}
 
 	out, err = runRound(t, repo, "--since", "v1")
+	wantDecline(t, out, err, "this branch already holds this range's sweep")
+}
+
+// A ref that makes no branch name names the sweep by its commit instead.
+func TestReviewRoundSweepNamesARelativeRefBySha(t *testing.T) {
+	repo := sweepRepo(t)
+	start := strings.TrimSpace(git(t, repo, "rev-parse", "--short=7", "HEAD~1"))
+
+	out, err := runRound(t, repo, "--since", "HEAD~1")
+	wantDecline(t, out, err, "branch:  sweep/"+start+"-to-")
+}
+
+// Another task's directory with an unsettled round still declines as the
+// sweep's, naming the sweep branch, not that task's resolve.
+func TestReviewRoundSweepOnABusyTaskBranch(t *testing.T) {
+	repo := sweepRepo(t)
+	git(t, repo, "switch", "-q", "DM-5/fix")
+	writeRound(t, repo, "1.md", "task: DM-5\nround: 1\nreviewer: local\nverdict: findings\n\n"+
+		"## Findings\n\n### 1.1 Missing check\nwhere: a.go:1\ncategory: tests and docs\n")
+
+	out, err := runRound(t, repo, "--since", "v1")
 	wantDecline(t, out, err, "a sweep starts its own series")
+
+	if !strings.Contains(out, "branch:  sweep/v1-to-") {
+		t.Errorf("output lacks the sweep branch:\n%s", out)
+	}
 }
 
 // A branch naming no task keys its findings by the branch, even when this

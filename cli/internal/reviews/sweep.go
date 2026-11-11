@@ -24,6 +24,18 @@ type Sweep struct {
 	Branch  string           // the branch a sweep of this range runs on
 	Decline findings.Decline // empty when the checked-out branch may hold it
 	Detail  string           // the decline's reason, naming the tasks
+	Here    bool             // the sweep's branch is the one checked out
+}
+
+// sweepBranch names the range by the ref as typed, or by its commit when the
+// ref (`HEAD~20`, `main^`) makes no valid branch name.
+func sweepBranch(ctx context.Context, dir, since, start, head string) string {
+	name := "sweep/" + strings.ReplaceAll(since, "/", "-") + "-to-" + head
+	if _, err := gitx.Exec(ctx, dir, "check-ref-format", "--branch", name); err != nil {
+		return "sweep/" + start + "-to-" + head
+	}
+
+	return name
 }
 
 // CheckSweep refuses the default branch, where resolve would commit to it,
@@ -35,14 +47,22 @@ func CheckSweep(ctx context.Context, t *target.Target, since string, warn io.Wri
 		return Sweep{}, fmt.Errorf("reading HEAD: %w", err)
 	}
 
-	if _, err := gitx.Exec(ctx, t.Dir, "rev-parse", "--verify", "--quiet", since+"^{commit}"); err != nil {
+	start, err := gitx.Exec(ctx, t.Dir, "rev-parse", "--verify", "--quiet", "--short=7", since+"^{commit}")
+	if err != nil {
 		return Sweep{}, fmt.Errorf("%s names no commit here", since)
 	}
 
-	sw := Sweep{Branch: "sweep/" + strings.ReplaceAll(since, "/", "-") + "-to-" + head}
-
 	branch := gitx.CurrentBranch(ctx, t.Dir)
-	if def, err := stack.LocalDefault(ctx, t.Dir); err == nil && branch == def {
+	sw := Sweep{Branch: sweepBranch(ctx, t.Dir, since, start, head)}
+	sw.Here = branch == sw.Branch
+
+	// unknown is not "elsewhere": a sweep on main would commit its fixes there
+	def, err := stack.LocalDefault(ctx, t.Dir)
+	if err != nil {
+		return sw, err
+	}
+
+	if branch == def {
 		sw.Decline = findings.OnDefault
 
 		return sw, nil
