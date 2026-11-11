@@ -179,6 +179,8 @@ Over a scope every project shares the span.
 4. **Updated**: commits, merges from the base (a commit with more than one parent) or force pushes in the window, counted, or a review requested there; `trace` when a commit's `Step:` trailer names the step, else `guessed`.
 5. Nothing in the window (a comment, a label, activity outside it): no row; an open request counts in `quiet`.
 
+**A bundle.** A request naming several tasks is a row for each of them, the lead and every rider, as in the state view.
+
 **A task's requests.** A task whose requests had activity in the window gets one row: the latest-opened of them leads, giving the row its group, `pr`, `who`, `owes` and summary, and `at` is the latest across them.
 Every other request of the task opened before it, touched in the window or found by the earlier search, goes in `related` by one rule, whether it ended before the later one opened:
 
@@ -189,6 +191,7 @@ Every other request of the task opened before it, touched in the window or found
 Only a request closed unmerged with no request of its task opened after it or still open keeps `abandoned`; one with such a request reads `closed`, `closed, replaced by #176` where the other opened later.
 
 **New tasks** are the tracker's open tasks whose `created` falls in the window: the host's issues' creation time, or a driver row's optional `created` (`docs/driver-contract.md`).
+A task with a row from a request in the window is not listed again here.
 `merged-unfinished` never appears in the feed: its author sees it in `--state` and `f10 status`.
 
 ## Sources

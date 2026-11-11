@@ -47,18 +47,23 @@ func DeriveFeed(f Facts, now time.Time, w Window) Board {
 
 		for _, t := range a.Requests {
 			if r, ok := feedRow(f, t, w, tasks); ok {
-				if len(membersOf(f.Prefix, feedPR(t))) == 0 {
+				members := membersOf(f.Prefix, feedPR(t))
+				if len(members) == 0 {
 					b.Feed.Rows = append(b.Feed.Rows, r)
 
 					continue
 				}
 
-				id := strings.ToUpper(r.Key)
-				if _, seen := byTask[id]; !seen {
-					order = append(order, id)
-				}
+				// a bundle's request is every member's, as in the state view
+				for _, m := range members {
+					id := strings.ToUpper(m)
+					if _, seen := byTask[id]; !seen {
+						order = append(order, id)
+					}
 
-				byTask[id] = append(byTask[id], requestRow{r, t})
+					r.Key, r.Task = m, tasks[id]
+					byTask[id] = append(byTask[id], requestRow{r, t})
+				}
 
 				continue
 			}
@@ -79,8 +84,14 @@ func DeriveFeed(f Facts, now time.Time, w Window) Board {
 		}
 	}
 
+	active := map[string]bool{}
+	for _, r := range b.Feed.Rows {
+		active[strings.ToUpper(r.Key)] = true
+	}
+
 	for _, t := range f.Tasks {
-		if !inWindow(w, t.Created) {
+		// one task is one row: created and worked on in the window, the work leads
+		if !inWindow(w, t.Created) || active[strings.ToUpper(t.ID)] {
 			continue
 		}
 

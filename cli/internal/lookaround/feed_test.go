@@ -351,6 +351,45 @@ func TestDeriveFeedOneRowPerTask(t *testing.T) {
 	}
 }
 
+// A bundle's request is a row for the lead and for each rider, and a task
+// created and started in the window has the started row only.
+func TestDeriveFeedBundleRiders(t *testing.T) {
+	t.Parallel()
+
+	f := Facts{
+		Prefix: "FT",
+		Tasks: []Task{
+			{ID: "FT-3", Title: "the lead", Created: hourToday(7)},
+			{ID: "FT-4", Title: "the rider", Created: hourToday(7)},
+			{ID: "FT-5", Title: "untouched", Created: hourToday(7)},
+		},
+		Activity: &forge.Activity{Requests: []forge.Touched{
+			touched(9, "FT-3 (+FT-4): the lead", "FT-3+FT-4/the-lead", forge.Open, hourToday(8)),
+		}},
+	}
+
+	var got []string
+
+	for _, r := range DeriveFeed(f, feedNow, feedToday).Feed.Rows {
+		title := ""
+		if r.Task != nil {
+			title = r.Task.Title
+		}
+
+		got = append(got, r.Key+" "+r.Group+" "+title)
+
+		if r.Group == GroupStarted && (r.PR == nil || r.PR.Number != 9) {
+			t.Errorf("%s = %+v, want the bundle's request", r.Key, r)
+		}
+	}
+
+	if want := []string{
+		"FT-3 started the lead", "FT-4 started the rider", "FT-5 new-tasks untouched",
+	}; !slices.Equal(got, want) {
+		t.Errorf("rows = %v, want %v", got, want)
+	}
+}
+
 // A review comment this morning makes no row, so the default still falls
 // back to the last working day.
 func TestChooseWindowIgnoresRowlessActivity(t *testing.T) {
