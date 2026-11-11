@@ -46,7 +46,9 @@ Any commit this step makes follows `conventions/context.md` → Commits, with `-
    - Another task named in the PR text is a link carrying its title, from `f10 task ref <id>... --md` (`conventions/context.md` → Task references).
    - A **bundle** is several tasks shipped in one PR, and the `task:` line of `f10 pr view` names it as `<lead>+<riders>`.
      Draft a bundle's title from the lead's, and its body links every member with its title.
-     `f10 pr create` and `f10 pr edit` add the riders after the lead id (`ABC-1 (+ABC-2, ABC-3): <lead title>`), so the draft never names them.
+     The riders go after the lead id, up to two and then a count (`ABC-1 (+ABC-2, ABC-3, 2 more): <lead title>`).
+     With the plain commands, leave them out of the draft, because `f10 pr create` and `f10 pr edit` add them.
+     A skill adapter opens and refreshes the PR itself, so its draft carries them in that shape.
    - On a host that closes issues on merge, the body carries one line per member, each on a line of its own.
      The lead and each rider the PR delivers get `Closes #12`.
      A rider the PR delivers only in part gets `Part of #12`, judged against that rider's criteria in the plan's `## Riders` section.

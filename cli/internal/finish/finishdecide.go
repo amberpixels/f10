@@ -232,9 +232,12 @@ func settleClose(in FinishInput, d *finishDecision, unpushed bool) error {
 		return nil
 	}
 
-	// a branch never pushed has no body, so its riders stay open
+	// a branch never pushed has no body, and on a tracker that is not the
+	// host the body names no rider, so either way the riders stay open
+	read := !unpushed && in.HostCloses
+
 	body := []string{}
-	if !unpushed {
+	if read {
 		body = BodyCloses(d.pull.Body, in.Task.MemberRefs()[1:])
 	}
 
@@ -244,7 +247,7 @@ func settleClose(in FinishInput, d *finishDecision, unpushed bool) error {
 		return nil
 	}
 
-	return RidersError{task: in.Task, body: body, read: !unpushed}
+	return RidersError{task: in.Task, body: body, read: read}
 }
 
 // cleanupErrs collects the failures after a merge: the merge has landed, so

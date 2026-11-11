@@ -24,7 +24,7 @@ const (
 type RidersError struct {
 	task ref.Ref
 	body []string // the riders the PR body closes
-	read bool     // a PR body was read; false for a branch never pushed
+	read bool     // the body was read; false with no PR, or a tracker that is not the host
 }
 
 func (e RidersError) Error() string {
@@ -76,8 +76,8 @@ func CloseChoice(task ref.Ref, value string, resolve func(string) (ref.Ref, erro
 }
 
 // settleRiders makes the merge close only the chosen riders: before the
-// merge by editing the body's keywords, after one by reopening those the
-// body closed. A tracker that is not the host closes nothing, so the notes
+// merge by editing the body's keywords, after one by reopening or closing
+// each rider the body got the other way. A tracker that is not the host closes nothing, so the notes
 // say what to close by hand.
 func settleRiders(
 	ctx context.Context,
@@ -109,20 +109,9 @@ func settleRiders(
 
 	switch {
 	case merged:
-		// a rider under `Part of` was never closed, so only the body's closes reopen
-		closed := BodyCloses(mergedBody, kept)
-		for _, m := range kept {
-			if !slices.Contains(closed, m.ID) {
-				continue
-			}
-
-			if err := in.Host.SetIssueOpen(ctx, m.Number, true); err != nil {
-				return nil, fmt.Errorf("reopening %s, which the merge closed: %w", m.ID, err)
-			}
-		}
-
-		if len(closed) > 0 {
-			notes = append(notes, "reopened "+strings.Join(closed, ", ")+", which the merge had closed")
+		var err error
+		if notes, err = settleMerged(ctx, in, mergedBody, kept, closing); err != nil {
+			return nil, err
 		}
 	default:
 		body, err := in.Host.PRBody(ctx, branch)
@@ -148,6 +137,47 @@ func settleRiders(
 	}
 
 	return textx.AppendNote(notes, keptNote(kept)), nil
+}
+
+// settleMerged brings the riders in line with the choice after the merge
+// acted on the body: a kept rider the body closed reopens, and a chosen one
+// the body left under `Part of` closes.
+func settleMerged(ctx context.Context, in FinishInput, body string, kept, closing []ref.Ref) ([]string, error) {
+	var notes []string
+
+	if reopen := BodyCloses(body, kept); len(reopen) > 0 {
+		for _, m := range kept {
+			if slices.Contains(reopen, m.ID) {
+				if err := in.Host.SetIssueOpen(ctx, m.Number, true); err != nil {
+					return nil, fmt.Errorf("reopening %s, which the merge closed: %w", m.ID, err)
+				}
+			}
+		}
+
+		notes = append(notes, "reopened "+strings.Join(reopen, ", ")+", which the merge had closed")
+	}
+
+	closedByMerge := BodyCloses(body, closing)
+
+	var shut []string
+
+	for _, m := range closing {
+		if slices.Contains(closedByMerge, m.ID) {
+			continue
+		}
+
+		if err := in.Host.SetIssueOpen(ctx, m.Number, false); err != nil {
+			return nil, fmt.Errorf("closing %s, which the merge left open: %w", m.ID, err)
+		}
+
+		shut = append(shut, m.ID)
+	}
+
+	if len(shut) > 0 {
+		notes = append(notes, "closed "+strings.Join(shut, ", ")+", which the merge had left open")
+	}
+
+	return notes, nil
 }
 
 func keptNote(kept []ref.Ref) string {

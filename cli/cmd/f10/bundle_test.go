@@ -420,6 +420,39 @@ func TestFinishFollowsTheBody(t *testing.T) {
 	}
 }
 
+// After a merge that left a rider under Part of, --close closes it, and the
+// report says the finish did it.
+func TestFinishClosesAChosenRiderTheMergeLeftOpen(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.f.script(ghView, mergedWithBody("Closes #1\nPart of #2"))
+	fx.f.script(lsRem, "")
+	fx.f.script("gh issue close 2", "")
+	fx.in.Task, fx.in.Close, fx.in.HostCloses = bundle12, []string{"GH-2"}, true
+
+	out, err := fx.run(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !fx.f.called("gh issue close 2") || !strings.Contains(out, "closed GH-2, which the merge had left open") {
+		t.Errorf("GH-2 was not closed: %v\n%s", fx.f.calls, out)
+	}
+}
+
+// A tracker that is not the host never reads the body, so the question
+// offers no body choice and the drive leaves every rider open.
+func TestFinishOnAnotherTrackerIgnoresTheBody(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.f.script(ghView, openWithBody("Closes #2"))
+	fx.f.script(ghRepo, allowAll)
+	fx.in.Task = bundle12
+
+	_, err := fx.run(t)
+	if err == nil || strings.Contains(err.Error(), "PR body") {
+		t.Errorf("err = %v, want the question without a body choice", err)
+	}
+}
+
 // A manual finish still asks, and the question names the body's choice.
 func TestFinishAsksWithTheBodysChoice(t *testing.T) {
 	for body, want := range map[string]string{
@@ -429,7 +462,7 @@ func TestFinishAsksWithTheBodysChoice(t *testing.T) {
 		fx := newFinishFixture(t)
 		fx.f.script(ghView, openWithBody(body))
 		fx.f.script(ghRepo, allowAll)
-		fx.in.Task = bundle12
+		fx.in.Task, fx.in.HostCloses = bundle12, true
 
 		_, err := fx.run(t)
 
