@@ -583,6 +583,7 @@ f10 status               # where the current task's run is, as `f10 status <id>`
 f10 status 1042          # a task's run in its own worktree, the question its agent waits on included
 f10 board                # what changed today (else the last working day): started, updated, reviewed, finished, new tasks
 f10 board --state        # where every task stands: done, in progress with its stage and next action, next
+f10 atlas --all --json   # your public projects with their declared and git facts, for a site to draw
 f10 ledger dump          # what runs recorded locally (--json, --project ., --task, --session)
 ```
 

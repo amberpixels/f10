@@ -75,6 +75,7 @@ f10 status [id] [--all] [--json | --plain]   # where the run is: a task's in its
 f10 standup [--since <time> | --week] [-C <checkout>]... [--group <name>]... [--all] [--json]   # your commits and PRs since your last standup, grouped by project and task
 f10 standup mark --since <time> [--at <time>]      # record a standup as reported: the next one starts where it ended
 f10 board [<window> | --since <window>] [--state] [--remote] [-C <checkout>]... [--group <name>]... [--all] [--detail] [--by person] [--json | --html] [--out <path>]   # what changed today (else the last working day); --state: where every task stands; one project or several
+f10 atlas [-C <checkout>]... [--group <name>]... [--all] [--json] [--out <path>]   # your public projects: what ~/.f10/atlas.md declares and what their git history says
 f10 stats [--since 30d] [<id>]   # active minutes per task by step group, with size and density; a median row; an id adds its steps
 
 f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --flow <name> | --discuss] [--pace <name>] [--after <id> | --base <branch>] [--agent <profile> | --model <model>] [note...]   # a worktree, a Herdr workspace, a prompted agent
@@ -1117,6 +1118,29 @@ On a repository nothing ever traced, read with `--remote`, every in-progress row
 The next action is a command where one exists (`f10 finish FT-71`, `/f10:resolve FT-71`), else a sentence.
 Rows draw under `in progress`, `next` and `done`; a task waiting only on its unmerged base, with nothing of its own started, stays under `next`, after the tasks that can start now.
 Inside a session, `/f10:board` runs the command with the same flags and prints its output; with `--state` it offers the rows whose next action is a command: the in-progress ones one per line, the `next` group as one line for its first task (`f10 start <id> and <N> more`), running none.
+
+## Atlas
+
+`f10 atlas` prints what each of your public projects is and how it has moved: what `~/.f10/atlas.md` declares (role, status, tagline) and what its checkout says (language, first and last commit, commits per month, latest tag).
+`docs/atlas.md` specifies the Atlas JSON and the declared file, and `docs/atlas.schema.json` is its schema.
+
+**The scope** is the board's: this checkout, or the union of `-C <path | name>` (repeatable), `--group <name>` (repeatable, a group in `~/.f10/board.md`) and `--all` (every checkout under `F10_ROOTS`, with it unset an error).
+A linked worktree counts as its main checkout, and a group entry naming a repository with no checkout is skipped, because the atlas reads local history only.
+
+**Only public projects are printed**, and only they are read: a project whose entry says `public: true`.
+A project with no entry is dropped, and so is a private one, even with an `alias`, because anonymous nodes are not printed yet.
+The declared file is checked whole on every run, so an unknown key or status, a bad or repeated alias, or a key matching two checkouts fails the run naming the entry.
+With `F10_ROOTS` set, a key or a link that names no checkout under any root fails too, because it is a typo; one naming a checkout outside this run's scope is skipped.
+Two public checkouts with one id, such as two clones of one remote, fail the run naming both, because an edge could not tell them apart.
+
+**The history** is the default branch's: origin's `HEAD`, else a local `main` or `master`, else `HEAD`.
+A checkout whose history does not read gets an `error` on its node, with its path removed, and every other project still prints.
+
+- With no flag, a line per project: name, status, language, last commit date and tagline, or the error.
+- `--json` prints the document; over several projects it is still one document. Edges are specified but not yet derived, so `edges` is `[]`.
+- `--out <path>` writes `--json` to a file, such as a site's data directory.
+
+It asks no host and reads no ledger, so a run over forty checkouts takes about a second.
 
 ## Stats
 
