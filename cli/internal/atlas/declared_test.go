@@ -61,6 +61,11 @@ func TestResolveRefusesABrokenFile(t *testing.T) {
 			scope: []Checkout{checkout("gears"), {Main: "/other/gears-copy", Name: "gears-copy", ID: "github.com/acme/gears"}},
 			want:  "/code/gears and /other/gears-copy are both exported as github.com/acme/gears",
 		},
+		"link matching two checkouts": {
+			decl:  Declared{Projects: map[string]Entry{"widgets": {Links: []Link{{To: "gears", Relation: "for"}}}}},
+			scope: []Checkout{checkout("gears"), twin, checkout("widgets")},
+			want:  `projects.widgets: links[0]: "gears" matches github.com/acme/gears and github.com/fork/gears`,
+		},
 		"typo under the roots": {
 			decl:  Declared{Projects: map[string]Entry{"gaers": {Public: true}}},
 			roots: []string{"/code/gears", "/code/widgets"},

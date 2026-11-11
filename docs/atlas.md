@@ -4,7 +4,7 @@ What each of your projects is and how they connect: one node per project, with w
 `f10 atlas --json` prints the **Atlas JSON** this file specifies, `docs/atlas.schema.json` is its JSON Schema, and `~/.f10/atlas.md` is the **declared file** where you write what no checkout can say.
 A renderer, such as a personal website, draws the document; f10 draws nothing.
 Version 1 reads local checkouts only, with no host call, so a run takes about a second and a logged-out host CLI cannot fail it.
-Today the command prints public nodes only: edges and anonymous nodes are specified here but not yet derived, so `edges` is `[]`.
+Today the command prints public nodes and the edges between them: anonymous nodes are specified here but not yet derived, so an edge with a private end is left out.
 
 ## Shape
 
@@ -108,6 +108,8 @@ It has no name, role, tagline, language, date, commit count or tag, because a co
 
 The edge rules:
 - A depended-on project is matched by the name its own manifest declares, never by its directory name, because the two can differ: the checkout `jsonish` may be the module `github.com/acme/json`.
+- Manifests are read at the checkout root only, the files `language` comes from, so a project whose manifest sits in a subdirectory declares no name and has no `depends` edge.
+- A name several nodes declare, such as an upstream and a fork that kept its module path, matches the node whose `id` is that name, and otherwise none, because a guess would draw a wrong edge.
 - An indirect Go requirement (`// indirect`) is not an edge, because the direct requirement that pulls it in is an edge of its own when both ends are in scope.
 - A go.mod `replace` whose target is a project in scope, a fork or a local path, is an edge to that project.
 - One manifest naming the same project twice is one edge, with `dev` only when every mention is development-only.

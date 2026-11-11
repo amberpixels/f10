@@ -111,13 +111,7 @@ func Resolve(ctx context.Context, decl Declared, scope []Checkout, roots []strin
 	out := map[string]Entry{}
 
 	for _, key := range keys {
-		var found []Checkout
-
-		for _, c := range scope {
-			if c.matches(key) {
-				found = append(found, c)
-			}
-		}
+		found := matching(scope, key)
 
 		switch {
 		case len(found) > 1:
@@ -138,6 +132,12 @@ func Resolve(ctx context.Context, decl Declared, scope []Checkout, roots []strin
 		}
 
 		for i, l := range decl.Projects[key].Links {
+			// a link draws one edge, so its target must name one checkout
+			if hits := matching(scope, l.To); len(hits) > 1 {
+				return nil, fmt.Errorf("projects.%s: links[%d]: %q matches %s and %s; name it by id",
+					key, i, l.To, hits[0].NodeID(), hits[1].NodeID())
+			}
+
 			if known != nil && !inScope(scope, l.To) && !known(l.To) {
 				return nil, fmt.Errorf("projects.%s: links[%d]: no checkout under F10_ROOTS is %q", key, i, l.To)
 			}
@@ -162,6 +162,18 @@ func Resolve(ctx context.Context, decl Declared, scope []Checkout, roots []strin
 	}
 
 	return out, nil
+}
+
+func matching(scope []Checkout, key string) []Checkout {
+	var out []Checkout
+
+	for _, c := range scope {
+		if c.matches(key) {
+			out = append(out, c)
+		}
+	}
+
+	return out
 }
 
 func inScope(scope []Checkout, key string) bool {

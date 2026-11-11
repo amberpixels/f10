@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -166,5 +167,66 @@ func TestAtlasReadsAWorktreeAsItsMainCheckout(t *testing.T) {
 	if n := doc.Nodes[0]; n.ID != "github.com/acme/gears" || n.Name != "gears" || n.Language != "go" ||
 		n.LastCommit != "2026-10-01T08:00:00Z" {
 		t.Errorf("node = %+v, want gears by its remote with main's tip", n)
+	}
+}
+
+// Edges join public nodes only: a requirement, a link, and a requirement on a
+// private checkout that is left out; the terminal names both directions.
+func TestAtlasPrintsTheEdges(t *testing.T) {
+	home := isolateEnv(t)
+	root := canonical(t, t.TempDir())
+	widgets := scopeRepo(t, root, "widgets")
+	jsonish := scopeRepo(t, root, "jsonish")
+	herd := scopeRepo(t, root, "herd")
+	secret := scopeRepo(t, root, "secret")
+
+	for dir, body := range map[string]string{
+		widgets: "module github.com/acme/widgets\n\nrequire (\n\tgithub.com/acme/json v0.1.0\n\tgithub.com/acme/secret v0.1.0\n)\n",
+		jsonish: "module github.com/acme/json\n",
+		herd:    "module github.com/acme/herd\n",
+		secret:  "module github.com/acme/secret\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	writeDeclared(t, home, "projects:\n"+
+		"  widgets: {public: true, links: [{to: herd, relation: plugin for}]}\n"+
+		"  jsonish: {public: true}\n  herd: {public: true}\n")
+
+	args := []string{"-C", widgets, "-C", jsonish, "-C", herd, "-C", secret, "atlas"}
+
+	out, err := runApp(t, append(args, "--json")...).outErr()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var doc atlas.Document
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+
+	want := []atlas.Edge{
+		{From: "local/widgets", To: "local/herd", Kind: "link", Source: "declared", Relation: "plugin for"},
+		{From: "local/widgets", To: "local/jsonish", Kind: "depends", Source: "manifest", Manifest: "go.mod"},
+	}
+	if !slices.Equal(doc.Edges, want) {
+		t.Errorf("edges = %+v, want %+v", doc.Edges, want)
+	}
+
+	text, err := runApp(t, args...).outErr()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, line := range []string{
+		"  used by: widgets (plugin for)",
+		"  used by: widgets\n",
+		"  depends on: herd (plugin for), jsonish\n",
+	} {
+		if !strings.Contains(text, line) {
+			t.Errorf("terminal output lacks %q:\n%s", line, text)
+		}
 	}
 }

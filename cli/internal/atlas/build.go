@@ -55,18 +55,21 @@ type Tag struct {
 	At   string `json:"at"`
 }
 
-// An Edge is specified but not yet derived, so the list is always empty.
+// An Edge joins two public nodes: a manifest dependency or a declared link.
 type Edge struct {
-	From   string `json:"from"`
-	To     string `json:"to"`
-	Kind   string `json:"kind"`
-	Source string `json:"source"`
+	From     string `json:"from"`
+	To       string `json:"to"`
+	Kind     string `json:"kind"`
+	Source   string `json:"source"`
+	Manifest string `json:"manifest,omitempty"`
+	Dev      bool   `json:"dev,omitempty"`
+	Relation string `json:"relation,omitempty"`
 }
 
 // Build reads every public checkout and assembles the document. A private
 // checkout is never read, so nothing of its history reaches the process.
 //
-//nolint:lostfield // an assembly: readNode carries each entry's fields, and aliases and links print later
+//nolint:lostfield // an assembly: readNode carries each entry's fields, and aliases print later
 func Build(ctx context.Context, entries map[string]Entry, scope []Checkout, now time.Time) Document {
 	now = now.UTC().Truncate(time.Second)
 
@@ -78,7 +81,7 @@ func Build(ctx context.Context, entries map[string]Entry, scope []Checkout, now 
 		}
 	}
 
-	nodes := make([]Node, len(public))
+	reads := make([]read, len(public))
 	sem := make(chan struct{}, readParallel)
 
 	var wg sync.WaitGroup
@@ -88,29 +91,37 @@ func Build(ctx context.Context, entries map[string]Entry, scope []Checkout, now 
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			nodes[i] = readNode(ctx, c, entries[c.Main], now)
+			reads[i] = readNode(ctx, c, entries[c.Main], now)
 		})
 	}
 
 	wg.Wait()
 
+	nodes := make([]Node, len(reads))
+	for i, r := range reads {
+		nodes[i] = r.node
+	}
+
 	slices.SortFunc(nodes, func(a, b Node) int { return cmp.Or(cmp.Compare(a.Name, b.Name), cmp.Compare(a.ID, b.ID)) })
 
-	return Document{Version: Version, GeneratedAt: now.Format(time.RFC3339), Nodes: nodes, Edges: []Edge{}}
+	return Document{Version: Version, GeneratedAt: now.Format(time.RFC3339), Nodes: nodes, Edges: deriveEdges(reads)}
 }
 
-func readNode(ctx context.Context, c Checkout, e Entry, now time.Time) Node {
+func readNode(ctx context.Context, c Checkout, e Entry, now time.Time) read {
 	n := Node{
 		ID: c.NodeID(), Kind: "public", Name: c.Name,
 		Role: e.Role, Status: e.Status, Tagline: e.Tagline,
 		Language: language(c.Main),
 	}
 
-	if err := readGit(ctx, c.Main, now, &n); err != nil {
+	err := readGit(ctx, c.Main, now, &n)
+
+	m, merr := readManifests(c.Main)
+	if err = errors.Join(err, merr); err != nil {
 		n.Error = scrub(ctx, err.Error(), c)
 	}
 
-	return n
+	return read{checkout: c, node: n, m: m, links: e.Links}
 }
 
 // scrub takes every local path out of a read's error, because nothing in the
