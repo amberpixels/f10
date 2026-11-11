@@ -144,6 +144,23 @@ func Resolve(ctx context.Context, decl Declared, scope []Checkout, roots []strin
 		}
 	}
 
+	// an edge names a node by id, so two exported checkouts with one id
+	// could not be told apart
+	exported := map[string]string{}
+
+	for _, c := range scope {
+		if !out[c.Main].Public {
+			continue
+		}
+
+		if other := exported[c.NodeID()]; other != "" {
+			return nil, fmt.Errorf("%s and %s are both exported as %s: rename one checkout or give it a remote",
+				other, c.Main, c.NodeID())
+		}
+
+		exported[c.NodeID()] = c.Main
+	}
+
 	return out, nil
 }
 

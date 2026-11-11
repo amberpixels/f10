@@ -2,6 +2,7 @@ package atlas
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -119,7 +120,10 @@ func TestBuildReportsAFailedReadWithoutThePath(t *testing.T) {
 	n := buildOne(t, Checkout{Main: r.Dir, Name: "empty", ID: "github.com/acme/empty"},
 		Entry{Public: true, Status: "parked", Tagline: "Nothing yet."})
 
-	if n.Error == "" || strings.Contains(n.Error, r.Dir) || n.Status != "parked" || n.Tagline != "Nothing yet." {
+	home, _ := os.UserHomeDir()
+	if n.Error == "" || strings.Contains(n.Error, r.Dir) || (home != "" && strings.Contains(n.Error, home)) ||
+		n.Status != "parked" ||
+		n.Tagline != "Nothing yet." {
 		t.Errorf("node = %+v, want an error without %s and the declared fields kept", n, r.Dir)
 	}
 }
@@ -174,5 +178,25 @@ func TestBuildSortsByName(t *testing.T) {
 	doc := Build(t.Context(), entries, scope, buildNow)
 	if len(doc.Nodes) != 2 || doc.Nodes[0].Name != "gears" {
 		t.Errorf("nodes = %+v, want gears first", doc.Nodes)
+	}
+}
+
+func TestScrubRemovesEveryLocalPath(t *testing.T) {
+	t.Parallel()
+
+	r := gitxtest.Init(t, filepath.Join(t.TempDir(), "gears"), "main")
+	home, _ := os.UserHomeDir()
+	text := "open " + filepath.Join(
+		r.Dir,
+		".git",
+		"index",
+	) + ": no; cd " + r.Dir + "; read " + filepath.Join(
+		home,
+		".gitconfig",
+	)
+
+	got := scrub(t.Context(), text, Checkout{Main: r.Dir, Name: "gears"})
+	if strings.Contains(got, r.Dir) || strings.Contains(got, home) || !strings.Contains(got, "gears/.git/index") {
+		t.Errorf("scrub = %q", got)
 	}
 }

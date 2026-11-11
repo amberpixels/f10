@@ -56,6 +56,11 @@ func TestResolveRefusesABrokenFile(t *testing.T) {
 			decl: Declared{Projects: map[string]Entry{"gears": {}, "github.com/acme/gears": {}}},
 			want: "projects.gears and projects.github.com/acme/gears",
 		},
+		"two public checkouts with one id": {
+			decl:  Declared{Projects: map[string]Entry{"gears": {Public: true}, "gears-copy": {Public: true}}},
+			scope: []Checkout{checkout("gears"), {Main: "/other/gears-copy", Name: "gears-copy", ID: "github.com/acme/gears"}},
+			want:  "/code/gears and /other/gears-copy are both exported as github.com/acme/gears",
+		},
 		"typo under the roots": {
 			decl:  Declared{Projects: map[string]Entry{"gaers": {Public: true}}},
 			roots: []string{"/code/gears", "/code/widgets"},

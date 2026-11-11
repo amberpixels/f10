@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -106,11 +107,26 @@ func readNode(ctx context.Context, c Checkout, e Entry, now time.Time) Node {
 	}
 
 	if err := readGit(ctx, c.Main, now, &n); err != nil {
-		// nothing in the atlas names a path, an error's text included
-		n.Error = strings.ReplaceAll(err.Error(), c.Main, c.Name)
+		n.Error = scrub(ctx, err.Error(), c)
 	}
 
 	return n
+}
+
+// scrub takes every local path out of a read's error, because nothing in the
+// atlas names one: the git directory, the checkout, then the home directory.
+func scrub(ctx context.Context, text string, c Checkout) string {
+	if gitDir := gitx.Out(ctx, c.Main, "rev-parse", "--path-format=absolute", "--git-common-dir"); gitDir != "" {
+		text = strings.ReplaceAll(text, gitDir, c.Name+"/.git")
+	}
+
+	text = strings.ReplaceAll(text, c.Main, c.Name)
+
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		text = strings.ReplaceAll(text, home, "~")
+	}
+
+	return text
 }
 
 // language takes the first stack the project loader infers.

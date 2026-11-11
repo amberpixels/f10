@@ -1131,6 +1131,7 @@ A linked worktree counts as its main checkout, and a group entry naming a reposi
 A project with no entry is dropped, and so is a private one, even with an `alias`, because anonymous nodes are not printed yet.
 The declared file is checked whole on every run, so an unknown key or status, a bad or repeated alias, or a key matching two checkouts fails the run naming the entry.
 With `F10_ROOTS` set, a key or a link that names no checkout under any root fails too, because it is a typo; one naming a checkout outside this run's scope is skipped.
+Two public checkouts with one id, such as two clones of one remote, fail the run naming both, because an edge could not tell them apart.
 
 **The history** is the default branch's: origin's `HEAD`, else a local `main` or `master`, else `HEAD`.
 A checkout whose history does not read gets an `error` on its node, with its path removed, and every other project still prints.
