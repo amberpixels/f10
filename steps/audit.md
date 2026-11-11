@@ -17,6 +17,9 @@ It reads plans and lore, because recorded intent is what tells a deliberate diff
    - `since <date>`: the range starts at the last commit before that date, `git rev-list -1 --before=<date> HEAD`.
      A date older than the first commit is the same as `all`.
    - No window: the range starts at the `head:` of the newest report in `<storage root>/audits/`.
+     When that sha is not an ancestor of HEAD (`git merge-base --is-ancestor`), start at `git merge-base <head> HEAD` instead and say so in one line.
+     That happens when the last audit ran on a branch that later merged by squash, which leaves its head off the default branch.
+     If git no longer has that commit, fall back to the last tag.
      With no report there, it starts at the last tag reachable from HEAD (`git describe --tags --abbrev=0`).
      With neither, decline in one line, asking for a ref.
    - `all`: the whole tree at HEAD, with no range.
@@ -26,7 +29,7 @@ It reads plans and lore, because recorded intent is what tells a deliberate diff
 2. **The map**, built by the main agent in a few calls.
    - File and line counts per package or directory, from `git ls-files`.
    - The import graph, where the stack prints one (the stack's own module or package graph command).
-   - The churn per area over the range, from `git log --numstat <range>`.
+   - The churn per area over the range, from `git log --numstat <range>`, summed per directory in the same command (piped through `awk`) so the output stays one line per area.
    - The **task map**: run `git log <range> --format='%h%x09%(trailers:key=Task,valueonly,separator=%x2C)%x09%s'`.
      A commit with no `Task:` trailer maps to the task by a task id in its subject.
      A commit with neither goes to an upkeep bucket.
@@ -38,7 +41,7 @@ It reads plans and lore, because recorded intent is what tells a deliberate diff
    - Probes the stack offers, when they are installed (`go vet`, `deadcode`, the linter the repo configures).
      A missing probe is one line in the report, never a failure.
 
-   Under `all`, the task map covers the newest 300 commits, because the full history would crowd out the code.
+   Under `all`, the churn and the task map cover the newest 300 commits, because the full history would crowd out the code.
 3. **The partition.**
    Split the code into areas from the map, each holding a similar amount of code and churn, and give each area one reviewer.
    Add two reviewers that every audit has:
@@ -117,8 +120,13 @@ On yes, run the **capture** step with the report as its description, split as th
 - The parent holds the verdict, the bugs, and the not-recommended list as its out-of-scope.
 - Each theme becomes a subtask, its findings and their `where:` lines in its body.
 - A bug that belongs to no theme is a subtask of its own, in phase 1.
-- Each subtask after the first carries an `After:` line naming the subtask it builds on: the last subtask of the phase before, or the theme its findings depend on.
-  Create the subtasks in phase order, so every `After:` names a task that already exists.
+- A phase-1 subtask carries no `After:` line, unless its theme depends on another phase-1 theme.
+- A later subtask's `After:` names the theme its findings depend on, else the last subtask created in the phase before.
+  `After:` holds one id, so a theme that depends on several names the one created last and lists the others in its body.
+- Create the subtasks in phase order, so every `After:` names a task that already exists.
+
+`/f10:drive` starts a subtask once the task its `After:` names has a commit, so the lines order the work but do not hold a phase until the one before it has finished.
+The parent's body says so, under the phase list.
 
 The report's path stays off the tracker under stealth, so the parent describes the audit without naming it.
 

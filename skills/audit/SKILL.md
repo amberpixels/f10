@@ -1,7 +1,7 @@
 ---
 name: audit
 description: "f10 audit skill - a big-picture review of what shipped over a window (since the last audit, a ref, a date, or the whole codebase): reviewer agents split by area plus cross-cutting and history lenses, every claimed bug verified in the code, one report under the storage root, and an offer to capture it as a parent task with ordered subtasks. Use when the user says \"/f10:audit [since <ref | date> | all]\", asks for an audit, a codebase health check, how recent work fits together, or what to refactor after a run of features."
-allowed-tools: Bash, Read, Write, Grep, Glob, Agent, AskUserQuestion
+allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Agent, AskUserQuestion, Skill
 argument-hint: "[since <ref | date> | all]"
 ---
 
