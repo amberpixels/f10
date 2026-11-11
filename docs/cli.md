@@ -1121,27 +1121,32 @@ Inside a session, `/f10:board` runs the command with the same flags and prints i
 
 ## Atlas
 
-`f10 atlas` prints what each of your public projects is, how it has moved and how they connect: what `~/.f10/atlas.md` declares (role, status, tagline, links) and what its checkout says (language, first and last commit, commits per month, latest tag, dependencies).
+`f10 atlas` prints what each of your public projects is, how it has moved and how they connect, with each aliased private project as an anonymous node: what `~/.f10/atlas.md` declares (role, status, tagline, links) and what its checkout says (language, first and last commit, commits per month, latest tag, dependencies).
 `docs/atlas.md` specifies the Atlas JSON and the declared file, and `docs/atlas.schema.json` is its schema.
 
 **The scope** is the board's: this checkout, or the union of `-C <path | name>` (repeatable), `--group <name>` (repeatable, a group in `~/.f10/board.md`) and `--all` (every checkout under `F10_ROOTS`, with it unset an error).
 A linked worktree counts as its main checkout, and a group entry naming a repository with no checkout is skipped, because the atlas reads local history only.
 
-**Only public projects are printed**, and only they are read: a project whose entry says `public: true`.
-A project with no entry is dropped, and so is a private one, even with an `alias`, because anonymous nodes are not printed yet.
+**What is printed** follows the privacy rule in `docs/atlas.md`:
+- A project whose entry says `public: true` is printed in full.
+- A private project whose entry gives an `alias` is printed as an anonymous node: its alias, its kind and its edges, nothing else.
+  Only its manifests are read, never its history, so nothing of its name, remote, path or rhythm reaches the document.
+- A project with no entry, or a private one with no alias, is dropped and never read.
 The declared file is checked whole on every run, so an unknown key or status, a bad or repeated alias, or a key matching two checkouts fails the run naming the entry.
 With `F10_ROOTS` set, a key or a link that names no checkout under any root fails too, because it is a typo; one naming a checkout outside this run's scope is skipped.
 Two public checkouts with one id, such as two clones of one remote, fail the run naming both, because an edge could not tell them apart.
 
-**Edges** join two public projects in scope.
+**Edges** join two printed projects in scope, never two anonymous ones.
 A `depends` edge comes from the root `go.mod` (direct requirements and `replace` targets), `package.json`, gemspec or `Gemfile`, matched by the name the other project's own manifest declares, never its directory name.
 A `link` edge is an entry's `links` item, with its relation in your words.
-An edge to a private project, or to one outside the scope, is left out.
+An edge from an anonymous node carries no `manifest` and no `dev`, because the file would name the private project's language.
+An edge to a dropped project, or to one outside the scope, is left out.
 
 **The history** is the default branch's: origin's `HEAD`, else a local `main` or `master`, else `HEAD`.
 A checkout whose history does not read gets an `error` on its node, with its path removed, and every other project still prints.
+An anonymous node has no `error` field, so a malformed manifest there prints a `warning:` line on stderr under its alias, with no path, and the node keeps its declared links but draws no `depends` edge.
 
-- With no flag, a line per project: name, status, language, last commit date and tagline, or the error.
+- With no flag, a line per project: name, status, language, last commit date and tagline, or the error; anonymous nodes follow, each as its alias and `anonymous`.
 - `--json` prints the document; over several projects it is still one document.
 - A project with edges gets a second line: `depends on:` lists what it requires or links to, and `used by:` lists what requires or links to it.
   A link shows its relation in parentheses, and a development-only dependency shows `(dev)`.

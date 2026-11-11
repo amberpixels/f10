@@ -3,6 +3,7 @@ package atlas
 import (
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/gitx/gitxtest"
@@ -84,7 +85,7 @@ replace github.com/acme/kit => ../kit
 		map[string]string{"go.mod": "module github.com/acme/secret\nrequire (\n"},
 	)
 
-	doc := Build(t.Context(), entries, scope, buildNow)
+	doc, _ := Build(t.Context(), entries, scope, buildNow)
 	fits(t, doc)
 
 	dep := func(from, to, manifest string, dev bool) Edge {
@@ -132,7 +133,7 @@ func TestBuildLeavesAnAmbiguousNameOut(t *testing.T) {
 		entries[r.Dir] = Entry{Public: true}
 	}
 
-	if doc := Build(t.Context(), entries, scope, buildNow); len(doc.Edges) != 0 {
+	if doc, _ := Build(t.Context(), entries, scope, buildNow); len(doc.Edges) != 0 {
 		t.Errorf("edges = %+v, want none", doc.Edges)
 	}
 }
@@ -154,5 +155,64 @@ func TestCollapseMergesDevAndDropsSelfEdges(t *testing.T) {
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("collapse = %+v, want %+v", got, want)
+	}
+}
+
+// Edges with an anonymous end: no manifest or dev mark from one, a go.mod and
+// a package.json naming one project as one edge, links both ways, nothing
+// between two anonymous nodes, and a broken manifest warned under the alias.
+func TestBuildDerivesEdgesWithAnAnonymousEnd(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	entries := map[string]Entry{}
+
+	var scope []Checkout
+
+	add := func(name, id string, e Entry, files map[string]string) string {
+		r := gitxtest.Init(t, filepath.Join(root, name), "main")
+		r.Commit("2026-11-01T08:00:00Z", "a", "1", "start")
+		writeFiles(t, r.Dir, files)
+
+		scope = append(scope, Checkout{Main: r.Dir, Name: name, ID: id, Local: id == ""})
+		entries[r.Dir] = e
+
+		return r.Dir
+	}
+
+	add("gears", "", Entry{Public: true}, map[string]string{
+		"go.mod":       "module github.com/acme/gears\n",
+		"package.json": `{"name": "gears-js"}`,
+	})
+	add("widgets", "", Entry{Public: true, Links: []Link{{To: "client-secret", Relation: "plugin for"}}}, nil)
+	add("client-secret", "github.com/acme/client-secret", Entry{Alias: "client-app", Links: []Link{
+		{To: "gears", Relation: "showcase for"},
+		{To: "partner-secret", Relation: "built for"},
+	}}, map[string]string{
+		"go.mod":       "module github.com/acme/client-secret\n\nrequire github.com/acme/gears v0.1.0\n",
+		"package.json": `{"name": "client", "devDependencies": {"gears-js": "1"}}`,
+	})
+	add("partner-secret", "", Entry{Alias: "partner-co"}, map[string]string{
+		"go.mod": "module github.com/acme/partner\n\nrequire github.com/acme/client-secret v0.1.0\n",
+	})
+	broken := add("broken-secret", "", Entry{Alias: "broken-co", Links: []Link{{To: "gears", Relation: "uses"}}},
+		map[string]string{"go.mod": "module github.com/acme/broken\nrequire (\n"})
+
+	doc, warnings := Build(t.Context(), entries, scope, buildNow)
+	fits(t, doc)
+
+	want := []Edge{
+		{From: "anon/broken-co", To: "local/gears", Kind: edgeLink, Source: "declared", Relation: "uses"},
+		{From: "anon/client-app", To: "local/gears", Kind: edgeDepends, Source: "manifest"},
+		{From: "anon/client-app", To: "local/gears", Kind: edgeLink, Source: "declared", Relation: "showcase for"},
+		{From: "local/widgets", To: "anon/client-app", Kind: edgeLink, Source: "declared", Relation: "plugin for"},
+	}
+	if !slices.Equal(doc.Edges, want) {
+		t.Errorf("edges =\n%+v\nwant\n%+v", doc.Edges, want)
+	}
+
+	if len(warnings) != 1 || !strings.HasPrefix(warnings[0], "broken-co: ") ||
+		strings.Contains(warnings[0], "broken-secret") || strings.Contains(warnings[0], broken) {
+		t.Errorf("warnings = %q, want one under the alias naming no checkout", warnings)
 	}
 }

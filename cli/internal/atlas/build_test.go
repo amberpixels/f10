@@ -2,6 +2,7 @@ package atlas
 
 import (
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -17,7 +18,7 @@ var buildNow = time.Date(2026, 11, 11, 12, 0, 0, 0, time.UTC)
 func buildOne(t *testing.T, c Checkout, e Entry) Node {
 	t.Helper()
 
-	doc := Build(t.Context(), map[string]Entry{c.Main: e}, []Checkout{c}, buildNow)
+	doc, _ := Build(t.Context(), map[string]Entry{c.Main: e}, []Checkout{c}, buildNow)
 	if len(doc.Nodes) != 1 {
 		t.Fatalf("nodes = %v, want one", doc.Nodes)
 	}
@@ -185,7 +186,7 @@ func TestBuildSkipsADanglingOriginHead(t *testing.T) {
 	}
 }
 
-// A private project is neither printed nor read, alias or not.
+// A private project with no alias is neither printed nor read.
 func TestBuildDropsPrivateProjects(t *testing.T) {
 	t.Parallel()
 
@@ -194,26 +195,95 @@ func TestBuildDropsPrivateProjects(t *testing.T) {
 	pub.Commit("2026-11-01T08:00:00Z", "a", "1", "start")
 
 	secret := gitxtest.Init(t, filepath.Join(root, "secret-client"), "main")
-	secret.Commit("2026-11-01T08:00:00Z", "a", "1", "start")
+	secret.Commit("2026-11-01T08:00:00Z", "go.mod", "module github.com/acme/secret-client\nrequire (\n", "start")
 
 	scope := []Checkout{
 		{Main: pub.Dir, Name: "gears", Local: true},
 		{Main: secret.Dir, Name: "secret-client", ID: "github.com/acme/secret-client"},
 		{Main: filepath.Join(root, "unread"), Name: "unread", Local: true},
 	}
-	entries := map[string]Entry{pub.Dir: {Public: true}, secret.Dir: {Alias: "client-app"}}
+	entries := map[string]Entry{pub.Dir: {Public: true}, secret.Dir: {Role: "client app"}}
 
-	doc := Build(t.Context(), entries, scope, buildNow)
+	doc, warnings := Build(t.Context(), entries, scope, buildNow)
 	raw := string(fits(t, doc))
 
-	for _, leak := range []string{"secret-client", secret.Dir, "client-app", "unread"} {
+	for _, leak := range []string{"secret-client", secret.Dir, "client app", "unread"} {
 		if strings.Contains(raw, leak) {
 			t.Errorf("the document names %q: %s", leak, raw)
 		}
 	}
 
-	if !strings.Contains(raw, `"edges":[]`) {
-		t.Errorf("edges not an empty list: %s", raw)
+	if !strings.Contains(raw, `"edges":[]`) || len(warnings) != 0 {
+		t.Errorf("edges not an empty list, or warnings %v: %s", warnings, raw)
+	}
+}
+
+// An aliased private project is its alias, its kind and its edges: none of
+// its name, remote, path, module path or history reaches the document.
+func TestBuildExportsAnAliasedProjectAnonymously(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	pub := gitxtest.Init(t, filepath.Join(root, "gears"), "main")
+	pub.Commit("2026-11-01T08:00:00Z", "go.mod",
+		"module github.com/acme/gears\n\nrequire github.com/acme/secret-client v0.1.0\n", "start")
+
+	secret := gitxtest.Init(t, filepath.Join(root, "secret-client"), "main")
+	secret.Commit("2025-03-01T08:00:00Z", "go.mod",
+		"module github.com/acme/secret-client\n\nrequire github.com/acme/gears v0.1.0\n", "start")
+	secret.Commit("2026-10-01T08:00:00Z", "a", "1", "more")
+	secret.At("2026-10-01T08:00:00Z", "tag", "v9.9.9")
+
+	scope := []Checkout{
+		{Main: pub.Dir, Name: "gears", Local: true},
+		{Main: secret.Dir, Name: "secret-client", ID: "github.com/acme/secret-client"},
+	}
+	entries := map[string]Entry{
+		pub.Dir:    {Public: true},
+		secret.Dir: {Alias: "client-app", Role: "client portal", Tagline: "Private."},
+	}
+
+	doc, warnings := Build(t.Context(), entries, scope, buildNow)
+	raw := fits(t, doc)
+
+	if len(warnings) != 0 {
+		t.Errorf("warnings = %v", warnings)
+	}
+
+	var generic struct {
+		Nodes []map[string]any `json:"nodes"`
+	}
+	if err := json.Unmarshal(raw, &generic); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(generic.Nodes) != 2 {
+		t.Fatalf("nodes = %v, want gears then the anonymous node", generic.Nodes)
+	}
+
+	anon := generic.Nodes[1]
+	if keys := slices.Sorted(maps.Keys(anon)); !slices.Equal(keys, []string{"alias", "id", "kind"}) {
+		t.Errorf("anonymous node keys = %v, want only alias, id and kind", keys)
+	}
+
+	if anon["id"] != "anon/client-app" || anon["kind"] != "anonymous" || anon["alias"] != "client-app" {
+		t.Errorf("anonymous node = %v", anon)
+	}
+
+	for _, leak := range []string{
+		"secret-client", "github.com/acme/secret-client", secret.Dir, "client portal", "Private.", "v9.9.9", "2025-03",
+	} {
+		if strings.Contains(string(raw), leak) {
+			t.Errorf("the document names %q: %s", leak, raw)
+		}
+	}
+
+	want := []Edge{
+		{From: "anon/client-app", To: "local/gears", Kind: edgeDepends, Source: "manifest"},
+		{From: "local/gears", To: "anon/client-app", Kind: edgeDepends, Source: "manifest", Manifest: manifestGoMod},
+	}
+	if !slices.Equal(doc.Edges, want) {
+		t.Errorf("edges =\n%+v\nwant\n%+v", doc.Edges, want)
 	}
 }
 
@@ -232,7 +302,7 @@ func TestBuildSortsByName(t *testing.T) {
 		entries[r.Dir] = Entry{Public: true}
 	}
 
-	doc := Build(t.Context(), entries, scope, buildNow)
+	doc, _ := Build(t.Context(), entries, scope, buildNow)
 	if len(doc.Nodes) != 2 || doc.Nodes[0].Name != "gears" {
 		t.Errorf("nodes = %+v, want gears first", doc.Nodes)
 	}
@@ -252,7 +322,7 @@ func TestScrubRemovesEveryLocalPath(t *testing.T) {
 		".gitconfig",
 	)
 
-	got := scrub(t.Context(), text, Checkout{Main: r.Dir, Name: "gears"})
+	got := scrub(t.Context(), text, Checkout{Main: r.Dir, Name: "gears"}, "gears")
 	if strings.Contains(got, r.Dir) || strings.Contains(got, home) || !strings.Contains(got, "gears/.git/index") {
 		t.Errorf("scrub = %q", got)
 	}
