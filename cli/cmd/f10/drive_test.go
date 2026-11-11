@@ -3062,8 +3062,15 @@ func TestDriveFinishInputTakesTheSettings(t *testing.T) {
 			in.Task.ID, in.Suffix, in.Branch, in.Flags.Merge, in.Flags.LeaveOpen)
 	}
 
-	if in.Close == nil || len(in.Close) != 0 {
-		t.Errorf("close = %v, want riders left open, never nil", in.Close)
+	if in.Close != nil || !in.FollowBody {
+		t.Errorf("close = %v, follow body %v; want the PR body to decide the riders", in.Close, in.FollowBody)
+	}
+
+	w := drive.WatcherFinishInput(tg, repo, hostops.NewHost("gh", repo), bundle, "DM-1-b")
+	if w.Close != nil || !w.FollowBody || !w.Flags.MergedOnly || w.Branch != "DM-1-b" || w.Cwd != repo {
+		t.Errorf("watcher = close %v, follow body %v, merged only %v, branch %q, cwd %q; "+
+			"want the body to decide, merged requests only, on DM-1-b from main",
+			w.Close, w.FollowBody, w.Flags.MergedOnly, w.Branch, w.Cwd)
 	}
 }
 

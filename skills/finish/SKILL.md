@@ -31,6 +31,7 @@ f10 finish <arguments>
    Ask once with `AskUserQuestion`: clean up locally and leave the PR open (`--local`), or merge it (`--merge`), or stop.
    Rerun the same command with the chosen flag appended and relay its report.
 4. **Exit 7 is a question**: the task ships in a bundle (the message names the riders and `--close`).
-   Ask once with one multi-select `AskUserQuestion`: which riders does the PR deliver, one option per rider, every one recommended.
+   The message also names the riders the PR body closes, the `--close` that follows it.
+   Ask once with one multi-select `AskUserQuestion`: which riders does the PR deliver, one option per rider, the ones the body closes recommended.
    Rerun the same command with `--close <the chosen ids, comma-separated>`, or `--close none` when none is chosen, and relay its report: the lead and the chosen riders close on merge, the rest stay open.
 5. Every other refusal is final: print the message verbatim and stop.

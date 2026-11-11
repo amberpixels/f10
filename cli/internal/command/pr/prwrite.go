@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/reviews"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
@@ -28,39 +29,56 @@ const statusLimit = 140
 // openPull is the subject's open request, read whole, for a command that
 // writes to it: a merged or closed one, or none, is refused by name.
 func openPull(ctx context.Context, cmd *cli.Command) (hostops.Host, forge.PR, error) {
+	h, p, _, err := openPullOf(ctx, cmd)
+
+	return h, p, err
+}
+
+// openPullOf is openPull with the task the request ships, nil for none.
+func openPullOf(ctx context.Context, cmd *cli.Command) (hostops.Host, forge.PR, *ref.Ref, error) {
 	t, err := target.For(ctx, cmd)
 	if err != nil {
-		return hostops.Host{}, forge.PR{}, err
+		return hostops.Host{}, forge.PR{}, nil, err
 	}
 
 	s, err := reviews.ResolvePRSubject(ctx, t, cmd.Args().First())
 	if err != nil {
-		return hostops.Host{}, forge.PR{}, err
+		return hostops.Host{}, forge.PR{}, nil, err
 	}
 
 	if s.LookupErr != nil {
-		return hostops.Host{}, forge.PR{}, s.LookupErr
+		return hostops.Host{}, forge.PR{}, nil, s.LookupErr
 	}
 
 	if s.Number == 0 {
-		return hostops.Host{}, forge.PR{}, fmt.Errorf("no open PR for %s", s.Branch)
+		return hostops.Host{}, forge.PR{}, nil, fmt.Errorf("no open PR for %s", s.Branch)
 	}
 
 	h, err := hostops.HostOf(t)
 	if err != nil {
-		return hostops.Host{}, forge.PR{}, err
+		return hostops.Host{}, forge.PR{}, nil, err
 	}
 
 	p, err := h.PR(ctx, strconv.Itoa(s.Number))
 	if err != nil {
-		return hostops.Host{}, forge.PR{}, err
+		return hostops.Host{}, forge.PR{}, nil, err
 	}
 
 	if err := RequireOpen(p); err != nil {
-		return hostops.Host{}, forge.PR{}, err
+		return hostops.Host{}, forge.PR{}, nil, err
 	}
 
-	return h, p, nil
+	return h, p, s.Task, nil
+}
+
+// PullTitle is the title a request opens or is retitled with: a bundle's
+// names its riders after the lead id, whatever the draft said.
+func PullTitle(title string, task *ref.Ref) string {
+	if title == "" || task == nil {
+		return title
+	}
+
+	return ref.BundleTitle(title, *task)
 }
 
 func RequireOpen(p forge.PR) error {
@@ -86,12 +104,12 @@ func runPREdit(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
-	h, p, err := openPull(ctx, cmd)
+	h, p, task, err := openPullOf(ctx, cmd)
 	if err != nil {
 		return err
 	}
 
-	return h.EditPull(ctx, strconv.Itoa(p.Number), title, body)
+	return h.EditPull(ctx, strconv.Itoa(p.Number), PullTitle(title, task), body)
 }
 
 // readBody reads a PR body from file, - meaning stdin; an empty one is
@@ -187,7 +205,7 @@ func runPRCreate(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	url, err := h.OpenPull(ctx, forge.NewPull{
-		Head: s.Branch, Base: base, Title: cmd.String("title"), Body: body,
+		Head: s.Branch, Base: base, Title: PullTitle(cmd.String("title"), s.Task), Body: body,
 		Labels: cmd.StringSlice("label"), Assignees: cmd.StringSlice("assignee"), Draft: cmd.Bool("draft"),
 	})
 	if err != nil {

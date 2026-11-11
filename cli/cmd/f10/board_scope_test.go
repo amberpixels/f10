@@ -449,6 +449,7 @@ func TestTitleAfterKey(t *testing.T) {
 		{"Show f10 board", "FT-121", "Show f10 board"},
 		{"FT-121", "FT-121", "FT-121"},
 		{"#12 title", "", "#12 title"},
+		{"FT-121 (+FT-122, FT-123, 2 more): Show f10 board", "FT-121", "Show f10 board"},
 	} {
 		if got := boardcmd.TitleAfterKey(tc.title, tc.key); got != tc.want {
 			t.Errorf("titleAfterKey(%q, %q) = %q, want %q", tc.title, tc.key, got, tc.want)

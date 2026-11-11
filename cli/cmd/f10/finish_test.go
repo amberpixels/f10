@@ -1270,7 +1270,7 @@ func TestFinishMergedWithoutWorktree(t *testing.T) {
 func TestFinishMergedWithoutWorktreeKeepsTheRecords(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.f.script(worktrees, porcelain())
-	fx.f.script(ghView, prMerged)
+	fx.f.script(ghView, mergedWithBody("Closes #1\nCloses #2"))
 	fx.f.script(lsRem, "")
 	fx.f.script("git diff --numstat --no-renames origin/main...refs/heads/GH-1", "10\t2\tcli/stats.go")
 	fx.in.Task, fx.in.Close, fx.in.HostCloses = bundle12, []string{"GH-2"}, true

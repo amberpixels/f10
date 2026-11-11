@@ -326,3 +326,20 @@ func TestGroupListsABundlesRiders(t *testing.T) {
 		t.Errorf("tasks = %+v, want the bundle as one", r.Tasks)
 	}
 }
+
+// A bundle PR's title names its riders after the lead id, so a PR or a
+// squash commit known only by its title files under the lead.
+func TestGroupFilesABundleTitleUnderItsLead(t *testing.T) {
+	retitled := func(p *HostPR) { p.Title = "FT-1 (+FT-2, FT-3): Lead" }
+
+	r := Group(input(
+		[]Commit{commit("a1", "main", "FT-4 (+FT-5): Other (#8)", 2)},
+		[]HostPR{own(9, "feature/lead", "main", HostOpen, retitled)},
+	))
+
+	if lead := taskByID(t, r, "FT-1"); len(lead.PRs) != 1 {
+		t.Errorf("FT-1 = %+v, want the bundle PR under its lead", lead)
+	}
+
+	taskByID(t, r, "FT-4")
+}
