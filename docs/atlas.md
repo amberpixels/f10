@@ -59,7 +59,7 @@ Version 1 reads local checkouts only, with no host call, so a run takes about a 
 |---|---|
 | `version` | `1`, this version of the spec |
 | `generated_at` | when the atlas was derived |
-| `nodes` | public nodes sorted by `name`, then anonymous nodes sorted by `alias` |
+| `nodes` | public nodes sorted by `name`, then `id`, then anonymous nodes sorted by `alias` |
 | `edges` | sorted by `from`, then `to`, then `kind`, then `manifest` or `relation`, so two runs over the same checkouts produce the same document |
 
 **Identity.** A node's `id` is the key every edge uses to name it.
@@ -68,7 +68,9 @@ Version 1 reads local checkouts only, with no host call, so a run takes about a 
 - An anonymous node takes `anon/<alias>`, built from its alias alone, so its id carries nothing of the project's remote or path.
 
 A linked worktree is never a node of its own: it is its main checkout.
-Two checkouts in scope that give the same id, such as two clones of one remote or two remote-less checkouts with one basename, are an error naming both, because an edge could not tell them apart.
+Two exported nodes with the same id, such as two public clones of one remote or two public remote-less checkouts with one basename, are an error naming both checkouts, because an edge could not tell them apart.
+Checkouts that are dropped never collide.
+Renaming one checkout, or giving it a remote, settles the error, because neither a project key nor an id can tell the two apart in the declared file.
 
 **A public node** is a project whose declared entry says `public: true`.
 Each field comes from the declared file or from the checkout.
@@ -86,7 +88,7 @@ Only `id`, `kind` and `name` are always present; every other field is absent whe
 | `first_commit`, `last_commit` | checkout | the committer dates of the first and the last commit on the default branch; absent when it has no commits, or the read failed before them |
 | `commits_per_month` | checkout | the commits on the default branch per calendar month (UTC), as `{month: "YYYY-MM", commits: n}`, from the first commit's month to `generated_at`'s, months with no commits included, so a renderer draws the rhythm without filling gaps; absent when `first_commit` is |
 | `latest_tag` | checkout | `name` and `at` (its commit's committer date) of the newest tag reachable from the default branch; several tags on one commit are ordered by name and the last wins; absent with no tag |
-| `error` | checkout | why reading the checkout failed, with the checkout's path removed from the text; the declared fields still print and the checkout fields read before the failure are kept; absent when the read succeeded |
+| `error` | checkout | why reading the checkout failed, with every local path removed from the text (the checkout's, its git directory's, the home directory's); the declared fields still print and the checkout fields read before the failure are kept; absent when the read succeeded |
 
 **An anonymous node** is a private project whose declared entry gives an `alias`.
 It carries exactly `id`, `kind` (`anonymous`) and `alias`, and its edges.
@@ -107,9 +109,10 @@ The edge rules:
 - A depended-on project is matched by the name its own manifest declares, never by its directory name, because the two can differ: the checkout `jsonish` may be the module `github.com/acme/json`.
 - An indirect Go requirement (`// indirect`) is not an edge, because the direct requirement that pulls it in is an edge of its own when both ends are in scope.
 - A go.mod `replace` whose target is a project in scope, a fork or a local path, is an edge to that project.
-- One manifest naming the same project twice is one edge.
+- One manifest naming the same project twice is one edge, with `dev` only when every mention is development-only.
 - A `depends` edge from an anonymous node carries no `manifest` and no `dev`, because the manifest's file names the private project's language.
   Several manifests of one anonymous node naming the same project are then one edge.
+  The project it depends on still suggests its stack (a node depending on a Go library is likely Go), which is the cost of keeping its edges at all, since showing a library in use is what an anonymous node is for.
 - A `depends` edge and a `link` edge between the same two nodes are two edges.
 - An edge is printed only when both its ends are nodes, so an edge to a dropped project, or to one outside the run's scope, is left out.
 - An edge between two anonymous nodes is dropped, because it describes nothing public.

@@ -277,9 +277,9 @@ func specBlock(t *testing.T, lang string) string {
 	return block
 }
 
-// The rules the schema cannot express: the node and edge order, and an
-// anonymous node's edges never naming the manifest that would give away its
-// language.
+// The rules the schema cannot express: the node and edge order, edges only
+// between two nodes and never between two anonymous ones, and an anonymous
+// node's edges never naming the manifest that would give away its language.
 func checkRules(doc any) []string {
 	var errs []string
 
@@ -287,12 +287,17 @@ func checkRules(doc any) []string {
 	nodes, _ := m["nodes"].([]any)
 	edges, _ := m["edges"].([]any)
 
-	nodeKey := func(n map[string]any) string {
+	nodeKey := func(n map[string]any) []string {
 		if n["kind"] == "public" {
-			return "0" + fmt.Sprint(n["name"])
+			return []string{"0", fmt.Sprint(n["name"]), fmt.Sprint(n["id"])}
 		}
 
-		return "1" + fmt.Sprint(n["alias"])
+		return []string{"1", fmt.Sprint(n["alias"]), ""}
+	}
+
+	ids := map[string]bool{}
+	for _, n := range nodes {
+		ids[fmt.Sprint(n.(map[string]any)["id"])] = true
 	}
 
 	edgeKey := func(e map[string]any) []string {
@@ -306,7 +311,7 @@ func checkRules(doc any) []string {
 
 	for i := 1; i < len(nodes); i++ {
 		a, b := nodeKey(nodes[i-1].(map[string]any)), nodeKey(nodes[i].(map[string]any))
-		if a >= b {
+		if slices.Compare(a, b) >= 0 {
 			errs = append(errs, fmt.Sprintf("nodes[%d] is out of order", i))
 		}
 	}
@@ -314,7 +319,18 @@ func checkRules(doc any) []string {
 	for i, item := range edges {
 		e := item.(map[string]any)
 
-		if from, _ := e["from"].(string); strings.HasPrefix(from, "anon/") {
+		from, _ := e["from"].(string)
+		to, _ := e["to"].(string)
+
+		if !ids[from] || !ids[to] {
+			errs = append(errs, fmt.Sprintf("edges[%d] has an end that is no node", i))
+		}
+
+		if strings.HasPrefix(from, "anon/") && strings.HasPrefix(to, "anon/") {
+			errs = append(errs, fmt.Sprintf("edges[%d] joins two anonymous nodes", i))
+		}
+
+		if strings.HasPrefix(from, "anon/") {
 			for _, key := range []string{"manifest", "dev"} {
 				if _, ok := e[key]; ok {
 					errs = append(errs, fmt.Sprintf("edges[%d] from an anonymous node carries %s", i, key))
@@ -443,26 +459,40 @@ func TestSchemaRejects(t *testing.T) {
 	}
 }
 
-// checkRules must catch each rule it stands in for, or the fixture tests
-// above pass on nothing.
+// checkRules must catch each rule it stands in for, each case breaking one
+// rule only, or the fixture tests above pass on nothing.
 func TestRulesReject(t *testing.T) {
 	t.Parallel()
 
-	pub := func(name string) string { return `{"kind": "public", "name": "` + name + `"}` }
-	edge := func(from, to string) string {
-		return `{"from": "` + from + `", "to": "` + to + `", "kind": "depends", "source": "manifest"}`
+	pub := func(id, name string) string { return `{"id": "` + id + `", "kind": "public", "name": "` + name + `"}` }
+	anon := func(alias string) string {
+		return `{"id": "anon/` + alias + `", "kind": "anonymous", "alias": "` + alias + `"}`
+	}
+	edge := func(from, to, extra string) string {
+		return `{"from": "` + from + `", "to": "` + to + `", "kind": "depends", "source": "manifest"` + extra + `}`
+	}
+	nodes := `"nodes": [` + pub("local/a", "a") + `, ` + pub("local/b", "b") + `, ` + anon("x") + `, ` + anon("y") + `]`
+	doc := func(edges ...string) string { return `{` + nodes + `, "edges": [` + strings.Join(edges, ", ") + `]}` }
+
+	for name, c := range map[string]struct{ raw, want string }{
+		"anonymous edge names its manifest": {doc(edge("anon/x", "local/a", `, "manifest": "go.mod"`)), "carries manifest"},
+		"anonymous edge marked dev":         {doc(edge("anon/x", "local/a", `, "dev": true`)), "carries dev"},
+		"public nodes out of order":         {`{"nodes": [` + pub("local/w", "w") + `, ` + pub("local/g", "g") + `]}`, "nodes[1]"},
+		"same name out of id order":         {`{"nodes": [` + pub("local/w", "w") + `, ` + pub("github.com/o/w", "w") + `]}`, "nodes[1]"},
+		"anonymous before public":           {`{"nodes": [` + anon("x") + `, ` + pub("local/g", "g") + `]}`, "nodes[1]"},
+		"edges out of order":                {doc(edge("local/b", "local/a", ""), edge("local/a", "local/b", "")), "out of order"},
+		"duplicate edge":                    {doc(edge("local/a", "local/b", ""), edge("local/a", "local/b", "")), "out of order"},
+		"edge to no node":                   {doc(edge("local/a", "local/gone", "")), "no node"},
+		"edge between two anonymous nodes":  {doc(edge("anon/x", "anon/y", "")), "two anonymous"},
+	} {
+		errs := checkRules(decode(t, []byte(c.raw)))
+		if !slices.ContainsFunc(errs, func(e string) bool { return strings.Contains(e, c.want) }) {
+			t.Errorf("%s: want an error naming %q, got %v", name, c.want, errs)
+		}
 	}
 
-	for name, raw := range map[string]string{
-		"anonymous edge names its manifest": `{"edges": [{"from": "anon/x", "to": "local/g", "kind": "depends", "source": "manifest", "manifest": "go.mod"}]}`,
-		"anonymous edge marked dev":         `{"edges": [{"from": "anon/x", "to": "local/g", "kind": "depends", "source": "manifest", "dev": true}]}`,
-		"public nodes out of order":         `{"nodes": [` + pub("widgets") + `, ` + pub("gears") + `]}`,
-		"anonymous before public":           `{"nodes": [{"kind": "anonymous", "alias": "a"}, ` + pub("gears") + `]}`,
-		"edges out of order":                `{"edges": [` + edge("local/b", "local/a") + `, ` + edge("local/a", "local/b") + `]}`,
-		"duplicate edge":                    `{"edges": [` + edge("local/a", "local/b") + `, ` + edge("local/a", "local/b") + `]}`,
-	} {
-		if errs := checkRules(decode(t, []byte(raw))); len(errs) == 0 {
-			t.Errorf("%s: the rules accept it", name)
-		}
+	same := `{"nodes": [` + pub("github.com/o/w", "w") + `, ` + pub("local/w", "w") + `]}`
+	if errs := checkRules(decode(t, []byte(same))); len(errs) > 0 {
+		t.Errorf("two nodes with one name in id order: %v", errs)
 	}
 }
