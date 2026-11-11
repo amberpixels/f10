@@ -47,6 +47,11 @@ build:
 ci: lint test
 # <<< justx:ci
 
+# race-check the daemon, whose drain reads drive state other goroutines write;
+# cgo is on because -race needs it on linux, where CI runs with it off
+test-race:
+    CGO_ENABLED=1 go test -race ./internal/daemon/...
+
 # run the prompt evals in ../evals against the real model ([docs/evals.md](../docs/evals.md))
 eval *args:
     go run ./cmd/f10eval -root .. {{args}}
