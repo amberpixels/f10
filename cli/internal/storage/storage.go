@@ -26,12 +26,13 @@ const (
 	lore     = "lore"
 	images   = "images"
 	demo     = "demo"
+	audits   = "audits"
 )
 
 // taskFileDirs is every dir an agent writes task files to. Instructions and
 // the driver stay out: a worktree's agent never edits what every checkout's
 // next run loads.
-var taskFileDirs = []string{plans, reviews, verdicts, spikes, handoffs, lore, images, demo}
+var taskFileDirs = []string{plans, reviews, verdicts, spikes, handoffs, lore, images, demo, audits}
 
 // ArchiveDir is the subdir of plans, findings and handoffs that a finished
 // or replaced file moves to.
@@ -117,6 +118,10 @@ func (r Root) Images(id string) string { return r.join(images, id) }
 
 // Demo is the task's demo dir.
 func (r Root) Demo(id string) string { return r.join(demo, id) }
+
+// Audits is the dir holding audit reports; the newest one's head starts the
+// next audit's default window.
+func (r Root) Audits() string { return r.join(audits) }
 
 // Instructions is the project's instructions layer at this root.
 func (r Root) Instructions() string { return r.join("instructions") }

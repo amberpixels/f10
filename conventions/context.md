@@ -87,7 +87,7 @@ If the loader is unavailable, follow the points below by hand.
    State them once, the prefix included, and suggest `f10 init`, which writes `.f10/instructions/project.md` from the same probes.
    Never refuse to run for missing config.
 6. **Agent profiles.**
-   A step that spawns a subagent (review's blind reviewer, `judge --blind`, cleanup's rules check) passes the Agent tool the `model` and `effort` its profile line's `Agent tool:` part names.
+   A step that spawns a subagent (review's blind reviewer, `judge --blind`, cleanup's rules check, the audit's reviewers) passes the Agent tool the `model` and `effort` its profile line's `Agent tool:` part names.
    That line is `<step>.<kind>` for the plan's `Kind` when the load prints one, else the plain `<step>` line.
    A line with no `Agent tool:` part passes neither, so the tool's own defaults apply.
    Every other step runs inline, on the task agent's profile (`docs/project-setup.md` → Agents).

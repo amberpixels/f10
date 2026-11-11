@@ -692,6 +692,12 @@ func TestAgents(t *testing.T) {
 		t.Errorf("the default flow's steps are keys: %s", eff.Errors())
 	}
 
+	// audit and judge --blind spawn agents with no flow entry behind them
+	standalone := "---\nflows:\n  default: implement pr\nagents:\n  audit: opus:high\n  judge: opus:max\n---\n"
+	if eff := buildWith(t, standalone, ""); eff.Errors() != "" {
+		t.Errorf("standalone spawners are keys without a flow entry: %s", eff.Errors())
+	}
+
 	if eff := buildWith(t, "---\nvisibility: public\n---\n", ""); eff.Agents != nil {
 		t.Errorf("no map declared leaves agents nil: %v", eff.Agents)
 	}

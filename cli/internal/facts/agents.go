@@ -11,13 +11,17 @@ import (
 // plan step's profile for a bug. The words are the plan's Kind line.
 var TaskKinds = []string{"feature", "bug", "refactor", "spike"}
 
+// StandaloneSpawners are the steps that spawn subagents outside any flow, so
+// their agents key needs no flow entry: the audit's reviewers, judge --blind.
+var StandaloneSpawners = []string{"audit", "judge"}
+
 // AgentKeyDefault is the key the task's agent runs on.
 const AgentKeyDefault = "default"
 
 // CheckAgentKey reports why key is no agents key: not `default`, not a step
-// some flow names, or a kind scope outside TaskKinds. steps are the step
-// names every flow names, merged; a map read outside a project (the
-// user's file) passes nil and keeps any step word.
+// some flow names or a standalone spawner, or a kind scope outside
+// TaskKinds. steps are the step names every flow names, merged; a map read
+// outside a project (the user's file) passes nil and keeps any step word.
 func CheckAgentKey(key string, steps []string) error {
 	step, kind, scoped := strings.Cut(key, ".")
 
@@ -29,7 +33,7 @@ func CheckAgentKey(key string, steps []string) error {
 		return fmt.Errorf("agents.%s: a key is default, a step, or step.kind", key)
 	case scoped && !slices.Contains(TaskKinds, kind):
 		return fmt.Errorf("agents.%s: %s is not a task kind (%s)", key, kind, strings.Join(TaskKinds, ", "))
-	case steps != nil && !slices.Contains(steps, step):
+	case steps != nil && !slices.Contains(steps, step) && !slices.Contains(StandaloneSpawners, step):
 		return fmt.Errorf("agents.%s: no flow has a %s entry (f10 flow lists them)", key, step)
 	}
 

@@ -55,15 +55,15 @@ func TestTaskFileDirsCoverMethods(t *testing.T) {
 
 	for _, dir := range []string{
 		root.Plans(), filepath.Dir(root.Reviews("x")), filepath.Dir(root.Verdicts("x")), root.Spikes(),
-		root.Handoffs(), root.Lore(), filepath.Dir(root.Images("x")), filepath.Dir(root.Demo("x")),
+		root.Handoffs(), root.Lore(), filepath.Dir(root.Images("x")), filepath.Dir(root.Demo("x")), root.Audits(),
 	} {
 		if !slices.Contains(granted, dir) {
 			t.Errorf("%s is not granted to the agent", dir)
 		}
 	}
 
-	if len(granted) != 8 {
-		t.Errorf("TaskFileDirs = %v, want the eight task-file dirs", granted)
+	if len(granted) != 9 {
+		t.Errorf("TaskFileDirs = %v, want the nine task-file dirs", granted)
 	}
 
 	for _, d := range granted {
