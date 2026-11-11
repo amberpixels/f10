@@ -5,6 +5,7 @@ package atlas
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -27,7 +28,8 @@ import (
 func Command() *cli.Command {
 	return &cli.Command{
 		Name: "atlas",
-		Usage: "your public projects and the edges between them, from ~/.f10/atlas.md, their git history and their manifests " +
+		Usage: "your public projects, the private ones you aliased, and the edges between them, " +
+			"from ~/.f10/atlas.md, their git history and their manifests " +
 			"(this project, or several with -C, --group, --all)",
 		Flags: []cli.Flag{
 			&cli.StringSliceFlag{
@@ -72,7 +74,10 @@ func run(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("%s: %w", path, err)
 	}
 
-	doc := atlas.Build(ctx, entries, checkouts, time.Now())
+	doc, warnings := atlas.Build(ctx, entries, checkouts, time.Now())
+	for _, w := range warnings {
+		fmt.Fprintln(cmd.ErrWriter, "warning: "+w)
+	}
 
 	if !asJSON {
 		render(cmd.Writer, doc, path)
@@ -127,11 +132,12 @@ func scoped(ctx context.Context, cmd *cli.Command) ([]atlas.Checkout, error) {
 }
 
 // render is a line per node: name, status, language, last commit, tagline,
-// with a failed read's error where the tagline goes. A node with edges gets
-// a second line naming what it depends on and what depends on it.
+// with a failed read's error where the tagline goes, and an anonymous node
+// as its alias alone. A node with edges gets a second line naming what it
+// depends on and what depends on it.
 func render(w io.Writer, doc atlas.Document, declared string) {
 	if len(doc.Nodes) == 0 {
-		fmt.Fprintf(w, "no public project in scope: give its entry in %s public: true\n", declared)
+		fmt.Fprintf(w, "no exported project in scope: give its entry in %s public: true, or an alias\n", declared)
 
 		return
 	}
@@ -143,6 +149,12 @@ func render(w io.Writer, doc atlas.Document, declared string) {
 	tw := tabwriter.NewWriter(&table, 0, 0, 2, ' ', 0)
 
 	for _, n := range doc.Nodes {
+		if n.Kind == "anonymous" {
+			fmt.Fprintf(tw, "%s\t-\t-\t-\tanonymous\n", n.Alias)
+
+			continue
+		}
+
 		last := "-"
 		if len(n.LastCommit) >= len("2006-01-02") {
 			last = n.LastCommit[:len("2006-01-02")]
@@ -160,7 +172,7 @@ func render(w io.Writer, doc atlas.Document, declared string) {
 
 	names := map[string]string{}
 	for _, n := range doc.Nodes {
-		names[n.ID] = n.Name
+		names[n.ID] = cmp.Or(n.Name, n.Alias)
 	}
 
 	rows := strings.Split(strings.TrimSuffix(table.String(), "\n"), "\n")

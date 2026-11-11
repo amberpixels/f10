@@ -11,16 +11,17 @@ const (
 	edgeLink    = "link"
 )
 
-// A read is one public node with what its manifests and entry say.
+// A read is one exported node with what its manifests and entry say.
 type read struct {
 	checkout Checkout
 	node     Node
 	m        manifests
 	links    []Link
+	warning  string // an anonymous node's failed read, as a fixed line under its alias
 }
 
 // nodeIndex finds the node a dependency, a replace or a link names, among
-// public nodes only: an edge with a private end is never drawn.
+// exported nodes only: an edge to a dropped project is never drawn.
 type nodeIndex struct {
 	declared map[ecosystem]map[string][]string // declared name to node ids
 	ids      map[string]bool
@@ -108,9 +109,19 @@ func (ix nodeIndex) byKey(key string) string {
 	return ""
 }
 
-// deriveEdges draws every edge between two public nodes, in the spec's order.
+// deriveEdges draws every edge between two exported nodes, in the spec's
+// order. One from an anonymous node loses its manifest and dev mark, because
+// the manifest's file names the private project's language, and one between
+// two anonymous nodes is dropped, because it describes nothing public.
 func deriveEdges(reads []read) []Edge {
 	ix := indexNodes(reads)
+	anon := map[string]bool{}
+
+	for _, r := range reads {
+		if r.node.Kind == kindAnonymous {
+			anon[r.node.ID] = true
+		}
+	}
 
 	var all []Edge
 
@@ -127,7 +138,21 @@ func deriveEdges(reads []read) []Edge {
 		}
 	}
 
-	return collapse(all)
+	kept := all[:0]
+
+	for _, e := range all {
+		if anon[e.From] && anon[e.To] {
+			continue
+		}
+
+		if anon[e.From] {
+			e.Manifest, e.Dev = "", false
+		}
+
+		kept = append(kept, e)
+	}
+
+	return collapse(kept)
 }
 
 // manifestEdges sends a replaced requirement to its replacement only, since

@@ -29,11 +29,13 @@ type Document struct {
 	Edges       []Edge `json:"edges"`
 }
 
-// A Node is a public node; every optional field is absent rather than empty.
+// A Node is a public node, or an anonymous one carrying only ID, Kind and
+// Alias; every optional field is absent rather than empty.
 type Node struct {
 	ID              string  `json:"id"`
 	Kind            string  `json:"kind"`
-	Name            string  `json:"name"`
+	Name            string  `json:"name,omitempty"`
+	Alias           string  `json:"alias,omitempty"`
 	Role            string  `json:"role,omitempty"`
 	Status          string  `json:"status,omitempty"`
 	Tagline         string  `json:"tagline,omitempty"`
@@ -55,7 +57,13 @@ type Tag struct {
 	At   string `json:"at"`
 }
 
-// An Edge joins two public nodes: a manifest dependency or a declared link.
+const (
+	kindPublic    = "public"
+	kindAnonymous = "anonymous"
+)
+
+// An Edge joins two nodes, not both anonymous: a manifest dependency or a
+// declared link.
 type Edge struct {
 	From     string `json:"from"`
 	To       string `json:"to"`
@@ -66,50 +74,77 @@ type Edge struct {
 	Relation string `json:"relation,omitempty"`
 }
 
-// Build reads every public checkout and assembles the document. A private
-// checkout is never read, so nothing of its history reaches the process.
+// Build reads every public checkout and only the manifests of an aliased
+// one, so no private history reaches the process. The warnings are anonymous
+// nodes' failed reads, because their closed shape has no error field.
 //
-//nolint:lostfield // an assembly: readNode carries each entry's fields, and aliases print later
-func Build(ctx context.Context, entries map[string]Entry, scope []Checkout, now time.Time) Document {
+//nolint:lostfield // an assembly: readNode and readAnonymous carry each entry's fields
+func Build(ctx context.Context, entries map[string]Entry, scope []Checkout, now time.Time) (Document, []string) {
 	now = now.UTC().Truncate(time.Second)
 
-	var public []Checkout
+	var exported []Checkout
 
 	for _, c := range scope {
-		if entries[c.Main].Public {
-			public = append(public, c)
+		if e := entries[c.Main]; e.Public || e.Alias != "" {
+			exported = append(exported, c)
 		}
 	}
 
-	reads := make([]read, len(public))
+	reads := make([]read, len(exported))
 	sem := make(chan struct{}, readParallel)
 
 	var wg sync.WaitGroup
 
-	for i, c := range public {
+	for i, c := range exported {
 		wg.Go(func() {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			reads[i] = readNode(ctx, c, entries[c.Main], now)
+			if e := entries[c.Main]; e.Public {
+				reads[i] = readNode(ctx, c, e, now)
+			} else {
+				reads[i] = readAnonymous(c, e)
+			}
 		})
 	}
 
 	wg.Wait()
 
 	nodes := make([]Node, len(reads))
+
+	var warnings []string
+
 	for i, r := range reads {
 		nodes[i] = r.node
+		if r.warning != "" {
+			warnings = append(warnings, r.warning)
+		}
 	}
 
-	slices.SortFunc(nodes, func(a, b Node) int { return cmp.Or(cmp.Compare(a.Name, b.Name), cmp.Compare(a.ID, b.ID)) })
+	slices.SortFunc(nodes, func(a, b Node) int {
+		return cmp.Or(
+			cmp.Compare(boolRank(a.Kind == kindAnonymous), boolRank(b.Kind == kindAnonymous)),
+			cmp.Compare(a.Name, b.Name), cmp.Compare(a.Alias, b.Alias), cmp.Compare(a.ID, b.ID),
+		)
+	})
+	slices.Sort(warnings)
 
-	return Document{Version: Version, GeneratedAt: now.Format(time.RFC3339), Nodes: nodes, Edges: deriveEdges(reads)}
+	doc := Document{Version: Version, GeneratedAt: now.Format(time.RFC3339), Nodes: nodes, Edges: deriveEdges(reads)}
+
+	return doc, warnings
+}
+
+func boolRank(b bool) int {
+	if b {
+		return 1
+	}
+
+	return 0
 }
 
 func readNode(ctx context.Context, c Checkout, e Entry, now time.Time) read {
 	n := Node{
-		ID: c.NodeID(), Kind: "public", Name: c.Name,
+		ID: c.NodeID(), Kind: kindPublic, Name: c.Name,
 		Role: e.Role, Status: e.Status, Tagline: e.Tagline,
 		Language: language(c.Main),
 	}
@@ -123,6 +158,26 @@ func readNode(ctx context.Context, c Checkout, e Entry, now time.Time) read {
 	}
 
 	return read{checkout: c, node: n, m: m, links: e.Links}
+}
+
+// readAnonymous builds the node from the alias alone and reads only the
+// manifests, so no field can carry the project's name, remote or history.
+func readAnonymous(c Checkout, e Entry) read {
+	n := Node{ID: "anon/" + e.Alias, Kind: kindAnonymous, Alias: e.Alias}
+
+	m, err := readManifests(c.Main)
+
+	r := read{checkout: c, node: n, m: m, links: e.Links}
+	if err != nil {
+		// a partial read could draw some of its own edges and not others, so none
+		// is drawn; its names stay, so public projects' edges into it still match
+		r.m = manifests{names: m.names}
+		// fixed text: the error would name a manifest, and so the language or the
+		// project itself (a gemspec's file name)
+		r.warning = e.Alias + ": a manifest did not read, so its depends edges are left out"
+	}
+
+	return r
 }
 
 // scrub takes every local path out of a read's error, because nothing in the

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -27,9 +28,9 @@ func writeDeclared(t *testing.T, home, body string) {
 	}
 }
 
-// Two checkouts in scope, one declared public: the document holds that one
-// alone, and --out writes the same bytes.
-func TestAtlasPrintsPublicProjectsOnly(t *testing.T) {
+// One public checkout and one aliased: the document holds gears in full and
+// the other under its alias alone, and --out writes the same bytes.
+func TestAtlasPrintsPublicAndAnonymousNodes(t *testing.T) {
 	home := isolateEnv(t)
 	root := canonical(t, t.TempDir())
 	gears := scopeRepo(t, root, "gears")
@@ -51,8 +52,9 @@ func TestAtlasPrintsPublicProjectsOnly(t *testing.T) {
 		t.Fatalf("%v\n%s", err, out)
 	}
 
-	if len(doc.Nodes) != 1 || doc.Nodes[0].ID != "local/gears" || doc.Nodes[0].Status != "stable" {
-		t.Errorf("nodes = %+v, want gears alone", doc.Nodes)
+	if len(doc.Nodes) != 2 || doc.Nodes[0].ID != "local/gears" || doc.Nodes[0].Status != "stable" ||
+		!reflect.DeepEqual(doc.Nodes[1], atlas.Node{ID: "anon/client", Kind: "anonymous", Alias: "client"}) {
+		t.Errorf("nodes = %+v, want gears then anon/client", doc.Nodes)
 	}
 
 	if strings.Contains(out, "secret") || strings.Contains(out, root) {
@@ -83,6 +85,16 @@ func TestAtlasPrintsPublicProjectsOnly(t *testing.T) {
 	if f := strings.Fields(text); len(f) != 5 || f[0] != "gears" || f[1] != "stable" || f[2] != "-" ||
 		len(f[3]) != len("2006-01-02") || f[4] != "Helpers." {
 		t.Errorf("terminal line = %q", text)
+	}
+
+	text, err = runApp(t, "-C", gears, "-C", secret, "atlas").outErr()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if rows := strings.Split(strings.TrimSpace(text), "\n"); len(rows) != 2 ||
+		!slices.Equal(strings.Fields(rows[1]), []string{"client", "-", "-", "-", "anonymous"}) {
+		t.Errorf("terminal output = %q, want the anonymous row last", text)
 	}
 }
 
@@ -170,8 +182,9 @@ func TestAtlasReadsAWorktreeAsItsMainCheckout(t *testing.T) {
 	}
 }
 
-// Edges join public nodes only: a requirement, a link, and a requirement on a
-// private checkout that is left out; the terminal names both directions.
+// A requirement, a link, a requirement on an aliased checkout drawn to its
+// anonymous node, and one on an unaliased private checkout left out; the
+// terminal names both directions.
 func TestAtlasPrintsTheEdges(t *testing.T) {
 	home := isolateEnv(t)
 	root := canonical(t, t.TempDir())
@@ -179,12 +192,15 @@ func TestAtlasPrintsTheEdges(t *testing.T) {
 	jsonish := scopeRepo(t, root, "jsonish")
 	herd := scopeRepo(t, root, "herd")
 	secret := scopeRepo(t, root, "secret")
+	hidden := scopeRepo(t, root, "hidden")
 
 	for dir, body := range map[string]string{
-		widgets: "module github.com/acme/widgets\n\nrequire (\n\tgithub.com/acme/json v0.1.0\n\tgithub.com/acme/secret v0.1.0\n)\n",
+		widgets: "module github.com/acme/widgets\n\nrequire (\n\tgithub.com/acme/json v0.1.0\n" +
+			"\tgithub.com/acme/secret v0.1.0\n\tgithub.com/acme/hidden v0.1.0\n)\n",
 		jsonish: "module github.com/acme/json\n",
 		herd:    "module github.com/acme/herd\n",
 		secret:  "module github.com/acme/secret\n",
+		hidden:  "module github.com/acme/hidden\n",
 	} {
 		if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(body), 0o600); err != nil {
 			t.Fatal(err)
@@ -193,9 +209,9 @@ func TestAtlasPrintsTheEdges(t *testing.T) {
 
 	writeDeclared(t, home, "projects:\n"+
 		"  widgets: {public: true, links: [{to: herd, relation: plugin for}]}\n"+
-		"  jsonish: {public: true}\n  herd: {public: true}\n")
+		"  jsonish: {public: true}\n  herd: {public: true}\n  hidden: {alias: client-app}\n")
 
-	args := []string{"-C", widgets, "-C", jsonish, "-C", herd, "-C", secret, "atlas"}
+	args := []string{"-C", widgets, "-C", jsonish, "-C", herd, "-C", secret, "-C", hidden, "atlas"}
 
 	out, err := runApp(t, append(args, "--json")...).outErr()
 	if err != nil {
@@ -208,6 +224,7 @@ func TestAtlasPrintsTheEdges(t *testing.T) {
 	}
 
 	want := []atlas.Edge{
+		{From: "local/widgets", To: "anon/client-app", Kind: "depends", Source: "manifest", Manifest: "go.mod"},
 		{From: "local/widgets", To: "local/herd", Kind: "link", Source: "declared", Relation: "plugin for"},
 		{From: "local/widgets", To: "local/jsonish", Kind: "depends", Source: "manifest", Manifest: "go.mod"},
 	}
@@ -223,10 +240,43 @@ func TestAtlasPrintsTheEdges(t *testing.T) {
 	for _, line := range []string{
 		"  used by: widgets (plugin for)",
 		"  used by: widgets\n",
-		"  depends on: herd (plugin for), jsonish\n",
+		"  depends on: client-app, herd (plugin for), jsonish\n",
 	} {
 		if !strings.Contains(text, line) {
 			t.Errorf("terminal output lacks %q:\n%s", line, text)
 		}
+	}
+
+	if strings.Contains(out, "hidden") || strings.Contains(text, "hidden") || strings.Contains(out, "secret") {
+		t.Errorf("a private project is named:\n%s\n%s", out, text)
+	}
+}
+
+// A broken manifest on an aliased checkout is a stderr warning under its
+// alias, and --json stays one valid document.
+func TestAtlasWarnsOnAnAnonymousNodesBrokenManifest(t *testing.T) {
+	home := isolateEnv(t)
+	root := canonical(t, t.TempDir())
+	gears := scopeRepo(t, root, "gears")
+	secret := scopeRepo(t, root, "secret")
+
+	if err := os.WriteFile(filepath.Join(secret, "package.json"), []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	writeDeclared(t, home, "projects:\n  gears: {public: true}\n  secret: {alias: client}\n")
+
+	out, errOut, err := runApp(t, "-C", gears, "-C", secret, "atlas", "--json").streams()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var doc atlas.Document
+	if err := json.Unmarshal([]byte(out), &doc); err != nil || len(doc.Nodes) != 2 {
+		t.Fatalf("stdout is not the two-node document (%v):\n%s", err, out)
+	}
+
+	if want := "warning: client: a manifest did not read, so its depends edges are left out\n"; errOut != want {
+		t.Errorf("stderr = %q, want %q", errOut, want)
 	}
 }
