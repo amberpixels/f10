@@ -17,7 +17,7 @@ type read struct {
 	node     Node
 	m        manifests
 	links    []Link
-	warning  string // an anonymous node's failed read, already scrubbed
+	warning  string // an anonymous node's failed read, as a fixed line under its alias
 }
 
 // nodeIndex finds the node a dependency, a replace or a link names, among
