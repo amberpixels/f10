@@ -413,14 +413,14 @@ agents:
 Two layers of the same map merge **key by key**, the later winning: your defaults in `~/.f10/agents.md` (YAML frontmatter with an `agents:` map, as `~/.f10/standup.md`), then the project's `agents:` (main's and a worktree's layers merged key by key too).
 A step's profile is then `default`, overlaid segment by segment by a run's flag (`f10 start --agent`, `f10 drive --agent`, a task's own `<id>:<profile>`), then by `<step>`, then by `<step>.<kind>`, the kind fetch settled (`feature`, `bug`, `refactor`, `spike`).
 So `--agent low` over `default: opus:high` runs on `opus:low`, and the flag is recorded on the branch, where `f10 agents` reads it back for a spawning step's line.
-A key is `default` or a step some declared flow names (the default flow included); a misspelt step is refused, as is a profile the kind refuses.
+A key is `default`, a step some declared flow names (the default flow included), or a step that spawns a subagent (`audit`, `cleanup`, `judge`, `review`), since each also runs as a skill outside any flow; a misspelt step is refused, as is a profile the kind refuses.
 `f10 agents` prints the merged map with each value's origin, and `f10 agents <step>...` each step's resolved profile with the key and layer behind each segment.
 `f10 config` lists the map as `agents.<key>` rows.
 
 What reaches where is explicit, and `f10 agents` prints it per step:
 
 - the task's agent (`f10 start`, `f10 drive`) starts on `default`, its model and effort as flags on the command line; the profile is recorded on the branch, so a rerun keeps it unless a flag names another, and `f10 start`'s report, the drive's open line and `f10 status` name it when it is not the kind's default;
-- a step that spawns a subagent passes its own key's profile to the Agent tool: the **review** step's blind reviewer, `judge --blind`'s judge, **cleanup**'s rules check.
+- a step that spawns a subagent passes its own key's profile to the Agent tool: the **review** step's blind reviewer, `judge --blind`'s judge, **cleanup**'s rules check, the **audit** step's reviewers.
   The project load (`f10-load-project.sh <step>`) prints each requested step's line, with the model family and effort word in the form the Agent tool takes;
 - every other step runs inline, on the task agent's profile.
   Its key is accepted so a map can be written once, and `f10 agents` says no lever reaches it yet: `implement`, `plan`, `commit`, `pr`, a judge in a flow, the resolve of a local or a CI review.
@@ -551,7 +551,7 @@ In stealth mode every trace reads as your own.
 `stealth` keeps `.f10/` untracked and every trace of f10 out of commits, PRs and tickets.
 It is the default.
 `in-repo` storage keeps the task files (plans, findings, verdicts, spike reports, lore) in the main checkout's `.f10/`, shared by every worktree and keyed by task id, so removing a worktree by any means loses none of them; a worktree's own `.f10/` holds only its optional instructions layer.
-The storage root also holds `images/<ID>/`, the images `f10 task read` downloaded for a task, until `f10 finish` removes them.
+The storage root also holds `images/<ID>/`, the images `f10 task read` downloaded for a task, until `f10 finish` removes them, and `audits/`, one report per `/f10:audit`.
 `out-of-tree` moves instructions and plans to `~/.f10/<project>/`, shared by every worktree, for when even an untracked directory is too visible.
 Out-of-tree declares itself by location: create the directory and f10 finds it.
 

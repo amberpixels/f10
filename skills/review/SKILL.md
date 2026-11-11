@@ -1,6 +1,6 @@
 ---
 name: review
-description: "f10 review skill - a blind local review of a change into a findings file, each finding with a failure scenario and a confidence mark; with host, the host's own code review shaped into that file; with ci, reads in the remote review on the PR or MR; with since, a coherence pass over the tasks shipped since a ref. Use when the user says \"/f10:review <task-id | PR | this branch> [host | ci]\" or \"/f10:review since [<ref>]\", asks for a code review of a branch or PR, wants bugs found before a PR is opened, wants the CI review's findings read in, or wants to check how recent tasks fit together. Pick it over the host's built-in code review when the findings should feed /f10:resolve, lore and the PR trace, or when the project's review categories, guardrails and lessons should apply. Settling the findings is /f10:resolve."
+description: "f10 review skill - a blind local review of a change into a findings file, each finding with a failure scenario and a confidence mark; with host, the host's own code review shaped into that file; with ci, reads in the remote review on the PR or MR; with since, runs /f10:audit over the work shipped since a ref. Use when the user says \"/f10:review <task-id | PR | this branch> [host | ci]\" or \"/f10:review since [<ref>]\", asks for a code review of a branch or PR, wants bugs found before a PR is opened, wants the CI review's findings read in, or wants to check how recent tasks fit together (since hands that to /f10:audit). Pick it over the host's built-in code review when the findings should feed /f10:resolve, lore and the PR trace, or when the project's review categories, guardrails and lessons should apply. Settling the findings is /f10:resolve."
 allowed-tools: Bash, Read, Write, Grep, Glob, Agent, AskUserQuestion, Skill
 argument-hint: "<task-id | PR | this branch> [host | ci] | since [<ref>]"
 ---
@@ -16,8 +16,8 @@ Running `/f10:review ci` authorizes the `f10 review ack` and `f10 review trigger
   It reports which steps the rest of the argument would run.
 - `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`; everything below still runs.
 - `ci`: strip it and run the step's remote review; standalone, it reads the latest CI review in, triggers a new one, or hands it to `/f10:resolve <id> ci`.
-- `host`: strip it and run the local review on the step's **host engine**, the host's own code review; it does not combine with `ci` or `since`.
-- `since [<ref>]`: strip it and run the step's **coherence lens** over the tasks in `<ref>..HEAD`, the ref defaulting to the last tag, refused on the default branch and on a branch named for a swept task or its parent, each refusal naming a `sweep/` branch; it does not combine with `ci`, whose review is about one PR's diff.
+- `host`: strip it and run the local review on the step's **host engine**, the host's own code review; it does not combine with `ci`.
+- `since [<ref>]`: invoke `/f10:audit` with the Skill tool, passing `since <ref>` when a ref was given and nothing otherwise, then stop; nothing below applies.
 - `<subject>`: a task id, PR or branch; the step's **Only the change checked out here** paragraph reads it.
 - No argument: the current branch against its base.
   Say in one line which branch and base you took, then start.

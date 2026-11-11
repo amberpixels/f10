@@ -24,7 +24,7 @@ state_dir="${F10_STATE_DIR:-$HOME/.claude/f10/state}"
 
 # The skills that run a step and so read the conventions. status, board, read, start, drive and finish run the binary
 # alone; --help loads nothing (modes/help.md).
-skills="brainstorm capture catchup cleanup debug demo explain handoff judge plan resolve review ship standup"
+skills="audit brainstorm capture catchup cleanup debug demo explain handoff judge plan resolve review ship standup"
 
 # shellcheck disable=SC2016 # the backticks are markdown for the model, not a command
 line='This context does not hold the f10 conventions: run `f10-load-conventions.sh`, then `f10 help --agent` in a call of its own, before anything else.'

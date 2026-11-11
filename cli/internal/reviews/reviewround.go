@@ -45,7 +45,7 @@ func OpenReviews(ctx context.Context, t *target.Target, explicit string, warn io
 
 // reviewsKey names a task's findings directory: the task id (a bundle's
 // lead), else the branch with `/` as `-` for work no task names. The task
-// this session recorded never keys it, or a sweep branch would file its
+// this session recorded never keys it, or a branch naming no task would file its
 // findings under whatever task the session last ran.
 func reviewsKey(ctx context.Context, t *target.Target, explicit string) (string, error) {
 	r, err := t.Reference(ctx, explicit)
@@ -130,9 +130,8 @@ func seriesOf(ctx context.Context, t *target.Target, s prSubject, dir string, wa
 
 // alreadyMerged reports whether merging the tree's work into base changes
 // nothing: tree equality, not ancestry, since a squash merge leaves the
-// branch's commits off main. A branch with nothing past base yet, such as
-// the coherence lens's fresh sweep branch, is not merged, and neither are
-// untracked work or a branch that does not merge.
+// branch's commits off main. A branch with nothing past base yet is not
+// merged, and neither are untracked work or a branch that does not merge.
 func alreadyMerged(ctx context.Context, dir, base string) bool {
 	if untracked, _ := gitx.Exec(ctx, dir, "ls-files", "--others", "--exclude-standard"); untracked != "" {
 		return false

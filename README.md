@@ -68,7 +68,7 @@ flowchart LR
 ```
 
 Solid arrows are the default flow, and dashed arrows are optional.
-`brainstorm`, `debug`, `judge`, `demo`, `explain`, `handoff` and `catchup` run when you ask for them.
+`brainstorm`, `debug`, `judge`, `demo`, `explain`, `handoff`, `catchup` and `audit` run when you ask for them.
 The other dashed steps run where a project declares them.
 Ship also catches up on its own when the base moved.
 
@@ -83,7 +83,8 @@ Each skill is an **entry point** into the chain:
 | `/f10:plan [<id \| desc>]` | (capture,) fetch, plan | the plan file saved, before any code, or the call handed to the task's own agent |
 | `/f10:ship [<id \| plan.md \| desc>]` | whatever is missing, then the flow | the end of the declared flow (an open PR by default), or the call handed to the task's own agent |
 | `/f10:cleanup [comments\|prose\|code] [<path>]` | cleanup | comments cut to the why, prose rewritten for clarity, leftovers taken out of the code, each diff proven in scope (a small one gets a light pass without proofs), verify green, nothing committed |
-| `/f10:review <id \| PR \| this branch> [host \| ci] \| since [<ref>]` | review | a findings file from a reviewer that never saw your session, from the host's own code review with `host`, or one read in from the CI review. With `since`, a check of how the tasks since a ref (the last tag by default) fit together, against their plans and lore |
+| `/f10:review <id \| PR \| this branch> [host \| ci] \| since [<ref>]` | review | a findings file from a reviewer that never saw your session, from the host's own code review with `host`, or one read in from the CI review. With `since`, it runs `/f10:audit` |
+| `/f10:audit [since <ref \| date> \| all]` | audit, then capture if you accept | a report of how the work since the last audit (else the last tag) fits together: reviewers split by area plus cross-cutting and history lenses, every claimed bug checked in the code, and the findings grouped into phases. It offers to capture the report as a parent with ordered subtasks |
 | `/f10:resolve <id \| PR \| this branch>` | resolve | fix, skip or ask per finding, the fixes verified, every ask in one questionnaire |
 | `/f10:demo <PR \| id \| this branch> [--hands-on]` | demo | screenshots and a local report, or a scenario you walk through |
 | `/f10:handoff [<id \| PR \| this branch>]` | handoff | a file listing what the change leaves after merge: data changes, jobs to run by hand, settings, deploy order, breaks for consumers and accepted debt, rewritten only when the branch head moves; every PR carries its body under `## Handoff` |
@@ -272,6 +273,8 @@ These are the terms the skills, and the rest of this README, use.
   An idea with no task files its verdicts under a slug of the idea.
 - **Spike report** - `<storage root>/spikes/<TASK-ID>.md`, what a spike's run ships.
   It holds the question, the answer, its evidence, the recommendation and the follow-up tasks.
+- **Audit report** - `<storage root>/audits/<YYYY-MM-DD-HHMM>-<sha7>.md`, one per `/f10:audit`.
+  Its header records the sha the audit ran at, which is where the next audit with no window starts.
 - **Gap** - a decision only you can make.
   The plan records each gap with a default, so the plan can always ship.
   Filling the gaps is one optional questionnaire.
@@ -310,8 +313,8 @@ These are the terms the skills, and the rest of this README, use.
 ```mermaid
 flowchart TB
     subgraph plugin ["the f10 plugin - generic, no project facts"]
-        skills2["skills/{brainstorm,debug,capture,plan,ship,judge,cleanup,review,resolve,demo,handoff,explain,catchup,standup}"]
-        gsteps["steps/{brainstorm,debug,capture,fetch,plan,judge,explain,catchup,implement,cleanup,commit,pr,push,review,resolve,demo,handoff,deploy,standup}.md"]
+        skills2["skills/{brainstorm,debug,capture,plan,ship,judge,cleanup,review,resolve,demo,handoff,explain,catchup,standup,audit}"]
+        gsteps["steps/{brainstorm,debug,capture,fetch,plan,judge,explain,catchup,implement,cleanup,commit,pr,push,review,resolve,demo,handoff,deploy,standup,audit}.md"]
         conv["conventions/{context,latency,gaps,failure,report,voice}.md"]
         modes2["modes/{help,dry-run,driven,forward}.md"]
     end

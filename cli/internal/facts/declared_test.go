@@ -692,6 +692,13 @@ func TestAgents(t *testing.T) {
 		t.Errorf("the default flow's steps are keys: %s", eff.Errors())
 	}
 
+	// each spawning step also runs as a skill, with no flow entry behind it
+	standalone := "---\nflows:\n  default: implement pr\nagents:\n  audit: opus:high\n  judge: opus:max\n" +
+		"  cleanup: sonnet:low\n  review: opus:high\n---\n"
+	if eff := buildWith(t, standalone, ""); eff.Errors() != "" {
+		t.Errorf("spawning steps are keys without a flow entry: %s", eff.Errors())
+	}
+
 	if eff := buildWith(t, "---\nvisibility: public\n---\n", ""); eff.Agents != nil {
 		t.Errorf("no map declared leaves agents nil: %v", eff.Agents)
 	}

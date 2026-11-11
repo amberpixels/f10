@@ -9,7 +9,7 @@ Every f10 run starts by loading it.
 - **skill** - an entry point the user invokes (`/f10:*`).
   A skill runs one or more steps.
   `/f10:start`, `/f10:drive`, `/f10:finish`, `/f10:status`, `/f10:board`, `/f10:read` and `/f10:asks` run the binary and no step.
-- **step** - a unit of work in `steps/*.md`: `brainstorm`, `debug`, `capture`, `fetch`, `plan`, `judge`, `explain`, `catchup`, `implement`, `cleanup`, `commit`, `pr`, `push`, `review`, `resolve`, `demo`, `handoff`, `deploy`, `standup`.
+- **step** - a unit of work in `steps/*.md`: `brainstorm`, `debug`, `capture`, `fetch`, `plan`, `judge`, `explain`, `catchup`, `implement`, `cleanup`, `commit`, `pr`, `push`, `review`, `resolve`, `demo`, `handoff`, `deploy`, `standup`, `audit`.
   The skill owns the invocation: argument, modes, authorization and where the session stops.
   The step owns the work.
   Where they disagree, the skill wins on the invocation and the step on the work.
@@ -87,7 +87,7 @@ If the loader is unavailable, follow the points below by hand.
    State them once, the prefix included, and suggest `f10 init`, which writes `.f10/instructions/project.md` from the same probes.
    Never refuse to run for missing config.
 6. **Agent profiles.**
-   A step that spawns a subagent (review's blind reviewer, `judge --blind`, cleanup's rules check) passes the Agent tool the `model` and `effort` its profile line's `Agent tool:` part names.
+   A step that spawns a subagent (review's blind reviewer, `judge --blind`, cleanup's rules check, the audit's reviewers) passes the Agent tool the `model` and `effort` its profile line's `Agent tool:` part names.
    That line is `<step>.<kind>` for the plan's `Kind` when the load prints one, else the plain `<step>` line.
    A line with no `Agent tool:` part passes neither, so the tool's own defaults apply.
    Every other step runs inline, on the task agent's profile (`docs/project-setup.md` → Agents).

@@ -31,6 +31,7 @@ var agentReach = map[string]string{
 	"review":              "the blind reviewer, a subagent",
 	"judge":               "the blind judge (judge --blind), a subagent",
 	"cleanup":             "the rules check, a subagent",
+	"audit":               "the audit's reviewers, subagents",
 }
 
 // AgentReachNone is the line for a step no lever reaches.
