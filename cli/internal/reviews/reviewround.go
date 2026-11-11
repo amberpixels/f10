@@ -1,7 +1,6 @@
 package reviews
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -17,7 +16,6 @@ import (
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/target"
-	"github.com/amberpixels/f10/cli/internal/taskid"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -48,11 +46,7 @@ func OpenReviews(ctx context.Context, t *target.Target, explicit string, warn io
 // this session recorded never keys it, or a branch naming no task would file its
 // findings under whatever task the session last ran.
 func reviewsKey(ctx context.Context, t *target.Target, explicit string) (string, error) {
-	r, err := t.Reference(ctx, explicit)
-	if err == nil && r.Origin == ref.OriginSession {
-		err = ref.ErrNoReference
-	}
-
+	r, err := t.BranchReference(ctx, explicit)
 	if err == nil {
 		return r.Head().ID, nil
 	}
@@ -119,10 +113,9 @@ func seriesOf(ctx context.Context, t *target.Target, s prSubject, dir string, wa
 	}
 
 	head, _, _ := strings.Cut(f.Reviewed, " ")
-	restart := !taskid.IsNumber(strings.TrimLeft(f.PR, "#!"))
 	series.Archived, err = archive.ArchiveReviews(
 		dir,
-		archive.SeriesEnd{Pr: cmp.Or(f.PR, "none"), Head: head, Restart: restart},
+		archive.SeriesEnd{PR: f.PR, Head: head, Restart: f.PR == 0},
 	)
 
 	return series, err
@@ -168,16 +161,16 @@ func seriesClosed(
 	hostErr error,
 	warn io.Writer,
 ) bool {
-	if n := strings.TrimLeft(f.PR, "#!"); taskid.IsNumber(n) {
+	if f.PR > 0 {
 		if hostErr != nil {
-			ui.Warnf(warn, "cannot read %s (%v), so its series of rounds goes on", f.PR, hostErr)
+			ui.Warnf(warn, "cannot read PR %d (%v), so its series of rounds goes on", f.PR, hostErr)
 
 			return false
 		}
 
-		p, err := h.PR(ctx, n)
+		p, err := h.PR(ctx, strconv.Itoa(f.PR))
 		if err != nil {
-			ui.Warnf(warn, "cannot read %s (%v), so its series of rounds goes on", f.PR, err)
+			ui.Warnf(warn, "cannot read %s (%v), so its series of rounds goes on", h.Ref(f.PR), err)
 
 			return false
 		}

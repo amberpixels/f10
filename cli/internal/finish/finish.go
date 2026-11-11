@@ -30,6 +30,8 @@ import (
 func Ref(ctx context.Context, t *target.Target, token string) (ref.Ref, string, string, error) {
 	token = strings.TrimSpace(token)
 	if token == "" {
+		// Reference, not BranchReference: a bare finish under -C is refused,
+		// and the refusal names the session's task to type
 		r, err := t.Reference(ctx, "")
 		if err != nil {
 			return ref.Ref{}, "", "", err

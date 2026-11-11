@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/textx"
 )
 
 // The pull requests a host lists, in one shape for both CLIs. Heavy fields
@@ -520,7 +521,7 @@ func (h Host) PullCommits(ctx context.Context, number int) ([]PRCommit, error) {
 
 	for _, c := range commits {
 		message := cmp.Or(c.Commit.Message, c.Message, c.Title)
-		subject, _, _ := strings.Cut(message, "\n")
+		subject := textx.FirstLine(message)
 		out = append(out, PRCommit{
 			SHA: cmp.Or(
 				c.SHA,

@@ -46,6 +46,17 @@ type PR struct {
 	RemoteOpen bool           `json:"remote_open,omitempty"` // the declared remote reviewer left one unhandled
 }
 
+// NewPR is a request with its state block parsed from its body, so the
+// board and status read one shape.
+func NewPR(p forge.PR) PR {
+	pr := PR{PR: p}
+	if s, ok := trace.ParseState(p.Body); ok {
+		pr.Block = &s
+	}
+
+	return pr
+}
+
 // Local is what this machine knows: live runs, worktrees, branches,
 // plans, findings, verdicts, what the ledger closed, and Herdr's view.
 type Local struct {

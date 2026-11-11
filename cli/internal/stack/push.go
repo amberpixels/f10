@@ -32,7 +32,13 @@ func ClearMarks(ctx context.Context, main, branch string, p CatchupPlan) error {
 // the PR), a PR retargeted by hand (git's base would carry another
 // branch's commits into it), or a local tip that is not origin's.
 type targetState struct {
-	UnpushedBase, Retargeted, Diverged bool
+	// UnpushedBase is a stacked base read from its local branch only. The
+	// drive integrates it and holds the push (ErrBaseNotPushed), because the
+	// dependents it runs build on that unpushed code on purpose. The watcher
+	// declines, because nobody asked it to build on code not yet pushed.
+	UnpushedBase bool
+
+	Retargeted, Diverged bool
 }
 
 // ReadTarget reads t against the PR's base and the branch's local and
@@ -88,8 +94,9 @@ func PushCatchup(ctx context.Context, dir, branch string, rec *drives.Catchup) (
 		return "", err
 	}
 
-	// fetched first, so a push made while the catchup ran shows here
-	if _, err := gitx.Exec(ctx, dir, "fetch", "origin"); err != nil {
+	// fetched fresh, not through the tick's FetchOnce, so a push made while
+	// the catchup ran shows here
+	if err := gitx.Fetch(ctx, dir); err != nil {
 		return "", err
 	}
 

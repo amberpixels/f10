@@ -49,16 +49,11 @@ func runCatchupBase(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	in := stack.CatchupInput{
-		Dir:            t.Layout.CheckoutRoot,
-		Main:           cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot),
-		Guard:          guard,
-		Catchup:        t.Effective.Catchup,
-		Stacked:        t.Effective.CatchupStacked,
-		CatchupDefault: stack.FactDefault(t.Effective, "catchup"),
-		StackedDefault: stack.FactDefault(t.Effective, "catchup_stacked"),
-		ShipStopped:    ShipStopped(),
-	}
+	in := stack.CatchupPolicy(t.Effective)
+	in.Dir = t.Layout.CheckoutRoot
+	in.Main = cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot)
+	in.Guard = guard
+	in.ShipStopped = ShipStopped()
 
 	if !cmd.Bool("no-fetch") {
 		if err := gitx.Fetch(ctx, in.Main); err != nil {

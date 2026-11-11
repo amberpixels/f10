@@ -49,6 +49,14 @@ func (t *Target) Reference(ctx context.Context, explicit string) (ref.Ref, error
 	return ref.Lookup{Prefix: t.Effective.IDPrefix, Dir: t.Dir}.Find(ctx, explicit)
 }
 
+// BranchReference is Reference without the session's task: the branch's
+// task or none, because a findings key, a commit's trailers and a merge
+// follow the checkout, never what this session last ran. Under -C the
+// branch is that checkout's own, so it answers there too.
+func (t *Target) BranchReference(ctx context.Context, explicit string) (ref.Ref, error) {
+	return ref.Lookup{Prefix: t.Effective.IDPrefix, Dir: t.Dir, NoSession: true}.Find(ctx, explicit)
+}
+
 // IDOf turns a task as typed (`117`, a url) into its id, a token that names
 // no task kept as typed. Lookups may start git and every finish row asks, so
 // each token is looked up once, safely across concurrent readers.

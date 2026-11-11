@@ -27,14 +27,22 @@ const BoardPlaceholder = "__BOARD_JSON__"
 // palette so the page and the terminal never disagree.
 const colorsPlaceholder = "__STAGE_COLORS__"
 
+// weightCSS is each stage weight as the page draws it.
+var weightCSS = map[statusview.Weight]string{
+	statusview.Plain: "font-weight: 400;",
+	statusview.Bold:  "font-weight: 600;",
+	statusview.Faint: "font-weight: 400; opacity: 0.6;",
+}
+
 // stageCSS is one rule per stage the palette colors, in a stable order.
 func stageCSS() string {
-	colors := statusview.StageColors()
+	looks := statusview.StageLooks()
 
 	var b strings.Builder
 
-	for _, stage := range slices.Sorted(maps.Keys(colors)) {
-		fmt.Fprintf(&b, "  .stage[data-stage=%q] { color: var(--%s); }\n", stage, colors[stage])
+	for _, stage := range slices.Sorted(maps.Keys(looks)) {
+		l := looks[stage]
+		fmt.Fprintf(&b, "  .stage[data-stage=%q] { color: var(--%s); %s }\n", stage, l.Color.CSS, weightCSS[l.Weight])
 	}
 
 	return strings.TrimSuffix(b.String(), "\n")

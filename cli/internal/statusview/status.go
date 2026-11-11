@@ -139,7 +139,7 @@ func SessionTaskID(sid string) string {
 // CheckoutTaskID is the task the branch names, else the one a linked
 // worktree's directory names on a detached HEAD, "" for none.
 func CheckoutTaskID(ctx context.Context, t *target.Target) string {
-	if r, err := (ref.Lookup{Prefix: t.Effective.IDPrefix, Dir: t.Dir, NoSession: true}).Find(ctx, ""); err == nil {
+	if r, err := t.BranchReference(ctx, ""); err == nil {
 		return r.Label()
 	}
 

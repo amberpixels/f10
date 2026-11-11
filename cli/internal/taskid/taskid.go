@@ -3,7 +3,11 @@
 // fragments, so they differ only where their input does.
 package taskid
 
-import "regexp"
+import (
+	"regexp"
+	"strconv"
+	"strings"
+)
 
 // The prefix as three readers see it. Typed is what a user types as a
 // reference, any case. Word is the first word of a skill argument, where a
@@ -42,6 +46,23 @@ func IsWord(token string) bool { return wordRE.MatchString(token) }
 
 // IsNumber reports a bare issue number.
 func IsNumber(token string) bool { return numberRE.MatchString(token) }
+
+// RequestNumber reads a PR or MR number as a host writes it (#12, !12) or
+// bare (12); anything else, `none` included, is 0.
+func RequestNumber(text string) int {
+	n := strings.TrimSpace(text)
+	if strings.HasPrefix(n, "#") || strings.HasPrefix(n, "!") {
+		n = n[1:]
+	}
+
+	if !IsNumber(n) {
+		return 0
+	}
+
+	v, _ := strconv.Atoi(n)
+
+	return v
+}
 
 // ValidPrefix reports a prefix a project may declare.
 func ValidPrefix(prefix string) bool { return declaredRE.MatchString(prefix) }

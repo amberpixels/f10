@@ -8,7 +8,7 @@ import (
 )
 
 func TestRootPaths(t *testing.T) {
-	t.Parallel()
+	t.Setenv(UserDirEnv, "") // the paths are ~/.f10's whatever the developer's shell sets
 
 	for _, root := range []Root{InRepo("/code/repo"), OutOfTree("/home/me", "repo")} {
 		base := string(root)
@@ -45,6 +45,19 @@ func TestRootPaths(t *testing.T) {
 	}
 }
 
+// UserDirEnv moves the user's dir, and every out-of-tree root with it.
+func TestUserDirEnvMovesTheRoot(t *testing.T) {
+	t.Setenv(UserDirEnv, "/elsewhere")
+
+	if got := UserDir("/home/me"); got != "/elsewhere" {
+		t.Errorf("UserDir = %q, want /elsewhere", got)
+	}
+
+	if got := OutOfTree("/home/me", "repo"); got != "/elsewhere/repo" {
+		t.Errorf("OutOfTree = %q, want /elsewhere/repo", got)
+	}
+}
+
 // Every dir a method names for a task file is granted to the agent, so a
 // new one cannot land in one place and not the other.
 func TestTaskFileDirsCoverMethods(t *testing.T) {
@@ -55,7 +68,7 @@ func TestTaskFileDirsCoverMethods(t *testing.T) {
 
 	for _, dir := range []string{
 		root.Plans(), filepath.Dir(root.Reviews("x")), filepath.Dir(root.Verdicts("x")), root.Spikes(),
-		root.Handoffs(), root.Lore(), filepath.Dir(root.Images("x")), filepath.Dir(root.Demo("x")), root.Audits(),
+		root.Handoffs(), root.Lore(), filepath.Dir(root.Images("x")), filepath.Dir(root.Demo("x")), root.join("audits"),
 	} {
 		if !slices.Contains(granted, dir) {
 			t.Errorf("%s is not granted to the agent", dir)

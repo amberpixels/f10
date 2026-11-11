@@ -39,3 +39,17 @@ func TestReaders(t *testing.T) {
 		t.Errorf("Parse(ft-12) = %q %q", p, n)
 	}
 }
+
+// A request number reads the same from gh's #n, glab's !n and a bare n.
+func TestRequestNumber(t *testing.T) {
+	t.Parallel()
+
+	for text, want := range map[string]int{
+		"#12": 12, "!12": 12, "12": 12, "#7": 7,
+		"none": 0, "": 0, "#": 0, "#!12": 0, "FT-12": 0,
+	} {
+		if got := RequestNumber(text); got != want {
+			t.Errorf("RequestNumber(%q) = %d, want %d", text, got, want)
+		}
+	}
+}

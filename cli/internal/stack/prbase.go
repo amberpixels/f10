@@ -11,7 +11,7 @@ import (
 
 // PRBase is the branch the subject's request targets or would target. A
 // recorded base found nowhere was finished and deleted, so its code is on
-// the default branch; that is said on warn. prTargetOf keeps "found nowhere"
+// the default branch; that is said on warn. PRTargetOf keeps "found nowhere"
 // as its own answer, which drive and the watcher wait on.
 func PRBase(ctx context.Context, warn io.Writer, main, branch string) (string, error) {
 	after, sha, err := RecordedBase(ctx, main, branch)

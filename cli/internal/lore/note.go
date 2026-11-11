@@ -33,13 +33,8 @@ func Note(store *Store, change string) string {
 		kind      Kind
 		one, many string
 	}{{KindDecision, "decision", "decisions"}, {KindLesson, "lesson", "lessons"}} {
-		word := k.many
-		if count[k.kind] == 1 {
-			word = k.one
-		}
-
 		if n := count[k.kind]; n > 0 {
-			parts = append(parts, strconv.Itoa(n)+" "+word)
+			parts = append(parts, strconv.Itoa(n)+" "+plural(n, k.one, k.many))
 		} else {
 			parts = append(parts, "no "+k.many)
 		}

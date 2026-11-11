@@ -489,8 +489,7 @@ func (in WatchInput) sendCatchup(
 
 		return nil
 	case st.UnpushedBase:
-		// a stacked base read from its local branch only: its unpushed
-		// commits would ride into this request, so the catchup waits for its push
+		// the watcher's side of stack's UnpushedBase rule: it waits for the push
 		return nil
 	case st.Retargeted:
 		return behind("retargeted", fmt.Sprintf("%s targets %s, not %s, which %s was started on: not caught up",
@@ -698,6 +697,7 @@ type WatchedTask struct {
 	Listed     bool            // the workspaces were listed, so "" is no workspace
 	Ws         string          // its workspace, for a message
 	// what a catchup needs, read after the pass's fetch under watch_catchup
+
 	// the pass's one fetch, which the catchup reuses; nil until origin was
 	// fetched and the fields below read
 	fetch     *stack.FetchOnce

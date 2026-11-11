@@ -15,7 +15,7 @@ Every f10 run starts by loading it.
   Where they disagree, the skill wins on the invocation and the step on the work.
   A step's `Context:` line names the `project.md` sections it reads.
 - **base role** - the role a step's `Role:` line names, which `project.md → Roles` or the step's overlay can replace (**Roles** below).
-  Under a replaced role, an instruction phrased for code (critical files, migrations, a failing test) applies by analogy or not at all, and the project's overlay for that step says which.
+  Under a replaced role, an instruction phrased for code applies by analogy or not at all, and the project's overlay for that step says which.
 - **overlay** - `.f10/instructions/<step>.md`, extending the generic step of that name.
 - **project-defined step** - a flow entry with no generic step, such as `e2e`.
   Its overlay is the whole step.
@@ -35,6 +35,7 @@ Every f10 run starts by loading it.
   `<key>` is the task id, or for an idea, a kebab slug of it.
 - **spike report** - `<storage root>/spikes/<TASK-ID>.md`, a spike's answer (`steps/implement.md`).
 - **handoff file** - `<storage root>/handoffs/<TASK-ID>.md`, what a change leaves for whoever ships it.
+- **audit report** - `<storage root>/audits/<time>-<sha7>.md`, one per `/f10:audit`.
 - **shipment** - what the ship flow leaves, decided by its **last delivering entry**:
   - `implement`: verified code, in prose.
   - `commit`: local commits, a sha.
@@ -105,7 +106,7 @@ A fact belongs to whatever acts on it, which says what it means:
 - `ceiling`: `f10 drive`, `f10 flow` and every reader of a pace.
 - `review`, `catchup`, `stale_after`: the **review**, **catchup** and **fetch** steps.
 - `traces`: the **commit**, **resolve**, **judge** and **catchup** steps, and `f10 finish`.
-- `agents`: `f10 start` and `f10 drive` (the task agent's `default`), and the **review**, **judge** and **cleanup** steps where they spawn a subagent.
+- `agents`: `f10 start` and `f10 drive` (the task agent's `default`), and each step that spawns a subagent (point 6 above).
 
 Every heading is optional, and only **Tracker** matters for the pipeline's contracts.
 

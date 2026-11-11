@@ -366,3 +366,29 @@ func TestChooseWindowIgnoresRowlessActivity(t *testing.T) {
 		t.Errorf("window = %+v, want the fallback", w)
 	}
 }
+
+// On GitLab a request with no task is keyed !n, so it never shares a key
+// with tracker issue #n, and its summaries write !n too.
+func TestDeriveFeedWritesGitLabRequests(t *testing.T) {
+	t.Parallel()
+
+	f := feedFacts()
+	f.Project.Host = "glab"
+
+	got := map[string]string{}
+	for _, r := range DeriveFeed(f, feedNow, feedToday).Feed.Rows {
+		got[r.Key] = r.Summary
+	}
+
+	if s, ok := got["!4"]; !ok || s != "opened" {
+		t.Errorf("the request with no task: %q (ok %v), want key !4", s, ok)
+	}
+
+	if _, ok := got["#4"]; ok {
+		t.Error("a GitLab request is keyed #4")
+	}
+
+	if s := got["FT-3"]; s != "opened, follow-up to !30" {
+		t.Errorf("FT-3 = %q, want the follow-up written !30", s)
+	}
+}

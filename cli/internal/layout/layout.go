@@ -118,7 +118,7 @@ func Locate(ctx context.Context, cwd string) *Layout {
 			root := storage.OutOfTree(home, lay.Project)
 			if oot := existingDir(root.Instructions()); oot != "" {
 				lay.Layers = []Layer{{Label: "out-of-tree", Dir: oot}}
-				lay.Source = "out-of-tree (~/.f10/" + lay.Project + ")"
+				lay.Source = "out-of-tree (" + homeShown(home, string(root)) + ")"
 				lay.StorageRoot = root
 			}
 		}
@@ -180,4 +180,13 @@ func layeringDecl(projectMD string) string {
 	}
 
 	return fm.Layering
+}
+
+// homeShown is path with home written ~, as the load script shows it.
+func homeShown(home, path string) string {
+	if rel, err := filepath.Rel(home, path); err == nil && rel != ".." && !strings.HasPrefix(rel, "../") {
+		return "~/" + rel
+	}
+
+	return path
 }

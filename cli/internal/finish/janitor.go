@@ -535,10 +535,7 @@ func (j *Sweeper) archive(branches []StaleBranch, removed map[string]time.Time) 
 		for _, id := range b.Ids {
 			if ok {
 				cleared[id] = laterOf(cleared[id], ended)
-				ends[id] = archive.SeriesEnd{Pr: "none", Head: cmp.Or(b.LocalSHA, b.originSHA)}
-				if n := j.prs[b.Name]; n > 0 {
-					ends[id] = archive.SeriesEnd{Pr: j.In.Host.Ref(n), Head: ends[id].Head}
-				}
+				ends[id] = archive.SeriesEnd{PR: j.prs[b.Name], Head: cmp.Or(b.LocalSHA, b.originSHA)}
 			} else {
 				left[id] = append(left[id], b.Name)
 			}

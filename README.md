@@ -31,6 +31,7 @@ The other skills are optional, and each has its place around the chain:
 - **demo** and **explain** run after the PR.
 - **handoff** runs before the merge, listing what the change leaves for whoever ships it.
 - **catchup** runs whenever the base branch moved.
+- **audit** runs after a run of tasks, reviewing what shipped over a window.
 
 No stack is hard-coded, so the same commands drive a Go service, a Rails app or a Terraform repo.
 f10 **infers** what it needs: the git remote gives `gh` or `glab`, and the build files give the verify commands.
@@ -65,6 +66,8 @@ flowchart LR
     expl -.->|"what it was · what it is"| told(["what changed"])
     implement -.->|"base moved: before implement, pr and judge"| catch[catchup]
     catch -.->|"merge or rebase · conflicts settled"| uptodate(["on its base"])
+    shipped(["shipped work over a window"]) -.-> aud[audit]
+    aud -.->|"a report · tasks sized to it"| report(["what to fix next"])
 ```
 
 Solid arrows are the default flow, and dashed arrows are optional.
@@ -316,7 +319,7 @@ flowchart TB
         skills2["skills/{brainstorm,debug,capture,plan,ship,judge,cleanup,review,resolve,demo,handoff,explain,catchup,standup,audit}"]
         gsteps["steps/{brainstorm,debug,capture,fetch,plan,judge,explain,catchup,implement,cleanup,commit,pr,push,review,resolve,demo,handoff,deploy,standup,audit}.md"]
         conv["conventions/{context,latency,gaps,failure,report,voice}.md"]
-        modes2["modes/{help,dry-run,driven,forward}.md"]
+        modes2["modes/{help,dry-run,driven,forward,binary}.md"]
     end
     subgraph repo ["&lt;repo&gt;/.f10 - project-specific, often untracked"]
         proj["instructions/project.md - facts & adapters"]

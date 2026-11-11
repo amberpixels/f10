@@ -2,7 +2,6 @@ package lookaround
 
 import (
 	"cmp"
-	"fmt"
 	"maps"
 	"slices"
 	"strings"
@@ -105,7 +104,7 @@ func gather(f Facts, since time.Time) []*row {
 
 		members := membersOf(f.Prefix, p)
 		if len(members) == 0 {
-			members = []string{fmt.Sprintf("#%d", p.Number)}
+			members = []string{f.Project.Ref(p.Number)}
 		}
 
 		// a bundle's request is every member's
@@ -362,14 +361,10 @@ func (r *row) fill() {
 
 // BaseOf settles a task's base for status and the board alike: the base the
 // branch records, else the request's state block, else the task's After line.
-// A request read without its block has it parsed from the body here.
 func BaseOf(branchAfter string, pr *PR, taskAfter string) (string, string) {
-	block := (*trace.State)(nil)
+	var block *trace.State
 	if pr != nil {
 		block = pr.Block
-		if s, ok := trace.ParseState(pr.Body); block == nil && ok {
-			block = &s
-		}
 	}
 
 	switch {

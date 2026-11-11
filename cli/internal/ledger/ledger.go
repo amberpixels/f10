@@ -138,7 +138,8 @@ func (e Event) FinishedTask() string {
 //go:embed migrations/*.sql
 var migrations embed.FS
 
-// Path is the database file: F10_LEDGER, else ~/.f10/f10.db.
+// Path is the database file: F10_LEDGER, else f10.db in the user's f10 dir
+// (~/.f10, or F10_USER_DIR).
 func Path() string {
 	if p := os.Getenv(PathEnv); p != "" {
 		return p

@@ -11,9 +11,18 @@ import (
 // plan step's profile for a bug. The words are the plan's Kind line.
 var TaskKinds = []string{"feature", "bug", "refactor", "spike"}
 
-// SpawningSteps are the steps that spawn a subagent on their own key. Each
-// also runs as a skill outside any flow, so its key needs no flow entry.
-var SpawningSteps = []string{"audit", "cleanup", "judge", "review"}
+// SpawnerReach is what each step that spawns a subagent on its own key
+// runs there. Each also runs as a skill outside any flow, so its key needs
+// no flow entry.
+var SpawnerReach = map[string]string{
+	"review":  "the blind reviewer, a subagent",
+	"judge":   "the blind judge (judge --blind), a subagent",
+	"cleanup": "the rules check, a subagent",
+	"audit":   "the audit's reviewers, subagents",
+}
+
+// SpawningSteps are SpawnerReach's steps, sorted.
+var SpawningSteps = slices.Sorted(maps.Keys(SpawnerReach))
 
 // AgentKeyDefault is the key the task's agent runs on.
 const AgentKeyDefault = "default"

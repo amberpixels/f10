@@ -109,7 +109,7 @@ func newestSeries(store *lore.Store, task string) string {
 		return task
 	}
 
-	for _, c := range LoreSeries(changes, task) {
+	for _, c := range archive.LoreSeries(changes, task) {
 		if _, err := store.Effective(c); err == nil {
 			return c
 		}

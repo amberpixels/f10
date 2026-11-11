@@ -4,11 +4,13 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/textx"
 	"github.com/amberpixels/f10/cli/internal/trace"
 )
 
@@ -166,7 +168,7 @@ func windowEnd(w Window, now time.Time) time.Time {
 func feedRow(f Facts, t forge.Touched, w Window, tasks map[string]*Task) (FeedRow, bool) {
 	pr := feedPR(t)
 
-	key := fmt.Sprintf("#%d", t.Number)
+	key := f.Project.Ref(t.Number)
 	members := membersOf(f.Prefix, pr)
 
 	if len(members) > 0 {
@@ -249,7 +251,7 @@ func feedRow(f Facts, t forge.Touched, w Window, tasks map[string]*Task) (FeedRo
 			r.Summary += " by " + t.MergedBy
 		}
 	case closedHere:
-		r.Group, r.From, r.Owes, r.Abandoned, r.Summary = GroupFinished, FromHost, "", true, "abandoned"
+		r.Group, r.From, r.Owes, r.Abandoned, r.Summary = GroupFinished, FromHost, "", true, StageAbandoned
 	case opened || ready:
 		r.Group, r.From = GroupStarted, FromHost
 
@@ -384,7 +386,7 @@ func taskRow(f Facts, reqs []requestRow) FeedRow {
 		rel := relationOf(p, lead.t)
 		r.Related = append(r.Related, RelatedPR{Number: p.Number, URL: p.URL, State: p.Status, Relation: rel})
 
-		n := fmt.Sprintf("#%d", p.Number)
+		n := f.Project.Ref(p.Number)
 
 		switch rel {
 		case RelationPart:
@@ -408,12 +410,12 @@ func taskRow(f Facts, reqs []requestRow) FeedRow {
 	case r.Abandoned && len(later) > 0:
 		r.Abandoned, r.Summary = false, "closed"
 		if l := later[len(later)-1]; l.CreatedAt.After(lead.t.CreatedAt) {
-			r.Summary += fmt.Sprintf(", replaced by #%d", l.Number)
+			r.Summary += ", replaced by " + f.Project.Ref(l.Number)
 		}
 	}
 
 	for _, q := range reqs {
-		n := fmt.Sprintf("#%d", q.t.Number)
+		n := f.Project.Ref(q.t.Number)
 		if !mergedInParts && slices.Contains(parts, n) && q.row.Group == GroupFinished && !q.row.Abandoned {
 			r.Summary += ", " + n + " merged"
 		}
@@ -464,7 +466,7 @@ func taskRequests(f Facts, id string) []PR {
 	}
 
 	for _, p := range f.Earlier[id] {
-		consider(PR{PR: p})
+		consider(NewPR(p))
 	}
 
 	slices.SortFunc(out, func(a, c PR) int {
@@ -474,18 +476,14 @@ func taskRequests(f Facts, id string) []PR {
 	return out
 }
 
-// Plural is n and word, pluralised past one ("-sh" takes "es"). Every
-// renderer counting a word goes through it.
+// Plural is n and word, pluralised past one ("-sh" takes "es").
 func Plural(n int, word string) string {
-	if n == 1 {
-		return "1 " + word
-	}
-
+	many := word + "s"
 	if strings.HasSuffix(word, "sh") {
-		return fmt.Sprintf("%d %ses", n, word)
+		many = word + "es"
 	}
 
-	return fmt.Sprintf("%d %ss", n, word)
+	return strconv.Itoa(n) + " " + textx.Plural(n, word, many)
 }
 
 func latestOf(times ...time.Time) time.Time {

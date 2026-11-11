@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+
+	"github.com/amberpixels/f10/cli/internal/gitx/gitxtest"
 )
 
 // realRepo is a repo with main at "base" and side branched from it, so a
@@ -17,10 +19,7 @@ type realRepo struct {
 func newRealRepo(t *testing.T) realRepo {
 	t.Helper()
 
-	r := realRepo{t, t.TempDir()}
-	r.git("init", "-q", "-b", "main")
-	r.git("config", "user.email", "t@t")
-	r.git("config", "user.name", "t")
+	r := realRepo{t, gitxtest.Init(t, t.TempDir(), "main").Dir}
 	r.commit("f", "base\n", "base")
 	r.git("branch", "side")
 

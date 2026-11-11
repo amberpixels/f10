@@ -123,11 +123,10 @@ func runTraceTrailers(ctx context.Context, cmd *cli.Command) error {
 	return nil
 }
 
-// traceTasks uses the lookup itself, not target.reference: under -C the
-// branch is the one -C points at, and never the session's task, since a
-// branch naming no task carries none; that case is nil and a stderr line.
+// traceTasks never reads the session's task, since a branch naming no task
+// carries none; that case is nil and a stderr line.
 func traceTasks(ctx context.Context, cmd *cli.Command, t *target.Target, alone string) ([]string, error) {
-	r, err := ref.Lookup{Prefix: t.Effective.IDPrefix, Dir: t.Dir, NoSession: true}.Find(ctx, cmd.String("task"))
+	r, err := t.BranchReference(ctx, cmd.String("task"))
 
 	switch {
 	case err == nil:

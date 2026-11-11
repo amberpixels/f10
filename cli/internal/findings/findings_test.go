@@ -130,18 +130,20 @@ func TestParseWithoutHeader(t *testing.T) {
 	}
 }
 
-// pr: names the PR a round reviewed; a file older than the line has none.
+// pr: names the PR a round reviewed, as gh or glab writes it; none and a
+// file older than the line have none.
 func TestParsePR(t *testing.T) {
 	t.Parallel()
 
-	for text, want := range map[string]string{
-		"task: GH-13\nround: 1\npr: #204\n": "#204",
-		"task: GH-13\nround: 1\npr: none\n": "none",
-		"task: GH-13\nround: 1\n":           "",
+	for text, want := range map[string]int{
+		"task: GH-13\nround: 1\npr: #204\n": 204,
+		"task: GH-13\nround: 1\npr: !204\n": 204,
+		"task: GH-13\nround: 1\npr: none\n": 0,
+		"task: GH-13\nround: 1\n":           0,
 	} {
 		f, err := Parse(text)
 		if err != nil || f.PR != want {
-			t.Errorf("Parse(%q).PR = %q, %v; want %q", text, f.PR, err, want)
+			t.Errorf("Parse(%q).PR = %d, %v; want %d", text, f.PR, err, want)
 		}
 	}
 }

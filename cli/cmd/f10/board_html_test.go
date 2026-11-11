@@ -140,6 +140,13 @@ func htmlBoards(t *testing.T) map[string]lookaround.Board {
 				Task: &lookaround.Task{ID: "FT-4", Title: "new"}, Who: lookaround.Who{Assignees: []string{"cat"}},
 				Summary: "created",
 			},
+			{
+				Group: lookaround.GroupFinished, Key: "FT-5", From: lookaround.FromHost,
+				PR: &lookaround.PRRef{
+					Number: 5, Title: "FT-5 (+FT-6, FT-7): Lead", URL: "https://x.io/pull/5", State: "merged",
+				},
+				Summary: "merged",
+			},
 		},
 	}
 	boards["feed-edges"] = feed
@@ -483,6 +490,13 @@ func TestBoardHTMLMatchesTheLocalOnlyNote(t *testing.T) {
 	}
 }
 
+// board.html cannot import the stage, so it matches the same text.
+func TestBoardHTMLMatchesTheAbandonedStage(t *testing.T) {
+	if !strings.Contains(boardcmd.BoardHTMLPage, `"`+lookaround.StageAbandoned+`"`) {
+		t.Errorf("board.html does not match the stage %q", lookaround.StageAbandoned)
+	}
+}
+
 // The page's stage colors come from the terminal's palette, so in-review
 // and pr-open are orange on both.
 func TestBoardPageColorsFollowTheTerminal(t *testing.T) {
@@ -493,9 +507,11 @@ func TestBoardPageColorsFollowTheTerminal(t *testing.T) {
 
 	page := buf.String()
 	for _, rule := range []string{
-		`.stage[data-stage="in-review"] { color: var(--orange); }`,
-		`.stage[data-stage="pr-open"] { color: var(--orange); }`,
-		`.stage[data-stage="reviewed"] { color: var(--magenta); }`,
+		`.stage[data-stage="in-review"] { color: var(--orange); font-weight: 400; }`,
+		`.stage[data-stage="pr-open"] { color: var(--orange); font-weight: 400; }`,
+		`.stage[data-stage="reviewed"] { color: var(--magenta); font-weight: 600; }`,
+		`.stage[data-stage="asking"] { color: var(--red); font-weight: 600; }`,
+		`.stage[data-stage="shipped"] { color: var(--green); font-weight: 400; opacity: 0.6; }`,
 	} {
 		if !strings.Contains(page, rule) {
 			t.Errorf("the page lacks %s", rule)
@@ -507,9 +523,9 @@ func TestBoardPageColorsFollowTheTerminal(t *testing.T) {
 	}
 
 	// light, dark by preference, and dark by choice: each defines every color
-	for _, color := range statusview.StageColors() {
-		if n := strings.Count(page, "--"+color+":"); n != 3 {
-			t.Errorf("--%s is defined %d times, want once per theme (3)", color, n)
+	for _, look := range statusview.StageLooks() {
+		if n := strings.Count(page, "--"+look.Color.CSS+":"); n != 3 {
+			t.Errorf("--%s is defined %d times, want once per theme (3)", look.Color.CSS, n)
 		}
 	}
 }

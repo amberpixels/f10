@@ -277,13 +277,13 @@ func TestReviewRoundRestartKeepsTheChange(t *testing.T) {
 
 	if _, err := finish.CloseSeries(
 		dir,
-		archive.SeriesEnd{Pr: "#7", Head: "abc1234"},
+		archive.SeriesEnd{PR: 7, Head: "abc1234"},
 	); err != nil ||
 		archive.ChangeOf(dir) != "DM-5.2" {
 		t.Errorf("after the PR merged: %q, %v, want DM-5.2", archive.ChangeOf(dir), err)
 	}
 
-	if got, ok := finish.ClosedChange(dir, archive.SeriesEnd{Pr: "#7"}); !ok || got != "DM-5" {
+	if got, ok := finish.ClosedChange(dir, archive.SeriesEnd{PR: 7}); !ok || got != "DM-5" {
 		t.Errorf("finish run again names %q, %v; want the merged PR's DM-5", got, ok)
 	}
 }
@@ -303,7 +303,7 @@ func TestLoreChangeArchivesAMergedSeries(t *testing.T) {
 
 	if e := archive.ReadSeriesEnd(
 		filepath.Join(repo, ".f10", "reviews", "archive", "DM-5.1"),
-	); e.Pr != "#7" ||
+	); e.PR != 7 ||
 		e.Restart {
 		t.Errorf("the archived series records %+v", e)
 	}
@@ -324,7 +324,7 @@ func TestReviewRoundKeepsTheSeriesOfAnOpenPR(t *testing.T) {
 func TestCloseSeriesCountsEveryPR(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, "reviews", "DM-5")
-	first := archive.SeriesEnd{Pr: "#7", Head: "abc1234"}
+	first := archive.SeriesEnd{PR: 7, Head: "abc1234"}
 
 	if got := archive.ChangeOf(dir); got != "DM-5" {
 		t.Fatalf("no series closed: %q", got)
@@ -344,16 +344,16 @@ func TestCloseSeriesCountsEveryPR(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := finish.CloseSeries(dir, archive.SeriesEnd{Pr: "!8", Head: "def5678"})
+	got, err := finish.CloseSeries(dir, archive.SeriesEnd{PR: 8, Head: "def5678"})
 	if err != nil || got != filepath.Join(root, "reviews", "archive", "DM-5.2") {
 		t.Fatalf("a second PR's rounds: %q, %v", got, err)
 	}
 
-	if e := archive.ReadSeriesEnd(got); e.Pr != "!8" || e.Head != "def5678" || e.At.IsZero() {
+	if e := archive.ReadSeriesEnd(got); e.PR != 8 || e.Head != "def5678" || e.At.IsZero() {
 		t.Errorf("closed file reads %+v", e)
 	}
 
-	if _, err := finish.CloseSeries(dir, archive.SeriesEnd{Pr: "#8"}); err != nil || archive.ChangeOf(dir) != "DM-5.3" {
+	if _, err := finish.CloseSeries(dir, archive.SeriesEnd{PR: 8}); err != nil || archive.ChangeOf(dir) != "DM-5.3" {
 		t.Errorf("glab's !8 and gh's #8 are one PR: %q, %v", archive.ChangeOf(dir), err)
 	}
 }

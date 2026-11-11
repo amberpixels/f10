@@ -317,7 +317,7 @@ func (src RowSource) Gather(ctx context.Context, k stack.ChildRow) (TaskRow, loo
 		}
 
 		if p, err := src.host.PR(ctx, at); err == nil {
-			f.SetPRs([]lookaround.PR{{PR: p}})
+			f.SetPRs([]lookaround.PR{lookaround.NewPR(p)})
 		}
 	}
 
