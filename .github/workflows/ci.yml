@@ -28,8 +28,9 @@ jobs:
       - uses: extractions/setup-just@v3
 
       # The same recipe developers run locally, so `just ci` and CI cannot
-      # drift apart. ci is lint + test - it verifies, never rewrites.
-      # cgo off, as the release builds: proves no dependency needs a C toolchain
+      # drift apart. ci is lint + test + test-race - it verifies, never rewrites.
+      # cgo off, as the release builds: proves no dependency needs a C toolchain.
+      # test-race turns cgo on for its own command, since -race needs it on linux.
       - name: Lint and test
         run: just ci
         env:

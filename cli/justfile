@@ -42,10 +42,13 @@ build:
     go build ./...
 # <<< justx:build
 
-# >>> justx:ci (managed) - `j @upgrade` re-syncs; remove these fences to take over
-# run all checks - read-only, safe for CI
-ci: lint test
-# <<< justx:ci
+# run all checks - read-only, safe for CI; unfenced so the race check survives `j @upgrade`
+ci: lint test test-race
+
+# race-check the daemon, whose drain reads drive state other goroutines write;
+# cgo is on because -race needs it on linux, where CI runs with it off
+test-race:
+    CGO_ENABLED=1 go test -race ./internal/daemon/...
 
 # run the prompt evals in ../evals against the real model ([docs/evals.md](../docs/evals.md))
 eval *args:

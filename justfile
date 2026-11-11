@@ -32,6 +32,9 @@ fix: cli::fix
 # run tests - the f10-load-project.sh parity suite included
 test: cli::test
 
+# race-check the daemon package
+test-race: cli::test-race
+
 # build the f10 binary
 build: cli::build
 
@@ -43,4 +46,4 @@ eval *args:
     just cli::eval {{args}}
 
 # run all checks - read-only, safe for CI
-ci: lint test
+ci: lint test test-race
