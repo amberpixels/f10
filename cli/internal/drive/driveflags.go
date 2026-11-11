@@ -44,7 +44,7 @@ func flagUsage(flags []driverec.DriveFlag) string {
 	return strings.Join(parts, " ")
 }
 
-// DriveUsage is drive's ArgsUsage, read off driveFlags.
+// DriveUsage is drive's ArgsUsage, read off DriveFlags.
 func DriveUsage() string {
 	run := slices.DeleteFunc(
 		slices.Clone(driverec.DriveFlags),

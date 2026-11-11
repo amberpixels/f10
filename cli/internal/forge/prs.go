@@ -87,11 +87,14 @@ func (h Host) ShowPR(ctx context.Context, number string, web bool) error {
 // Sigil is how the host writes a request's number: #n, or GitLab's !n.
 func (h Host) Sigil() string {
 	if h.glab() {
-		return "!"
+		return mrSigil
 	}
 
-	return "#"
+	return prSigil
 }
+
+// Ref is request n as the host writes it: #12, or !12 on GitLab.
+func (h Host) Ref(n int) string { return h.Sigil() + strconv.Itoa(n) }
 
 // SharedNumbers reports whether issues and requests share one counter, so
 // a bare #n may name either; GitLab numbers them apart.

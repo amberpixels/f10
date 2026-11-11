@@ -23,7 +23,7 @@ const mainPullWait = 2 * time.Minute
 
 // pullMain brings the local default branch up to the merge. The merge has
 // landed on origin by then, so a pull that fails defers to a later retry
-// (retryPendingPull) and comes back as a note naming the cause; it never
+// (RetryPendingPull) and comes back as a note naming the cause; it never
 // rebases or resets the branch.
 func pullMain(ctx context.Context, root, main, def, sha string) (string, bool) {
 	note, err := pullDefault(ctx, root, main, def, sha)

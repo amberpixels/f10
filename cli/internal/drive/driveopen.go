@@ -18,6 +18,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/textx"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -97,7 +98,7 @@ func (in *DriveInput) open(ctx context.Context, r *DriveRun) error {
 	// drives before the skills were read off the flow stored them here
 	_ = branchmeta.Unset(ctx, in.Main, o.Branch, branchmeta.Chain) // absent is fine
 
-	for _, n := range finish.AppendNote(o.Notes, note) {
+	for _, n := range textx.AppendNote(o.Notes, note) {
 		fmt.Fprintf(in.Out, "  %s\n", n)
 	}
 

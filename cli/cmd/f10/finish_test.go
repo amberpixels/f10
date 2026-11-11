@@ -1278,10 +1278,11 @@ func TestFinishMergedWithoutWorktreeKeepsTheRecords(t *testing.T) {
 
 	var sized []finish.BranchSize
 
-	prev := finish.RecordSize
-	finish.RecordSize = func(_ context.Context, _, _, _ string, s finish.BranchSize) { sized = append(sized, s) }
-
-	t.Cleanup(func() { finish.RecordSize = prev })
+	seam.Swap(
+		t,
+		&finish.RecordSize,
+		func(_ context.Context, _, _, _ string, s finish.BranchSize) { sized = append(sized, s) },
+	)
 
 	out, err := fx.run(t)
 	if err != nil {
@@ -2315,16 +2316,13 @@ func TestFinishRecordsTheBranchSize(t *testing.T) {
 
 			var got []finish.BranchSize
 
-			prev := finish.RecordSize
-			finish.RecordSize = func(_ context.Context, _, branch, task string, s finish.BranchSize) {
+			seam.Swap(t, &finish.RecordSize, func(_ context.Context, _, branch, task string, s finish.BranchSize) {
 				if branch != "GH-1" || task != "GH-1" {
 					t.Errorf("recorded for %s on %s", task, branch)
 				}
 
 				got = append(got, s)
-			}
-
-			t.Cleanup(func() { finish.RecordSize = prev })
+			})
 
 			if out, err := fx.run(t); err != nil {
 				t.Fatalf("%v\n%s", err, out)

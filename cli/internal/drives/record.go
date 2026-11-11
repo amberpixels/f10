@@ -60,7 +60,7 @@ const (
 	PhaseRunning   = "running"   // a skill in flight
 	PhaseVerifying = "verifying" // the drive's own verify after a catchup
 	PhaseRetrying  = "retrying"  // sending its action again after a failed attempt
-	PhaseParked    = "parked"    // a skill waits for its base's code
+	PhaseParked    = "parked"    // a skill waits for its base's code, or its branch on origin
 	PhaseWaiting   = "waiting"   // finish waits for its base to be through
 	PhaseEnded     = "ended"     // its outcome is in
 )

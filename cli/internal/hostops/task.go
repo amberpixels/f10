@@ -51,7 +51,7 @@ type Row struct {
 	Created  time.Time `json:"created,omitzero"`
 }
 
-// StripTitles is for driver rows; the host's come stripped from listIssues.
+// StripTitles is for driver rows; the host's come stripped from ListIssues.
 func StripTitles(rows []Row, titles tasktitle.Template) []Row {
 	for i, r := range rows {
 		n := strings.TrimPrefix(r.ID[strings.LastIndexByte(r.ID, '-')+1:], "#")

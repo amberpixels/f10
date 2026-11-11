@@ -32,7 +32,7 @@ func LinkAfter(body, link string) string {
 type Tracker struct {
 	Resolve func(ctx context.Context, token string) (ref.Ref, error)
 	Info    func(ctx context.Context, task ref.Ref) (hostops.TaskInfo, error)
-	// Children is the task's open subtasks; nil, like errNoParentLink, is a
+	// Children is the task's open subtasks; nil, like ErrNoParentLink, is a
 	// tracker with no parent link
 	Children func(ctx context.Context, task ref.Ref) ([]ChildRow, error)
 	// AllChildren is children with the closed ones kept, for status

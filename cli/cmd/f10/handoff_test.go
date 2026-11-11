@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/archive"
-	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
@@ -26,18 +25,18 @@ func TestHandoffLines(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "GH-1.md")
 
-	missing := strings.Join(taskcmd.HandoffLines(path, "GH-1", tipOf("abc")), "\n")
+	missing := strings.Join(archive.HandoffLines(path, "GH-1", tipOf("abc")), "\n")
 	if !strings.HasPrefix(missing, "no handoff for GH-1:") || !strings.Contains(missing, "/f10:handoff") {
 		t.Errorf("missing = %q", missing)
 	}
 
 	writeHandoffFile(t, path, "abc1234567")
 
-	if got := strings.Join(taskcmd.HandoffLines(path, "GH-1", tipOf("abc1234567")), "\n"); got != handoffBody {
+	if got := strings.Join(archive.HandoffLines(path, "GH-1", tipOf("abc1234567")), "\n"); got != handoffBody {
 		t.Errorf("current = %q, want the body alone", got)
 	}
 
-	got := taskcmd.HandoffLines(path, "GH-1", tipOf("def7654321"))
+	got := archive.HandoffLines(path, "GH-1", tipOf("def7654321"))
 	if len(got) < 2 || !strings.Contains(got[0], "written at abc1234, the branch merged at def7654") ||
 		strings.Join(got[1:], "\n") != handoffBody {
 		t.Errorf("stale = %q", got)
@@ -46,20 +45,20 @@ func TestHandoffLines(t *testing.T) {
 	// a head copied short is its own commit, not a stale one
 	writeHandoffFile(t, path, "abc1234")
 
-	if got := strings.Join(taskcmd.HandoffLines(path, "GH-1", tipOf("abc1234567")), "\n"); got != handoffBody {
+	if got := strings.Join(archive.HandoffLines(path, "GH-1", tipOf("abc1234567")), "\n"); got != handoffBody {
 		t.Errorf("short head = %q, want the body alone", got)
 	}
 
 	writeHandoffFile(t, path, "abc1234567")
 
 	// no tip to compare against prints the body as it is
-	if got := strings.Join(taskcmd.HandoffLines(path, "GH-1", tipOf("")), "\n"); got != handoffBody {
+	if got := strings.Join(archive.HandoffLines(path, "GH-1", tipOf("")), "\n"); got != handoffBody {
 		t.Errorf("no tip = %q", got)
 	}
 
 	writeFile(t, path, "## Config\n- no frontmatter\n")
 
-	if got := taskcmd.HandoffLines(
+	if got := archive.HandoffLines(
 		path,
 		"GH-1",
 		tipOf("abc"),
@@ -71,9 +70,9 @@ func TestHandoffLines(t *testing.T) {
 
 // archiveHandoff is the move finish and the janitor make, in one call.
 func archiveHandoff(root storage.Root, id string) (string, error) {
-	src, target := taskcmd.HandoffTarget(root, id)
+	src, target := archive.HandoffTarget(root, id)
 
-	return target, taskcmd.MoveHandoff(src, target)
+	return target, archive.MoveHandoff(src, target)
 }
 
 func TestArchiveHandoffNumbers(t *testing.T) {

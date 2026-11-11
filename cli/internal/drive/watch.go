@@ -239,7 +239,8 @@ func (in WatchInput) ReadTargets(ctx context.Context, tasks []WatchedTask, store
 		return
 	}
 
-	if _, err := gitx.Exec(ctx, in.Main, "fetch", "origin"); err != nil {
+	fetch := &stack.FetchOnce{}
+	if err := fetch.Fetch(ctx, in.Main); err != nil {
 		in.warnf("no catchup this pass, fetching origin: %v", err)
 
 		return
@@ -247,7 +248,7 @@ func (in WatchInput) ReadTargets(ctx context.Context, tasks []WatchedTask, store
 
 	for _, i := range want {
 		t := &tasks[i]
-		t.fetched = true
+		t.fetch = fetch
 
 		t.originSHA, t.targetErr = gitx.Ref(ctx, in.Main, "refs/remotes/origin/"+t.Branch)
 		if t.targetErr != nil {
@@ -314,7 +315,7 @@ func (in WatchInput) parked(t WatchedTask) bool {
 }
 
 func (in WatchInput) catchupStep(ctx context.Context, task WatchedTask, store map[string]WatchReport) *WatchReport {
-	if !task.fetched || task.Agent == agentctl.StatusWorking || WaitingOnAsk(task.Run) {
+	if task.fetch == nil || task.Agent == agentctl.StatusWorking || WaitingOnAsk(task.Run) {
 		return nil
 	}
 
@@ -437,14 +438,14 @@ func (in WatchInput) settleCatchup(
 // failedAt records the fingerprint a failed catchup left, so another goes
 // out only once the target or the conflict moves.
 func (in WatchInput) failedAt(ctx context.Context, task WatchedTask, rec *drives.Catchup) {
-	conflicts, err := gitx.Conflicts(ctx, task.Path, rec.Target, "HEAD")
+	fp, _, err := stack.ConflictFingerprint(ctx, task.Path, rec.Target)
 	if err != nil {
 		in.warnf("%s: reading what %s conflicts on: %v", task.ID, task.Branch, err)
 
 		return
 	}
 
-	rec.Fingerprint = drives.Fingerprint(rec.Target, stack.ConflictWay(conflicts), "")
+	rec.Fingerprint = fp
 }
 
 // pushFailed is told once per cause, the record kept so the next pass retries.
@@ -524,14 +525,14 @@ func (in WatchInput) sendCatchup(
 	}
 
 	if failed != nil {
-		conflicts, err := gitx.Conflicts(ctx, task.Path, aim.SHA, "HEAD")
+		fp, _, err := stack.ConflictFingerprint(ctx, task.Path, aim.SHA)
 		if err != nil {
 			in.warnf("%s skipped this pass, reading what %s conflicts on: %v", task.ID, task.Branch, err)
 
 			return nil
 		}
 
-		if drives.Fingerprint(aim.SHA, stack.ConflictWay(conflicts), "") == failed.Fingerprint {
+		if fp == failed.Fingerprint {
 			return nil
 		}
 	}
@@ -570,7 +571,6 @@ func (in WatchInput) integrate(
 
 	unmark := func() { _ = branchmeta.Unset(ctx, in.Main, task.Branch, aim.Key) } // nobody will clear it
 
-	// readTargets fetched origin for this pass
 	rec, err := stack.CatchupRecord(
 		ctx,
 		in.Main,
@@ -578,7 +578,7 @@ func (in WatchInput) integrate(
 		task.Branch,
 		aim.Key,
 		in.Now(),
-		&stack.FetchOnce{Done: task.fetched},
+		task.fetch,
 	)
 	if err != nil {
 		unmark()
@@ -596,7 +596,10 @@ func (in WatchInput) integrate(
 		return in.Engine.Message(tasks, archive.ChangeOf(in.Storage.Reviews(task.ID)))(p)
 	}
 
-	p, stopped, err := in.Engine.Integrate(ctx, in.Engine.Input(in.Main, task.Path), message)
+	ci := in.Engine.Input(in.Main, task.Path)
+	ci.Fetched = task.fetch
+
+	p, stopped, err := in.Engine.Integrate(ctx, ci, message)
 	if err != nil {
 		unmark()
 
@@ -659,7 +662,7 @@ func (in WatchInput) undo(ctx context.Context, task WatchedTask, head string, st
 	}
 }
 
-// worktreeBusy is recheckFinish's read for a catchup: a working agent or an
+// worktreeBusy is RecheckFinish's read for a catchup: a working agent or an
 // unclean tree waits for the next pass.
 func (in WatchInput) worktreeBusy(ctx context.Context, task WatchedTask) bool {
 	if in.Agents != nil {
@@ -668,7 +671,7 @@ func (in WatchInput) worktreeBusy(ctx context.Context, task WatchedTask) bool {
 			return true
 		}
 
-		if ws := finish.WorkspaceAt(wss, task.Path); ws != nil && ws.Status == agentctl.StatusWorking {
+		if ws := worktree.WorkspaceAt(wss, task.Path); ws != nil && ws.Status == agentctl.StatusWorking {
 			return true
 		}
 	}
@@ -694,7 +697,9 @@ type WatchedTask struct {
 	Listed     bool            // the workspaces were listed, so "" is no workspace
 	Ws         string          // its workspace, for a message
 	// what a catchup needs, read after the pass's fetch under watch_catchup
-	fetched   bool           // origin was fetched and the fields below read
+	// the pass's one fetch, which the catchup reuses; nil until origin was
+	// fetched and the fields below read
+	fetch     *stack.FetchOnce
 	originSHA string         // origin's tip; "" when origin lacks the branch
 	target    stack.PRTarget // what git says its request targets
 	targetErr error          // the target, or origin's tip, could not be read
@@ -948,8 +953,8 @@ func CollectWatched(ctx context.Context, in WatchInput) ([]WatchedTask, int, err
 			task.Background = backgroundAt(in.StateDir, task.Run)
 		}
 
-		if ws := finish.WorkspaceAt(wss, path); ws != nil {
-			task.Agent, task.Ws = ws.Status, finish.WorkspaceLabel(ws)
+		if ws := worktree.WorkspaceAt(wss, path); ws != nil {
+			task.Agent, task.Ws = ws.Status, worktree.WorkspaceLabel(ws)
 		}
 
 		tasks = append(tasks, task)
@@ -986,7 +991,7 @@ func WatcherFinish(ctx context.Context, w io.Writer, t *target.Target, main, roo
 
 	in := finish.InputFor(t, main, h, r)
 	in.Branch, in.Flags.MergedOnly = task.Branch, true
-	// never processPlace: the self-close path would end the daemon, and its
+	// never ProcessPlace: the self-close path would end the daemon, and its
 	// directory may be a worktree since removed, where getwd fails
 	in.Cwd = main
 
@@ -1026,8 +1031,8 @@ func RecheckFinish(ctx context.Context, b agentctl.Backend, main string, task Wa
 		return fmt.Errorf("listing workspaces: %w", err)
 	}
 
-	if ws := finish.WorkspaceAt(wss, task.Path); ws != nil && ws.Status == agentctl.StatusWorking {
-		return fmt.Errorf("its agent in workspace %s is working", finish.WorkspaceLabel(ws))
+	if ws := worktree.WorkspaceAt(wss, task.Path); ws != nil && ws.Status == agentctl.StatusWorking {
+		return fmt.Errorf("its agent in workspace %s is working", worktree.WorkspaceLabel(ws))
 	}
 
 	return nil

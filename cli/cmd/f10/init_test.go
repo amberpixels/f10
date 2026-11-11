@@ -155,9 +155,9 @@ func mkRepo(t *testing.T) string {
 	t.Helper()
 
 	r := initRepo(t, canonical(t, t.TempDir())+"/demo", "master")
-	r.git("remote", "add", "origin", "git@github.com:amberpixels/demo.git")
+	r.Git("remote", "add", "origin", "git@github.com:amberpixels/demo.git")
 
-	return r.dir
+	return r.Dir
 }
 
 func readExclude(t *testing.T, repo string) string {

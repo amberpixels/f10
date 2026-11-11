@@ -17,8 +17,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/taskid"
 	"github.com/amberpixels/f10/cli/internal/ui"
-	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // OpenReviews is the findings directory review round and lore change both
@@ -113,7 +113,7 @@ func seriesOf(ctx context.Context, t *target.Target, s prSubject, dir string, wa
 	}
 
 	head, _, _ := strings.Cut(f.Reviewed, " ")
-	restart := !worktree.Digits(strings.TrimLeft(f.PR, "#!"))
+	restart := !taskid.IsNumber(strings.TrimLeft(f.PR, "#!"))
 	series.Archived, err = archive.ArchiveReviews(
 		dir,
 		archive.SeriesEnd{Pr: cmp.Or(f.PR, "none"), Head: head, Restart: restart},
@@ -163,7 +163,7 @@ func seriesClosed(
 	hostErr error,
 	warn io.Writer,
 ) bool {
-	if n := strings.TrimLeft(f.PR, "#!"); worktree.Digits(n) {
+	if n := strings.TrimLeft(f.PR, "#!"); taskid.IsNumber(n) {
 		if hostErr != nil {
 			ui.Warnf(warn, "cannot read %s (%v), so its series of rounds goes on", f.PR, hostErr)
 

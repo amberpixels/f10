@@ -251,7 +251,7 @@ func TestWatchStoreRoundTrip(t *testing.T) {
 	}
 }
 
-// collectWatched reads only task worktrees, marks an owned and a handed
+// CollectWatched reads only task worktrees, marks an owned and a handed
 // back one, and counts only local task branches toward watching.
 func TestCollectWatched(t *testing.T) {
 	fx := newJanitorFixture(t)

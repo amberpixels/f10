@@ -423,7 +423,7 @@ func DriveList(
 	return nil
 }
 
-// RowFinishedFor checks a record's row, an id as typed, by finishedTask, as
+// RowFinishedFor checks a record's row, an id as typed, by FinishedTask, as
 // drive and status do; a row that names no task, or a git error, reads as
 // unfinished, since a wrong yes hides a halt.
 func RowFinishedFor(ctx context.Context, t *target.Target) func(string) bool {
@@ -457,7 +457,7 @@ func RowFinishedFor(ctx context.Context, t *target.Target) func(string) bool {
 	}
 }
 
-// FinishedLazily is finishedTask with its reads made lazily: the tracker is
+// FinishedLazily is FinishedTask with its reads made lazily: the tracker is
 // asked only when no branch, live plan or archived plan already decides.
 func FinishedLazily(root storage.Root, id string, branched func() (bool, error), info func() hostops.TaskInfo) bool {
 	if b, err := branched(); err != nil || b {

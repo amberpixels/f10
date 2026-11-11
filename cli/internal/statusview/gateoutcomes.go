@@ -7,6 +7,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/textx"
 )
 
 // Outcomes is what the reviews and judges of a task left, with the time
@@ -187,7 +188,7 @@ func loreOutcomes(entries []lore.Entry) Outcomes {
 				*at = e.At
 			}
 		case lore.KindVerdict:
-			j := &archive.JudgeOutcome{Verdict: e.Outcome, Reason: FirstLine(strings.TrimSpace(e.Body))}
+			j := &archive.JudgeOutcome{Verdict: e.Outcome, Reason: textx.FirstLine(strings.TrimSpace(e.Body))}
 
 			switch {
 			case e.Judged == "task":
@@ -219,5 +220,5 @@ func loreOutcomes(entries []lore.Entry) Outcomes {
 }
 
 func firstErrLine(err error) string {
-	return FirstLine(err.Error())
+	return textx.FirstLine(err.Error())
 }

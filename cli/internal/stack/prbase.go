@@ -39,38 +39,45 @@ func PRBase(ctx context.Context, warn io.Writer, main, branch string) (string, e
 // merge bases with the local and origin copies, so neither unpushed commits
 // of the base nor origin moving ahead read as this change.
 func ForkPoint(ctx context.Context, dir, head, base string) (string, error) {
-	var points []string
+	point, err := NewerMergeBase(ctx, dir, head, base)
+	if err == nil && point == "" {
+		err = fmt.Errorf("%s shares no history with %s, locally or on origin", head, base)
+	}
+
+	return point, err
+}
+
+// NewerMergeBase is the newer of head's merge bases with base's local and
+// origin copies, "" with neither. Two that diverged give origin's, the copy a
+// request is compared against and a guard integrates.
+func NewerMergeBase(ctx context.Context, dir, head, base string) (string, error) {
+	var tip string
 
 	for _, r := range []string{"refs/heads/" + base, "refs/remotes/origin/" + base} {
-		if RefSHA(ctx, dir, r) == "" {
+		mb, err := gitx.MergeBase(ctx, dir, head, r)
+
+		switch {
+		case gitx.UnknownObject(err):
+			continue // that copy does not exist
+		case err != nil:
+			return "", err
+		case mb == "" || mb == tip:
 			continue
 		}
 
-		mb, err := gitx.MergeBase(ctx, dir, head, r)
-		if err != nil {
-			return "", err
+		if tip != "" {
+			older, err := gitx.IsAncestor(ctx, dir, mb, tip)
+			if err != nil {
+				return "", err
+			}
+
+			if older {
+				continue
+			}
 		}
 
-		if mb != "" {
-			points = append(points, mb)
-		}
+		tip = mb
 	}
 
-	switch len(points) {
-	case 0:
-		return "", fmt.Errorf("%s shares no history with %s, locally or on origin", head, base)
-	case 1:
-		return points[0], nil
-	}
-
-	older, err := gitx.IsAncestor(ctx, dir, points[0], points[1])
-	if err != nil {
-		return "", err
-	}
-
-	if older {
-		return points[1], nil
-	}
-
-	return points[0], nil
+	return tip, nil
 }

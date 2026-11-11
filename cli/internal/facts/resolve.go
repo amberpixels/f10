@@ -26,6 +26,8 @@ type Fact struct {
 type Problem struct {
 	Error   bool   `json:"error,omitempty"`
 	Message string `json:"message"`
+	// File is the user's file the problem is in, "" for the project's facts
+	File string `json:"-"`
 }
 
 // A source is a fact as the frontmatter declares it.
@@ -71,6 +73,19 @@ func (e *Effective) scalar(fm *layered, key string) string {
 
 func (e *Effective) problem(isError bool, format string, args ...any) {
 	e.Problems = append(e.Problems, Problem{Error: isError, Message: fmt.Sprintf(format, args...)})
+}
+
+// ErrorProblems are the problems that stop a command.
+func (e *Effective) ErrorProblems() []Problem {
+	var out []Problem
+
+	for _, p := range e.Problems {
+		if p.Error {
+			out = append(out, p)
+		}
+	}
+
+	return out
 }
 
 // Errors are the problems that stop a command, joined for its message.

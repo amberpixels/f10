@@ -149,7 +149,6 @@ type Record struct {
 	Agent       string
 	Finish      *DriveFinish // nil when absent or malformed
 	Drive       string
-	Chain       []string
 	Flow        string
 	Pace        string
 	Watch       string
@@ -181,14 +180,13 @@ func (r *Record) set(key Key, value string) {
 		}
 	case Drive:
 		r.Drive = value
-	case Chain:
-		r.Chain = strings.Fields(value)
 	case Flow:
 		r.Flow = value
 	case Pace:
 		r.Pace = value
 	case Watch:
 		r.Watch = value
+	case Chain: // an older drive's, which only the drive's unset reads
 	}
 }
 

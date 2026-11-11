@@ -23,6 +23,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/seam"
 	"github.com/amberpixels/f10/cli/internal/standup"
 	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/target"
@@ -36,17 +37,14 @@ func issueURL(id string) string {
 }
 
 // withLinks seeds the ledger with FT-1..FT-3 and makes every writer a
-// terminal when on; projectOf answers linkProject for any directory.
+// terminal when on; ProjectOf answers linkProject for any directory.
 func withLinks(t *testing.T, on bool) {
 	t.Helper()
 
 	t.Setenv(ledger.PathEnv, filepath.Join(t.TempDir(), "f10.db"))
 
-	prevTerm, prevProject := render.LinkTerminal, target.ProjectOf
-	t.Cleanup(func() { render.LinkTerminal, target.ProjectOf = prevTerm, prevProject })
-
-	render.LinkTerminal = func(io.Writer) bool { return on }
-	target.ProjectOf = func(context.Context, string) string { return linkProject }
+	seam.Swap(t, &render.LinkTerminal, func(io.Writer) bool { return on })
+	seam.Swap(t, &target.ProjectOf, func(context.Context, string) string { return linkProject })
 
 	ledger.RememberRefs(t.Context(), linkProject,
 		ledger.TaskRef{ID: "FT-1", Title: "One", URL: issueURL("FT-1")},
@@ -370,7 +368,7 @@ func commandSources(t *testing.T) []string {
 }
 
 // The render table above covers the commands that exist; this scan catches a
-// new print of a bare task id in any file, which must go through taskLinks or
+// new print of a bare task id in any file, which must go through TaskLinks or
 // be listed in machineRead.
 func TestNoPlainTaskIDPrints(t *testing.T) {
 	used := map[string]bool{}

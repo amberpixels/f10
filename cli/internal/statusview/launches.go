@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -145,7 +146,7 @@ func launchBase(
 	if branched {
 		if x, err := stack.LoadBranchIndex(ctx, main); err == nil {
 			if b, err := x.Find(ctx, "", id, suffix, stack.PolicyLocal); err == nil && b.Name != "" {
-				base = cmp.Or(BranchAfter(ctx, main, b.Name), base)
+				base = cmp.Or(branchmeta.Out(ctx, main, b.Name, branchmeta.After), base)
 			}
 		}
 	}

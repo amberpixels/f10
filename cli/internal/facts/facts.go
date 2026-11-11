@@ -264,8 +264,8 @@ var (
 	idSampleRE      = regexp.MustCompile(`\b(` + taskid.Declared + `)-\d+\b`)
 )
 
-// idPrefix is the task id format's letters in Tracker prose, "" when none:
-// the half a branch search and a plan filename need.
+// idPrefix is the letters of the declared task id format (tracker.id, as
+// `FT-###`), "" when none: the half a branch search and a plan filename need.
 func idPrefix(declared string) string {
 	for _, re := range []*regexp.Regexp{idPlaceholderRE, idSampleRE} {
 		if m := re.FindStringSubmatch(declared); m != nil {

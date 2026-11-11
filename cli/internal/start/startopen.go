@@ -12,7 +12,6 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/driver"
-	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/launch"
@@ -22,6 +21,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/textx"
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
@@ -49,7 +49,7 @@ type StartInput struct {
 	Pick           *hostops.Pickup // the PR picked up, or nil for a task started by its id
 	Note           string          // the user's words after the id, for the agent before it waits, or ""
 	// Children is the task's subtasks, read to refuse a parent; nil skips the
-	// check (see checksParent)
+	// check (see ChecksParent)
 	Children func(ctx context.Context, task ref.Ref) ([]stack.ChildRow, error)
 	// Started moves a task to tracker.status's started word; nil when none
 	// is declared, or for a PR picked up, whose task someone else started
@@ -76,7 +76,7 @@ func Start(ctx context.Context, w io.Writer, in StartInput) error {
 		}
 
 		if typed {
-			o.Notes = finish.AppendNote(
+			o.Notes = textx.AppendNote(
 				o.Notes,
 				launch.WatchEnter(ctx, worktree.Agents(o.Path), o.Path, name, text, sent),
 			)
@@ -141,7 +141,7 @@ func MarkStarted(ctx context.Context, started func(context.Context, ref.Ref) err
 	return notes
 }
 
-// An OpenedTask is what openTask leaves behind; fresh says this call is to
+// An OpenedTask is what OpenTask leaves behind; fresh says this call is to
 // start the agent, which deliver does with its first prompt.
 type OpenedTask struct {
 	Task   ref.Ref // the task, with the riders its branch ships
@@ -189,7 +189,7 @@ func (o *OpenedTask) Deliver(ctx context.Context, id, suffix, text string) (stri
 	return l.agent, true, worktree.Agents(o.Path).Prompt(ctx, l.agent, text)
 }
 
-// A pendingLaunch is an agent openTask decided to start.
+// A pendingLaunch is an agent OpenTask decided to start.
 type pendingLaunch struct {
 	agent   string
 	profile agentctl.Profile
@@ -305,7 +305,7 @@ func openWorktree(
 			return "", nil, err
 		}
 
-		notes = finish.AppendNote(notes, note)
+		notes = textx.AppendNote(notes, note)
 	}
 
 	switch {

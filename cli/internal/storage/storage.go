@@ -52,8 +52,17 @@ func InRepo(checkout string) Root { return Root(filepath.Join(checkout, DirName)
 func OutOfTree(home, project string) Root { return Root(filepath.Join(UserDir(home), project)) }
 
 // UserDir is the user's own f10 dir, holding the ledger, the daemon and
-// every out-of-tree project.
-func UserDir(home string) string { return filepath.Join(home, DirName) }
+// every out-of-tree project: UserDirEnv when set, so one setting moves all of
+// it, else ~/.f10 under home.
+func UserDir(home string) string {
+	if dir := userDirSet(); dir != "" {
+		return dir
+	}
+
+	return filepath.Join(home, DirName)
+}
+
+func userDirSet() string { return strings.TrimSpace(os.Getenv(UserDirEnv)) }
 
 // Path is the root itself.
 func (r Root) Path() string { return r.join() }
@@ -140,10 +149,10 @@ func (r Root) join(elem ...string) string {
 // a run that must not read them (the eval runner, tests) points it elsewhere.
 const UserDirEnv = "F10_USER_DIR"
 
-// UserFilesDir is the dir holding the user's own files: UserDirEnv when
-// set, else ~/.f10.
+// UserFilesDir is UserDir for this user, which needs no home when
+// UserDirEnv is set.
 func UserFilesDir() (string, error) {
-	if dir := strings.TrimSpace(os.Getenv(UserDirEnv)); dir != "" {
+	if dir := userDirSet(); dir != "" {
 		return dir, nil
 	}
 

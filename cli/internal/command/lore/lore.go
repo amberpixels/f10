@@ -22,6 +22,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/textx"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -184,7 +185,7 @@ func loreFor(ctx context.Context, cmd *cli.Command) (*loreEnv, error) {
 			return nil, err
 		}
 
-		root = statusview.LoreRootFor(t)
+		root = t.LoreRoot()
 	}
 
 	return &loreEnv{
@@ -192,43 +193,6 @@ func loreFor(ctx context.Context, cmd *cli.Command) (*loreEnv, error) {
 		cwd:   cwd,
 		top:   top,
 	}, nil
-}
-
-// LoreNote names each missing kind, so a change that reached finish without a
-// ship run shows it; "" when lore cannot be read, since finish never fails
-// on it.
-func LoreNote(store *lore.Store, change string) string {
-	entries, err := store.Effective(change)
-
-	switch {
-	case errors.Is(err, lore.ErrNoRecord):
-		return "lore: no entries for " + change + ": no intent, no decisions, no lessons"
-	case err != nil:
-		return ""
-	}
-
-	count := map[lore.Kind]int{}
-	for _, e := range entries {
-		count[e.Kind]++
-	}
-
-	parts := []string{"no intent"}
-	if count[lore.KindIntent] > 0 {
-		parts[0] = "intent"
-	}
-
-	for _, k := range []struct {
-		kind      lore.Kind
-		one, many string
-	}{{lore.KindDecision, "decision", "decisions"}, {lore.KindLesson, "lesson", "lessons"}} {
-		if n := count[k.kind]; n > 0 {
-			parts = append(parts, strconv.Itoa(n)+" "+pluralWord(n, k.one, k.many))
-		} else {
-			parts = append(parts, "no "+k.many)
-		}
-	}
-
-	return "lore: " + strings.Join(parts, ", ")
 }
 
 func runLoreAdd(ctx context.Context, cmd *cli.Command) error {
@@ -586,10 +550,10 @@ func runLoreValidate(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if len(problems) > 0 {
-		return fmt.Errorf("lore validate: %d %s", len(problems), pluralWord(len(problems), "problem", "problems"))
+		return fmt.Errorf("lore validate: %d %s", len(problems), textx.Plural(len(problems), "problem", "problems"))
 	}
 
-	_, err = fmt.Fprintf(cmd.Writer, "%d %s valid\n", len(changes), pluralWord(len(changes), "change", "changes"))
+	_, err = fmt.Fprintf(cmd.Writer, "%d %s valid\n", len(changes), textx.Plural(len(changes), "change", "changes"))
 
 	return err
 }
@@ -600,12 +564,4 @@ func oneArg(cmd *cli.Command, verb, usage string) (string, error) {
 	}
 
 	return cmd.Args().First(), nil
-}
-
-func pluralWord(n int, one, many string) string {
-	if n == 1 {
-		return one
-	}
-
-	return many
 }

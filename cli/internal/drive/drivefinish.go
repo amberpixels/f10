@@ -30,7 +30,7 @@ func (in *DriveInput) readyToMerge(ctx context.Context, r *DriveRun) error {
 		return Halt(id, "finish", err.Error())
 	}
 
-	if _, err := gitx.Exec(ctx, r.O.Path, "fetch", "origin"); err != nil {
+	if err := in.View().fetch.Fetch(ctx, in.Main); err != nil {
 		return Halt(id, "finish", err.Error())
 	}
 
@@ -106,7 +106,7 @@ type DriveFinish struct {
 	Task     ref.Ref
 	Suffix   string
 	Branch   string // the run's branch, "" to look it up by task and suffix
-	Pr       string // the answer to a foreign PR: finishMerge, finishLeaveOpen or ""
+	Pr       string // the answer to a foreign PR: FinishMerge, FinishLeaveOpen or ""
 	Progress func(string)
 	Handoff  func([]string)
 	Deferred func(string)

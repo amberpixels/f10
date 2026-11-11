@@ -46,3 +46,25 @@ func FreeArchiveName(dir, id string) string {
 		}
 	}
 }
+
+// ArchivePlan moves the plan into the shared archive. A missing plan is a
+// note, since a task shipped without one still needs cleaning up; one that
+// cannot move is an error, since removing the worktree would delete it.
+func ArchivePlan(root storage.Root, id string) (string, string, error) {
+	plan, dst := root.Plan(id), root.Archive()
+
+	if !fsx.Exists(plan) {
+		return "", fmt.Sprintf("no plan at %s, nothing archived", plan), nil
+	}
+
+	if err := os.MkdirAll(dst, 0o750); err != nil {
+		return "", "", fmt.Errorf("archiving the plan at %s: %w", plan, err)
+	}
+
+	target := FreeArchiveName(dst, id)
+	if err := os.Rename(plan, target); err != nil {
+		return "", "", fmt.Errorf("archiving the plan at %s: %w", plan, err)
+	}
+
+	return target, "", nil
+}

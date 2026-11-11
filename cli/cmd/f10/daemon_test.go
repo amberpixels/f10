@@ -104,12 +104,8 @@ func TestDriveDrainsAtATick(t *testing.T) {
 }
 
 func TestWakeReturnsOnAWrite(t *testing.T) {
-	drive.WakeStep = 10 * time.Millisecond
-	t.Cleanup(func() { drive.WakeStep = time.Second })
-
-	in := &drive.DriveInput{
-		StateDir: t.TempDir(),
-	}
+	in := &drive.DriveInput{}
+	in.StateDir, in.WakeStep = t.TempDir(), 10*time.Millisecond
 	in.Runs = []*drive.DriveRun{{Phase: drive.AtRunning, O: start.OpenedTask{Path: "/code/repo.GH-1"}}}
 
 	write := func(name, root string) {

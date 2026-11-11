@@ -10,18 +10,6 @@ import (
 	"github.com/amberpixels/f10/cli/internal/stack"
 )
 
-func VerifyFieldIn(fields []facts.Field) facts.Field {
-	const name = "Verify"
-
-	for _, f := range fields {
-		if f.Name == name {
-			return f
-		}
-	}
-
-	return facts.Field{Name: name, Origin: facts.OriginOf(facts.OriginAbsent)}
-}
-
 // VerifyLine is the verify the steps run, resolved once: its origin, the
 // file it came from, then the commands or the judgment left to the model.
 func VerifyLine(f facts.Field) string {

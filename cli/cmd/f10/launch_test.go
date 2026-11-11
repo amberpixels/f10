@@ -11,6 +11,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/runplan"
+	"github.com/amberpixels/f10/cli/internal/seam"
 	"github.com/amberpixels/f10/cli/internal/start"
 )
 
@@ -159,16 +160,13 @@ func TestPromptCheckedResendsEnterOnce(t *testing.T) {
 	}
 }
 
-// The drive checks a typed send once, enterRetry after it, and never one
+// The drive checks a typed send once, EnterRetry after it, and never one
 // that went on the agent's command line.
 func TestDriveRetriesEnterOnceForATypedSend(t *testing.T) {
 	m := useAgents(t)
 	m.screens = []string{screenWith("❯ " + sentText)}
 
-	prev := launch.EnterRetry
-	launch.EnterRetry = 10 * time.Second
-
-	t.Cleanup(func() { launch.EnterRetry = prev })
+	seam.Swap(t, &launch.EnterRetry, 10*time.Second)
 
 	now := time.Now()
 	in := &drive.DriveInput{

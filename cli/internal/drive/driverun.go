@@ -72,7 +72,7 @@ type driveConfig struct {
 	Root string // the storage root as a path for per-run state: the record, the leases, the asks; "" keeps none
 	Args driverec.DriveArgs
 	Argv []string // the command line as given, for the resume command
-	// Sequence is the skills a task on fl goes through; nil is driveSkills,
+	// Sequence is the skills a task on fl goes through; nil is DriveSkills,
 	// read off the flow, and a test runs the machinery on any skill
 	Sequence func(fl runplan.ShipFlow) []string
 	Flow     runplan.ShipFlow                            // the flow typed, or default; a task's branch may record another
@@ -93,6 +93,11 @@ type driveConfig struct {
 	DaemonRun bool
 	// DefaultParallel is the cap on tasks running a skill at once with none given
 	DefaultParallel int
+	// Attempts is how many times in a row one action may fail with the task's
+	// state unchanged before the drive halts it; 0 is attemptLimit
+	Attempts int
+	// WakeStep is how often a waiting drive looks for a write; 0 is wakeStep
+	WakeStep time.Duration
 }
 
 // driveDeps is what the drive calls out to, which a test replaces.
@@ -127,7 +132,7 @@ type driveState struct {
 	links      *render.TaskLinks // prints this drive's task ids for people
 	project    string            // the name the links print task ids under, read once they load
 	inboxNotes []string
-	PullLine   string // the last line retryPull printed, or a finish's deferred note
+	PullLine   string // the last line RetryPull printed, or a finish's deferred note
 	RanFinish  bool   // a finish ran here, so this drive may pull main
 
 	// Parallel caps the tasks running a skill at once, and twice it the
@@ -297,7 +302,7 @@ const (
 	atQueued                    // opened, its next skill held by the cap
 	atVerifying                 // the drive's own verify after a catchup runs, in job
 	atRetrying                  // an attempt failed: the next poll sends the action again
-	AtParked                    // a skill waits for its base's code
+	AtParked                    // a skill waits for its base's code, or its branch on origin
 	AtWaiting                   // finish waits for its base to be through
 )
 

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/seam"
 	"github.com/amberpixels/f10/cli/internal/statusview"
 )
 
@@ -106,10 +107,7 @@ func TestStatusFallbackLinksPlan(t *testing.T) {
 func withTerminal(t *testing.T, on bool) {
 	t.Helper()
 
-	prev := render.LinkTerminal
-	t.Cleanup(func() { render.LinkTerminal = prev })
-
-	render.LinkTerminal = func(io.Writer) bool { return on }
+	seam.Swap(t, &render.LinkTerminal, func(io.Writer) bool { return on })
 }
 
 // A drive copies finish's report out of a buffer, which links as the drive's

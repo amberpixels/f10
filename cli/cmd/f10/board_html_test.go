@@ -15,6 +15,7 @@ import (
 
 	boardcmd "github.com/amberpixels/f10/cli/internal/command/board"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
+	"github.com/amberpixels/f10/cli/internal/statusview"
 )
 
 // The HTML report checked on the recorded boards: the embedded JSON is the
@@ -315,7 +316,7 @@ func renderUnderNode(t *testing.T) map[string]rendered {
 	return out
 }
 
-// The page's model() and the terminal's boardLines agree on every board:
+// The page's model() and the terminal's BoardLines agree on every board:
 // same notes, same empty sentence, same lines in the same order.
 func TestBoardHTMLModelMatchesTerminal(t *testing.T) {
 	drawn := renderUnderNode(t)
@@ -479,5 +480,36 @@ func TestBoardGroupsAWaitingTaskUnderNext(t *testing.T) {
 func TestBoardHTMLMatchesTheLocalOnlyNote(t *testing.T) {
 	if !strings.Contains(boardcmd.BoardHTMLPage, `"`+lookaround.NoteLocalOnly+`"`) {
 		t.Errorf("board.html does not match the note %q", lookaround.NoteLocalOnly)
+	}
+}
+
+// The page's stage colors come from the terminal's palette, so in-review
+// and pr-open are orange on both.
+func TestBoardPageColorsFollowTheTerminal(t *testing.T) {
+	var buf bytes.Buffer
+	if err := boardcmd.RenderBoardHTML(&buf, lookaround.Board{}); err != nil {
+		t.Fatal(err)
+	}
+
+	page := buf.String()
+	for _, rule := range []string{
+		`.stage[data-stage="in-review"] { color: var(--orange); }`,
+		`.stage[data-stage="pr-open"] { color: var(--orange); }`,
+		`.stage[data-stage="reviewed"] { color: var(--magenta); }`,
+	} {
+		if !strings.Contains(page, rule) {
+			t.Errorf("the page lacks %s", rule)
+		}
+	}
+
+	if strings.Contains(page, "__STAGE_COLORS__") {
+		t.Error("the colors placeholder was left in the page")
+	}
+
+	// light, dark by preference, and dark by choice: each defines every color
+	for _, color := range statusview.StageColors() {
+		if n := strings.Count(page, "--"+color+":"); n != 3 {
+			t.Errorf("--%s is defined %d times, want once per theme (3)", color, n)
+		}
 	}
 }

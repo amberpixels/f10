@@ -86,8 +86,35 @@ func TestCheckReportsAReverseImport(t *testing.T) {
 	want := []string{
 		"internal/command/b imports internal/command/a: peers of rank 3 import each other; move the shared piece down instead",
 		"internal/command/c: no rank in the layers table",
-		"internal/svc imports internal/command/a: rank 2 imports rank 3; move the shared piece down instead",
+		"internal/svc imports internal/command/a: a service imports a command; move the helper down to a service",
 		"other/unranked: no rank in the layers table",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d violations %v, want %v", len(got), got, want)
+	}
+
+	for i := range want {
+		if got[i].String() != want[i] {
+			t.Errorf("violation %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+// A leaf reaching into project state, and a service borrowing a command's
+// helper, both fail under the real table.
+func TestTableRejectsLeafAndCommandImports(t *testing.T) {
+	t.Parallel()
+
+	got := Check(map[string][]string{
+		"internal/ui":           {"internal/state"},
+		"internal/finish":       {"internal/command/task"},
+		"internal/command/task": nil,
+		"internal/state":        nil,
+	}, Table)
+
+	want := []string{
+		"internal/finish imports internal/command/task: a service imports a command; move the helper down to a service",
+		"internal/ui imports internal/state: rank -1 imports rank 0; move the shared piece down instead",
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d violations %v, want %v", len(got), got, want)

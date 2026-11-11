@@ -102,15 +102,20 @@ func ClaimRun(e ledger.Event) *state.Run {
 	return &r
 }
 
+// LedgerFinishStands says whether a finish the ledger recorded still holds:
+// a live plan means the task was re-planned after it, so it is pending work
+// again. Status, the board and the local scan all read a finish by it.
+func LedgerFinishStands(finished, planLive bool) bool { return finished && !planLive }
+
 // AddLedger takes what the ledger adds to the record: the claim where no live
-// run is, a finish, the request url, and a halt newer than the run. A finish
-// counts only while planLive is false: a live plan means the task came back.
+// run is, a finish while it stands, the request url, and a halt newer than
+// the run.
 func (tf *TaskFacts) AddLedger(lt LedgerTask, planLive bool) {
 	if tf.Run == nil {
 		tf.Run = lt.Claim
 	}
 
-	if lt.Finished && !planLive && !tf.Finished {
+	if LedgerFinishStands(lt.Finished, planLive) && !tf.Finished {
 		tf.Finished, tf.FinishedFrom = true, FinishedByLedger
 	}
 

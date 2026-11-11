@@ -171,8 +171,8 @@ func (d *Dials) UnmarshalYAML(node *yaml.Node) error {
 	return nil
 }
 
-// MarshalYAML writes the shorthand a word stands for, so a migrated off
-// reads back as it was written.
+// MarshalYAML writes the shorthand a word stands for, so an `off` read from
+// a file is written back as it was written.
 func (d Dials) MarshalYAML() (any, error) {
 	switch {
 	case d.Off:

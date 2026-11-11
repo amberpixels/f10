@@ -10,7 +10,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/statusview"
 )
 
-// A StallCheck is what refuseStalled reads run state with: runs updated
+// A StallCheck is what RefuseStalled reads run state with: runs updated
 // before since were written by an agent that is gone.
 type StallCheck struct {
 	StateDir   string

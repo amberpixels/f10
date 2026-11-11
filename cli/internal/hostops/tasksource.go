@@ -210,7 +210,7 @@ func (s FallbackSource) Create(ctx context.Context, warnTo io.Writer, nt NewTask
 func declined(err error) bool { return errors.Is(err, driver.ErrUnsupported) }
 
 // driverSource runs the project's driver. A declined verb comes back as
-// driver.ErrUnsupported, unwrapped, for fallbackSource to read.
+// driver.ErrUnsupported, unwrapped, for FallbackSource to read.
 type driverSource struct {
 	t *target.Target
 	d *driver.Driver
@@ -488,7 +488,7 @@ func (s HostSource) Create(ctx context.Context, warnTo io.Writer, nt NewTask) (r
 // RefusedSource is a tracker f10 cannot reach: not the host's issues and no
 // driver taking the verb, or the host's issues with no host CLI. Reads fail
 // plainly. Writes exit 3 so capture falls back to its adapters, except that
-// comment and update with no host CLI fail plainly (refuseWrite).
+// comment and update with no host CLI fail plainly (RefuseWrite).
 type RefusedSource struct {
 	Target *target.Target
 	Driver *driver.Driver // the driver that declined, nil when none was found

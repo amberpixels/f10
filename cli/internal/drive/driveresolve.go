@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/worktree"
@@ -153,7 +152,7 @@ func (in *DriveInput) ResolveTasks(ctx context.Context) ([]DriveTask, []string, 
 // runs, chosen in the drive skill. A started task is never a parent here, so
 // a resumed drive asks the tracker nothing more.
 func (in *DriveInput) refuseParent(ctx context.Context, r ref.Ref) error {
-	open, err := taskcmd.OpenSubtasks(ctx, in.Tracker, r)
+	open, err := stack.OpenSubtasks(ctx, in.Tracker, r)
 	if err != nil || len(open) == 0 {
 		return err
 	}

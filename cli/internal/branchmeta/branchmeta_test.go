@@ -86,7 +86,6 @@ func TestGitRoundTrip(t *testing.T) {
 	want := branchmeta.Record{
 		Branch: "a.b/c.d", Task: "GH-1", Riders: []string{"GH-2", "GH-3"}, After: "GH-7", AfterBranch: "GH-7/base",
 		Finish: &branchmeta.DriveFinish{State: branchmeta.FinishRunning, Action: "merging #204"},
-		Chain:  []string{"/f10:plan", "/f10:ship"},
 	}
 	if !reflect.DeepEqual(rec, want) {
 		t.Errorf("Load = %+v\nwant %+v", rec, want)

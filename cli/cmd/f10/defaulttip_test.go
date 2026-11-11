@@ -19,30 +19,30 @@ func newTipFixture(t *testing.T) tipFixture {
 	t.Helper()
 
 	r := initRepo(t, t.TempDir(), "main")
-	r.commit("2026-01-01T00:00:00Z", "a", "a", "base")
-	base := strings.TrimSpace(git(t, r.dir, "rev-parse", "HEAD"))
-	r.commit("2026-01-02T00:00:00Z", "b", "b", "local")
-	local := strings.TrimSpace(git(t, r.dir, "rev-parse", "HEAD"))
-	r.git("checkout", "-q", "-b", "side", base)
-	r.commit("2026-01-03T00:00:00Z", "c", "c", "remote")
-	remote := strings.TrimSpace(git(t, r.dir, "rev-parse", "HEAD"))
-	r.git("checkout", "-q", "main")
+	r.Commit("2026-01-01T00:00:00Z", "a", "a", "base")
+	base := strings.TrimSpace(git(t, r.Dir, "rev-parse", "HEAD"))
+	r.Commit("2026-01-02T00:00:00Z", "b", "b", "local")
+	local := strings.TrimSpace(git(t, r.Dir, "rev-parse", "HEAD"))
+	r.Git("checkout", "-q", "-b", "side", base)
+	r.Commit("2026-01-03T00:00:00Z", "c", "c", "remote")
+	remote := strings.TrimSpace(git(t, r.Dir, "rev-parse", "HEAD"))
+	r.Git("checkout", "-q", "main")
 
 	return tipFixture{r, base, local, remote}
 }
 
 func (f tipFixture) point(local, remote string) {
 	if local == "" {
-		f.repo.git("checkout", "-q", "--detach")
-		f.repo.git("update-ref", "-d", "refs/heads/main")
+		f.repo.Git("checkout", "-q", "--detach")
+		f.repo.Git("update-ref", "-d", "refs/heads/main")
 	} else {
-		f.repo.git("update-ref", "refs/heads/main", local)
+		f.repo.Git("update-ref", "refs/heads/main", local)
 	}
 
 	if remote == "" {
-		f.repo.git("update-ref", "-d", "refs/remotes/origin/main")
+		f.repo.Git("update-ref", "-d", "refs/remotes/origin/main")
 	} else {
-		f.repo.git("update-ref", "refs/remotes/origin/main", remote)
+		f.repo.Git("update-ref", "refs/remotes/origin/main", remote)
 	}
 }
 
@@ -53,8 +53,8 @@ func TestDefaultTipReaders(t *testing.T) {
 	cases := []struct {
 		name          string
 		local, remote func(tipFixture) string
-		land          string // landingBase: "local", "remote" or "error"
-		target        string // defaultTargetOf: "main" or "origin/main" or "error"
+		land          string // LandingBase: "local", "remote" or "error"
+		target        string // DefaultTargetOf: "main" or "origin/main" or "error"
 	}{
 		{"equal", tipBase, tipBase, "local", "main"},
 		{"origin missing", tipBase, tipNone, "local", "main"},
@@ -70,7 +70,7 @@ func TestDefaultTipReaders(t *testing.T) {
 			local, remote := c.local(f), c.remote(f)
 			f.point(local, remote)
 
-			sha, err := finish.LandingBase(t.Context(), f.repo.dir, "main")
+			sha, err := finish.LandingBase(t.Context(), f.repo.Dir, "main")
 
 			switch c.land {
 			case "error":
@@ -87,7 +87,7 @@ func TestDefaultTipReaders(t *testing.T) {
 				}
 			}
 
-			sha, name, err := stack.DefaultTargetOf(t.Context(), f.repo.dir, "main")
+			sha, name, err := stack.DefaultTargetOf(t.Context(), f.repo.Dir, "main")
 			want := map[string]string{"main": local, "origin/main": remote}[c.target]
 
 			if err != nil || name != c.target || sha != want {

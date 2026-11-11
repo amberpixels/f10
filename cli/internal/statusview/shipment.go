@@ -103,7 +103,7 @@ type ReviewPath struct {
 // the storage root. The commit row waits for a commit of the task's own:
 // before one, HEAD is the base's.
 //
-//nolint:lostfield // PRState comes from askPR, only for a pushed task
+//nolint:lostfield // PRState comes from AskPR, only for a pushed task
 func ReadShipment(ctx context.Context, in TaskStatusInput, events []ledger.Event, known ledger.TaskRef) Shipment {
 	lt := lookaround.FoldLedger(events, in.ID, func(token string) string { return token })
 

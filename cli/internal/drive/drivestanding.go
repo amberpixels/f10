@@ -3,7 +3,6 @@ package drive
 import (
 	"fmt"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/driverec"
@@ -23,7 +22,7 @@ func guardStop(run *state.Run) bool {
 }
 
 // awaitsDecision is a stop a catchup must not run over: a question or a
-// blocked decision, not one a catchup leaves in place (heldStop).
+// blocked decision, not one a catchup leaves in place (HeldStop).
 func awaitsDecision(run *state.Run) bool {
 	return run != nil && driverec.StoppedRun(run) && !HeldStop(run) && (run.Ask != "" || blockedRun(run))
 }
@@ -77,8 +76,8 @@ func ResumeAt(skill string, run *state.Run) string {
 		// a ship parked on its base resumes at the entry that found it empty
 	case entry == "catchup" && run.At > 0 && run.At <= len(run.Pipeline):
 		entry = run.Pipeline[run.At-1]
-	case !strings.Contains(run.Next, "/f10:catchup"):
-		return ""
+	case !guardStop(run):
+		return "" // only the guard's typed kind says so, never the wording of next
 	}
 
 	step := flow.Parse(entry).Step
@@ -95,7 +94,7 @@ func ResumeAt(skill string, run *state.Run) string {
 	return s
 }
 
-// ResumeShown is resumeAt's steering as a person reads it: the resumed
+// ResumeShown is ResumeAt's steering as a person reads it: the resumed
 // entry by its label, when the flow gives it one.
 func ResumeShown(run *state.Run, at string) string {
 	if label := run.LabelAt(run.At); label != "" {

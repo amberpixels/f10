@@ -180,10 +180,7 @@ func catchupTurn(id string) string {
 func (fx *driveFixture) oneAttempt(t *testing.T) {
 	t.Helper()
 
-	prev := drive.AttemptLimit
-	drive.AttemptLimit = 1
-
-	t.Cleanup(func() { drive.AttemptLimit = prev })
+	fx.in.Attempts = 1
 }
 
 func (fx *driveFixture) drive(t *testing.T) error {
@@ -2460,6 +2457,9 @@ func TestDriveCatchesUpAPushedBranchWhenItsTargetMoves(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			fx := newDriveFixture(t, "GH-1", "ship", "finish")
+			// the real integration on the scripted base, so its fetch counts
+			// with the tick's
+			fx.in.Catchup.Integrate = stack.IntegrateWith(fx.in.Catchup.Base)
 			fx.task("GH-1", hostops.TaskInfo{Body: "x"}, heads("GH-1"))
 			fx.f.script(worktrees, porcelain("GH-1", "/code/repo.GH-1"))
 			fx.opens("GH-1", "ws:GH-1", "pane:1")
@@ -2519,6 +2519,7 @@ func TestDriveCatchesUpAPushedBranchWhenItsTargetMoves(t *testing.T) {
 			}
 
 			fx.f.script(catchup, "{}")
+			fx.f.script("git rebase main0", "") // the scripted base's method
 			fx.f.script("git merge-tree --write-tree --no-messages "+aim+" HEAD", "tree")
 			fx.f.script("git rev-parse -q --verify HEAD", "head0", "head1")
 			fx.f.script("git rev-parse -q --verify MERGE_HEAD", "")
@@ -3576,8 +3577,16 @@ func TestDriveEndParksFinishRecord(t *testing.T) {
 // names the place only for an entry the flow names twice.
 func TestResumeAtSteering(t *testing.T) {
 	pipeline := []string{"judge", "implement", "cleanup", "pr", "review:local", "judge", "pr"}
+	// the guard's kind decides; next is worded freely, so none names catchup
 	stop := func(leaf string, at int) *state.Run {
-		return &state.Run{Ship: "partial", Leaf: leaf, At: at, Pipeline: pipeline, Next: "/f10:catchup --driven"}
+		return &state.Run{
+			Ship:     "partial",
+			Leaf:     leaf,
+			At:       at,
+			Pipeline: pipeline,
+			Stop:     state.StopGuard,
+			Next:     "settle it, then rerun",
+		}
 	}
 
 	for run, want := range map[*state.Run]string{
@@ -3587,7 +3596,9 @@ func TestResumeAtSteering(t *testing.T) {
 		stop("catchup", 0):   "",
 		stop("pr", 0):        "resume at pr",
 		stop("cleanup", 3):   "",
-		{Ship: "partial", Leaf: "pr", At: 4, Pipeline: pipeline, Next: "fix it"}: "",
+		{Ship: "partial", Leaf: "pr", At: 4, Pipeline: pipeline, Next: "fix it"}:                                "",
+		{Ship: "partial", Leaf: "pr", At: 4, Pipeline: pipeline, Next: "run /f10:catchup --driven, then rerun"}: "",
+		{Ship: "failed", Leaf: "pr", At: 4, Pipeline: pipeline, Wait: "GH-9"}:                                   "resume at pr (entry 4)",
 	} {
 		if got := drive.ResumeAt("ship", run); got != want {
 			t.Errorf("resumeAt(%s, %q) = %q, want %q", run.Leaf, run.Next, got, want)
@@ -4212,7 +4223,7 @@ func TestDriveRetriesADeferredPull(t *testing.T) {
 // steering it sends keeps the bare entry and its place, which ship matches.
 func TestResumeShownUsesTheLabel(t *testing.T) {
 	run := &state.Run{
-		Ship: "partial", Leaf: "pr", At: 4, Next: "run /f10:catchup --driven in the worktree, then rerun the drive",
+		Ship: "partial", Leaf: "pr", At: 4, Stop: state.StopGuard,
 		Pipeline: []string{"implement", "pr", "review:local", "pr"}, Labels: []string{"", "", "", "pr-polish"},
 	}
 

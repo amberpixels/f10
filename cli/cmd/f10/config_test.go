@@ -17,6 +17,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 func TestWrap(t *testing.T) {
@@ -155,7 +156,7 @@ func TestRenderHumanKeyValues(t *testing.T) {
 // project's, each with its own origin.
 func TestConfigShowsAgentsPerKey(t *testing.T) {
 	repo := paceRepo(t, "flows:\n  default: plan review implement pr\nagents:\n  review: sonnet:low\n", "")
-	user := os.Getenv(configcmd.UserDirEnv)
+	user := os.Getenv(storage.UserDirEnv)
 	if err := os.MkdirAll(user, 0o750); err != nil {
 		t.Fatal(err)
 	}
@@ -267,7 +268,7 @@ func TestVerifyLine(t *testing.T) {
 			pb := &probe.Probes{Verify: tc.signals}
 			eff := facts.Build(lay, pb, "")
 
-			if got := configcmd.VerifyLine(configcmd.VerifyFieldIn(eff.Fields)); got != tc.want {
+			if got := configcmd.VerifyLine(facts.VerifyFieldIn(eff.Fields)); got != tc.want {
 				t.Errorf("verifyLine = %q, want %q", got, tc.want)
 			}
 		})

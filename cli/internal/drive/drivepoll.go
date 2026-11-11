@@ -8,10 +8,10 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/driverec"
-	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/ui"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // Stalled is an agent idle for grace with its turn's end unreported, once
@@ -32,7 +32,7 @@ func Stalled(
 }
 
 // backgroundPending is background work launched at bg still counting as
-// running: up to verifyLimit, the longest a catchup's verify may take, so a
+// running: up to VerifyLimit, the longest a catchup's verify may take, so a
 // job whose notification never comes still ends in a stall.
 func backgroundPending(bg, now time.Time) bool {
 	return !bg.IsZero() && now.Sub(bg) < stack.VerifyLimit
@@ -88,7 +88,7 @@ func (in *DriveInput) poll(
 	case atPending, AtHeld, AtRunning:
 	}
 
-	ws := finish.WorkspaceByID(in.View().Wss, r.O.Ws.ID)
+	ws := worktree.WorkspaceByID(in.View().Wss, r.O.Ws.ID)
 	if ws == nil {
 		return in.workspaceGone(r)
 	}

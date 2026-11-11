@@ -32,7 +32,7 @@ type ChildRow struct {
 }
 
 // RawChildrenFor is the task's subtasks as the tracker holds them;
-// errNoParentLink when it has no parent link to read.
+// ErrNoParentLink when it has no parent link to read.
 func RawChildrenFor(ctx context.Context, t *target.Target, task ref.Ref) ([]hostops.RawChild, error) {
 	return hostops.TasksFor(t).Children(ctx, task)
 }

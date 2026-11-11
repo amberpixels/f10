@@ -94,7 +94,7 @@ func RetryEnter(ctx context.Context, b agentctl.Backend, name, text string) stri
 }
 
 // PromptChecked types text into the task's agent, then waits up to
-// enterRetry for the agent's prompt mark and presses Enter once if the text
+// EnterRetry for the agent's prompt mark and presses Enter once if the text
 // is still in its input box. The note says what the check did; it is never
 // an error, since the prompt itself went out.
 func PromptChecked(ctx context.Context, path, id, suffix, text string) (string, error) {
@@ -108,7 +108,7 @@ func PromptChecked(ctx context.Context, path, id, suffix, text string) (string, 
 	return WatchEnter(ctx, worktree.Agents(path), path, name, text, sent), nil
 }
 
-// WatchEnter is promptChecked's wait, for a prompt typed at sent into the
+// WatchEnter is PromptChecked's wait, for a prompt typed at sent into the
 // agent in the checkout at root. Only the prompt mark ends it early: an
 // empty input box may be one that has not drawn the text yet.
 func WatchEnter(ctx context.Context, b agentctl.Backend, root, name, text string, sent time.Time) string {

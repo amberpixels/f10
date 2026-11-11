@@ -6,7 +6,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/finish"
 )
 
-// What keepOpen rewrites, closeAgain rewrites back, in every form pickup reads.
+// What KeepOpen rewrites, CloseAgain rewrites back, in every form pickup reads.
 func TestKeepOpenRoundTrip(t *testing.T) {
 	for _, body := range []string{
 		"Closes #12",

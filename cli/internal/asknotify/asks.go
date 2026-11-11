@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"runtime"
 	"strings"
 	"time"
@@ -66,9 +65,6 @@ func RaiseAsk(
 	}
 }
 
-// AskNotifier tells the user of a new ask; tests turn it off.
-var AskNotifier = notifyAsk
-
 // asksConfig is ~/.f10/md's frontmatter.
 type asksConfig struct {
 	// Notify runs per new ask through sh, {task}, {question} and {url}
@@ -77,13 +73,15 @@ type asksConfig struct {
 	Notify string `yaml:"notify"`
 }
 
-func notifyAsk(ctx context.Context, a asks.Ask) error {
+// Notify tells the user of a new ask by the command ~/.f10/md names, else
+// the desktop's own notification.
+func Notify(ctx context.Context, a asks.Ask) error {
 	var cfg asksConfig
 	if _, err := scope.ReadUserConfig(asksConfigFile, &cfg); err != nil {
 		return err
 	}
 
-	argv, env := NotifyArgv(cfg.Notify, a, runtime.GOOS, exec.LookPath)
+	argv, env := NotifyArgv(cfg.Notify, a, runtime.GOOS, shell.LookPath)
 	if len(argv) == 0 {
 		return nil
 	}
@@ -91,13 +89,18 @@ func notifyAsk(ctx context.Context, a asks.Ask) error {
 	ctx, cancel := context.WithTimeout(ctx, notifyTimeout)
 	defer cancel()
 
-	//nolint:gosec // the user's own notify command, from their own settings
-	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
-	cmd.Env = append(os.Environ(), env...)
+	// env sets the variables for the command alone, never as shell text
+	if len(env) > 0 {
+		argv = append(append([]string{"env"}, env...), argv...)
+	}
 
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("%s: %w: %s", argv[0], err, strings.TrimSpace(string(out)))
+	res, err := shell.Capture(ctx, "", argv[0], argv[1:]...)
+
+	switch {
+	case err != nil:
+		return fmt.Errorf("%s: %w", argv[0], err)
+	case res.Code != 0:
+		return fmt.Errorf("%s: exit %d: %s", argv[0], res.Code, strings.TrimSpace(res.Stderr+" "+res.Stdout))
 	}
 
 	return nil

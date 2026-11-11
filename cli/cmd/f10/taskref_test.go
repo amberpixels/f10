@@ -10,6 +10,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/seam"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/statusview"
@@ -77,7 +78,7 @@ func TestTaskRefsLedgerThenTracker(t *testing.T) {
 	f := newFakes(t)
 	tg := childTarget(t, "gh")
 	t.Setenv(ledger.PathEnv, filepath.Join(t.TempDir(), "f10.db"))
-	target.ProjectOf = func(context.Context, string) string { return "github.com/o/r" }
+	seam.Swap(t, &target.ProjectOf, func(context.Context, string) string { return "github.com/o/r" })
 
 	f.script("gh issue view 109 --json number,title,state,labels,createdAt,url,body,assignees,comments",
 		`{"number":109,"title":"Base task","state":"OPEN","url":"https://github.com/o/r/issues/109","body":"b"}`)

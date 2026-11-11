@@ -85,15 +85,11 @@ func newFakes(t *testing.T) *fakes {
 		"herdr agent read ",
 	}
 
-	prevRetry, prevPoll := launch.EnterRetry, launch.EnterPoll
-	launch.EnterRetry, launch.EnterPoll = 0, 0
-
-	t.Cleanup(func() { launch.EnterRetry, launch.EnterPoll = prevRetry, prevPoll })
-
-	prevProject := target.ProjectOf
+	seam.Swap(t, &launch.EnterRetry, 0)
+	seam.Swap(t, &launch.EnterPoll, 0)
 
 	// task refs need the project from git, which these fakes do not script
-	target.ProjectOf = func(context.Context, string) string { return "" }
+	seam.Swap(t, &target.ProjectOf, func(context.Context, string) string { return "" })
 
 	seam.Swap(t, &gitx.Exec, func(_ context.Context, _ string, args ...string) (string, error) {
 		res := f.answer("git " + strings.Join(args, " "))
@@ -116,10 +112,6 @@ func newFakes(t *testing.T) *fakes {
 	})
 
 	seam.Swap(t, &shell.Has, func(name string) bool { return f.has[name] })
-
-	t.Cleanup(func() {
-		target.ProjectOf = prevProject
-	})
 	t.Setenv("HERDR_ENV", "1")
 
 	return f
@@ -1713,10 +1705,7 @@ func TestStartLeavesABusyPaneAlone(t *testing.T) {
 // A fresh pane whose shell is still starting answers busy; start waits it
 // out and prompts the agent once it starts.
 func TestStartWaitsForTheShell(t *testing.T) {
-	prevPoll := herdr.StartPoll
-	herdr.StartPoll = time.Millisecond
-
-	t.Cleanup(func() { herdr.StartPoll = prevPoll })
+	seam.Swap(t, &herdr.StartPoll, time.Millisecond)
 
 	f := newFakes(t)
 	f.has["wt"] = true

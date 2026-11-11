@@ -14,20 +14,20 @@ func TestBaseHasCodeIgnoresMerges(t *testing.T) {
 	r := newCatchupRepo(t)
 
 	// FT-1/a is the base's base; FT-2/b stacks on it and merges its next commit
-	r.at(before, "checkout", "-q", "-b", "FT-2/b", "FT-1/a")
-	r.at(before, "config", branchmeta.AfterBranch.For("FT-2/b"), "FT-1/a")
-	r.at(before, "checkout", "-q", "FT-1/a")
-	r.commit(during, "a2.go", "package main // a2\n", "a2")
-	r.at(during, "checkout", "-q", "FT-2/b")
-	r.at(during, "merge", "-q", "--no-ff", "--no-edit", "FT-1/a")
+	r.At(before, "checkout", "-q", "-b", "FT-2/b", "FT-1/a")
+	r.At(before, "config", branchmeta.AfterBranch.For("FT-2/b"), "FT-1/a")
+	r.At(before, "checkout", "-q", "FT-1/a")
+	r.Commit(during, "a2.go", "package main // a2\n", "a2")
+	r.At(during, "checkout", "-q", "FT-2/b")
+	r.At(during, "merge", "-q", "--no-ff", "--no-edit", "FT-1/a")
 
-	if stack.BaseHasCode(t.Context(), r.dir, "FT-2/b", "main") {
+	if stack.BaseHasCode(t.Context(), r.Dir, "FT-2/b", "main") {
 		t.Error("a merge of its own base counted as code")
 	}
 
-	r.commit(during, "b.go", "package main // b2\n", "b")
+	r.Commit(during, "b.go", "package main // b2\n", "b")
 
-	if !stack.BaseHasCode(t.Context(), r.dir, "FT-2/b", "main") {
+	if !stack.BaseHasCode(t.Context(), r.Dir, "FT-2/b", "main") {
 		t.Error("a commit of its own did not count")
 	}
 }
@@ -37,23 +37,23 @@ func TestBaseHasCodeIgnoresMerges(t *testing.T) {
 func TestOriginBaseHasCode(t *testing.T) {
 	r := newCatchupRepo(t)
 
-	r.at(before, "checkout", "-q", "-b", "FT-2/b", "FT-1/a")
-	r.at(before, "config", branchmeta.AfterBranch.For("FT-2/b"), "FT-1/a")
-	r.at(before, "checkout", "-q", "FT-1/a")
-	r.commit(during, "a2.go", "package main // a2\n", "a2")
-	r.at(during, "checkout", "-q", "FT-2/b")
-	r.at(during, "merge", "-q", "--no-ff", "--no-edit", "FT-1/a")
-	r.at(during, "update-ref", "refs/remotes/origin/FT-2/b", "HEAD")
-	r.at(during, "update-ref", "refs/remotes/origin/FT-1/a", "FT-1/a")
+	r.At(before, "checkout", "-q", "-b", "FT-2/b", "FT-1/a")
+	r.At(before, "config", branchmeta.AfterBranch.For("FT-2/b"), "FT-1/a")
+	r.At(before, "checkout", "-q", "FT-1/a")
+	r.Commit(during, "a2.go", "package main // a2\n", "a2")
+	r.At(during, "checkout", "-q", "FT-2/b")
+	r.At(during, "merge", "-q", "--no-ff", "--no-edit", "FT-1/a")
+	r.At(during, "update-ref", "refs/remotes/origin/FT-2/b", "HEAD")
+	r.At(during, "update-ref", "refs/remotes/origin/FT-1/a", "FT-1/a")
 
-	if stack.OriginBaseHasCode(t.Context(), r.dir, "FT-2/b", "main") {
+	if stack.OriginBaseHasCode(t.Context(), r.Dir, "FT-2/b", "main") {
 		t.Error("origin's merge of its own base counted as code")
 	}
 
-	r.commit(during, "b.go", "package main // b2\n", "b")
-	r.at(during, "update-ref", "refs/remotes/origin/FT-2/b", "HEAD")
+	r.Commit(during, "b.go", "package main // b2\n", "b")
+	r.At(during, "update-ref", "refs/remotes/origin/FT-2/b", "HEAD")
 
-	if !stack.OriginBaseHasCode(t.Context(), r.dir, "FT-2/b", "main") {
+	if !stack.OriginBaseHasCode(t.Context(), r.Dir, "FT-2/b", "main") {
 		t.Error("origin's commit of its own did not count")
 	}
 }

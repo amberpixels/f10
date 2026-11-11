@@ -33,7 +33,7 @@ type Target struct {
 	Effective *facts.Effective
 	scoped    bool // -C named another project, which collapses the ref cascade
 
-	project     string // the ledger's project id, read once by refProject
+	project     string // the ledger's project id, read once by RefProject
 	projectOnce sync.Once
 }
 
@@ -163,7 +163,7 @@ func At(ctx context.Context, dir string, scoped bool, cmdName string) (*Target, 
 
 	// a fact declared wrong stops every command that acts on facts; config,
 	// init and doctor are how it is seen and fixed, so they run anyway
-	if errs := eff.Errors(); errs != "" && cmdName != "config" && cmdName != "init" && cmdName != "doctor" {
+	if errs := eff.ErrorProblems(); len(errs) > 0 && cmdName != "config" && cmdName != "init" && cmdName != "doctor" {
 		return nil, errors.New(LabeledErrors(errs) + "\n(f10 config shows every fact and where it came from)")
 	}
 
@@ -240,19 +240,32 @@ func ExpandHome(path string) (string, error) {
 	return filepath.Join(home, rest), nil
 }
 
-// LabeledErrors marks each error with project.md unless it already names
-// its own file, as a problem in the user's ~/.f10 files does.
-func LabeledErrors(errs string) string {
-	lines := strings.Split(errs, "\n")
-	for i, line := range lines {
-		if !filepath.IsAbs(line[:strings.IndexByte(line+":", ':')]) {
-			lines[i] = "project.md: " + line
+// LabeledErrors marks each of the project's problems with project.md; a
+// problem in the user's ~/.f10 files names its own file already.
+func LabeledErrors(problems []facts.Problem) string {
+	msgs := make([]string, 0, len(problems))
+
+	for _, p := range problems {
+		if p.File == "" {
+			msgs = append(msgs, "project.md: "+p.Message)
+		} else {
+			msgs = append(msgs, p.Message)
 		}
 	}
 
-	return strings.Join(lines, "\n")
+	return strings.Join(msgs, "\n")
 }
 
 // ProjectOf is the ledger's project id for dir. A var, so tests that fake
 // git leave the task refs alone.
 var ProjectOf = func(ctx context.Context, dir string) string { return ledger.Where(ctx, dir).Project }
+
+// LoreRoot is where the project's lore lives: the checkout's committed
+// .lore, else the storage root's, which every checkout shares.
+func (t *Target) LoreRoot() string {
+	if t.Effective.Lore == "committed" {
+		return filepath.Join(t.Layout.CheckoutRoot, ".lore")
+	}
+
+	return t.Layout.StorageRoot.Lore()
+}

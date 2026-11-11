@@ -18,9 +18,9 @@ func scopeRepo(t *testing.T, parent, name string) string {
 	t.Helper()
 
 	r := initRepo(t, filepath.Join(parent, name), "main")
-	r.git("commit", "-q", "--allow-empty", "-m", "init")
+	r.Git("commit", "-q", "--allow-empty", "-m", "init")
 
-	return r.dir
+	return r.Dir
 }
 
 func standupJSON(t *testing.T, args ...string) standup.Standup {

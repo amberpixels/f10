@@ -8,9 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	lorecmd "github.com/amberpixels/f10/cli/internal/command/lore"
-	statuscmd "github.com/amberpixels/f10/cli/internal/command/status"
 	"github.com/amberpixels/f10/cli/internal/lore"
+	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/verdict"
 )
 
@@ -293,7 +292,7 @@ func TestLoreStepCommands(t *testing.T) {
 
 	store := &lore.Store{Root: filepath.Join(dir, ".lore")}
 
-	o := statuscmd.ReadOutcomes(store, "", "FT-1")
+	o := statusview.ReadOutcomes(store, "", "FT-1")
 	if len(o.Local) != 1 || o.Local[0].Fixed != 1 || len(o.Remote) != 1 || o.Remote[0].Skipped != 1 ||
 		o.ChangeJudge == nil {
 		t.Errorf("status reads %+v", o)
@@ -302,7 +301,7 @@ func TestLoreStepCommands(t *testing.T) {
 	// round two reopens the fixed finding from the settle's id, the chain's head
 	must("add", "finding", "--change", "FT-1", "--supersedes", settled, "--status", "open", "-m", "Still off by one")
 
-	if o := statuscmd.ReadOutcomes(
+	if o := statusview.ReadOutcomes(
 		store,
 		"",
 		"FT-1",
@@ -316,7 +315,7 @@ func TestLoreNote(t *testing.T) {
 	store := &lore.Store{Root: t.TempDir()}
 
 	want := "lore: no entries for FT-9: no intent, no decisions, no lessons"
-	if got := lorecmd.LoreNote(store, "FT-9"); got != want {
+	if got := lore.Note(store, "FT-9"); got != want {
 		t.Errorf("empty: %q, want %q", got, want)
 	}
 
@@ -333,14 +332,14 @@ func TestLoreNote(t *testing.T) {
 	add(lore.Entry{Kind: lore.KindDecision, Chosen: "x", Anchors: []lore.Anchor{anchor}})
 	add(lore.Entry{Kind: lore.KindDecision, Chosen: "y", Anchors: []lore.Anchor{anchor}})
 
-	if got, want := lorecmd.LoreNote(store, "FT-9"), "lore: no intent, 2 decisions, no lessons"; got != want {
+	if got, want := lore.Note(store, "FT-9"), "lore: no intent, 2 decisions, no lessons"; got != want {
 		t.Errorf("decisions only: %q, want %q", got, want)
 	}
 
 	add(lore.Entry{Kind: lore.KindIntent})
 	add(lore.Entry{Kind: lore.KindLesson, Anchors: []lore.Anchor{anchor}})
 
-	if got, want := lorecmd.LoreNote(store, "FT-9"), "lore: intent, 2 decisions, 1 lesson"; got != want {
+	if got, want := lore.Note(store, "FT-9"), "lore: intent, 2 decisions, 1 lesson"; got != want {
 		t.Errorf("all kinds: %q, want %q", got, want)
 	}
 }

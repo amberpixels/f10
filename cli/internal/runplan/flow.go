@@ -160,7 +160,7 @@ func sortedKeys(m map[string]string) []string {
 	return keys
 }
 
-// A ShipFlow is the flow a started task ships through. byArea is no flow
+// A ShipFlow is the flow a started task ships through. ByArea is no flow
 // named on a project declaring flow_by_area: ship picks the flow from the
 // task's area, so it is told none and nothing is recorded on the branch.
 type ShipFlow struct {

@@ -11,6 +11,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/textx"
 )
 
 // neverPushed proves a branch has no request, no copy on origin and no
@@ -26,26 +27,48 @@ func neverPushed(ctx context.Context, in FinishInput, branch string, pullErr err
 	}
 
 	pushed, err := gitx.RemoteBranchExists(ctx, in.Main, branch)
-
-	switch {
-	case err != nil:
+	if err != nil {
 		return false, err
-	case pushed:
-		return false, fmt.Errorf("%w: origin has %s with no PR: open one, or delete origin's copy to merge it here",
-			pullErr, branch)
 	}
 
-	upstream, err := gitx.Config(ctx, in.Main, "branch."+branch+".merge")
-
-	switch {
+	switch why, err := pushedSign(ctx, in.Main, branch, pushed); {
 	case err != nil:
 		return false, err
-	case upstream != "":
+	case why == signOrigin:
+		return false, fmt.Errorf("%w: origin has %s with no PR: open one, or delete origin's copy to merge it here",
+			pullErr, branch)
+	case why == signUpstream:
 		return false, fmt.Errorf("%w: %s tracks a branch origin no longer has; if its request merged on the host, "+
 			"finish it by hand", pullErr, branch)
 	}
 
 	return true, nil
+}
+
+// What says a branch with no request was pushed once.
+const (
+	signOrigin   = "origin has a copy"
+	signUpstream = "an upstream origin lacks" // a request merged there the host no longer lists (glab lists open only)
+)
+
+// pushedSign is the proof finish and the janitor share that a branch no
+// request names was never pushed: "" when origin has no copy and it tracks
+// no upstream, else the sign that it was.
+func pushedSign(ctx context.Context, main, branch string, onOrigin bool) (string, error) {
+	if onOrigin {
+		return signOrigin, nil
+	}
+
+	upstream, err := gitx.Config(ctx, main, "branch."+branch+".merge")
+
+	switch {
+	case err != nil:
+		return "", err
+	case upstream != "":
+		return signUpstream, nil
+	}
+
+	return "", nil
 }
 
 // LandingBase is the local default branch, or origin's copy when the local
@@ -65,7 +88,7 @@ func LandingBase(ctx context.Context, dir, def string) (string, error) {
 	return sha, err
 }
 
-// landUnpushed builds the merge in memory on landingBase so no checkout is
+// landUnpushed builds the merge in memory on LandingBase so no checkout is
 // touched, then moves the default branch. A conflict, or a rebase that is
 // not a fast-forward, is left to a catchup; a rerun lands nothing. The last
 // note says whether the commit closes the task or the tracker must.
@@ -116,7 +139,7 @@ func landUnpushed(ctx context.Context, in FinishInput, branch, def string) (stri
 		return "", nil, err
 	}
 
-	notes = AppendNote(notes, note)
+	notes = textx.AppendNote(notes, note)
 
 	var sha string
 

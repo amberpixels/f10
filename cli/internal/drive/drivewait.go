@@ -1,6 +1,7 @@
 package drive
 
 import (
+	"cmp"
 	"context"
 	"os"
 	"path/filepath"
@@ -11,9 +12,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
-// WakeStep is how often a waiting drive looks for a write: a step boundary,
+// wakeStep is how often a waiting drive looks for a write: a step boundary,
 // a prompt mark or a cancel is seen within it.
-var WakeStep = time.Second
+const wakeStep = time.Second
 
 // Wake returns before d once the drive's record or a per-session file about
 // one of its worktrees is written. A stat a second of a few dozen small
@@ -36,7 +37,7 @@ func (in *DriveInput) Wake(ctx context.Context, d time.Duration) error {
 	}
 
 	for {
-		step := min(WakeStep, time.Until(deadline))
+		step := min(cmp.Or(in.WakeStep, wakeStep), time.Until(deadline))
 		if step <= 0 {
 			return nil
 		}

@@ -144,7 +144,7 @@ func (rd *statusReader) gateSource(ctx context.Context) GateSource {
 			Main:   rd.main,
 			Eff:    rd.t.Effective,
 			review: rd.t.Effective.Review,
-			store:  &lore.Store{Root: LoreRootFor(rd.t)},
+			store:  &lore.Store{Root: rd.t.LoreRoot()},
 			host:   rd.host,
 			Shared: rd.t.Layout.StorageRoot.Path(),
 		}
@@ -211,7 +211,7 @@ func (rd *statusReader) rows(ctx context.Context) RowSource {
 // skill call reseeds its run, and the block takes the run's; with no run,
 // the host is asked for the PR's state the no-run block shows.
 //
-//nolint:lostfield // a read: readShipment fills the fields
+//nolint:lostfield // a read: ReadShipment fills the fields
 func (rd *statusReader) shipment(ctx context.Context, in TaskStatusInput, runs []*state.Run) Shipment {
 	known := ledger.LookupRefs(ctx, rd.t.RefProject(ctx), []string{in.ID})[in.ID]
 	s := ReadShipment(ctx, in, rd.ledger(ctx), known)
@@ -255,7 +255,7 @@ func (rd *statusReader) printRows(v StatusView, rows []TaskRow, head string) (st
 }
 
 // parentRows is `status <id>` for a parent: its children, closed ones
-// included, as rows. errNoParentLink, or no rows, is not a parent.
+// included, as rows. ErrNoParentLink, or no rows, is not a parent.
 func (rd *statusReader) parentRows(ctx context.Context, r ref.Ref) ([]TaskRow, error) {
 	kids, err := stack.TrackerFor(rd.t).AllChildren(ctx, r)
 	if err != nil || len(kids) == 0 {
@@ -273,8 +273,8 @@ func (rd *statusReader) finishedRow(ctx context.Context, r ref.Ref) *TaskRow {
 
 	lt := lookaround.FoldLedger(rd.ledger(ctx), r.ID, rd.idOf(ctx))
 
-	// a ledger finish counts only while no live plan says the task came back
-	if !stack.FinishedTask(info, tr.Storage, r.ID, false) && (!lt.Finished || tr.Storage.PlanLive(r.ID)) {
+	if !stack.FinishedTask(info, tr.Storage, r.ID, false) &&
+		!lookaround.LedgerFinishStands(lt.Finished, tr.Storage.PlanLive(r.ID)) {
 		return nil
 	}
 
@@ -297,7 +297,7 @@ func StatusText(ctx context.Context, dir, session string) (string, bool) {
 
 	asks, err := BareStatus(ctx, StatusView{Out: &out, Warn: &out}, dir, false, session, false)
 	if err != nil {
-		out.WriteString("f10: " + err.Error() + "\n")
+		out.WriteString(ui.Prefixed(err.Error()) + "\n")
 	}
 
 	return strings.TrimSpace(out.String()), asks

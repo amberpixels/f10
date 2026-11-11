@@ -117,14 +117,14 @@ func decideFinish(ctx context.Context, in FinishInput) (finishDecision, error) {
 	}
 
 	if !onMain {
-		d.ws, d.mainWS = WorkspaceAt(wss, path), WorkspaceAt(wss, in.Main)
+		d.ws, d.mainWS = worktree.WorkspaceAt(wss, path), worktree.WorkspaceAt(wss, in.Main)
 		d.self = gitx.Inside(in.Cwd, path) || (d.ws != nil && in.Workspace != "" && in.Workspace == d.ws.ID)
 	}
 
 	if d.self && !in.Flags.Yes {
 		return d, fmt.Errorf("f10 finish %s would close its own workspace (%s): "+
 			"run it from the main checkout, or pass --yes to close this workspace after the report",
-			in.Task.ID, cmp.Or(WorkspaceLabel(d.ws), name))
+			in.Task.ID, cmp.Or(worktree.WorkspaceLabel(d.ws), name))
 	}
 
 	if d.def, err = stack.LocalDefault(ctx, in.Main); err != nil {
@@ -328,18 +328,14 @@ func (in FinishInput) leaveOpen(ctx context.Context, p forge.PR) (bool, error) {
 		return false, nil
 	}
 
-	author := p.Author
-	if author == "" {
-		return false, nil
-	}
-
-	me, err := in.Host.Login(ctx)
+	// only a request proven someone else's is refused
+	owner, err := in.Host.Owner(ctx, p)
 	if err != nil {
 		return false, fmt.Errorf("telling whose PR %s is: %w", p.URL, err)
 	}
 
-	if !strings.EqualFold(author, me) {
-		return false, ForeignPullError{URL: p.URL, Author: author}
+	if owner == forge.OwnerOther {
+		return false, ForeignPullError{URL: p.URL, Author: p.Author}
 	}
 
 	return false, nil
@@ -359,14 +355,6 @@ func refuseUnpushed(ctx context.Context, main, branch string) error {
 
 	return fmt.Errorf("%s has commits origin/%s does not: push or drop them first, "+
 		"since leaving the PR open deletes the local branch", branch, branch)
-}
-
-func AppendNote(notes []string, note string) []string {
-	if note == "" {
-		return notes
-	}
-
-	return append(notes, note)
 }
 
 // FinishTarget is the task's branch and the checkout holding it, main's or a
@@ -417,32 +405,4 @@ func refuseDirty(ctx context.Context, path string) error {
 	}
 
 	return errors.New(b.String())
-}
-
-func WorkspaceAt(wss []agentctl.Workspace, path string) *agentctl.Workspace {
-	for i := range wss {
-		if wss[i].Path != "" && gitx.SamePath(wss[i].Path, path) {
-			return &wss[i]
-		}
-	}
-
-	return nil
-}
-
-func WorkspaceByID(wss []agentctl.Workspace, id string) *agentctl.Workspace {
-	for i := range wss {
-		if wss[i].ID == id {
-			return &wss[i]
-		}
-	}
-
-	return nil
-}
-
-func WorkspaceLabel(ws *agentctl.Workspace) string {
-	if ws == nil {
-		return ""
-	}
-
-	return ws.Label
 }

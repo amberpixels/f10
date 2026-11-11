@@ -9,11 +9,12 @@ import (
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // ExcludeLine is spelled as a repo that did it by hand would, so an existing
 // entry is found.
-const ExcludeLine = ".f10/"
+const ExcludeLine = storage.DirName + "/"
 
 // ExcludeF10 appends the entry to info/exclude rather than .gitignore, so the
 // ignore itself is never committed.

@@ -9,7 +9,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
-// BranchDiff is verifyDiff for the checkout at dir, main the main checkout.
+// BranchDiff is VerifyDiff for the checkout at dir, main the main checkout.
 func BranchDiff(ctx context.Context, dir, main string) (string, []string, error) {
 	branch := gitx.CurrentBranch(ctx, dir)
 	if branch == "" {

@@ -7,7 +7,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
-// tipPolicy is how defaultTip answers when the local default branch and
+// tipPolicy is how DefaultTip answers when the local default branch and
 // origin's copy both exist and neither holds the other, or, for originFirst,
 // whenever origin's copy exists at all.
 type tipPolicy int

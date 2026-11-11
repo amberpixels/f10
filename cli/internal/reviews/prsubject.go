@@ -16,6 +16,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/taskid"
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
@@ -64,7 +65,7 @@ func (s prSubject) HeadRef() string {
 // number, always a request here; a task is named with its prefix or url.
 func PullNumberOf(token string) int {
 	number, _ := worktree.PullToken(token)
-	if number == "" && worktree.Digits(token) {
+	if number == "" && taskid.IsNumber(token) {
 		number = token
 	}
 
@@ -117,7 +118,7 @@ func ResolvePRSubject(ctx context.Context, t *target.Target, token string) (prSu
 		r = r.Head()
 		s.Task = &r
 
-		// origin too, unlike taskCheckout: a branch pushed from another
+		// origin too, unlike TaskCheckout: a branch pushed from another
 		// machine is only on origin, and still names the change
 		want, _, err := stack.BranchName(ctx, t.Driver(), r, "", nil)
 		if err != nil {

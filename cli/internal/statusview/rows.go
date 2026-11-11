@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"slices"
 	"strconv"
 	"strings"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/driverec"
 	"github.com/amberpixels/f10/cli/internal/drives"
 	"github.com/amberpixels/f10/cli/internal/forge"
@@ -327,12 +327,12 @@ func (src RowSource) Gather(ctx context.Context, k stack.ChildRow) (TaskRow, loo
 		row.PR = f.PRURL
 	}
 
-	f.Base, f.BaseFrom = k.After, lookaround.FromGuessed
+	var branchAfter string
 	if branch != "" {
-		if after := BranchAfter(ctx, src.main, branch); after != "" {
-			f.Base, f.BaseFrom = after, lookaround.FromLocal
-		}
+		branchAfter = branchmeta.Out(ctx, src.main, branch, branchmeta.After)
 	}
+
+	f.Base, f.BaseFrom = lookaround.BaseOf(branchAfter, f.PR, k.After)
 
 	if src.gates != nil {
 		row.Gates = src.gates(ctx, k.ID, branch, root, f.Run)
@@ -480,7 +480,7 @@ func PRColumn(r TaskRow) string {
 		return ""
 	}
 
-	col := PullNumber(r.PR)
+	col := forge.PullNumber(r.PR)
 
 	switch r.PRState {
 	case "", forge.Open:
@@ -510,11 +510,6 @@ func statusGlyph(i int) string {
 	}
 
 	return glyphs[i]
-}
-
-// PullNumber is a request's url as `#128`.
-func PullNumber(url string) string {
-	return "#" + path.Base(url)
 }
 
 // DrivenTasks is every task a drive lists while its driver runs, by id,

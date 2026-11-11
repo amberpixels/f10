@@ -79,8 +79,8 @@ func slugBranch(ctx context.Context, task ref.Ref, title func(context.Context) (
 // short enough for a tab label and a worktree path.
 const SlugMax = 40
 
-// Slugify cuts at the last hyphen at or before slugMax so no word is split,
-// hard at slugMax when there is none.
+// Slugify cuts at the last hyphen at or before SlugMax so no word is split,
+// hard at SlugMax when there is none.
 func Slugify(title string) string {
 	var (
 		b   strings.Builder
@@ -317,7 +317,7 @@ func (x *BranchIndex) carrying(ctx context.Context, id string) ([]string, error)
 }
 
 // candidates are the task's linked branches, else its branches under the
-// first root of policyLocalOrOrigin that has any, and whether they are linked.
+// first root of PolicyLocalOrOrigin that has any, and whether they are linked.
 func (x *BranchIndex) candidates(ctx context.Context, id string) ([]string, bool, error) {
 	if linked := x.Linked(id); len(linked) > 0 {
 		return linked, true, nil
@@ -346,7 +346,7 @@ func LoadBranchIndex(ctx context.Context, dir string) (*BranchIndex, error) {
 // in order.
 type BranchPolicy []string
 
-var // policyLocalOrOrigin finds a branch only origin has, for start to track
+var // PolicyLocalOrOrigin finds a branch only origin has, for start to track
 PolicyLocalOrOrigin = BranchPolicy{"refs/heads/", "refs/remotes/origin/"}
 
 // NamedRef is the ref --base names, with its commit. Exact refs rather than

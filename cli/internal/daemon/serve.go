@@ -30,7 +30,7 @@ import (
 const Supported = true
 
 // ExitDrained is a drive's exit when it stopped for an upgrade, to be
-// resumed by the next daemon; drive.go's exitDrained.
+// resumed by the next daemon.
 const ExitDrained = 6
 
 // ErrRunning is a second daemon finding the first one's lease held.

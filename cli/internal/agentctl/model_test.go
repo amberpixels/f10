@@ -1,6 +1,10 @@
 package agentctl
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/amberpixels/f10/cli/internal/seam"
+)
 
 func TestResolve(t *testing.T) {
 	tests := []struct {
@@ -40,10 +44,7 @@ func TestResolve(t *testing.T) {
 }
 
 func TestNearestTie(t *testing.T) {
-	saved := ModelFamilies
-	t.Cleanup(func() { ModelFamilies = saved })
-
-	ModelFamilies = []string{"abcd", "abce"}
+	seam.Swap(t, &ModelFamilies, []string{"abcd", "abce"})
 
 	if f, ok := nearest("abc"); ok {
 		t.Errorf("nearest(abc) = %q; want a tie, no match", f)

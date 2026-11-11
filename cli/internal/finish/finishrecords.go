@@ -100,8 +100,8 @@ func checkLore(in FinishInput, merging bool) (string, error) {
 	return fmt.Sprintf("lore check %s: %s (lore_gate: warn): merged anyway", in.loreChange(), reasons), nil
 }
 
-// loreChange is the change the merge closes; a finishInput built without
-// finish (a test, mergeBody alone) reads the task id.
+// loreChange is the change the merge closes; a FinishInput built without
+// finish (a test, MergeBody alone) reads the task id.
 func (in FinishInput) loreChange() string {
 	return cmp.Or(in.Change, in.Task.ID)
 }

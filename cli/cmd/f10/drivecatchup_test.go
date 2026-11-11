@@ -631,11 +631,11 @@ func TestRunVerifyStopsAtTheFirstRedAndLogsIt(t *testing.T) {
 	}
 }
 
-// On a real repo: integrateBranch rebases a branch behind main, the branch
-// then holds its base with nothing left, and clearMarks drops the mark.
+// On a real repo: IntegrateBranch rebases a branch behind main, the branch
+// then holds its base with nothing left, and ClearMarks drops the mark.
 func TestIntegrateBranchThenNothingLeft(t *testing.T) {
 	r := newCatchupRepo(t)
-	r.at(before, "config", branchmeta.Landed.For("FT-1/a"), "main")
+	r.At(before, "config", branchmeta.Landed.For("FT-1/a"), "main")
 
 	in := r.input("")
 
@@ -645,10 +645,10 @@ func TestIntegrateBranchThenNothingLeft(t *testing.T) {
 	}
 
 	d := &drive.DriveInput{
-		Main:    r.dir,
+		Main:    r.Dir,
 		Catchup: &stack.CatchupEngine{Policy: in, Base: stack.ResolveCatchup},
 	}
-	run := &drive.DriveRun{O: start.OpenedTask{Branch: "FT-1/a", Path: r.dir}}
+	run := &drive.DriveRun{O: start.OpenedTask{Branch: "FT-1/a", Path: r.Dir}}
 
 	if tree, err := d.CatchupLeft(t.Context(), run); err != nil || tree.Left() != "" {
 		left := tree.Left()
@@ -660,11 +660,11 @@ func TestIntegrateBranchThenNothingLeft(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := stack.ClearMarks(t.Context(), r.dir, "FT-1/a", base); err != nil {
+	if err := stack.ClearMarks(t.Context(), r.Dir, "FT-1/a", base); err != nil {
 		t.Fatal(err)
 	}
 
-	if v, _ := gitx.Config(t.Context(), r.dir, branchmeta.Landed.For("FT-1/a")); v != "" {
+	if v, _ := gitx.Config(t.Context(), r.Dir, branchmeta.Landed.For("FT-1/a")); v != "" {
 		t.Errorf("the landed mark survived: %q", v)
 	}
 }
@@ -672,14 +672,14 @@ func TestIntegrateBranchThenNothingLeft(t *testing.T) {
 // A conflict left in a file is what is left once the rebase concluded.
 func TestCatchupLeftNamesAMarker(t *testing.T) {
 	r := newCatchupRepo(t)
-	r.commit(during, "a.go", "<<<<<<< HEAD\nx\n", "a marker committed")
+	r.Commit(during, "a.go", "<<<<<<< HEAD\nx\n", "a marker committed")
 
 	in := r.input("")
 	d := &drive.DriveInput{
-		Main:    r.dir,
+		Main:    r.Dir,
 		Catchup: &stack.CatchupEngine{Policy: in, Base: stack.ResolveCatchup},
 	}
-	run := &drive.DriveRun{O: start.OpenedTask{Branch: "FT-1/a", Path: r.dir}}
+	run := &drive.DriveRun{O: start.OpenedTask{Branch: "FT-1/a", Path: r.Dir}}
 
 	if _, _, err := stack.IntegrateBranch(
 		t.Context(),
@@ -965,14 +965,14 @@ func TestDriveKeepsTheCatchupRecordForAResume(t *testing.T) {
 		t.Fatalf("resumed with %+v, want %+v", got, r.LastCatchup)
 	}
 
-	// a copy: a change on the resumed run is written only through keepCatchup
+	// a copy: a change on the resumed run is written only through KeepCatchup
 	got.Spent = true
 	if fx.in.Rec.Task("GH-1").Catchup.Spent {
 		t.Error("the resumed record shares the drive record's copy")
 	}
 }
 
-// readTree and withBase are the one read of a worktree a catchup acts on:
+// ReadTree and WithBase are the one read of a worktree a catchup acts on:
 // each state reads as the wording drive and the watcher print for it.
 func TestReadTree(t *testing.T) {
 	cases := map[string]struct {
@@ -980,11 +980,11 @@ func TestReadTree(t *testing.T) {
 		left  string // a substring of left(), "" for nothing left
 		lost  bool
 	}{
-		"held and clean": {setup: func(r gitRepo) { r.at(during, "rebase", "-q", "main") }},
+		"held and clean": {setup: func(r gitRepo) { r.At(during, "rebase", "-q", "main") }},
 		"base lost":      {left: "FT-1/a does not hold main", lost: true},
 		"dirty": {
 			setup: func(r gitRepo) {
-				if err := os.WriteFile(filepath.Join(r.dir, "x.go"), []byte("x"), 0o644); err != nil {
+				if err := os.WriteFile(filepath.Join(r.Dir, "x.go"), []byte("x"), 0o644); err != nil {
 					t.Fatal(err)
 				}
 			},
@@ -992,17 +992,17 @@ func TestReadTree(t *testing.T) {
 		},
 		"marker": {
 			setup: func(r gitRepo) {
-				r.at(during, "rebase", "-q", "main")
-				r.commit(during, "a.go", "<<<<<<< HEAD\nx\n", "a marker committed")
+				r.At(during, "rebase", "-q", "main")
+				r.Commit(during, "a.go", "<<<<<<< HEAD\nx\n", "a marker committed")
 			},
 			left: "conflict markers left in a.go",
 		},
 		"merge in progress": {
 			setup: func(r gitRepo) {
-				r.commit(during, "b.go", "package main // not b\n", "b on the branch")
+				r.Commit(during, "b.go", "package main // not b\n", "b on the branch")
 
 				cmd := exec.CommandContext(t.Context(), "git", "merge", "-q", "main")
-				cmd.Dir = r.dir
+				cmd.Dir = r.Dir
 				_ = cmd.Run() // conflicts, leaving the merge in progress
 			},
 			left: "a merge is still in progress in ",
@@ -1016,7 +1016,7 @@ func TestReadTree(t *testing.T) {
 				tc.setup(r)
 			}
 
-			tree, err := stack.ReadTree(t.Context(), r.dir)
+			tree, err := stack.ReadTree(t.Context(), r.Dir)
 			if err == nil && tree.Busy() == "" {
 				tree, err = tree.WithBase(t.Context(), "FT-1/a", stack.CatchupPlan{Base: "main", SHA: r.sha("main")})
 			}

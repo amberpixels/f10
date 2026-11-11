@@ -13,9 +13,9 @@ import (
 
 // What a base was found through, in the step's words.
 const (
-	FoundLanded  = "f10-landed"
-	FoundAfter   = "f10-after-branch"
-	FoundGone    = "f10-after-branch gone"
+	FoundLanded  = string(branchmeta.Landed)
+	FoundAfter   = string(branchmeta.AfterBranch)
+	FoundGone    = string(branchmeta.AfterBranch) + " gone"
 	FoundDefault = "default branch"
 )
 
@@ -206,6 +206,9 @@ type CatchupInput struct {
 	CatchupDefault, StackedDefault bool // the value is the default, not declared
 
 	ShipStopped bool
+
+	// Fetched is the tick's or the watcher pass's fetch, nil outside one
+	Fetched *FetchOnce
 }
 
 // rewritten is the base's old tip when its history was rewritten: onto

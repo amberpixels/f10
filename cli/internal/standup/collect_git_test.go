@@ -1,11 +1,10 @@
 package standup
 
 import (
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/amberpixels/f10/cli/internal/gitx/gitxtest"
 )
 
 // The git half of the upkeep rules against real git: a merge of main, a
@@ -18,82 +17,38 @@ const (
 	later  = "2026-10-14T12:00:00Z"
 )
 
-// gitRepo is a clone of a bare origin, every git call dated.
-type gitRepo struct {
-	t   *testing.T
-	dir string
-}
-
-// at runs git with a fixed author and committer date.
-func (r gitRepo) at(when string, args ...string) string {
-	r.t.Helper()
-
-	cmd := exec.CommandContext(r.t.Context(), "git", args...)
-	cmd.Dir = r.dir
-	cmd.Env = append(os.Environ(), "GIT_AUTHOR_DATE="+when, "GIT_COMMITTER_DATE="+when)
-
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		r.t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
-	}
-
-	return strings.TrimSpace(string(out))
-}
-
-func (r gitRepo) commit(when, file, content, msg string) {
-	r.t.Helper()
-
-	if err := os.WriteFile(filepath.Join(r.dir, file), []byte(content), 0o644); err != nil {
-		r.t.Fatal(err)
-	}
-
-	r.at(when, "add", file)
-	r.at(when, "commit", "-q", "-m", msg)
-}
-
-func newStandupRepo(t *testing.T) gitRepo {
+func newStandupRepo(t *testing.T) gitxtest.Repo {
 	t.Helper()
 
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("no git")
-	}
+	r := gitxtest.Clone(t, "work")
+	r.At(before, "checkout", "-q", "-b", "main")
 
-	root := t.TempDir()
-	origin := filepath.Join(root, "origin.git")
-	(gitRepo{t, root}).at(before, "init", "-q", "--bare", "--initial-branch=main", origin)
-	(gitRepo{t, root}).at(before, "clone", "-q", origin, filepath.Join(root, "work"))
-
-	r := gitRepo{t, filepath.Join(root, "work")}
-	r.at(before, "config", "user.email", "me@x.io")
-	r.at(before, "config", "user.name", "Me")
-	r.at(before, "checkout", "-q", "-b", "main")
-
-	r.commit(before, "main.go", "package standup\n", "init")
-	r.commit(before, "go.sum", "a v1\n", "deps")
-	r.at(before, "push", "-q", "-u", "origin", "main")
-	r.at(before, "remote", "set-head", "origin", "main")
+	r.Commit(before, "main.go", "package standup\n", "init")
+	r.Commit(before, "go.sum", "a v1\n", "deps")
+	r.At(before, "push", "-q", "-u", "origin", "main")
+	r.At(before, "remote", "set-head", "origin", "main")
 
 	for _, task := range []string{"FT-1/a", "FT-2/b", "FT-3/c"} {
-		r.at(before, "checkout", "-q", "-b", task, "main")
-		r.commit(before, strings.ReplaceAll(task, "/", "-")+".go", "package standup // "+task+"\n", task+" start")
-		r.at(before, "push", "-q", "-u", "origin", task)
+		r.At(before, "checkout", "-q", "-b", task, "main")
+		r.Commit(before, strings.ReplaceAll(task, "/", "-")+".go", "package standup // "+task+"\n", task+" start")
+		r.At(before, "push", "-q", "-u", "origin", task)
 	}
 
 	// main moves on under someone else's name
-	r.at(before, "checkout", "-q", "main")
-	r.at(during, "-c", "user.email=other@x.io", "commit", "-q", "--allow-empty", "-m", "theirs")
-	r.commit(during, "other.go", "package standup // theirs\n", "theirs 2")
-	r.at(during, "push", "-q", "origin", "main")
+	r.At(before, "checkout", "-q", "main")
+	r.At(during, "-c", "user.email=other@x.io", "commit", "-q", "--allow-empty", "-m", "theirs")
+	r.Commit(during, "other.go", "package standup // theirs\n", "theirs 2")
+	r.At(during, "push", "-q", "origin", "main")
 
-	r.at(during, "checkout", "-q", "FT-1/a")
-	r.at(during, "merge", "-q", "--no-edit", "origin/main")
-	r.at(during, "checkout", "-q", "FT-2/b")
-	r.commit(during, "go.sum", "a v2\n", "bump a")
-	r.at(during, "checkout", "-q", "FT-3/c")
-	r.commit(during, "FT-3-c.go", "package standup // FT-3 more\n", "FT-3 more")
+	r.At(during, "checkout", "-q", "FT-1/a")
+	r.At(during, "merge", "-q", "--no-edit", "origin/main")
+	r.At(during, "checkout", "-q", "FT-2/b")
+	r.Commit(during, "go.sum", "a v2\n", "bump a")
+	r.At(during, "checkout", "-q", "FT-3/c")
+	r.Commit(during, "FT-3-c.go", "package standup // FT-3 more\n", "FT-3 more")
 
 	for _, task := range []string{"FT-1/a", "FT-2/b", "FT-3/c"} {
-		r.at(during, "push", "-q", "origin", task)
+		r.At(during, "push", "-q", "origin", task)
 	}
 
 	return r
@@ -102,7 +57,7 @@ func newStandupRepo(t *testing.T) gitRepo {
 func TestStandupOnRealGit(t *testing.T) {
 	r := newStandupRepo(t)
 
-	in, err := Collect(t.Context(), Source{Dir: r.dir, Main: r.dir, Prefix: "FT"}, standupSince)
+	in, err := Collect(t.Context(), Source{Dir: r.Dir, Main: r.Dir, Prefix: "FT"}, standupSince)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,15 +92,15 @@ func TestStandupOnRealGit(t *testing.T) {
 func TestSamePatchesOnRealGit(t *testing.T) {
 	r := newStandupRepo(t)
 
-	r.at(later, "checkout", "-q", "FT-3/c")
-	beforeRebase := r.at(later, "rev-parse", "HEAD")
-	r.at(later, "rebase", "-q", "origin/main")
-	rebased := r.at(later, "rev-parse", "HEAD")
+	r.At(later, "checkout", "-q", "FT-3/c")
+	beforeRebase := r.At(later, "rev-parse", "HEAD")
+	r.At(later, "rebase", "-q", "origin/main")
+	rebased := r.At(later, "rev-parse", "HEAD")
 
-	r.commit(later, "FT-3-c.go", "package standup // FT-3 changed\n", "FT-3 fixup")
-	r.at(later, "reset", "-q", "--soft", "HEAD~2")
-	r.at(later, "commit", "-q", "-m", "FT-3 more")
-	amended := r.at(later, "rev-parse", "HEAD")
+	r.Commit(later, "FT-3-c.go", "package standup // FT-3 changed\n", "FT-3 fixup")
+	r.At(later, "reset", "-q", "--soft", "HEAD~2")
+	r.At(later, "commit", "-q", "-m", "FT-3 more")
+	amended := r.At(later, "rev-parse", "HEAD")
 
 	for _, tc := range []struct {
 		name, before, after string
@@ -156,7 +111,7 @@ func TestSamePatchesOnRealGit(t *testing.T) {
 		{"old head unknown here", strings.Repeat("e", 40), rebased, "unknown"},
 	} {
 		got := "unknown"
-		if p := samePatches(t.Context(), r.dir, "origin/main", tc.before, tc.after); p != nil {
+		if p := samePatches(t.Context(), r.Dir, "origin/main", tc.before, tc.after); p != nil {
 			got = map[bool]string{true: "true", false: "false"}[*p]
 		}
 

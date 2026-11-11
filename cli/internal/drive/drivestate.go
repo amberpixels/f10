@@ -10,17 +10,18 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
-	statuscmd "github.com/amberpixels/f10/cli/internal/command/status"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/statusview"
 )
 
-// AttemptLimit is how many times in a row one action may fail with the
-// task's state unchanged before the drive halts it.
-var AttemptLimit = 3
+// attemptLimit is the drive's Attempts unless one is given.
+const attemptLimit = 3
+
+func (in *DriveInput) attemptLimit() int { return cmp.Or(in.Attempts, attemptLimit) }
 
 // A TaskState is where a task stands by git, its PR and its files, read only
 // where the drive reconciles a turn, never on every poll, since the PR read
@@ -142,7 +143,7 @@ func (in *DriveInput) readState(ctx context.Context, r *DriveRun, run *state.Run
 	lead := r.Task.Ref.Head().ID
 	s.plan = r.O.Plan != "" || fsx.Exists(in.Storage.Plan(lead))
 
-	o := statuscmd.ReadOutcomes(nil, in.Storage.Path(), lead)
+	o := statusview.ReadOutcomes(nil, in.Storage.Path(), lead)
 	s.Reviews, s.ChangeJudged = len(o.Local)+len(o.Remote), o.ChangeJudge != nil
 
 	if in.Pull != nil && s.Origin != "" {
@@ -236,16 +237,16 @@ func (in *DriveInput) count(r *DriveRun, list *[]attempt, action, fp string, hal
 	*list = append(*list, attempt{Action: action, State: fp, Reason: reason, At: in.Now()})
 	attempts := *list
 
-	if len(attempts) < AttemptLimit {
+	if len(attempts) < in.attemptLimit() {
 		// the count is of failures in a row with nothing changed, never of
 		// turns, so a restart says why it reads 1 again
 		if restarted {
 			fmt.Fprintf(in.Out, "%s %s: failed again, but the task moved since the last failure, "+
 				"so the count starts over at 1 of %d, trying again: %s\n",
-				in.id(r.Task.Ref.ID), action, AttemptLimit, reason)
+				in.id(r.Task.Ref.ID), action, in.attemptLimit(), reason)
 		} else {
 			fmt.Fprintf(in.Out, "%s %s: failed, %d of %d in a row with nothing changed, trying again: %s\n",
-				in.id(r.Task.Ref.ID), action, len(attempts), AttemptLimit, reason)
+				in.id(r.Task.Ref.ID), action, len(attempts), in.attemptLimit(), reason)
 		}
 
 		return nil
