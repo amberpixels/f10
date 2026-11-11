@@ -59,8 +59,8 @@ f10 pr open [n | id]     # the PR or MR: a number is one, a task id its open one
 f10 pr base [PR | id] [--origin]      # the base: the open PR's target, else the recorded stacked base, else the default branch
 f10 pr diff [PR | id] [--name-only]   # the change against that base: here with uncommitted work, else the open PR's diff, else the branch
 f10 pr view [PR | id] [--comments]    # branch, base, task and open PR (head sha, target, mine) with its description; says so when there is no PR
-f10 pr create --title T --body-file F [--label L]... [--assignee A]... [--draft]   # open a PR for the branch here against pr base; prints its url, or an open one's
-f10 pr edit [PR | id] [--title T] [--body-file F]   # rewrite the open PR's title or body; base, labels and assignees stay
+f10 pr create --title T --body-file F [--label L]... [--assignee A]... [--draft]   # open a PR for the branch here against pr base; prints its url, or an open one's; a bundle's title names its riders after the lead id
+f10 pr edit [PR | id] [--title T] [--body-file F]   # rewrite the open PR's title or body; base, labels and assignees stay; a bundle's title names its riders after the lead id
 f10 pr comment [PR | id] [--reply-to URL [--quote T]] < text    # comment, or reply in a review's thread; prints the url, never posts the same text twice
 f10 pr status [PR | id] --name N --state S -m TEXT [--sha SHA]   # a commit status on the open PR's head; one set the same way is left alone
 f10 pr catchup [--guard implement|pr|judge] [--no-fetch]   # what a catchup of the current branch brings in: base, how found, method and why, the conflict mark
@@ -226,7 +226,13 @@ A bundle branch fetched from origin has no local record; start reads its riders 
 Before anything is created, start refuses a parent among the members, a rider already on another branch (naming it), a branch that exists with other riders (riders are fixed at start) and a suffix.
 The bundle's base is the one `After:` its members name outside it; a line naming another member is dropped, and two different bases are refused.
 `f10 drive` takes a bundle as one entry; a task `After:` a rider waits for the whole bundle.
-Drive's finish asks no riders question, since a resume carries only the latest answer: it leaves every rider open, and its report names them for `gh issue close` or the tracker.
+A bundle's PR title names the riders after the lead id, up to two and then a count (`ABC-1 (+ABC-2, ABC-3, 2 more): <lead title>`), because GitHub cuts long commit subjects from the end.
+`f10 pr create` and `f10 pr edit` add that tag to the drafted title, and replace one already there.
+The board shows such a PR under its lead with the lead's title.
+Drive's finish and the watcher ask no riders question, since a resume carries only the latest answer.
+They follow the PR body instead: a rider under `Closes #n` closes, and one under `Part of #n`, or not named at all, stays open.
+The report names the riders left open.
+A bundle merged without a PR has no body, so its riders stay open.
 
 A recorded dependency is read back by the ship, pr and catchup steps, not by this binary.
 Before implement, where a base is recorded on the branch, ship's catchup guard brings the base in by the method `f10 pr catchup` prints, unless `catchup: off`: `merge`, `rebase`, or `onto` for a base that was squash-merged or rebased, which replays only the branch's own commits. A recorded base whose branch has no code yet gets one question instead, wait or proceed on the plan's assumption, even under `catchup: off`; a driven run waits.
@@ -246,8 +252,10 @@ After its report, start runs the [janitor](#janitor) when its last run is 6 hour
 `f10 finish 42` is the inverse of start, in the order that keeps the local side honest.
 It finds the task's branch the way start does (the branch linked by `f10-task` or `f10-tasks`, else the exact name, else the one `<id>` / `<id>-*` / `<id>+*` branch, else the one local branch carrying the id past a prefix, like `feat/<id>-slug`) and the checkout that has it checked out; without either it stops, since finish removes only a branch it can tie to the task.
 For a bundle, finish needs `--close`: the riders the PR delivers, comma-separated, `all` or `none`.
-Without it, finish exits **7** before changing anything, and the finish skill asks.
-Before an open PR merges, each rider left open has its closing keyword in the PR body turned into `Part of #n`; after a merge that already happened, each is reopened instead.
+Without it, finish exits **7** before changing anything, naming the riders the PR body closes as the default, and the finish skill asks.
+`--close` overrides the body.
+Before an open PR merges, each rider left open has its closing keyword in the PR body turned into `Part of #n`, and each rider chosen to close has its `Part of #n` turned back into `Closes #n`.
+After a merge that already happened, each rider left open that the body closed is reopened instead.
 A tracker that is not the host closes nothing on merge, so the notes name the riders to close there.
 The notes also carry one line on the change's lore (`docs/lore.md`): its intent, decisions and lessons counted, each named when missing, so a change that reached finish without a ship run shows it left none.
 That checkout is a worktree start created, or the main checkout itself for a task shipped from main with no worktree.

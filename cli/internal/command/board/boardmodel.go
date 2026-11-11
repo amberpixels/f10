@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/lookaround"
+	"github.com/amberpixels/f10/cli/internal/ref"
 )
 
 // A BoardModel is what a renderer draws. board.html builds the same model in
@@ -214,12 +215,13 @@ func windowLabel(w lookaround.Window) string {
 func localDate(t time.Time) string { return t.Local().Format(time.DateOnly) }
 
 // TitleAfterKey drops the "<key>: " a request's title often starts with,
-// since the row already shows the key; FT-12 never matches FT-121.
+// and a bundle's riders tag after it, since the row already shows the key;
+// FT-12 never matches FT-121.
 func TitleAfterKey(title, key string) string {
 	rest, ok := strings.CutPrefix(title, key)
 	if !ok || key == "" || rest == "" || (rest[0] != ':' && rest[0] != ' ') {
 		return title
 	}
 
-	return cmp.Or(strings.TrimLeft(rest, ": -"), title)
+	return cmp.Or(strings.TrimLeft(ref.TrimRiders(rest), ": -"), title)
 }

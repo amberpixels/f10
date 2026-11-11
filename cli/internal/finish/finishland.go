@@ -101,7 +101,7 @@ func landMerge(ctx context.Context, w io.Writer, in FinishInput, d finishDecisio
 	)
 
 	if len(in.Task.Riders()) > 0 && !unpushed {
-		if riderNotes, err = settleRiders(ctx, in, name, p.Status == forge.Merged); err != nil {
+		if riderNotes, err = settleRiders(ctx, in, name, p.Status == forge.Merged, p.Body); err != nil {
 			return landing{}, err
 		}
 	}

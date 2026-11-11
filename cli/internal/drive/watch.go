@@ -990,7 +990,7 @@ func WatcherFinish(ctx context.Context, w io.Writer, t *target.Target, main, roo
 	var buf bytes.Buffer
 
 	in := finish.InputFor(t, main, h, r)
-	in.Branch, in.Flags.MergedOnly = task.Branch, true
+	in.Branch, in.Flags.MergedOnly, in.FollowBody = task.Branch, true, true
 	// never ProcessPlace: the self-close path would end the daemon, and its
 	// directory may be a worktree since removed, where getwd fails
 	in.Cwd = main

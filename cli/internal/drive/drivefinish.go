@@ -124,9 +124,9 @@ func DriveFinishInput(t *target.Target, main string, h hostops.Host, req DriveFi
 	in.Flags.Merge, in.Flags.LeaveOpen = req.Pr == FinishMerge, req.Pr == FinishLeaveOpen
 	in.Progress, in.Handoff, in.Deferred = req.Progress, req.Handoff, req.Deferred
 	// a driven finish asks no second question, since a resume carries only
-	// the latest answer: a bundle's riders stay open, the reversible choice,
-	// and the report names them
-	in.Close = []string{}
+	// the latest answer: the PR body says which riders close, and the report
+	// names those left open
+	in.FollowBody = true
 
 	return in, nil
 }

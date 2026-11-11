@@ -10,9 +10,10 @@ import (
 	"github.com/amberpixels/f10/cli/internal/textx"
 )
 
-// A bundle's riders at finish. The PR body carries a closing keyword per
-// member, so a merge closes every one; which riders the PR really delivers
-// is the user's call, asked once: finish refuses to guess.
+// A bundle's riders at finish. The PR body says which riders the PR
+// delivers: `Closes #n` closes one on merge, `Part of #n` leaves it open.
+// The drive and the watcher follow the body; a manual finish asks once,
+// offering the body's choice, and --close overrides it.
 
 const (
 	closeAll  = "all"
@@ -22,11 +23,23 @@ const (
 // A RidersError is a bundle finished without --close: nothing changed.
 type RidersError struct {
 	task ref.Ref
+	body []string // the riders the PR body closes
+	read bool     // a PR body was read; false for a branch never pushed
 }
 
 func (e RidersError) Error() string {
-	return fmt.Sprintf("%s ships with riders %s: pass --close with the riders this PR delivers "+
+	msg := fmt.Sprintf("%s ships with riders %s: pass --close with the riders this PR delivers "+
 		"(ids, %s or %s); the rest stay open", e.task.ID, strings.Join(e.task.Riders(), ", "), closeAll, closeNone)
+
+	switch {
+	case !e.read:
+		return msg
+	case len(e.body) == 0:
+		return msg + "; the PR body closes none of them: --close " + closeNone + " follows it"
+	default:
+		return msg + "; the PR body closes " + strings.Join(e.body, ", ") +
+			": --close " + strings.Join(e.body, ",") + " follows it"
+	}
 }
 
 // CloseChoice reads --close; a token outside the bundle is a typo, refused.
@@ -63,9 +76,16 @@ func CloseChoice(task ref.Ref, value string, resolve func(string) (ref.Ref, erro
 }
 
 // settleRiders makes the merge close only the chosen riders: before the
-// merge by editing the body's keywords, after one by reopening. A tracker
-// that is not the host closes nothing, so the notes say what to close by hand.
-func settleRiders(ctx context.Context, in FinishInput, branch string, merged bool) ([]string, error) {
+// merge by editing the body's keywords, after one by reopening those the
+// body closed. A tracker that is not the host closes nothing, so the notes
+// say what to close by hand.
+func settleRiders(
+	ctx context.Context,
+	in FinishInput,
+	branch string,
+	merged bool,
+	mergedBody string,
+) ([]string, error) {
 	var kept, closing []ref.Ref
 
 	for _, m := range in.Task.MemberRefs()[1:] {
@@ -88,15 +108,23 @@ func settleRiders(ctx context.Context, in FinishInput, branch string, merged boo
 	}
 
 	switch {
-	case merged && len(kept) > 0:
+	case merged:
+		// a rider under `Part of` was never closed, so only the body's closes reopen
+		closed := BodyCloses(mergedBody, kept)
 		for _, m := range kept {
+			if !slices.Contains(closed, m.ID) {
+				continue
+			}
+
 			if err := in.Host.SetIssueOpen(ctx, m.Number, true); err != nil {
 				return nil, fmt.Errorf("reopening %s, which the merge closed: %w", m.ID, err)
 			}
 		}
 
-		notes = append(notes, "reopened "+strings.Join(refIDs(kept), ", ")+", which the merge had closed")
-	case !merged:
+		if len(closed) > 0 {
+			notes = append(notes, "reopened "+strings.Join(closed, ", ")+", which the merge had closed")
+		}
+	default:
 		body, err := in.Host.PRBody(ctx, branch)
 		if err != nil {
 			return nil, err

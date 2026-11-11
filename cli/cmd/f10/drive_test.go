@@ -3062,8 +3062,8 @@ func TestDriveFinishInputTakesTheSettings(t *testing.T) {
 			in.Task.ID, in.Suffix, in.Branch, in.Flags.Merge, in.Flags.LeaveOpen)
 	}
 
-	if in.Close == nil || len(in.Close) != 0 {
-		t.Errorf("close = %v, want riders left open, never nil", in.Close)
+	if in.Close != nil || !in.FollowBody {
+		t.Errorf("close = %v, follow body %v; want the PR body to decide the riders", in.Close, in.FollowBody)
 	}
 }
 
