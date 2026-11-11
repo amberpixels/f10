@@ -94,6 +94,8 @@ It reads plans and lore, because recorded intent is what tells a deliberate diff
    - Re-read every claimed bug and every `high` finding at its `where:`, and mark it `verified` when the code shows it, or `reported` when one link could not be traced.
    - Drop a finding with no `file:line`, or one the code at HEAD already settles.
    - Order the themes into **phases**: a theme goes after the themes its findings depend on, and within a phase the cheaper or riskier-to-postpone theme goes first.
+   - No findings is a valid result, so never pad the report to fill it.
+     A reviewer that reports nothing in its area has reported, and it has not failed.
 7. **Write the report.**
    The header comes first, one `key: value` line each:
    - `window:` the window as given, or `last audit` or `last tag` when none was given.
@@ -109,17 +111,35 @@ It reads plans and lore, because recorded intent is what tells a deliberate diff
    - `## Not recommended`: changes a reader might expect that the audit advises against, each with its reason.
    - `## Probes`: one line per probe, run or missing.
 
+   A section with nothing in it is written as its heading with `- none` (`## Bugs - none`).
+
 Report per `conventions/report.md` with an `audit` row, the report's path.
 Under the block, give the count of bugs (verified and reported), themes and phases.
 
 ## Capture
 
-After the report, offer once with `AskUserQuestion` to capture it as tasks: a parent with one subtask per theme, or nothing.
-On yes, run the **capture** step with the report as its description, split as that step's point 1 describes:
+The capture's size follows the findings' weight, because a task per minor theme costs more to plan, ship and later audit than the fixes themselves.
+A theme is **heavy** when it holds a `high` finding or a finding of size `large`.
+Every other theme is **minor**.
+
+- **No findings**: offer no capture, and say so in one line under the report.
+- **Only minor themes**, the default case: offer one task, or nothing.
+- **At least one heavy theme**: offer one task per heavy theme plus one task for all the minor themes, under a parent, or one task for everything, or nothing.
+
+Make the offer once, with `AskUserQuestion`.
+
+**One task** holds the verdict, a checklist of about 3 to 7 items, and the not-recommended list as its out-of-scope.
+Each item is one theme or one bug, with its `where:` lines.
+If more than 7 items would remain, merge the cheapest themes into one item (cosmetic prose and comment fixes, for example).
+Items go in phase order, so the checklist reads top to bottom.
+Run the **capture** step with this body as its description, as one task, never split.
+
+**A parent with subtasks** runs the **capture** step with the report as its description, split as that step's point 1 describes:
 
 - The parent holds the verdict, the bugs, and the not-recommended list as its out-of-scope.
-- Each theme becomes a subtask, its findings and their `where:` lines in its body.
-- A bug that belongs to no theme is a subtask of its own, in phase 1.
+- The minor themes, and any bug in no heavy theme, go into one subtask shaped like the single task above.
+  That subtask is created first, in phase 1.
+- Each heavy theme becomes its own subtask, with its findings and their `where:` lines in its body.
 - A phase-1 subtask carries no `After:` line, unless its theme depends on another phase-1 theme.
 - A later subtask's `After:` names the theme its findings depend on, else the last subtask created in the phase before.
   `After:` holds one id, so a theme that depends on several names the one created last and lists the others in its body.
@@ -128,7 +148,7 @@ On yes, run the **capture** step with the report as its description, split as th
 `/f10:drive` starts a subtask once the task its `After:` names has a commit, so the lines order the work but do not hold a phase until the one before it has finished.
 The parent's body says so, under the phase list.
 
-The report's path stays off the tracker under stealth, so the parent describes the audit without naming it.
+The report's path stays off the tracker under stealth, so the task or the parent describes the audit without naming it.
 
-**On failure:** a window that names no commit, a reviewer that returns nothing, or a report that cannot be written (`conventions/failure.md`).
+**On failure:** a window that names no commit, a reviewer whose run ends with no report at all, or a report that cannot be written (`conventions/failure.md`).
 A failed write puts the full report in the message, with the path it was meant for.

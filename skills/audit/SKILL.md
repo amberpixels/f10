@@ -1,6 +1,6 @@
 ---
 name: audit
-description: "f10 audit skill - a big-picture review of what shipped over a window (since the last audit, a ref, a date, or the whole codebase): reviewer agents split by area plus cross-cutting and history lenses, every claimed bug verified in the code, one report under the storage root, and an offer to capture it as a parent task with ordered subtasks. Use when the user says \"/f10:audit [since <ref | date> | all]\", asks for an audit, a codebase health check, how recent work fits together, or what to refactor after a run of features."
+description: "f10 audit skill - a big-picture review of what shipped over a window (since the last audit, a ref, a date, or the whole codebase): reviewer agents split by area plus cross-cutting and history lenses, every claimed bug verified in the code, one report under the storage root, and an offer to capture it sized to the findings: nothing when it found nothing, one task with a short checklist when everything is minor, a parent with subtasks only for heavy themes. Use when the user says \"/f10:audit [since <ref | date> | all]\", asks for an audit, a codebase health check, how recent work fits together, or what to refactor after a run of features."
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Agent, AskUserQuestion, Skill
 argument-hint: "[since <ref | date> | all]"
 ---
@@ -22,4 +22,4 @@ argument-hint: "[since <ref | date> | all]"
 
 **Exit**
 - Stop at the report, or once the capture it offered has created the tasks.
-- Next: `/f10:drive <parent>` once the tasks exist.
+- Next: `/f10:start <task>` for one task, or `/f10:drive <parent>` once a parent and its subtasks exist.
