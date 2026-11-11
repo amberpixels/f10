@@ -23,6 +23,17 @@ func runReviewRound(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
+	var sweep reviews.Sweep
+	if since := cmd.String("since"); since != "" {
+		if sweep, err = reviews.CheckSweep(ctx, t, since, cmd.ErrWriter); err != nil {
+			return err
+		}
+
+		if sweep.Decline != "" {
+			return writeRounds(cmd, findings.Status{Decline: sweep.Decline, Branch: sweep.Branch, Detail: sweep.Detail})
+		}
+	}
+
 	dir, series, err := reviews.OpenReviews(ctx, t, cmd.Args().First(), cmd.ErrWriter)
 	if err != nil {
 		return err
@@ -37,6 +48,16 @@ func runReviewRound(ctx context.Context, cmd *cli.Command) error {
 
 	st.PR, st.Archived = series.Pr, series.Archived
 
+	// a sweep starts a series of its own, so a directory holding any round
+	// already belongs to other work
+	if sweep.Branch != "" && st.Latest != "" && st.Decline == "" {
+		st.Decline, st.Round, st.Path, st.Branch = findings.Started, 0, "", sweep.Branch
+	}
+
+	return writeRounds(cmd, st)
+}
+
+func writeRounds(cmd *cli.Command, st findings.Status) error {
 	if cmd.Bool("json") {
 		if err := ui.JSON(cmd.Writer, st); err != nil {
 			return err
@@ -65,8 +86,16 @@ func roundsDoc(st findings.Status) string {
 	row("archive", st.Archived)
 	row("latest", st.Latest)
 	row("pr", st.PR)
+	row("branch", st.Branch)
 
 	switch st.Decline {
+	case findings.OnDefault:
+		row("decline", "a sweep does not run on the default branch: git switch -c "+st.Branch)
+	case findings.Swept:
+		row("decline", st.Detail+": run the sweep on its own branch (git switch -c "+st.Branch+")")
+	case findings.Started:
+		row("decline", "a sweep starts its own series, and this directory holds a round: "+
+			"run it on a fresh branch (git switch -c "+st.Branch+")")
 	case findings.Merged:
 		row("decline", "already merged, nothing to review")
 	case findings.Unsettled:

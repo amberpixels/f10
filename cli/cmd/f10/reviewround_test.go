@@ -7,12 +7,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/findings"
 	"github.com/amberpixels/f10/cli/internal/finish"
+	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -161,12 +163,12 @@ func squashOntoMain(t *testing.T, dir string) {
 }
 
 // hostGH puts a fake gh first on PATH that reports PR #7 in state.
-func hostGH(t *testing.T, state string) {
+func hostGH(t *testing.T, prState string) {
 	t.Helper()
 
 	bin := t.TempDir()
 	gh := "#!/bin/sh\ncase \"$1 $2\" in\n" +
-		"\"pr view\") echo '{\"number\":7,\"state\":\"" + state + "\"}' ;;\n" +
+		"\"pr view\") echo '{\"number\":7,\"state\":\"" + prState + "\"}' ;;\n" +
 		"\"pr list\") echo '[]' ;;\nesac\n"
 
 	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte(gh), 0o700); err != nil {
@@ -386,5 +388,121 @@ func TestReviewRoundGivesAFreshBranchRoundOne(t *testing.T) {
 
 	if out, err := runRound(t, repo); err != nil || !strings.Contains(out, "round:   1") {
 		t.Errorf("got %v:\n%s\nwant round 1", err, out)
+	}
+}
+
+// sweepRepo is roundRepo's project on main, tagged v1, with two tasks
+// shipped after the tag: DM-2 by its Task: trailer, DM-3 by its subject.
+func sweepRepo(t *testing.T) string {
+	t.Helper()
+
+	dir := roundRepo(t)
+	git(t, dir, "switch", "-q", "main")
+	git(t, dir, "tag", "v1")
+	git(t, dir, "commit", "-q", "--allow-empty", "-m", "Count per key", "-m", "Task: DM-2")
+	git(t, dir, "commit", "-q", "--allow-empty", "-m", "DM-3: reject excess")
+
+	return dir
+}
+
+func sweepBranchName(t *testing.T, repo string) string {
+	t.Helper()
+
+	return "sweep/v1-to-" + strings.TrimSpace(git(t, repo, "rev-parse", "--short=7", "HEAD"))
+}
+
+// A sweep on the default branch declines and names the branch to run it on.
+func TestReviewRoundSweepOnDefaultBranch(t *testing.T) {
+	repo := sweepRepo(t)
+
+	out, err := runRound(t, repo, "--since", "v1")
+	wantDecline(t, out, err, "not run on the default branch")
+
+	if want := "branch:  " + sweepBranchName(t, repo); !strings.Contains(out, want) {
+		t.Errorf("output lacks %q:\n%s", want, out)
+	}
+}
+
+// A branch named for a swept task, or for the parent of one, declines, so
+// the sweep is never filed under a task it reviews.
+func TestReviewRoundSweepRefusesASweptTask(t *testing.T) {
+	for _, tc := range []struct{ name, branch, want string }{
+		{"a swept task", "DM-2/review", "DM-2 is one of the swept tasks"},
+		{"the parent of a swept task", "DM-1/review", "DM-1 is the parent of swept DM-3"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := sweepRepo(t)
+			driver := "#!/bin/sh\n[ \"$1 $2\" = 'children 1' ] || exit 3\n" +
+				"echo '[{\"id\":\"DM-3\",\"state\":\"closed\"}]'\n"
+
+			if err := os.WriteFile(filepath.Join(repo, ".f10", "driver"), []byte(driver), 0o700); err != nil {
+				t.Fatal(err)
+			}
+
+			git(t, repo, "switch", "-q", "-c", tc.branch)
+
+			out, err := runRound(t, repo, "--since", "v1")
+			wantDecline(t, out, err, tc.want)
+		})
+	}
+}
+
+// The sweep's own branch takes round one under the branch's name, and
+// declines once that directory holds a round.
+func TestReviewRoundSweepOnItsOwnBranch(t *testing.T) {
+	repo := sweepRepo(t)
+	git(t, repo, "switch", "-q", "-c", sweepBranchName(t, repo))
+
+	out, err := runRound(t, repo, "--since", "v1", "--json")
+	if err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+
+	var st findings.Status
+	if err := json.Unmarshal([]byte(out), &st); err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.HasPrefix(filepath.Base(st.Dir), "sweep-v1-to-") || st.Round != 1 {
+		t.Fatalf("got %+v, want round 1 under the sweep branch", st)
+	}
+
+	if err := os.MkdirAll(st.Dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(st.Path, []byte("task: sweep\nround: 1\nreviewer: local\nlens: coherence\n"+
+		"verdict: clean\n\n## Categories\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err = runRound(t, repo, "--since", "v1")
+	wantDecline(t, out, err, "a sweep starts its own series")
+}
+
+// A branch naming no task keys its findings by the branch, even when this
+// session's run recorded a task.
+func TestReviewRoundIgnoresTheSessionTask(t *testing.T) {
+	repo := tracedRepo(t, "sweep/a", "")
+	stateDir := t.TempDir()
+	t.Setenv("F10_STATE_DIR", stateDir)
+	t.Setenv("F10_SESSION_ID", "sess-1")
+
+	if err := (&state.Run{Session: "sess-1", Task: "DM-9"}).Save(t.Context(), stateDir, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := runRound(t, repo, "--json")
+	if err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+
+	var st findings.Status
+	if err := json.Unmarshal([]byte(out), &st); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := filepath.Base(st.Dir); got != "sweep-a" {
+		t.Errorf("dir = %s, want sweep-a", got)
 	}
 }

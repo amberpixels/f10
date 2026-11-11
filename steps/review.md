@@ -25,7 +25,7 @@ The argument only says which task the change belongs to:
 When the branch of that task or PR is not the current one, decline in one line.
 Name the worktree that holds the branch (`git worktree list`), or say that none does.
 That decline is a normal end.
-`since [<ref>]` reviews a range of tasks instead (**The coherence lens**), and its findings still land in the checked-out branch's directory.
+`since [<ref>]` reviews a range of tasks instead (**The coherence lens**), on a branch of the sweep's own.
 
 ## The findings file
 
@@ -306,10 +306,18 @@ Unlike the blind reviewer, it reads plans, because recorded intent is what tells
 **Range.**
 The range starts at the ref given, else at the last tag reachable from HEAD (`git describe --tags --abbrev=0`).
 With neither, decline in one line, asking for a ref.
-On the default branch, decline in one line, naming `f10 start` or a branch of its own.
-That is because resolve would land the fixes on the default branch, and two sweeps there would close its findings directory.
-The findings go to round one of the checked-out branch's directory (`f10 review round`), so `/f10:resolve` settles them as it settles any round.
-When that directory already holds a round, decline in one line, naming a fresh branch (`f10 start <a sweep task>`).
+Then run `f10 review round --since <ref>` before anything else.
+A sweep's findings, lore and PR are filed under whatever task the branch names, so the sweep needs a branch that no swept task owns.
+The command declines with exit 3 in three cases, and each decline's `branch:` row names the sweep's branch, `sweep/<ref>-to-<HEAD's short sha>`:
+
+- **On the default branch**, because resolve would commit the fixes straight to it.
+  With a clean tree, run `git switch -c <branch>` and the round again in one call, then go on.
+  A dirty tree declines in one line, because the switch would carry unrelated work onto the sweep's branch.
+- **On a branch whose task is swept, or is the parent of a swept task**, because the parent would then carry the sweep's findings, lore and PR.
+- **On a branch whose directory already holds a round**, because a sweep starts a series of its own.
+
+In the other two cases, print the `decline:` line and end.
+When the command does not decline, the findings go to round one of the sweep branch's directory, so `/f10:resolve` settles them as it settles any round.
 
 1. **The task map**, built by the main agent.
    Run one call: `git log <ref>..HEAD --format='%h%x09%(trailers:key=Task,valueonly,separator=%x2C)%x09%s'`.
@@ -371,6 +379,7 @@ Without the dial, round two runs only in one of two cases:
 
 - Round one was heavy: its resolve fixed six or more findings.
 - Round one is a `lens: coherence` sweep whose resolve recorded a `fix`, because no diff review has read that fix.
+  That round two reviews the fixes on the sweep's own branch, so the series and its PR both belong to the sweep.
 
 Otherwise, never run, suggest or offer a second round.
 A resolve that settles every finding, with verify green, ends the review.
