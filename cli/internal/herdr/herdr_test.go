@@ -128,7 +128,7 @@ func TestWorkspacesReadsTheListing(t *testing.T) {
 		shell.Result{Stdout: `{"id":"cli:workspace:list","result":{"type":"workspace_list","workspaces":[` +
 			`{"workspace_id":"wJA","label":"f10","focused":false,"agent_status":"done",` +
 			`"worktree":{"checkout_path":"/code/f10","is_linked_worktree":false}},` +
-			`{"workspace_id":"wJ2","label":"p44","focused":true}]}}`},
+			`{"workspace_id":"wJ2","label":"orb","focused":true}]}}`},
 	)
 
 	list, err := Workspaces(t.Context(), "/code/f10")
@@ -144,7 +144,7 @@ func TestWorkspacesReadsTheListing(t *testing.T) {
 		t.Errorf("first = %+v", list[0])
 	}
 
-	if list[1] != (Listed{ID: "wJ2", Label: "p44", Focused: true}) {
+	if list[1] != (Listed{ID: "wJ2", Label: "orb", Focused: true}) {
 		t.Errorf("second = %+v, want no path for a workspace without a worktree", list[1])
 	}
 

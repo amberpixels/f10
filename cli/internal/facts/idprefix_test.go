@@ -53,7 +53,7 @@ func TestProjectPrefix(t *testing.T) {
 		{name: "obsidian_daily.orbit", want: "ODO"},
 		{name: "My Project", want: "MP"},
 		// one word gives its first three characters, digit or not
-		{name: "runwell", want: "RUN"},
+		{name: "lantern", want: "LAN"},
 		{name: "herdr", want: "HER"},
 		{name: "d3rtyjson", want: "D3R"},
 		{name: "go", want: "GO"},

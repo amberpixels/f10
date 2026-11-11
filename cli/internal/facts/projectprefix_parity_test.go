@@ -18,7 +18,7 @@ func TestProjectPrefixParity(t *testing.T) {
 	script := bundleScript(t)
 
 	for _, name := range []string{
-		"f10", "r3", "git-undo", "notion-sdk-go", "runwell", "herdr", "d3rtyjson",
+		"f10", "r3", "git-undo", "notion-sdk-go", "lantern", "herdr", "d3rtyjson",
 		"obsidian_daily.orbit", "go", "x", "3d-tool", "f10-плагин",
 	} {
 		t.Run(name, func(t *testing.T) {
