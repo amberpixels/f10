@@ -25,10 +25,16 @@ func TestScaffoldSections(t *testing.T) {
 			name: "github checkout with a stack and a justfile",
 			lay:  &layout.Layout{Project: "demo", StorageRoot: "/repo/.f10"},
 			pb: &probe.Probes{
-				Host:   "github.com",
-				CLI:    probe.Signal{Value: "gh", Evidence: "well-known host github.com"},
-				Stack:  []probe.Signal{{Value: "Go", Evidence: "go.mod"}},
-				Verify: []probe.Signal{{Value: "just lint / just test", Evidence: "justfile"}},
+				Host:  "github.com",
+				CLI:   probe.Signal{Value: "gh", Evidence: "well-known host github.com"},
+				Stack: []probe.Signal{{Value: "Go", Evidence: "go.mod"}},
+				Verify: []probe.Signal{
+					{
+						Value:    "just lint / just test",
+						Commands: []string{"just lint", "just test"},
+						Evidence: "justfile",
+					},
+				},
 			},
 			wantSection: []string{"Project", "Tracker", "Hosting & PR", "Verify"},
 			wantOmitted: []string{"Roles", "Review", "Guardrails"},
@@ -175,10 +181,12 @@ func TestScaffoldRoundTrip(t *testing.T) {
 	t.Parallel()
 
 	detected := &probe.Probes{
-		Host:   "github.com",
-		CLI:    probe.Signal{Value: "gh", Evidence: "well-known host github.com"},
-		Stack:  []probe.Signal{{Value: "Go", Evidence: "go.mod"}},
-		Verify: []probe.Signal{{Value: "just lint / just test", Evidence: "justfile"}},
+		Host:  "github.com",
+		CLI:   probe.Signal{Value: "gh", Evidence: "well-known host github.com"},
+		Stack: []probe.Signal{{Value: "Go", Evidence: "go.mod"}},
+		Verify: []probe.Signal{
+			{Value: "just lint / just test", Commands: []string{"just lint", "just test"}, Evidence: "justfile"},
+		},
 		Review: &probe.Review{
 			Reviewer: "claude[bot]",
 			Trigger:  "automatic, manual",

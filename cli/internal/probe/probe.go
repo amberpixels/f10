@@ -20,6 +20,9 @@ import (
 type Signal struct {
 	Value    string `json:"value"`
 	Evidence string `json:"evidence"`
+	// Commands are a verify signal's commands, one each; Value joins them for
+	// display only, so nothing splits it back.
+	Commands []string `json:"-"`
 	// Judgment marks guidance rather than commands: a build file with no
 	// lint or test entry, or a bare stack. Never written into project.md.
 	Judgment bool `json:"judgment,omitempty"`
@@ -243,7 +246,7 @@ func verifySignals(root string, stack []Signal) []Signal {
 					Judgment: true,
 				})
 			} else {
-				out = append(out, Signal{Value: strings.Join(cmds, " / "), Evidence: f})
+				out = append(out, Signal{Value: strings.Join(cmds, " / "), Commands: cmds, Evidence: f})
 			}
 
 			break

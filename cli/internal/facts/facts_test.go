@@ -3,11 +3,13 @@ package facts
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 const mainProjectMD = `# demo project
@@ -280,4 +282,30 @@ func readFile(t *testing.T, path string) []byte {
 	}
 
 	return data
+}
+
+// The drive runs a detected verify one command at a time, so the commands
+// must leave the build file as a list, not as the field's display string.
+func TestBuildDetectedVerifyCommands(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if err := os.WriteFile(
+		filepath.Join(dir, "justfile"),
+		[]byte("lint:\n    true\ntest:\n    true\n"),
+		0o600,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	lay := &layout.Layout{Project: "demo", CheckoutRoot: dir, StorageRoot: storage.InRepo(dir)}
+	eff := Build(lay, probe.Run(t.Context(), lay), "")
+
+	if f := fieldByName(t, eff, "Verify"); f.Origin.Kind != OriginDetected || f.Value != "just lint / just test" {
+		t.Errorf("Verify = %q (%s), want the two recipes, detected", f.Value, f.Origin)
+	}
+
+	if want := []string{"just lint", "just test"}; !slices.Equal(eff.VerifyCommands, want) {
+		t.Errorf("VerifyCommands = %q, want %q", eff.VerifyCommands, want)
+	}
 }

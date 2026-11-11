@@ -227,6 +227,11 @@ func (in WatchInput) ReadTargets(ctx context.Context, tasks []WatchedTask, store
 			continue
 		}
 
+		// a catchup in flight is read from git whatever the mark says
+		if (rec == nil || rec.Failed) && in.parked(t) {
+			continue
+		}
+
 		want = append(want, i)
 	}
 
@@ -300,6 +305,14 @@ func (in WatchInput) handedBack(ctx context.Context, branch string) bool {
 	return v == "false"
 }
 
+// parked reports an idle agent whose last turn launched background work (a
+// verify it may come back to). The mark outlives work that already ended, so
+// it never holds back a catchup git shows clean: no catchup is sent under it,
+// and one that did not end clean is not failed under it.
+func (in WatchInput) parked(t WatchedTask) bool {
+	return backgroundPending(t.Background, in.Now())
+}
+
 func (in WatchInput) catchupStep(ctx context.Context, task WatchedTask, store map[string]WatchReport) *WatchReport {
 	if !task.fetched || task.Agent == agentctl.StatusWorking || WaitingOnAsk(task.Run) {
 		return nil
@@ -314,6 +327,10 @@ func (in WatchInput) catchupStep(ctx context.Context, task WatchedTask, store ma
 	rec := store[task.ID].Catchup
 	if rec != nil && !rec.Failed {
 		return in.settleCatchup(ctx, task, rec, store)
+	}
+
+	if in.parked(task) {
+		return nil
 	}
 
 	return in.sendCatchup(ctx, task, rec, store)
@@ -345,6 +362,10 @@ func (in WatchInput) settleCatchup(
 	}
 
 	if reason != "" {
+		if in.parked(task) {
+			return nil // the turn may still come back to it
+		}
+
 		rec.Failed = true
 		in.failedAt(ctx, task, rec)
 
@@ -666,9 +687,9 @@ type WatchedTask struct {
 	HostErr  error      // the host did not answer for its request this pass
 	LocalSHA string     // the branch's tip
 	Run      *state.Run // the newest run reported from its worktree
-	// background is when run's session launched background work still
+	// Background is when run's session launched background work still
 	// pending, the zero time for none
-	background time.Time
+	Background time.Time
 	Agent      agentctl.Status // "" with no workspace, or no listing
 	Listed     bool            // the workspaces were listed, so "" is no workspace
 	Ws         string          // its workspace, for a message
@@ -814,7 +835,7 @@ func DecideWatch(t WatchedTask, mode string, now time.Time) (*WatchReport, bool)
 	updated := run.Updated.UTC().Format(time.RFC3339)
 
 	for _, phase := range []string{"ship", "plan"} {
-		if Stalled(t.Agent, run, phase, time.Time{}, now.Sub(run.Updated), watchStallGrace, t.background, now) {
+		if Stalled(t.Agent, run, phase, time.Time{}, now.Sub(run.Updated), watchStallGrace, t.Background, now) {
 			return &WatchReport{
 				Kind: WatchStalled,
 				Text: fmt.Sprintf("agent idle while its run says %s %s", phase, run.PhaseText(phase)),
@@ -924,7 +945,7 @@ func CollectWatched(ctx context.Context, in WatchInput) ([]WatchedTask, int, err
 
 		if runs := statusview.InRoot(live, path); len(runs) > 0 {
 			task.Run = runs[0]
-			task.background = backgroundAt(in.StateDir, task.Run)
+			task.Background = backgroundAt(in.StateDir, task.Run)
 		}
 
 		if ws := finish.WorkspaceAt(wss, path); ws != nil {

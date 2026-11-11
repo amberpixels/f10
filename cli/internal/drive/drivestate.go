@@ -204,24 +204,39 @@ func (in *DriveInput) attempt(
 ) error {
 	run, _ := in.run(r.O.Path) // a run the state dir cannot give leaves the run out
 
-	return in.AttemptAt(r, action, in.readState(ctx, r, r.current(run)).Fingerprint(), halt)
+	fp := in.readState(ctx, r, r.current(run)).Fingerprint()
+
+	// what a catchup turn left counts apart from its conflict and its red
+	// verify, or the two taking turns would start each other's count over
+	if action == "catchup" {
+		return in.count(r, &r.leftAttempts, action, fp, halt)
+	}
+
+	return in.AttemptAt(r, action, fp, halt)
 }
 
 // AttemptAt is attempt with the state to compare given: a catchup's is the
 // conflict it left, since a catchup that merges moves the head without
 // progress, and the reason it gives changes wording between catchups.
 func (in *DriveInput) AttemptAt(r *DriveRun, action, fp string, halt DriveResult) error {
+	return in.count(r, &r.attempts, action, fp, halt)
+}
+
+// count adds a failure to list, which holds the failures in a row at one
+// state, and gives halt once the limit is reached.
+func (in *DriveInput) count(r *DriveRun, list *[]attempt, action, fp string, halt DriveResult) error {
 	reason := halt.Reason
 	restarted := false
 
-	if n := len(r.attempts); n > 0 && (r.attempts[n-1].Action != action || r.attempts[n-1].State != fp) {
-		restarted = r.attempts[n-1].Action == action
-		r.attempts = nil
+	if n := len(*list); n > 0 && ((*list)[n-1].Action != action || (*list)[n-1].State != fp) {
+		restarted = (*list)[n-1].Action == action
+		*list = nil
 	}
 
-	r.attempts = append(r.attempts, attempt{Action: action, State: fp, Reason: reason, At: in.Now()})
+	*list = append(*list, attempt{Action: action, State: fp, Reason: reason, At: in.Now()})
+	attempts := *list
 
-	if len(r.attempts) < AttemptLimit {
+	if len(attempts) < AttemptLimit {
 		// the count is of failures in a row with nothing changed, never of
 		// turns, so a restart says why it reads 1 again
 		if restarted {
@@ -230,23 +245,23 @@ func (in *DriveInput) AttemptAt(r *DriveRun, action, fp string, halt DriveResult
 				in.id(r.Task.Ref.ID), action, AttemptLimit, reason)
 		} else {
 			fmt.Fprintf(in.Out, "%s %s: failed, %d of %d in a row with nothing changed, trying again: %s\n",
-				in.id(r.Task.Ref.ID), action, len(r.attempts), AttemptLimit, reason)
+				in.id(r.Task.Ref.ID), action, len(attempts), AttemptLimit, reason)
 		}
 
 		return nil
 	}
 
 	res := halt
-	if len(r.attempts) > 1 {
+	if len(attempts) > 1 {
 		// the count is the drive's own word on the halt, beside any the run gave
 		res.fromRun = false
 
 		res.Lines = append(
 			res.Lines,
-			fmt.Sprintf("  %s failed %d times in a row with nothing changed:", action, len(r.attempts)),
+			fmt.Sprintf("  %s failed %d times in a row with nothing changed:", action, len(attempts)),
 		)
 
-		for i, a := range r.attempts {
+		for i, a := range attempts {
 			res.Lines = append(
 				res.Lines,
 				fmt.Sprintf("  attempt %d at %s: %s", i+1, a.At.Format(time.TimeOnly), a.Reason),
@@ -254,7 +269,7 @@ func (in *DriveInput) AttemptAt(r *DriveRun, action, fp string, halt DriveResult
 		}
 	}
 
-	res.Attempts = slices.Clone(r.attempts)
+	res.Attempts = slices.Clone(attempts)
 
 	return endWith(res)
 }
@@ -273,7 +288,7 @@ func (in *DriveInput) failed(ctx context.Context, r *DriveRun, halt DriveResult)
 
 // clearAttempts starts the count over: the task moved.
 func (*DriveInput) clearAttempts(r *DriveRun) {
-	r.attempts = nil
+	r.attempts, r.leftAttempts = nil, nil
 }
 
 // settle reads the state at a turn's end its run did not explain: a skill
@@ -291,15 +306,13 @@ func (in *DriveInput) settle(
 		return in.catchupSettled(ctx, r, retry)
 	}
 
-	if r.Skill != "catchup" {
-		passed, err := in.reconcile(ctx, r, in.readState(ctx, r, run))
-		if err != nil {
-			return err
-		}
+	passed, err := in.reconcile(ctx, r, in.readState(ctx, r, run))
+	if err != nil {
+		return err
+	}
 
-		if passed > 0 {
-			return in.Next(ctx, r)
-		}
+	if passed > 0 {
+		return in.Next(ctx, r)
 	}
 
 	if !retry {
