@@ -32,7 +32,7 @@ var Table = []Rule{
 	{Prefix: "internal/shell", Rank: -2},
 	{Prefix: "internal/gitx", Rank: -2},
 	{Prefix: "internal/flock", Rank: -2},
-	{Prefix: "internal/seam", Rank: -2},
+	{Prefix: "internal/seam", Rank: -3}, // the test swap, which every package's tests may import
 	{Prefix: "internal/buildinfo", Rank: -2},
 	{Prefix: "internal/calendar", Rank: -2},
 	{Prefix: "internal/mdline", Rank: -2},

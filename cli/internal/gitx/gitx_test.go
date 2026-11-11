@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/amberpixels/f10/cli/internal/seam"
 )
 
 // script answers Exec from a map keyed by the joined arguments and records
@@ -19,8 +21,7 @@ func script(t *testing.T, answers map[string]string) *[]string {
 
 	var calls []string
 
-	prev := Exec
-	Exec = func(_ context.Context, _ string, args ...string) (string, error) {
+	seam.Swap(t, &Exec, func(_ context.Context, _ string, args ...string) (string, error) {
 		key := strings.Join(args, " ")
 		calls = append(calls, key)
 
@@ -30,9 +31,7 @@ func script(t *testing.T, answers map[string]string) *[]string {
 		}
 
 		return out, nil
-	}
-
-	t.Cleanup(func() { Exec = prev })
+	})
 
 	return &calls
 }
@@ -365,8 +364,7 @@ func TestUnsetConfig(t *testing.T) {
 // Conflicts reads merge-tree's stage lines on exit 1 into one Conflict per
 // path; a clean merge is nil, and a loud exit is an error.
 func TestConflictsNamesThePathsAndTheirBlobs(t *testing.T) {
-	prev := Exec
-	Exec = func(_ context.Context, _ string, args ...string) (string, error) {
+	seam.Swap(t, &Exec, func(_ context.Context, _ string, args ...string) (string, error) {
 		switch args[len(args)-1] {
 		case "clean":
 			return "tree", nil
@@ -377,9 +375,7 @@ func TestConflictsNamesThePathsAndTheirBlobs(t *testing.T) {
 				"100644 b1 1\tb.go\n100644 b2 2\tb.go\n100644 b3 3\tb.go\n" +
 				"100644 a2 2\ta.go\n100644 a3 3\ta.go\n"}
 		}
-	}
-
-	t.Cleanup(func() { Exec = prev })
+	})
 
 	if conflicts, err := Conflicts(t.Context(), ".", "main", "clean"); conflicts != nil || err != nil {
 		t.Errorf("a clean merge = %v, %v, want nil", conflicts, err)
@@ -509,18 +505,15 @@ func TestPullFFFailsAtOnceOnAnythingElse(t *testing.T) {
 func TestFetchIntoRetriesALostRefLock(t *testing.T) {
 	var calls int
 
-	prev, waits := Exec, pullLockWaits
-	Exec = func(_ context.Context, _ string, args ...string) (string, error) {
+	seam.Swap(t, &Exec, func(_ context.Context, _ string, args ...string) (string, error) {
 		calls++
 		if calls == 1 {
 			return "", &ExitError{Args: args, Code: 1, Stderr: "error: cannot lock ref 'refs/remotes/origin/main'"}
 		}
 
 		return "", nil
-	}
-	pullLockWaits = []time.Duration{time.Millisecond}
-
-	t.Cleanup(func() { Exec, pullLockWaits = prev, waits })
+	})
+	seam.Swap(t, &pullLockWaits, []time.Duration{time.Millisecond})
 
 	if err := FetchInto(t.Context(), "/repo", "main"); err != nil || calls != 2 {
 		t.Errorf("FetchInto = %v after %d calls, want success on the retry", err, calls)

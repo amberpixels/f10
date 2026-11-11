@@ -209,10 +209,8 @@ var busy = shell.Result{
 func shortWait(t *testing.T, deadline time.Duration) {
 	t.Helper()
 
-	prevDeadline, prevPoll := StartDeadline, StartPoll
-	StartDeadline, StartPoll = deadline, time.Millisecond
-
-	t.Cleanup(func() { StartDeadline, StartPoll = prevDeadline, prevPoll })
+	seam.Swap(t, &StartDeadline, deadline)
+	seam.Swap(t, &StartPoll, time.Millisecond)
 }
 
 func TestErrorCarriesCodeAndMessage(t *testing.T) {
@@ -374,10 +372,8 @@ func TestStartAgentReportsTheWait(t *testing.T) {
 	fake(t, busy)
 	shortWait(t, 300*time.Millisecond)
 
-	prevPoll, prevReport := StartPoll, StartReport
-	StartPoll, StartReport = 5*time.Millisecond, 50*time.Millisecond
-
-	t.Cleanup(func() { StartPoll, StartReport = prevPoll, prevReport })
+	seam.Swap(t, &StartPoll, 5*time.Millisecond)
+	seam.Swap(t, &StartReport, 50*time.Millisecond)
 
 	var waits []time.Duration
 

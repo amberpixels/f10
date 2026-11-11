@@ -15,6 +15,7 @@ import (
 
 	boardcmd "github.com/amberpixels/f10/cli/internal/command/board"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
+	"github.com/amberpixels/f10/cli/internal/statusview"
 )
 
 // The HTML report checked on the recorded boards: the embedded JSON is the
@@ -503,5 +504,12 @@ func TestBoardPageColorsFollowTheTerminal(t *testing.T) {
 
 	if strings.Contains(page, "__STAGE_COLORS__") {
 		t.Error("the colors placeholder was left in the page")
+	}
+
+	// light, dark by preference, and dark by choice: each defines every color
+	for _, color := range statusview.StageColors() {
+		if n := strings.Count(page, "--"+color+":"); n != 3 {
+			t.Errorf("--%s is defined %d times, want once per theme (3)", color, n)
+		}
 	}
 }

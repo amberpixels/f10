@@ -127,6 +127,11 @@ here="$(canon "${here:-$(pwd -P)}")"
 main="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree /{print $2; exit}')"
 if [ -n "${main:-}" ]; then main="$(canon "$main")"; fi
 proj="$(basename "${main:-$here}")"
+# the user's own f10 dir: F10_USER_DIR when set, as the binary reads it, else ~/.f10
+user_dir="${F10_USER_DIR:-$HOME/.f10}"
+user_dir_shown="$user_dir"
+# shellcheck disable=SC2088 # shown to the reader, never expanded
+[ -z "${F10_USER_DIR:-}" ] && user_dir_shown="~/.f10"
 # in-repo storage is main's .f10 for every checkout, so removing a worktree loses nothing
 storage="${main:-$here}/.f10"
 
@@ -176,11 +181,11 @@ elif [ -n "$base_instr" ]; then
   l1_dir="$base_instr"
   src="$base_label ($base_root)"
   [ "$here" != "$base_root" ] && src="$src via worktree fallback"
-elif [ -d "$HOME/.f10/$proj/instructions" ]; then
+elif [ -d "$user_dir/$proj/instructions" ]; then
   l1_label="out-of-tree"
-  l1_dir="$HOME/.f10/$proj/instructions"
-  src="out-of-tree (~/.f10/$proj)"
-  storage="$HOME/.f10/$proj"
+  l1_dir="$user_dir/$proj/instructions"
+  src="out-of-tree ($user_dir_shown/$proj)"
+  storage="$user_dir/$proj"
 fi
 
 # the .md basenames a layer holds, requested or not. Without it an unrequested overlay is

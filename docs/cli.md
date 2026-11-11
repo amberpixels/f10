@@ -141,7 +141,7 @@ A step scoped by task kind (`plan.bug`) prints a line per kind unless `--kind` p
 A key or a profile the vocabulary refuses is a problem naming the file, as a `project.md` fact is: it stops every command that acts on facts but `f10 config`, `f10 init` and `f10 doctor`, which report it.
 
 **Your file**, `~/.f10/agents.md`, YAML frontmatter then free prose, holds the `agents:` map every project starts from (`docs/project-setup.md` → Agents).
-`F10_USER_DIR` names another directory than `~/.f10` for it and the other user files, which the eval runner uses to keep a measured run off your own map.
+`F10_USER_DIR` names another directory than `~/.f10` for it, the other user files, the ledger, the daemon's run dir and out-of-tree project roots, which the eval runner uses to keep a measured run off your own map.
 
 ## Start
 
