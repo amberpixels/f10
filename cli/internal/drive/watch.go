@@ -25,6 +25,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/launch"
+	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/statusview"
@@ -963,6 +964,18 @@ func CollectWatched(ctx context.Context, in WatchInput) ([]WatchedTask, int, err
 	return tasks, len(branches), nil
 }
 
+// WatcherFinishInput is the finish the watcher runs: merged requests only,
+// and a bundle's riders closed as the PR body says, since no one is asked.
+func WatcherFinishInput(t *target.Target, main string, h hostops.Host, r ref.Ref, branch string) finish.FinishInput {
+	in := finish.InputFor(t, main, h, r)
+	in.Branch, in.Flags.MergedOnly, in.FollowBody = branch, true, true
+	// never ProcessPlace: the self-close path would end the daemon, and its
+	// directory may be a worktree since removed, where getwd fails
+	in.Cwd = main
+
+	return in
+}
+
 // WatcherFinish holds the lease as the watcher and refuses anything but a
 // merged request. It writes no drive finish record: the board would read
 // the watcher as a drive.
@@ -989,13 +1002,7 @@ func WatcherFinish(ctx context.Context, w io.Writer, t *target.Target, main, roo
 
 	var buf bytes.Buffer
 
-	in := finish.InputFor(t, main, h, r)
-	in.Branch, in.Flags.MergedOnly = task.Branch, true
-	// never ProcessPlace: the self-close path would end the daemon, and its
-	// directory may be a worktree since removed, where getwd fails
-	in.Cwd = main
-
-	err = finish.Finish(ctx, &buf, in)
+	err = finish.Finish(ctx, &buf, WatcherFinishInput(t, main, h, r, task.Branch))
 
 	for line := range strings.SplitSeq(strings.TrimSpace(buf.String()), "\n") {
 		if line != "" {

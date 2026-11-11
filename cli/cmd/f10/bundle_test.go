@@ -348,7 +348,7 @@ func TestFinishKeepsARiderOpen(t *testing.T) {
 // After a merge that closed every member, a rider left open is reopened.
 func TestFinishReopensAKeptRiderAfterTheMerge(t *testing.T) {
 	fx := newFinishFixture(t)
-	fx.f.script(ghView, prMerged)
+	fx.f.script(ghView, mergedWithBody("Closes #1\nCloses #2"))
 	fx.f.script(lsRem, "")
 	fx.f.script("gh issue reopen 2", "")
 	fx.in.Task, fx.in.Close, fx.in.HostCloses = bundle12, []string{}, true
@@ -360,6 +360,125 @@ func TestFinishReopensAKeptRiderAfterTheMerge(t *testing.T) {
 
 	if !fx.f.called("gh issue reopen 2") || !strings.Contains(out, "reopened GH-2") {
 		t.Errorf("GH-2 was not reopened: %v\n%s", fx.f.calls, out)
+	}
+}
+
+func jsonBody(body string) string { return `"body":"` + strings.ReplaceAll(body, "\n", `\n`) + `"` }
+
+func openWithBody(body string) string {
+	return `{"state":"OPEN","url":"https://gh/pr/9","number":9,"baseRefName":"main",` + jsonBody(body) + `}`
+}
+
+func mergedWithBody(body string) string {
+	return `{"state":"MERGED","url":"https://gh/pr/9","number":9,"baseRefName":"main",` +
+		`"mergeCommit":{"oid":"m3rge"},` + jsonBody(body) + `}`
+}
+
+// The drive and the watcher close the riders the PR body closes and leave
+// those under Part of open, with no body edit before the merge and no
+// reopen after it.
+func TestFinishFollowsTheBody(t *testing.T) {
+	for name, tc := range map[string]struct {
+		body   string
+		merged bool
+		want   string
+	}{
+		"every rider closes":           {body: "Closes #1\nCloses #2", want: "closed:"},
+		"a part-of rider stays open":   {body: "Closes #1\nPart of #2", want: "left open: GH-2"},
+		"after the merge, closed":      {body: "Closes #1\nCloses #2", merged: true, want: "closed:       GH-2"},
+		"after the merge, part of":     {body: "Closes #1\nPart of #2", merged: true, want: "left open: GH-2"},
+		"a rider the body never names": {body: "Closes #1", want: "left open: GH-2"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			fx := newFinishFixture(t)
+			fx.in.Task, fx.in.HostCloses, fx.in.FollowBody = bundle12, true, true
+
+			if tc.merged {
+				fx.in.Flags.MergedOnly = true
+				fx.f.script(ghView, mergedWithBody(tc.body))
+				fx.f.script(lsRem, "")
+			} else {
+				fx.f.script(ghView, openWithBody(tc.body), mergedWithBody(tc.body))
+				fx.f.script(ghRepo, allowAll)
+				fx.f.script(ghMerge, "")
+				fx.f.script("gh pr view GH-1 --json body", `{`+jsonBody(tc.body)+`}`)
+			}
+
+			out, err := fx.run(t)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if fx.f.called("gh pr edit") || fx.f.called("gh issue reopen") {
+				t.Errorf("the body's choice was overridden: %v", fx.f.calls)
+			}
+
+			if !strings.Contains(out, tc.want) {
+				t.Errorf("report missing %q:\n%s", tc.want, out)
+			}
+		})
+	}
+}
+
+// After a merge that left a rider under Part of, --close closes it, and the
+// report says the finish did it.
+func TestFinishClosesAChosenRiderTheMergeLeftOpen(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.f.script(ghView, mergedWithBody("Closes #1\nPart of #2"))
+	fx.f.script(lsRem, "")
+	fx.f.script("gh issue close 2", "")
+	fx.in.Task, fx.in.Close, fx.in.HostCloses = bundle12, []string{"GH-2"}, true
+
+	out, err := fx.run(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !fx.f.called("gh issue close 2") || !strings.Contains(out, "closed GH-2, which the merge had left open") {
+		t.Errorf("GH-2 was not closed: %v\n%s", fx.f.calls, out)
+	}
+}
+
+// A tracker that is not the host never reads the body, so the question
+// offers no body choice and the drive leaves every rider open.
+func TestFinishOnAnotherTrackerIgnoresTheBody(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.f.script(ghView, openWithBody("Closes #2"))
+	fx.f.script(ghRepo, allowAll)
+	fx.in.Task = bundle12
+
+	_, err := fx.run(t)
+	if err == nil || strings.Contains(err.Error(), "PR body") {
+		t.Errorf("err = %v, want the question without a body choice", err)
+	}
+}
+
+// A manual finish still asks, and the question names the body's choice.
+func TestFinishAsksWithTheBodysChoice(t *testing.T) {
+	for body, want := range map[string]string{
+		"Closes #1\nCloses #2":  "the PR body closes GH-2: --close GH-2 follows it",
+		"Closes #1\nPart of #2": "the PR body closes none of them: --close none follows it",
+	} {
+		fx := newFinishFixture(t)
+		fx.f.script(ghView, openWithBody(body))
+		fx.f.script(ghRepo, allowAll)
+		fx.in.Task, fx.in.HostCloses = bundle12, true
+
+		_, err := fx.run(t)
+
+		var re finish.RidersError
+		if !errors.As(err, &re) || !strings.Contains(err.Error(), want) {
+			t.Errorf("body %q: err = %v, want %q", body, err, want)
+		}
+	}
+}
+
+func TestBodyCloses(t *testing.T) {
+	riders := []ref.Ref{{ID: "GH-2", Number: "2"}, {ID: "GH-3", Number: "3"}, {ID: "GH-4", Number: "4"}}
+	body := "Closes #1\nfixes https://github.com/a/b/issues/2\nPart of #3\nCloses #44"
+
+	if got := finish.BodyCloses(body, riders); !slices.Equal(got, []string{"GH-2"}) {
+		t.Errorf("BodyCloses = %v, want [GH-2]", got)
 	}
 }
 

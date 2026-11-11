@@ -12,6 +12,7 @@ import (
 	prcmd "github.com/amberpixels/f10/cli/internal/command/pr"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/seam"
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
@@ -293,5 +294,26 @@ func TestCreatePullReadsTheURLBack(t *testing.T) {
 		forge.NewPull{Head: "feat", Base: "base", Title: "T", Body: "B", Labels: []string{"x"}, Draft: true})
 	if err != nil || got != "https://gh/o/r/pull/9" {
 		t.Errorf("createPull = %q, %v", got, err)
+	}
+}
+
+// pr create and pr edit name a bundle's riders after the lead id, whatever
+// the draft said; a task alone, no task and a body-only edit keep the title.
+func TestPullTitle(t *testing.T) {
+	bundle := &ref.Ref{ID: "GH-1", Number: "1", Bundle: []string{"GH-1", "GH-2", "GH-3"}}
+
+	for _, tc := range []struct {
+		title string
+		task  *ref.Ref
+		want  string
+	}{
+		{"GH-1: Lead", bundle, "GH-1 (+GH-2, GH-3): Lead"},
+		{"GH-1: Lead", &ref.Ref{ID: "GH-1", Number: "1"}, "GH-1: Lead"},
+		{"GH-1: Lead", nil, "GH-1: Lead"},
+		{"", bundle, ""},
+	} {
+		if got := prcmd.PullTitle(tc.title, tc.task); got != tc.want {
+			t.Errorf("PullTitle(%q) = %q, want %q", tc.title, got, tc.want)
+		}
 	}
 }

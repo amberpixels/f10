@@ -3,6 +3,8 @@ package finish
 import (
 	"fmt"
 	"regexp"
+
+	"github.com/amberpixels/f10/cli/internal/ref"
 )
 
 // issueRef is an issue by `#n` or by its url; the number's pattern goes in
@@ -19,6 +21,21 @@ var ClosingRE = regexp.MustCompile(fmt.Sprintf(closingKeyword, `\d+`))
 
 // ClosingLine is the line a commit or a PR body closes issue number with.
 func ClosingLine(number string) string { return "Closes #" + number }
+
+// BodyCloses is the riders body closes on merge, in bundle order: a rider
+// under `Part of`, or not named at all, stays open.
+func BodyCloses(body string, riders []ref.Ref) []string {
+	closing := []string{}
+
+	for _, r := range riders {
+		re := regexp.MustCompile(fmt.Sprintf(closingKeyword, regexp.QuoteMeta(r.Number)))
+		if re.MatchString(body) {
+			closing = append(closing, r.ID)
+		}
+	}
+
+	return closing
+}
 
 // KeepOpen turns `Closes #12` into `Part of #12`, so the merge leaves it open.
 func KeepOpen(body, number string) string {

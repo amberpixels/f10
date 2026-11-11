@@ -35,6 +35,10 @@ func Finish(ctx context.Context, w io.Writer, in FinishInput) error {
 		return err
 	}
 
+	if d.close != nil {
+		in.Close = d.close
+	}
+
 	errs := &cleanupErrs{landed: d.kind.landed()}
 
 	l, err := land(ctx, w, in, d, errs)
@@ -68,7 +72,8 @@ type finishDecision struct {
 	// the task's workspace and main's; self is this process running in the task's
 	ws, mainWS *agentctl.Workspace
 	self       bool
-	loreNote   string // a failing lore check under lore_gate: warn
+	loreNote   string   // a failing lore check under lore_gate: warn
+	close      []string // the riders the merge closes, once settleClose decided
 }
 
 // stays names what a failure before the removal keeps for the rerun.
@@ -189,7 +194,9 @@ func decideFinish(ctx context.Context, in FinishInput) (finishDecision, error) {
 		return d, err
 	}
 
-	return d, refuseRiders(in)
+	err = settleClose(in, &d, unpushed)
+
+	return d, err
 }
 
 // decideGone takes over a branch with no worktree only when its PR merged;
@@ -212,16 +219,35 @@ func decideGone(ctx context.Context, in FinishInput, gone goneError) (finishDeci
 
 	d := finishDecision{kind: landingGone, place: noWorktree, name: gone.branch, def: def, pull: p}
 
-	return d, refuseRiders(in)
+	err = settleClose(in, &d, false)
+
+	return d, err
 }
 
-// refuseRiders stops a bundle's merge until the riders it closes are known.
-func refuseRiders(in FinishInput) error {
-	if len(in.Task.Riders()) > 0 && in.Close == nil {
-		return RidersError{task: in.Task}
+// settleClose decides which riders a bundle's merge closes: --close when
+// given, else the PR body's keywords under FollowBody. Without either it
+// refuses, naming the body's choice, so a person decides before the merge.
+func settleClose(in FinishInput, d *finishDecision, unpushed bool) error {
+	if len(in.Task.Riders()) == 0 || in.Close != nil {
+		return nil
 	}
 
-	return nil
+	// a branch never pushed has no body, and on a tracker that is not the
+	// host the body names no rider, so either way the riders stay open
+	read := !unpushed && in.HostCloses
+
+	body := []string{}
+	if read {
+		body = BodyCloses(d.pull.Body, in.Task.MemberRefs()[1:])
+	}
+
+	if in.FollowBody {
+		d.close = body
+
+		return nil
+	}
+
+	return RidersError{task: in.Task, body: body, read: read}
 }
 
 // cleanupErrs collects the failures after a merge: the merge has landed, so

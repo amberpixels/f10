@@ -100,8 +100,11 @@ type FinishInput struct {
 	// Title reads the task's title for a squash merged here, nil for none
 	Title func(context.Context) (string, error)
 	// Close is the riders the PR delivers, closed with the lead; nil, no
-	// --close answer yet, refuses a bundle's merge
+	// --close answer yet, refuses a bundle's merge unless FollowBody
 	Close []string
+	// FollowBody takes a nil Close from the PR body's closing keywords, for
+	// the drive and the watcher, which have no one to ask
+	FollowBody bool
 	// Sweep runs the janitor before the workspace closes, since a self-close
 	// ends the process; nil for none
 	Sweep func(context.Context)

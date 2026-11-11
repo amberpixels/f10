@@ -73,7 +73,11 @@ func Command() *cli.Command {
 				Hidden:   true,
 				Category: command.Plumbing,
 				Flags: []cli.Flag{
-					&cli.StringFlag{Name: "title", Usage: "the `TITLE`", Required: true},
+					&cli.StringFlag{
+						Name:     "title",
+						Usage:    "the `TITLE`; a bundle's riders are added after the lead id",
+						Required: true,
+					},
 					&cli.StringFlag{Name: "body-file", Usage: "the body from `FILE`; - reads stdin", Required: true},
 					&cli.StringSliceFlag{Name: "label", Usage: "a `LABEL`; repeat for several"},
 					&cli.StringSliceFlag{Name: "assignee", Usage: "an `ASSIGNEE`; repeat for several"},
@@ -88,7 +92,10 @@ func Command() *cli.Command {
 				Hidden:    true,
 				Category:  command.Plumbing,
 				Flags: []cli.Flag{
-					&cli.StringFlag{Name: "title", Usage: "the new `TITLE`"},
+					&cli.StringFlag{
+						Name:  "title",
+						Usage: "the new `TITLE`; a bundle's riders are added after the lead id",
+					},
 					&cli.StringFlag{Name: "body-file", Usage: "the new body from `FILE`; - reads stdin"},
 				},
 				Action: runPREdit,
