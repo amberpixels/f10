@@ -1,4 +1,4 @@
-package drives
+package drivestore
 
 // Live is a drive neither cancelled nor done, and whether its driver runs:
 // holds the drive's lease. A stopped drive still lists its tasks.

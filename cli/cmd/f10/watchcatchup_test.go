@@ -11,7 +11,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drive"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/stack"
@@ -173,7 +173,7 @@ func TestWatchCatchesUpAnOpenPR(t *testing.T) {
 			root := t.TempDir()
 
 			if tc.lease {
-				lease, err := drives.Acquire(root, "GH-1", 2)
+				lease, err := drivestore.Acquire(root, "GH-1", 2)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -399,7 +399,7 @@ func TestWatchSettlesASentCatchup(t *testing.T) {
 			root := t.TempDir()
 
 			if tc.held {
-				l, err := drives.Acquire(root, "GH-1", 2)
+				l, err := drivestore.Acquire(root, "GH-1", 2)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -415,7 +415,7 @@ func TestWatchSettlesASentCatchup(t *testing.T) {
 
 			store := map[string]drive.WatchReport{"GH-1": {
 				Kind: drive.WatchCatchup, Key: "catchup sent m2 h1", At: watchNow,
-				Catchup: &drives.Catchup{Target: "m2", Head: "p1", Origin: "p1", Base: "origin/main", At: watchNow},
+				Catchup: &drivestore.Catchup{Target: "m2", Head: "p1", Origin: "p1", Base: "origin/main", At: watchNow},
 			}}
 
 			out := catchupPass(t, in, []drive.WatchedTask{task}, store)
@@ -467,7 +467,7 @@ func TestWatchSettlesASentCatchup(t *testing.T) {
 
 func TestWatchStoreKeepsTheCatchupRecord(t *testing.T) {
 	root := t.TempDir()
-	rec := &drives.Catchup{Target: "m2", Head: "h1", Origin: "p1", Base: "origin/main", At: watchNow, Failed: true}
+	rec := &drivestore.Catchup{Target: "m2", Head: "h1", Origin: "p1", Base: "origin/main", At: watchNow, Failed: true}
 
 	want := map[string]drive.WatchReport{"FT-1": {Kind: drive.WatchCatchup, Key: "k", At: watchNow, Catchup: rec}}
 	if err := drive.SaveWatchStore(root, want); err != nil {

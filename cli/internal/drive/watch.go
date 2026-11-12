@@ -18,8 +18,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
-	"github.com/amberpixels/f10/cli/internal/driverec"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
@@ -271,7 +271,7 @@ func (in WatchInput) warnf(format string, args ...any) {
 func (in WatchInput) finishReport(ctx context.Context, task WatchedTask) *WatchReport {
 	err := in.Finish(ctx, task)
 
-	if held := (drives.HeldError{}); errors.As(err, &held) {
+	if held := (drivestore.HeldError{}); errors.As(err, &held) {
 		return nil
 	}
 
@@ -343,7 +343,7 @@ func (in WatchInput) catchupStep(ctx context.Context, task WatchedTask, store ma
 // overwritten; one not clean with the agent idle is told once and left as
 // it is, since an operation in progress there may be someone's hand merge.
 func (in WatchInput) settleCatchup(
-	ctx context.Context, task WatchedTask, rec *drives.Catchup, store map[string]WatchReport,
+	ctx context.Context, task WatchedTask, rec *drivestore.Catchup, store map[string]WatchReport,
 ) *WatchReport {
 	if task.Pr == nil || task.Pr.Status != forge.Open {
 		setCatchup(store, task.ID, nil) // its request is gone: nothing to keep current
@@ -379,9 +379,9 @@ func (in WatchInput) settleCatchup(
 		}
 	}
 
-	lease, err := drives.AcquireAs(in.Root, task.ID, drives.Holder{Watch: true})
+	lease, err := drivestore.AcquireAs(in.Root, task.ID, drivestore.Holder{Watch: true})
 
-	if held := (drives.HeldError{}); errors.As(err, &held) {
+	if held := (drivestore.HeldError{}); errors.As(err, &held) {
 		setCatchup(store, task.ID, nil) // whoever holds it pushes
 
 		return nil
@@ -438,7 +438,7 @@ func (in WatchInput) settleCatchup(
 
 // failedAt records the fingerprint a failed catchup left, so another goes
 // out only once the target or the conflict moves.
-func (in WatchInput) failedAt(ctx context.Context, task WatchedTask, rec *drives.Catchup) {
+func (in WatchInput) failedAt(ctx context.Context, task WatchedTask, rec *drivestore.Catchup) {
 	fp, _, err := stack.ConflictFingerprint(ctx, task.Path, rec.Target)
 	if err != nil {
 		in.warnf("%s: reading what %s conflicts on: %v", task.ID, task.Branch, err)
@@ -450,7 +450,7 @@ func (in WatchInput) failedAt(ctx context.Context, task WatchedTask, rec *drives
 }
 
 // pushFailed is told once per cause, the record kept so the next pass retries.
-func (in WatchInput) pushFailed(task WatchedTask, rec *drives.Catchup, err error) *WatchReport {
+func (in WatchInput) pushFailed(task WatchedTask, rec *drivestore.Catchup, err error) *WatchReport {
 	return &WatchReport{
 		Kind: WatchCatchup,
 		Text: fmt.Sprintf("%s caught up with %s, and pushing it failed: %v", task.Branch, rec.Base, err),
@@ -465,7 +465,7 @@ func (in WatchInput) pushFailed(task WatchedTask, rec *drives.Catchup, err error
 // last catchup that did not end clean, blocks another until its
 // fingerprint moves.
 func (in WatchInput) sendCatchup(
-	ctx context.Context, task WatchedTask, failed *drives.Catchup, store map[string]WatchReport,
+	ctx context.Context, task WatchedTask, failed *drivestore.Catchup, store map[string]WatchReport,
 ) *WatchReport {
 	pr, aim := task.Pr, task.target
 	if pr == nil || pr.Status != forge.Open || task.originSHA == "" || aim.SHA == "" {
@@ -537,9 +537,9 @@ func (in WatchInput) sendCatchup(
 		}
 	}
 
-	lease, err := drives.AcquireAs(in.Root, task.ID, drives.Holder{Watch: true})
+	lease, err := drivestore.AcquireAs(in.Root, task.ID, drivestore.Holder{Watch: true})
 	if err != nil {
-		if held := (drives.HeldError{}); !errors.As(err, &held) {
+		if held := (drivestore.HeldError{}); !errors.As(err, &held) {
 			in.warnf("%s skipped this pass: %v", task.ID, err)
 		}
 
@@ -721,7 +721,7 @@ type WatchReport struct {
 	At   time.Time `yaml:"at"`
 	// Catchup is the catchup the watcher sent and has not settled, kept on
 	// the stored report like Told
-	Catchup *drives.Catchup `yaml:"catchup,omitempty"`
+	Catchup *drivestore.Catchup `yaml:"catchup,omitempty"`
 }
 
 // watchToldMax bounds a task's told keys; the oldest go first.
@@ -786,7 +786,7 @@ const WatchPullKey = "pull"
 // project, not one task.
 const WatchHostKey = "host"
 
-func setCatchup(store map[string]WatchReport, id string, rec *drives.Catchup) {
+func setCatchup(store map[string]WatchReport, id string, rec *drivestore.Catchup) {
 	r := store[id]
 	r.Catchup = rec
 	store[id] = r
@@ -851,7 +851,7 @@ func DecideWatch(t WatchedTask, mode string, now time.Time) (*WatchReport, bool)
 		}
 	}
 
-	if !driverec.StoppedRun(run) && run.Ship != "done" {
+	if !drivectl.StoppedRun(run) && run.Ship != "done" {
 		return nil, false
 	}
 
@@ -933,7 +933,7 @@ func CollectWatched(ctx context.Context, in WatchInput) ([]WatchedTask, int, err
 
 		task := WatchedTask{ID: b.Ids[0], Branch: b.Name, Path: path, LocalSHA: b.LocalSHA, Listed: listed}
 
-		if h, ok := drives.Probe(in.Root, task.ID); ok {
+		if h, ok := drivestore.Probe(in.Root, task.ID); ok {
 			task.Owner = h.String()
 		} else {
 			task.Off = in.handedBack(ctx, b.Name)
@@ -980,7 +980,7 @@ func WatcherFinishInput(t *target.Target, main string, h hostops.Host, r ref.Ref
 // merged request. It writes no drive finish record: the board would read
 // the watcher as a drive.
 func WatcherFinish(ctx context.Context, w io.Writer, t *target.Target, main, root string, task WatchedTask) error {
-	lease, err := drives.AcquireAs(root, task.ID, drives.Holder{Watch: true})
+	lease, err := drivestore.AcquireAs(root, task.ID, drivestore.Holder{Watch: true})
 	if err != nil {
 		return err
 	}

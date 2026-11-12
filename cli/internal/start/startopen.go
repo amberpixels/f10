@@ -9,7 +9,6 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
-	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/launch"
@@ -20,14 +19,15 @@ import (
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/textx"
+	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // StartInput is everything start needs once the target is settled, so
 // the flow can be tested without a checkout.
 type StartInput struct {
-	Main     string         // the main checkout: worktrees are its siblings
-	Driver   *driver.Driver // nil without one
+	Main     string                // the main checkout: worktrees are its siblings
+	Driver   *trackerdriver.Driver // nil without one
 	Task     ref.Ref
 	Suffix   string
 	Mode     string

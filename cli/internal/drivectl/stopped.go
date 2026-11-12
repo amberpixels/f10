@@ -1,4 +1,4 @@
-package driverec
+package drivectl
 
 import (
 	"github.com/amberpixels/f10/cli/internal/state"

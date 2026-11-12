@@ -18,7 +18,7 @@ import (
 	standupcmd "github.com/amberpixels/f10/cli/internal/command/standup"
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/drive"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/layers"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
@@ -144,9 +144,9 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 	cases := map[string]renderer{
 		"drive list": func(t *testing.T, _ bool) string {
 			root := t.TempDir()
-			if err := drives.Create(root, &drives.Record{
+			if err := drivestore.Create(root, &drivestore.Record{
 				Args:  []string{"FT-1", "FT-2"},
-				Tasks: []drives.Task{{ID: "FT-1"}, {ID: "FT-2"}},
+				Tasks: []drivestore.Task{{ID: "FT-1"}, {ID: "FT-2"}},
 			}); err != nil {
 				t.Fatal(err)
 			}
@@ -168,9 +168,9 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 		},
 		"daemon status": func(t *testing.T, _ bool) string {
 			root := t.TempDir()
-			if err := drives.Create(
+			if err := drivestore.Create(
 				root,
-				&drives.Record{Tasks: []drives.Task{{ID: "FT-1"}, {ID: "FT-2"}}},
+				&drivestore.Record{Tasks: []drivestore.Task{{ID: "FT-1"}, {ID: "FT-2"}}},
 			); err != nil {
 				t.Fatal(err)
 			}

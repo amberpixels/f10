@@ -7,8 +7,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/amberpixels/f10/cli/internal/driverec"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/ref"
 )
 
@@ -20,7 +20,7 @@ func finishRecords(w io.Writer, in FinishInput, branch string) {
 		return
 	}
 
-	recs, err := drives.List(in.Root)
+	recs, err := drivestore.List(in.Root)
 	if err != nil {
 		fmt.Fprintf(w, "  marking drive records: %v\n", err)
 
@@ -29,11 +29,11 @@ func finishRecords(w io.Writer, in FinishInput, branch string) {
 
 	for _, rec := range recs {
 		match := AttemptRows(in, branch, rec.Tasks)
-		if !slices.ContainsFunc(rec.Tasks, func(t drives.Task) bool { return !driverec.RowDone(t) && match(t) }) {
+		if !slices.ContainsFunc(rec.Tasks, func(t drivestore.Task) bool { return !drivectl.RowDone(t) && match(t) }) {
 			continue
 		}
 
-		if err := driverec.MarkFinished(in.Root, rec.Number, match); err != nil {
+		if err := drivectl.MarkFinished(in.Root, rec.Number, match); err != nil {
 			fmt.Fprintf(w, "  marking drive %d: %v\n", rec.Number, err)
 		}
 	}
@@ -43,7 +43,7 @@ func finishRecords(w io.Writer, in FinishInput, branch string) {
 // attempt finished leaves the task's others alive. A bare finish, or one
 // that found the lone <id>-* branch, types no suffix: the branch's ending
 // names the attempt, the same way the branch index finds it.
-func AttemptRows(in FinishInput, branch string, rows []drives.Task) func(drives.Task) bool {
+func AttemptRows(in FinishInput, branch string, rows []drivestore.Task) func(drivestore.Task) bool {
 	ofTask := func(row string) (string, bool) {
 		id, suffix := ref.SplitSuffix(row)
 
@@ -61,7 +61,7 @@ func AttemptRows(in FinishInput, branch string, rows []drives.Task) func(drives.
 		}
 	}
 
-	return func(t drives.Task) bool {
+	return func(t drivestore.Task) bool {
 		suffix, ok := ofTask(t.ID)
 
 		return ok && strings.EqualFold(suffix, acted)

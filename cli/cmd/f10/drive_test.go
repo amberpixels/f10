@@ -18,8 +18,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drive"
-	"github.com/amberpixels/f10/cli/internal/driverec"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/flow"
@@ -92,7 +92,7 @@ func newDriveFixture(t *testing.T, args ...string) *driveFixture {
 		}
 	}
 
-	a, err := driverec.ParseDriveArgs(rest)
+	a, err := drivectl.ParseDriveArgs(rest)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1276,7 +1276,7 @@ func TestDriveHaltsACatchupThatStallsWithNothingSettled(t *testing.T) {
 		t.Errorf("recorded %+v, want one halt at catchup", recorded)
 	}
 
-	if fx.sleeps < int(drive.StallGrace/driverec.DefaultEvery) {
+	if fx.sleeps < int(drive.StallGrace/drivectl.DefaultEvery) {
 		t.Errorf("halted after %d polls, before the grace ran out", fx.sleeps)
 	}
 }
@@ -1348,7 +1348,7 @@ func TestDriveHaltsOnAJudgeStop(t *testing.T) {
 		}
 	}
 
-	rec, err := drives.Read(fx.in.Root, 1)
+	rec, err := drivestore.Read(fx.in.Root, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1402,7 +1402,7 @@ func TestDriveHaltsOnAnAgentThatStoppedWithoutReporting(t *testing.T) {
 		t.Errorf("halt event %+v", e)
 	}
 
-	if fx.sleeps < int(drive.StallGrace/driverec.DefaultEvery) {
+	if fx.sleeps < int(drive.StallGrace/drivectl.DefaultEvery) {
 		t.Errorf("halted after %d polls, before the grace ran out", fx.sleeps)
 	}
 }
@@ -1769,45 +1769,45 @@ func TestParseDriveArgs(t *testing.T) {
 			args:  []string{"GH-1", "GH-2", "--flow", "Direct"},
 			tasks: "GH-1 GH-2",
 			flow:  "direct",
-			every: driverec.DefaultEvery,
+			every: drivectl.DefaultEvery,
 		},
-		{args: []string{"GH-1", "--local"}, tasks: "GH-1", flow: "local", every: driverec.DefaultEvery},
-		{args: []string{"GH-1", "--local", "--flow=local"}, tasks: "GH-1", flow: "local", every: driverec.DefaultEvery},
-		{args: []string{"GH-1", "--", "GH-4"}, tasks: "GH-1 GH-4", span: true, every: driverec.DefaultEvery},
+		{args: []string{"GH-1", "--local"}, tasks: "GH-1", flow: "local", every: drivectl.DefaultEvery},
+		{args: []string{"GH-1", "--local", "--flow=local"}, tasks: "GH-1", flow: "local", every: drivectl.DefaultEvery},
+		{args: []string{"GH-1", "--", "GH-4"}, tasks: "GH-1 GH-4", span: true, every: drivectl.DefaultEvery},
 		{
 			args:  []string{"--every", "5s", "GH-1", "--answer=1. yes"},
 			tasks: "GH-1", answers: "1. yes", every: 5 * time.Second,
 		},
 		{
 			args:  []string{"GH-1", "GH-2", "--answer", "GH-1=1. yes", "--answer=GH-2=1. no"},
-			tasks: "GH-1 GH-2", answers: "GH-1=1. yes|GH-2=1. no", every: driverec.DefaultEvery,
+			tasks: "GH-1 GH-2", answers: "GH-1=1. yes|GH-2=1. no", every: drivectl.DefaultEvery,
 		},
 		{
 			args:  []string{"GH-1:sonnet", "GH-2", "--model", "opus"},
-			tasks: "GH-1 GH-2", model: "opus", models: "sonnet|", every: driverec.DefaultEvery,
+			tasks: "GH-1 GH-2", model: "opus", models: "sonnet|", every: drivectl.DefaultEvery,
 		},
 		{
 			args:  []string{"--model=fable", "GH-1-retry:opus"},
-			tasks: "GH-1-retry", model: "fable", models: "opus", every: driverec.DefaultEvery,
+			tasks: "GH-1-retry", model: "fable", models: "opus", every: drivectl.DefaultEvery,
 		},
 		{
 			args:   []string{"https://host:8080/o/r/issues/1", "https://github.com/o/r/issues/2:opus"},
 			tasks:  "https://host:8080/o/r/issues/1 https://github.com/o/r/issues/2",
-			models: "|opus", every: driverec.DefaultEvery,
+			models: "|opus", every: drivectl.DefaultEvery,
 		},
 		{
 			args:   []string{"GH-1", "--", "GH-4"},
 			tasks:  "GH-1 GH-4",
 			span:   true,
 			models: "|",
-			every:  driverec.DefaultEvery,
+			every:  drivectl.DefaultEvery,
 		},
 		{
 			args: []string{
 				"GH-1:claude:opus:high", "--agent", "sonnet:low", "https://github.com/o/r/issues/2:opus:max",
 			},
 			tasks: "GH-1 https://github.com/o/r/issues/2", model: "sonnet:low",
-			models: "claude:opus:high|opus:max", every: driverec.DefaultEvery,
+			models: "claude:opus:high|opus:max", every: drivectl.DefaultEvery,
 		},
 		{args: []string{"GH-1:"}, wantErr: "names no profile"},
 		{args: []string{"GH-1:opus", "--", "GH-4"}, wantErr: "run-wide --agent"},
@@ -1830,7 +1830,7 @@ func TestParseDriveArgs(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		a, err := driverec.ParseDriveArgs(c.args)
+		a, err := drivectl.ParseDriveArgs(c.args)
 
 		if c.wantErr != "" {
 			if err == nil || !strings.Contains(err.Error(), c.wantErr) {
@@ -2946,7 +2946,7 @@ func TestDriveBoundsTheWaitForAnAgent(t *testing.T) {
 		t.Errorf("output = %s", fx.out.String())
 	}
 
-	if limit := int(drive.StartWindow/driverec.DefaultEvery) + 2; fx.sleeps > limit {
+	if limit := int(drive.StartWindow/drivectl.DefaultEvery) + 2; fx.sleeps > limit {
 		t.Errorf("polled %d times, past the start window's %d", fx.sleeps, limit)
 	}
 }
@@ -4107,7 +4107,7 @@ func TestPushCatchupOnlyOverWhatTheCatchupSaw(t *testing.T) {
 				fx.f.script(tc.push, "")
 			}
 
-			rec := &drives.Catchup{Base: "origin/main", Origin: "p1", Spent: !tc.held}
+			rec := &drivestore.Catchup{Base: "origin/main", Origin: "p1", Spent: !tc.held}
 
 			_, err := stack.PushCatchup(context.Background(), "/code/repo.GH-1", "GH-1", rec)
 
@@ -4169,7 +4169,7 @@ func TestDriveFinishWithADeferredPullIsFinished(t *testing.T) {
 	}()
 
 	res := in.RunFinish(t.Context(), &drive.DriveRun{Task: drive.DriveTask{Ref: gh1}})
-	if res.Row != driverec.RowFinished || res.Code != 0 || len(res.Lines) != 1 ||
+	if res.Row != drivectl.RowFinished || res.Code != 0 || len(res.Lines) != 1 ||
 		!strings.Contains(res.Lines[0], "GH-1 finished; main not pulled") {
 		t.Errorf("runFinish = %+v, want finished with the note", res)
 	}

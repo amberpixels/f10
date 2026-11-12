@@ -8,12 +8,12 @@ import (
 	"testing"
 
 	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
-	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -237,7 +237,7 @@ func TestFallbackOnlyOnUnsupported(t *testing.T) {
 		t.Error("a failing driver fell back to host issues")
 	}
 
-	f.fail("driver search x", shell.Result{Code: driver.ExitUnsupported})
+	f.fail("driver search x", shell.Result{Code: trackerdriver.ExitUnsupported})
 	f.script("gh issue list --search x --json number,title,state,url,labels,body,assignees,createdAt --limit 30", `[]`)
 
 	if _, err := taskcmd.SearchRows(t.Context(), tg, "x"); err != nil || !f.called("gh issue list") {

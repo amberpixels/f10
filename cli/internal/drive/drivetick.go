@@ -14,8 +14,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/daemon"
-	"github.com/amberpixels/f10/cli/internal/driverec"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
@@ -30,7 +30,7 @@ import (
 // Drive runs the flow; nothing is created or prompted before the graph
 // passed validation.
 func Drive(ctx context.Context, w io.Writer, in *DriveInput) (err error) {
-	in.Out, in.leases = w, map[string]*drives.Lease{}
+	in.Out, in.leases = w, map[string]*drivestore.Lease{}
 	in.resolveProfiles()
 
 	tasks, notes, err := in.ResolveTasks(ctx)
@@ -96,7 +96,7 @@ func Drive(ctx context.Context, w io.Writer, in *DriveInput) (err error) {
 	for _, i := range order {
 		r := &DriveRun{Task: tasks[i], LastCatchup: in.SavedCatchup(tasks[i])}
 		if r.Task.finished {
-			in.End(ctx, r, DriveResult{Row: driverec.RowAlreadyFinished})
+			in.End(ctx, r, DriveResult{Row: drivectl.RowAlreadyFinished})
 		}
 
 		runs = append(runs, r)
@@ -490,7 +490,7 @@ func (in *DriveInput) MarkBehind(ctx context.Context, r *DriveRun) error {
 
 // SavedCatchup is the catchup record an earlier run of this drive kept for
 // t, so a resumed drive leases its push as the first one would have.
-func (in *DriveInput) SavedCatchup(t DriveTask) *drives.Catchup {
+func (in *DriveInput) SavedCatchup(t DriveTask) *drivestore.Catchup {
 	if in.Rec == nil {
 		return nil
 	}

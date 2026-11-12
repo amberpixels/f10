@@ -1,4 +1,4 @@
-package driverec
+package drivectl
 
 import (
 	"errors"

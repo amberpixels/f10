@@ -17,7 +17,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/buildinfo"
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/drive"
-	"github.com/amberpixels/f10/cli/internal/driverec"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/target"
 )
@@ -121,7 +121,7 @@ func runDaemonLogs(ctx context.Context, cmd *cli.Command) error {
 	path := daemon.LogPath(dir)
 
 	if arg := cmd.Args().First(); arg != "" {
-		n, err := driverec.DriveNumber(arg)
+		n, err := drivectl.DriveNumber(arg)
 		if err != nil {
 			return err
 		}

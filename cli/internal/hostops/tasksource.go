@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
+	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -207,18 +207,18 @@ func (s FallbackSource) Create(ctx context.Context, warnTo io.Writer, nt NewTask
 	return r, url, err
 }
 
-func declined(err error) bool { return errors.Is(err, driver.ErrUnsupported) }
+func declined(err error) bool { return errors.Is(err, trackerdriver.ErrUnsupported) }
 
 // driverSource runs the project's driver. A declined verb comes back as
 // driver.ErrUnsupported, unwrapped, for FallbackSource to read.
 type driverSource struct {
 	t *target.Target
-	d *driver.Driver
+	d *trackerdriver.Driver
 }
 
 //nolint:lostfield // a lookup by id, not a conversion
 func (s driverSource) Read(ctx context.Context, r ref.Ref) (string, ledger.TaskRef, error) {
-	doc, err := s.d.Run(ctx, driver.VerbRead, r.Number)
+	doc, err := s.d.Run(ctx, trackerdriver.VerbRead, r.Number)
 	if err != nil {
 		return "", ledger.TaskRef{}, err
 	}
@@ -230,13 +230,13 @@ func (s driverSource) Read(ctx context.Context, r ref.Ref) (string, ledger.TaskR
 
 //nolint:lostfield // a lookup by id, not a conversion
 func (s driverSource) Ref(ctx context.Context, r ref.Ref) (ledger.TaskRef, error) {
-	doc, err := s.d.Run(ctx, driver.VerbRead, r.Number)
+	doc, err := s.d.Run(ctx, trackerdriver.VerbRead, r.Number)
 	if err != nil {
 		return ledger.TaskRef{}, err
 	}
 
 	k := ledger.TaskRef{ID: r.ID, Title: driverTitleFor(s.t, r, doc)}
-	if url, err := s.d.Run(ctx, driver.VerbURL, r.Number); err == nil {
+	if url, err := s.d.Run(ctx, trackerdriver.VerbURL, r.Number); err == nil {
 		k.URL = strings.TrimSpace(url)
 	}
 
@@ -248,34 +248,34 @@ func (s driverSource) Ref(ctx context.Context, r ref.Ref) (ledger.TaskRef, error
 }
 
 func (s driverSource) Info(ctx context.Context, r ref.Ref) (TaskInfo, error) {
-	body, err := s.d.Run(ctx, driver.VerbRead, r.Number)
+	body, err := s.d.Run(ctx, trackerdriver.VerbRead, r.Number)
 
 	return TaskInfo{Body: body}, err
 }
 
 func (s driverSource) URL(ctx context.Context, r ref.Ref) (string, error) {
-	url, err := s.d.Run(ctx, driver.VerbURL, r.Number)
+	url, err := s.d.Run(ctx, trackerdriver.VerbURL, r.Number)
 
 	return strings.TrimSpace(url), err
 }
 
 func (s driverSource) Index(ctx context.Context) (string, error) {
-	url, err := s.d.Run(ctx, driver.VerbIndex)
+	url, err := s.d.Run(ctx, trackerdriver.VerbIndex)
 
 	return strings.TrimSpace(url), err
 }
 
 // List ignores limit: the contract's list is the driver's first page.
 func (s driverSource) List(ctx context.Context, _ int) ([]Row, error) {
-	return s.rows(ctx, "list", driver.VerbList)
+	return s.rows(ctx, "list", trackerdriver.VerbList)
 }
 
 func (s driverSource) Search(ctx context.Context, query string) ([]Row, error) {
-	return s.rows(ctx, "search", driver.VerbSearch, query)
+	return s.rows(ctx, "search", trackerdriver.VerbSearch, query)
 }
 
 func (s driverSource) Children(ctx context.Context, r ref.Ref) ([]RawChild, error) {
-	out, err := s.d.Run(ctx, driver.VerbChildren, r.Number)
+	out, err := s.d.Run(ctx, trackerdriver.VerbChildren, r.Number)
 	if err != nil {
 		return nil, err
 	}
@@ -290,17 +290,17 @@ func (s driverSource) Children(ctx context.Context, r ref.Ref) ([]RawChild, erro
 
 // Created has no driver verb; the contract's read carries no date f10 parses.
 func (driverSource) Created(context.Context, ref.Ref) (time.Time, error) {
-	return time.Time{}, driver.ErrUnsupported
+	return time.Time{}, trackerdriver.ErrUnsupported
 }
 
 // Title has no driver verb: a driver names the branch itself, and a slug
 // from its read would rename every branch on its tracker.
 func (driverSource) Title(context.Context, ref.Ref) (string, error) {
-	return "", driver.ErrUnsupported
+	return "", trackerdriver.ErrUnsupported
 }
 
 func (s driverSource) Comment(ctx context.Context, warnTo io.Writer, r ref.Ref, body string) (string, error) {
-	out, err := s.write(ctx, warnTo, body, driver.VerbComment, r.Number)
+	out, err := s.write(ctx, warnTo, body, trackerdriver.VerbComment, r.Number)
 	if err != nil && !declined(err) {
 		return "", fmt.Errorf("%w\n%s", err, MayPosted)
 	}
@@ -309,7 +309,12 @@ func (s driverSource) Comment(ctx context.Context, warnTo io.Writer, r ref.Ref, 
 }
 
 func (s driverSource) Update(ctx context.Context, warnTo io.Writer, r ref.Ref, p Props) error {
-	if _, err := s.write(ctx, warnTo, "", driver.VerbUpdate, append([]string{r.Number}, p.args()...)...); err != nil {
+	if _, err := s.write(
+		ctx,
+		warnTo,
+		"",
+		trackerdriver.VerbUpdate,
+		append([]string{r.Number}, p.args()...)...); err != nil {
 		return err
 	}
 
@@ -319,7 +324,7 @@ func (s driverSource) Update(ctx context.Context, warnTo io.Writer, r ref.Ref, p
 }
 
 func (s driverSource) Relink(ctx context.Context, warnTo io.Writer, r ref.Ref, parent, unwritten string) error {
-	_, err := s.write(ctx, warnTo, "", driver.VerbUpdate, r.Number, "--parent", parent)
+	_, err := s.write(ctx, warnTo, "", trackerdriver.VerbUpdate, r.Number, "--parent", parent)
 	if err != nil && !declined(err) && unwritten != UnwrittenNothing {
 		return fmt.Errorf("%w\n%s", err, unwritten)
 	}
@@ -491,36 +496,36 @@ func (s HostSource) Create(ctx context.Context, warnTo io.Writer, nt NewTask) (r
 // comment and update with no host CLI fail plainly (RefuseWrite).
 type RefusedSource struct {
 	Target *target.Target
-	Driver *driver.Driver // the driver that declined, nil when none was found
-	noCLI  error          // set when the tracker is the host's issues and no CLI reaches it
+	Driver *trackerdriver.Driver // the driver that declined, nil when none was found
+	noCLI  error                 // set when the tracker is the host's issues and no CLI reaches it
 }
 
 func (s RefusedSource) Read(context.Context, ref.Ref) (string, ledger.TaskRef, error) {
-	return "", ledger.TaskRef{}, s.Refuse(driver.VerbRead)
+	return "", ledger.TaskRef{}, s.Refuse(trackerdriver.VerbRead)
 }
 
 func (s RefusedSource) Ref(context.Context, ref.Ref) (ledger.TaskRef, error) {
-	return ledger.TaskRef{}, s.Refuse(driver.VerbRead)
+	return ledger.TaskRef{}, s.Refuse(trackerdriver.VerbRead)
 }
 
 func (s RefusedSource) Info(context.Context, ref.Ref) (TaskInfo, error) {
-	return TaskInfo{}, s.Refuse(driver.VerbRead)
+	return TaskInfo{}, s.Refuse(trackerdriver.VerbRead)
 }
 
 func (s RefusedSource) URL(context.Context, ref.Ref) (string, error) {
-	return "", s.Refuse(driver.VerbURL)
+	return "", s.Refuse(trackerdriver.VerbURL)
 }
 
 func (s RefusedSource) Index(context.Context) (string, error) {
-	return "", s.Refuse(driver.VerbIndex)
+	return "", s.Refuse(trackerdriver.VerbIndex)
 }
 
 func (s RefusedSource) List(context.Context, int) ([]Row, error) {
-	return nil, s.Refuse(driver.VerbList)
+	return nil, s.Refuse(trackerdriver.VerbList)
 }
 
 func (s RefusedSource) Search(context.Context, string) ([]Row, error) {
-	return nil, s.Refuse(driver.VerbSearch)
+	return nil, s.Refuse(trackerdriver.VerbSearch)
 }
 
 // Children: a driver declining it on a tracker that is not the host's
@@ -530,7 +535,7 @@ func (s RefusedSource) Children(context.Context, ref.Ref) ([]RawChild, error) {
 		return nil, ErrNoParentLink
 	}
 
-	return nil, s.Refuse(driver.VerbChildren)
+	return nil, s.Refuse(trackerdriver.VerbChildren)
 }
 
 // Created is undated for a tracker that is not the host's issues; the
@@ -540,19 +545,19 @@ func (s RefusedSource) Created(context.Context, ref.Ref) (time.Time, error) {
 }
 
 func (s RefusedSource) Title(context.Context, ref.Ref) (string, error) {
-	return "", s.Refuse(driver.VerbBranch)
+	return "", s.Refuse(trackerdriver.VerbBranch)
 }
 
 func (s RefusedSource) Comment(context.Context, io.Writer, ref.Ref, string) (string, error) {
-	return "", s.RefuseWrite(driver.VerbComment, UnwrittenNothing)
+	return "", s.RefuseWrite(trackerdriver.VerbComment, UnwrittenNothing)
 }
 
 func (s RefusedSource) Update(context.Context, io.Writer, ref.Ref, Props) error {
-	return s.RefuseWrite(driver.VerbUpdate, UnwrittenNothing)
+	return s.RefuseWrite(trackerdriver.VerbUpdate, UnwrittenNothing)
 }
 
 func (s RefusedSource) Relink(_ context.Context, _ io.Writer, _ ref.Ref, _, unwritten string) error {
-	return s.RefuseWrite(driver.VerbUpdate+" --parent", unwritten)
+	return s.RefuseWrite(trackerdriver.VerbUpdate+" --parent", unwritten)
 }
 
 func (s RefusedSource) Create(context.Context, io.Writer, NewTask) (ref.Ref, string, error) {
@@ -581,7 +586,7 @@ func (s RefusedSource) RefuseWrite(verb, unwritten string) error {
 // its own adapter.
 func (s RefusedSource) RefuseCreate() error {
 	return ui.Exit(ui.ExitDeclined, "%s; create it through the project's Create adapter (project.md, Tracker)",
-		s.why(driver.VerbCreate))
+		s.why(trackerdriver.VerbCreate))
 }
 
 // why is the refusal's one sentence for verb.
@@ -606,12 +611,12 @@ func (s RefusedSource) why(verb string) string {
 // VerbNeeds names what needs each verb, for the refusal when a driver
 // declines it.
 var VerbNeeds = map[string]string{
-	driver.VerbRead:   "`f10 task read`, `f10 start` and `f10 drive` need",
-	driver.VerbBranch: "`f10 start` and `f10 drive` need for a branch name past the bare id",
-	driver.VerbURL:    "`f10 task open <id>` needs",
-	driver.VerbIndex:  "`f10 task open` with no id needs",
-	driver.VerbList:   "`f10 task open --print` and the board's next rows need",
-	driver.VerbSearch: "`f10 task search` needs",
+	trackerdriver.VerbRead:   "`f10 task read`, `f10 start` and `f10 drive` need",
+	trackerdriver.VerbBranch: "`f10 start` and `f10 drive` need for a branch name past the bare id",
+	trackerdriver.VerbURL:    "`f10 task open <id>` needs",
+	trackerdriver.VerbIndex:  "`f10 task open` with no id needs",
+	trackerdriver.VerbList:   "`f10 task open --print` and the board's next rows need",
+	trackerdriver.VerbSearch: "`f10 task search` needs",
 }
 
 // UnwrittenNothing is a write's refusal when no write came before it.

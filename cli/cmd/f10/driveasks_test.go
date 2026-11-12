@@ -9,7 +9,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/asks"
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/drive"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -109,7 +109,7 @@ func TestDriveTakesInboxAnswer(t *testing.T) {
 		t.Error("the inbox answer was not marked taken")
 	}
 
-	rec, _ := drives.Read(fx.in.Root, 1)
+	rec, _ := drivestore.Read(fx.in.Root, 1)
 	if len(rec.Answered) != 1 || rec.Answered[0].Text != "1. stop" {
 		t.Errorf("record answered = %+v", rec.Answered)
 	}
@@ -150,7 +150,7 @@ func TestDriveResumesForLateAnswer(t *testing.T) {
 
 	// the user answers the moment they are told, before the drive exits
 	fx.in.Notify = func(_ context.Context, a asks.Ask) error {
-		if _, held := drives.Probe(fx.in.Root, drives.DriveKey(1)); !held {
+		if _, held := drivestore.Probe(fx.in.Root, drivestore.DriveKey(1)); !held {
 			t.Error("the drive's lease was free before it exited")
 		}
 

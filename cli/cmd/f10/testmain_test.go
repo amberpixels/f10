@@ -10,7 +10,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/asks"
 	"github.com/amberpixels/f10/cli/internal/daemon"
-	"github.com/amberpixels/f10/cli/internal/driverec"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -89,7 +89,7 @@ func TestMain(m *testing.M) {
 	}
 
 	// a start or a drive run here hands nothing to a real daemon
-	driverec.WatchProject = func(context.Context, io.Writer, *target.Target) {}
+	drivectl.WatchProject = func(context.Context, io.Writer, *target.Target) {}
 
 	code := m.Run()
 

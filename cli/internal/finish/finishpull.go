@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
@@ -51,7 +51,7 @@ var ErrPullBusy = errors.New("another finish held the pull")
 
 func pullDefault(ctx context.Context, root, main, def, sha string) (string, error) {
 	if root != "" {
-		lease, err := drives.Await(ctx, root, MainPullKey, drives.Holder{}, mainPullWait)
+		lease, err := drivestore.Await(ctx, root, MainPullKey, drivestore.Holder{}, mainPullWait)
 		if err != nil {
 			return "", fmt.Errorf("%w: %w", ErrPullBusy, err)
 		}

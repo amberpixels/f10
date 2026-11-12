@@ -12,8 +12,8 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/drive"
-	"github.com/amberpixels/f10/cli/internal/driverec"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -40,7 +40,7 @@ func fastTurn(t *testing.T) *driveFixture {
 func TestDriveSeesATurnBetweenTwoLooks(t *testing.T) {
 	fx := fastTurn(t)
 	fx.onTick[1] = func() {
-		at := fx.clock.Add(-driverec.DefaultEvery + time.Second)
+		at := fx.clock.Add(-drivectl.DefaultEvery + time.Second)
 		if err := state.MarkPrompt(fx.in.StateDir, "s-1", "/code/repo.GH-1", at); err != nil {
 			t.Fatal(err)
 		}
@@ -89,7 +89,7 @@ func TestDriveDrainsAtATick(t *testing.T) {
 		t.Errorf("output = %s", fx.out.String())
 	}
 
-	rec, err := drives.Read(fx.in.Root, 1)
+	rec, err := drivestore.Read(fx.in.Root, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestDriveDrainsAtATick(t *testing.T) {
 		t.Errorf("drained task has outcome %+v", rec.Tasks[0].Outcome)
 	}
 
-	if _, held := drives.Probe(fx.in.Root, "GH-1"); held {
+	if _, held := drivestore.Probe(fx.in.Root, "GH-1"); held {
 		t.Error("the task's lease is still held after the drain")
 	}
 }
@@ -160,7 +160,7 @@ func TestRecordArgsDropsForeground(t *testing.T) {
 		t.Errorf("recordArgs = %v", got)
 	}
 
-	a, err := driverec.ParseDriveArgs([]string{"GH-1", "--foreground"})
+	a, err := drivectl.ParseDriveArgs([]string{"GH-1", "--foreground"})
 	if err != nil || !a.Fore {
 		t.Errorf("parse = %+v, %v", a, err)
 	}

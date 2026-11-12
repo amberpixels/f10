@@ -15,8 +15,8 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
-	"github.com/amberpixels/f10/cli/internal/driverec"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/forge"
@@ -761,7 +761,7 @@ func TestFinishDefersAFailedPull(t *testing.T) {
 		t.Errorf("the plan was not archived: %v", err)
 	}
 
-	if _, ok := drives.Probe(fx.in.Root, finish.MainPullKey); ok {
+	if _, ok := drivestore.Probe(fx.in.Root, finish.MainPullKey); ok {
 		t.Error("the main-pull lease outlived the failed pull")
 	}
 
@@ -1309,18 +1309,18 @@ func TestFinishMarksDriveRecords(t *testing.T) {
 	fx.openPR()
 	fx.in.Root = t.TempDir()
 
-	halted := func() *drives.Outcome { return &drives.Outcome{Row: "halted at catchup", Code: ui.ExitHalted} }
-	for _, tasks := range [][]drives.Task{
+	halted := func() *drivestore.Outcome { return &drivestore.Outcome{Row: "halted at catchup", Code: ui.ExitHalted} }
+	for _, tasks := range [][]drivestore.Task{
 		{{ID: "GH-1", Outcome: halted()}, {ID: "GH-2", Outcome: halted()}},
 		{{ID: "GH-1", Outcome: halted()}},
 		{{ID: "GH-1-b", Outcome: halted()}},
 	} {
-		if err := drives.Create(fx.in.Root, &drives.Record{Tasks: tasks}); err != nil {
+		if err := drivestore.Create(fx.in.Root, &drivestore.Record{Tasks: tasks}); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	running, err := drives.Acquire(fx.in.Root, drives.DriveKey(2), 2)
+	running, err := drivestore.Acquire(fx.in.Root, drivestore.DriveKey(2), 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1335,12 +1335,12 @@ func TestFinishMarksDriveRecords(t *testing.T) {
 		id    string
 		want  string
 	}{
-		{1, "GH-1", driverec.RowFinished},
+		{1, "GH-1", drivectl.RowFinished},
 		{1, "GH-2", "halted at catchup"},
 		{2, "GH-1", "halted at catchup"},
 		{3, "GH-1-b", "halted at catchup"},
 	} {
-		rec, err := drives.Read(fx.in.Root, c.drive)
+		rec, err := drivestore.Read(fx.in.Root, c.drive)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1354,7 +1354,7 @@ func TestFinishMarksDriveRecords(t *testing.T) {
 // A finish matches the attempt it acted on: the typed suffix, else the one
 // its branch ends in, so a bare finish in GH-1-b's worktree leaves GH-1 alone.
 func TestAttemptRows(t *testing.T) {
-	rows := []drives.Task{{ID: "GH-1"}, {ID: "GH-1-b"}, {ID: "GH-2"}}
+	rows := []drivestore.Task{{ID: "GH-1"}, {ID: "GH-1-b"}, {ID: "GH-2"}}
 
 	for _, c := range []struct {
 		suffix, branch string
@@ -1402,10 +1402,10 @@ func TestFinishAlreadyFinished(t *testing.T) {
 
 	fx.in.Root = t.TempDir()
 
-	halted := &drives.Outcome{Row: "halted at catchup", Code: ui.ExitHalted}
+	halted := &drivestore.Outcome{Row: "halted at catchup", Code: ui.ExitHalted}
 
-	rec := &drives.Record{Tasks: []drives.Task{{ID: "GH-1", Outcome: halted}}}
-	if err := drives.Create(fx.in.Root, rec); err != nil {
+	rec := &drivestore.Record{Tasks: []drivestore.Task{{ID: "GH-1", Outcome: halted}}}
+	if err := drivestore.Create(fx.in.Root, rec); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1414,12 +1414,12 @@ func TestFinishAlreadyFinished(t *testing.T) {
 		t.Errorf("err = %v, out:\n%s", err, out)
 	}
 
-	rec, err = drives.Read(fx.in.Root, 1)
+	rec, err = drivestore.Read(fx.in.Root, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if o := rec.Task("GH-1").Outcome; o == nil || o.Row != driverec.RowFinished {
+	if o := rec.Task("GH-1").Outcome; o == nil || o.Row != drivectl.RowFinished {
 		t.Errorf("the drive record kept %+v", o)
 	}
 
@@ -1437,7 +1437,7 @@ func TestFinishAlreadyFinished(t *testing.T) {
 func TestFinishLeaseRefusesADrivenTask(t *testing.T) {
 	root := t.TempDir()
 
-	held, err := drives.Acquire(root, "GH-1", 3)
+	held, err := drivestore.Acquire(root, "GH-1", 3)
 	if err != nil {
 		t.Fatal(err)
 	}

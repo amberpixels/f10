@@ -16,7 +16,6 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/command"
-	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/images"
 	"github.com/amberpixels/f10/cli/internal/ledger"
@@ -24,6 +23,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -127,7 +127,7 @@ func Command() *cli.Command {
 					"`# <title>` first, and print its id (exit 3: neither creates tasks here)",
 				Flags: []cli.Flag{
 					&cli.StringFlag{Name: "status", Usage: "the status, in the tracker's own word"},
-					&cli.StringFlag{Name: "priority", Usage: "one of " + strings.Join(driver.Priorities, ", ")},
+					&cli.StringFlag{Name: "priority", Usage: "one of " + strings.Join(trackerdriver.Priorities, ", ")},
 					&cli.StringSliceFlag{Name: "label", Usage: "a label; repeat for several"},
 					&cli.StringFlag{Name: "parent", Usage: "the task id to link it under as a subtask"},
 					&cli.StringSliceFlag{
@@ -165,7 +165,7 @@ func Command() *cli.Command {
 						Name:  "status",
 						Usage: "the status, in the tracker's own word (host issues: open or closed)",
 					},
-					&cli.StringFlag{Name: "priority", Usage: "one of " + strings.Join(driver.Priorities, ", ")},
+					&cli.StringFlag{Name: "priority", Usage: "one of " + strings.Join(trackerdriver.Priorities, ", ")},
 					&cli.StringSliceFlag{Name: "label", Usage: "a label to add; repeat for several"},
 					&cli.StringFlag{Name: "assignee", Usage: "who holds the task, in the tracker's own name for them"},
 					&cli.StringFlag{
@@ -391,11 +391,11 @@ func runTaskSearch(ctx context.Context, cmd *cli.Command) error {
 // RankRows is stable, so the tracker's order holds inside a level.
 func RankRows(rows []hostops.Row) []hostops.Row {
 	rank := func(r hostops.Row) int {
-		if i, ok := driver.PriorityRank(r.Priority); ok {
+		if i, ok := trackerdriver.PriorityRank(r.Priority); ok {
 			return i
 		}
 
-		return len(driver.Priorities)
+		return len(trackerdriver.Priorities)
 	}
 
 	slices.SortStableFunc(rows, func(a, b hostops.Row) int { return rank(a) - rank(b) })

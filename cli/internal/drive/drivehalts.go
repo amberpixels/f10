@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/amberpixels/f10/cli/internal/driverec"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -40,12 +40,12 @@ func (in *DriveInput) End(ctx context.Context, r *DriveRun, res DriveResult) {
 	}
 
 	// a finished task's branch took the record with it
-	if res.Row != driverec.RowFinished {
+	if res.Row != drivectl.RowFinished {
 		in.parkFinish(ctx, r)
 	}
 
-	in.saveTask(r, func(t *drives.Task) {
-		t.Skill, t.Queued, t.Phase, t.Outcome = "", false, drives.PhaseEnded, &drives.Outcome{
+	in.saveTask(r, func(t *drivestore.Task) {
+		t.Skill, t.Queued, t.Phase, t.Outcome = "", false, drivestore.PhaseEnded, &drivestore.Outcome{
 			Row:  res.Row,
 			Code: res.Code,
 		}
@@ -66,7 +66,7 @@ func (in *DriveInput) End(ctx context.Context, r *DriveRun, res DriveResult) {
 
 	// a finished task's lines are its handoff, which finish's report just
 	// printed; they wait for the drive's report
-	if len(res.Lines) == 0 || res.Row == driverec.RowFinished {
+	if len(res.Lines) == 0 || res.Row == drivectl.RowFinished {
 		fmt.Fprintf(in.Out, "%s: %s\n", in.id(r.Task.Ref.ID), res.Row)
 
 		return

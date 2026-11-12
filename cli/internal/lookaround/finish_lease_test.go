@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 )
 
 // A finish record outlives a killed drive; only a held lease keeps it.
@@ -24,7 +24,7 @@ func TestDropDeadFinish(t *testing.T) {
 	}
 
 	for _, id := range []string{"GH-1", "GH-2", "GH-3"} {
-		l, err := drives.Acquire(root, id, 1)
+		l, err := drivestore.Acquire(root, id, 1)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -12,7 +12,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drive"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
@@ -940,20 +940,20 @@ func TestDriveMarksNothingBehindAnUnreadPullRequest(t *testing.T) {
 func TestDriveKeepsTheCatchupRecordForAResume(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "ship")
 	fx.in.Root = t.TempDir()
-	fx.in.Rec = &drives.Record{Args: []string{"GH-1"}, Tasks: []drives.Task{{ID: "GH-1"}}}
+	fx.in.Rec = &drivestore.Record{Args: []string{"GH-1"}, Tasks: []drivestore.Task{{ID: "GH-1"}}}
 
-	if err := drives.Create(fx.in.Root, fx.in.Rec); err != nil {
+	if err := drivestore.Create(fx.in.Root, fx.in.Rec); err != nil {
 		t.Fatal(err)
 	}
 
 	task := drive.DriveTask{Ref: ref.Ref{ID: "GH-1"}}
 	r := &drive.DriveRun{
 		Task:        task,
-		LastCatchup: &drives.Catchup{Target: "m2", Origin: "p1", Base: "main", Integrated: true},
+		LastCatchup: &drivestore.Catchup{Target: "m2", Origin: "p1", Base: "main", Integrated: true},
 	}
 	fx.in.KeepCatchup(r)
 
-	back, err := drives.Read(fx.in.Root, fx.in.Rec.Number)
+	back, err := drivestore.Read(fx.in.Root, fx.in.Rec.Number)
 	if err != nil {
 		t.Fatal(err)
 	}

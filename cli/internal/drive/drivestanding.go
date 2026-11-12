@@ -5,7 +5,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/amberpixels/f10/cli/internal/driverec"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
@@ -24,7 +24,7 @@ func guardStop(run *state.Run) bool {
 // awaitsDecision is a stop a catchup must not run over: a question or a
 // blocked decision, not one a catchup leaves in place (HeldStop).
 func awaitsDecision(run *state.Run) bool {
-	return run != nil && driverec.StoppedRun(run) && !HeldStop(run) && (run.Ask != "" || blockedRun(run))
+	return run != nil && drivectl.StoppedRun(run) && !HeldStop(run) && (run.Ask != "" || blockedRun(run))
 }
 
 // HeldStop is a ship stop a catchup leaves in place: the guard's, or a

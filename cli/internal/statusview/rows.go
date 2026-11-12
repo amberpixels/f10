@@ -14,8 +14,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
-	"github.com/amberpixels/f10/cli/internal/driverec"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
@@ -162,13 +162,13 @@ func StageOf(f lookaround.TaskFacts, baseDone bool) (string, string) {
 		return StageAsking, cmp.Or(r.LeafShown(), r.Furthest())
 	case f.Halt != nil:
 		return StageHalted, f.Halt.Skill
-	case r != nil && r.Wait != "" && driverec.StoppedRun(r):
+	case r != nil && r.Wait != "" && drivectl.StoppedRun(r):
 		return StageWaiting, "on " + r.Wait
-	case r != nil && driverec.StoppedRun(r):
+	case r != nil && drivectl.StoppedRun(r):
 		return StageHalted, cmp.Or(r.LeafShown(), r.Furthest())
-	case f.DrivePhase == drives.PhaseParked:
+	case f.DrivePhase == drivestore.PhaseParked:
 		return StageWaiting, "on " + cmp.Or(f.Base, "its base")
-	case f.DrivePhase == drives.PhaseWaiting:
+	case f.DrivePhase == drivestore.PhaseWaiting:
 		return StageWaiting, "to finish after " + cmp.Or(f.Base, "its base")
 	case r == nil && f.Queued:
 		return StageQueued, ""
@@ -515,7 +515,7 @@ func statusGlyph(i int) string {
 // DrivenTasks is every task a drive lists while its driver runs, by id,
 // each bundle member on its own. A stopped drive holds nothing until it
 // resumes, as its queue does not.
-func DrivenTasks(active []drives.Live) map[string]bool {
+func DrivenTasks(active []drivestore.Live) map[string]bool {
 	out := map[string]bool{}
 
 	for _, d := range active {

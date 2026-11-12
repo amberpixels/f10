@@ -21,7 +21,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/flock"
 )
 
@@ -598,7 +598,7 @@ func (s *Server) startResume(root, dir string, env []string, n int) error {
 // command line sends; "" when it will not read, and for a cancelled or done
 // one, which shares its command line with a newer drive it must not attach to.
 func liveKey(root string, n int) string {
-	rec, err := drives.Read(root, n)
+	rec, err := drivestore.Read(root, n)
 	if err != nil || rec.Cancelled != nil || rec.Done() {
 		return ""
 	}

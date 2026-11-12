@@ -4,13 +4,13 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/amberpixels/f10/cli/internal/driverec"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
 )
 
 // flagUsage is the usage of flags, one bracket each, a flag and its alt
 // as one choice.
-func flagUsage(flags []driverec.DriveFlag) string {
-	one := func(f driverec.DriveFlag) string {
+func flagUsage(flags []drivectl.DriveFlag) string {
+	one := func(f drivectl.DriveFlag) string {
 		s := f.Name
 		if f.Value != "" {
 			s += " " + f.Value
@@ -26,7 +26,7 @@ func flagUsage(flags []driverec.DriveFlag) string {
 	var parts []string
 
 	for _, f := range flags {
-		if f.Alt != "" && slices.ContainsFunc(flags, func(g driverec.DriveFlag) bool { return g.Name == f.Alt }) {
+		if f.Alt != "" && slices.ContainsFunc(flags, func(g drivectl.DriveFlag) bool { return g.Name == f.Alt }) {
 			continue
 		}
 
@@ -47,10 +47,10 @@ func flagUsage(flags []driverec.DriveFlag) string {
 // DriveUsage is drive's ArgsUsage, read off DriveFlags.
 func DriveUsage() string {
 	run := slices.DeleteFunc(
-		slices.Clone(driverec.DriveFlags),
-		func(f driverec.DriveFlag) bool { return f.Name == "--resume" },
+		slices.Clone(drivectl.DriveFlags),
+		func(f drivectl.DriveFlag) bool { return f.Name == "--resume" },
 	)
 
 	return "<id>[:profile]... | <id> -- <id>  " + flagUsage(run) + "\n" +
-		"   f10 drive --resume N " + flagUsage(driverec.ResumeTunes()) + " | list [--all] | cancel N"
+		"   f10 drive --resume N " + flagUsage(drivectl.ResumeTunes()) + " | list [--all] | cancel N"
 }

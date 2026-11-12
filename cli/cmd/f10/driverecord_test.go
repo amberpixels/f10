@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/drive"
-	"github.com/amberpixels/f10/cli/internal/driverec"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -34,7 +34,7 @@ func TestDriveSkipsATaskAnotherDriveOwns(t *testing.T) {
 	// bouncing off the lease says nothing about the owner's task
 	fx.in.Record = func(_ context.Context, _ string, e ledger.Event) { t.Errorf("recorded %+v", e) }
 
-	other, err := drives.Acquire(fx.in.Root, "GH-1", 7)
+	other, err := drivestore.Acquire(fx.in.Root, "GH-1", 7)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestDriveRecordIsPickedUpByTheSameCommand(t *testing.T) {
 		t.Errorf("output lacks %q:\n%s", want, fx.out.String())
 	}
 
-	rec, err := drives.Read(root, 1)
+	rec, err := drivestore.Read(root, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestDriveRecordIsPickedUpByTheSameCommand(t *testing.T) {
 	}
 
 	// the drive's leases went with it
-	if _, held := drives.Probe(root, "GH-1"); held {
+	if _, held := drivestore.Probe(root, "GH-1"); held {
 		t.Error("the task's lease outlived the drive")
 	}
 
@@ -108,7 +108,7 @@ func TestDriveRecordIsPickedUpByTheSameCommand(t *testing.T) {
 	fx.f.script(wsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
 	fx.onTick[1] = func() {
 		// the task runs again: the outcome its last run left is gone
-		if rec, err := drives.Read(root, 1); err != nil || rec.Task("GH-1").Outcome != nil {
+		if rec, err := drivestore.Read(root, 1); err != nil || rec.Task("GH-1").Outcome != nil {
 			t.Errorf("record while running = %+v, %v", rec.Task("GH-1"), err)
 		}
 	}
@@ -122,7 +122,7 @@ func TestDriveRecordIsPickedUpByTheSameCommand(t *testing.T) {
 		t.Errorf("the rerun did not pick up drive 1:\n%s", fx.out.String())
 	}
 
-	rec, err = drives.Read(root, 1)
+	rec, err = drivestore.Read(root, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func TestDriveRecordIsPickedUpByTheSameCommand(t *testing.T) {
 		t.Errorf("answers = %+v, answered = %+v", rec.Answers, rec.Answered)
 	}
 
-	if all, _ := drives.List(root); len(all) != 1 {
+	if all, _ := drivestore.List(root); len(all) != 1 {
 		t.Errorf("%d records, want the one picked up", len(all))
 	}
 }
@@ -160,7 +160,7 @@ func TestDriveDropsUnusedAnswers(t *testing.T) {
 		t.Errorf("output:\n%s", fx.out.String())
 	}
 
-	rec, err := drives.Read(fx.in.Root, 1)
+	rec, err := drivestore.Read(fx.in.Root, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,8 +175,11 @@ func TestDriveDropsUnusedAnswers(t *testing.T) {
 func TestOpenRecordKeepsAnswersNotTaken(t *testing.T) {
 	root := t.TempDir()
 
-	rec := &drives.Record{Args: []string{"GH-1", "GH-2"}, Answers: map[string]string{"GH-1": "1. yes", "GH-2": "1. no"}}
-	if err := drives.Create(root, rec); err != nil {
+	rec := &drivestore.Record{
+		Args:    []string{"GH-1", "GH-2"},
+		Answers: map[string]string{"GH-1": "1. yes", "GH-2": "1. no"},
+	}
+	if err := drivestore.Create(root, rec); err != nil {
 		t.Fatal(err)
 	}
 
@@ -212,8 +215,8 @@ func TestOpenRecordKeepsAnswersNotTaken(t *testing.T) {
 func TestOpenRecordReplacesABareAnswerHoldingEquals(t *testing.T) {
 	root := t.TempDir()
 
-	rec := &drives.Record{Args: []string{"GH-1"}, Answers: map[string]string{"": "1. old"}}
-	if err := drives.Create(root, rec); err != nil {
+	rec := &drivestore.Record{Args: []string{"GH-1"}, Answers: map[string]string{"": "1. old"}}
+	if err := drivestore.Create(root, rec); err != nil {
 		t.Fatal(err)
 	}
 
@@ -327,13 +330,13 @@ func TestDriveStopsWhenCancelled(t *testing.T) {
 // and the record on disk says so; a row whose task is not finished stays.
 func TestDriveListHealsRowsFinishedOutside(t *testing.T) {
 	root := t.TempDir()
-	rec := &drives.Record{Args: []string{"GH-1", "GH-2", "GH-3"}, Tasks: []drives.Task{
-		{ID: "GH-1", Outcome: &drives.Outcome{Row: "halted at catchup", Code: ui.ExitHalted}},
-		{ID: "GH-2", Outcome: &drives.Outcome{Row: "halted at catchup", Code: ui.ExitHalted}},
+	rec := &drivestore.Record{Args: []string{"GH-1", "GH-2", "GH-3"}, Tasks: []drivestore.Task{
+		{ID: "GH-1", Outcome: &drivestore.Outcome{Row: "halted at catchup", Code: ui.ExitHalted}},
+		{ID: "GH-2", Outcome: &drivestore.Outcome{Row: "halted at catchup", Code: ui.ExitHalted}},
 		{ID: "GH-3", Skill: "ship"},
 	}}
 
-	if err := drives.Create(root, rec); err != nil {
+	if err := drivestore.Create(root, rec); err != nil {
 		t.Fatal(err)
 	}
 
@@ -350,12 +353,12 @@ func TestDriveListHealsRowsFinishedOutside(t *testing.T) {
 		}
 	}
 
-	got, err := drives.Read(root, 1)
+	got, err := drivestore.Read(root, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	for id, want := range map[string]string{"GH-1": driverec.RowFinished, "GH-2": "halted at catchup", "GH-3": driverec.RowFinished} {
+	for id, want := range map[string]string{"GH-1": drivectl.RowFinished, "GH-2": "halted at catchup", "GH-3": drivectl.RowFinished} {
 		if o := got.Task(id).Outcome; o == nil || o.Row != want {
 			t.Errorf("%s recorded %+v, want %q", id, o, want)
 		}
@@ -369,20 +372,20 @@ func TestDriveListHealsRowsFinishedOutside(t *testing.T) {
 // A running drive owns its record: list checks none of its rows.
 func TestDriveListLeavesARunningDrive(t *testing.T) {
 	root := t.TempDir()
-	rec := &drives.Record{Args: []string{"GH-1"}, Tasks: []drives.Task{
-		{ID: "GH-1", Outcome: &drives.Outcome{Row: "halted at catchup", Code: ui.ExitHalted}},
+	rec := &drivestore.Record{Args: []string{"GH-1"}, Tasks: []drivestore.Task{
+		{ID: "GH-1", Outcome: &drivestore.Outcome{Row: "halted at catchup", Code: ui.ExitHalted}},
 	}}
 
-	if err := drives.Create(root, rec); err != nil {
+	if err := drivestore.Create(root, rec); err != nil {
 		t.Fatal(err)
 	}
 
-	before, err := os.ReadFile(drives.Path(root, 1))
+	before, err := os.ReadFile(drivestore.Path(root, 1))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	own, err := drives.Acquire(root, drives.DriveKey(1), 1)
+	own, err := drivestore.Acquire(root, drivestore.DriveKey(1), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -397,7 +400,7 @@ func TestDriveListLeavesARunningDrive(t *testing.T) {
 		t.Errorf("list:\n%s", list.String())
 	}
 
-	if after, _ := os.ReadFile(drives.Path(root, 1)); !bytes.Equal(after, before) {
+	if after, _ := os.ReadFile(drivestore.Path(root, 1)); !bytes.Equal(after, before) {
 		t.Errorf("record changed:\n%s", after)
 	}
 }
@@ -405,27 +408,27 @@ func TestDriveListLeavesARunningDrive(t *testing.T) {
 func TestParseDriveSubcommands(t *testing.T) {
 	cases := []struct {
 		args []string
-		want driverec.DriveArgs
+		want drivectl.DriveArgs
 		err  string
 	}{
-		{args: []string{"list"}, want: driverec.DriveArgs{List: true}},
-		{args: []string{"list", "--all"}, want: driverec.DriveArgs{List: true, All: true}},
+		{args: []string{"list"}, want: drivectl.DriveArgs{List: true}},
+		{args: []string{"list", "--all"}, want: drivectl.DriveArgs{List: true, All: true}},
 		{args: []string{"list", "GH-1"}, err: "only --all"},
-		{args: []string{"cancel", "3"}, want: driverec.DriveArgs{Cancel: 3}},
+		{args: []string{"cancel", "3"}, want: drivectl.DriveArgs{Cancel: 3}},
 		{args: []string{"cancel"}, err: "one drive number"},
 		{args: []string{"cancel", "x"}, err: "not a drive number"},
-		{args: []string{"--resume", "2", "--answer", "1. yes"}, want: driverec.DriveArgs{
-			Resume: 2, Answers: []string{"1. yes"}, Every: driverec.DefaultEvery,
+		{args: []string{"--resume", "2", "--answer", "1. yes"}, want: drivectl.DriveArgs{
+			Resume: 2, Answers: []string{"1. yes"}, Every: drivectl.DefaultEvery,
 		}},
 		{args: []string{"--resume=2", "GH-1"}, err: "takes only --answer, --every and --parallel"},
 		{
 			args: []string{"--resume", "2", "--parallel=3"},
-			want: driverec.DriveArgs{Resume: 2, Parallel: 3, Every: driverec.DefaultEvery},
+			want: drivectl.DriveArgs{Resume: 2, Parallel: 3, Every: drivectl.DefaultEvery},
 		},
 	}
 
 	for _, c := range cases {
-		got, err := driverec.ParseDriveArgs(c.args)
+		got, err := drivectl.ParseDriveArgs(c.args)
 
 		switch {
 		case c.err != "":
@@ -519,7 +522,7 @@ func TestOpenRecordKeepsTheCap(t *testing.T) {
 			StateDir:        t.TempDir(),
 			Argv:            argv,
 			DefaultParallel: 6,
-			Args:            driverec.DriveArgs{Parallel: parallel},
+			Args:            drivectl.DriveArgs{Parallel: parallel},
 			Now:             time.Now,
 		}
 		if err := in.OpenRecord(nil); err != nil {
@@ -547,7 +550,7 @@ func TestOpenRecordKeepsTheCap(t *testing.T) {
 			t.Errorf("%q: cap %d, want %d", c.argv, in.Parallel, c.want)
 		}
 
-		rec, err := drives.Read(root, in.Rec.Number)
+		rec, err := drivestore.Read(root, in.Rec.Number)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -559,11 +562,11 @@ func TestOpenRecordKeepsTheCap(t *testing.T) {
 }
 
 func TestTaskStandingQueued(t *testing.T) {
-	if got := drive.TaskStanding(drives.Task{Queued: true}, true); got != "queued" {
+	if got := drive.TaskStanding(drivestore.Task{Queued: true}, true); got != "queued" {
 		t.Errorf("a queued task in a running drive stands %q", got)
 	}
 
-	if got := drive.TaskStanding(drives.Task{Queued: true}, false); got != "not reached" {
+	if got := drive.TaskStanding(drivestore.Task{Queued: true}, false); got != "not reached" {
 		t.Errorf("a queued task in a stopped drive stands %q", got)
 	}
 }
@@ -571,12 +574,12 @@ func TestTaskStandingQueued(t *testing.T) {
 // A task its running drive parked, or holds at finish, stands waiting, not
 // running the skill it last had in flight.
 func TestTaskStandingWaiting(t *testing.T) {
-	parked := drives.Task{Skill: "ship", Phase: drives.PhaseParked}
+	parked := drivestore.Task{Skill: "ship", Phase: drivestore.PhaseParked}
 	if got := drive.TaskStanding(parked, true); got != "waiting on its base" {
 		t.Errorf("a parked task stands %q", got)
 	}
 
-	held := drives.Task{Skill: "finish", Phase: drives.PhaseWaiting}
+	held := drivestore.Task{Skill: "finish", Phase: drivestore.PhaseWaiting}
 	if got := drive.TaskStanding(held, true); got != "waiting to finish after its base" {
 		t.Errorf("a finish held for its base stands %q", got)
 	}
@@ -630,8 +633,8 @@ func TestFinishedLazily(t *testing.T) {
 func TestRecordFollowsThePhase(t *testing.T) {
 	root := t.TempDir()
 
-	rec := &drives.Record{Args: []string{"GH-1"}, Tasks: []drives.Task{{ID: "GH-1"}}}
-	if err := drives.Create(root, rec); err != nil {
+	rec := &drivestore.Record{Args: []string{"GH-1"}, Tasks: []drivestore.Task{{ID: "GH-1"}}}
+	if err := drivestore.Create(root, rec); err != nil {
 		t.Fatal(err)
 	}
 
@@ -645,7 +648,7 @@ func TestRecordFollowsThePhase(t *testing.T) {
 	want := func(phase string, queued bool) {
 		t.Helper()
 
-		got, err := drives.Read(root, rec.Number)
+		got, err := drivestore.Read(root, rec.Number)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -656,18 +659,18 @@ func TestRecordFollowsThePhase(t *testing.T) {
 	}
 
 	in.Queue(r)
-	want(drives.PhaseQueued, true)
+	want(drivestore.PhaseQueued, true)
 
 	in.Unqueue(r)
 	in.Enter(r, drive.AtRunning)
-	want(drives.PhaseRunning, false)
+	want(drivestore.PhaseRunning, false)
 
 	in.Enter(r, drive.AtParked)
-	want(drives.PhaseParked, false)
+	want(drivestore.PhaseParked, false)
 
 	in.Enter(r, drive.AtWaiting)
-	want(drives.PhaseWaiting, false)
+	want(drivestore.PhaseWaiting, false)
 
 	in.End(t.Context(), r, drive.DriveResult{Row: "done: ship"})
-	want(drives.PhaseEnded, false)
+	want(drivestore.PhaseEnded, false)
 }

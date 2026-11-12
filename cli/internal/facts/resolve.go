@@ -6,10 +6,10 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
+	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 )
 
 // The frontmatter declares every typed fact, and the default fills the rest.
@@ -239,7 +239,7 @@ func mapShown(m map[string]string) string {
 func priorityIndex(declared map[string]Labels) map[string]string {
 	index := map[string]string{}
 
-	for _, level := range driver.Priorities {
+	for _, level := range trackerdriver.Priorities {
 		for _, name := range declared[level] {
 			if key := strings.ToLower(name); index[key] == "" {
 				index[key] = level
@@ -254,7 +254,7 @@ func priorityIndex(declared map[string]Labels) map[string]string {
 func priorityShown(declared map[string]Labels) string {
 	var shown []string
 
-	for _, level := range driver.Priorities {
+	for _, level := range trackerdriver.Priorities {
 		if names := declared[level]; len(names) > 0 {
 			shown = append(shown, level+": "+strings.Join(names, ", "))
 		}
@@ -282,7 +282,7 @@ func (e *Effective) resolveHosting(fm *layered) {
 
 	// a bad value is already a problem that stops the command; the default
 	// stands in until then
-	e.DriverTimeout = driver.DefaultTimeout
+	e.DriverTimeout = trackerdriver.DefaultTimeout
 	if d, err := ParseDriverTimeout(e.scalar(fm, "driver_timeout")); err == nil {
 		e.DriverTimeout = d
 	}

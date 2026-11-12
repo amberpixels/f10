@@ -9,10 +9,10 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -26,16 +26,16 @@ func readProps(cmd *cli.Command) (hostops.Props, error) {
 	p.Status = strings.TrimSpace(cmd.String("status"))
 
 	if raw := cmd.String("priority"); raw != "" {
-		rank, ok := driver.PriorityRank(raw)
+		rank, ok := trackerdriver.PriorityRank(raw)
 		if !ok {
 			return hostops.Props{}, fmt.Errorf(
 				"priority %q is not one of %s",
 				raw,
-				strings.Join(driver.Priorities, ", "),
+				strings.Join(trackerdriver.Priorities, ", "),
 			)
 		}
 
-		p.Priority = driver.Priorities[rank]
+		p.Priority = trackerdriver.Priorities[rank]
 	}
 
 	for _, l := range cmd.StringSlice("label") {
@@ -63,7 +63,7 @@ func readProps(cmd *cli.Command) (hostops.Props, error) {
 }
 
 func runTaskComment(ctx context.Context, cmd *cli.Command) error {
-	t, r, err := writeTarget(ctx, cmd, driver.VerbComment)
+	t, r, err := writeTarget(ctx, cmd, trackerdriver.VerbComment)
 	if err != nil {
 		return err
 	}
@@ -106,7 +106,7 @@ func runTaskUpdate(ctx context.Context, cmd *cli.Command) error {
 		)
 	}
 
-	t, r, err := writeTarget(ctx, cmd, driver.VerbUpdate)
+	t, r, err := writeTarget(ctx, cmd, trackerdriver.VerbUpdate)
 	if err != nil {
 		return err
 	}

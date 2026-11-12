@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
@@ -53,7 +53,7 @@ type statusReader struct {
 	gatesOnce  sync.Once
 	gates      GateSource
 	drivesOnce sync.Once
-	active     []drives.Live // the drive records, read once for both the rows and the gates
+	active     []drivestore.Live // the drive records, read once for both the rows and the gates
 }
 
 func NewStatusReader(t *target.Target, now time.Time) (*statusReader, error) {
@@ -155,8 +155,8 @@ func (rd *statusReader) gateSource(ctx context.Context) GateSource {
 }
 
 // drives is the drive records neither cancelled nor done.
-func (rd *statusReader) drives() []drives.Live {
-	rd.drivesOnce.Do(func() { rd.active = drives.Active(rd.t.Layout.StorageRoot.Path()) })
+func (rd *statusReader) drives() []drivestore.Live {
+	rd.drivesOnce.Do(func() { rd.active = drivestore.Active(rd.t.Layout.StorageRoot.Path()) })
 
 	return rd.active
 }

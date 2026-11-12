@@ -15,10 +15,10 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/calendar"
-	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/standup"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
+	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 )
 
 // The typed half of project.md, a leading YAML block. An unknown key or a
@@ -255,7 +255,7 @@ var scalarKeys = []scalarKey{
 		key:   "driver_timeout",
 		field: func(d *Declared) *string { return &d.DriverTimeout },
 		parse: discard(ParseDriverTimeout),
-		def:   driver.DefaultTimeout.String(),
+		def:   trackerdriver.DefaultTimeout.String(),
 	},
 	{
 		key:   "watch",
@@ -446,10 +446,14 @@ func (t TrackerDecl) checkPriority() []string {
 	seen := map[string]string{} // lower-cased label to the level it was first seen under
 
 	for _, level := range slices.Sorted(maps.Keys(t.Priority)) {
-		if _, ok := driver.PriorityRank(level); !ok || level != strings.ToLower(level) {
+		if _, ok := trackerdriver.PriorityRank(level); !ok || level != strings.ToLower(level) {
 			bad = append(
 				bad,
-				fmt.Sprintf("tracker.priority: %q is not one of %s", level, strings.Join(driver.Priorities, ", ")),
+				fmt.Sprintf(
+					"tracker.priority: %q is not one of %s",
+					level,
+					strings.Join(trackerdriver.Priorities, ", "),
+				),
 			)
 
 			continue

@@ -5,8 +5,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -23,8 +23,8 @@ func SettlePriorities(rows []Row, warn io.Writer) []Row {
 			continue
 		}
 
-		if rank, ok := driver.PriorityRank(r.Priority); ok {
-			rows[i].Priority = driver.Priorities[rank]
+		if rank, ok := trackerdriver.PriorityRank(r.Priority); ok {
+			rows[i].Priority = trackerdriver.Priorities[rank]
 
 			continue
 		}
@@ -39,7 +39,7 @@ func SettlePriorities(rows []Row, warn io.Writer) []Row {
 
 	for _, v := range unknown {
 		ui.Warnf(warn, "priority %q on %d row(s) is not one of %s; ignored",
-			v, count[v], strings.Join(driver.Priorities, ", "))
+			v, count[v], strings.Join(trackerdriver.Priorities, ", "))
 	}
 
 	return rows

@@ -1,6 +1,6 @@
 //go:build unix
 
-package drives
+package drivestore
 
 import (
 	"context"

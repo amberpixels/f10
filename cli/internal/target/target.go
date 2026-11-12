@@ -14,7 +14,6 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/ledger"
@@ -22,6 +21,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/projects"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 )
 
 // A Target is the project a command answers for; -C only changes which
@@ -106,9 +106,9 @@ func (t *Target) DriverPaths() []string {
 	return paths
 }
 
-func (t *Target) Driver() *driver.Driver {
+func (t *Target) Driver() *trackerdriver.Driver {
 	for _, p := range t.DriverPaths() {
-		if d := driver.Find(filepath.Dir(p), t.Dir); d != nil {
+		if d := trackerdriver.Find(filepath.Dir(p), t.Dir); d != nil {
 			if t.Effective != nil {
 				d.Timeout = t.Effective.DriverTimeout
 			}

@@ -20,7 +20,6 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/branchmeta/branchmetatest"
 	startcmd "github.com/amberpixels/f10/cli/internal/command/start"
-	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/gitx"
@@ -35,6 +34,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 	"github.com/amberpixels/f10/cli/internal/ui"
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
@@ -239,7 +239,7 @@ func (f *fakes) called(prefix string) bool {
 
 // fakeDriver is an executable at <root>/driver so driver.Find accepts it;
 // what it answers comes from the fakes, never from running it.
-func fakeDriver(t *testing.T) *driver.Driver {
+func fakeDriver(t *testing.T) *trackerdriver.Driver {
 	t.Helper()
 
 	root := t.TempDir()
@@ -249,7 +249,7 @@ func fakeDriver(t *testing.T) *driver.Driver {
 		t.Fatal(err)
 	}
 
-	return driver.Find(root, root)
+	return trackerdriver.Find(root, root)
 }
 
 const (
@@ -381,7 +381,7 @@ func TestBranchName(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			f := newFakes(t)
 
-			var d *driver.Driver
+			var d *trackerdriver.Driver
 			if c.driver {
 				d = fakeDriver(t)
 				f.fail("driver branch 1", c.answer)

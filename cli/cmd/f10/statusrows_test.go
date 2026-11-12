@@ -16,7 +16,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/drive"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
@@ -76,14 +76,14 @@ func TestStageOf(t *testing.T) {
 		{"queued", facts{Queued: true, Base: "FT-1"}, false, statusview.StageQueued, ""},
 		{
 			"parked by its drive",
-			facts{Run: run("skipped", "done", "upcoming", ""), Base: "FT-1", DrivePhase: drives.PhaseParked},
+			facts{Run: run("skipped", "done", "upcoming", ""), Base: "FT-1", DrivePhase: drivestore.PhaseParked},
 			false, statusview.StageWaiting, "on FT-1",
 		},
 		{
 			"finish waits for its base",
 			facts{
 				Run:  &state.Run{Capture: "prior", Plan: "done", Ship: "done", Final: "pr"},
-				Base: "FT-1", DrivePhase: drives.PhaseWaiting,
+				Base: "FT-1", DrivePhase: drivestore.PhaseWaiting,
 			},
 			false, statusview.StageWaiting, "to finish after FT-1",
 		},
@@ -103,26 +103,26 @@ func TestDrivenTasks(t *testing.T) {
 	root := t.TempDir()
 	now := time.Now()
 
-	for _, rec := range []*drives.Record{
-		{Tasks: []drives.Task{{ID: "FT-1"}}},
-		{Cancelled: &now, Tasks: []drives.Task{{ID: "FT-5"}}},
-		{Tasks: []drives.Task{{ID: "FT-6", Outcome: &drives.Outcome{Row: "ok"}}}},
-		{Tasks: []drives.Task{{ID: "ft-2_v2+FT-3"}}},
+	for _, rec := range []*drivestore.Record{
+		{Tasks: []drivestore.Task{{ID: "FT-1"}}},
+		{Cancelled: &now, Tasks: []drivestore.Task{{ID: "FT-5"}}},
+		{Tasks: []drivestore.Task{{ID: "FT-6", Outcome: &drivestore.Outcome{Row: "ok"}}}},
+		{Tasks: []drivestore.Task{{ID: "ft-2_v2+FT-3"}}},
 	} {
-		if err := drives.Create(root, rec); err != nil {
+		if err := drivestore.Create(root, rec); err != nil {
 			t.Fatal(err)
 		}
 	}
 
 	for _, n := range []int{2, 3, 4} {
-		lease, err := drives.Acquire(root, drives.DriveKey(n), n)
+		lease, err := drivestore.Acquire(root, drivestore.DriveKey(n), n)
 		if err != nil {
 			t.Fatal(err)
 		}
 		t.Cleanup(lease.Release)
 	}
 
-	got := statusview.DrivenTasks(drives.Active(root))
+	got := statusview.DrivenTasks(drivestore.Active(root))
 	want := map[string]bool{"FT-2": true, "FT-3": true}
 
 	if len(got) != len(want) || !got["FT-2"] || !got["FT-3"] {

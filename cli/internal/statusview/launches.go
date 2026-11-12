@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
@@ -177,13 +177,13 @@ func launchBase(
 // driveTasks is drive n's tasks as typed, none once the drive is done or
 // cancelled, or its record is gone. Queued, parked and waiting hold only
 // while the driver runs: a stopped drive holds no task back.
-func driveTasks(root, n string) []drives.Task {
+func driveTasks(root, n string) []drivestore.Task {
 	num, err := strconv.Atoi(n)
 	if err != nil {
 		return nil
 	}
 
-	d, ok := drives.ActiveOne(root, num)
+	d, ok := drivestore.ActiveOne(root, num)
 	if !ok {
 		return nil
 	}

@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/trace"
+	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 )
 
 // Derive is the board from facts: one row per task or taskless request,
@@ -663,12 +663,12 @@ func earlyStage(stage string) bool {
 
 func priorityRank(t *Task) int {
 	if t == nil {
-		return len(driver.Priorities)
+		return len(trackerdriver.Priorities)
 	}
 
-	if i, ok := driver.PriorityRank(t.Priority); ok {
+	if i, ok := trackerdriver.PriorityRank(t.Priority); ok {
 		return i
 	}
 
-	return len(driver.Priorities)
+	return len(trackerdriver.Priorities)
 }

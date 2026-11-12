@@ -9,9 +9,8 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/asks"
-	"github.com/amberpixels/f10/cli/internal/driver"
-	"github.com/amberpixels/f10/cli/internal/driverec"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
@@ -22,6 +21,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 )
 
 // DriveInput is one drive: what its command line and project settled, what
@@ -39,7 +39,7 @@ func (in *DriveInput) Enter(r *DriveRun, p runPhase) {
 	}
 
 	r.Phase = p
-	in.saveTask(r, func(t *drives.Task) { t.Phase, t.Queued = p.recorded(), r.Queued() })
+	in.saveTask(r, func(t *drivestore.Task) { t.Phase, t.Queued = p.recorded(), r.Queued() })
 }
 
 // Skills is what drive prompts r through, in order; a spike its pace does
@@ -66,7 +66,7 @@ func (in *DriveInput) SequenceOf(fl runplan.ShipFlow) []string {
 type driveConfig struct {
 	Main string
 	Root string // the storage root as a path for per-run state: the record, the leases, the asks; "" keeps none
-	Args driverec.DriveArgs
+	Args drivectl.DriveArgs
 	Argv []string // the command line as given, for the resume command
 	// Sequence is the skills a task on fl goes through; nil is DriveSkills,
 	// read off the flow, and a test runs the machinery on any skill
@@ -98,7 +98,7 @@ type driveConfig struct {
 
 // driveDeps is what the drive calls out to, which a test replaces.
 type driveDeps struct {
-	Driver  *driver.Driver
+	Driver  *trackerdriver.Driver
 	Tracker stack.Tracker
 	Title   func(ref.Ref) func(context.Context) (string, error)
 	Started func(context.Context, ref.Ref) error // nil when tracker.status declares no started word
@@ -121,9 +121,9 @@ type driveState struct {
 	Answers  answerBook                  // --answer and the inbox's answers, until a task takes each
 	profiles map[string]agentctl.Profile // each profile as typed, resolved over the layers; "" is the map's default
 
-	Rec    *drives.Record           // this drive's record; nil with no root
-	own    *drives.Lease            // the drive's own lease, held while it runs
-	leases map[string]*drives.Lease // each task's, by key, held while the task is unended
+	Rec    *drivestore.Record           // this drive's record; nil with no root
+	own    *drivestore.Lease            // the drive's own lease, held while it runs
+	leases map[string]*drivestore.Lease // each task's, by key, held while the task is unended
 
 	links      *render.TaskLinks // prints this drive's task ids for people
 	project    string            // the name the links print task ids under, read once they load
@@ -257,7 +257,7 @@ type catchupState struct {
 	// LastCatchup is the catchup this drive last sent for the task, kept on
 	// the drive record: the push after it leases against its origin tip, and
 	// a conflict after it counts by its fingerprint
-	LastCatchup *drives.Catchup
+	LastCatchup *drivestore.Catchup
 	// catchupPlan is the base the drive's own catchup integrated, and
 	// catchupLeft what git showed unsettled after the agent's last turn
 	catchupPlan *stack.CatchupPlan
@@ -273,22 +273,22 @@ type runPhase int
 func (p runPhase) recorded() string {
 	switch p {
 	case atPending:
-		return drives.PhasePending
+		return drivestore.PhasePending
 	case AtHeld, atQueued:
-		return drives.PhaseQueued
+		return drivestore.PhaseQueued
 	case AtRunning:
-		return drives.PhaseRunning
+		return drivestore.PhaseRunning
 	case atVerifying:
-		return drives.PhaseVerifying
+		return drivestore.PhaseVerifying
 	case atRetrying:
-		return drives.PhaseRetrying
+		return drivestore.PhaseRetrying
 	case AtParked:
-		return drives.PhaseParked
+		return drivestore.PhaseParked
 	case AtWaiting:
-		return drives.PhaseWaiting
+		return drivestore.PhaseWaiting
 	}
 
-	return drives.PhasePending
+	return drivestore.PhasePending
 }
 
 const (

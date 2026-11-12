@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/amberpixels/f10/cli/internal/driverec"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/render"
@@ -31,7 +31,7 @@ import (
 
 // healFinished settles a stopped drive's open rows whose task finished
 // outside it, on screen always and on disk when the lease is free.
-func healFinished(root string, rec *drives.Record, finished func(string) bool) {
+func healFinished(root string, rec *drivestore.Record, finished func(string) bool) {
 	if finished == nil {
 		return
 	}
@@ -39,14 +39,14 @@ func healFinished(root string, rec *drives.Record, finished func(string) bool) {
 	hit := map[string]bool{}
 
 	for i := range rec.Tasks {
-		if t := &rec.Tasks[i]; !driverec.RowDone(*t) && finished(t.ID) {
+		if t := &rec.Tasks[i]; !drivectl.RowDone(*t) && finished(t.ID) {
 			hit[t.ID] = true
-			driverec.SetFinished(t)
+			drivectl.SetFinished(t)
 		}
 	}
 
 	if len(hit) > 0 {
-		_ = driverec.MarkFinished(root, rec.Number, func(t drives.Task) bool { return hit[t.ID] })
+		_ = drivectl.MarkFinished(root, rec.Number, func(t drivestore.Task) bool { return hit[t.ID] })
 	}
 }
 
@@ -63,7 +63,7 @@ func RecordArgs(argv []string) []string {
 			continue
 		}
 
-		if f, ok := driverec.DriveFlagNamed(name); ok && f.Tunes {
+		if f, ok := drivectl.DriveFlagNamed(name); ok && f.Tunes {
 			if f.Value != "" && !inline {
 				i++
 			}
@@ -93,13 +93,13 @@ func (in *DriveInput) OpenRecord(tasks []DriveTask) error {
 
 	switch {
 	case in.Args.Resume > 0:
-		in.Rec, err = drives.Read(in.Root, in.Args.Resume)
+		in.Rec, err = drivestore.Read(in.Root, in.Args.Resume)
 		if err == nil && in.Rec.Cancelled != nil {
 			err = fmt.Errorf("drive %d was cancelled: run the same command without --resume to start a new one",
 				in.Rec.Number)
 		}
 	default:
-		in.Rec, err = drives.Find(in.Root, RecordArgs(in.Argv))
+		in.Rec, err = drivestore.Find(in.Root, RecordArgs(in.Argv))
 	}
 
 	if err != nil {
@@ -107,7 +107,7 @@ func (in *DriveInput) OpenRecord(tasks []DriveTask) error {
 	}
 
 	if in.Rec == nil {
-		in.Rec = &drives.Record{
+		in.Rec = &drivestore.Record{
 			Created:  in.Now(),
 			Args:     RecordArgs(in.Argv),
 			Flow:     in.Args.Flow,
@@ -122,18 +122,18 @@ func (in *DriveInput) OpenRecord(tasks []DriveTask) error {
 				profile = in.Args.Profiles[i]
 			}
 
-			in.Rec.Tasks = append(in.Rec.Tasks, drives.Task{
+			in.Rec.Tasks = append(in.Rec.Tasks, drivestore.Task{
 				ID: t.Ref.Label() + worktree.SuffixOf(t.Suffix), Agent: profile, After: t.after,
 			})
 		}
 
-		if err := drives.Create(in.Root, in.Rec); err != nil {
+		if err := drivestore.Create(in.Root, in.Rec); err != nil {
 			return err
 		}
 	}
 
-	own, err := drives.Acquire(in.Root, drives.DriveKey(in.Rec.Number), in.Rec.Number)
-	if held := (drives.HeldError{}); errors.As(err, &held) {
+	own, err := drivestore.Acquire(in.Root, drivestore.DriveKey(in.Rec.Number), in.Rec.Number)
+	if held := (drivestore.HeldError{}); errors.As(err, &held) {
 		return fmt.Errorf("drive %d is running (pid %d): f10 drive cancel %d stops it", in.Rec.Number,
 			held.Holder.PID, in.Rec.Number)
 	}
@@ -147,7 +147,7 @@ func (in *DriveInput) OpenRecord(tasks []DriveTask) error {
 	// the drive keeps the cap it started with, unless this run passes one
 	in.Parallel = cmp.Or(in.Args.Parallel, in.Rec.Parallel, in.DefaultParallel)
 	if in.Rec.Parallel != in.Parallel {
-		in.save(func(rec *drives.Record) { rec.Parallel = in.Parallel })
+		in.save(func(rec *drivestore.Record) { rec.Parallel = in.Parallel })
 	}
 
 	// an answer kept from a run that stopped before taking it goes first,
@@ -195,12 +195,12 @@ func (in *DriveInput) RecordLaunch() error {
 
 // save applies change to the record. A failed write is a line, never a
 // halt: the branch keeps the position, the record what it cannot.
-func (in *DriveInput) save(change func(*drives.Record)) {
+func (in *DriveInput) save(change func(*drivestore.Record)) {
 	if in.Rec == nil {
 		return
 	}
 
-	rec, err := drives.Update(in.Root, in.Rec.Number, change)
+	rec, err := drivestore.Update(in.Root, in.Rec.Number, change)
 	if err != nil {
 		fmt.Fprintf(in.Out, "  recording drive %d: %v\n", in.Rec.Number, err)
 
@@ -210,13 +210,13 @@ func (in *DriveInput) save(change func(*drives.Record)) {
 	in.Rec = rec
 }
 
-func (in *DriveInput) saveTask(r *DriveRun, change func(*drives.Task)) {
+func (in *DriveInput) saveTask(r *DriveRun, change func(*drivestore.Task)) {
 	ids := []string{
 		r.Task.Ref.Label() + worktree.SuffixOf(r.Task.Suffix),
 		r.Task.Ref.ID + worktree.SuffixOf(r.Task.Suffix),
 	}
 
-	in.save(func(rec *drives.Record) {
+	in.save(func(rec *drivestore.Record) {
 		for _, id := range ids {
 			if t := rec.Task(id); t != nil {
 				change(t)
@@ -227,8 +227,8 @@ func (in *DriveInput) saveTask(r *DriveRun, change func(*drives.Task)) {
 	})
 }
 
-func (in *DriveInput) savePending(taken *drives.Answer) {
-	in.save(func(rec *drives.Record) {
+func (in *DriveInput) savePending(taken *drivestore.Answer) {
+	in.save(func(rec *drivestore.Record) {
 		rec.Answers = in.Answers.Pending()
 
 		if taken != nil {
@@ -239,7 +239,7 @@ func (in *DriveInput) savePending(taken *drives.Answer) {
 
 func (in *DriveInput) took(id, skill, text string) {
 	if in.Rec != nil {
-		in.savePending(&drives.Answer{Task: id, Skill: skill, Text: text, At: in.Now()})
+		in.savePending(&drivestore.Answer{Task: id, Skill: skill, Text: text, At: in.Now()})
 	}
 }
 
@@ -250,7 +250,7 @@ func (in *DriveInput) refreshRecord() {
 		return
 	}
 
-	rec, err := drives.Read(in.Root, in.Rec.Number)
+	rec, err := drivestore.Read(in.Root, in.Rec.Number)
 	if err != nil {
 		return
 	}
@@ -279,8 +279,8 @@ func (in *DriveInput) lease(r *DriveRun) (string, bool) {
 		return "", true
 	}
 
-	l, err := drives.Acquire(in.Root, key, in.Rec.Number)
-	if held := (drives.HeldError{}); errors.As(err, &held) {
+	l, err := drivestore.Acquire(in.Root, key, in.Rec.Number)
+	if held := (drivestore.HeldError{}); errors.As(err, &held) {
 		return "owned by " + held.Holder.String(), false
 	}
 
@@ -349,7 +349,7 @@ func DriveList(
 	all bool,
 	finished func(row string) bool,
 ) error {
-	recs, err := drives.List(root)
+	recs, err := drivestore.List(root)
 	if err != nil {
 		return err
 	}
@@ -381,7 +381,7 @@ func DriveList(
 			fmt.Fprintln(w)
 		}
 
-		holder, running := drives.Probe(root, drives.DriveKey(rec.Number))
+		holder, running := drivestore.Probe(root, drivestore.DriveKey(rec.Number))
 		if !running {
 			healFinished(root, rec, finished)
 		}
@@ -472,15 +472,15 @@ func FinishedLazily(root storage.Root, id string, branched func() (bool, error),
 	return stack.FinishedTask(ti, root, id, false)
 }
 
-func TaskStanding(t drives.Task, running bool) string {
+func TaskStanding(t drivestore.Task, running bool) string {
 	switch {
 	case t.Outcome != nil:
 		return t.Outcome.Row
 	case running && t.Queued:
 		return "queued"
-	case running && t.Phase == drives.PhaseParked:
+	case running && t.Phase == drivestore.PhaseParked:
 		return "waiting on its base"
-	case running && t.Phase == drives.PhaseWaiting:
+	case running && t.Phase == drivestore.PhaseWaiting:
 		return "waiting to finish after its base"
 	case running && t.Skill != "":
 		return "running " + t.Skill
@@ -494,7 +494,7 @@ func TaskStanding(t drives.Task, running bool) string {
 // DriveCancel marks drive n cancelled: a live drive stops prompting at its
 // next poll; worktrees, branches and agents stay as they are.
 func DriveCancel(w io.Writer, root string, n int, now time.Time) error {
-	rec, err := drives.Update(root, n, func(r *drives.Record) {
+	rec, err := drivestore.Update(root, n, func(r *drivestore.Record) {
 		if r.Cancelled == nil {
 			r.Cancelled = &now
 		}
@@ -503,7 +503,7 @@ func DriveCancel(w io.Writer, root string, n int, now time.Time) error {
 		return err
 	}
 
-	if holder, running := drives.Probe(root, drives.DriveKey(n)); running {
+	if holder, running := drivestore.Probe(root, drivestore.DriveKey(n)); running {
 		fmt.Fprintf(w, "drive %d cancelled: pid %d stops at its next poll, after any finish it is running\n",
 			rec.Number, holder.PID)
 

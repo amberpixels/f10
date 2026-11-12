@@ -12,7 +12,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	ledgercmd "github.com/amberpixels/f10/cli/internal/command/ledger"
 	"github.com/amberpixels/f10/cli/internal/drive"
-	"github.com/amberpixels/f10/cli/internal/driverec"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
 	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
@@ -243,7 +243,7 @@ func TestBundleAfter(t *testing.T) {
 }
 
 func TestDriveParsesABundle(t *testing.T) {
-	a, err := driverec.ParseDriveArgs(strings.Fields("GH-1+GH-2:opus GH-3"))
+	a, err := drivectl.ParseDriveArgs(strings.Fields("GH-1+GH-2:opus GH-3"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +253,7 @@ func TestDriveParsesABundle(t *testing.T) {
 	}
 
 	in := &drive.DriveInput{
-		Args: driverec.DriveArgs{Tasks: []string{"GH-1+GH-2", "GH-5"}, Span: true},
+		Args: drivectl.DriveArgs{Tasks: []string{"GH-1+GH-2", "GH-5"}, Span: true},
 	}
 	if _, _, err := in.Span(t.Context()); err == nil {
 		t.Error("a bundle as a range end was taken")

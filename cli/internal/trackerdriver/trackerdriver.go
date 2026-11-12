@@ -1,7 +1,7 @@
-// Package driver runs the executable at .f10/driver, a project's tracker
+// Package trackerdriver runs the executable at .f10/driver, a project's tracker
 // driver per docs/driver-contract.md. It touches only its tracker: f10 opens
 // urls and creates branches, so `open` means the same with or without one.
-package driver
+package trackerdriver
 
 import (
 	"context"

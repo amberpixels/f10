@@ -11,7 +11,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/observe"
 	"github.com/amberpixels/f10/cli/internal/stack"
@@ -298,7 +298,7 @@ func (in *DriveInput) verified(ctx context.Context, r *DriveRun, job *verifyJob)
 			"verify is red after the catchup: "+job.res.Failed+" failed, its output is in "+job.res.Log,
 		)
 
-		if err := in.AttemptAt(r, "catchup", drives.Fingerprint(p.SHA, "", job.res.Failed), halt); err != nil {
+		if err := in.AttemptAt(r, "catchup", drivestore.Fingerprint(p.SHA, "", job.res.Failed), halt); err != nil {
 			return err
 		}
 
@@ -375,13 +375,13 @@ func (in *DriveInput) KeepCatchup(r *DriveRun) {
 		return
 	}
 
-	var c *drives.Catchup
+	var c *drivestore.Catchup
 	if r.LastCatchup != nil {
 		saved := *r.LastCatchup
 		c = &saved
 	}
 
-	in.saveTask(r, func(t *drives.Task) { t.Catchup = c })
+	in.saveTask(r, func(t *drivestore.Task) { t.Catchup = c })
 }
 
 // conflictAttempt counts a conflict met after the catchup this drive sent,

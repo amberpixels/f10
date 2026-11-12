@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/statusview"
@@ -92,11 +92,14 @@ func TestStatusParentWorld(t *testing.T) {
 	)...)
 
 	// a running drive lists FT-6, so it waits on its base
-	if err := drives.Create(root, &drives.Record{Tasks: []drives.Task{{ID: "FT-6", After: "FT-3"}}}); err != nil {
+	if err := drivestore.Create(
+		root,
+		&drivestore.Record{Tasks: []drivestore.Task{{ID: "FT-6", After: "FT-3"}}},
+	); err != nil {
 		t.Fatal(err)
 	}
 
-	lease, err := drives.Acquire(root, drives.DriveKey(1), 1)
+	lease, err := drivestore.Acquire(root, drivestore.DriveKey(1), 1)
 	if err != nil {
 		t.Fatal(err)
 	}

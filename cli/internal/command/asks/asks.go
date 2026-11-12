@@ -22,7 +22,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/asks"
 	"github.com/amberpixels/f10/cli/internal/buildinfo"
 	"github.com/amberpixels/f10/cli/internal/daemon"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/render"
@@ -379,7 +379,7 @@ func liveDeliver() Deliverer {
 		},
 		Resume: resumeAskDrive,
 		Live: func(a asks.Ask) bool {
-			_, held := drives.Probe(a.Root, drives.DriveKey(a.Drive))
+			_, held := drivestore.Probe(a.Root, drivestore.DriveKey(a.Drive))
 
 			return held
 		},

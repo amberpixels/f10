@@ -10,11 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
+	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 )
 
 // A Host is the forge binding with the nouns only this command acts on; the
@@ -373,11 +373,11 @@ const IssuePage = 30
 // priorityOf is the most urgent level the issue's labels map to, or "" when
 // none does. Labels compare case-insensitively, as the hosts treat them.
 func priorityOf(names []string, priorities map[string]string) string {
-	best, level := len(driver.Priorities), ""
+	best, level := len(trackerdriver.Priorities), ""
 
 	for _, name := range names {
-		if rank, ok := driver.PriorityRank(priorities[strings.ToLower(name)]); ok && rank < best {
-			best, level = rank, driver.Priorities[rank]
+		if rank, ok := trackerdriver.PriorityRank(priorities[strings.ToLower(name)]); ok && rank < best {
+			best, level = rank, trackerdriver.Priorities[rank]
 		}
 	}
 

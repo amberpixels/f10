@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
-	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/layout"
@@ -17,6 +16,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
@@ -127,8 +127,8 @@ func TestDeclinedVerbOnNonHostTracker(t *testing.T) {
 	tg := declaredTracker(t, facts.TrackerNotion)
 	path := writeDriver(t, tg.Layout.StorageRoot.Path())
 
-	f.fail("driver list", shell.Result{Code: driver.ExitUnsupported})
-	f.fail("driver search index", shell.Result{Code: driver.ExitUnsupported})
+	f.fail("driver list", shell.Result{Code: trackerdriver.ExitUnsupported})
+	f.fail("driver search index", shell.Result{Code: trackerdriver.ExitUnsupported})
 
 	_, listErr := stack.TaskRows(t.Context(), tg, hostops.IssuePage)
 	_, searchErr := taskcmd.SearchRows(t.Context(), tg, "index")
@@ -153,7 +153,12 @@ func TestDeclinedVerbRefusalNamesTheNeed(t *testing.T) {
 	path := writeDriver(t, tg.Layout.StorageRoot.Path())
 
 	verbs := []string{
-		driver.VerbRead, driver.VerbURL, driver.VerbIndex, driver.VerbList, driver.VerbSearch, driver.VerbBranch,
+		trackerdriver.VerbRead,
+		trackerdriver.VerbURL,
+		trackerdriver.VerbIndex,
+		trackerdriver.VerbList,
+		trackerdriver.VerbSearch,
+		trackerdriver.VerbBranch,
 	}
 	for _, verb := range verbs {
 		err := hostops.RefusedSource{Target: tg, Driver: tg.Driver()}.Refuse(verb)
@@ -163,8 +168,11 @@ func TestDeclinedVerbRefusalNamesTheNeed(t *testing.T) {
 		}
 	}
 
-	if !strings.Contains(hostops.VerbNeeds[driver.VerbList], "`f10 task open --print` and the board's next rows") {
-		t.Errorf("list need = %q", hostops.VerbNeeds[driver.VerbList])
+	if !strings.Contains(
+		hostops.VerbNeeds[trackerdriver.VerbList],
+		"`f10 task open --print` and the board's next rows",
+	) {
+		t.Errorf("list need = %q", hostops.VerbNeeds[trackerdriver.VerbList])
 	}
 
 	if _, err := worktree.TitleLookup(
@@ -184,7 +192,7 @@ func TestDeclinedVerbOnHostTrackerFallsBack(t *testing.T) {
 	tg := declaredTracker(t, facts.TrackerGitHub)
 	writeDriver(t, tg.Layout.StorageRoot.Path())
 
-	f.fail("driver list", shell.Result{Code: driver.ExitUnsupported})
+	f.fail("driver list", shell.Result{Code: trackerdriver.ExitUnsupported})
 	f.script(
 		"gh issue list --json number,title,state,url,labels,body,assignees,createdAt --limit 30",
 		`[{"number":7,"title":"host issue","state":"OPEN","url":"https://github.com/o/r/issues/7","labels":[]}]`,

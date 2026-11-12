@@ -1,4 +1,4 @@
-package drives
+package drivestore
 
 import "time"
 

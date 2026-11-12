@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
-	"github.com/amberpixels/f10/cli/internal/driverec"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/forge"
@@ -107,7 +107,7 @@ func (src GateSource) gatesOf(ctx context.Context, id, branch, root, storage str
 		// the record says drive finishes the branch, and outlives a halted or
 		// killed drive; what finish is doing counts only under the lease
 		rec, ok := branchmeta.ParseDriveFinish(branchmeta.Out(ctx, src.Main, branch, branchmeta.Finish))
-		if _, held := drives.Probe(src.Shared, id); ok && held {
+		if _, held := drivestore.Probe(src.Shared, id); ok && held {
 			in.Finish = rec
 		}
 
@@ -150,14 +150,14 @@ type DriveFlow struct {
 // DriveFlows maps each task of a drive neither cancelled nor done to the
 // flow the drive took, the newest drive winning. A drive without --flow
 // records none, read as default: an area's pick is ship's to make.
-func DriveFlows(active []drives.Live) map[string]DriveFlow {
+func DriveFlows(active []drivestore.Live) map[string]DriveFlow {
 	out := map[string]DriveFlow{}
 
 	for _, d := range active {
 		for _, t := range d.Tasks {
 			if lead := ref.TypedLead(t.ID); out[lead].Name == "" {
 				// a record that no longer parses keeps its flow, under no pace
-				a, _ := driverec.ParseDriveArgs(d.Args)
+				a, _ := drivectl.ParseDriveArgs(d.Args)
 				out[lead] = DriveFlow{Name: cmp.Or(d.Flow, "default"), pace: a.Pace, Running: d.Running}
 			}
 		}

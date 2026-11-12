@@ -12,12 +12,12 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 )
 
 // The three outcomes of a check.
@@ -44,9 +44,9 @@ type Env struct {
 	Layout      *layout.Layout
 	Probes      *probe.Probes
 	Facts       *facts.Effective
-	Version     string         // the binary's, as `f10 --version` prints it
-	Driver      *driver.Driver // the project's tracker driver; nil when it has none
-	NeedsDriver bool           // the tracker reads only through a driver, as Notion or Jira does
+	Version     string                // the binary's, as `f10 --version` prints it
+	Driver      *trackerdriver.Driver // the project's tracker driver; nil when it has none
+	NeedsDriver bool                  // the tracker reads only through a driver, as Notion or Jira does
 
 	Getenv   func(string) string
 	LookPath func(string) (string, error)

@@ -12,7 +12,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drive"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/shell"
@@ -198,7 +198,7 @@ func TestReconcileFinishes(t *testing.T) {
 	}{
 		{err: nil, kind: drive.WatchFinished},
 		{err: errors.New("dirty"), kind: drive.WatchRefused},
-		{err: drives.HeldError{Key: "FT-1", Holder: drives.Holder{Drive: 2}}, kind: ""},
+		{err: drivestore.HeldError{Key: "FT-1", Holder: drivestore.Holder{Drive: 2}}, kind: ""},
 	} {
 		var out collected
 
@@ -271,7 +271,7 @@ func TestCollectWatched(t *testing.T) {
 
 	root := t.TempDir()
 
-	lease, err := drives.Acquire(root, "GH-3", 2)
+	lease, err := drivestore.Acquire(root, "GH-3", 2)
 	if err != nil {
 		t.Fatal(err)
 	}

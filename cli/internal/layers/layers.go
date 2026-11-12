@@ -46,8 +46,8 @@ var Table = []Rule{
 	{Prefix: "internal/projects", Rank: -2},
 	{Prefix: "internal/ui", Rank: -1},
 	{Prefix: "internal/tasktree", Rank: -1},
-	{Prefix: "internal/driver", Rank: -1}, // imports shell
-	{Prefix: "internal/asks", Rank: -1},   // imports fsx
+	{Prefix: "internal/trackerdriver", Rank: -1}, // imports shell
+	{Prefix: "internal/asks", Rank: -1},          // imports fsx
 
 	// the domain packages, which Go's own cycle check keeps acyclic
 	{Prefix: "internal", Rank: 0, Peers: true},
@@ -62,7 +62,7 @@ var Table = []Rule{
 	{Prefix: "internal/reviews", Rank: 2, Peers: true},
 	{Prefix: "internal/scope", Rank: 2, Peers: true},
 	{Prefix: "internal/launch", Rank: 2, Peers: true},
-	{Prefix: "internal/driverec", Rank: 2, Peers: true},
+	{Prefix: "internal/drivectl", Rank: 2, Peers: true},
 	{Prefix: "internal/asknotify", Rank: 2, Peers: true},
 	{Prefix: "internal/statusview", Rank: 2, Peers: true},
 	{Prefix: "internal/command", Rank: 2, Peers: true, Exact: true},

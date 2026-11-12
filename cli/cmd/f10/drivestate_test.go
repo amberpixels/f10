@@ -9,7 +9,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drive"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
@@ -295,14 +295,14 @@ func TestCatchupAttemptsCountTheFingerprint(t *testing.T) {
 		return &res
 	}
 
-	same := drives.Fingerprint("m1", "a.go", "")
+	same := drivestore.Fingerprint("m1", "a.go", "")
 	for i := range 2 {
 		if res := attempt(same); res != nil {
 			t.Fatalf("attempt %d halted: %+v", i+1, res)
 		}
 	}
 
-	for _, moved := range []string{drives.Fingerprint("m2", "a.go", ""), drives.Fingerprint("m1", "b.go", "")} {
+	for _, moved := range []string{drivestore.Fingerprint("m2", "a.go", ""), drivestore.Fingerprint("m1", "b.go", "")} {
 		if res := attempt(moved); res != nil {
 			t.Fatalf("a moved fingerprint halted: %+v", res)
 		}

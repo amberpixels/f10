@@ -15,7 +15,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/ledger"
@@ -837,25 +837,25 @@ func TestDriveFlows(t *testing.T) {
 	root := t.TempDir()
 	now := time.Now()
 
-	for _, rec := range []*drives.Record{
-		{Flow: "old", Tasks: []drives.Task{{ID: "FT-1"}, {ID: "FT-4"}}},
-		{Flow: "gone", Cancelled: &now, Tasks: []drives.Task{{ID: "FT-5"}}},
-		{Flow: "done", Tasks: []drives.Task{{ID: "FT-6", Outcome: &drives.Outcome{Row: "ok"}}}},
-		{Flow: "prose", Tasks: []drives.Task{{ID: "FT-1_v2"}, {ID: "FT-2+FT-3"}}},
-		{Tasks: []drives.Task{{ID: "FT-4"}}},
+	for _, rec := range []*drivestore.Record{
+		{Flow: "old", Tasks: []drivestore.Task{{ID: "FT-1"}, {ID: "FT-4"}}},
+		{Flow: "gone", Cancelled: &now, Tasks: []drivestore.Task{{ID: "FT-5"}}},
+		{Flow: "done", Tasks: []drivestore.Task{{ID: "FT-6", Outcome: &drivestore.Outcome{Row: "ok"}}}},
+		{Flow: "prose", Tasks: []drivestore.Task{{ID: "FT-1_v2"}, {ID: "FT-2+FT-3"}}},
+		{Tasks: []drivestore.Task{{ID: "FT-4"}}},
 	} {
-		if err := drives.Create(root, rec); err != nil {
+		if err := drivestore.Create(root, rec); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	lease, err := drives.Acquire(root, drives.DriveKey(4), 4)
+	lease, err := drivestore.Acquire(root, drivestore.DriveKey(4), 4)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer lease.Release()
 
-	got := statusview.DriveFlows(drives.Active(root))
+	got := statusview.DriveFlows(drivestore.Active(root))
 	want := map[string]statusview.DriveFlow{
 		"FT-1": {Name: "prose", Running: true},
 		"FT-2": {Name: "prose", Running: true},

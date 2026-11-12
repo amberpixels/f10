@@ -15,7 +15,6 @@ import (
 
 	boardcmd "github.com/amberpixels/f10/cli/internal/command/board"
 	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
-	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/images"
@@ -23,6 +22,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -144,7 +144,7 @@ func TestTaskListURL(t *testing.T) {
 		t.Errorf("driver index = %q, %v", got, err)
 	}
 
-	f.fail("driver index", shell.Result{Code: driver.ExitUnsupported})
+	f.fail("driver index", shell.Result{Code: trackerdriver.ExitUnsupported})
 	f.script("gh repo view --json url", `{"url":"https://github.com/o/r"}`)
 
 	if got, err := taskcmd.TaskListURL(t.Context(), tg); err != nil || got != "https://github.com/o/r/issues" {
@@ -182,7 +182,7 @@ func TestTaskRows(t *testing.T) {
 		t.Errorf("printed rows = %q, %v; want no body", printed.String(), err)
 	}
 
-	f.fail("driver list", shell.Result{Code: driver.ExitUnsupported})
+	f.fail("driver list", shell.Result{Code: trackerdriver.ExitUnsupported})
 	f.script(
 		"gh issue list --json number,title,state,url,labels,body,assignees,createdAt --limit 30",
 		`[{"number":7,"title":"host issue","state":"OPEN","url":"https://github.com/o/r/issues/7","labels":[{"name":"P3"}]},`+
@@ -250,7 +250,7 @@ func TestWriteTaskListRanksAndWarns(t *testing.T) {
 	}
 
 	// the host path, through the declared map
-	f.fail("driver list", shell.Result{Code: driver.ExitUnsupported})
+	f.fail("driver list", shell.Result{Code: trackerdriver.ExitUnsupported})
 	f.script("gh issue list --json number,title,state,url,labels,body,assignees,createdAt --limit 30",
 		`[{"number":7,"title":"low","state":"OPEN","labels":[{"name":"P3"}]},`+
 			`{"number":8,"title":"none","state":"OPEN","labels":[]},`+

@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
-	"github.com/amberpixels/f10/cli/internal/driverec"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/start"
@@ -33,7 +33,7 @@ func (in *DriveInput) send(ctx context.Context, r *DriveRun, skill string) error
 		c.Spent = true
 	}
 
-	in.saveTask(r, func(t *drives.Task) { t.Skill, t.Outcome = skill, nil })
+	in.saveTask(r, func(t *drivestore.Task) { t.Skill, t.Outcome = skill, nil })
 	in.KeepCatchup(r)
 
 	answeredAt, answered := in.Answers.Heard(id)
@@ -67,7 +67,7 @@ func (in *DriveInput) send(ctx context.Context, r *DriveRun, skill string) error
 	case r.retry:
 		// an attempt failed: the action goes again, whatever the run says
 		return in.prompt(ctx, r, ws, skill, "")
-	case run != nil && driverec.StoppedRun(run):
+	case run != nil && drivectl.StoppedRun(run):
 		answer := in.takeAnswer(id)
 		if answer == "" {
 			// a catchup clears a mark but restores the ship stop it noted, so
