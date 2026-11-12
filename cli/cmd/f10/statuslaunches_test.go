@@ -351,7 +351,7 @@ func TestHookStatusTextReportsAsks(t *testing.T) {
 	fx.worktree(t, "DM-1", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
 	fx.launch(t, state.LaunchStart, "DM-1")
 
-	text, asks := hookcmd.HookStatusText(t.Context(), "sess-1")
+	text, asks := hookcmd.HookStatusText(t.Context(), "sess-1", "")
 	if asks || !strings.HasPrefix(text, statusview.LaunchesHead) {
 		t.Errorf("no ask: asks = %v, text:\n%s", asks, text)
 	}
@@ -366,7 +366,7 @@ func TestHookStatusTextReportsAsks(t *testing.T) {
 	})
 	fx.launch(t, state.LaunchStart, "DM-3")
 
-	if _, asks := hookcmd.HookStatusText(t.Context(), "sess-1"); !asks {
+	if _, asks := hookcmd.HookStatusText(t.Context(), "sess-1", ""); !asks {
 		t.Error("an asking launch did not report an ask")
 	}
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lore"
+	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 )
@@ -601,7 +602,7 @@ func TestRenderGates(t *testing.T) {
 		t.Errorf("a run with no gates carries some: %s", raw)
 	}
 
-	// a parent's rows carry the compact column, a finished task alone every line
+	// a parent's rows carry the compact column
 	rows := []TaskRow{
 		{ID: "FT-1", Title: "Thing", Stage: stageReviewing, Step: "review", Gates: gates},
 	}
@@ -614,18 +615,6 @@ func TestRenderGates(t *testing.T) {
 
 	if !strings.Contains(out.String(), "review  󰚔 L … · R upcoming · 󰊛 J upcoming") {
 		t.Errorf("rows lack the gate column:\n%s", out.String())
-	}
-
-	rows[0].Full = true
-
-	out.Reset()
-
-	if err := RenderRows(&out, rows, RowView{}); err != nil {
-		t.Fatal(err)
-	}
-
-	if !strings.Contains(out.String(), "implement  done\n") || strings.Contains(out.String(), "L … ·") {
-		t.Errorf("a finished row lacks its gate lines:\n%s", out.String())
 	}
 }
 
@@ -972,11 +961,11 @@ func TestGatesShowEntryLabels(t *testing.T) {
 		t.Errorf("json = %s", b)
 	}
 
-	if rows := gateLines(
+	if rows := gateFacts(
 		gates,
 	); !slices.ContainsFunc(
 		rows,
-		func(r [2]string) bool { return r[0] == "  pr-polish" },
+		func(r render.Fact) bool { return r.Label == "  pr-polish" },
 	) {
 		t.Errorf("rows = %v, want a pr-polish row", rows)
 	}

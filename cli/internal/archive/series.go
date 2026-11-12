@@ -185,10 +185,15 @@ func SeriesStart(dir string) time.Time {
 		return time.Time{}
 	}
 
-	newest := closed[len(closed)-1]
-	if e := ReadSeriesEnd(newest); !e.At.IsZero() {
+	return SeriesEndAt(closed[len(closed)-1])
+}
+
+// SeriesEndAt is when an archived series closed: its closed file's time,
+// else the directory's, for a series archived before the file recorded one.
+func SeriesEndAt(dir string) time.Time {
+	if e := ReadSeriesEnd(dir); !e.At.IsZero() {
 		return e.At
 	}
 
-	return ModTime(newest)
+	return ModTime(dir)
 }

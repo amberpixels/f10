@@ -171,9 +171,7 @@ func runFacts(r *state.Run, v RunView) []render.Fact {
 		add(p, r.PhaseText(p), statusStyle(r.Status(p)))
 	}
 
-	for _, g := range v.Gates {
-		add("  "+g.Shown(), g.Text(), statusStyle(g.style()))
-	}
+	rows = append(rows, gateFacts(v.Gates)...)
 
 	for _, kv := range [][2]string{{"note", r.Note}, {"next", r.Next}, {"ask", r.Ask}, {"wait", r.Wait}, {"stop", r.Stop}} {
 		if kv[1] != "" {

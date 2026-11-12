@@ -54,9 +54,10 @@ type Env struct {
 	// PromptTyped is told of every prompt submitted, with the session's
 	// cwd: one typed in an asking agent's pane answers its ask.
 	PromptTyped func(ctx context.Context, cwd, prompt string)
-	// StatusText is what `f10 status` prints for a session, and whether it
-	// holds a question to relay, which needs a model turn.
-	StatusText func(ctx context.Context, session string) (string, bool)
+	// StatusText is what `f10 status [token]` prints for a session, and
+	// whether the model must take the turn: a question to relay, or a token
+	// that names no task.
+	StatusText func(ctx context.Context, session, token string) (string, bool)
 
 	// Observers receive every observation after the badge has applied it.
 	Observers []observe.Observer
@@ -71,7 +72,7 @@ func (e *Env) now() time.Time {
 }
 
 // Dispatch handles one hook event and returns what the hook prints on
-// stdout: a verdict for a bare `/f10:status`, nothing otherwise.
+// stdout: a verdict for a typed `/f10:status [id]`, nothing otherwise.
 func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 	if env.Debug {
 		debugLog(env.StateDir, raw)
@@ -99,11 +100,13 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 			env.PromptTyped(ctx, p.Cwd, p.Prompt)
 		}
 	case "UserPromptExpansion":
-		// the typed path, which the Skill tool never sees. Only a bare status
-		// is answered here: one with a task id, or holding an ask (answerStatus
-		// checks), may relay a question, which needs a model turn
-		if (p.CommandName == "f10:status" || p.CommandName == "status") && p.CommandArgs == "" {
-			return answerStatus(ctx, env, sid)
+		// the typed path, which the Skill tool never sees. A status for this
+		// session or one task id is answered here, unless it holds a question
+		// to relay or names no task, which the model takes (answerStatus checks)
+		if token, ok := statusToken(p.CommandName, p.CommandArgs); ok {
+			if out := answerStatus(ctx, env, sid, token); out != nil {
+				return out
+			}
 		}
 
 		seed(ctx, env, sid, skillOf(p.CommandName), p.CommandArgs, p.Cwd)
@@ -373,16 +376,36 @@ func debugLog(dir string, raw []byte) {
 	_, _ = f.Write(append(slices.Clone(raw), '\n'))
 }
 
-// answerStatus answers a bare `/f10:status` with a blocking verdict that ends
-// the turn before the model runs, so it costs no model turn.
-func answerStatus(ctx context.Context, env *Env, sid string) []byte {
-	text, asks := "", false
+// statusToken is the task a typed `/f10:status` names, "" for a bare one;
+// ok is false for any other command, or arguments that are not one task id
+// (a flag, free words), which the skill reads.
+func statusToken(name, args string) (string, bool) {
+	if name != "f10:status" && name != "status" {
+		return "", false
+	}
+
+	switch f := strings.Fields(args); {
+	case len(f) == 0:
+		return "", true
+	case len(f) == 1 && !strings.HasPrefix(f[0], "-"):
+		return f[0], true
+	}
+
+	return "", false
+}
+
+// answerStatus answers a typed `/f10:status [id]` with a blocking verdict
+// that ends the turn before the model runs, so it costs no model turn.
+func answerStatus(ctx context.Context, env *Env, sid, token string) []byte {
+	// with no reader a task id has no answer here, and the bare default
+	// below is wrong for it
+	text, pass := "", token != ""
 	if env.StatusText != nil {
-		text, asks = env.StatusText(ctx, sid)
+		text, pass = env.StatusText(ctx, sid, token)
 		text = strings.TrimRight(text, "\n")
 	}
 
-	if asks {
+	if pass {
 		return nil
 	}
 

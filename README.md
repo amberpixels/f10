@@ -94,7 +94,7 @@ Each skill is an **entry point** into the chain:
 | `/f10:explain <PR \| id \| this branch \| local \| concept \| path>` | explain | for a change, what it was and what it is now. For a thing, what it is |
 | `/f10:catchup` | catchup | the branch merged or rebased onto its base, conflicts settled, verify green, nothing pushed |
 | `/f10:standup [--since <date> \| --week] [-C <checkout> \| --group <name> \| --all] [--other]` | standup | a report of your work by day, project and task. It is printed, and drafted wherever your settings or the project's overlay name a delivery adapter. The next report starts where this one ended |
-| `/f10:status [id]` | nothing: a hook answers it, or `f10 status <id>` with an id | the run's status in words. With an id, another worktree's run and its agent's question, relayed and answered |
+| `/f10:status [id]` | nothing: a hook answers it, bare or with an id | the run's status in words. With an id, another worktree's run and its agent's question, relayed and answered |
 | `/f10:asks [id]` | nothing: it runs `f10 asks` | the questions driven agents wait on, across projects, asked in one questionnaire. Each answer resumes its drive or reaches its agent |
 | `/f10:read [id \| id+id]` | nothing: it runs `f10 task read` | the task, its comments and every image it links, opened in context, with nothing planned or started |
 | `/f10:board [<window>] [--state] [--remote] [-C <checkout>]` | nothing: it runs `f10 board` | what changed today (else the last working day), by group. With `--state`, every task's stage and next action, and your own next moves offered one per line (the `next` group as one line, for its first task), none of them run |
@@ -416,8 +416,8 @@ When there is no task to name, `f10 status` in a terminal lists this repo's live
 When a task is named, `--json` takes the shape that `f10 status <id>` prints: a run list, the fallback object, or task rows.
 
 Inside a session, `! f10 status` already has the session id.
-A bare `/f10:status` is answered by the plugin's hook before a model runs, so it costs no tokens.
-Two cases go to the model instead: `/f10:status <id>`, and a status that prints a question a driven agent waits on.
+`/f10:status` and `/f10:status <id>` are answered by the plugin's hook before a model runs, so they cost no tokens.
+Three cases go to the model instead: a status that prints a question a driven agent waits on, an argument that names no task, and a task whose read takes longer than 3 seconds.
 The model puts the question to you and sends your answer.
 
 `f10 status 1042` reads another run, the one in the worktree that has the task's branch.
@@ -487,7 +487,7 @@ The last two in the default hold the real U+F015A and U+F073A characters.
 - **Hooks** (`hooks/hooks.json`) - every state hook runs `f10 hook`, which reads the payload once.
   `UserPromptExpansion` and `PreToolUse` catch a skill starting, whether you typed it or the model invoked it.
   They read its argument to tell a description, which is routed through capture, from a task id.
-  `UserPromptExpansion` also answers a bare `/f10:status`: it writes a blocking verdict on stdout, which ends the turn.
+  `UserPromptExpansion` also answers `/f10:status [id]`: it writes a blocking verdict on stdout, which ends the turn.
   The same two events, and `SessionStart` after a compaction, inject the conventions through `f10-inject.sh`.
   They send them in chunks under Claude Code's per-hook cap, once per session and again after a compaction dropped them.
   A per-session marker records whether the session holds them.

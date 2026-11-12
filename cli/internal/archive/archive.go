@@ -47,6 +47,25 @@ func FreeArchiveName(dir, id string) string {
 	}
 }
 
+// NewestArchived is the most recently written of `<id>.md` and `<id>.<N>.md`
+// in an archive dir, "" for none. FreeArchiveName takes the lowest free
+// name, so the number does not order them and the file's time does.
+func NewestArchived(dir, id string) string {
+	paths, _ := filepath.Glob(filepath.Join(dir, id+".*.md"))
+	if one := filepath.Join(dir, id+".md"); fsx.Exists(one) {
+		paths = append(paths, one)
+	}
+
+	newest := ""
+	for _, p := range paths {
+		if newest == "" || ModTime(p).After(ModTime(newest)) {
+			newest = p
+		}
+	}
+
+	return newest
+}
+
 // ArchivePlan moves the plan into the shared archive. A missing plan is a
 // note, since a task shipped without one still needs cleaning up; one that
 // cannot move is an error, since removing the worktree would delete it.

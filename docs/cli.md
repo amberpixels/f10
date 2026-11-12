@@ -452,13 +452,15 @@ FT-116  2 done · 1 halted · 1 reviewing
 A row is a glyph for the stage (`✓` done or shipped, `✗` halted, `?` asking, `·` anything else), the id, the stage, the current or last step, and the PR with its state when it is not open, an open or merged PR's number after a Nerd Font icon (`F10_STATUS_GLYPHS` replaces the icons on a terminal without the font).
 A task's run block gains an `agent` row, the profile its branch records (`opus:high`), when that is not the kind's default; `--json` carries it as `agent`.
 The title goes on the line beneath, cut to fit; the ask, the halt reason and what unblocks it (`next`) follow as labelled lines.
-A finished task alone prints as a one-row tree with no heading, every gate a labelled line.
 Each row reads the child's live run in its worktree, else the ledger's last record of it, which outlives the worktree `f10 finish` removes.
 The PRs come from one host search for every row.
 A row reads its PR on its own only when the search missed it, by its branch or by the url the ledger kept.
 On a terminal the id and the PR are links (OSC 8).
-`--plain` prints the same tree with no color and no urls, its gates as a `gates` line under the title; titles, halt and next lines are cut to `$COLUMNS`, else 100, and an ask is never cut.
-A model that needs a url runs `f10 task open <id> --link` or `f10 pr open <n> --link`.
+`--plain` prints the same tree with no color and no links.
+So every row carries its task url on a `url` line, and its PR's url on a `pr` line, under the title.
+The gates go on a `gates` line after the `url` and `pr` lines.
+Titles, halt and next lines are cut to `$COLUMNS`, else 100, but an ask or a url is never cut.
+A parent and `launched here` print a tree whatever the count, and a child's files are one call away in `f10 status <child-id>`.
 A skill relays it in a fenced block: relayed text shows an OSC 8 link's escape bytes, and a markdown table is reflowed at pane width.
 It applies only to the tree; a run's block prints as without it.
 
@@ -492,19 +494,22 @@ review 1:      /home/me/code/f10/.f10/reviews/FT-414/1.md
 ```
 
 A row with no value is left out.
-Every row but one is read locally: the title and the url from the task refs f10 already read (a run that lost its url gets it back from there, in `--json` too), the head's short sha once the branch has a commit of its own, and the plan and the handoff when their files exist.
+Every row but one is read locally: the title and the url from the task refs f10 already read (a run that lost its url gets it back from there, in `--json` too), the head's short sha once the branch has a commit of its own, and the plan, the handoff and the demo report (`demo/<id>/report.html`) when their files exist.
 The PR comes from the ledger's `pr_opened` event.
 A project whose PR adapter runs a script around `gh` leaves no such event, so for a task the ledger saw pushed, status asks the host for the PR by branch.
 Each judge verdict and each review findings file gets a row of its own after `plan` and `handoff`: `judge <subject>` (task, plan or change), with the file's number added when a subject was judged twice, and `review <round>`.
 Verdicts from before the open series are an earlier PR's and stay out, as the judge gate drops them.
 `--json` carries the same files as `verdicts` (`subject`, `path`) and `reviews` (`round`, `path`).
-`--json` also carries the whole block as a `shipment` object, on each run entry (repeated per run, as `agent` is) and on the no-run block: `task`, `title`, `url`, `branch`, `pr`, `pr_state` (only when the host was asked), `commit`, `plan`, `handoff`, `verdicts` and `reviews`, each left out when empty except `task`.
+`--json` also carries the whole block as a `shipment` object, on each run entry (repeated per run, as `agent` is) and on the no-run block: `task`, `title`, `url`, `branch`, `pr`, `pr_state` (only when the host was asked), `commit`, `plan`, `handoff`, `demo`, `verdicts` and `reviews`, each left out when empty except `task`.
 The flat keys a reader written before the object relies on stay beside it: `verdicts` and `reviews` on a run entry, and those plus `plan`, `pr` and `pr_state` on the no-run block.
 A run entry's own `plan` key is the plan phase's status, not the plan file.
 The run's step rows go on under it as `label: value`, in the same value column, so the whole block reads as one table, and `--plain` prints the same block.
 With a run under it, the plan file's row is `plan file`, because the run's `plan` row holds the plan phase.
 
-`f10 status <id>` lists the task's **gates** under the `ship` row, while the run is going and after it finished, and the one `done` row of a task with no branch left prints them as lines under it:
+A finished task, its branch gone, prints the same block, read from what `f10 finish` archived: the newest archived plan and handoff, a `review <round>` row per findings file of the series its last PR closed (`reviews/archive/<id>.<n>/`), a `judge` row per verdict written since the series before it closed, and the demo report.
+`pr state` and the gates as step rows follow, and `--json` still prints its one `done` row.
+
+`f10 status <id>` lists the task's **gates** under the `ship` row, while the run is going and after it finished, and the block of a task with no branch left prints them as step rows under `pr state`:
 
 ```
 ship:           running: review:local
@@ -541,7 +546,7 @@ The icons are Nerd Font `md-*` glyphs, the only range Claude Code's output keeps
 `--json` prints the rows as an array: `id`, `title`, `url`, `depth`, `after`, `stage`, `step`, `pr`, `pr_state`, and `note`, `next`, `ask` where set.
 
 A task with no children reports as before: its live run, else its plan and PR.
-A task with no branch left (`f10 finish` removed it) prints its single `done` row when the ledger, the tracker or the plan archive says it finished, and `--json` a one-row array; otherwise it fails as before, with `no run to read`.
+A task with no branch left (`f10 finish` removed it) prints its facts block (**Status**, above) when the ledger, the tracker or the plan archive says it finished, and `--json` prints a one-row array; otherwise it fails as before, with `no run to read`.
 A task whose checkout has its branch is read from there first, so only a task with no run to read asks the host for children.
 
 ## Drive

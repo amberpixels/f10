@@ -2,13 +2,16 @@ package statusview
 
 import (
 	"strings"
+
+	"github.com/amberpixels/f10/cli/internal/render"
 )
 
-func gateLines(gates []gate) [][2]string {
-	out := make([][2]string, len(gates))
+// gateFacts is the gates as the indented step rows under a block's ship row.
+func gateFacts(gates []gate) []render.Fact {
+	out := make([]render.Fact, len(gates))
 
 	for i, g := range gates {
-		out[i] = [2]string{"  " + g.Shown(), g.Text()}
+		out[i] = RunFact("  "+g.Shown(), g.Text(), statusStyle(g.style()))
 	}
 
 	return out
