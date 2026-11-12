@@ -28,6 +28,10 @@ func (in *DriveInput) endAfterChecks(ctx context.Context, r *DriveRun, skills []
 		return endWith(done)
 	}
 
+	if err := branchmeta.ClearOnGreen(ctx, in.Main, r.O.Branch, hc.State == forge.Green); err != nil {
+		done.Lines = append(done.Lines, r.Task.Ref.ID+" triage record not cleared: "+err.Error())
+	}
+
 	switch {
 	case url == "" || (hc.State != forge.Red && hc.State != forge.Pending):
 		r.checks = nil

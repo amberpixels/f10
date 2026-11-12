@@ -90,7 +90,9 @@ const DefaultJobQuery = "query($owner: String!, $name: String!, $check: String!)
 const defaultJobDepth = 5
 
 // DefaultJob is how the job named name last ended on the default branch:
-// Green, Red, or "" when none of its recent runs there completed.
+// Green, Red, or "" when none of its recent runs there completed. A
+// cancelled run is skipped, since a newer push cancelling it says nothing
+// of whether the job passes.
 func (h Host) DefaultJob(ctx context.Context, name string) (string, error) {
 	if h.glab() {
 		return h.defaultPipelineJob(ctx, name)
@@ -127,7 +129,7 @@ func (h Host) DefaultJob(ctx context.Context, name string) (string, error) {
 	for _, commit := range payload.Data.Repository.DefaultBranchRef.Target.History.Nodes {
 		for _, suite := range commit.CheckSuites.Nodes {
 			for _, run := range suite.CheckRuns.Nodes {
-				if v := run.verdict(); v != Pending {
+				if v := run.verdict(); v != Pending && !strings.EqualFold(run.Conclusion, "CANCELLED") {
 					return v, nil
 				}
 			}
@@ -172,7 +174,7 @@ func (h Host) defaultPipelineJob(ctx context.Context, name string) (string, erro
 		}
 
 		i := slices.IndexFunc(jobs, func(j pipelineJob) bool { return j.Name == name })
-		if i < 0 {
+		if i < 0 || strings.EqualFold(jobs[i].Status, "canceled") {
 			continue
 		}
 

@@ -85,8 +85,8 @@ func runPRChecks(ctx context.Context, cmd *cli.Command) error {
 	// the record lives on a local branch; a PR read from elsewhere keeps none
 	local := stack.RefSHA(ctx, s.Main, "refs/heads/"+s.Branch) != ""
 
-	if hc.State == forge.Green && local {
-		if err := branchmeta.ClearTriage(ctx, s.Main, s.Branch); err != nil {
+	if local {
+		if err := branchmeta.ClearOnGreen(ctx, s.Main, s.Branch, hc.State == forge.Green); err != nil {
 			return err
 		}
 	}

@@ -53,7 +53,8 @@ Any read that finds the head green clears the record, so the limits hold for one
    - Run `f10 pr checks --record fix`, then commit as `conventions/context.md` → Commits says, with `--step ci`.
      The commit message names the failing job and the cause in plain words.
    - Push, never forcing.
-     When ship runs this step before an entry that pushes (`pr`, `push`, or a judge after `pr`), leave the push to that entry, so the fix goes out with it.
+     When ship runs this step before a `pr` or `push` entry, leave the push to that entry, so the fix goes out with it.
+     Every other entry pushes only on some outcomes, as a judge after `pr` does on yellow alone, so before one of those the step pushes its fix itself.
    - Red verify that cannot be fixed fails the step (`conventions/failure.md`), with the work left uncommitted.
 5. **Ask** when the table says so, or when the action it picks is already in `tried`: red after a fix round, or red again after a rerun of the same head.
    The question names the job, its log url, the local verify result, the default branch's result, and what was tried.

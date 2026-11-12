@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 )
@@ -14,6 +15,12 @@ import (
 // ciWatch is a pass whose host reads red on head h3ad, counting its reads,
 // and whose agent takes prompts into sent.
 func ciWatch(t *testing.T, on bool) (*WatchInput, *collected, *[]string, *int) {
+	in, out, sent, reads, _ := ciWatchFakes(t, on)
+
+	return in, out, sent, reads
+}
+
+func ciWatchFakes(t *testing.T, on bool) (*WatchInput, *collected, *[]string, *int, *testkit.Fakes) {
 	t.Helper()
 
 	f := testkit.NewFakes(t)
@@ -27,6 +34,7 @@ func ciWatch(t *testing.T, on bool) (*WatchInput, *collected, *[]string, *int) {
 	)
 
 	in := &WatchInput{
+		Main: "/code/repo",
 		Mode: "report",
 		Root: t.TempDir(),
 		Now:  func() time.Time { return watchNow },
@@ -46,7 +54,7 @@ func ciWatch(t *testing.T, on bool) (*WatchInput, *collected, *[]string, *int) {
 		},
 	}
 
-	return in, &out, &sent, &reads
+	return in, &out, &sent, &reads, f
 }
 
 func redTask() WatchedTask {
@@ -122,5 +130,31 @@ func TestWatchSendsARedHeadUnderWatchCI(t *testing.T) {
 		if len(*sent) != 0 {
 			t.Errorf("%s: sent %q, want nothing", name, *sent)
 		}
+	}
+}
+
+// A rerun the step recorded on the same head is a new triage record, so a
+// head still red after it is sent once more and the step asks; a green read
+// clears the record, so the next red spell starts with a fix round.
+func TestWatchSendsAgainAfterARerunAndClearsOnGreen(t *testing.T) {
+	in, _, sent, _, f := ciWatchFakes(t, true)
+	store := map[string]watchReport{}
+
+	in.reconcile(t.Context(), []WatchedTask{redTask()}, store)
+	f.Meta.Seed("FT-1", branchmeta.CI, "h3ad:rerun")
+	in.reconcile(t.Context(), []WatchedTask{redTask()}, store)
+	in.reconcile(t.Context(), []WatchedTask{redTask()}, store)
+
+	if len(*sent) != 2 {
+		t.Fatalf("sent %d triages, want one before the rerun and one after", len(*sent))
+	}
+
+	in.Checks = func(context.Context, forge.PR) (forge.HeadChecks, error) {
+		return forge.HeadChecks{State: forge.Green, SHA: "h3ad"}, nil
+	}
+	in.reconcile(t.Context(), []WatchedTask{redTask()}, store)
+
+	if v, _ := branchmeta.Get(t.Context(), "/code/repo", "FT-1", branchmeta.CI); v != "" {
+		t.Errorf("record after green = %q, want it cleared", v)
 	}
 }

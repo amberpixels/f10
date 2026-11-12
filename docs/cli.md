@@ -271,7 +271,7 @@ A drive's finish does not wait itself.
 Instead the drive holds the task as `waiting on checks` and tries again each poll, for up to 20 minutes per head.
 On red it sends `/f10:ci` to the task's agent and shows the task as `triaging checks` (**Checks triage** below).
 A drive whose pace does not finish holds a shipped PR the same way before it ends the task, so a head that turns red is triaged first.
-The watcher finishes only merged PRs, so it never reads the checks.
+The watcher finishes only merged PRs, so its finish never waits on checks; its own read of an open PR's checks is under **Watch** (**red**).
 
 ### Checks triage
 

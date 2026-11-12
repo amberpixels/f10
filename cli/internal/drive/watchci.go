@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
@@ -17,7 +18,8 @@ import (
 const watchRed = "red"
 
 // watchCI is the last checks a pass read on a task's request head, so a
-// settled head is not read again, and the head a triage was sent for.
+// settled head is not read again, and the head and triage record a triage
+// was last sent for.
 type watchCI struct {
 	SHA   string `yaml:"sha"`
 	State string `yaml:"state"`
@@ -25,8 +27,9 @@ type watchCI struct {
 }
 
 // ciStep tells a red head once, and under watch_ci: on sends it to an idle
-// agent once. A green head is read again only once it moves; a pending or
-// red one every pass, since a rerun settles it on the same head.
+// agent once per head and triage record. A green head is read again only
+// once it moves; a pending or red one every pass, since a rerun settles it
+// on the same head.
 func (in WatchInput) ciStep(ctx context.Context, task WatchedTask, store map[string]watchReport) *watchReport {
 	pr := task.Pr
 	if in.Checks == nil || task.Owner != "" || task.Off || task.HostErr != nil || pr == nil ||
@@ -35,35 +38,40 @@ func (in WatchInput) ciStep(ctx context.Context, task WatchedTask, store map[str
 	}
 
 	held := store[task.ID]
+	if prev := held.CI; prev != nil && prev.SHA == pr.HeadSHA && prev.State != forge.Pending &&
+		prev.State != forge.Red {
+		return nil
+	}
 
-	rec := held.CI
-	if rec == nil || rec.SHA != pr.HeadSHA || rec.State == forge.Pending || rec.State == forge.Red {
-		hc, err := in.Checks(ctx, *pr)
-		if err != nil {
-			in.warnf("%s: reading the checks on %s: %v", task.ID, pr.URL, err)
-
-			return nil
-		}
-
-		rec = &watchCI{SHA: pr.HeadSHA, State: hc.State}
-		if held.CI != nil && held.CI.SHA == pr.HeadSHA {
-			rec.Sent = held.CI.Sent
-		}
-
-		held.CI = rec
-		store[task.ID] = held
-
-		if hc.State == forge.Red {
-			return in.redReport(ctx, task, hc, rec)
-		}
+	hc, err := in.Checks(ctx, *pr)
+	if err != nil {
+		in.warnf("%s: reading the checks on %s: %v", task.ID, pr.URL, err)
 
 		return nil
 	}
 
-	return nil
+	rec := &watchCI{SHA: pr.HeadSHA, State: hc.State}
+	if held.CI != nil {
+		rec.Sent = held.CI.Sent
+	}
+
+	held.CI = rec
+	store[task.ID] = held
+
+	if err := branchmeta.ClearOnGreen(ctx, in.Main, task.Branch, hc.State == forge.Green); err != nil {
+		in.warnf("%s: clearing the triage record: %v", task.ID, err)
+	}
+
+	if hc.State != forge.Red {
+		return nil
+	}
+
+	return in.redReport(ctx, task, hc, rec)
 }
 
-// redReport tells the red head, sending the triage where the pass may.
+// redReport tells the red head, sending the triage where the pass may. A
+// send is keyed by the head and the triage record, so a rerun that fails
+// again on the same head is sent once more, and the step asks.
 func (in WatchInput) redReport(ctx context.Context, task WatchedTask, hc forge.HeadChecks, rec *watchCI) *watchReport {
 	at := gitx.ShortSHA(hc.SHA)
 	jobs := ""
@@ -82,14 +90,23 @@ func (in WatchInput) redReport(ctx context.Context, task WatchedTask, hc forge.H
 		Key:  watchRed + " " + hc.SHA,
 	}
 
+	tr, err := branchmeta.ReadTriage(ctx, in.Main, task.Branch)
+	if err != nil {
+		in.warnf("%s: reading the triage record: %v", task.ID, err)
+
+		return rep
+	}
+
+	key := hc.SHA + " " + tr.Format()
 	sentRep := &watchReport{
 		Kind: watchRed,
 		Text: fmt.Sprintf("%s checks red at %s%s: sent /f10:ci to its agent", task.Pr.URL, at, jobs),
-		Key:  watchRed + " sent " + hc.SHA,
+		Key:  watchRed + " sent " + key,
 	}
 
-	// a head already sent keeps its report, so it is not told again
-	if rec.Sent == hc.SHA {
+	// a head and record already sent keep their report, so neither is told
+	// nor sent again
+	if rec.Sent == key {
 		return sentRep
 	}
 
@@ -108,7 +125,7 @@ func (in WatchInput) redReport(ctx context.Context, task WatchedTask, hc forge.H
 		return rep
 	}
 
-	rec.Sent = hc.SHA
+	rec.Sent = key
 
 	return sentRep
 }

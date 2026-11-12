@@ -48,6 +48,8 @@ func TestDefaultJobOnGitHub(t *testing.T) {
 	}{
 		{"green", history(`{"status":"COMPLETED","conclusion":"SUCCESS"}`), Green},
 		{"red behind a running tip", history(`{"status":"IN_PROGRESS"}`, `{"status":"COMPLETED","conclusion":"FAILURE"}`), Red},
+		{"green behind a cancelled run", history(`{"status":"COMPLETED","conclusion":"CANCELLED"}`,
+			`{"status":"COMPLETED","conclusion":"SUCCESS"}`), Green},
 		{"never ran", history(``, ``), ""},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -64,14 +66,15 @@ func TestDefaultJobOnGitHub(t *testing.T) {
 func TestDefaultJobOnGitLab(t *testing.T) {
 	script(t, map[string]string{
 		"glab repo view -F json": `{"default_branch":"main"}`,
-		"glab api projects/:fullpath/pipelines?ref=main&scope=finished&per_page=5": `[{"id":8},{"id":7}]`,
+		"glab api projects/:fullpath/pipelines?ref=main&scope=finished&per_page=5": `[{"id":9},{"id":8},{"id":7}]`,
+		"glab api projects/:fullpath/pipelines/9/jobs?per_page=100":                `[{"name":"lint","status":"canceled"}]`,
 		"glab api projects/:fullpath/pipelines/8/jobs?per_page=100":                `[{"name":"test","status":"success"}]`,
 		"glab api projects/:fullpath/pipelines/7/jobs?per_page=100":                `[{"name":"lint","status":"failed"}]`,
 	})
 
 	got, err := Host{Name: "glab"}.DefaultJob(t.Context(), "lint")
 	if err != nil || got != Red {
-		t.Errorf("DefaultJob = %q, %v; want red from the older pipeline", got, err)
+		t.Errorf("DefaultJob = %q, %v; want red from the older pipeline, past a cancelled run", got, err)
 	}
 }
 

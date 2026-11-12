@@ -111,3 +111,14 @@ func ReadTriage(ctx context.Context, dir, branch string) (Triage, error) {
 func ClearTriage(ctx context.Context, dir, branch string) error {
 	return UnsetIfSet(ctx, dir, branch, CI)
 }
+
+// ClearOnGreen ends the red spell when the head read green. Every reader
+// calls it, since a fix counts for the branch and a record left past green
+// would spend the next spell's fix round.
+func ClearOnGreen(ctx context.Context, dir, branch string, green bool) error {
+	if !green {
+		return nil
+	}
+
+	return ClearTriage(ctx, dir, branch)
+}

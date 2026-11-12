@@ -2,13 +2,17 @@ package pr
 
 import (
 	"errors"
+	"io"
 	"strings"
 	"testing"
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/testkit"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -102,4 +106,73 @@ func TestTriageFacts(t *testing.T) {
 	if !strings.Contains(cancelled, "cancelled t=") {
 		t.Errorf("cancelled job:\n%s", cancelled)
 	}
+}
+
+// One fix round per red spell and one rerun per head: a second of either
+// is refused before anything runs, and a rerun on a new head is allowed.
+func TestActOnChecksKeepsTheLimits(t *testing.T) {
+	f := testkit.NewFakes(t)
+	f.Script("gh run rerun 77 --failed", "")
+
+	h := hostops.NewHost("gh", "")
+	red := func(sha string) forge.HeadChecks {
+		return forge.HeadChecks{State: forge.Red, SHA: sha, Failed: []forge.Check{{Name: "lint", Run: "77"}}}
+	}
+
+	act := func(hc forge.HeadChecks, rerun bool) error {
+		return actOnChecks(t.Context(), io.Discard, h, hc, "/code/repo", "FT-1", true, rerun)
+	}
+
+	if err := act(red("aaa"), false); err != nil {
+		t.Fatalf("first fix = %v", err)
+	}
+
+	if err := act(red("bbb"), false); err == nil {
+		t.Error("a second fix round on a new head was allowed")
+	}
+
+	if err := act(red("bbb"), true); err != nil {
+		t.Fatalf("first rerun = %v", err)
+	}
+
+	if err := act(red("bbb"), true); err == nil || countOf(f.Calls, "gh run rerun 77 --failed") != 1 {
+		t.Errorf(
+			"a second rerun of bbb = %v, reruns %d; want refused before rerunning",
+			err,
+			countOf(f.Calls, "gh run rerun 77 --failed"),
+		)
+	}
+
+	if err := act(red("ccc"), true); err != nil {
+		t.Errorf("a rerun on a new head = %v, want allowed", err)
+	}
+
+	if err := act(forge.HeadChecks{State: forge.Green, SHA: "ddd"}, true); err == nil {
+		t.Error("a rerun of a green head was allowed")
+	}
+
+	if err := actOnChecks(t.Context(), io.Discard, h, red("eee"), "/code/repo", "FT-1", false, false); err == nil {
+		t.Error("a fix recorded for a branch that is not here was allowed")
+	}
+
+	// a green read ends the spell, so the next spell gets its fix round
+	if err := branchmeta.ClearOnGreen(t.Context(), "/code/repo", "FT-1", true); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := act(red("fff"), false); err != nil {
+		t.Errorf("a fix after green = %v, want allowed", err)
+	}
+}
+
+func countOf(calls []string, call string) int {
+	n := 0
+
+	for _, c := range calls {
+		if c == call {
+			n++
+		}
+	}
+
+	return n
 }

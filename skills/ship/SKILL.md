@@ -44,7 +44,7 @@ Deploy has its own confirmation (the **deploy** step).
 4. **Read the checks at each boundary** once the branch has an open PR (after the first `pr` entry), in the same call as the load: `f10-state.sh set ship running <entry>; f10 pr checks --brief; f10-load-project.sh <step>`.
    It costs no turn, because the line comes back with the step.
    - `checks: red`: run `f10-load-project.sh ci catchup` and the **ci** step before the entry, under the entry's badge.
-     When the entry pushes (`pr`, `push`, or a judge after `pr`), the step leaves its fix for that push.
+     Before a `pr` or `push` entry the step leaves its fix for that push, and before any other entry it pushes the fix itself.
    - `checks: pending`, `green` or `none`: go on, because only finish waits on checks.
    - A default branch that is red too does not stop the run: the step notes it, and the run asks once at its end, interactive or driven.
 
