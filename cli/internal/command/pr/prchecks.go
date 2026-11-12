@@ -2,7 +2,6 @@ package pr
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
 
@@ -66,7 +65,11 @@ func runPRChecks(ctx context.Context, cmd *cli.Command) error {
 		err = render.WriteFacts(cmd.Writer, rows, render.LabelWidth(rows), ui.Width(cmd.Writer))
 	}
 
-	return errors.Join(err, checksExit(hc.State))
+	if err != nil {
+		return err
+	}
+
+	return checksExit(hc.State)
 }
 
 // ChecksFacts is the block pr checks prints: the request, its head, the
