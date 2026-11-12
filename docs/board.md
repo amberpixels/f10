@@ -212,7 +212,7 @@ Nothing is ever written to the host.
 
 `cli/internal/lookaround/testdata/derive/<name>.facts.json` is one collector result; `<name>.board.json` the board it derives to at a fixed clock.
 `cli/internal/lookaround/testdata/feed/<name>.board.json` is a feed derived from facts the test builds.
-`cli/cmd/f10/testdata/board/<name>.json` is a recorded run: the git and host calls with their answers, tracker rows and local state, beside the board out; a `feed` one names its window, cut by years at the fixture's clock, and fails on any call it does not record.
+`cli/internal/command/board/testdata/board/<name>.json` is a recorded run: the git and host calls with their answers, tracker rows and local state, beside the board out; a `feed` one names its window, cut by years at the fixture's clock, and fails on any call it does not record.
 
 ## Changing this spec
 

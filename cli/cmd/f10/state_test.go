@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/testkit"
 )
 
 func runState(t *testing.T, args ...string) (string, int) {
@@ -21,7 +22,7 @@ func runState(t *testing.T, args ...string) (string, int) {
 	}
 
 	// the exit handler prints the message; the test's handler keeps it in err
-	return r.combined + r.err.Error(), exitCode(r.err)
+	return r.combined + r.err.Error(), testkit.ExitCode(r.err)
 }
 
 func TestStateCommand(t *testing.T) {

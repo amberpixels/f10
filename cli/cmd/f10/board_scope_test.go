@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -12,12 +11,12 @@ import (
 	"testing"
 	"time"
 
-	boardcmd "github.com/amberpixels/f10/cli/internal/command/board"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
 	"github.com/amberpixels/f10/cli/internal/projects"
 	"github.com/amberpixels/f10/cli/internal/scope"
 	"github.com/amberpixels/f10/cli/internal/seam"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/testkit"
 )
 
 // The board over a scope. These checkouts have no remote, so every host and
@@ -25,7 +24,7 @@ import (
 
 // --all is the F10_ROOTS walk, so it is off until the variable is set.
 func TestBoardAllNeedsRoots(t *testing.T) {
-	isolateEnv(t)
+	testkit.IsolateEnv(t)
 	t.Setenv(projects.RootsEnv, "")
 
 	if _, err := runApp(t, "board", "--all").outErr(); err == nil || !strings.Contains(err.Error(), projects.RootsEnv) {
@@ -36,12 +35,12 @@ func TestBoardAllNeedsRoots(t *testing.T) {
 // One project whose instructions do not read is a board with every
 // source failed; the other renders.
 func TestBoardScopeFailsOneProjectAlone(t *testing.T) {
-	isolateEnv(t)
+	testkit.IsolateEnv(t)
 
-	root := canonical(t, t.TempDir())
-	good := scopeRepo(t, root, "good")
-	broken := scopeRepo(t, root, "broken")
-	git(t, broken, "remote", "add", "origin", "git@github.com:acme/broken.git")
+	root := testkit.Canonical(t, t.TempDir())
+	good := testkit.ScopeRepo(t, root, "good")
+	broken := testkit.ScopeRepo(t, root, "broken")
+	testkit.Git(t, broken, "remote", "add", "origin", "git@github.com:acme/broken.git")
 
 	instructions := filepath.Join(broken, ".f10", "instructions")
 	if err := os.MkdirAll(instructions, 0o755); err != nil {
@@ -114,10 +113,10 @@ func TestBoardScopeFailsOneProjectAlone(t *testing.T) {
 
 // -C alone shows every project's rows under its name; --by takes person.
 func TestBoardCheckoutsExpand(t *testing.T) {
-	isolateEnv(t)
+	testkit.IsolateEnv(t)
 
-	root := canonical(t, t.TempDir())
-	a, b := scopeRepo(t, root, "a"), scopeRepo(t, root, "b")
+	root := testkit.Canonical(t, t.TempDir())
+	a, b := testkit.ScopeRepo(t, root, "a"), testkit.ScopeRepo(t, root, "b")
 
 	out, err := runApp(t, "-C", a, "-C", b, "board").outErr()
 	if err != nil {
@@ -145,104 +144,22 @@ func TestBoardCheckoutsExpand(t *testing.T) {
 	}
 }
 
-// A board group lists repositories beside paths; a repository on an
-// unknown host says which prefix to write; a missing group names the
-// board's own file.
-func TestBoardGroupsMixRepositories(t *testing.T) {
-	home := isolateEnv(t)
-
-	root := canonical(t, t.TempDir())
-	scopeRepo(t, root, "acme-api")
-
-	writeUserFile(t, home, scope.BoardConfigFile, "---\ngroups:\n  work: ["+root+"/acme-*, github.com/acme/widgets]\n"+
-		"  odd: [git.example.com/acme/widgets]\n---\n")
-
-	items, err := scope.ReadGroups(scope.BoardConfigFile, []string{"work"})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(items) != 2 || items[0].Dir != filepath.Join(root, "acme-api") || items[1].Repo == nil ||
-		items[1].Repo.ID() != "github.com/acme/widgets" || items[1].Repo.CLI != "gh" || items[1].Repo.Prefix != "WID" {
-		t.Errorf("items = %+v", items)
-	}
-
-	if _, err := scope.ReadGroups(
-		scope.BoardConfigFile,
-		[]string{"odd"},
-	); err == nil ||
-		!strings.Contains(err.Error(), "glab:") {
-		t.Errorf("odd: err = %v, want the prefixes named", err)
-	}
-
-	if _, err := scope.ReadGroups(
-		scope.BoardConfigFile,
-		[]string{"play"},
-	); err == nil ||
-		!strings.Contains(err.Error(), scope.BoardConfigFile) {
-		t.Errorf("play: err = %v, want %s named", err, scope.BoardConfigFile)
-	}
-
-	// standup's groups live in its own file: the board's are not read for it
-	if _, err := scope.ReadGroups(scope.StandupConfigFile, []string{"work"}); err == nil ||
-		!strings.Contains(err.Error(), scope.StandupConfigFile) {
-		t.Errorf("standup: err = %v, want %s named", err, scope.StandupConfigFile)
-	}
-}
-
-// A repository entry parses as a string or a map, and the map's prefix
-// wins over the derived one.
-func TestBoardRepos(t *testing.T) {
-	home := isolateEnv(t)
-
-	writeUserFile(t, home, scope.BoardConfigFile, "---\nrepos:\n  - github.com/acme/widgets\n"+
-		"  - {repo: gitlab.com/acme/sub/widgets, prefix: wid}\n  - glab:git.example.com/acme/infra\n"+
-		"people:\n  - {name: ann, tracker: Ann Lee, host: annl, emails: [ann@acme.example]}\n---\n")
-
-	cfg, _, err := scope.ReadBoardConfig()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var got []string
-
-	for _, r := range cfg.Repos {
-		ref, err := scope.ParseRepo(r.Repo, r.Prefix)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		got = append(got, ref.CLI+" "+ref.ID()+" "+ref.Prefix+" "+ref.Repo())
-	}
-
-	want := "gh github.com/acme/widgets WID acme/widgets|glab gitlab.com/acme/sub/widgets WID acme/sub/widgets|" +
-		"glab git.example.com/acme/infra INF git.example.com/acme/infra"
-	if strings.Join(got, "|") != want {
-		t.Errorf("repos = %q, want %q", strings.Join(got, "|"), want)
-	}
-
-	if len(cfg.People) != 1 || cfg.People[0].Host != "annl" || len(cfg.People[0].Emails) != 1 {
-		t.Errorf("people = %+v", cfg.People)
-	}
-
-	writeUserFile(t, home, scope.BoardConfigFile, "---\npeople:\n  - {host: annl}\n---\n")
-
-	if _, _, err := scope.ReadBoardConfig(); err == nil || !strings.Contains(err.Error(), "no name") {
-		t.Errorf("err = %v, want the nameless person refused", err)
-	}
-}
-
 // A watched repository runs through the whole scope: --all adds it, the
 // host is asked with the repository named, and one a checkout in the
 // scope already covers is dropped. The host CLI is scripted; git is real.
 func TestBoardAllReadsWatchedRepos(t *testing.T) {
-	home := isolateEnv(t)
+	home := testkit.IsolateEnv(t)
 
-	root := canonical(t, t.TempDir())
-	good := scopeRepo(t, root, "good")
-	git(t, good, "remote", "add", "origin", "https://github.com/acme/good.git")
+	root := testkit.Canonical(t, t.TempDir())
+	good := testkit.ScopeRepo(t, root, "good")
+	testkit.Git(t, good, "remote", "add", "origin", "https://github.com/acme/good.git")
 
-	writeUserFile(t, home, scope.BoardConfigFile, "---\nrepos: [github.com/acme/good, github.com/acme/other]\n---\n")
+	testkit.WriteUserFile(
+		t,
+		home,
+		scope.BoardConfigFile,
+		"---\nrepos: [github.com/acme/good, github.com/acme/other]\n---\n",
+	)
 	t.Setenv(projects.RootsEnv, filepath.Join(root, "*"))
 
 	var (
@@ -339,7 +256,7 @@ func TestBoardAllReadsWatchedRepos(t *testing.T) {
 	}
 
 	// a repository entry that does not parse fails only the run that reads it
-	writeUserFile(t, home, scope.BoardConfigFile, "---\nrepos: [git.example.com/acme/x]\n---\n")
+	testkit.WriteUserFile(t, home, scope.BoardConfigFile, "---\nrepos: [git.example.com/acme/x]\n---\n")
 
 	if _, err := runApp(t, "-C", good, "board", "--json").outErr(); err != nil {
 		t.Errorf("one checkout with a bad repos entry: %v, want it unread", err)
@@ -347,112 +264,5 @@ func TestBoardAllReadsWatchedRepos(t *testing.T) {
 
 	if _, err := runApp(t, "board", "--all").outErr(); err == nil || !strings.Contains(err.Error(), "repos") {
 		t.Errorf("--all with a bad repos entry: %v, want it named", err)
-	}
-}
-
-// Rows of several projects group under the person each resolves to, the
-// unresolved last, and each line names its project; a row waiting on its
-// base sorts after the work in progress.
-func TestRenderByPerson(t *testing.T) {
-	at := time.Date(2026, 10, 20, 10, 0, 0, 0, time.UTC)
-	boards := []lookaround.Board{
-		{Project: lookaround.Project{Name: "api"}, Rows: []lookaround.Row{
-			{Key: "FT-1", Stage: lookaround.StageNext, Who: lookaround.Who{Person: "bob"}},
-			{Key: "FT-2", Stage: lookaround.StageInReview, Who: lookaround.Who{Person: "ann"}, LastActivity: at},
-			{Key: "#9", Stage: lookaround.StagePROpen},
-			{
-				Key: "FT-4", Stage: lookaround.StageBlocked, BlockedBy: []string{"FT-2"},
-				Who: lookaround.Who{Person: "ann"},
-			},
-		}},
-		{Project: lookaround.Project{Name: "web"}, Rows: []lookaround.Row{
-			{Key: "WEB-3", Stage: lookaround.StageDone, Who: lookaround.Who{Person: "ann"}, LastActivity: at},
-		}},
-	}
-
-	var out bytes.Buffer
-
-	boardcmd.RenderByPerson(&out, boards, 0)
-
-	var heads, lines []string
-
-	for l := range strings.SplitSeq(strings.TrimSpace(out.String()), "\n") {
-		if l == "" {
-			continue
-		}
-
-		if !strings.Contains(l, "  ") {
-			heads = append(heads, l)
-		} else {
-			lines = append(lines, strings.Join(strings.Fields(l)[:2], " "))
-		}
-	}
-
-	if got, want := strings.Join(heads, ","), "ann,bob,nobody"; got != want {
-		t.Errorf("headings = %q, want %q\n%s", got, want, out.String())
-	}
-
-	if got, want := strings.Join(lines, ","), "api FT-2,api FT-4,web WEB-3,api FT-1,api #9"; got != want {
-		t.Errorf("rows = %q, want %q\n%s", got, want, out.String())
-	}
-}
-
-// The glance counts what is in flight and what waits on a person, names
-// the oldest, and says failed once for a project nothing could read.
-func TestRenderSummary(t *testing.T) {
-	now := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
-	boards := []lookaround.Board{
-		{
-			Project: lookaround.Project{Name: "api"},
-			Sources: []lookaround.Source{{Name: "host", OK: true}},
-			Rows: []lookaround.Row{
-				{Key: "FT-1", Stage: lookaround.StageNext, Next: lookaround.Next{Command: "f10 start FT-1"}},
-				{
-					Key: "FT-2", Stage: lookaround.StageInReview, LastActivity: now.Add(-50 * time.Hour),
-					Next: lookaround.Next{Command: "/f10:resolve FT-2"},
-				},
-				{
-					Key: "FT-3", Stage: lookaround.StagePROpen, LastActivity: now.Add(-3 * time.Hour),
-					Next: lookaround.Next{Text: "waiting on review"},
-				},
-				{Key: "FT-4", Stage: lookaround.StageDone},
-			},
-		},
-		lookaround.Unreachable(
-			lookaround.Project{Name: "web"}, os.ErrNotExist, now, lookaround.Window{Since: now}, lookaround.ViewState,
-		),
-		{Project: lookaround.Project{Name: "ops"}, Sources: []lookaround.Source{
-			{Name: "host", Error: "gh: down"}, {Name: "tracker", OK: true}, {Name: "local", OK: true},
-		}},
-	}
-
-	var out bytes.Buffer
-
-	boardcmd.RenderSummary(&out, boards, now, 0)
-
-	for _, want := range []string{
-		"api  2 in flight  1 waiting on you  oldest FT-2 2d",
-		"web  failed  file does not exist",
-		"ops  nothing in flight  host failed  gh: down",
-	} {
-		if !strings.Contains(out.String(), want) {
-			t.Errorf("summary lacks %q:\n%s", want, out.String())
-		}
-	}
-}
-
-func TestTitleAfterKey(t *testing.T) {
-	for _, tc := range []struct{ title, key, want string }{
-		{"FT-121: Show f10 board", "FT-121", "Show f10 board"},
-		{"FT-121 - Show f10 board", "FT-121", "Show f10 board"},
-		{"FT-121: Show f10 board", "FT-12", "FT-121: Show f10 board"},
-		{"Show f10 board", "FT-121", "Show f10 board"},
-		{"FT-121", "FT-121", "FT-121"},
-		{"#12 title", "", "#12 title"},
-		{"FT-121 (+FT-122, FT-123, 2 more): Show f10 board", "FT-121", "Show f10 board"},
-	} {
-		if got := boardcmd.TitleAfterKey(tc.title, tc.key); got != tc.want {
-			t.Errorf("titleAfterKey(%q, %q) = %q, want %q", tc.title, tc.key, got, tc.want)
-		}
 	}
 }

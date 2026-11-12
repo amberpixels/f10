@@ -6,15 +6,17 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/amberpixels/f10/cli/internal/testkit"
 )
 
 // init writes into a real repo, so these run the real command tree against
 // real repos.
 
 func TestInitWritesAndRefusesToOverwrite(t *testing.T) {
-	isolateEnv(t)
+	testkit.IsolateEnv(t)
 
-	repo := mkRepo(t)
+	repo := testkit.MkRepo(t)
 
 	out, err := runApp(t, "-C", repo, "init").outErr()
 	if err != nil {
@@ -45,7 +47,7 @@ func TestInitWritesAndRefusesToOverwrite(t *testing.T) {
 	}
 
 	// git must not see the directory init just created
-	if status := git(t, repo, "status", "--porcelain"); strings.Contains(status, ".f10") {
+	if status := testkit.Git(t, repo, "status", "--porcelain"); strings.Contains(status, ".f10") {
 		t.Errorf("git sees .f10 after init: %q", status)
 	}
 
@@ -60,9 +62,9 @@ func TestInitWritesAndRefusesToOverwrite(t *testing.T) {
 }
 
 func TestInitDoesNotDuplicateTheExcludeEntry(t *testing.T) {
-	isolateEnv(t)
+	testkit.IsolateEnv(t)
 
-	repo := mkRepo(t)
+	repo := testkit.MkRepo(t)
 
 	path := filepath.Join(repo, ".git", "info", "exclude")
 	if err := os.WriteFile(path, []byte("*.tmp\n.f10/\n"), 0o644); err != nil {
@@ -79,13 +81,13 @@ func TestInitDoesNotDuplicateTheExcludeEntry(t *testing.T) {
 }
 
 func TestInitRefusesInALinkedWorktree(t *testing.T) {
-	isolateEnv(t)
+	testkit.IsolateEnv(t)
 
-	repo := mkRepo(t)
-	git(t, repo, "commit", "-q", "--allow-empty", "-m", "root")
+	repo := testkit.MkRepo(t)
+	testkit.Git(t, repo, "commit", "-q", "--allow-empty", "-m", "root")
 
 	wt := filepath.Join(t.TempDir(), "feature")
-	git(t, repo, "worktree", "add", "-q", "-b", "feature", wt)
+	testkit.Git(t, repo, "worktree", "add", "-q", "-b", "feature", wt)
 
 	_, err := runApp(t, "-C", wt, "init").outErr()
 	if err == nil {
@@ -102,9 +104,9 @@ func TestInitRefusesInALinkedWorktree(t *testing.T) {
 }
 
 func TestInitRefusesOutsideGit(t *testing.T) {
-	isolateEnv(t)
+	testkit.IsolateEnv(t)
 
-	dir := canonical(t, t.TempDir())
+	dir := testkit.Canonical(t, t.TempDir())
 
 	if _, err := runApp(t, "-C", dir, "init").outErr(); err == nil {
 		t.Fatal("init outside a git checkout succeeded")
@@ -112,10 +114,10 @@ func TestInitRefusesOutsideGit(t *testing.T) {
 }
 
 func TestInitWritesOutOfTreeWithoutTouchingTheRepo(t *testing.T) {
-	home := isolateEnv(t)
-	repo := mkRepo(t)
+	home := testkit.IsolateEnv(t)
+	repo := testkit.MkRepo(t)
 
-	oot := filepath.Join(canonical(t, home), ".f10", filepath.Base(repo), "instructions")
+	oot := filepath.Join(testkit.Canonical(t, home), ".f10", filepath.Base(repo), "instructions")
 	if err := os.MkdirAll(oot, 0o755); err != nil {
 		t.Fatalf("creating the out-of-tree root: %v", err)
 	}
@@ -137,29 +139,6 @@ func TestInitWritesOutOfTreeWithoutTouchingTheRepo(t *testing.T) {
 	}
 }
 
-// isolateEnv keeps the probes off the developer's own machine: both the
-// gh/glab config lookup and the out-of-tree storage root hang off HOME.
-func isolateEnv(t *testing.T) string {
-	t.Helper()
-
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
-
-	return home
-}
-
-// mkRepo is a checkout named demo: the name derives the task id prefix
-// init writes, and a temp dir's own basename derives none.
-func mkRepo(t *testing.T) string {
-	t.Helper()
-
-	r := initRepo(t, canonical(t, t.TempDir())+"/demo", "master")
-	r.Git("remote", "add", "origin", "git@github.com:amberpixels/demo.git")
-
-	return r.Dir
-}
-
 func readExclude(t *testing.T, repo string) string {
 	t.Helper()
 
@@ -171,26 +150,13 @@ func readExclude(t *testing.T, repo string) string {
 	return string(data)
 }
 
-// canonical matches the layout package, which reports physical paths - a temp dir
-// on macOS is reached through a symlink.
-func canonical(t *testing.T, path string) string {
-	t.Helper()
-
-	p, err := filepath.EvalSymlinks(path)
-	if err != nil {
-		t.Fatalf("canonicalizing %s: %v", path, err)
-	}
-
-	return p
-}
-
 // The remote review's four facts come from the CI workflow when one runs the
 // Claude Code action, and from nowhere otherwise: a checkout without one
 // declares no remote review rather than a guessed one.
 func TestInitWritesTheReviewFromAWorkflow(t *testing.T) {
-	isolateEnv(t)
+	testkit.IsolateEnv(t)
 
-	bare := mkRepo(t)
+	bare := testkit.MkRepo(t)
 
 	out, err := runApp(t, "-C", bare, "init").outErr()
 	if err != nil {
@@ -206,7 +172,7 @@ func TestInitWritesTheReviewFromAWorkflow(t *testing.T) {
 		t.Errorf("the report's left-out row does not name Review:\n%s", out)
 	}
 
-	repo := mkRepo(t)
+	repo := testkit.MkRepo(t)
 	dir := filepath.Join(repo, ".github", "workflows")
 
 	if err := os.MkdirAll(dir, 0o750); err != nil {
@@ -242,9 +208,9 @@ func TestInitWritesTheReviewFromAWorkflow(t *testing.T) {
 // A value outside a key's vocabulary stops the commands that act on facts;
 // config still runs, since it is how the problem is seen.
 func TestDeclarationErrorStopsCommands(t *testing.T) {
-	isolateEnv(t)
+	testkit.IsolateEnv(t)
 
-	repo := mkRepo(t)
+	repo := testkit.MkRepo(t)
 	path := filepath.Join(repo, ".f10", "instructions", "project.md")
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {

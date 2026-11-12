@@ -5,13 +5,15 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/amberpixels/f10/cli/internal/testkit"
 )
 
 // A rider is read through its bundle's lead: the plan and the demo report
 // are keyed by the lead, so naming the rider finds them.
 func TestPlanAndDemoFollowARiderToItsLead(t *testing.T) {
-	repo := tracedRepo(t, "DM-1/thing", "")
-	git(t, repo, "config", "branch.DM-1/thing.f10-tasks", "DM-2")
+	repo := testkit.TracedRepo(t, "DM-1/thing", "")
+	testkit.Git(t, repo, "config", "branch.DM-1/thing.f10-tasks", "DM-2")
 	t.Chdir(repo)
 
 	for path, body := range map[string]string{

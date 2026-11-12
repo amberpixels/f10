@@ -7,49 +7,21 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
-	prcmd "github.com/amberpixels/f10/cli/internal/command/pr"
-	"github.com/amberpixels/f10/cli/internal/hostops"
-	"github.com/amberpixels/f10/cli/internal/probe"
-	"github.com/amberpixels/f10/cli/internal/reviews"
 	"github.com/amberpixels/f10/cli/internal/stack"
-	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/testkit"
 )
-
-// prRepo is a clone of a bare origin, so origin/HEAD and pushed branches
-// exist; origin is a path, so no host CLI applies and every read is git's.
-func prRepo(t *testing.T) string {
-	t.Helper()
-
-	dir := cloneRepo(t, "repo").Dir
-	commitFile(t, dir, "main.txt")
-	git(t, dir, "push", "-q", "origin", "main")
-	git(t, dir, "remote", "set-head", "origin", "-a")
-
-	return dir
-}
-
-func commitFile(t *testing.T, dir, name string) {
-	t.Helper()
-
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(name+"\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	git(t, dir, "add", name)
-	git(t, dir, "commit", "-q", "-m", name)
-}
 
 // stacked puts feat on a pushed base branch, recorded as start records it.
 func stacked(t *testing.T) string {
 	t.Helper()
 
-	dir := prRepo(t)
-	git(t, dir, "switch", "-q", "-c", "base")
-	commitFile(t, dir, "base.txt")
-	git(t, dir, "push", "-q", "origin", "base")
-	git(t, dir, "switch", "-q", "-c", "feat")
-	commitFile(t, dir, "feat.txt")
-	git(t, dir, "config", branchmeta.AfterBranch.For("feat"), "base")
+	dir := testkit.PrRepo(t)
+	testkit.Git(t, dir, "switch", "-q", "-c", "base")
+	testkit.CommitFile(t, dir, "base.txt")
+	testkit.Git(t, dir, "push", "-q", "origin", "base")
+	testkit.Git(t, dir, "switch", "-q", "-c", "feat")
+	testkit.CommitFile(t, dir, "feat.txt")
+	testkit.Git(t, dir, "config", branchmeta.AfterBranch.For("feat"), "base")
 
 	return dir
 }
@@ -61,14 +33,14 @@ func TestPRBase(t *testing.T) {
 		t.Errorf("stacked: base = %q, %v; want base", out, err)
 	}
 
-	git(t, dir, "config", branchmeta.AfterBranch.For("feat"), "gone")
+	testkit.Git(t, dir, "config", branchmeta.AfterBranch.For("feat"), "gone")
 
 	out, errOut, err := runApp(t, "-C", dir, "pr", "base").streams()
 	if err != nil || out != "main\nfound: "+stack.FoundGone+"\n" || errOut != "" {
 		t.Errorf("gone: base = %q, %q, %v; want main and the typed found line, nothing on stderr", out, errOut, err)
 	}
 
-	git(t, dir, "config", "--unset", branchmeta.AfterBranch.For("feat"))
+	testkit.Git(t, dir, "config", "--unset", branchmeta.AfterBranch.For("feat"))
 
 	if out, _, err := runApp(t, "-C", dir, "pr", "base").streams(); err != nil || out != "main\n" {
 		t.Errorf("unrecorded: base = %q, %v; want main", out, err)
@@ -77,11 +49,11 @@ func TestPRBase(t *testing.T) {
 
 // A PR cannot target a base origin lacks, so --origin refuses it.
 func TestPRBaseOriginRefusesALocalBase(t *testing.T) {
-	dir := prRepo(t)
-	git(t, dir, "switch", "-q", "-c", "base")
-	commitFile(t, dir, "base.txt")
-	git(t, dir, "switch", "-q", "-c", "feat")
-	git(t, dir, "config", branchmeta.AfterBranch.For("feat"), "base")
+	dir := testkit.PrRepo(t)
+	testkit.Git(t, dir, "switch", "-q", "-c", "base")
+	testkit.CommitFile(t, dir, "base.txt")
+	testkit.Git(t, dir, "switch", "-q", "-c", "feat")
+	testkit.Git(t, dir, "config", branchmeta.AfterBranch.For("feat"), "base")
 
 	_, _, err := runApp(t, "-C", dir, "pr", "base", "--origin").streams()
 	if err == nil || !strings.Contains(err.Error(), "not on origin") {
@@ -108,11 +80,11 @@ func TestPRDiffStacked(t *testing.T) {
 // and origin's copy of the base moving ahead is not this change either.
 func TestPRDiffForksFromTheNewerBase(t *testing.T) {
 	dir := stacked(t)
-	git(t, dir, "switch", "-q", "base")
-	commitFile(t, dir, "unpushed.txt")
-	git(t, dir, "switch", "-q", "-c", "feat2")
-	commitFile(t, dir, "feat2.txt")
-	git(t, dir, "config", branchmeta.AfterBranch.For("feat2"), "base")
+	testkit.Git(t, dir, "switch", "-q", "base")
+	testkit.CommitFile(t, dir, "unpushed.txt")
+	testkit.Git(t, dir, "switch", "-q", "-c", "feat2")
+	testkit.CommitFile(t, dir, "feat2.txt")
+	testkit.Git(t, dir, "config", branchmeta.AfterBranch.For("feat2"), "base")
 
 	out, _, err := runApp(t, "-C", dir, "pr", "diff", "--name-only").streams()
 	if err != nil || out != "feat2.txt\n" {
@@ -135,64 +107,16 @@ func TestPRViewWithNoPR(t *testing.T) {
 	}
 }
 
-func TestPullNumberOf(t *testing.T) {
-	for token, want := range map[string]int{
-		"12":                             12,
-		"#12":                            12,
-		"!12":                            12,
-		"https://github.com/o/r/pull/12": 12,
-		"https://gitlab.example.com/g/r/-/merge_requests/7": 7,
-		"FT-12":                            0,
-		"https://github.com/o/r/issues/12": 0,
-		"":                                 0,
-	} {
-		if got := reviews.PullNumberOf(token); got != want {
-			t.Errorf("pullNumberOf(%q) = %d, want %d", token, got, want)
-		}
-	}
-}
-
-// Only an open request is the branch's: a closed one before it is history.
-func TestOpenPullOfSkipsClosed(t *testing.T) {
-	f := newFakes(t)
-	f.script("gh pr list --head feat --state all --json number,state,headRefName,headRefOid,baseRefName,url,"+
-		"author,createdAt,mergedAt,closedAt --limit 100",
-		`[{"number":3,"state":"CLOSED","createdAt":"2026-10-02T00:00:00Z"},`+
-			`{"number":5,"state":"OPEN","createdAt":"2026-10-01T00:00:00Z"}]`)
-
-	tg := &target.Target{Dir: t.TempDir(), Probes: &probe.Probes{CLI: probe.Signal{Value: "gh"}}}
-
-	if p, err := reviews.OpenPullOf(t.Context(), tg, "feat"); err != nil || p.Number != 5 {
-		t.Errorf("openPullOf = %d, %v; want 5", p.Number, err)
-	}
-}
-
-// A finished task's branch is gone, so its newest request, merged or not,
-// stands for the change.
-func TestLastPullOfTakesTheNewestAnyState(t *testing.T) {
-	f := newFakes(t)
-	f.script("gh pr list --head REPO-7 --state all --json number,state,headRefName,headRefOid,baseRefName,url,"+
-		"author,createdAt,mergedAt,closedAt --limit 100",
-		`[{"number":3,"state":"CLOSED","createdAt":"2026-10-01T00:00:00Z"},`+
-			`{"number":5,"state":"MERGED","baseRefName":"main","createdAt":"2026-10-02T00:00:00Z"}]`)
-
-	tg := &target.Target{Dir: t.TempDir(), Probes: &probe.Probes{CLI: probe.Signal{Value: "gh"}}}
-
-	if p, err := reviews.LastPullOf(t.Context(), tg, "REPO-7"); err != nil || p.Number != 5 || p.Base != "main" {
-		t.Errorf("lastPullOf = #%d on %q, %v; want #5 on main", p.Number, p.Base, err)
-	}
-}
-
 // A task id finds its branch locally, or on origin alone, and names a task
 // with no branch as one to start.
 func TestPRSubjectByTaskID(t *testing.T) {
-	dir := prRepo(t)
-	git(t, dir, "switch", "-q", "-c", "REPO-7")
-	commitFile(t, dir, "seven.txt")
-	git(t, dir, "push", "-q", "origin", "REPO-7")
-	git(t, dir, "switch", "-q", "-c", "REPO-8", "main")
-	commitFile(t, dir, "eight.txt")
-	git(t, dir, "switch", "-q", "main")
+	dir := testkit.PrRepo(t)
+	testkit.Git(t, dir, "switch", "-q", "-c", "REPO-7")
+	testkit.CommitFile(t, dir, "seven.txt")
+	testkit.Git(t, dir, "push", "-q", "origin", "REPO-7")
+	testkit.Git(t, dir, "switch", "-q", "-c", "REPO-8", "main")
+	testkit.CommitFile(t, dir, "eight.txt")
+	testkit.Git(t, dir, "switch", "-q", "main")
 
 	out, _, err := runApp(t, "-C", dir, "pr", "view", "REPO-8").streams()
 	if err != nil || !strings.Contains(out, "branch: REPO-8\n") || !strings.Contains(out, "task: REPO-8\n") {
@@ -204,7 +128,7 @@ func TestPRSubjectByTaskID(t *testing.T) {
 		t.Errorf("local branch: diff = %q, %v; want its commits alone", out, err)
 	}
 
-	git(t, dir, "branch", "-q", "-D", "REPO-7")
+	testkit.Git(t, dir, "branch", "-q", "-D", "REPO-7")
 
 	out, _, err = runApp(t, "-C", dir, "pr", "diff", "REPO-7", "--name-only").streams()
 	if err != nil || out != "seven.txt\n" {
@@ -217,63 +141,18 @@ func TestPRSubjectByTaskID(t *testing.T) {
 	}
 }
 
-// A PR's head branch names its task by the link start writes, else by the
-// id in its name.
-func TestBranchTask(t *testing.T) {
-	dir := prRepo(t)
-	git(t, dir, "config", branchmeta.Task.For("picked-up"), "REPO-3")
-
-	tg, err := target.At(t.Context(), dir, false, "pr")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	named := tg.Effective.IDPrefix + "-4"
-
-	for branch, want := range map[string]string{"picked-up": "REPO-3", named + "/slug": named, "other": ""} {
-		got := ""
-		if r := reviews.BranchTask(t.Context(), tg, dir, branch); r != nil {
-			got = r.ID
-		}
-
-		if got != want {
-			t.Errorf("branchTask(%q) = %q, want %q", branch, got, want)
-		}
-	}
-}
-
-func TestPullCommentsGitHub(t *testing.T) {
-	f := newFakes(t)
-	f.script("gh pr view 4 --json comments", `{"comments":[`+
-		`{"author":{"login":"ann"},"body":"looks good","createdAt":"2026-10-01T00:00:00Z"}]}`)
-
-	got, err := hostops.NewHost("gh", t.TempDir()).PullComments(t.Context(), 4)
-	if err != nil || len(got) != 1 || got[0].Author != "ann" || got[0].Body != "looks good" {
-		t.Errorf("PullComments = %+v, %v", got, err)
-	}
-}
-
-func TestPatchFiles(t *testing.T) {
-	patch := "diff --git a/x.go b/x.go\nindex 1..2\n--- a/x.go\n+++ b/x.go\n@@ -1 +1 @@\n-a\n+b\n" +
-		"diff --git a/old.md b/new.md\nrename from old.md\n"
-
-	if got := prcmd.PatchFiles(patch); got != "x.go\nnew.md" {
-		t.Errorf("patchFiles = %q", got)
-	}
-}
-
 // After a squash merge the merge base is still where the first PR started,
 // so a commit added to the reused branch is all that is new.
 func TestPRDiffShowsOnlyCommitsAfterASquashMerge(t *testing.T) {
-	dir := prRepo(t)
-	git(t, dir, "switch", "-q", "-c", "feat")
-	commitFile(t, dir, "first.txt")
-	git(t, dir, "switch", "-q", "main")
-	git(t, dir, "merge", "-q", "--squash", "feat")
-	git(t, dir, "commit", "-q", "-m", "first, squashed")
-	git(t, dir, "push", "-q", "origin", "main")
-	git(t, dir, "switch", "-q", "feat")
-	commitFile(t, dir, "second.txt")
+	dir := testkit.PrRepo(t)
+	testkit.Git(t, dir, "switch", "-q", "-c", "feat")
+	testkit.CommitFile(t, dir, "first.txt")
+	testkit.Git(t, dir, "switch", "-q", "main")
+	testkit.Git(t, dir, "merge", "-q", "--squash", "feat")
+	testkit.Git(t, dir, "commit", "-q", "-m", "first, squashed")
+	testkit.Git(t, dir, "push", "-q", "origin", "main")
+	testkit.Git(t, dir, "switch", "-q", "feat")
+	testkit.CommitFile(t, dir, "second.txt")
 
 	out, _, err := runApp(t, "-C", dir, "pr", "diff", "--name-only").streams()
 	if err != nil || out != "second.txt\n" {
@@ -284,14 +163,14 @@ func TestPRDiffShowsOnlyCommitsAfterASquashMerge(t *testing.T) {
 // A branch whose PR merged but which is not finished yet still shows its
 // change, which explain and judge read after the merge.
 func TestPRDiffOfAMergedBranchShowsItsChange(t *testing.T) {
-	dir := prRepo(t)
-	git(t, dir, "switch", "-q", "-c", "feat")
-	commitFile(t, dir, "first.txt")
-	git(t, dir, "switch", "-q", "main")
-	git(t, dir, "merge", "-q", "--squash", "feat")
-	git(t, dir, "commit", "-q", "-m", "first, squashed")
-	git(t, dir, "push", "-q", "origin", "main")
-	git(t, dir, "switch", "-q", "feat")
+	dir := testkit.PrRepo(t)
+	testkit.Git(t, dir, "switch", "-q", "-c", "feat")
+	testkit.CommitFile(t, dir, "first.txt")
+	testkit.Git(t, dir, "switch", "-q", "main")
+	testkit.Git(t, dir, "merge", "-q", "--squash", "feat")
+	testkit.Git(t, dir, "commit", "-q", "-m", "first, squashed")
+	testkit.Git(t, dir, "push", "-q", "origin", "main")
+	testkit.Git(t, dir, "switch", "-q", "feat")
 
 	out, _, err := runApp(t, "-C", dir, "pr", "diff", "--name-only").streams()
 	if err != nil || out != "first.txt\n" {

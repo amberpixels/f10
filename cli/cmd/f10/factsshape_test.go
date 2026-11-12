@@ -3,13 +3,10 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"reflect"
-	"slices"
 	"strings"
 	"testing"
 
-	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
-	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/testkit"
 )
 
 // everyScalar declares each scalar frontmatter key, so the config golden
@@ -51,10 +48,10 @@ pace: medium
 func configGolden(t *testing.T, name, projectMD string) {
 	t.Helper()
 
-	home := isolateEnv(t)
+	home := testkit.IsolateEnv(t)
 	t.Setenv("F10_ROOTS", "")
 
-	repo := mkRepo(t)
+	repo := testkit.MkRepo(t)
 
 	if err := os.WriteFile(
 		filepath.Join(repo, "justfile"),
@@ -77,7 +74,7 @@ func configGolden(t *testing.T, name, projectMD string) {
 
 	out := runApp(t, "-C", repo, "config", "--json").must(t)
 	out = strings.ReplaceAll(out, repo, "$REPO")
-	out = strings.ReplaceAll(out, canonical(t, home), "$HOME")
+	out = strings.ReplaceAll(out, testkit.Canonical(t, home), "$HOME")
 	out = strings.ReplaceAll(out, home, "$HOME")
 
 	golden(t, filepath.Join("testdata", "config", name+".golden"), out)
@@ -86,7 +83,7 @@ func configGolden(t *testing.T, name, projectMD string) {
 func golden(t *testing.T, path, got string) {
 	t.Helper()
 
-	if *updateGolden {
+	if *testkit.UpdateGolden {
 		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 			t.Fatal(err)
 		}
@@ -111,68 +108,3 @@ func golden(t *testing.T, path, got string) {
 func TestConfigJSONEveryScalar(t *testing.T) { configGolden(t, "every-scalar", everyScalar) }
 
 func TestConfigJSONNothingDeclared(t *testing.T) { configGolden(t, "nothing-declared", "") }
-
-// Only the host's own issues fall back to the host; a declared Notion or
-// Jira tracker reads through its driver alone.
-func TestHostIssuesByKind(t *testing.T) {
-	for kind, want := range map[facts.TrackerKind]bool{
-		facts.TrackerGitHub: true,
-		facts.TrackerGitLab: true,
-		facts.TrackerNotion: false,
-		facts.TrackerJira:   false,
-	} {
-		if got := declaredTracker(t, kind).HostIssues(); got != want {
-			t.Errorf("declared %s: hostIssues = %v, want %v", kind, got, want)
-		}
-	}
-
-	// a kind only the CLI implies is no declaration, so the host answers
-	detected := childTarget(t, "gh")
-	detected.Effective.TrackerKind = facts.TrackerJira
-	detected.Effective.Facts = nil
-
-	if !detected.HostIssues() || detected.TrackerDeclared() {
-		t.Error("an undeclared kind should fall back to host issues")
-	}
-
-	none := childTarget(t, "gh")
-	none.Effective.TrackerKind = ""
-
-	if !none.HostIssues() {
-		t.Error("no kind should fall back to host issues")
-	}
-}
-
-// The config view copies Effective field by field, so a field added there
-// fails here until the view shows it or this list says the view folds it
-// into its own shape.
-func TestConfigViewCoversEffective(t *testing.T) {
-	folded := []string{
-		"agentsOrigin",        // each agents entry carries its own origin
-		"pacesOrigin",         // each paces entry carries its own origin
-		"paceOrigin",          // the pace entry carries its origin
-		"ceilingOrigin",       // each ceiling entry carries its own origin
-		"ceilingExcept",       // the ceiling's last entry
-		"ceilingExceptOrigin", // the ceiling's last entry's origin
-	}
-
-	shown := jsonKeys(reflect.TypeFor[configcmd.View]())
-
-	for _, key := range jsonKeys(reflect.TypeFor[facts.Effective]()) {
-		if !slices.Contains(shown, key) && !slices.Contains(folded, key) {
-			t.Errorf("f10 config --json lacks Effective's %q", key)
-		}
-	}
-}
-
-func jsonKeys(typ reflect.Type) []string {
-	var keys []string
-
-	for f := range typ.Fields() {
-		if name, _, _ := strings.Cut(f.Tag.Get("json"), ","); name != "" && name != "-" {
-			keys = append(keys, name)
-		}
-	}
-
-	return keys
-}

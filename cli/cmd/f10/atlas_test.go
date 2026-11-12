@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx/gitxtest"
 	"github.com/amberpixels/f10/cli/internal/projects"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/testkit"
 )
 
 func writeDeclared(t *testing.T, home, body string) {
@@ -31,10 +32,10 @@ func writeDeclared(t *testing.T, home, body string) {
 // One public checkout and one aliased: the document holds gears in full and
 // the other under its alias alone, and --out writes the same bytes.
 func TestAtlasPrintsPublicAndAnonymousNodes(t *testing.T) {
-	home := isolateEnv(t)
-	root := canonical(t, t.TempDir())
-	gears := scopeRepo(t, root, "gears")
-	secret := scopeRepo(t, root, "secret")
+	home := testkit.IsolateEnv(t)
+	root := testkit.Canonical(t, t.TempDir())
+	gears := testkit.ScopeRepo(t, root, "gears")
+	secret := testkit.ScopeRepo(t, root, "secret")
 
 	writeDeclared(
 		t,
@@ -111,8 +112,8 @@ func withoutStamp(doc string) string {
 }
 
 func TestAtlasRefusesABrokenDeclaredFile(t *testing.T) {
-	home := isolateEnv(t)
-	gears := scopeRepo(t, canonical(t, t.TempDir()), "gears")
+	home := testkit.IsolateEnv(t)
+	gears := testkit.ScopeRepo(t, testkit.Canonical(t, t.TempDir()), "gears")
 
 	for body, want := range map[string]string{
 		"projects:\n  gears: {status: dormant}\n": "projects.gears: status",
@@ -127,7 +128,7 @@ func TestAtlasRefusesABrokenDeclaredFile(t *testing.T) {
 }
 
 func TestAtlasScopeErrors(t *testing.T) {
-	isolateEnv(t)
+	testkit.IsolateEnv(t)
 	t.Setenv(projects.RootsEnv, "")
 
 	if _, err := runApp(t, "atlas", "--all").outErr(); err == nil || !strings.Contains(err.Error(), projects.RootsEnv) {
@@ -139,7 +140,7 @@ func TestAtlasScopeErrors(t *testing.T) {
 		t.Errorf("-C a plain dir: err = %v", err)
 	}
 
-	gears := scopeRepo(t, canonical(t, t.TempDir()), "gears")
+	gears := testkit.ScopeRepo(t, testkit.Canonical(t, t.TempDir()), "gears")
 	if _, err := runApp(t, "-C", gears, "atlas", "--out", "x.json").outErr(); err == nil ||
 		!strings.Contains(err.Error(), "--json") {
 		t.Errorf("--out alone: err = %v", err)
@@ -149,7 +150,7 @@ func TestAtlasScopeErrors(t *testing.T) {
 // A linked worktree is its main checkout: the node takes the main checkout's
 // name, the normalised remote as its id, and origin HEAD's history.
 func TestAtlasReadsAWorktreeAsItsMainCheckout(t *testing.T) {
-	home := isolateEnv(t)
+	home := testkit.IsolateEnv(t)
 	r := gitxtest.Clone(t, "gears")
 	r.Commit("2026-10-01T08:00:00Z", "go.mod", "module github.com/acme/gears\n", "start")
 	r.Git("push", "-q", "origin", "main")
@@ -186,13 +187,13 @@ func TestAtlasReadsAWorktreeAsItsMainCheckout(t *testing.T) {
 // anonymous node, and one on an unaliased private checkout left out; the
 // terminal names both directions.
 func TestAtlasPrintsTheEdges(t *testing.T) {
-	home := isolateEnv(t)
-	root := canonical(t, t.TempDir())
-	widgets := scopeRepo(t, root, "widgets")
-	jsonish := scopeRepo(t, root, "jsonish")
-	herd := scopeRepo(t, root, "herd")
-	secret := scopeRepo(t, root, "secret")
-	hidden := scopeRepo(t, root, "hidden")
+	home := testkit.IsolateEnv(t)
+	root := testkit.Canonical(t, t.TempDir())
+	widgets := testkit.ScopeRepo(t, root, "widgets")
+	jsonish := testkit.ScopeRepo(t, root, "jsonish")
+	herd := testkit.ScopeRepo(t, root, "herd")
+	secret := testkit.ScopeRepo(t, root, "secret")
+	hidden := testkit.ScopeRepo(t, root, "hidden")
 
 	for dir, body := range map[string]string{
 		widgets: "module github.com/acme/widgets\n\nrequire (\n\tgithub.com/acme/json v0.1.0\n" +
@@ -255,10 +256,10 @@ func TestAtlasPrintsTheEdges(t *testing.T) {
 // A broken manifest on an aliased checkout is a stderr warning under its
 // alias, and --json stays one valid document.
 func TestAtlasWarnsOnAnAnonymousNodesBrokenManifest(t *testing.T) {
-	home := isolateEnv(t)
-	root := canonical(t, t.TempDir())
-	gears := scopeRepo(t, root, "gears")
-	secret := scopeRepo(t, root, "secret")
+	home := testkit.IsolateEnv(t)
+	root := testkit.Canonical(t, t.TempDir())
+	gears := testkit.ScopeRepo(t, root, "gears")
+	secret := testkit.ScopeRepo(t, root, "secret")
 
 	if err := os.WriteFile(filepath.Join(secret, "package.json"), []byte("{"), 0o600); err != nil {
 		t.Fatal(err)

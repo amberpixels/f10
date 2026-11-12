@@ -4,22 +4,13 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/lore"
 	"github.com/amberpixels/f10/cli/internal/statusview"
-	"github.com/amberpixels/f10/cli/internal/verdict"
+	"github.com/amberpixels/f10/cli/internal/testkit"
 )
-
-// lore keeps its own copy of the judge's outcomes so it imports nothing
-// from f10; this is what keeps the copy honest.
-func TestLoreOutcomesAreVerdicts(t *testing.T) {
-	if !slices.Equal(lore.Outcomes, verdict.Verdicts) {
-		t.Errorf("lore.Outcomes %q, verdict.Verdicts %q", lore.Outcomes, verdict.Verdicts)
-	}
-}
 
 func runLore(t *testing.T, args ...string) (string, error) {
 	t.Helper()
@@ -39,7 +30,7 @@ func TestLoreVerbs(t *testing.T) {
 	git := func(args ...string) {
 		t.Helper()
 
-		git(t, dir, args...)
+		testkit.Git(t, dir, args...)
 	}
 
 	git("init", "-q")
@@ -164,7 +155,7 @@ func TestLoreWhyNoRecord(t *testing.T) {
 		{"init", "-q"},
 		{"-c", "user.email=a@b.c", "-c", "user.name=A", "commit", "-q", "--allow-empty", "-m", "empty"},
 	} {
-		git(t, dir, args...)
+		testkit.Git(t, dir, args...)
 	}
 
 	if err := os.WriteFile(filepath.Join(dir, "new.go"), []byte("x\n"), 0o644); err != nil {
@@ -192,7 +183,7 @@ func TestLoreLocalRootIsMains(t *testing.T) {
 		{"commit", "-q", "--allow-empty", "-m", "root"},
 		{"worktree", "add", "-q", "-b", "FT-1/x", wt},
 	} {
-		git(t, main, args...)
+		testkit.Git(t, main, args...)
 	}
 
 	t.Chdir(wt)
@@ -218,7 +209,7 @@ func TestLoreLocalRootIsMains(t *testing.T) {
 func TestLoreAddAnchorBeforeFirstCommit(t *testing.T) {
 	dir := t.TempDir()
 
-	git(t, dir, "init", "-q")
+	testkit.Git(t, dir, "init", "-q")
 
 	t.Chdir(dir)
 
@@ -238,7 +229,7 @@ func TestLoreStepCommands(t *testing.T) {
 		{"config", "user.email", "dev@example.com"},
 		{"config", "user.name", "Dev"},
 	} {
-		git(t, dir, args...)
+		testkit.Git(t, dir, args...)
 	}
 
 	if err := os.WriteFile(filepath.Join(dir, "a.go"), []byte("a\nb\n"), 0o644); err != nil {
@@ -246,7 +237,7 @@ func TestLoreStepCommands(t *testing.T) {
 	}
 
 	for _, args := range [][]string{{"add", "."}, {"commit", "-q", "-m", "a"}} {
-		git(t, dir, args...)
+		testkit.Git(t, dir, args...)
 	}
 
 	t.Chdir(dir)
@@ -275,7 +266,7 @@ func TestLoreStepCommands(t *testing.T) {
 		"--resolution", "house style", "-m", "house style")
 
 	// judge
-	head := strings.TrimSpace(git(t, dir, "rev-parse", "HEAD"))
+	head := strings.TrimSpace(testkit.Git(t, dir, "rev-parse", "HEAD"))
 	must("add", "verdict", "--change", "FT-1", "--outcome", "proceed", "--gate", "judge",
 		"--commit", head, "--judged", "change", "-m", "sound")
 
@@ -311,44 +302,11 @@ func TestLoreStepCommands(t *testing.T) {
 	}
 }
 
-func TestLoreNote(t *testing.T) {
-	store := &lore.Store{Root: t.TempDir()}
-
-	want := "lore: no entries for FT-9: no intent, no decisions, no lessons"
-	if got := lore.Note(store, "FT-9"); got != want {
-		t.Errorf("empty: %q, want %q", got, want)
-	}
-
-	add := func(e lore.Entry) {
-		t.Helper()
-
-		e.Change, e.Human, e.Body = "FT-9", "dev@example.com", "why"
-		if _, err := store.Add(t.Context(), e); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	anchor := lore.Anchor{Path: "a.go", Line: 1, Commit: "abcdef1"}
-	add(lore.Entry{Kind: lore.KindDecision, Chosen: "x", Anchors: []lore.Anchor{anchor}})
-	add(lore.Entry{Kind: lore.KindDecision, Chosen: "y", Anchors: []lore.Anchor{anchor}})
-
-	if got, want := lore.Note(store, "FT-9"), "lore: no intent, 2 decisions, no lessons"; got != want {
-		t.Errorf("decisions only: %q, want %q", got, want)
-	}
-
-	add(lore.Entry{Kind: lore.KindIntent})
-	add(lore.Entry{Kind: lore.KindLesson, Anchors: []lore.Anchor{anchor}})
-
-	if got, want := lore.Note(store, "FT-9"), "lore: intent, 2 decisions, 1 lesson"; got != want {
-		t.Errorf("all kinds: %q, want %q", got, want)
-	}
-}
-
 // A task's second PR writes to <id>.2 once its first series is archived, and
 // show on the bare id lists every series, newest first.
 func TestLoreChangeAndShowSeries(t *testing.T) {
-	repo := tracedRepo(t, "DM-7/thing", "on")
-	git(t, repo, "config", "user.email", "dev@example.com")
+	repo := testkit.TracedRepo(t, "DM-7/thing", "on")
+	testkit.Git(t, repo, "config", "user.email", "dev@example.com")
 	t.Chdir(repo)
 
 	must := func(args ...string) string {
@@ -406,7 +364,7 @@ func TestLoreAgentFromSession(t *testing.T) {
 	dir := t.TempDir()
 
 	for _, args := range [][]string{{"init", "-q"}, {"config", "user.email", "dev@example.com"}} {
-		git(t, dir, args...)
+		testkit.Git(t, dir, args...)
 	}
 
 	t.Chdir(dir)
@@ -443,7 +401,7 @@ func TestLoreAgentFromSession(t *testing.T) {
 // Work no task names keys its change by the branch, as review round keys
 // the same findings directory.
 func TestLoreChangeOnABranchWithNoTask(t *testing.T) {
-	repo := tracedRepo(t, "feat/thing", "on")
+	repo := testkit.TracedRepo(t, "feat/thing", "on")
 	t.Chdir(repo)
 
 	out, err := runLore(t, "change")

@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -17,6 +16,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/testkit"
 )
 
 // launchFixture is a main checkout whose session sess-1 launched tasks,
@@ -28,8 +28,8 @@ type launchFixture struct {
 func newLaunchFixture(t *testing.T) launchFixture {
 	t.Helper()
 
-	repo := tracedRepo(t, "main", "")
-	git(t, repo, "remote", "remove", "origin") // no host CLI: nothing leaves the machine
+	repo := testkit.TracedRepo(t, "main", "")
+	testkit.Git(t, repo, "remote", "remove", "origin") // no host CLI: nothing leaves the machine
 
 	fx := launchFixture{repo: repo, stateDir: t.TempDir()}
 	t.Setenv("F10_STATE_DIR", fx.stateDir)
@@ -45,7 +45,7 @@ func (fx launchFixture) worktree(t *testing.T, id string, run state.Run) {
 	t.Helper()
 
 	path := filepath.Join(filepath.Dir(fx.repo), "demo."+id)
-	git(t, fx.repo, "worktree", "add", "-q", "-b", id+"/work", path)
+	testkit.Git(t, fx.repo, "worktree", "add", "-q", "-b", id+"/work", path)
 
 	run.Session, run.Task, run.Root = "agent-"+id, id, gitx.Resolved(path)
 	if err := run.Save(t.Context(), fx.stateDir, time.Now()); err != nil {
@@ -212,7 +212,7 @@ func TestBareStatusNestsLaunchesUnderTheirBase(t *testing.T) {
 
 	fx.worktree(t, "DM-3", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
 	fx.worktree(t, "DM-5", state.Run{Capture: "prior", Plan: "done", Ship: "upcoming"})
-	git(t, fx.repo, "config", branchmeta.After.For("DM-5/work"), "DM-3")
+	testkit.Git(t, fx.repo, "config", branchmeta.After.For("DM-5/work"), "DM-3")
 
 	n := fx.drive(t, func(r *drivestore.Record) { r.Tasks[1].After = "DM-3" }, "DM-3", "DM-4")
 	fx.launch(t, state.LaunchStart, "DM-5")
@@ -248,7 +248,7 @@ func TestBareStatusBranchBaseBeatsTheDrives(t *testing.T) {
 	fx.worktree(t, "DM-3", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
 	fx.worktree(t, "DM-7", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
 	fx.worktree(t, "DM-4", state.Run{Capture: "prior", Plan: "done", Ship: "upcoming"})
-	git(t, fx.repo, "config", branchmeta.After.For("DM-4/work"), "DM-3")
+	testkit.Git(t, fx.repo, "config", branchmeta.After.For("DM-4/work"), "DM-3")
 
 	fx.drive(t, func(r *drivestore.Record) { r.Tasks[2].After = "DM-7" }, "DM-3", "DM-7", "DM-4")
 
@@ -285,29 +285,6 @@ func TestBareStatusIgnoresAFinishedBase(t *testing.T) {
 
 	if rows[0].After != "" || rows[0].Depth != 0 {
 		t.Errorf("a finished base still holds DM-6: %+v", rows[0])
-	}
-}
-
-// Dropping a row moves what hung under it up to its level.
-func TestDropRowsLiftsTheDroppedRowsChildren(t *testing.T) {
-	rows := []statusview.TaskRow{
-		{ID: "A", Depth: 0, Stage: statusview.StageDone},
-		{ID: "B", Depth: 1},
-		{ID: "C", Depth: 2, Stage: statusview.StageDone},
-		{ID: "D", Depth: 3},
-		{ID: "E", Depth: 1},
-		{ID: "F", Depth: 0},
-	}
-
-	got := statusview.DropRows(rows, func(r statusview.TaskRow) bool { return r.Stage == statusview.StageDone })
-
-	var b strings.Builder
-	for _, r := range got {
-		fmt.Fprintf(&b, "%s%d ", r.ID, r.Depth)
-	}
-
-	if want := "B0 D1 E0 F0 "; b.String() != want {
-		t.Errorf("rows = %q, want %q", b.String(), want)
 	}
 }
 

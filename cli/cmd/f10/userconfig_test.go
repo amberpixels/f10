@@ -2,8 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -11,103 +9,11 @@ import (
 	"github.com/amberpixels/f10/cli/internal/calendar"
 	"github.com/amberpixels/f10/cli/internal/scope"
 	"github.com/amberpixels/f10/cli/internal/standup"
+	"github.com/amberpixels/f10/cli/internal/testkit"
 )
 
-func writeUserFile(t *testing.T, home, name, body string) {
-	t.Helper()
-
-	if err := os.MkdirAll(filepath.Join(home, ".f10"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := os.WriteFile(filepath.Join(home, ".f10", name), []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestLastStandupRoundTrip(t *testing.T) {
-	isolateEnv(t)
-
-	if last, err := scope.ReadLastStandup(); err != nil || last != nil {
-		t.Fatalf("no file: %v, %v, want nil, nil", last, err)
-	}
-
-	want := standup.Last{
-		At:    time.Date(2026, 10, 12, 7, 0, 0, 0, time.UTC),
-		Since: time.Date(2026, 10, 9, 7, 0, 0, 0, time.UTC),
-	}
-	if err := scope.WriteLastStandup(want); err != nil {
-		t.Fatal(err)
-	}
-
-	got, err := scope.ReadLastStandup()
-	if err != nil || got == nil || !got.At.Equal(want.At) || !got.Since.Equal(want.Since) {
-		t.Errorf("read back %+v, %v, want %+v", got, err, want)
-	}
-}
-
-// A stored standup that does not read is an error, never a silent restart
-// of the period.
-func TestLastStandupCorrupt(t *testing.T) {
-	home := isolateEnv(t)
-	writeUserFile(t, home, scope.StandupStateFile, "{not json")
-
-	if _, err := scope.ReadLastStandup(); err == nil || !strings.Contains(err.Error(), scope.StandupStateFile) {
-		t.Errorf("err = %v, want one naming the file", err)
-	}
-}
-
-func TestReadWorkdays(t *testing.T) {
-	cases := []struct {
-		name, body string
-		want       []time.Weekday
-		wantErr    string
-	}{
-		{"no frontmatter", "# notes\n", []time.Weekday{1, 2, 3, 4, 5}, ""},
-		{"no workdays key", "---\n---\nprose\n", []time.Weekday{1, 2, 3, 4, 5}, ""},
-		{
-			"a working Saturday",
-			"---\nworkdays: [Mon, tue, wed, thu, fri, sat]\n---\n",
-			[]time.Weekday{1, 2, 3, 4, 5, 6},
-			"",
-		},
-		{"an unknown key", "---\nholidays: [2026-12-25]\n---\n", nil, "holidays"},
-		{"a bad day name", "---\nworkdays: [monday]\n---\n", nil, `"monday"`},
-		{"no day at all", "---\nworkdays: []\n---\n", nil, "names no day"},
-	}
-
-	for _, c := range cases {
-		home := isolateEnv(t)
-		writeUserFile(t, home, scope.StandupConfigFile, c.body)
-
-		got, err := scope.ReadWorkdays()
-		if c.wantErr != "" {
-			if err == nil || !strings.Contains(err.Error(), c.wantErr) {
-				t.Errorf("%s: err = %v, want %q", c.name, err, c.wantErr)
-			}
-
-			continue
-		}
-
-		var want calendar.Workdays
-		for _, d := range c.want {
-			want[d] = true
-		}
-
-		if err != nil || got != want {
-			t.Errorf("%s: workdays = %v, %v, want %v", c.name, got, err, want)
-		}
-	}
-
-	isolateEnv(t)
-
-	if got, err := scope.ReadWorkdays(); err != nil || got != calendar.DefaultWorkdays() {
-		t.Errorf("no file: %v, %v, want Monday to Friday", got, err)
-	}
-}
-
 func TestStandupMark(t *testing.T) {
-	isolateEnv(t)
+	testkit.IsolateEnv(t)
 
 	if _, err := runApp(t, "standup", "mark", "--since", "2026-10-09T07:00:00Z").outErr(); err != nil {
 		t.Fatal(err)
@@ -146,10 +52,10 @@ func TestStandupMark(t *testing.T) {
 
 // Only the fallback reads standup.md: a broken one fails no other run.
 func TestStandupReadsWorkdaysOnlyOnTheFallback(t *testing.T) {
-	home := isolateEnv(t)
-	writeUserFile(t, home, scope.StandupConfigFile, "---\nworkdays: [monday]\n---\n")
+	home := testkit.IsolateEnv(t)
+	testkit.WriteUserFile(t, home, scope.StandupConfigFile, "---\nworkdays: [monday]\n---\n")
 
-	dir := initRepo(t, canonical(t, t.TempDir()), "master").Dir
+	dir := testkit.InitRepo(t, testkit.Canonical(t, t.TempDir()), "master").Dir
 
 	if _, err := runApp(t, "-C", dir, "standup", "--json", "--week").outErr(); err != nil {
 		t.Errorf("--week: %v, want standup.md unread", err)
@@ -162,7 +68,7 @@ func TestStandupReadsWorkdaysOnlyOnTheFallback(t *testing.T) {
 }
 
 func TestStandupSinceAndWeekConflict(t *testing.T) {
-	isolateEnv(t)
+	testkit.IsolateEnv(t)
 
 	if _, err := runApp(t, "standup", "--since", "2026-10-09", "--week").outErr(); err == nil ||
 		!strings.Contains(err.Error(), "--week") {
@@ -174,9 +80,9 @@ func TestStandupSinceAndWeekConflict(t *testing.T) {
 // activity, found in one wider read of the history; reading the report
 // stores nothing.
 func TestStandupFallsBackToTheLastWorkingDay(t *testing.T) {
-	isolateEnv(t)
+	testkit.IsolateEnv(t)
 
-	r := initRepo(t, canonical(t, t.TempDir()), "master")
+	r := testkit.InitRepo(t, testkit.Canonical(t, t.TempDir()), "master")
 	dir := r.Dir
 
 	now := time.Now()

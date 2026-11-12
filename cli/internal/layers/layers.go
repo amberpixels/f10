@@ -7,6 +7,7 @@ package layers
 
 import (
 	"fmt"
+	"path"
 	"sort"
 	"strings"
 )
@@ -35,6 +36,7 @@ var Table = []Rule{
 	{Prefix: "internal/flock", Rank: -2},
 	{Prefix: "internal/seam", Rank: -3},          // the test swap, which every package's tests may import
 	{Prefix: "internal/gitx/gitxtest", Rank: -3}, // test repos, gitx's own tests included
+	{Prefix: "internal/testenv", Rank: -3},       // the hermetic test environment, for every package's tests
 	{Prefix: "internal/buildinfo", Rank: -2},
 	{Prefix: "internal/calendar", Rank: -2},
 	{Prefix: "internal/mdline", Rank: -2},
@@ -65,6 +67,7 @@ var Table = []Rule{
 	{Prefix: "internal/drivectl", Rank: 2, Peers: true},
 	{Prefix: "internal/asknotify", Rank: 2, Peers: true},
 	{Prefix: "internal/statusview", Rank: 2, Peers: true},
+	{Prefix: "internal/testkit", Rank: 2, Peers: true}, // the fakes, which swap seams in the services above
 	{Prefix: "internal/command", Rank: 2, Peers: true, Exact: true},
 
 	// leaf commands: nothing but services below them
@@ -89,6 +92,7 @@ var Table = []Rule{
 	// finish, start (which sweeps finished tasks), then the drive over both;
 	// each command sits just above the core it parses flags for
 	{Prefix: "internal/finish", Rank: 5},
+	{Prefix: "internal/finish/finishtest", Rank: 6}, // the janitor fixture, for finish's and the drive's tests
 	{Prefix: "internal/command/finish", Rank: 6},
 	{Prefix: "internal/start", Rank: 7},
 	{Prefix: "internal/command/start", Rank: 8},
@@ -133,7 +137,7 @@ func Check(imports map[string][]string, table []Rule) []Violation {
 
 		for _, to := range tos {
 			tr, ok := RankOf(to, table)
-			if !ok || to == from {
+			if !ok || to == from || ownTestHelper(from, to) {
 				continue
 			}
 
@@ -160,6 +164,12 @@ func Check(imports map[string][]string, table []Rule) []Violation {
 	sort.Slice(out, func(i, j int) bool { return out[i].String() < out[j].String() })
 
 	return out
+}
+
+// ownTestHelper says to is from's own test helper package, <pkg>/<pkg>test:
+// it imports from, so it ranks above it, and only from's tests import it.
+func ownTestHelper(from, to string) bool {
+	return to == from+"/"+path.Base(from)+"test"
 }
 
 // RankOf is the rule that ranks pkg, a path relative to the module root.

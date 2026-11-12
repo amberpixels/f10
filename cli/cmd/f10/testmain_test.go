@@ -1,106 +1,27 @@
 package main
 
 import (
-	"context"
-	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/asks"
 	"github.com/amberpixels/f10/cli/internal/daemon"
-	"github.com/amberpixels/f10/cli/internal/drivectl"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
-	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/testenv"
+	"github.com/amberpixels/f10/cli/internal/testkit"
 )
 
-// testRoot holds every user-level dir for the run, so a test that sets
-// nothing still never reads or writes the developer's own HOME.
-var testRoot string
-
-// testStorage is the storage root of a fixture that names none. The fakes
-// drop the agent grants it adds, so a test that does not care about storage
-// scripts the agent start without them.
-var testStorage storage.Root
-
-// cleared is the environment the developer's shell may set, which would
-// otherwise leak into the tests. The dir overrides among it are cleared, not
-// pinned, so they follow HOME and a test that moves HOME moves them too.
-var cleared = []string{
-	"XDG_CONFIG_HOME", "F10_STATE_DIR", storage.UserDirEnv, "CLAUDE_CONFIG_DIR", "GH_CONFIG_DIR", "GLAB_CONFIG_DIR",
-	daemon.NumberFileEnv, "F10_AGENT_MODEL", "F10_AGENT_VIA", "F10_AGENT_SESSION",
-	"F10_SESSION_ID", "CLAUDE_CODE_SESSION_ID", "CLAUDECODE",
-	"HERDR_ENV", "HERDR_WORKSPACE_ID",
-	"F10_ROOTS", "F10_STATE_TTL", "F10_STATE_DEBUG",
-	"F10_PLUGIN_ROOT", "CLAUDE_PLUGIN_ROOT",
-	"F10_STANDUP_RECORD", "F10_BOARD_RECORD", "F10_STATUS_GLYPHS",
-	"XDG_RUNTIME_DIR",
-}
-
-func TestMain(m *testing.M) {
-	root, err := os.MkdirTemp("", "f10-test-")
-	if err != nil {
-		panic(err)
-	}
-
-	// the daemon puts a unix socket here, and a socket path has about 100
-	// bytes, more than a dir under macOS $TMPDIR leaves
-	runDir, err := os.MkdirTemp("/tmp", "f10r")
-	if err != nil {
-		panic(err)
-	}
-
-	testRoot, err = filepath.EvalSymlinks(root)
-	if err != nil {
-		panic(err)
-	}
-
-	home := filepath.Join(testRoot, "home")
-	testStorage = storage.Root(filepath.Join(testRoot, "storage"))
-
-	for _, name := range cleared {
-		_ = os.Unsetenv(name)
-	}
-
-	for name, value := range map[string]string{
-		"HOME":         home,
-		ledger.PathEnv: filepath.Join(testRoot, "f10.db"),
-		"F10_ASKS_DIR": filepath.Join(testRoot, "asks"),
-		"F10_RUN_DIR":  runDir,
-		// the developer's git config never shapes a fixture
-		"GIT_CONFIG_GLOBAL":   os.DevNull,
-		"GIT_CONFIG_NOSYSTEM": "1",
-	} {
-		_ = os.Setenv(name, value)
-	}
-
-	// an ask raised here notifies nobody
-	userDir := storage.UserDir(home)
-	if err := os.MkdirAll(userDir, 0o750); err != nil {
-		panic(err)
-	}
-
-	if err := os.WriteFile(filepath.Join(userDir, "md"), []byte("---\nnotify: off\n---\n"), 0o600); err != nil {
-		panic(err)
-	}
-
-	// a start or a drive run here hands nothing to a real daemon
-	drivectl.WatchProject = func(context.Context, io.Writer, *target.Target) {}
-
-	code := m.Run()
-
-	_ = os.RemoveAll(root)
-	_ = os.RemoveAll(runDir)
-
-	os.Exit(code)
-}
+func TestMain(m *testing.M) { testkit.Main(m) }
 
 // A new default path that escapes the temp root fails here, not by writing
-// to the developer's ~/.claude/f10 or ~/.f10.
+// to the developer's ~/.claude/f10 or ~/.f10. testenv names these dirs by
+// their env vars alone, so this is where a renamed variable shows.
 func TestUserDirsStayInTheTestRoot(t *testing.T) {
 	userDir, err := storage.UserFilesDir()
 	if err != nil {
@@ -120,12 +41,26 @@ func TestUserDirsStayInTheTestRoot(t *testing.T) {
 		"user f10 dir":    userDir,
 		"claude settings": runplan.ClaudeSettingsPath(),
 	} {
-		if !strings.HasPrefix(path, testRoot+string(filepath.Separator)) {
-			t.Errorf("%s = %q, outside the test root %q", name, path, testRoot)
+		if !strings.HasPrefix(path, testenv.Root+string(filepath.Separator)) {
+			t.Errorf("%s = %q, outside the test root %q", name, path, testenv.Root)
 		}
 	}
 
+	if dir := storage.UserDir(home); dir != testenv.UserDir() {
+		t.Errorf("user dir = %q, want testenv's %q, where it turns notifications off", dir, testenv.UserDir())
+	}
+
 	if dir := daemon.RunDir(); !strings.HasPrefix(dir, "/tmp/f10r") {
-		t.Errorf("daemon run dir = %q, want the short dir TestMain made", dir)
+		t.Errorf("daemon run dir = %q, want the short dir testenv made", dir)
+	}
+
+	for _, name := range []string{storage.UserDirEnv, daemon.NumberFileEnv} {
+		if !slices.Contains(testenv.Cleared, name) {
+			t.Errorf("testenv.Cleared lacks %s", name)
+		}
+	}
+
+	if got := os.Getenv(ledger.PathEnv); got != filepath.Join(testenv.Root, "f10.db") {
+		t.Errorf("%s = %q, want the ledger testenv set", ledger.PathEnv, got)
 	}
 }

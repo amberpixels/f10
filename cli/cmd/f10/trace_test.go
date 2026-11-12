@@ -12,36 +12,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/seam"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/testkit"
 )
-
-// tracedRepo is a checkout on the given branch, its project.md declaring
-// DM task ids and the traces switch as asked ("" leaves it undeclared).
-func tracedRepo(t *testing.T, branch, traces string) string {
-	t.Helper()
-	isolateEnv(t)
-	t.Setenv("F10_SESSION_ID", "")
-	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
-
-	repo := mkRepo(t)
-	git(t, repo, "commit", "-q", "--allow-empty", "-m", "init")
-	git(t, repo, "checkout", "-q", "-b", branch)
-
-	block := "---\ntracker:\n  id: DM-###\n"
-	if traces != "" {
-		block += "traces: " + traces + "\n"
-	}
-
-	path := filepath.Join(repo, ".f10", "instructions", "project.md")
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := os.WriteFile(path, []byte(block+"---\n# demo\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	return repo
-}
 
 func runTrace(t *testing.T, repo string, args ...string) (string, error) {
 	t.Helper()
@@ -86,7 +58,7 @@ func TestTraceTrailers(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			repo := tracedRepo(t, c.branch, c.traces)
+			repo := testkit.TracedRepo(t, c.branch, c.traces)
 
 			got, err := runTrace(t, repo, c.args...)
 			if err != nil {
@@ -103,7 +75,7 @@ func TestTraceTrailers(t *testing.T) {
 // A task's second PR names its own lore change, so lore why on its lines
 // finds the follow-up's entries; the first PR's commits carry no Change: line.
 func TestTraceTrailersNameTheSeriesChange(t *testing.T) {
-	repo := tracedRepo(t, "DM-7/thing", "on")
+	repo := testkit.TracedRepo(t, "DM-7/thing", "on")
 
 	got, err := runTrace(t, repo, "--step", "implement")
 	if err != nil || got != "Task: DM-7\nStep: implement\n" {
@@ -123,7 +95,7 @@ func TestTraceTrailersNameTheSeriesChange(t *testing.T) {
 // A session that recorded a task does not lend it to a branch naming none:
 // the trailer is the branch's task or nothing.
 func TestTraceTrailersIgnoreTheSessionTask(t *testing.T) {
-	repo := tracedRepo(t, "main", "on")
+	repo := testkit.TracedRepo(t, "main", "on")
 	dir := t.TempDir()
 	t.Setenv("F10_STATE_DIR", dir)
 	t.Setenv("F10_SESSION_ID", "sess-1")
@@ -140,7 +112,7 @@ func TestTraceTrailersIgnoreTheSessionTask(t *testing.T) {
 }
 
 func TestTraceTrailersRefuses(t *testing.T) {
-	repo := tracedRepo(t, "DM-7/thing", "on")
+	repo := testkit.TracedRepo(t, "DM-7/thing", "on")
 
 	if _, err := runTrace(t, repo, "--step", "resolve", "--fixed", "1"); err == nil ||
 		!strings.Contains(err.Error(), "go together") {
@@ -223,8 +195,8 @@ func fakeHost(t *testing.T, cli, viewKey, editPrefix, view string) *ghFake {
 func glabRepo(t *testing.T, branch, traces string) string {
 	t.Helper()
 
-	repo := tracedRepo(t, branch, traces)
-	git(t, repo, "remote", "set-url", "origin", "git@gitlab.com:amberpixels/demo.git")
+	repo := testkit.TracedRepo(t, branch, traces)
+	testkit.Git(t, repo, "remote", "set-url", "origin", "git@gitlab.com:amberpixels/demo.git")
 
 	return repo
 }
@@ -282,9 +254,9 @@ func TestTraceState(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			repo := tracedRepo(t, c.branch, "on")
+			repo := testkit.TracedRepo(t, c.branch, "on")
 			if c.after != "" {
-				git(t, repo, "config", "branch."+c.branch+".f10-after", c.after)
+				testkit.Git(t, repo, "config", "branch."+c.branch+".f10-after", c.after)
 			}
 
 			gh := fakeGH(t, c.branch, c.view)
@@ -302,7 +274,7 @@ func TestTraceState(t *testing.T) {
 }
 
 func TestTraceStateOffMakesNoHostCall(t *testing.T) {
-	repo := tracedRepo(t, "DM-7/thing", "off")
+	repo := testkit.TracedRepo(t, "DM-7/thing", "off")
 	gh := fakeGH(t, "DM-7/thing", openPR("Adds the thing.\n"))
 
 	if _, _, err := runApp(t, "-C", repo, "trace", "state", "--step", "pr").streams(); err != nil {
@@ -320,7 +292,7 @@ func TestTraceStateOffMakesNoHostCall(t *testing.T) {
 func TestTraceStateOffBodyFileCarriesTheBlock(t *testing.T) {
 	const branch = "DM-7/thing"
 
-	repo := tracedRepo(t, branch, "off")
+	repo := testkit.TracedRepo(t, branch, "off")
 	held := "Old description.\n\n<!-- state {\"v\":1,\"task\":\"DM-7\",\"step\":\"judge\",\"round\":1} -->\n"
 	gh := fakeGH(t, branch, openPR(held))
 
@@ -376,7 +348,7 @@ func TestTraceStateDeclines(t *testing.T) {
 	const branch = "DM-7/thing"
 
 	t.Run("a merged PR is left alone", func(t *testing.T) {
-		repo := tracedRepo(t, branch, "on")
+		repo := testkit.TracedRepo(t, branch, "on")
 		gh := fakeGH(t, branch, `{"state":"MERGED","url":"https://gh/pr/9","body":"x","author":{"login":"me"}}`)
 
 		_, errOut, err := runApp(t, "-C", repo, "trace", "state", "--step", "pr").streams()
@@ -386,7 +358,7 @@ func TestTraceStateDeclines(t *testing.T) {
 	})
 
 	t.Run("no PR yet is a note", func(t *testing.T) {
-		repo := tracedRepo(t, branch, "on")
+		repo := testkit.TracedRepo(t, branch, "on")
 		gh := fakeGH(t, branch, `ERR:no pull requests found for branch "DM-7/thing"`)
 
 		_, errOut, err := runApp(t, "-C", repo, "trace", "state", "--step", "review", "--round", "1",
@@ -397,7 +369,7 @@ func TestTraceStateDeclines(t *testing.T) {
 	})
 
 	t.Run("any other host error is returned", func(t *testing.T) {
-		repo := tracedRepo(t, branch, "on")
+		repo := testkit.TracedRepo(t, branch, "on")
 		fakeGH(t, branch, "ERR:rate limited")
 
 		if _, _, err := runApp(t, "-C", repo, "trace", "state", "--step", "pr").streams(); err == nil ||
@@ -407,7 +379,7 @@ func TestTraceStateDeclines(t *testing.T) {
 	})
 
 	t.Run("another author's PR is left alone", func(t *testing.T) {
-		repo := tracedRepo(t, branch, "on")
+		repo := testkit.TracedRepo(t, branch, "on")
 		gh := fakeGH(t, branch, `{"state":"OPEN","url":"https://gh/pr/9","body":"x","author":{"login":"someone"}}`)
 
 		_, errOut, err := runApp(t, "-C", repo, "trace", "state", "--step", "pr").streams()
@@ -422,7 +394,7 @@ func TestTraceStateDeclines(t *testing.T) {
 func TestTraceStateBodyFile(t *testing.T) {
 	const branch = "DM-7/thing"
 
-	repo := tracedRepo(t, branch, "on")
+	repo := testkit.TracedRepo(t, branch, "on")
 	host := "Old description.\n\n<!-- state {\"v\":1,\"task\":\"DM-7\",\"step\":\"judge\",\"round\":1,\"asks\":1} -->\n"
 	gh := fakeGH(t, branch, openPR(host))
 
