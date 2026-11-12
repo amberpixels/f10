@@ -5,10 +5,10 @@ import (
 	"io"
 	"maps"
 
-	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -64,5 +64,5 @@ func TaskRefsFor(t *target.Target,
 
 //nolint:lostfield // a lookup through the target, not a conversion of it
 func lookupRefFor(ctx context.Context, t *target.Target, r ref.Ref) (ledger.TaskRef, error) {
-	return hostops.TasksFor(t).Ref(ctx, r)
+	return tasksource.TasksFor(t).Ref(ctx, r)
 }

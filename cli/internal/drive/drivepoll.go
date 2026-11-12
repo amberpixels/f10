@@ -7,18 +7,18 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
-	"github.com/amberpixels/f10/cli/internal/driverec"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/ui"
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
-// Stalled is an agent idle for grace with its turn's end unreported, once
+// stalled is an agent idle for grace with its turn's end unreported, once
 // the Stop hook had time; drive and the watcher read a stall the same way.
 // Background work launched at bg keeps it working: Herdr shows an agent idle
 // while it waits on one.
-func Stalled(
+func stalled(
 	status agentctl.Status,
 	run *state.Run,
 	skill string,
@@ -68,8 +68,8 @@ func (in *DriveInput) poll(
 	id, skill := r.Task.Ref.ID, r.Skill
 
 	switch r.Phase {
-	case AtWaiting, AtParked, atQueued:
-		return in.Next(ctx, r)
+	case atWaiting, atParked, atQueued:
+		return in.next(ctx, r)
 	case atVerifying:
 		job := r.Job
 		if !job.Finished() {
@@ -77,18 +77,18 @@ func (in *DriveInput) poll(
 		}
 
 		r.Job = nil
-		in.Enter(r, AtRunning)
+		in.enter(r, atRunning)
 
 		return in.verified(ctx, r, job)
 	case atRetrying:
-		in.Enter(r, AtRunning)
+		in.enter(r, atRunning)
 		r.retry = true
 
 		return in.send(ctx, r, r.Skill)
-	case atPending, AtHeld, AtRunning:
+	case atPending, AtHeld, atRunning:
 	}
 
-	ws := worktree.WorkspaceByID(in.View().Wss, r.O.Ws.ID)
+	ws := worktree.WorkspaceByID(in.view().Wss, r.O.Ws.ID)
 	if ws == nil {
 		return in.workspaceGone(r)
 	}
@@ -108,9 +108,9 @@ func (in *DriveInput) poll(
 	case agentctl.StatusIdle, agentctl.StatusDone:
 	default:
 		// Herdr shows no agent yet: the start window bounds this wait too
-		if !r.begun && now.Sub(r.SentAt) > StartWindow {
-			return Halt(id, skill, fmt.Sprintf("workspace %s shows no agent %s after the prompt: "+
-				"check its pane, then rerun this drive", workspaceName(ws), StartWindow))
+		if !r.begun && now.Sub(r.SentAt) > startWindow {
+			return halt(id, skill, fmt.Sprintf("workspace %s shows no agent %s after the prompt: "+
+				"check its pane, then rerun this drive", workspaceName(ws), startWindow))
 		}
 
 		return nil
@@ -129,12 +129,12 @@ func (in *DriveInput) poll(
 	}
 
 	if !r.begun && !recent {
-		in.RetryEnter(ctx, r)
+		in.retryEnter(ctx, r)
 
-		if now.Sub(r.SentAt) > StartWindow {
+		if now.Sub(r.SentAt) > startWindow {
 			// a prompt never taken may sit under a startup dialog, so it is not typed again
-			return in.settle(ctx, r, run, Halted(id, skill, fmt.Sprintf(
-				"the agent in workspace %s did not take the prompt within %s", workspaceName(ws), StartWindow)), false)
+			return in.settle(ctx, r, run, halted(id, skill, fmt.Sprintf(
+				"the agent in workspace %s did not take the prompt within %s", workspaceName(ws), startWindow)), false)
 		}
 
 		return nil
@@ -149,14 +149,14 @@ func (in *DriveInput) poll(
 		r.Skill, skill = "catchup", "catchup"
 	}
 
-	if recent && driverec.StoppedRun(run) {
+	if recent && drivectl.StoppedRun(run) {
 		switch {
 		case skill == "ship" && run.Wait != "":
 			return in.park(ctx, r, run)
-		case skill == "catchup" && HeldStop(run):
+		case skill == "catchup" && heldStop(run):
 			// a catchup that stopped and then ended clean restores the stop it
 			// found, so git says how it ended
-		case skill == "ship" && guardStop(run) && ResumeAt(skill, run) != "" && in.marked(ctx, r):
+		case skill == "ship" && guardStop(run) && resumeAt(skill, run) != "" && in.marked(ctx, r):
 			// the stop the guard leaves names the catchup ship resumes from; a
 			// mark on a ship that failed elsewhere is the watcher's, not the guard's
 			if err := in.guardAgain(ctx, r); err != nil {
@@ -165,7 +165,7 @@ func (in *DriveInput) poll(
 
 			fmt.Fprintf(in.Out, "%s ship: the catchup guard conflicted, catching up\n", in.id(id))
 
-			return in.Next(ctx, r)
+			return in.next(ctx, r)
 		case run.Ask != "" || blockedRun(run):
 			// blocked is a decision, a judge's stop or a stale task's verdict:
 			// sending the skill again would roll it again
@@ -188,10 +188,10 @@ func (in *DriveInput) poll(
 		// a turn that ends without its report is read from the branch; one the
 		// branch does not get past halts, since the agent may wait on a
 		// permission dialog that typing the skill again could answer
-		if Stalled(ws.Status, run, skill, since, now.Sub(r.idleSince), StallGrace, bg, now) {
+		if stalled(ws.Status, run, skill, since, now.Sub(r.idleSince), stallGrace, bg, now) {
 			r.idleSince = time.Time{}
 
-			halt := Halted(id, skill, fmt.Sprintf("agent %s in workspace %s is idle %s: "+
+			halt := halted(id, skill, fmt.Sprintf("agent %s in workspace %s is idle %s: "+
 				"it stopped without reporting, answer it in that pane", agentctl.AgentName(id, r.Task.Suffix, r.O.Path),
 				workspaceName(ws), idleWhile(run, skill)))
 
@@ -215,7 +215,7 @@ func (in *DriveInput) poll(
 		return err
 	}
 
-	return in.Next(ctx, r)
+	return in.next(ctx, r)
 }
 
 // guardAgain halts a ship whose guard conflicted the same way three times
@@ -244,11 +244,11 @@ func (in *DriveInput) mark(ctx context.Context, r *DriveRun) (branchmeta.Key, er
 
 // verdict reads a stopped run: an ask goes to the user, anything else is the
 // halt it gives, at once on a rerun, or once its attempts run out in a poll.
-func (*DriveInput) verdict(task DriveTask, skill string, run *state.Run) DriveResult {
+func (*DriveInput) verdict(task DriveTask, skill string, run *state.Run) driveResult {
 	id := task.Ref.ID
 
 	if run.Ask != "" {
-		return DriveResult{
+		return driveResult{
 			Row:   "asked at " + skill,
 			Code:  ui.ExitAsk,
 			Lines: []string{fmt.Sprintf("%s asks at %s: %s", id, skill, run.Ask)},
@@ -261,7 +261,7 @@ func (*DriveInput) verdict(task DriveTask, skill string, run *state.Run) DriveRe
 		reason = "the run says " + p + " " + run.PhaseText(p)
 	}
 
-	res := Halted(id, skill, reason)
+	res := halted(id, skill, reason)
 	res.fromRun = true
 
 	if run.Next != "" {

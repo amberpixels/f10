@@ -1,6 +1,3 @@
-// Package hostops is how commands reach the host and the tracker: the host
-// CLI with the title template, the task sources behind one interface, task
-// rows and the After: line.
 package hostops
 
 import (
@@ -13,11 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
+	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 )
 
 // A Host is the forge binding with the nouns only this command acts on; the
@@ -122,7 +119,7 @@ func (h Host) IssueTitle(ctx context.Context, number string) (string, error) {
 		return "", fmt.Errorf("%s returned no title for issue %s", h.Name, number)
 	}
 
-	return h.title(iss.Title, number), nil
+	return h.StripTitle(iss.Title, number), nil
 }
 
 func (h Host) ListIssues(
@@ -278,7 +275,7 @@ func (h Host) Update(ctx context.Context, number string, p Props, priorities map
 	add, remove := slices.Clone(p.Labels), []string(nil)
 
 	if p.Priority != "" {
-		label := priorityLabel(p.Priority, priorities)
+		label := PriorityLabel(p.Priority, priorities)
 		if label == "" {
 			return fmt.Errorf("priority %s: tracker.priority in project.md maps no label to it", p.Priority)
 		}
@@ -343,16 +340,17 @@ func (h Host) SetTitle(ctx context.Context, number, title string) error {
 	return h.EditIssue(ctx, number, forge.IssueEdit{Title: title})
 }
 
+// StripTitle is raw with the prefix the title template wrote taken off.
+func (h Host) StripTitle(raw, number string) string {
+	return h.Titles.Strip(raw, h.taskID(number), number)
+}
+
 func (h Host) taskID(number string) string {
 	if h.Prefix == "" {
 		return number
 	}
 
 	return h.Prefix + "-" + number
-}
-
-func (h Host) title(raw, number string) string {
-	return h.Titles.Strip(raw, h.taskID(number), number)
 }
 
 func (h Host) retitled(raw, number string) string {
@@ -376,11 +374,11 @@ const IssuePage = 30
 // priorityOf is the most urgent level the issue's labels map to, or "" when
 // none does. Labels compare case-insensitively, as the hosts treat them.
 func priorityOf(names []string, priorities map[string]string) string {
-	best, level := len(driver.Priorities), ""
+	best, level := len(trackerdriver.Priorities), ""
 
 	for _, name := range names {
-		if rank, ok := driver.PriorityRank(priorities[strings.ToLower(name)]); ok && rank < best {
-			best, level = rank, driver.Priorities[rank]
+		if rank, ok := trackerdriver.PriorityRank(priorities[strings.ToLower(name)]); ok && rank < best {
+			best, level = rank, trackerdriver.Priorities[rank]
 		}
 	}
 

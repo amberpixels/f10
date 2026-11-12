@@ -13,9 +13,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
-// ResolveTasks skips a range member the tracker does not know as a task,
+// resolveTasks skips a range member the tracker does not know as a task,
 // with a note; a listed one is an error.
-func (in *DriveInput) ResolveTasks(ctx context.Context) ([]DriveTask, []string, error) {
+func (in *DriveInput) resolveTasks(ctx context.Context) ([]DriveTask, []string, error) {
 	var (
 		tasks []DriveTask
 		notes []string
@@ -113,7 +113,7 @@ func (in *DriveInput) ResolveTasks(ctx context.Context) ([]DriveTask, []string, 
 	}
 
 	if in.Args.Span {
-		from, to, err := in.Span(ctx)
+		from, to, err := in.span(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -161,7 +161,7 @@ func (in *DriveInput) refuseParent(ctx context.Context, r ref.Ref) error {
 		"or run /f10:drive %s to choose", r.ID, strings.Join(open, ", "), r.ID, r.ID)
 }
 
-func (in *DriveInput) Span(ctx context.Context) (ref.Ref, ref.Ref, error) {
+func (in *DriveInput) span(ctx context.Context) (ref.Ref, ref.Ref, error) {
 	if slices.ContainsFunc(in.Args.Tasks, func(t string) bool { return strings.Contains(t, ref.Separator) }) {
 		return ref.Ref{}, ref.Ref{}, errors.New("a range's ends are single ids: list a bundle on its own")
 	}

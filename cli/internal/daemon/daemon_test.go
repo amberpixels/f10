@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 )
 
 // runDir is a short dir: a unix socket path has about 100 bytes, and the
@@ -133,8 +133,8 @@ func TestServeAttachesToAResumeBeforeItsNumber(t *testing.T) {
 
 	root := t.TempDir()
 
-	rec := &drives.Record{Args: []string{"FT-1", "FT-2"}}
-	if err := drives.Create(root, rec); err != nil {
+	rec := &drivestore.Record{Args: []string{"FT-1", "FT-2"}}
+	if err := drivestore.Create(root, rec); err != nil {
 		t.Fatal(err)
 	}
 
@@ -178,8 +178,8 @@ func TestServeAttachesAResumeToAnUnnumberedDrive(t *testing.T) {
 
 	root := t.TempDir()
 
-	rec := &drives.Record{Args: []string{"FT-1", "FT-2"}}
-	if err := drives.Create(root, rec); err != nil {
+	rec := &drivestore.Record{Args: []string{"FT-1", "FT-2"}}
+	if err := drivestore.Create(root, rec); err != nil {
 		t.Fatal(err)
 	}
 
@@ -211,9 +211,9 @@ func TestServeAttachesAResumeToAnUnnumberedDrive(t *testing.T) {
 
 	// a cancelled record with the same command line names another drive
 	cancelled := time.Now()
-	old := &drives.Record{Args: rec.Args, Cancelled: &cancelled}
+	old := &drivestore.Record{Args: rec.Args, Cancelled: &cancelled}
 
-	if err := drives.Create(root, old); err != nil {
+	if err := drivestore.Create(root, old); err != nil {
 		t.Fatal(err)
 	}
 

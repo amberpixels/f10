@@ -1,6 +1,8 @@
 // Package atlas is the atlas command: the board's scope, the declared file
 // and each checkout's git history, printed as the Atlas JSON or a line per
 // project. It asks no host and reads no ledger.
+// Package atlas is the f10 atlas command: it prints the Atlas JSON for this
+// project, or for several picked by group.
 package atlas
 
 import (

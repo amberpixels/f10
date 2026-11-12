@@ -79,10 +79,10 @@ func RefuseStartParent(ctx context.Context, in StartInput) error {
 	return nil
 }
 
-// SettleBundle refuses what would split a task across two branches, a rider
+// settleBundle refuses what would split a task across two branches, a rider
 // another branch ships or a branch reopened with other riders than typed,
 // since riders are fixed at start; a task alone takes its branch's riders.
-func SettleBundle(ctx context.Context, main string, task ref.Ref, existing string) (ref.Ref, error) {
+func settleBundle(ctx context.Context, main string, task ref.Ref, existing string) (ref.Ref, error) {
 	x, err := stack.LoadBranchIndex(ctx, main)
 	if err != nil {
 		return ref.Ref{}, err

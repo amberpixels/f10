@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
@@ -124,7 +124,7 @@ func (e OriginMovedError) Error() string {
 // plain when it fast-forwards origin, leased against rec's origin tip after
 // a rewrite, and never carrying a base origin lacks. A rewrite with no live
 // lease is refused as unseen; a push or a refusal spends the lease.
-func PushCatchup(ctx context.Context, dir, branch string, rec *drives.Catchup) (string, error) {
+func PushCatchup(ctx context.Context, dir, branch string, rec *drivestore.Catchup) (string, error) {
 	tracking := "refs/remotes/origin/" + branch
 
 	pushed, err := gitx.Ref(ctx, dir, tracking)

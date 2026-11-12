@@ -11,8 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/amberpixels/f10/cli/internal/driver"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
@@ -21,6 +20,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
@@ -50,11 +50,11 @@ func Ref(ctx context.Context, t *target.Target, token string) (ref.Ref, string, 
 	return r, suffix, "", err
 }
 
-var ErrNotMerged = errors.New("its request has not merged on the host, and only merged work is finished here")
+var errNotMerged = errors.New("its request has not merged on the host, and only merged work is finished here")
 
-func Lease(root, id string) (*drives.Lease, error) {
-	lease, err := drives.Acquire(root, id, 0)
-	if held := (drives.HeldError{}); errors.As(err, &held) {
+func Lease(root, id string) (*drivestore.Lease, error) {
+	lease, err := drivestore.Acquire(root, id, 0)
+	if held := (drivestore.HeldError{}); errors.As(err, &held) {
 		if held.Holder.Drive > 0 {
 			return nil, fmt.Errorf("%w: f10 drive cancel %d stops it, or let it finish", held, held.Holder.Drive)
 		}
@@ -79,9 +79,9 @@ func (e ForeignPullError) Error() string {
 // FinishInput is everything finish needs once the target is settled, so
 // the flow can be tested without a checkout.
 type FinishInput struct {
-	Main   string         // the main checkout: host and git commands run here
-	Root   string         // the shared storage root, for the pull's lease; "" takes none
-	Driver *driver.Driver // nil without one
+	Main   string                // the main checkout: host and git commands run here
+	Root   string                // the shared storage root, for the pull's lease; "" takes none
+	Driver *trackerdriver.Driver // nil without one
 	Task   ref.Ref
 	Change string // the lore change this merge closes; finish fills it from the task's series
 	Suffix string
@@ -154,12 +154,12 @@ func InputFor(t *target.Target, main string, h hostops.Host, task ref.Ref) Finis
 		Storage:    t.Layout.StorageRoot,
 		Title:      worktree.TitleLookup(t, task.Number),
 		Subtasks:   stack.TrackerFor(t).AllChildren,
-		CloseTask:  CloseTaskFor(t, h.In(main)),
+		CloseTask:  closeTaskFor(t, h.In(main)),
 	}
 }
 
-// CloseTaskFor closes the task on the host only where the host is the tracker.
-func CloseTaskFor(t *target.Target, h hostops.Host) func(context.Context, ref.Ref) error {
+// closeTaskFor closes the task on the host only where the host is the tracker.
+func closeTaskFor(t *target.Target, h hostops.Host) func(context.Context, ref.Ref) error {
 	if !t.HostCloses() {
 		return nil
 	}

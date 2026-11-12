@@ -8,134 +8,13 @@ import (
 	"time"
 
 	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
-	"github.com/amberpixels/f10/cli/internal/facts"
-	"github.com/amberpixels/f10/cli/internal/hostops"
-	"github.com/amberpixels/f10/cli/internal/ref"
-	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/testkit"
 )
-
-func TestStaleAt(t *testing.T) {
-	now := time.Date(2026, 10, 29, 12, 0, 0, 0, time.UTC)
-
-	for _, tc := range []struct {
-		name       string
-		age        time.Duration
-		staleAfter string
-		want       bool
-	}{
-		{"under 10d", 10*24*time.Hour - time.Minute, "10d", false},
-		{"over 10d", 10*24*time.Hour + time.Minute, "10d", true},
-		{"under 3w", 20 * 24 * time.Hour, "3w", false},
-		{"over 3w", 22 * 24 * time.Hour, "3w", true},
-		{"undeclared", 1000 * 24 * time.Hour, "", false},
-	} {
-		if got := hostops.StaleAt(now.Add(-tc.age), staleOf(tc.staleAfter), now); got != tc.want {
-			t.Errorf("%s: staleAt = %v, want %v", tc.name, got, tc.want)
-		}
-	}
-
-	if hostops.StaleAt(time.Time{}, staleOf("10d"), now) {
-		t.Error("no created date read as stale")
-	}
-}
-
-// writeVerdict puts a verdict file under root, its mtime age before now.
-func writeVerdict(t *testing.T, root, task, n, subject, verdict string, at time.Time) string {
-	t.Helper()
-
-	path := filepath.Join(root, "verdicts", task, n+".md")
-	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
-		t.Fatal(err)
-	}
-
-	body := "task: " + task + "\nsubject: " + subject + "\nverdict: " + verdict + "\nreason: r\n"
-	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := os.Chtimes(path, at, at); err != nil {
-		t.Fatal(err)
-	}
-
-	return path
-}
-
-// Only a proceed on the task itself, written within stale_after, clears a
-// stale task; the newest one is named, whichever root holds it.
-func TestStaleness(t *testing.T) {
-	now := time.Now()
-	old := now.Add(-60 * 24 * time.Hour)
-	day := 24 * time.Hour
-
-	if got := taskcmd.Staleness(old, staleOf(""), now, nil, "FT-1"); got != taskcmd.StaleFresh {
-		t.Errorf("undeclared = %q", got)
-	}
-
-	if got := taskcmd.Staleness(time.Time{}, staleOf("3w"), now, nil, "FT-1"); got != taskcmd.StaleUndated {
-		t.Errorf("no date = %q", got)
-	}
-
-	if got := taskcmd.Staleness(now.Add(-day), staleOf("3w"), now, nil, "FT-1"); got != taskcmd.StaleFresh {
-		t.Errorf("young = %q", got)
-	}
-
-	root, main := t.TempDir(), t.TempDir()
-
-	writeVerdict(t, root, "FT-1", "1", "task FT-1", "rethink", now.Add(-day))
-	writeVerdict(t, root, "FT-1", "2", "plan FT-1", "proceed", now.Add(-day))
-	writeVerdict(t, root, "FT-1", "3", "task FT-1", "proceed", now.Add(-30*day))
-
-	if got := taskcmd.Staleness(old, staleOf("3w"), now, []string{root}, "FT-1"); got != taskcmd.StaleNeeds {
-		t.Errorf("no recent task proceed = %q", got)
-	}
-
-	older := writeVerdict(t, root, "FT-1", "4", "task FT-1", "proceed", now.Add(-5*day))
-	newer := writeVerdict(t, main, "FT-1", "1", "task FT-1", "proceed", now.Add(-2*day))
-
-	if got := taskcmd.Staleness(old, staleOf("3w"), now, []string{root}, "FT-1"); got != taskcmd.StaleJudged+" "+older {
-		t.Errorf("recent proceed = %q, want %s", got, older)
-	}
-
-	if got := taskcmd.Staleness(
-		old,
-		staleOf("3w"),
-		now,
-		[]string{root, main},
-		"FT-1",
-	); got != taskcmd.StaleJudged+" "+newer {
-		t.Errorf("newest across roots = %q, want %s", got, newer)
-	}
-}
-
-func TestHostIssueCreated(t *testing.T) {
-	f := newFakes(t)
-	f.script("gh issue view 14 --json number,title,state,labels,createdAt,url,body,assignees",
-		`{"createdAt":"2026-09-20T23:30:00-02:00","url":"https://github.com/o/r/issues/14"}`)
-	f.script("glab issue view 7 -F json", `{"iid":7,"created_at":"2026-10-01T08:00:00Z","web_url":"https://x"}`)
-	f.script(
-		"gh issue view 4 --json number,title,state,labels,createdAt,url,body,assignees",
-		`{"url":"https://github.com/o/r/pull/4"}`,
-	)
-
-	at, err := hostops.NewHost("gh", "/code/repo").IssueCreated(t.Context(), "14")
-	if err != nil || at.UTC().Format(time.DateOnly) != "2026-09-21" {
-		t.Errorf("gh created = %v, %v", at, err)
-	}
-
-	at, err = hostops.NewHost("glab", "/code/repo").IssueCreated(t.Context(), "7")
-	if err != nil || at.UTC().Format(time.DateOnly) != "2026-10-01" {
-		t.Errorf("glab created = %v, %v", at, err)
-	}
-
-	if _, err := hostops.NewHost("gh", "/code/repo").IssueCreated(t.Context(), "4"); err == nil {
-		t.Error("a pull request answered for an issue")
-	}
-}
 
 // task stale takes the branch's task and stale_after from project.md, and
 // --created stands in for a tracker the host does not answer.
 func TestTaskStaleCommand(t *testing.T) {
-	repo := tracedRepo(t, "DM-5/fix", "")
+	repo := testkit.TracedRepo(t, "DM-5/fix", "")
 	t.Chdir(repo)
 
 	run := func(staleAfter string, args ...string) string {
@@ -171,65 +50,10 @@ func TestTaskStaleCommand(t *testing.T) {
 		t.Errorf("old = %q", got)
 	}
 
-	writeVerdict(t, filepath.Join(repo, ".f10"), "DM-5", "1", "task DM-5", "proceed", time.Now())
+	testkit.WriteVerdict(t, filepath.Join(repo, ".f10"), "DM-5", "1", "task DM-5", "proceed", time.Now())
 
 	if got := run("3w", "--created", "2020-01-01"); !strings.HasPrefix(got, taskcmd.StaleJudged+" ") ||
 		!strings.HasSuffix(got, filepath.Join("verdicts", "DM-5", "1.md")) {
 		t.Errorf("judged = %q", got)
 	}
-}
-
-// A bare call asks the host's issues for the date, a driver beside them
-// included; a failing host is the plain error, never a refetch hint.
-func TestTaskStaleCreatedAt(t *testing.T) {
-	f := newFakes(t)
-	f.script("gh issue view 14 --json number,title,state,labels,createdAt,url,body,assignees",
-		`{"createdAt":"2026-09-20T23:30:00Z","url":"https://github.com/o/r/issues/14"}`)
-	f.fail(
-		"gh issue view 15 --json number,title,state,labels,createdAt,url,body,assignees",
-		shell.Result{Code: 1, Stderr: "rate limited"},
-	)
-
-	tg := childTarget(t, "gh")
-
-	at, err := taskcmd.CreatedAtFor(t.Context(), tg, ref.Ref{ID: "FT-14", Number: "14"}, "")
-	if err != nil || at.Format(time.DateOnly) != "2026-09-20" {
-		t.Errorf("host date = %v, %v", at, err)
-	}
-
-	_, err = taskcmd.CreatedAtFor(t.Context(), tg, ref.Ref{ID: "FT-15", Number: "15"}, "")
-	if err == nil || !strings.Contains(err.Error(), "rate limited") || strings.Contains(err.Error(), "fetch adapter") {
-		t.Errorf("failing host = %v, want gh's error alone", err)
-	}
-
-	at, err = taskcmd.CreatedAtFor(t.Context(), tg, ref.Ref{ID: "FT-16", Number: "16"}, "2020-01-02")
-	if err != nil || at.Format(time.DateOnly) != "2020-01-02" {
-		t.Errorf("--created = %v, %v; want no host call", at, err)
-	}
-
-	if _, err := taskcmd.CreatedAtFor(t.Context(), tg, ref.Ref{ID: "FT-16", Number: "16"}, "2020-13-01"); err == nil ||
-		!strings.Contains(err.Error(), "YYYY-MM-DD") {
-		t.Errorf("bad --created = %v", err)
-	}
-
-	tg.Effective.TrackerKind = facts.TrackerJira
-	tg.Effective.Facts = append(tg.Effective.Facts, facts.Fact{Key: "tracker.kind", Origin: facts.DeclaredIn("main")})
-
-	if at, err := taskcmd.CreatedAtFor(
-		t.Context(),
-		tg,
-		ref.Ref{ID: "FT-14", Number: "14"},
-		"",
-	); err != nil ||
-		!at.IsZero() {
-		t.Errorf("non-host tracker = %v, %v; want undated", at, err)
-	}
-}
-
-// staleOf is a stale_after value as the frontmatter writes it; "" is off.
-func staleOf(value string) facts.StaleAfter {
-	var s facts.StaleAfter
-	_ = s.UnmarshalText([]byte(value))
-
-	return s
 }

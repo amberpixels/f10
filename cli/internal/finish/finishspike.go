@@ -29,7 +29,7 @@ func TaskSpike(checkout string, root storage.Root, id string) string {
 			continue
 		}
 
-		if plan := root.Plan(id); fsx.Exists(plan) && !SpikePlan(plan) {
+		if plan := root.Plan(id); fsx.Exists(plan) && !spikePlan(plan) {
 			return ""
 		}
 
@@ -42,7 +42,7 @@ func TaskSpike(checkout string, root storage.Root, id string) string {
 // kindSpike matches a plan's kind line in the shapes plans write it.
 var kindSpike = regexp.MustCompile(`(?i)^(- )?kind\s*:\s*spike\b`)
 
-func SpikePlan(path string) bool {
+func spikePlan(path string) bool {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return false
@@ -125,9 +125,9 @@ func trimStatus(lines []string) []string {
 	return paths
 }
 
-// KeptName is kept/ and the branch's name with the task's ids taken out, so
+// keptName is kept/ and the branch's name with the task's ids taken out, so
 // no task lookup finds it; numbered when taken.
-func KeptName(ctx context.Context, main, branch string, ids []string) string {
+func keptName(ctx context.Context, main, branch string, ids []string) string {
 	slug := branch
 	for _, id := range ids {
 		slug = idPattern(id).ReplaceAllString(slug, "")

@@ -23,10 +23,10 @@ const attemptLimit = 3
 
 func (in *DriveInput) attemptLimit() int { return cmp.Or(in.Attempts, attemptLimit) }
 
-// A TaskState is where a task stands by git, its PR and its files, read only
+// A taskState is where a task stands by git, its PR and its files, read only
 // where the drive reconciles a turn, never on every poll, since the PR read
 // is a host call.
-type TaskState struct {
+type taskState struct {
 	Head, Origin string
 	Code         bool           // the branch has commits of its own past the default branch
 	mark         branchmeta.Key // the catchup mark on the branch, "" for none
@@ -40,7 +40,7 @@ type TaskState struct {
 
 // Fingerprint is the state an attempt compares: the agent's status and every
 // timestamp stay out, since they change on each turn that makes no progress.
-func (s TaskState) Fingerprint() string {
+func (s taskState) Fingerprint() string {
 	parts := []string{
 		s.Head, s.Origin, strconv.FormatBool(s.Code), string(s.mark), s.busy, strconv.FormatBool(s.plan), s.Pr,
 		strconv.Itoa(s.Reviews), strconv.FormatBool(s.ChangeJudged),
@@ -56,7 +56,7 @@ func (s TaskState) Fingerprint() string {
 // Has reports the evidence that a skill is done. finish is the drive's own
 // step, never read from the branch, and any other skill only
 // from its run's phase.
-func (s TaskState) Has(skill string) bool {
+func (s taskState) Has(skill string) bool {
 	if s.stopped(skill) {
 		return false
 	}
@@ -75,7 +75,7 @@ func (s TaskState) Has(skill string) bool {
 // entry's output, and an artifact from every review and change judge on the
 // way, so a ship stopped between its first pr and its last is not shipped.
 // With no pipeline recorded, an open PR carrying the branch stands for it.
-func (s TaskState) Shipped() bool {
+func (s taskState) Shipped() bool {
 	var pipeline flow.Flow
 	if s.Run != nil {
 		pipeline = s.Run.Entries()
@@ -121,15 +121,15 @@ func (s TaskState) Shipped() bool {
 
 // stopped says the current run reports phase stopped without an ask: an
 // explicit stop is a failed attempt, whatever the branch shows.
-func (s TaskState) stopped(phase string) bool {
+func (s taskState) stopped(phase string) bool {
 	return s.Run != nil && s.Run.Ask == "" && state.Stopped(s.Run.Status(phase))
 }
 
 // readState reads the task's state. A read git cannot answer leaves its
 // field empty: the state then shows less evidence, never more.
-func (in *DriveInput) readState(ctx context.Context, r *DriveRun, run *state.Run) TaskState {
+func (in *DriveInput) readState(ctx context.Context, r *DriveRun, run *state.Run) taskState {
 	branch := r.O.Branch
-	s := TaskState{Run: run}
+	s := taskState{Run: run}
 
 	s.Head, _ = gitx.Ref(ctx, in.Main, "refs/heads/"+branch)
 	s.Origin, _ = gitx.Ref(ctx, in.Main, "refs/remotes/origin/"+branch)
@@ -157,7 +157,7 @@ func (in *DriveInput) readState(ctx context.Context, r *DriveRun, run *state.Run
 
 // reconcile moves the task past every skill whose evidence is in,
 // recording each as drive does a reported one, and says how many it passed.
-func (in *DriveInput) reconcile(ctx context.Context, r *DriveRun, s TaskState) (int, error) {
+func (in *DriveInput) reconcile(ctx context.Context, r *DriveRun, s taskState) (int, error) {
 	passed := 0
 
 	for skills := in.Skills(r); r.Pos < len(skills) && s.Has(skills[r.Pos]); {
@@ -201,7 +201,7 @@ func (in *DriveInput) attempt(
 	ctx context.Context,
 	r *DriveRun,
 	action string,
-	halt DriveResult,
+	halt driveResult,
 ) error {
 	run, _ := in.run(r.O.Path) // a run the state dir cannot give leaves the run out
 
@@ -213,19 +213,19 @@ func (in *DriveInput) attempt(
 		return in.count(r, &r.leftAttempts, action, fp, halt)
 	}
 
-	return in.AttemptAt(r, action, fp, halt)
+	return in.attemptAt(r, action, fp, halt)
 }
 
-// AttemptAt is attempt with the state to compare given: a catchup's is the
+// attemptAt is attempt with the state to compare given: a catchup's is the
 // conflict it left, since a catchup that merges moves the head without
 // progress, and the reason it gives changes wording between catchups.
-func (in *DriveInput) AttemptAt(r *DriveRun, action, fp string, halt DriveResult) error {
+func (in *DriveInput) attemptAt(r *DriveRun, action, fp string, halt driveResult) error {
 	return in.count(r, &r.attempts, action, fp, halt)
 }
 
 // count adds a failure to list, which holds the failures in a row at one
 // state, and gives halt once the limit is reached.
-func (in *DriveInput) count(r *DriveRun, list *[]attempt, action, fp string, halt DriveResult) error {
+func (in *DriveInput) count(r *DriveRun, list *[]attempt, action, fp string, halt driveResult) error {
 	reason := halt.Reason
 	restarted := false
 
@@ -277,12 +277,12 @@ func (in *DriveInput) count(r *DriveRun, list *[]attempt, action, fp string, hal
 
 // failed is a turn that ended without doing its action: the next poll sends
 // the action again, or the task halts on the limit with halt.
-func (in *DriveInput) failed(ctx context.Context, r *DriveRun, halt DriveResult) error {
+func (in *DriveInput) failed(ctx context.Context, r *DriveRun, halt driveResult) error {
 	if err := in.attempt(ctx, r, r.Skill, halt); err != nil {
 		return err
 	}
 
-	in.Enter(r, atRetrying)
+	in.enter(r, atRetrying)
 
 	return nil
 }
@@ -299,7 +299,7 @@ func (in *DriveInput) settle(
 	ctx context.Context,
 	r *DriveRun,
 	run *state.Run,
-	halt DriveResult,
+	halt driveResult,
 	retry bool,
 ) error {
 	// git, not the turn, says whether the drive's own catchup settled
@@ -313,7 +313,7 @@ func (in *DriveInput) settle(
 	}
 
 	if passed > 0 {
-		return in.Next(ctx, r)
+		return in.next(ctx, r)
 	}
 
 	if !retry {

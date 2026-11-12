@@ -1,3 +1,5 @@
+// Package finish is the f10 finish and f10 janitor commands: it parses their
+// flags and hands the work to the finish service.
 package finish
 
 import (

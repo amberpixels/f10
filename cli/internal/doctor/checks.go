@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 )
 
 // Check names, in the order Run reports them.
@@ -552,7 +552,7 @@ func checkDriver(ctx context.Context, env *Env) Result {
 	if exe == "" {
 		r.Status = StatusProblem
 		r.Detail = shim + " runs " + driversName + ", which is not found"
-		r.Remedy = driver.F10DriversInstall
+		r.Remedy = trackerdriver.F10DriversInstall
 
 		return r
 	}
@@ -564,7 +564,7 @@ func checkDriver(ctx context.Context, env *Env) Result {
 	if err != nil {
 		r.Status = StatusProblem
 		r.Detail = exe + " --version did not run: " + err.Error()
-		r.Remedy = driver.F10DriversInstall
+		r.Remedy = trackerdriver.F10DriversInstall
 
 		return r
 	}
@@ -574,8 +574,8 @@ func checkDriver(ctx context.Context, env *Env) Result {
 		r.Status = StatusProblem
 		r.Scope = driverScope
 		r.Detail = driversName + " at " + exe + " predates --version, so it is older than v0.2.0 and below " +
-			driver.MinF10Drivers + " that --set on task create needs"
-		r.Remedy = driver.F10DriversInstall
+			trackerdriver.MinF10Drivers + " that --set on task create needs"
+		r.Remedy = trackerdriver.F10DriversInstall
 
 		return r
 	}
@@ -591,13 +591,13 @@ func checkDriver(ctx context.Context, env *Env) Result {
 	case !parses(got):
 		r.Status = StatusOK
 		r.Detail = driversName + " at " + exe + " is a dev build (" + strings.TrimSpace(res.Stdout) +
-			"), not compared with " + driver.MinF10Drivers
-	case older(got, driver.MinF10Drivers):
+			"), not compared with " + trackerdriver.MinF10Drivers
+	case older(got, trackerdriver.MinF10Drivers):
 		r.Status = StatusProblem
 		r.Scope = driverScope
-		r.Detail = driversName + " " + got + " at " + exe + ", below " + driver.MinF10Drivers +
+		r.Detail = driversName + " " + got + " at " + exe + ", below " + trackerdriver.MinF10Drivers +
 			" that --set on task create needs"
-		r.Remedy = driver.F10DriversInstall
+		r.Remedy = trackerdriver.F10DriversInstall
 	default:
 		r.Status, r.Detail = StatusOK, driversName+" "+got+" at "+exe
 	}

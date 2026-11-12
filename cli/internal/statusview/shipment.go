@@ -31,8 +31,8 @@ type Shipment struct {
 	Plan    string `json:"plan,omitempty"`
 	Handoff string `json:"handoff,omitempty"`
 
-	Verdicts []VerdictPath `json:"verdicts,omitempty"`
-	Reviews  []ReviewPath  `json:"reviews,omitempty"`
+	Verdicts []verdictPath `json:"verdicts,omitempty"`
+	Reviews  []reviewPath  `json:"reviews,omitempty"`
 
 	pulled bool // the host was asked for the PR, so nothing asks it again
 }
@@ -76,7 +76,7 @@ func (s *Shipment) Facts(link bool) []render.Fact {
 
 // AskPR reads the branch's PR from the host, once: a PR the host does not
 // know leaves the ledger's url standing.
-func (s *Shipment) AskPR(ctx context.Context, in TaskStatusInput) {
+func (s *Shipment) AskPR(ctx context.Context, in taskStatusInput) {
 	if s.pulled || in.Host == nil || in.Branch == "" {
 		return
 	}
@@ -87,24 +87,24 @@ func (s *Shipment) AskPR(ctx context.Context, in TaskStatusInput) {
 	}
 }
 
-// VerdictPath is a judge verdict file the facts block links, by its subject.
-type VerdictPath struct {
+// verdictPath is a judge verdict file the facts block links, by its subject.
+type verdictPath struct {
 	Subject string `json:"subject"` // task, plan or change
 	Path    string `json:"path"`
 }
 
-// ReviewPath is a findings file the facts block links, by its round.
-type ReviewPath struct {
+// reviewPath is a findings file the facts block links, by its round.
+type reviewPath struct {
 	Round string `json:"round"`
 	Path  string `json:"path"`
 }
 
-// ReadShipment fills the shipment from the ledger's task ref and PR, git and
+// readShipment fills the shipment from the ledger's task ref and PR, git and
 // the storage root. The commit row waits for a commit of the task's own:
 // before one, HEAD is the base's.
 //
 //nolint:lostfield // PRState comes from AskPR, only for a pushed task
-func ReadShipment(ctx context.Context, in TaskStatusInput, events []ledger.Event, known ledger.TaskRef) Shipment {
+func readShipment(ctx context.Context, in taskStatusInput, events []ledger.Event, known ledger.TaskRef) Shipment {
 	lt := lookaround.FoldLedger(events, in.ID, func(token string) string { return token })
 
 	s := Shipment{
@@ -144,23 +144,23 @@ func ReadShipment(ctx context.Context, in TaskStatusInput, events []ledger.Event
 
 // ShipFiles is the task's verdict and findings files. Verdicts from before
 // the open series are an earlier PR's, dropped as the judge row drops them.
-func ShipFiles(root, id string) ([]VerdictPath, []ReviewPath) {
+func ShipFiles(root, id string) ([]verdictPath, []reviewPath) {
 	reviews := storage.Root(root).Reviews(id)
 	since := archive.SeriesStart(reviews)
 
 	var (
-		verdicts []VerdictPath
-		rounds   []ReviewPath
+		verdicts []verdictPath
+		rounds   []reviewPath
 	)
 
 	for _, v := range archive.JudgeFiles(root, id) {
 		if !v.At.Before(since) {
-			verdicts = append(verdicts, VerdictPath{Subject: v.Judged, Path: v.Path})
+			verdicts = append(verdicts, verdictPath{Subject: v.Judged, Path: v.Path})
 		}
 	}
 
 	for _, path := range findings.Series(reviews) {
-		rounds = append(rounds, ReviewPath{Round: strings.TrimSuffix(filepath.Base(path), ".md"), Path: path})
+		rounds = append(rounds, reviewPath{Round: strings.TrimSuffix(filepath.Base(path), ".md"), Path: path})
 	}
 
 	return verdicts, rounds

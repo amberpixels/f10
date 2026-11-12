@@ -14,8 +14,8 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/buildinfo"
 	"github.com/amberpixels/f10/cli/internal/daemon"
-	"github.com/amberpixels/f10/cli/internal/driverec"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
@@ -27,14 +27,14 @@ func WriteDaemonStatus(ctx context.Context, w io.Writer, links *render.TaskLinks
 		rep.Started.Format(time.DateTime), len(rep.Runs), len(rep.Watches))
 
 	for _, r := range rep.Runs {
-		fmt.Fprintf(w, "\n%s\n", DriveTitle(r))
+		fmt.Fprintf(w, "\n%s\n", driveTitle(r))
 		fmt.Fprintf(w, "  pid    %d, since %s\n  log    %s\n", r.PID, r.Since.Format(time.DateTime), r.Log)
 
 		if r.Drive == 0 {
 			continue
 		}
 
-		if rec, err := drives.Read(r.Root, r.Drive); err == nil {
+		if rec, err := drivestore.Read(r.Root, r.Drive); err == nil {
 			// each drive's ids resolve under its own project, since the
 			// daemon runs drives for several
 			project := ""
@@ -50,7 +50,7 @@ func WriteDaemonStatus(ctx context.Context, w io.Writer, links *render.TaskLinks
 			links.Load(ctx, project, ids...)
 
 			for _, t := range rec.Tasks {
-				fmt.Fprintf(w, "  %s %s\n", render.PadRight(links.ID(project, t.ID), 6), TaskStanding(t, true))
+				fmt.Fprintf(w, "  %s %s\n", render.PadRight(links.ID(project, t.ID), 6), taskStanding(t, true))
 			}
 		}
 	}
@@ -68,7 +68,7 @@ func WriteDaemonStatus(ctx context.Context, w io.Writer, links *render.TaskLinks
 	}
 }
 
-func DriveTitle(r daemon.Run) string {
+func driveTitle(r daemon.Run) string {
 	project := projectName(r.Root)
 	if r.Drive == 0 {
 		return project + ": drive starting"
@@ -85,7 +85,7 @@ func projectName(root string) string {
 	return filepath.Base(filepath.Dir(root))
 }
 
-func ThroughDaemon(ctx context.Context, w io.Writer, t *target.Target, argv []string, a driverec.DriveArgs) error {
+func ThroughDaemon(ctx context.Context, w io.Writer, t *target.Target, argv []string, a drivectl.DriveArgs) error {
 	dir, ver := daemon.RunDir(), buildinfo.Version()
 
 	cwd, err := os.Getwd()
@@ -111,7 +111,7 @@ func ThroughDaemon(ctx context.Context, w io.Writer, t *target.Target, argv []st
 	if len(a.Answers) == 0 {
 		req.Resume = a.Resume
 		if a.Resume == 0 {
-			req.Key = drives.Key(RecordArgs(argv))
+			req.Key = drivestore.Key(recordArgs(argv))
 		}
 	}
 
@@ -119,37 +119,41 @@ func ThroughDaemon(ctx context.Context, w io.Writer, t *target.Target, argv []st
 	defer stop()
 
 	// a task the drive leaves unfinished is watched once the drive ends
-	driverec.WatchProject(ctx, w, t)
+	drivectl.WatchProject(ctx, w, t)
 
-	return FollowDrive(ctx, w, dir, ver, req, nil)
+	return followDrive(ctx, w, dir, ver, req, nil)
 }
 
 // setDriveParallel writes a given --parallel into the record --resume names
 // or this command line picks up; with none, the new drive records it itself.
-func setDriveParallel(w io.Writer, root string, argv []string, a driverec.DriveArgs) {
+func setDriveParallel(w io.Writer, root string, argv []string, a drivectl.DriveArgs) {
 	var (
-		rec *drives.Record
+		rec *drivestore.Record
 		err error
 	)
 
 	if a.Resume > 0 {
-		rec, err = drives.Read(root, a.Resume)
+		rec, err = drivestore.Read(root, a.Resume)
 	} else {
-		rec, err = drives.Find(root, RecordArgs(argv))
+		rec, err = drivestore.Find(root, recordArgs(argv))
 	}
 
 	if err != nil || rec == nil || rec.Parallel == a.Parallel {
 		return
 	}
 
-	if _, err := drives.Update(root, rec.Number, func(r *drives.Record) { r.Parallel = a.Parallel }); err != nil {
+	if _, err := drivestore.Update(
+		root,
+		rec.Number,
+		func(r *drivestore.Record) { r.Parallel = a.Parallel },
+	); err != nil {
 		fmt.Fprintf(w, "  recording drive %d's --parallel: %v\n", rec.Number, err)
 	}
 }
 
-// FollowDrive follows the drive until it exits, into the next daemon when
+// followDrive follows the drive until it exits, into the next daemon when
 // an upgrade drained it. spawn starts a daemon; nil is this binary's.
-func FollowDrive(
+func followDrive(
 	ctx context.Context,
 	w io.Writer,
 	dir, ver string,

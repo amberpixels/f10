@@ -14,8 +14,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
-	"github.com/amberpixels/f10/cli/internal/driverec"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
@@ -25,24 +25,25 @@ import (
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/tasktree"
 )
 
 // Stages, as `status <parent>` names them, one per row.
 const (
 	StageDone         = "done"
-	StageShipped      = "shipped"
-	StageAsking       = "asking"
-	StageHalted       = "halted"
-	StageImplementing = "implementing"
-	StageReviewing    = "reviewing"
-	StageResolving    = "resolving"
-	StageJudging      = "judging"
-	StagePlanning     = "planning"
-	StagePlanned      = "planned"
-	StageWaiting      = "waiting"
-	StageQueued       = "queued"
-	StageNotStarted   = "not started"
+	stageShipped      = "shipped"
+	stageAsking       = "asking"
+	stageHalted       = "halted"
+	stageImplementing = "implementing"
+	stageReviewing    = "reviewing"
+	stageResolving    = "resolving"
+	stageJudging      = "judging"
+	stagePlanning     = "planning"
+	stagePlanned      = "planned"
+	stageWaiting      = "waiting"
+	stageQueued       = "queued"
+	stageNotStarted   = "not started"
 )
 
 // A TaskRow is one task as `status <parent>` lists it, and the shape its
@@ -60,28 +61,28 @@ type TaskRow struct {
 	Note    string `json:"note,omitempty"`
 	Next    string `json:"next,omitempty"`
 	Ask     string `json:"ask,omitempty"`
-	Gates   []Gate `json:"gates,omitempty"`
+	Gates   []gate `json:"gates,omitempty"`
 
 	Full bool `json:"-"` // a finished task alone: every gate on a line of its own
 }
 
 // Finish settles the row's stage and the lines printed under it.
 func (row *TaskRow) Finish(f lookaround.TaskFacts, baseDone bool) {
-	row.Stage, row.Step = StageOf(f, baseDone)
+	row.Stage, row.Step = stageOf(f, baseDone)
 
 	// a shipped task whose finish drive holds says so where the step goes
-	if row.Stage == StageShipped {
+	if row.Stage == stageShipped {
 		for _, g := range row.Gates {
-			if g.Step == "finish" && g.Via == ViaDrive {
+			if g.Step == "finish" && g.Via == viaDrive {
 				row.Step = "finish: " + g.Text()
 			}
 		}
 	}
 
 	switch row.Stage {
-	case StageAsking:
+	case stageAsking:
 		row.Ask = f.Run.Ask
-	case StageHalted:
+	case stageHalted:
 		if f.Halt != nil {
 			row.Note = f.Halt.Reason
 		} else {
@@ -97,7 +98,7 @@ func (row *TaskRow) GateColumn() string {
 		return ""
 	}
 
-	return CompactGates(row.Gates)
+	return compactGates(row.Gates)
 }
 
 // cells is the row's stage, step, gates and PR, and the lines under it.
@@ -108,7 +109,7 @@ func (row *TaskRow) cells(v RowView, withGates bool, faint lipgloss.Style) ([]ta
 		cells = append(cells, tasktree.Cell{Text: row.GateColumn()})
 	}
 
-	cells = append(cells, tasktree.Cell{Text: PRColumn(*row)})
+	cells = append(cells, tasktree.Cell{Text: prColumn(*row)})
 
 	if v.Term {
 		stage, pr := StageStyle(row.Stage), row.PR
@@ -142,7 +143,7 @@ func (row *TaskRow) subLines() [][2]string {
 	}
 
 	if row.Full {
-		for _, l := range GateLines(row.Gates) {
+		for _, l := range gateLines(row.Gates) {
 			out = append(out, [2]string{strings.TrimSpace(l[0]), l[1]})
 		}
 	}
@@ -150,61 +151,61 @@ func (row *TaskRow) subLines() [][2]string {
 	return out
 }
 
-// StageOf is the one mapping from a task's facts to its stage and step;
+// stageOf is the one mapping from a task's facts to its stage and step;
 // baseDone says the base the task waits on is done.
-func StageOf(f lookaround.TaskFacts, baseDone bool) (string, string) {
+func stageOf(f lookaround.TaskFacts, baseDone bool) (string, string) {
 	r := f.Run
 
 	switch {
 	case f.Finished || f.PR != nil && f.PR.Status == forge.Merged:
 		return StageDone, "finish"
 	case r != nil && r.Ask != "":
-		return StageAsking, cmp.Or(r.LeafShown(), r.Furthest())
+		return stageAsking, cmp.Or(r.LeafShown(), r.Furthest())
 	case f.Halt != nil:
-		return StageHalted, f.Halt.Skill
-	case r != nil && r.Wait != "" && driverec.StoppedRun(r):
-		return StageWaiting, "on " + r.Wait
-	case r != nil && driverec.StoppedRun(r):
-		return StageHalted, cmp.Or(r.LeafShown(), r.Furthest())
-	case f.DrivePhase == drives.PhaseParked:
-		return StageWaiting, "on " + cmp.Or(f.Base, "its base")
-	case f.DrivePhase == drives.PhaseWaiting:
-		return StageWaiting, "to finish after " + cmp.Or(f.Base, "its base")
+		return stageHalted, f.Halt.Skill
+	case r != nil && r.Wait != "" && drivectl.StoppedRun(r):
+		return stageWaiting, "on " + r.Wait
+	case r != nil && drivectl.StoppedRun(r):
+		return stageHalted, cmp.Or(r.LeafShown(), r.Furthest())
+	case f.DrivePhase == drivestore.PhaseParked:
+		return stageWaiting, "on " + cmp.Or(f.Base, "its base")
+	case f.DrivePhase == drivestore.PhaseWaiting:
+		return stageWaiting, "to finish after " + cmp.Or(f.Base, "its base")
 	case r == nil && f.Queued:
-		return StageQueued, ""
+		return stageQueued, ""
 	case r == nil && f.Base != "" && !baseDone && f.Driven:
-		return StageWaiting, "after " + f.Base
+		return stageWaiting, "after " + f.Base
 	case r == nil && f.Base != "" && !baseDone:
 		// only a drive holds a task for its base; nothing holds this one yet
-		return StageNotStarted, "after " + f.Base
+		return stageNotStarted, "after " + f.Base
 	case r == nil:
-		return StageNotStarted, ""
+		return stageNotStarted, ""
 	}
 
 	switch r.Ship {
 	case "running":
 		switch r.Leaf {
 		case "review":
-			return StageReviewing, r.LeafShown()
+			return stageReviewing, r.LeafShown()
 		case "resolve":
-			return StageResolving, r.LeafShown()
+			return stageResolving, r.LeafShown()
 		case "judge":
-			return StageJudging, r.LeafShown()
+			return stageJudging, r.LeafShown()
 		default:
-			return StageImplementing, cmp.Or(r.LeafShown(), "ship")
+			return stageImplementing, cmp.Or(r.LeafShown(), "ship")
 		}
 	case "done":
-		return StageShipped, cmp.Or(r.FinalShown(), "ship")
+		return stageShipped, cmp.Or(r.FinalShown(), "ship")
 	}
 
 	switch {
 	case r.Capture == "running" || r.Plan == "running":
-		return StagePlanning, r.Furthest()
+		return stagePlanning, r.Furthest()
 	case r.Plan != state.Upcoming && r.Plan != "":
-		return StagePlanned, "plan"
+		return stagePlanned, "plan"
 	}
 
-	return StageNotStarted, ""
+	return stageNotStarted, ""
 }
 
 // readLedger reads the project's events once. A ledger that is missing or
@@ -215,8 +216,8 @@ func readLedger(ctx context.Context, main string) []ledger.Event {
 	return events
 }
 
-// RowSource is what gathering rows reads from, bound once per status call.
-type RowSource struct {
+// rowSource is what gathering rows reads from, bound once per status call.
+type rowSource struct {
 	Live    []*state.Run
 	Events  []ledger.Event
 	main    string       // where the branch records live
@@ -231,7 +232,7 @@ type RowSource struct {
 	// Driven holds every task id a running drive lists, bundle riders too
 	Driven map[string]bool
 	// gates reads a task's gates; nil reads none
-	gates func(ctx context.Context, id, branch, root string, run *state.Run) []Gate
+	gates func(ctx context.Context, id, branch, root string, run *state.Run) []gate
 	// Requests is every child's requests by upper-cased id, read once
 	Requests map[string][]lookaround.PR
 }
@@ -239,7 +240,7 @@ type RowSource struct {
 // RowsFrom builds a row per child from one host read of every child's
 // requests, the local reads for each running beside the others', then
 // decides the stages with each base's before its dependents'.
-func (src RowSource) RowsFrom(ctx context.Context, kids []stack.ChildRow) []TaskRow {
+func (src rowSource) RowsFrom(ctx context.Context, kids []stack.ChildRow) []TaskRow {
 	facts := make([]lookaround.TaskFacts, len(kids))
 	rows := make([]TaskRow, len(kids))
 	src.Requests = src.readRequests(ctx, kids)
@@ -274,7 +275,7 @@ func (src RowSource) RowsFrom(ctx context.Context, kids []stack.ChildRow) []Task
 // Gather reads one task's facts: the live run in its checkout, else the
 // ledger's last claim, the requests naming it (its branch's where it has
 // one), and the base its branch records, else the tracker's.
-func (src RowSource) Gather(ctx context.Context, k stack.ChildRow) (TaskRow, lookaround.TaskFacts) {
+func (src rowSource) Gather(ctx context.Context, k stack.ChildRow) (TaskRow, lookaround.TaskFacts) {
 	row := TaskRow{ID: k.ID, Title: k.Title, URL: k.URL, Depth: k.Depth, After: k.After}
 	f := lookaround.TaskFacts{
 		Queued:     k.Queued,
@@ -292,7 +293,7 @@ func (src RowSource) Gather(ctx context.Context, k stack.ChildRow) (TaskRow, loo
 	}
 
 	if root != "" {
-		if own, _ := TaskRuns(InRoot(src.Live, root), k.ID); len(own) > 0 {
+		if own, _ := taskRuns(InRoot(src.Live, root), k.ID); len(own) > 0 {
 			f.Run = own[0] // state.List sorts newest first
 		}
 	}
@@ -344,7 +345,7 @@ func (src RowSource) Gather(ctx context.Context, k stack.ChildRow) (TaskRow, loo
 // idOf is token as an id. An empty token, a finish run with no argument
 // from a session with no task, names nothing: resolving it would read the
 // reader's own branch.
-func (src RowSource) idOf(token string) string {
+func (src rowSource) idOf(token string) string {
 	if token == "" || src.Resolve == nil {
 		return token
 	}
@@ -354,7 +355,7 @@ func (src RowSource) idOf(token string) string {
 
 // readRequests is every child's requests by upper-cased id, one host query
 // for all of them. A failed read leaves each row to the url the ledger kept.
-func (src RowSource) readRequests(ctx context.Context, kids []stack.ChildRow) map[string][]lookaround.PR {
+func (src rowSource) readRequests(ctx context.Context, kids []stack.ChildRow) map[string][]lookaround.PR {
 	if src.host == nil || len(kids) == 0 {
 		return nil
 	}
@@ -390,8 +391,8 @@ type RowView struct {
 
 // stageOrder is the stages as a parent's heading counts them.
 var stageOrder = []string{
-	StageDone, StageShipped, StageAsking, StageHalted, StageImplementing, StageReviewing,
-	StageResolving, StageJudging, StagePlanning, StagePlanned, StageWaiting, StageQueued, StageNotStarted,
+	StageDone, stageShipped, stageAsking, stageHalted, stageImplementing, stageReviewing,
+	stageResolving, stageJudging, stagePlanning, stagePlanned, stageWaiting, stageQueued, stageNotStarted,
 }
 
 // RenderRows prints the rows as a task tree under the parent's heading.
@@ -417,13 +418,13 @@ func RenderRows(w io.Writer, rows []TaskRow, v RowView) error {
 	// plain output keeps its rows narrow: the gates go on a line beneath
 	withGates := !v.Plain && slices.ContainsFunc(rows, func(r TaskRow) bool { return r.GateColumn() != "" })
 
-	tr := make([]hostops.TreeRow, len(rows))
+	tr := make([]tasksource.TreeRow, len(rows))
 	for i, r := range rows {
-		tr[i] = hostops.TreeRow{ID: r.ID, Title: r.Title, URL: r.URL, Depth: r.Depth}
+		tr[i] = tasksource.TreeRow{ID: r.ID, Title: r.Title, URL: r.URL, Depth: r.Depth}
 		links.Known("", r.ID, r.URL)
 	}
 
-	nodes := hostops.SubtaskNodes(tr, hostops.TreeOpts{
+	nodes := tasksource.SubtaskNodes(tr, tasksource.TreeOpts{
 		TitleBelow: true,
 		ID: func(i int) tasktree.Cell {
 			c := tasktree.Cell{Text: stateGlyph(rows[i].Stage) + " " + rows[i].ID}
@@ -444,11 +445,11 @@ func RenderRows(w io.Writer, rows []TaskRow, v RowView) error {
 // answer, or anything else.
 func stateGlyph(stage string) string {
 	switch stage {
-	case StageDone, StageShipped:
+	case StageDone, stageShipped:
 		return "✓"
-	case StageHalted:
+	case stageHalted:
 		return "✗"
-	case StageAsking:
+	case stageAsking:
 		return "?"
 	}
 
@@ -473,9 +474,9 @@ func stageCounts(rows []TaskRow) string {
 	return strings.Join(parts, " · ")
 }
 
-// PRColumn is `#128`, with the state beside it unless the PR is open, an
+// prColumn is `#128`, with the state beside it unless the PR is open, an
 // open or merged PR's icon before it so the number reads as a PR.
-func PRColumn(r TaskRow) string {
+func prColumn(r TaskRow) string {
 	if r.PR == "" {
 		return ""
 	}
@@ -512,10 +513,10 @@ func statusGlyph(i int) string {
 	return glyphs[i]
 }
 
-// DrivenTasks is every task a drive lists while its driver runs, by id,
+// drivenTasks is every task a drive lists while its driver runs, by id,
 // each bundle member on its own. A stopped drive holds nothing until it
 // resumes, as its queue does not.
-func DrivenTasks(active []drives.Live) map[string]bool {
+func drivenTasks(active []drivestore.Live) map[string]bool {
 	out := map[string]bool{}
 
 	for _, d := range active {

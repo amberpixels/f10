@@ -126,7 +126,7 @@ func settleRiders(
 		}
 
 		for _, m := range closing {
-			edited = CloseAgain(edited, m.Number)
+			edited = closeAgain(edited, m.Number)
 		}
 
 		if edited != body {
@@ -145,7 +145,7 @@ func settleRiders(
 func settleMerged(ctx context.Context, in FinishInput, body string, kept, closing []ref.Ref) ([]string, error) {
 	var notes []string
 
-	if reopen := BodyCloses(body, kept); len(reopen) > 0 {
+	if reopen := bodyCloses(body, kept); len(reopen) > 0 {
 		for _, m := range kept {
 			if slices.Contains(reopen, m.ID) {
 				if err := in.Host.SetIssueOpen(ctx, m.Number, true); err != nil {
@@ -157,7 +157,7 @@ func settleMerged(ctx context.Context, in FinishInput, body string, kept, closin
 		notes = append(notes, "reopened "+strings.Join(reopen, ", ")+", which the merge had closed")
 	}
 
-	closedByMerge := BodyCloses(body, closing)
+	closedByMerge := bodyCloses(body, closing)
 
 	var shut []string
 

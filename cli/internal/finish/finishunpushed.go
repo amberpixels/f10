@@ -126,7 +126,7 @@ func landUnpushed(ctx context.Context, in FinishInput, branch, def string) (stri
 	if tree == gitx.Out(ctx, in.Main, "rev-parse", base+"^{tree}") {
 		// a rerun after a landing: the unpushed commit may already close the task
 		note := unclosedNote(in)
-		if closing := ClosingLines(in); closing != "" && strings.Contains(
+		if closing := closingLines(in); closing != "" && strings.Contains(
 			gitx.Out(ctx, in.Main, "log", "--format=%B", "refs/remotes/origin/"+def+"..refs/heads/"+def), closing) {
 			note = closesOnPush(in, def)
 		}
@@ -143,7 +143,7 @@ func landUnpushed(ctx context.Context, in FinishInput, branch, def string) (stri
 
 	var sha string
 
-	closing := ClosingLines(in)
+	closing := closingLines(in)
 
 	switch method {
 	case "--rebase":
@@ -162,7 +162,7 @@ func landUnpushed(ctx context.Context, in FinishInput, branch, def string) (stri
 		sha, err = gitx.CommitTree(ctx, in.Main, tree, []string{base}, squashMessage(ctx, in, base, head)...)
 	default: // --merge, or glab's plain merge
 		sha, err = gitx.CommitTree(ctx, in.Main, tree, []string{base, tip},
-			paragraphs("Merge branch '"+branch+"'", cmp.Or(MergeBody(in, closing, method), closing))...)
+			paragraphs("Merge branch '"+branch+"'", cmp.Or(mergeBody(in, closing, method), closing))...)
 	}
 
 	if err != nil {
@@ -215,9 +215,9 @@ func squashMessage(ctx context.Context, in FinishInput, base, head string) []str
 		list = "- " + strings.Join(subjects, "\n- ")
 	}
 
-	description := strings.Join(paragraphs(list, ClosingLines(in)), "\n\n")
+	description := strings.Join(paragraphs(list, closingLines(in)), "\n\n")
 
-	return paragraphs(subject, cmp.Or(MergeBody(in, description, "--squash"), description))
+	return paragraphs(subject, cmp.Or(mergeBody(in, description, "--squash"), description))
 }
 
 func paragraphs(parts ...string) []string {
@@ -241,11 +241,11 @@ func closedIDs(in FinishInput) []string {
 	return append([]string{in.Task.ID}, in.Close...)
 }
 
-// ClosingLines closes the lead and the riders --close names once the commit
+// closingLines closes the lead and the riders --close names once the commit
 // reaches origin's default branch; written whatever traces says, since it is
 // the task's own reference. Other trackers, a driver's included, are not
 // closed by a commit, as on the PR path.
-func ClosingLines(in FinishInput) string {
+func closingLines(in FinishInput) string {
 	if !in.HostCloses {
 		return ""
 	}
@@ -254,7 +254,7 @@ func ClosingLines(in FinishInput) string {
 
 	for _, m := range in.Task.MemberRefs() {
 		if m.ID == in.Task.ID || slices.Contains(in.Close, m.ID) {
-			lines = append(lines, ClosingLine(m.Number))
+			lines = append(lines, closingLine(m.Number))
 		}
 	}
 

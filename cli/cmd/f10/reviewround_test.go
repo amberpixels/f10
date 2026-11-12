@@ -15,6 +15,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/findings"
 	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/testkit"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -49,8 +50,8 @@ func TestReviewRoundNamesTheDirectory(t *testing.T) {
 		{"a bundle's rider: the lead", "DM-5/fix", "DM-6", "DM-5"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			repo := tracedRepo(t, tc.branch, "")
-			git(t, repo, "config", "branch.DM-5/fix.f10-tasks", "DM-6")
+			repo := testkit.TracedRepo(t, tc.branch, "")
+			testkit.Git(t, repo, "config", "branch.DM-5/fix.f10-tasks", "DM-6")
 
 			var args []string
 			if tc.arg != "" {
@@ -76,7 +77,7 @@ func TestReviewRoundNamesTheDirectory(t *testing.T) {
 
 // An unsettled round one declines with exit 3, naming the finding.
 func TestReviewRoundDeclines(t *testing.T) {
-	repo := tracedRepo(t, "DM-5/fix", "")
+	repo := testkit.TracedRepo(t, "DM-5/fix", "")
 	writeRound(t, repo, "1.md", "task: DM-5\nround: 1\nreviewer: local\nverdict: findings\n\n"+
 		"## Findings\n\n### 1.1 Missing check\nwhere: a.go:1\ncategory: tests and docs\n")
 
@@ -100,7 +101,7 @@ func TestReviewRoundDeclines(t *testing.T) {
 
 // Round two is the last: it declines whether or not anything still waits.
 func TestReviewRoundDeclinesAfterRoundTwo(t *testing.T) {
-	repo := tracedRepo(t, "DM-5/fix", "")
+	repo := testkit.TracedRepo(t, "DM-5/fix", "")
 	head := "task: DM-5\nround: %s\nreviewer: local\nverdict: findings\n\n"
 	writeRound(t, repo, "1.md", strings.Replace(head, "%s", "1", 1)+
 		"## Findings\n\n### 1.1 Missing check\nwhere: a.go:1\ncategory: tests and docs\nverdict: ask\n")
@@ -125,11 +126,11 @@ func TestReviewRoundDeclinesAfterRoundTwo(t *testing.T) {
 // project keeps it, checked out on DM-5/fix with one commit of its own.
 func roundRepo(t *testing.T) string {
 	t.Helper()
-	isolateEnv(t)
+	testkit.IsolateEnv(t)
 	t.Setenv("F10_SESSION_ID", "")
 	t.Setenv("CLAUDE_CODE_SESSION_ID", "")
 
-	dir := prRepo(t)
+	dir := testkit.PrRepo(t)
 	path := filepath.Join(dir, ".f10", "instructions", "project.md")
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
@@ -144,8 +145,8 @@ func roundRepo(t *testing.T) string {
 		t.Fatal(err)
 	}
 
-	git(t, dir, "switch", "-q", "-c", "DM-5/fix")
-	commitFile(t, dir, "fix.txt")
+	testkit.Git(t, dir, "switch", "-q", "-c", "DM-5/fix")
+	testkit.CommitFile(t, dir, "fix.txt")
 
 	return dir
 }
@@ -155,11 +156,11 @@ func roundRepo(t *testing.T) string {
 func squashOntoMain(t *testing.T, dir string) {
 	t.Helper()
 
-	git(t, dir, "switch", "-q", "main")
-	git(t, dir, "merge", "-q", "--squash", "DM-5/fix")
-	git(t, dir, "commit", "-q", "-m", "DM-5 squashed")
-	git(t, dir, "push", "-q", "origin", "main")
-	git(t, dir, "switch", "-q", "DM-5/fix")
+	testkit.Git(t, dir, "switch", "-q", "main")
+	testkit.Git(t, dir, "merge", "-q", "--squash", "DM-5/fix")
+	testkit.Git(t, dir, "commit", "-q", "-m", "DM-5 squashed")
+	testkit.Git(t, dir, "push", "-q", "origin", "main")
+	testkit.Git(t, dir, "switch", "-q", "DM-5/fix")
 }
 
 // hostGH puts a fake gh first on PATH that reports PR #7 in state.
@@ -214,7 +215,7 @@ func TestReviewRoundDeclinesAMergedBranch(t *testing.T) {
 // A review before any commit sees the working tree, not HEAD at main's tip.
 func TestReviewRoundReviewsUncommittedWork(t *testing.T) {
 	repo := roundRepo(t)
-	git(t, repo, "reset", "-q", "--hard", "main")
+	testkit.Git(t, repo, "reset", "-q", "--hard", "main")
 
 	if err := os.WriteFile(filepath.Join(repo, "main.txt"), []byte("changed\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -228,7 +229,7 @@ func TestReviewRoundReviewsUncommittedWork(t *testing.T) {
 // Two rounds on a merged PR end their series: the next PR on the task starts
 // at round 1, and the old rounds are archived, not deleted.
 func TestReviewRoundStartsANewSeriesAfterAMergedPR(t *testing.T) {
-	repo := tracedRepo(t, "DM-5/fix", "")
+	repo := testkit.TracedRepo(t, "DM-5/fix", "")
 	hostGH(t, "MERGED")
 	twoRounds(t, repo, "pr: #7\n")
 
@@ -252,7 +253,7 @@ func TestReviewRoundStartsANewSeriesAfterAMergedPR(t *testing.T) {
 // A round with no pr: line belongs to the commits it reviewed: one HEAD
 // cannot reach is a finished series.
 func TestReviewRoundStartsANewSeriesPastAnUnreachableSha(t *testing.T) {
-	repo := tracedRepo(t, "DM-5/fix", "")
+	repo := testkit.TracedRepo(t, "DM-5/fix", "")
 	twoRounds(t, repo, "reviewed: 0123456789abcdef0123456789abcdef01234567\n")
 
 	if out, err := runRound(t, repo); err != nil || !strings.Contains(out, "round:   1") {
@@ -263,7 +264,7 @@ func TestReviewRoundStartsANewSeriesPastAnUnreachableSha(t *testing.T) {
 // Rounds a rebase ended before any PR belong to the PR that follows, so the
 // lore change stays the task id, and the merge after them is the first PR.
 func TestReviewRoundRestartKeepsTheChange(t *testing.T) {
-	repo := tracedRepo(t, "DM-5/fix", "")
+	repo := testkit.TracedRepo(t, "DM-5/fix", "")
 	twoRounds(t, repo, "reviewed: 0123456789abcdef0123456789abcdef01234567\n")
 
 	if _, err := runRound(t, repo); err != nil {
@@ -291,7 +292,7 @@ func TestReviewRoundRestartKeepsTheChange(t *testing.T) {
 // lore change closes a series whose PR merged without finish, so the
 // follow-up's first entry already lands in its own change.
 func TestLoreChangeArchivesAMergedSeries(t *testing.T) {
-	repo := tracedRepo(t, "DM-5/fix", "")
+	repo := testkit.TracedRepo(t, "DM-5/fix", "")
 	hostGH(t, "MERGED")
 	twoRounds(t, repo, "pr: #7\n")
 	t.Chdir(repo)
@@ -311,7 +312,7 @@ func TestLoreChangeArchivesAMergedSeries(t *testing.T) {
 
 // A rebase keeps the branch's open PR, so the series and its limit stand.
 func TestReviewRoundKeepsTheSeriesOfAnOpenPR(t *testing.T) {
-	repo := tracedRepo(t, "DM-5/fix", "")
+	repo := testkit.TracedRepo(t, "DM-5/fix", "")
 	hostGH(t, "OPEN")
 	twoRounds(t, repo, "reviewed: 0123456789abcdef0123456789abcdef01234567\npr: #7\n")
 
@@ -319,72 +320,11 @@ func TestReviewRoundKeepsTheSeriesOfAnOpenPR(t *testing.T) {
 	wantDecline(t, out, err, "round 2 is the last")
 }
 
-// A merge closes a series with no rounds too, since the archive counts the
-// task's PRs; finishing the same PR again closes nothing more.
-func TestCloseSeriesCountsEveryPR(t *testing.T) {
-	root := t.TempDir()
-	dir := filepath.Join(root, "reviews", "DM-5")
-	first := archive.SeriesEnd{PR: 7, Head: "abc1234"}
-
-	if got := archive.ChangeOf(dir); got != "DM-5" {
-		t.Fatalf("no series closed: %q", got)
-	}
-
-	for range 2 {
-		if _, err := finish.CloseSeries(dir, first); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	if got := archive.ChangeOf(dir); got != "DM-5.2" {
-		t.Errorf("after one PR, twice finished: %q, want DM-5.2", got)
-	}
-
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		t.Fatal(err)
-	}
-
-	got, err := finish.CloseSeries(dir, archive.SeriesEnd{PR: 8, Head: "def5678"})
-	if err != nil || got != filepath.Join(root, "reviews", "archive", "DM-5.2") {
-		t.Fatalf("a second PR's rounds: %q, %v", got, err)
-	}
-
-	if e := archive.ReadSeriesEnd(got); e.PR != 8 || e.Head != "def5678" || e.At.IsZero() {
-		t.Errorf("closed file reads %+v", e)
-	}
-
-	if _, err := finish.CloseSeries(dir, archive.SeriesEnd{PR: 8}); err != nil || archive.ChangeOf(dir) != "DM-5.3" {
-		t.Errorf("glab's !8 and gh's #8 are one PR: %q, %v", archive.ChangeOf(dir), err)
-	}
-}
-
-// Each finished series takes the next number; a task with no findings
-// archives nothing.
-func TestArchiveReviewsNumbersEachSeries(t *testing.T) {
-	root := t.TempDir()
-	dir := filepath.Join(root, "reviews", "DM-5")
-
-	if got, err := archive.ArchiveReviews(dir, archive.SeriesEnd{}); got != "" || err != nil {
-		t.Fatalf("no directory: got %q, %v", got, err)
-	}
-
-	for _, want := range []string{"DM-5.1", "DM-5.2"} {
-		if err := os.MkdirAll(dir, 0o750); err != nil {
-			t.Fatal(err)
-		}
-
-		got, err := archive.ArchiveReviews(dir, archive.SeriesEnd{})
-		if err != nil || got != filepath.Join(root, "reviews", "archive", want) {
-			t.Errorf("got %q, %v; want archive/%s", got, err, want)
-		}
-	}
-}
-
 // A fresh branch cut from main, with nothing past main yet, is not merged,
 // so it still gets round 1.
 func TestReviewRoundGivesAFreshBranchRoundOne(t *testing.T) {
 	repo := roundRepo(t)
-	git(t, repo, "reset", "-q", "--hard", "main")
+	testkit.Git(t, repo, "reset", "-q", "--hard", "main")
 
 	if out, err := runRound(t, repo); err != nil || !strings.Contains(out, "round:   1") {
 		t.Errorf("got %v:\n%s\nwant round 1", err, out)
@@ -394,7 +334,7 @@ func TestReviewRoundGivesAFreshBranchRoundOne(t *testing.T) {
 // A branch naming no task keys its findings by the branch, even when this
 // session's run recorded a task.
 func TestReviewRoundIgnoresTheSessionTask(t *testing.T) {
-	repo := tracedRepo(t, "sweep/a", "")
+	repo := testkit.TracedRepo(t, "sweep/a", "")
 	stateDir := t.TempDir()
 	t.Setenv("F10_STATE_DIR", stateDir)
 	t.Setenv("F10_SESSION_ID", "sess-1")

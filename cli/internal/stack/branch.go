@@ -1,5 +1,3 @@
-// Package stack is how a task branch stands on its base: the branch index,
-// the After: base, base code checks, the catchup engine and verify runs.
 package stack
 
 import (
@@ -11,16 +9,16 @@ import (
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
-	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 )
 
 // BranchName is the task's branch name and, when no slug came, the note
 // saying why.
 func BranchName(
 	ctx context.Context,
-	d *driver.Driver,
+	d *trackerdriver.Driver,
 	task ref.Ref,
 	suffix string,
 	title func(context.Context) (string, error),
@@ -28,7 +26,7 @@ func BranchName(
 	var name, note string
 
 	if d != nil {
-		out, err := d.Run(ctx, driver.VerbBranch, task.Number)
+		out, err := d.Run(ctx, trackerdriver.VerbBranch, task.Number)
 
 		switch {
 		case err == nil:
@@ -36,7 +34,7 @@ func BranchName(
 			if name == "" {
 				return "", "", errors.New("driver branch printed nothing")
 			}
-		case !errors.Is(err, driver.ErrUnsupported):
+		case !errors.Is(err, trackerdriver.ErrUnsupported):
 			return "", "", err
 		}
 	}
@@ -379,7 +377,7 @@ type FoundBranch struct {
 func TaskCheckout(
 	ctx context.Context,
 	main string,
-	d *driver.Driver,
+	d *trackerdriver.Driver,
 	task ref.Ref,
 	suffix string,
 ) (string, string, error) {

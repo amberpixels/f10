@@ -89,7 +89,7 @@ func (d finishDecision) stays() string {
 // A branch with no worktree and a merged PR completes a finish that stopped
 // halfway; no branch at all returns the goneError for finishBranchless.
 func decideFinish(ctx context.Context, in FinishInput) (finishDecision, error) {
-	name, path, onMain, err := FinishTarget(ctx, in)
+	name, path, onMain, err := finishTarget(ctx, in)
 	if gone := (goneError{}); errors.As(err, &gone) && gone.branch != "" {
 		return decideGone(ctx, in, gone)
 	}
@@ -144,7 +144,7 @@ func decideFinish(ctx context.Context, in FinishInput) (finishDecision, error) {
 	}
 
 	if in.Flags.MergedOnly && (unpushed || d.pull.Status != forge.Merged) {
-		return d, ErrNotMerged
+		return d, errNotMerged
 	}
 
 	// a spike with a PR finishes the normal way, and its tree must be clean
@@ -238,7 +238,7 @@ func settleClose(in FinishInput, d *finishDecision, unpushed bool) error {
 
 	body := []string{}
 	if read {
-		body = BodyCloses(d.pull.Body, in.Task.MemberRefs()[1:])
+		body = bodyCloses(d.pull.Body, in.Task.MemberRefs()[1:])
 	}
 
 	if in.FollowBody {
@@ -383,10 +383,10 @@ func refuseUnpushed(ctx context.Context, main, branch string) error {
 		"since leaving the PR open deletes the local branch", branch, branch)
 }
 
-// FinishTarget is the task's branch and the checkout holding it, main's or a
+// finishTarget is the task's branch and the checkout holding it, main's or a
 // worktree's. A branch checked out nowhere is a refusal: finish cleans up
 // only what start made.
-func FinishTarget(ctx context.Context, in FinishInput) (string, string, bool, error) {
+func finishTarget(ctx context.Context, in FinishInput) (string, string, bool, error) {
 	name, path, err := in.Branch, "", error(nil)
 	if name == "" {
 		name, path, err = stack.TaskCheckout(ctx, in.Main, in.Driver, in.Task, in.Suffix)

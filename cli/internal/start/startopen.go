@@ -1,5 +1,3 @@
-// Package start opens a task: its checkout, its workspace and its agent,
-// prompted, or a PR picked up to continue.
 package start
 
 import (
@@ -11,7 +9,6 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
-	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/launch"
@@ -21,15 +18,17 @@ import (
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/textx"
+	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // StartInput is everything start needs once the target is settled, so
 // the flow can be tested without a checkout.
 type StartInput struct {
-	Main     string         // the main checkout: worktrees are its siblings
-	Driver   *driver.Driver // nil without one
+	Main     string                // the main checkout: worktrees are its siblings
+	Driver   *trackerdriver.Driver // nil without one
 	Task     ref.Ref
 	Suffix   string
 	Mode     string
@@ -119,7 +118,7 @@ func StartedMove(t *target.Target) func(context.Context, ref.Ref) error {
 	}
 
 	return func(ctx context.Context, task ref.Ref) error {
-		return hostops.TasksFor(t).Update(ctx, io.Discard, task, hostops.Props{Status: word})
+		return tasksource.TasksFor(t).Update(ctx, io.Discard, task, hostops.Props{Status: word})
 	}
 }
 
@@ -210,7 +209,7 @@ func OpenTask(ctx context.Context, in StartInput) (OpenedTask, error) {
 	name, base, dep, existing := settled.name, settled.base, settled.dep, settled.existing
 
 	if in.Pick == nil {
-		if in.Task, err = SettleBundle(ctx, in.Main, in.Task, existing.Name); err != nil {
+		if in.Task, err = settleBundle(ctx, in.Main, in.Task, existing.Name); err != nil {
 			return OpenedTask{}, err
 		}
 	}
@@ -300,7 +299,7 @@ func openWorktree(
 	path := stack.WorktreeOf(wts, name)
 
 	if in.Pick != nil && !in.Pick.Landed() && !existing.Remote {
-		note, err := SyncPickup(ctx, in.Main, name, path != "")
+		note, err := syncPickup(ctx, in.Main, name, path != "")
 		if err != nil {
 			return "", nil, err
 		}

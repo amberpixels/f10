@@ -1,19 +1,12 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"os/exec"
 	"strings"
 	"testing"
 
-	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
-	"github.com/amberpixels/f10/cli/internal/driver"
-	"github.com/amberpixels/f10/cli/internal/facts"
-	"github.com/amberpixels/f10/cli/internal/hostops"
-	"github.com/amberpixels/f10/cli/internal/probe"
-	"github.com/amberpixels/f10/cli/internal/shell"
-	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/testkit"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -142,8 +135,8 @@ func TestUnreachableTrackerRefusals(t *testing.T) {
 					return
 				}
 
-				if r.err == nil || exitCode(r.err) != c.exit {
-					t.Fatalf("err = %v (exit %d), want exit %d", r.err, exitCode(r.err), c.exit)
+				if r.err == nil || testkit.ExitCode(r.err) != c.exit {
+					t.Fatalf("err = %v (exit %d), want exit %d", r.err, testkit.ExitCode(r.err), c.exit)
 				}
 
 				for _, w := range c.want {
@@ -174,73 +167,5 @@ func withStaleAfter(t *testing.T, repo string) {
 
 	path := repo + "/.f10/instructions/project.md"
 	md := strings.Replace(readFile(t, path), "tracker:", "stale_after: 3d\ntracker:", 1)
-	writeFile(t, path, md)
-}
-
-// tasks picks the source from the driver, the tracker kind and the host CLI.
-func TestTasksPicksTheSource(t *testing.T) {
-	for _, tc := range []struct {
-		driver bool
-		kind   facts.TrackerKind
-		cli    string
-		want   string
-	}{
-		{false, facts.TrackerGitHub, "gh", "hostops.HostSource"},
-		{false, facts.TrackerGitHub, "", "hostops.RefusedSource"},
-		{false, facts.TrackerNotion, "gh", "hostops.RefusedSource"},
-		{true, facts.TrackerGitHub, "gh", "hostops.FallbackSource hostops.HostSource"},
-		{true, facts.TrackerGitHub, "", "hostops.FallbackSource hostops.RefusedSource"},
-		{true, facts.TrackerNotion, "gh", "hostops.FallbackSource hostops.RefusedSource"},
-	} {
-		name := fmt.Sprintf("driver %v, %s, cli %q", tc.driver, tc.kind, tc.cli)
-		t.Run(name, func(t *testing.T) {
-			tg := declaredTracker(t, tc.kind)
-			tg.Probes = &probe.Probes{CLI: probe.Signal{Value: tc.cli, Evidence: "none"}}
-
-			if tc.driver {
-				writeDriver(t, tg.Layout.StorageRoot.Path())
-			}
-
-			src := hostops.TasksFor(tg)
-			got := fmt.Sprintf("%T", src)
-
-			if f, ok := src.(hostops.FallbackSource); ok {
-				got += fmt.Sprintf(" %T", f.Rest)
-			}
-
-			if got != tc.want {
-				t.Errorf("tasks() = %s, want %s", got, tc.want)
-			}
-		})
-	}
-}
-
-// Only the driver's exit 3 reaches the host: any other driver failure is
-// the answer, and the host is never asked.
-func TestFallbackOnlyOnUnsupported(t *testing.T) {
-	f := newFakes(t)
-	tg := declaredTracker(t, facts.TrackerGitHub)
-	writeDriver(t, tg.Layout.StorageRoot.Path())
-
-	f.fail("driver list", shell.Result{Code: 1, Stderr: "tracker down"})
-
-	if _, err := stack.TaskRows(
-		t.Context(),
-		tg,
-		hostops.IssuePage,
-	); err == nil ||
-		!strings.Contains(err.Error(), "tracker down") {
-		t.Errorf("err = %v, want the driver's failure", err)
-	}
-
-	if f.called("gh issue list") {
-		t.Error("a failing driver fell back to host issues")
-	}
-
-	f.fail("driver search x", shell.Result{Code: driver.ExitUnsupported})
-	f.script("gh issue list --search x --json number,title,state,url,labels,body,assignees,createdAt --limit 30", `[]`)
-
-	if _, err := taskcmd.SearchRows(t.Context(), tg, "x"); err != nil || !f.called("gh issue list") {
-		t.Errorf("err = %v; want the declined search on host issues", err)
-	}
+	testkit.WriteFile(t, path, md)
 }

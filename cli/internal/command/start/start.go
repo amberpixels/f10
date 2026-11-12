@@ -1,3 +1,5 @@
+// Package start is the f10 start and f10 forward commands: it parses their
+// arguments and hands the work to the start service.
 package start
 
 import (
@@ -12,7 +14,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
-	"github.com/amberpixels/f10/cli/internal/driverec"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/forge"
@@ -343,7 +345,7 @@ func afterStart(ctx context.Context, cmd *cli.Command, t *target.Target, r ref.R
 		ui.Warnf(cmd.ErrWriter, "recording the launch: %v", err)
 	}
 
-	driverec.WatchProject(ctx, cmd.ErrWriter, t)
+	drivectl.WatchProject(ctx, cmd.ErrWriter, t)
 
 	finish.SweepIfDue(ctx, cmd.ErrWriter, filepath.Join(t.Layout.StorageRoot.Path(), finish.JanitorStamp), time.Now(),
 		func(ctx context.Context) ([]string, error) { return finish.Janitor(ctx, finish.JanitorFor(t)) })

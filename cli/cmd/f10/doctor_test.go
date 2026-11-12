@@ -10,17 +10,18 @@ import (
 	"github.com/amberpixels/f10/cli/internal/doctor"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/testkit"
 )
 
 // A broken project.md stops every command that acts on facts, but doctor
 // runs past it to report it, and exits 1 for it.
 func TestDoctorReportsABrokenProjectAndExitsNonZero(t *testing.T) {
-	home := isolateEnv(t)
+	home := testkit.IsolateEnv(t)
 	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(home, ".claude"))
 	t.Setenv("CLAUDECODE", "")
 
-	dir := mkRepo(t)
-	git(t, dir, "remote", "remove", "origin") // no host CLI call leaves the test
+	dir := testkit.MkRepo(t)
+	testkit.Git(t, dir, "remote", "remove", "origin") // no host CLI call leaves the test
 
 	instr := filepath.Join(dir, ".f10", "instructions")
 	if err := os.MkdirAll(instr, 0o750); err != nil {
@@ -36,7 +37,7 @@ func TestDoctorReportsABrokenProjectAndExitsNonZero(t *testing.T) {
 	}
 
 	out, err := runApp(t, "-C", dir, "doctor", "--json").outErr()
-	if code := exitCode(err); code != 1 {
+	if code := testkit.ExitCode(err); code != 1 {
 		t.Fatalf("exit code %d (%v), want 1", code, err)
 	}
 
@@ -61,7 +62,7 @@ func TestDoctorReportsABrokenProjectAndExitsNonZero(t *testing.T) {
 // The user's files are facts, so doctor reports a broken one by its path,
 // even in a checkout with no project.md.
 func TestDoctorReportsABrokenUserFile(t *testing.T) {
-	home := isolateEnv(t)
+	home := testkit.IsolateEnv(t)
 	t.Setenv("CLAUDE_CONFIG_DIR", filepath.Join(home, ".claude"))
 	t.Setenv("CLAUDECODE", "")
 
@@ -77,8 +78,8 @@ func TestDoctorReportsABrokenUserFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dir := mkRepo(t)
-	git(t, dir, "remote", "remove", "origin") // no host CLI call leaves the test
+	dir := testkit.MkRepo(t)
+	testkit.Git(t, dir, "remote", "remove", "origin") // no host CLI call leaves the test
 
 	out, _ := runApp(t, "-C", dir, "doctor", "--json").outErr()
 

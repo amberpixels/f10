@@ -195,12 +195,18 @@ func (e *Ensurer) hello(ctx context.Context) (Reply, error) {
 	return Call(ctx, e.Dir, Request{Op: OpHello}, 0)
 }
 
-// gone waits for a stopping daemon's lease to free.
+// gone waits for a stopping daemon's lease to free. A held lease with no
+// answer is also a daemon still starting, since Serve locks before it
+// listens, so one that answers and is not stopping ends the wait too.
 func (e *Ensurer) gone(ctx context.Context) error {
 	deadline := time.Now().Add(e.DrainWait)
 
 	for {
 		if !daemonHeld(e.Dir) {
+			return nil
+		}
+
+		if rep, err := e.hello(ctx); err == nil && !rep.Stopping {
 			return nil
 		}
 

@@ -8,18 +8,18 @@ import (
 	"github.com/amberpixels/f10/cli/internal/lookaround"
 )
 
-// A Color is one palette color: its code in the terminal's 256 colors and
+// A color is one palette color: its code in the terminal's 256 colors and
 // the CSS variable the board's page defines for it.
-type Color struct{ ANSI, CSS string }
+type color struct{ ANSI, CSS string }
 
 var (
-	green   = Color{"2", "green"}
-	red     = Color{"1", "red"}
-	yellow  = Color{"3", "yellow"}
-	orange  = Color{"208", "orange"}
-	blue    = Color{"4", "blue"}
-	cyan    = Color{"6", "cyan"}
-	magenta = Color{"5", "magenta"}
+	green   = color{"2", "green"}
+	red     = color{"1", "red"}
+	yellow  = color{"3", "yellow"}
+	orange  = color{"208", "orange"}
+	blue    = color{"4", "blue"}
+	cyan    = color{"6", "cyan"}
+	magenta = color{"5", "magenta"}
 )
 
 // Weight is how loud a stage is drawn: bold where it asks for you or for a
@@ -32,9 +32,9 @@ const (
 	Faint
 )
 
-// A Look is a stage's color and weight, on the terminal and the page alike.
-type Look struct {
-	Color  Color
+// A look is a stage's color and weight, on the terminal and the page alike.
+type look struct {
+	Color  color
 	Weight Weight
 }
 
@@ -42,32 +42,32 @@ type Look struct {
 // the board's, by how much a stage needs you: done green, asking, halted or
 // blocked red, implementing yellow, reviewing orange, planning blue. The
 // terminal and the board's page both draw it; a stage it lacks is faint.
-var stageLooks = map[string]Look{
+var stageLooks = map[string]look{
 	StageDone:                        {green, Plain},
-	StageShipped:                     {green, Faint},
+	stageShipped:                     {green, Faint},
 	lookaround.GroupFinished:         {green, Plain},
 	lookaround.StageReady:            {green, Bold},
-	StageAsking:                      {red, Bold},
-	StageHalted:                      {red, Bold},
+	stageAsking:                      {red, Bold},
+	stageHalted:                      {red, Bold},
 	lookaround.StageAsksWaiting:      {red, Bold},
 	lookaround.StageBlocked:          {red, Bold},
 	lookaround.StageAbandoned:        {red, Plain},
-	StageImplementing:                {yellow, Plain},
+	stageImplementing:                {yellow, Plain},
 	lookaround.GroupUpdated:          {yellow, Bold},
-	StageReviewing:                   {orange, Plain},
-	StageResolving:                   {orange, Plain},
+	stageReviewing:                   {orange, Plain},
+	stageResolving:                   {orange, Plain},
 	lookaround.StageInReview:         {orange, Plain},
 	lookaround.StagePROpen:           {orange, Plain},
-	StagePlanning:                    {blue, Plain},
-	StageJudging:                     {blue, Plain},
-	StagePlanned:                     {blue, Faint},
+	stagePlanning:                    {blue, Plain},
+	stageJudging:                     {blue, Plain},
+	stagePlanned:                     {blue, Faint},
 	lookaround.GroupStarted:          {blue, Bold},
 	lookaround.StageMergedUnfinished: {cyan, Bold},
 	lookaround.GroupReviewed:         {magenta, Bold},
 }
 
 // StageLooks is the palette by stage, a copy, for the board's page.
-func StageLooks() map[string]Look { return maps.Clone(stageLooks) }
+func StageLooks() map[string]look { return maps.Clone(stageLooks) }
 
 // StageStyle is the stage's look in the terminal.
 func StageStyle(stage string) lipgloss.Style {

@@ -1,3 +1,5 @@
+// Package pr is the f10 pr command: a change's base, diff and description, and
+// opening, editing and commenting on its PR or MR.
 package pr
 
 import (

@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -12,11 +11,12 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	hookcmd "github.com/amberpixels/f10/cli/internal/command/hook"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/testkit"
 )
 
 // launchFixture is a main checkout whose session sess-1 launched tasks,
@@ -28,8 +28,8 @@ type launchFixture struct {
 func newLaunchFixture(t *testing.T) launchFixture {
 	t.Helper()
 
-	repo := tracedRepo(t, "main", "")
-	git(t, repo, "remote", "remove", "origin") // no host CLI: nothing leaves the machine
+	repo := testkit.TracedRepo(t, "main", "")
+	testkit.Git(t, repo, "remote", "remove", "origin") // no host CLI: nothing leaves the machine
 
 	fx := launchFixture{repo: repo, stateDir: t.TempDir()}
 	t.Setenv("F10_STATE_DIR", fx.stateDir)
@@ -45,7 +45,7 @@ func (fx launchFixture) worktree(t *testing.T, id string, run state.Run) {
 	t.Helper()
 
 	path := filepath.Join(filepath.Dir(fx.repo), "demo."+id)
-	git(t, fx.repo, "worktree", "add", "-q", "-b", id+"/work", path)
+	testkit.Git(t, fx.repo, "worktree", "add", "-q", "-b", id+"/work", path)
 
 	run.Session, run.Task, run.Root = "agent-"+id, id, gitx.Resolved(path)
 	if err := run.Save(t.Context(), fx.stateDir, time.Now()); err != nil {
@@ -62,7 +62,7 @@ func (fx launchFixture) launch(t *testing.T, kind, value string) {
 }
 
 // drive writes a drive record over ids and launches it.
-func (fx launchFixture) drive(t *testing.T, change func(*drives.Record), ids ...string) int {
+func (fx launchFixture) drive(t *testing.T, change func(*drivestore.Record), ids ...string) int {
 	t.Helper()
 
 	tg, err := target.At(t.Context(), fx.repo, false, "status")
@@ -70,16 +70,16 @@ func (fx launchFixture) drive(t *testing.T, change func(*drives.Record), ids ...
 		t.Fatal(err)
 	}
 
-	rec := &drives.Record{Args: ids, Session: "sess-1"}
+	rec := &drivestore.Record{Args: ids, Session: "sess-1"}
 	for _, id := range ids {
-		rec.Tasks = append(rec.Tasks, drives.Task{ID: id})
+		rec.Tasks = append(rec.Tasks, drivestore.Task{ID: id})
 	}
 
 	if change != nil {
 		change(rec)
 	}
 
-	if err := drives.Create(tg.Layout.StorageRoot.Path(), rec); err != nil {
+	if err := drivestore.Create(tg.Layout.StorageRoot.Path(), rec); err != nil {
 		t.Fatal(err)
 	}
 
@@ -158,14 +158,14 @@ func TestBareStatusDropsFinishedDrives(t *testing.T) {
 	fx.worktree(t, "DM-1", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
 
 	fx.launch(t, state.LaunchStart, "DM-1")
-	fx.drive(t, func(r *drives.Record) {
+	fx.drive(t, func(r *drivestore.Record) {
 		for i := range r.Tasks {
-			r.Tasks[i].Outcome = &drives.Outcome{Row: "done", Code: 0}
+			r.Tasks[i].Outcome = &drivestore.Outcome{Row: "done", Code: 0}
 		}
 	}, "DM-5")
 
 	now := time.Now()
-	fx.drive(t, func(r *drives.Record) { r.Cancelled = &now }, "DM-6")
+	fx.drive(t, func(r *drivestore.Record) { r.Cancelled = &now }, "DM-6")
 	fx.drive(t, nil, "DM-1")
 
 	if got, want := rowIDs(fx.rows(t)), "DM-1:implementing"; got != want {
@@ -212,9 +212,9 @@ func TestBareStatusNestsLaunchesUnderTheirBase(t *testing.T) {
 
 	fx.worktree(t, "DM-3", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
 	fx.worktree(t, "DM-5", state.Run{Capture: "prior", Plan: "done", Ship: "upcoming"})
-	git(t, fx.repo, "config", branchmeta.After.For("DM-5/work"), "DM-3")
+	testkit.Git(t, fx.repo, "config", branchmeta.After.For("DM-5/work"), "DM-3")
 
-	n := fx.drive(t, func(r *drives.Record) { r.Tasks[1].After = "DM-3" }, "DM-3", "DM-4")
+	n := fx.drive(t, func(r *drivestore.Record) { r.Tasks[1].After = "DM-3" }, "DM-3", "DM-4")
 	fx.launch(t, state.LaunchStart, "DM-5")
 
 	// only a running drive holds DM-4 for its base
@@ -223,7 +223,7 @@ func TestBareStatusNestsLaunchesUnderTheirBase(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	lease, err := drives.Acquire(tg.Layout.StorageRoot.Path(), drives.DriveKey(n), n)
+	lease, err := drivestore.Acquire(tg.Layout.StorageRoot.Path(), drivestore.DriveKey(n), n)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,9 +248,9 @@ func TestBareStatusBranchBaseBeatsTheDrives(t *testing.T) {
 	fx.worktree(t, "DM-3", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
 	fx.worktree(t, "DM-7", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
 	fx.worktree(t, "DM-4", state.Run{Capture: "prior", Plan: "done", Ship: "upcoming"})
-	git(t, fx.repo, "config", branchmeta.After.For("DM-4/work"), "DM-3")
+	testkit.Git(t, fx.repo, "config", branchmeta.After.For("DM-4/work"), "DM-3")
 
-	fx.drive(t, func(r *drives.Record) { r.Tasks[2].After = "DM-7" }, "DM-3", "DM-7", "DM-4")
+	fx.drive(t, func(r *drivestore.Record) { r.Tasks[2].After = "DM-7" }, "DM-3", "DM-7", "DM-4")
 
 	rows := fx.rows(t)
 	if got, want := rowIDs(rows), "DM-3:implementing DM-4:planned DM-7:implementing"; got != want {
@@ -276,7 +276,7 @@ func TestBareStatusIgnoresAFinishedBase(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fx.drive(t, func(r *drives.Record) { r.Tasks[0].After = "DM-5" }, "DM-6")
+	fx.drive(t, func(r *drivestore.Record) { r.Tasks[0].After = "DM-5" }, "DM-6")
 
 	rows := fx.rows(t)
 	if got, want := rowIDs(rows), "DM-6:not started"; got != want {
@@ -285,29 +285,6 @@ func TestBareStatusIgnoresAFinishedBase(t *testing.T) {
 
 	if rows[0].After != "" || rows[0].Depth != 0 {
 		t.Errorf("a finished base still holds DM-6: %+v", rows[0])
-	}
-}
-
-// Dropping a row moves what hung under it up to its level.
-func TestDropRowsLiftsTheDroppedRowsChildren(t *testing.T) {
-	rows := []statusview.TaskRow{
-		{ID: "A", Depth: 0, Stage: statusview.StageDone},
-		{ID: "B", Depth: 1},
-		{ID: "C", Depth: 2, Stage: statusview.StageDone},
-		{ID: "D", Depth: 3},
-		{ID: "E", Depth: 1},
-		{ID: "F", Depth: 0},
-	}
-
-	got := statusview.DropRows(rows, func(r statusview.TaskRow) bool { return r.Stage == statusview.StageDone })
-
-	var b strings.Builder
-	for _, r := range got {
-		fmt.Fprintf(&b, "%s%d ", r.ID, r.Depth)
-	}
-
-	if want := "B0 D1 E0 F0 "; b.String() != want {
-		t.Errorf("rows = %q, want %q", b.String(), want)
 	}
 }
 
@@ -320,7 +297,7 @@ func TestBareStatusWithNoLiveLaunch(t *testing.T) {
 	}
 
 	now := time.Now()
-	fx.drive(t, func(r *drives.Record) { r.Cancelled = &now }, "DM-6")
+	fx.drive(t, func(r *drivestore.Record) { r.Cancelled = &now }, "DM-6")
 
 	if got := fx.status(t); got != "no f10 run in this session\n" {
 		t.Errorf("a cancelled drive only: %q", got)
@@ -407,7 +384,7 @@ func TestBareStatusUnopenedTaskTakesTheDrivesFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fx.drive(t, func(r *drives.Record) { r.Flow = "prose" }, "DM-7", "DM-8+DM-9")
+	fx.drive(t, func(r *drivestore.Record) { r.Flow = "prose" }, "DM-7", "DM-8+DM-9")
 
 	rows := fx.rows(t)
 	if len(rows) != 2 {

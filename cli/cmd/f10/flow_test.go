@@ -4,26 +4,20 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 
-	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
-	startcmd "github.com/amberpixels/f10/cli/internal/command/start"
-	"github.com/amberpixels/f10/cli/internal/drive"
-	"github.com/amberpixels/f10/cli/internal/facts"
-	"github.com/amberpixels/f10/cli/internal/flow"
-	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/runplan"
+	"github.com/amberpixels/f10/cli/internal/testkit"
 )
 
 // f10 flow and f10 config read the same flows, and the human list names
 // what selects each.
 func TestFlowAndConfigAgree(t *testing.T) {
-	isolateEnv(t)
+	testkit.IsolateEnv(t)
 
-	repo := mkRepo(t)
+	repo := testkit.MkRepo(t)
 	path := filepath.Join(repo, ".f10", "instructions", "project.md")
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
@@ -70,123 +64,12 @@ func TestFlowAndConfigAgree(t *testing.T) {
 	}
 }
 
-// A rerun of drive keeps the flow a branch records; a branch with none,
-// or one recording a flow no longer declared, takes the run's.
-func TestDriveKeepsTheRecordedFlow(t *testing.T) {
-	declared := map[string]runplan.ShipFlow{"": {}, "local": {Name: "local"}}
-	resolve := func(name string) (runplan.ShipFlow, error) {
-		if fl, ok := declared[name]; ok {
-			return fl, nil
-		}
-
-		return runplan.ShipFlow{}, os.ErrNotExist
-	}
-
-	for _, tc := range []struct {
-		recorded, want, note string
-		writes               bool
-	}{
-		{recorded: "", want: "default", writes: true},
-		{recorded: "default", want: "default"},
-		{recorded: "local", want: "local", note: "kept the local flow"},
-		{recorded: "gone", want: "default", note: "no longer declares", writes: true},
-	} {
-		f := newFakes(t)
-		f.meta.Seed("GH-1", branchmeta.Flow, tc.recorded)
-
-		in := &drive.DriveInput{
-			Main:    "/code/repo",
-			Resolve: resolve,
-		}
-
-		fl, note, err := in.KeepFlow(t.Context(), "GH-1")
-		if err != nil || fl.Recorded() != tc.want || !strings.Contains(note, tc.note) ||
-			f.called("set branch.GH-1."+string(branchmeta.Flow)+" default") != tc.writes {
-			t.Errorf("recorded %q: flow %q, note %q, err %v, calls %v", tc.recorded, fl.Recorded(), note, err, f.calls)
-		}
-	}
-}
-
-func TestCompletingFlow(t *testing.T) {
-	for args, want := range map[string]bool{
-		"f10 start --flow --generate-shell-completion":       true,
-		"f10 drive GH-1 --flow --generate-shell-completion":  true,
-		"f10 start --local --generate-shell-completion":      false,
-		"f10 start --flow local --generate-shell-completion": false,
-	} {
-		if got := configcmd.CompletingFlow(strings.Fields(args)); got != want {
-			t.Errorf("%q = %v, want %v", args, got, want)
-		}
-	}
-}
-
-// A task runs the skills of the flow it keeps from its branch: a planless
-// run still plans a task whose recorded flow leads with plan.
-func TestSkillsOfAKeptFlow(t *testing.T) {
-	direct := runplan.ShipFlow{Name: "direct", Planless: true}
-	in := &drive.DriveInput{
-		Flow: direct,
-	}
-
-	if got := strings.Join(in.Skills(&drive.DriveRun{Flow: direct}), " "); got != "ship finish" {
-		t.Errorf("the run's own flow = %q", got)
-	}
-
-	if got := strings.Join(in.Skills(&drive.DriveRun{Flow: runplan.ShipFlow{}}), " "); got != "plan ship finish" {
-		t.Errorf("a kept default flow = %q, want plan first and finish kept", got)
-	}
-
-	spike := &drive.DriveRun{Flow: runplan.ShipFlow{Finish: "off"}, Finishes: true}
-	if got := strings.Join(in.Skills(spike), " "); got != "plan ship finish" {
-		t.Errorf("a spike closing on a pace without finish = %q, want finish added", got)
-	}
-}
-
-// With flow_by_area declared and no flow named, ship picks the flow from
-// the task's area: start and drive send ship alone, and record nothing.
-func TestFlowByArea(t *testing.T) {
-	eff := &facts.Effective{
-		Flows: map[string]flow.Flow{
-			"default": flow.Of([]string{"plan", "implement", "pr"}), "direct": flow.Of([]string{"implement", "push"}),
-		},
-		FlowByArea: map[string]string{"ui": "direct"},
-	}
-
-	fl, err := pacedFlowIn(eff, nil, "", "")
-	if err != nil || !fl.ByArea || fl.Plans() || fl.Recorded() != "" {
-		t.Fatalf("no flow named = %+v, %v", fl, err)
-	}
-
-	if named, _ := pacedFlowIn(eff, nil, "", "default"); named.ByArea || !named.Plans() {
-		t.Errorf("a named flow wins over the area map: %+v", named)
-	}
-
-	if got := launch.Prompt(startcmd.ModeDefault, fl, "GH-1", nil, "", nil, ""); got != "/f10:ship GH-1 --driven" {
-		t.Errorf("prompt = %q, want ship alone", got)
-	}
-
-	if got := strings.Join(drive.DriveSkills(fl), " "); got != "ship finish" {
-		t.Errorf("drive skills = %q, want ship plans as the area's flow says", got)
-	}
-
-	f := newFakes(t)
-
-	in := &drive.DriveInput{
-		Main: "/code/repo",
-		Flow: fl,
-	}
-	if kept, note, err := in.KeepFlow(t.Context(), "GH-1"); err != nil || kept != fl || note != "" ||
-		slices.ContainsFunc(f.calls, func(c string) bool { return strings.HasPrefix(c, "set branch.") }) {
-		t.Errorf("keepFlow = %+v, %q, %v; calls %v", kept, note, err, f.calls)
-	}
-}
-
 // f10 flow prints a labelled entry as written, the list ship runs and
 // passes to its badge, with or without a pace; JSON keeps entries bare.
 func TestFlowPrintsEntryLabels(t *testing.T) {
-	isolateEnv(t)
+	testkit.IsolateEnv(t)
 
-	repo := mkRepo(t)
+	repo := testkit.MkRepo(t)
 	path := filepath.Join(repo, ".f10", "instructions", "project.md")
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {

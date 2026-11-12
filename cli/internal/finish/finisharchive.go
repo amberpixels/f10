@@ -36,7 +36,7 @@ func archiveTask(root storage.Root, id string, end *archive.SeriesEnd,
 
 	// a plan still live keeps the images its text links to
 	if !a.planFailed {
-		a.images = RemoveImages(root, id)
+		a.images = removeImages(root, id)
 	}
 
 	a.handoffSrc, a.handoff = archive.HandoffTarget(root, id)
@@ -54,9 +54,9 @@ func archiveTask(root storage.Root, id string, end *archive.SeriesEnd,
 	return a, nil
 }
 
-// RemoveImages drops the images `task read` downloaded for the task; a
+// removeImages drops the images `task read` downloaded for the task; a
 // failure is a note, since the task is finished either way.
-func RemoveImages(root storage.Root, id string) string {
+func removeImages(root storage.Root, id string) string {
 	dir := root.Images(id)
 	if err := os.RemoveAll(dir); err != nil {
 		return fmt.Sprintf("the task's images at %s stay: %v", dir, err)

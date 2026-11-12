@@ -12,9 +12,9 @@ import (
 // started, else its body's After: line. The graph is rebuilt every run from
 // those, so nothing is stored and a resume reads the same answer.
 
-// Graph refuses a base outside the list that is not finished, and a cycle,
+// graph refuses a base outside the list that is not finished, and a cycle,
 // before anything is created.
-func (in *DriveInput) Graph(ctx context.Context, tasks []DriveTask) ([]int, []string, error) {
+func (in *DriveInput) graph(ctx context.Context, tasks []DriveTask) ([]int, []string, error) {
 	var notes []string
 
 	for i := range tasks {
@@ -52,7 +52,7 @@ func (in *DriveInput) Graph(ctx context.Context, tasks []DriveTask) ([]int, []st
 		t.Base = recorded
 	}
 
-	index := ListIndex(tasks)
+	index := listIndex(tasks)
 
 	for _, t := range tasks {
 		if t.finished || t.Base == "" {
@@ -74,7 +74,7 @@ func (in *DriveInput) Graph(ctx context.Context, tasks []DriveTask) ([]int, []st
 		}
 	}
 
-	order, err := TopoOrder(tasks, index)
+	order, err := topoOrder(tasks, index)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -82,9 +82,9 @@ func (in *DriveInput) Graph(ctx context.Context, tasks []DriveTask) ([]int, []st
 	return order, notes, nil
 }
 
-// ListIndex maps each listed id to its first position; every member of a
+// listIndex maps each listed id to its first position; every member of a
 // bundle maps to the bundle's, so a base that rides in it waits for it.
-func ListIndex(tasks []DriveTask) map[string]int {
+func listIndex(tasks []DriveTask) map[string]int {
 	index := make(map[string]int, len(tasks))
 
 	for i, t := range tasks {
@@ -98,9 +98,9 @@ func ListIndex(tasks []DriveTask) map[string]int {
 	return index
 }
 
-// TopoOrder puts bases before dependents; among the ready, the one listed
+// topoOrder puts bases before dependents; among the ready, the one listed
 // first goes first, so a list already in order runs in that order.
-func TopoOrder(tasks []DriveTask, index map[string]int) ([]int, error) {
+func topoOrder(tasks []DriveTask, index map[string]int) ([]int, error) {
 	placed := make([]bool, len(tasks))
 	order := make([]int, 0, len(tasks))
 

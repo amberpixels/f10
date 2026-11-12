@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/trace"
 )
@@ -379,7 +379,7 @@ func ReadTree(ctx context.Context, dir string) (TreeState, error) {
 // healthy task, or loop on a doomed one.
 func CatchupRecord(
 	ctx context.Context, main, dir, branch string, key branchmeta.Key, now time.Time, fetched *FetchOnce,
-) (*drives.Catchup, error) {
+) (*drivestore.Catchup, error) {
 	target, base, err := catchupTarget(ctx, main, branch, key)
 	if err != nil {
 		return nil, err
@@ -400,7 +400,7 @@ func CatchupRecord(
 		return nil, err
 	}
 
-	return &drives.Catchup{
+	return &drivestore.Catchup{
 		Target: target, Head: head, Origin: origin, Base: base, At: now, TargetRef: targetRef,
 	}, nil
 }
@@ -430,7 +430,7 @@ func ConflictFingerprint(ctx context.Context, dir, target string) (string, strin
 		return "", "", err
 	}
 
-	return drives.Fingerprint(target, conflictWay(conflicts), ""), conflictPaths(conflicts), nil
+	return drivestore.Fingerprint(target, conflictWay(conflicts), ""), conflictPaths(conflicts), nil
 }
 
 // conflictWay identifies conflicts by path and the blobs each side brought,

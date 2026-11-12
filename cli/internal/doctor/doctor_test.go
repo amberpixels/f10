@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 )
 
 // A fixture is a healthy install in temp directories: a plugin root, its
@@ -400,7 +400,7 @@ func (f *fixture) shim(body string) {
 	path := filepath.Join(f.e.Layout.CheckoutRoot, ".f10", "driver")
 	f.write(path, "#!/bin/sh\n"+body+"\n")
 	must(f.t, os.Chmod(path, 0o755))
-	f.e.Driver = &driver.Driver{Path: path, Dir: f.e.Layout.CheckoutRoot}
+	f.e.Driver = &trackerdriver.Driver{Path: path, Dir: f.e.Layout.CheckoutRoot}
 }
 
 func TestDriverCheck(t *testing.T) {
@@ -477,7 +477,7 @@ func TestDriverCheck(t *testing.T) {
 				t.Fatalf("status = %q (%s), want %q with %q", r.Status, r.Detail, c.want, c.detail)
 			}
 
-			want := driver.F10DriversInstall
+			want := trackerdriver.F10DriversInstall
 			if f.e.Driver == nil {
 				want = "docs/driver-contract.md"
 			}

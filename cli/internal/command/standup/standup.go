@@ -1,3 +1,5 @@
+// Package standup is the f10 standup command: what you did since your last
+// standup, grouped by project and task.
 package standup
 
 import (

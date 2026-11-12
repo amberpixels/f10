@@ -1,0 +1,91 @@
+package archive_test
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/amberpixels/f10/cli/internal/archive"
+	"github.com/amberpixels/f10/cli/internal/fsx"
+	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/testkit"
+)
+
+func tipOf(sha string) func() string { return func() string { return sha } }
+
+func TestHandoffLines(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "GH-1.md")
+
+	missing := strings.Join(archive.HandoffLines(path, "GH-1", tipOf("abc")), "\n")
+	if !strings.HasPrefix(missing, "no handoff for GH-1:") || !strings.Contains(missing, "/f10:handoff") {
+		t.Errorf("missing = %q", missing)
+	}
+
+	testkit.WriteHandoffFile(t, path, "abc1234567")
+
+	if got := strings.Join(archive.HandoffLines(path, "GH-1", tipOf("abc1234567")), "\n"); got != testkit.HandoffBody {
+		t.Errorf("current = %q, want the body alone", got)
+	}
+
+	got := archive.HandoffLines(path, "GH-1", tipOf("def7654321"))
+	if len(got) < 2 || !strings.Contains(got[0], "written at abc1234, the branch merged at def7654") ||
+		strings.Join(got[1:], "\n") != testkit.HandoffBody {
+		t.Errorf("stale = %q", got)
+	}
+
+	// a head copied short is its own commit, not a stale one
+	testkit.WriteHandoffFile(t, path, "abc1234")
+
+	if got := strings.Join(archive.HandoffLines(path, "GH-1", tipOf("abc1234567")), "\n"); got != testkit.HandoffBody {
+		t.Errorf("short head = %q, want the body alone", got)
+	}
+
+	testkit.WriteHandoffFile(t, path, "abc1234567")
+
+	// no tip to compare against prints the body as it is
+	if got := strings.Join(archive.HandoffLines(path, "GH-1", tipOf("")), "\n"); got != testkit.HandoffBody {
+		t.Errorf("no tip = %q", got)
+	}
+
+	testkit.WriteFile(t, path, "## Config\n- no frontmatter\n")
+
+	if got := archive.HandoffLines(
+		path,
+		"GH-1",
+		tipOf("abc"),
+	); len(got) != 1 ||
+		!strings.Contains(got[0], "no frontmatter") {
+		t.Errorf("unreadable = %q", got)
+	}
+}
+
+// archiveHandoff is the move finish and the janitor make, in one call.
+func archiveHandoff(root storage.Root, id string) (string, error) {
+	src, target := archive.HandoffTarget(root, id)
+
+	return target, archive.MoveHandoff(src, target)
+}
+
+func TestArchiveHandoffNumbers(t *testing.T) {
+	main := t.TempDir()
+	src := archive.TaskHandoff(storage.InRepo(main), "GH-1")
+	archived := filepath.Join(filepath.Dir(src), "archive")
+
+	if got, err := archiveHandoff(storage.InRepo(main), "GH-1"); err != nil || got != "" {
+		t.Fatalf("missing file = %q, %v", got, err)
+	}
+
+	testkit.WriteFile(t, filepath.Join(archived, "GH-1.md"), "first PR")
+	testkit.WriteHandoffFile(t, src, "abc")
+
+	got, err := archiveHandoff(storage.InRepo(main), "GH-1")
+	if err != nil || got != filepath.Join(archived, "GH-1.1.md") || fsx.Exists(src) {
+		t.Fatalf("archived = %q, %v", got, err)
+	}
+
+	if body, _ := os.ReadFile(got); !strings.Contains(string(body), testkit.HandoffBody) {
+		t.Errorf("archived body = %q", body)
+	}
+}

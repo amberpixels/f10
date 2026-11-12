@@ -1,3 +1,5 @@
+// Package stats is the f10 stats command: active minutes per task by step
+// group.
 package stats
 
 import (

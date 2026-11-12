@@ -13,9 +13,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
-// BranchSize is what a task changed, lockfiles, generated code and
+// branchSize is what a task changed, lockfiles, generated code and
 // snapshots left out.
-type BranchSize struct {
+type branchSize struct {
 	Lines, Md, Files int
 	Base             string
 }
@@ -23,7 +23,7 @@ type BranchSize struct {
 // measureBranch reads the size before the branch lands, since landing moves
 // the merge base to the tip and the diff reads zero; a PR the host already
 // merged with a merge commit measures from that commit's first parent.
-func measureBranch(ctx context.Context, dir, branch, def string, unpushed bool) (BranchSize, bool) {
+func measureBranch(ctx context.Context, dir, branch, def string, unpushed bool) (branchSize, bool) {
 	bases := []string{"origin/" + def}
 	if unpushed {
 		bases = []string{def}
@@ -61,12 +61,12 @@ func measureBranch(ctx context.Context, dir, branch, def string, unpushed bool) 
 		return s, true
 	}
 
-	return BranchSize{}, false
+	return branchSize{}, false
 }
 
 // numstatSize sums `git diff --numstat`; a binary file's `-` counts zero.
-func numstatSize(out, base string) BranchSize {
-	s := BranchSize{Base: base}
+func numstatSize(out, base string) branchSize {
+	s := branchSize{Base: base}
 
 	for line := range strings.SplitSeq(out, "\n") {
 		fields := strings.SplitN(line, "\t", 3)
@@ -88,8 +88,8 @@ func numstatSize(out, base string) BranchSize {
 	return s
 }
 
-// RecordSize puts the size in the ledger for `f10 stats`; a test swaps it.
-var RecordSize = func(ctx context.Context, dir, branch, task string, s BranchSize) {
+// recordSize puts the size in the ledger for `f10 stats`; a test swaps it.
+var recordSize = func(ctx context.Context, dir, branch, task string, s branchSize) {
 	place := ledger.Where(ctx, dir)
 
 	ledger.Record(ledger.Event{
@@ -116,5 +116,5 @@ func sizeRecorder(ctx context.Context, in FinishInput, branch, def string, unpus
 		return func() {}
 	}
 
-	return func() { RecordSize(ctx, in.Main, branch, in.Task.ID, size) }
+	return func() { recordSize(ctx, in.Main, branch, in.Task.ID, size) }
 }

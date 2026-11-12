@@ -1,3 +1,5 @@
+// Package config holds the commands that report and settle a project's setup:
+// f10 config, f10 init, f10 flow, f10 agents and f10 doctor.
 package config
 
 import (

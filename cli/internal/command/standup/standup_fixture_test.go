@@ -1,0 +1,185 @@
+package standup_test
+
+import (
+	"context"
+	"encoding/json"
+	"maps"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/seam"
+	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/standup"
+	"github.com/amberpixels/f10/cli/internal/testkit"
+)
+
+// Each fixture under testdata/standup is every git and host call `f10 standup`
+// made in a real checkout, with its answer and the class each item must get;
+// replaying one runs the real collectors and Group over it. Record a new one
+// from a public amberpixels checkout, never a private one, then check its
+// expect map by hand:
+//
+//	F10_STANDUP_RECORD='<checkout>|<since, RFC 3339>|<name>|<id prefix>' \
+//	  go test ./internal/command/standup -run TestRecordStandupFixture
+
+type standupFixture struct {
+	Since  time.Time                      `json:"since"`
+	Prefix string                         `json:"prefix"`
+	Host   string                         `json:"host"`
+	Calls  map[string]testkit.FixtureCall `json:"calls"`
+	Expect map[string]string              `json:"expect"` // item to "work" or "upkeep <reason>"
+}
+
+func TestStandupFixtures(t *testing.T) {
+	paths, err := filepath.Glob("testdata/standup/*.json")
+	if err != nil || len(paths) == 0 {
+		t.Fatalf("no fixtures: %v", err)
+	}
+
+	for _, path := range paths {
+		t.Run(strings.TrimSuffix(filepath.Base(path), ".json"), func(t *testing.T) {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			var fx standupFixture
+			if err := json.Unmarshal(data, &fx); err != nil {
+				t.Fatal(err)
+			}
+
+			f := testkit.NewFakes(t)
+			// the recorded calls answer the branch records, as git did when recording
+			t.Cleanup(branchmeta.SetBackend(branchmeta.Git{}))
+
+			for key, res := range fx.Calls {
+				f.Answers[key] = []shell.Result{shell.Result(res)}
+			}
+
+			got := classes(t, fx, ".")
+			for _, item := range slices.Sorted(maps.Keys(got)) {
+				if want, ok := fx.Expect[item]; !ok {
+					t.Errorf("%s = %q, missing from expect", item, got[item])
+				} else if got[item] != want {
+					t.Errorf("%s = %q, want %q", item, got[item], want)
+				}
+			}
+
+			for item := range fx.Expect {
+				if _, ok := got[item]; !ok {
+					t.Errorf("%s expected, not in the report", item)
+				}
+			}
+		})
+	}
+}
+
+// TestRecordStandupFixture fills expect from what the code says today: a
+// draft to check by hand.
+func TestRecordStandupFixture(t *testing.T) {
+	spec := os.Getenv("F10_STANDUP_RECORD")
+	if spec == "" {
+		t.Skip("F10_STANDUP_RECORD is not set")
+	}
+
+	parts := strings.Split(spec, "|")
+	if len(parts) != 4 {
+		t.Fatalf("F10_STANDUP_RECORD = %q, want checkout|since|name|prefix", spec)
+	}
+
+	since, err := time.Parse(time.RFC3339, parts[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fx := standupFixture{Since: since, Prefix: parts[3], Host: "gh", Calls: map[string]testkit.FixtureCall{}}
+
+	prevExec, prevCapture := gitx.Exec, shell.Capture
+
+	seam.Swap(t, &gitx.Exec, func(ctx context.Context, dir string, args ...string) (string, error) {
+		out, err := prevExec(ctx, dir, args...)
+
+		res := testkit.FixtureCall{Stdout: out}
+		if err != nil {
+			res = testkit.FixtureCall{Code: testkit.GitExitCode(err), Stderr: err.Error()}
+		}
+
+		fx.Calls["git "+strings.Join(args, " ")] = res
+
+		return out, err
+	})
+
+	seam.Swap(t, &shell.Capture, func(ctx context.Context, dir, name string, args ...string) (shell.Result, error) {
+		res, err := prevCapture(ctx, dir, name, args...)
+		fx.Calls[filepath.Base(name)+" "+strings.Join(args, " ")] = testkit.FixtureCall(res)
+
+		return res, err
+	})
+
+	fx.Expect = classes(t, fx, parts[0])
+
+	data, err := json.MarshalIndent(fx, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(
+		filepath.Join("testdata", "standup", parts[2]+".json"),
+		append(data, '\n'),
+		0o644,
+	); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// classes keys every item of the report: a commit by sha, a force-push by
+// "push <after>", a task by "task <id>".
+func classes(t *testing.T, fx standupFixture, dir string) map[string]string {
+	t.Helper()
+
+	in, err := standup.Collect(t.Context(), standup.Source{
+		Dir: dir, Main: dir, Prefix: fx.Prefix, Host: &forge.Host{Name: fx.Host, Dir: dir},
+	}, fx.Since)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r := standup.Group(in)
+	out := map[string]string{}
+
+	class := func(c, reason string) string { return strings.TrimSpace(c + " " + reason) }
+
+	commits := func(cs []standup.Commit) {
+		for _, c := range cs {
+			out[c.SHA] = class(c.Class, c.Upkeep)
+		}
+	}
+
+	prs := func(ps []standup.PR) {
+		for _, p := range ps {
+			commits(p.Commits)
+
+			for _, fp := range p.ForcePushes {
+				out["push "+fp.After] = class(fp.Class, fp.Upkeep)
+			}
+		}
+	}
+
+	for _, task := range r.Tasks {
+		out["task "+task.ID] = task.Class
+		prs(task.PRs)
+		commits(task.Commits)
+	}
+
+	prs(r.Other.PRs)
+	commits(r.Other.Commits)
+
+	return out
+}

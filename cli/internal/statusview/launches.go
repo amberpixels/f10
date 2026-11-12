@@ -9,12 +9,12 @@ import (
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
-	"github.com/amberpixels/f10/cli/internal/drives"
-	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -22,9 +22,9 @@ import (
 // LaunchesHead heads the tree of what this session launched.
 const LaunchesHead = "launched here"
 
-// DropRows leaves out the rows drop picks, in tree order: what hung under a
+// dropRows leaves out the rows drop picks, in tree order: what hung under a
 // dropped row moves up to its level.
-func DropRows(rows []TaskRow, drop func(TaskRow) bool) []TaskRow {
+func dropRows(rows []TaskRow, drop func(TaskRow) bool) []TaskRow {
 	var (
 		out []TaskRow
 		cut []int // the depths of the dropped rows above this one
@@ -112,7 +112,7 @@ func launchKids(ctx context.Context, warn io.Writer, t *target.Target, sid strin
 
 		// a finished task reads nothing further: its row would only drop
 		branched, err := stack.HasTaskBranch(ctx, main, r.ID)
-		if err == nil && (tok.started && !branched || stack.FinishedTask(hostops.TaskInfo{}, root, r.ID, branched)) {
+		if err == nil && (tok.started && !branched || stack.FinishedTask(tasksource.TaskInfo{}, root, r.ID, branched)) {
 			continue
 		}
 
@@ -164,7 +164,7 @@ func launchBase(
 		out = r.Head().ID
 
 		has, err := stack.HasTaskBranch(ctx, main, out)
-		if err != nil || stack.FinishedTask(hostops.TaskInfo{}, stack.TrackerFor(t).Storage, out, has) {
+		if err != nil || stack.FinishedTask(tasksource.TaskInfo{}, stack.TrackerFor(t).Storage, out, has) {
 			out = ""
 		}
 	}
@@ -177,13 +177,13 @@ func launchBase(
 // driveTasks is drive n's tasks as typed, none once the drive is done or
 // cancelled, or its record is gone. Queued, parked and waiting hold only
 // while the driver runs: a stopped drive holds no task back.
-func driveTasks(root, n string) []drives.Task {
+func driveTasks(root, n string) []drivestore.Task {
 	num, err := strconv.Atoi(n)
 	if err != nil {
 		return nil
 	}
 
-	d, ok := drives.ActiveOne(root, num)
+	d, ok := drivestore.ActiveOne(root, num)
 	if !ok {
 		return nil
 	}

@@ -13,7 +13,6 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/command"
-	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -23,6 +22,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/textx"
+	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 	"github.com/amberpixels/f10/cli/internal/ui"
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
@@ -89,9 +89,9 @@ func runForward(ctx context.Context, cmd *cli.Command) error {
 // ForwardInput is everything forward needs once the target is settled, so
 // the flow can be tested without a checkout.
 type ForwardInput struct {
-	Main     string         // the main checkout: worktrees are its siblings
-	Here     string         // the checkout this command answers for: a task here is not forwarded
-	driver   *driver.Driver // nil without one
+	Main     string                // the main checkout: worktrees are its siblings
+	Here     string                // the checkout this command answers for: a task here is not forwarded
+	driver   *trackerdriver.Driver // nil without one
 	Task     ref.Ref
 	Suffix   string
 	Text     string        // what the agent is told, before the marker

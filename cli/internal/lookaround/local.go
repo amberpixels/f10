@@ -11,7 +11,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/findings"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ledger"
@@ -347,7 +347,7 @@ func dropDeadFinish(branches map[string]Branch, root, prefix string) {
 			}
 		}
 
-		if _, held := drives.Probe(root, lead); root == "" || lead == "" || !held {
+		if _, held := drivestore.Probe(root, lead); root == "" || lead == "" || !held {
 			b.Finish = nil
 			branches[name] = b
 		}

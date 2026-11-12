@@ -1,3 +1,5 @@
+// Package drive is the f10 drive command: it parses a drive's arguments and
+// hands them to the drive service.
 package drive
 
 import (
@@ -18,8 +20,8 @@ import (
 	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/drive"
-	"github.com/amberpixels/f10/cli/internal/driverec"
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/hostops"
@@ -76,7 +78,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		return cli.ShowSubcommandHelp(cmd)
 	}
 
-	a, err := driverec.ParseDriveArgs(argv)
+	a, err := drivectl.ParseDriveArgs(argv)
 	if err != nil {
 		return err
 	}
@@ -130,13 +132,13 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	// a resume runs the record's own command line, with the answers and
 	// --every given now
 	if a.Resume > 0 {
-		rec, err := drives.Read(t.Layout.StorageRoot.Path(), a.Resume)
+		rec, err := drivestore.Read(t.Layout.StorageRoot.Path(), a.Resume)
 		if err != nil {
 			return err
 		}
 
 		given := a
-		if a, err = driverec.ParseDriveArgs(rec.Args); err != nil {
+		if a, err = drivectl.ParseDriveArgs(rec.Args); err != nil {
 			return fmt.Errorf("drive %d: %w", rec.Number, err)
 		}
 

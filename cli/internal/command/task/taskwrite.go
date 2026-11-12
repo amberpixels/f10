@@ -9,10 +9,11 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
+	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -26,16 +27,16 @@ func readProps(cmd *cli.Command) (hostops.Props, error) {
 	p.Status = strings.TrimSpace(cmd.String("status"))
 
 	if raw := cmd.String("priority"); raw != "" {
-		rank, ok := driver.PriorityRank(raw)
+		rank, ok := trackerdriver.PriorityRank(raw)
 		if !ok {
 			return hostops.Props{}, fmt.Errorf(
 				"priority %q is not one of %s",
 				raw,
-				strings.Join(driver.Priorities, ", "),
+				strings.Join(trackerdriver.Priorities, ", "),
 			)
 		}
 
-		p.Priority = driver.Priorities[rank]
+		p.Priority = trackerdriver.Priorities[rank]
 	}
 
 	for _, l := range cmd.StringSlice("label") {
@@ -63,7 +64,7 @@ func readProps(cmd *cli.Command) (hostops.Props, error) {
 }
 
 func runTaskComment(ctx context.Context, cmd *cli.Command) error {
-	t, r, err := writeTarget(ctx, cmd, driver.VerbComment)
+	t, r, err := writeTarget(ctx, cmd, trackerdriver.VerbComment)
 	if err != nil {
 		return err
 	}
@@ -78,7 +79,7 @@ func runTaskComment(ctx context.Context, cmd *cli.Command) error {
 		return errors.New("task comment reads the comment as markdown on stdin, and it was empty")
 	}
 
-	url, err := hostops.TasksFor(t).Comment(ctx, cmd.ErrWriter, r, body)
+	url, err := tasksource.TasksFor(t).Comment(ctx, cmd.ErrWriter, r, body)
 	if err != nil {
 		return err
 	}
@@ -106,7 +107,7 @@ func runTaskUpdate(ctx context.Context, cmd *cli.Command) error {
 		)
 	}
 
-	t, r, err := writeTarget(ctx, cmd, driver.VerbUpdate)
+	t, r, err := writeTarget(ctx, cmd, trackerdriver.VerbUpdate)
 	if err != nil {
 		return err
 	}
@@ -119,7 +120,7 @@ func runTaskUpdate(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if !p.Empty() {
-		if err := hostops.TasksFor(t).Update(ctx, cmd.ErrWriter, r, p); err != nil {
+		if err := tasksource.TasksFor(t).Update(ctx, cmd.ErrWriter, r, p); err != nil {
 			return err
 		}
 	}
@@ -129,12 +130,12 @@ func runTaskUpdate(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	// the parent goes alone, so a source declining it has dropped nothing else
-	unwritten := hostops.UnwrittenNothing
+	unwritten := tasksource.UnwrittenNothing
 	if !p.Empty() {
 		unwritten = "the other properties were written, the parent link was not"
 	}
 
-	return hostops.TasksFor(t).Relink(ctx, cmd.ErrWriter, r, parent, unwritten)
+	return tasksource.TasksFor(t).Relink(ctx, cmd.ErrWriter, r, parent, unwritten)
 }
 
 // parentNumber resolves --parent before anything is written; empty means
@@ -170,7 +171,7 @@ func writeTarget(ctx context.Context, cmd *cli.Command, verb string) (*target.Ta
 	}
 
 	if rs, ok := refusedUpFrontFor(t); ok {
-		return nil, ref.Ref{}, rs.RefuseWrite(verb, hostops.UnwrittenNothing)
+		return nil, ref.Ref{}, rs.RefuseWrite(verb, tasksource.UnwrittenNothing)
 	}
 
 	return t, r, nil

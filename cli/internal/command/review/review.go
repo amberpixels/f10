@@ -1,3 +1,5 @@
+// Package review is the f10 review command: it reads, awaits, triggers,
+// acknowledges and settles the remote review on a PR or MR.
 package review
 
 import (

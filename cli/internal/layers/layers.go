@@ -1,7 +1,8 @@
 // Package layers holds the module's import rule: every package has a rank,
 // and a package imports only packages of a lower rank, so feature groups
 // cannot depend on each other in cycles. The table is the architecture; a
-// change to it is a design change.
+// change to it is a design change. Its tests also hold the package comment
+// rule: the comment lives in <pkg>.go or doc.go, a binary's in main.go.
 package layers
 
 import (
@@ -34,6 +35,7 @@ var Table = []Rule{
 	{Prefix: "internal/flock", Rank: -2},
 	{Prefix: "internal/seam", Rank: -3},          // the test swap, which every package's tests may import
 	{Prefix: "internal/gitx/gitxtest", Rank: -3}, // test repos, gitx's own tests included
+	{Prefix: "internal/testenv", Rank: -3},       // the hermetic test environment, for every package's tests
 	{Prefix: "internal/buildinfo", Rank: -2},
 	{Prefix: "internal/calendar", Rank: -2},
 	{Prefix: "internal/mdline", Rank: -2},
@@ -45,8 +47,8 @@ var Table = []Rule{
 	{Prefix: "internal/projects", Rank: -2},
 	{Prefix: "internal/ui", Rank: -1},
 	{Prefix: "internal/tasktree", Rank: -1},
-	{Prefix: "internal/driver", Rank: -1}, // imports shell
-	{Prefix: "internal/asks", Rank: -1},   // imports fsx
+	{Prefix: "internal/trackerdriver", Rank: -1}, // imports shell
+	{Prefix: "internal/asks", Rank: -1},          // imports fsx
 
 	// the domain packages, which Go's own cycle check keeps acyclic
 	{Prefix: "internal", Rank: 0, Peers: true},
@@ -54,6 +56,7 @@ var Table = []Rule{
 	{Prefix: "internal/target", Rank: 1},
 	{Prefix: "internal/render", Rank: 2, Peers: true},
 	{Prefix: "internal/hostops", Rank: 2, Peers: true},
+	{Prefix: "internal/tasksource", Rank: 2, Peers: true},
 	{Prefix: "internal/stack", Rank: 2, Peers: true},
 	{Prefix: "internal/worktree", Rank: 2, Peers: true},
 	{Prefix: "internal/archive", Rank: 2, Peers: true},
@@ -61,9 +64,10 @@ var Table = []Rule{
 	{Prefix: "internal/reviews", Rank: 2, Peers: true},
 	{Prefix: "internal/scope", Rank: 2, Peers: true},
 	{Prefix: "internal/launch", Rank: 2, Peers: true},
-	{Prefix: "internal/driverec", Rank: 2, Peers: true},
+	{Prefix: "internal/drivectl", Rank: 2, Peers: true},
 	{Prefix: "internal/asknotify", Rank: 2, Peers: true},
 	{Prefix: "internal/statusview", Rank: 2, Peers: true},
+	{Prefix: "internal/testkit", Rank: 2, Peers: true}, // the fakes, which swap seams in the services above
 	{Prefix: "internal/command", Rank: 2, Peers: true, Exact: true},
 
 	// leaf commands: nothing but services below them
@@ -88,6 +92,7 @@ var Table = []Rule{
 	// finish, start (which sweeps finished tasks), then the drive over both;
 	// each command sits just above the core it parses flags for
 	{Prefix: "internal/finish", Rank: 5},
+	{Prefix: "internal/finish/finishtest", Rank: 6}, // the janitor fixture, for finish's and the drive's tests
 	{Prefix: "internal/command/finish", Rank: 6},
 	{Prefix: "internal/start", Rank: 7},
 	{Prefix: "internal/command/start", Rank: 8},

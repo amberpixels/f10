@@ -1,6 +1,3 @@
-// Package statusview reads where tasks and runs stand and renders it: the
-// status reader, the gates of each run, the stage of each task and the
-// shipment a run left.
 package statusview
 
 import (
@@ -48,14 +45,14 @@ func BareStatus(ctx context.Context, v StatusView, dir string, scoped bool, sid 
 				return false, err
 			}
 
-			here := CheckoutTaskID(ctx, t)
+			here := checkoutTaskID(ctx, t)
 			if here == "" && sid != "" {
 				if p, err := rd.launches(ctx, v, sid); p.Printed {
 					return p.asks, err
 				}
 			}
 
-			if id := cmp.Or(SessionTaskID(sid), here); id != "" {
+			if id := cmp.Or(sessionTaskID(sid), here); id != "" {
 				if p, err := rd.Task(ctx, v, id, true); p.Printed {
 					return p.asks, err
 				}
@@ -111,7 +108,7 @@ func BareStatus(ctx context.Context, v StatusView, dir string, scoped bool, sid 
 
 	asks := slices.ContainsFunc(runs, func(r *state.Run) bool { return r.Ask != "" })
 
-	return asks, WriteRuns(v, runs, make([][]Gate, len(runs)), nil, showRoot, "", now)
+	return asks, writeRuns(v, runs, make([][]gate, len(runs)), nil, showRoot, "", now)
 }
 
 // liveRuns is the reader's runs, else a fresh read of the state dir.
@@ -123,8 +120,8 @@ func liveRuns(rd *statusReader, now time.Time) ([]*state.Run, error) {
 	return state.List(state.Dir(), now, state.TTL())
 }
 
-// SessionTaskID is the task the session's run names, "" for none.
-func SessionTaskID(sid string) string {
+// sessionTaskID is the task the session's run names, "" for none.
+func sessionTaskID(sid string) string {
 	if sid == "" {
 		return ""
 	}
@@ -136,9 +133,9 @@ func SessionTaskID(sid string) string {
 	return ""
 }
 
-// CheckoutTaskID is the task the branch names, else the one a linked
+// checkoutTaskID is the task the branch names, else the one a linked
 // worktree's directory names on a detached HEAD, "" for none.
-func CheckoutTaskID(ctx context.Context, t *target.Target) string {
+func checkoutTaskID(ctx context.Context, t *target.Target) string {
 	if r, err := t.BranchReference(ctx, ""); err == nil {
 		return r.Label()
 	}
@@ -151,9 +148,9 @@ func CheckoutTaskID(ctx context.Context, t *target.Target) string {
 	return ref.Match(t.Effective.IDPrefix, filepath.Base(t.Layout.CheckoutRoot))
 }
 
-// TaskStatusInput is what `status <id>` knows about a task before reading
+// taskStatusInput is what `status <id>` knows about a task before reading
 // any run.
-type TaskStatusInput struct {
+type taskStatusInput struct {
 	ID      string
 	Branch  string
 	Root    string        // the checkout holding branch
@@ -165,12 +162,12 @@ type TaskStatusInput struct {
 	agent   string        // the profile the branch records, as typed; "" for the kind's default
 }
 
-// ErrNoRunToRead is a task with no branch, or a branch checked out
+// errNoRunToRead is a task with no branch, or a branch checked out
 // nowhere: no run to read, though a finished one still reports.
-var ErrNoRunToRead = errors.New("no run to read")
+var errNoRunToRead = errors.New("no run to read")
 
 // taskStatusFor resolves the task to its checkout.
-func taskStatusFor(ctx context.Context, t *target.Target, r ref.Ref, suffix string) (TaskStatusInput, error) {
+func taskStatusFor(ctx context.Context, t *target.Target, r ref.Ref, suffix string) (taskStatusInput, error) {
 	// a bundle's run, plan and branch are its lead's
 	r = r.Head()
 
@@ -180,14 +177,14 @@ func taskStatusFor(ctx context.Context, t *target.Target, r ref.Ref, suffix stri
 
 	switch {
 	case err != nil:
-		return TaskStatusInput{}, err
+		return taskStatusInput{}, err
 	case name == "":
-		return TaskStatusInput{}, fmt.Errorf("%s has no branch here: %w", r.ID, ErrNoRunToRead)
+		return taskStatusInput{}, fmt.Errorf("%s has no branch here: %w", r.ID, errNoRunToRead)
 	case path == "":
-		return TaskStatusInput{}, fmt.Errorf("branch %s is checked out nowhere: %w", name, ErrNoRunToRead)
+		return taskStatusInput{}, fmt.Errorf("branch %s is checked out nowhere: %w", name, errNoRunToRead)
 	}
 
-	in := TaskStatusInput{
+	in := taskStatusInput{
 		ID:      r.ID,
 		Branch:  name,
 		Root:    path,
@@ -210,11 +207,11 @@ func taskStatusFor(ctx context.Context, t *target.Target, r ref.Ref, suffix stri
 	return in, nil
 }
 
-// TaskRuns splits the checkout's runs into the task's own and the rest,
+// taskRuns splits the checkout's runs into the task's own and the rest,
 // since every skill call reseeds its run and the agent may be on another
 // task by now; an empty task is the task's only in a phase skill's run that
 // fetch has not named yet, since a catchup's run names no task either.
-func TaskRuns(runs []*state.Run, id string) ([]*state.Run, []*state.Run) {
+func taskRuns(runs []*state.Run, id string) ([]*state.Run, []*state.Run) {
 	var own, others []*state.Run
 
 	for _, r := range runs {
@@ -241,8 +238,8 @@ type fallback struct {
 	PR      string       `json:"pr,omitempty"`
 	PRState string       `json:"pr_state,omitempty"`
 
-	Verdicts []VerdictPath `json:"verdicts,omitempty"`
-	Reviews  []ReviewPath  `json:"reviews,omitempty"`
+	Verdicts []verdictPath `json:"verdicts,omitempty"`
+	Reviews  []reviewPath  `json:"reviews,omitempty"`
 
 	Shipment *Shipment `json:"shipment,omitempty"`
 }
@@ -259,7 +256,7 @@ func (fb fallback) Render(w io.Writer, limit int, link bool) {
 	rows = append(rows, RunFact("run", "none for "+fb.Task+" in "+fb.Root, faint))
 
 	for _, r := range fb.Others {
-		rows = append(rows, RunFact("agent", textx.OrDash(r.Task)+" · "+CurrentPhase(r), plain))
+		rows = append(rows, RunFact("agent", textx.OrDash(r.Task)+" · "+currentPhase(r), plain))
 	}
 
 	if fb.PRState != "" {
@@ -269,10 +266,10 @@ func (fb fallback) Render(w io.Writer, limit int, link bool) {
 	_ = render.WriteFacts(w, rows, render.LabelWidth(rows), limit)
 }
 
-// TaskFallback lays the task's shipment out as the fallback.
+// taskFallback lays the task's shipment out as the fallback.
 //
 //nolint:lostfield // a reduction: the fallback shows the shipment, not every input
-func TaskFallback(in TaskStatusInput, others []*state.Run, ship Shipment) fallback {
+func taskFallback(in taskStatusInput, others []*state.Run, ship Shipment) fallback {
 	fb := fallback{
 		Task: in.ID, Root: in.Root, Others: others, Plan: ship.Plan, PR: ship.PR, PRState: ship.PRState,
 		Verdicts: ship.Verdicts, Reviews: ship.Reviews, Shipment: &ship,

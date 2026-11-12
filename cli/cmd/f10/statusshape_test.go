@@ -9,14 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/urfave/cli/v3"
-
 	hookcmd "github.com/amberpixels/f10/cli/internal/command/hook"
-	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
-	"github.com/amberpixels/f10/cli/internal/ledger"
-	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/statusview"
+	"github.com/amberpixels/f10/cli/internal/testkit"
 )
 
 // objectKeys is the sorted top-level keys of one JSON object.
@@ -34,8 +30,8 @@ func objectKeys(t *testing.T, raw json.RawMessage) string {
 // `status <id> --json` keeps its keys: a run entry and the fallback, each
 // with the shipment object beside the keys it always had.
 func TestStatusTaskJSONShape(t *testing.T) {
-	repo := tracedRepo(t, "DM-5/fix-retry", "")
-	git(t, repo, "remote", "remove", "origin") // no host CLI: nothing leaves the machine
+	repo := testkit.TracedRepo(t, "DM-5/fix-retry", "")
+	testkit.Git(t, repo, "remote", "remove", "origin") // no host CLI: nothing leaves the machine
 
 	dir := t.TempDir()
 	t.Setenv("F10_STATE_DIR", dir)
@@ -89,37 +85,6 @@ func TestStatusTaskJSONShape(t *testing.T) {
 	}
 }
 
-// `task report --children` draws the parent, then its open subtasks nested
-// by After:, each with its title and url.
-func TestTaskReportChildrenTree(t *testing.T) {
-	f := newFakes(t)
-	tg := childTarget(t, "gh")
-
-	f.script("gh api --paginate repos/{owner}/{repo}/issues/71/sub_issues", `[
-		{"number":72,"title":"base","state":"open","html_url":"https://x/72","body":"b","labels":[]},
-		{"number":73,"title":"later","state":"open","html_url":"https://x/73","body":"x\nAfter: #72\n","labels":[]},
-		{"number":74,"title":"done","state":"closed","html_url":"https://x/74","body":"","labels":[]}
-	]`)
-	scriptNoBranch(f, "FT-72", "FT-73")
-
-	var out bytes.Buffer
-
-	cmd := &cli.Command{Writer: &out, ErrWriter: &out}
-	r := ref.Ref{ID: "FT-71", Number: "71"}
-
-	if err := taskcmd.WriteParentTree(t.Context(), cmd, tg, "71", r,
-		ledger.TaskRef{ID: "FT-71", Title: "Rate limits", URL: "https://x/71"}); err != nil {
-		t.Fatal(err)
-	}
-
-	want := "FT-71        Rate limits  ↗ https://x/71\n" +
-		"└─ FT-72     base         ↗ https://x/72\n" +
-		"   └─ FT-73  later        ↗ https://x/73\n"
-	if out.String() != want {
-		t.Errorf("tree =\n%s\nwant\n%s", out.String(), want)
-	}
-}
-
 // A bare status whose session task's run asks a question leaves the turn to
 // the model, as an asking launch does.
 func TestHookStatusTextReportsTheSessionTasksAsk(t *testing.T) {
@@ -142,7 +107,7 @@ func TestHookStatusTextReportsTheSessionTasksAsk(t *testing.T) {
 
 // `f10 state show` prints the session's run as the status run block does.
 func TestStateShowPrintsTheRunBlock(t *testing.T) {
-	repo := tracedRepo(t, "main", "")
+	repo := testkit.TracedRepo(t, "main", "")
 	dir := t.TempDir()
 	t.Setenv("F10_STATE_DIR", dir)
 	t.Setenv("F10_SESSION_ID", "sess-1")

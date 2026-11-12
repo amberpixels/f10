@@ -1,3 +1,5 @@
+// Package hook is the f10 hook command, which handles one Claude Code hook
+// event read from stdin.
 package hook
 
 import (

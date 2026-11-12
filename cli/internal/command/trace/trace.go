@@ -1,3 +1,5 @@
+// Package trace is the f10 trace command: the commit trailers and the PR state
+// block a step writes.
 package trace
 
 import (

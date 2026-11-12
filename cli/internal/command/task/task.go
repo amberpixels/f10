@@ -1,3 +1,5 @@
+// Package task is the f10 task, f10 plan and f10 demo commands: reading,
+// creating and updating the project's tasks and opening their plans and demos.
 package task
 
 import (
@@ -14,7 +16,6 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/command"
-	"github.com/amberpixels/f10/cli/internal/driver"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/images"
 	"github.com/amberpixels/f10/cli/internal/ledger"
@@ -22,6 +23,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
+	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -125,7 +128,7 @@ func Command() *cli.Command {
 					"`# <title>` first, and print its id (exit 3: neither creates tasks here)",
 				Flags: []cli.Flag{
 					&cli.StringFlag{Name: "status", Usage: "the status, in the tracker's own word"},
-					&cli.StringFlag{Name: "priority", Usage: "one of " + strings.Join(driver.Priorities, ", ")},
+					&cli.StringFlag{Name: "priority", Usage: "one of " + strings.Join(trackerdriver.Priorities, ", ")},
 					&cli.StringSliceFlag{Name: "label", Usage: "a label; repeat for several"},
 					&cli.StringFlag{Name: "parent", Usage: "the task id to link it under as a subtask"},
 					&cli.StringSliceFlag{
@@ -163,7 +166,7 @@ func Command() *cli.Command {
 						Name:  "status",
 						Usage: "the status, in the tracker's own word (host issues: open or closed)",
 					},
-					&cli.StringFlag{Name: "priority", Usage: "one of " + strings.Join(driver.Priorities, ", ")},
+					&cli.StringFlag{Name: "priority", Usage: "one of " + strings.Join(trackerdriver.Priorities, ", ")},
 					&cli.StringSliceFlag{Name: "label", Usage: "a label to add; repeat for several"},
 					&cli.StringFlag{Name: "assignee", Usage: "who holds the task, in the tracker's own name for them"},
 					&cli.StringFlag{
@@ -246,7 +249,7 @@ func fetchFallback(err error) error {
 
 // ReadDoc feeds the ledger's task refs, so a later ref costs no tracker call.
 func ReadDoc(ctx context.Context, t *target.Target, r ref.Ref) (string, error) {
-	doc, k, err := hostops.TasksFor(t).Read(ctx, r)
+	doc, k, err := tasksource.TasksFor(t).Read(ctx, r)
 	if err == nil {
 		stack.RememberRefsFor(ctx, t, k)
 	}
@@ -345,7 +348,7 @@ func runTaskOpen(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	url, err := hostops.TasksFor(t).URL(ctx, r)
+	url, err := tasksource.TasksFor(t).URL(ctx, r)
 	if err != nil {
 		return err
 	}
@@ -354,7 +357,7 @@ func runTaskOpen(ctx context.Context, cmd *cli.Command) error {
 }
 
 func TaskListURL(ctx context.Context, t *target.Target) (string, error) {
-	return hostops.TasksFor(t).Index(ctx)
+	return tasksource.TasksFor(t).Index(ctx)
 }
 
 func WriteTaskList(ctx context.Context, t *target.Target, w, warn io.Writer) error {
@@ -389,11 +392,11 @@ func runTaskSearch(ctx context.Context, cmd *cli.Command) error {
 // RankRows is stable, so the tracker's order holds inside a level.
 func RankRows(rows []hostops.Row) []hostops.Row {
 	rank := func(r hostops.Row) int {
-		if i, ok := driver.PriorityRank(r.Priority); ok {
+		if i, ok := trackerdriver.PriorityRank(r.Priority); ok {
 			return i
 		}
 
-		return len(driver.Priorities)
+		return len(trackerdriver.Priorities)
 	}
 
 	slices.SortStableFunc(rows, func(a, b hostops.Row) int { return rank(a) - rank(b) })
@@ -402,7 +405,7 @@ func RankRows(rows []hostops.Row) []hostops.Row {
 }
 
 func SearchRows(ctx context.Context, t *target.Target, query string) ([]hostops.Row, error) {
-	rows, err := hostops.TasksFor(t).Search(ctx, query)
+	rows, err := tasksource.TasksFor(t).Search(ctx, query)
 	stack.RememberRefsFor(ctx, t, hostops.RowRefs(rows)...)
 
 	return rows, err
@@ -440,7 +443,7 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	r, url, err := hostops.TasksFor(t).Create(ctx, cmd.ErrWriter, nt)
+	r, url, err := tasksource.TasksFor(t).Create(ctx, cmd.ErrWriter, nt)
 	if err != nil {
 		return err
 	}
@@ -458,13 +461,13 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 
 // readNewTask reads the properties and resolves the parent and the body's
 // After: base once, before any source sees them.
-func readNewTask(ctx context.Context, t *target.Target, cmd *cli.Command, doc string) (hostops.NewTask, error) {
+func readNewTask(ctx context.Context, t *target.Target, cmd *cli.Command, doc string) (tasksource.NewTask, error) {
 	p, err := readProps(cmd)
 	if err != nil {
-		return hostops.NewTask{}, err
+		return tasksource.NewTask{}, err
 	}
 
-	nt := hostops.NewTask{Doc: doc, Props: p}
+	nt := tasksource.NewTask{Doc: doc, Props: p}
 
 	for _, link := range []struct {
 		flag, id string
@@ -479,7 +482,7 @@ func readNewTask(ctx context.Context, t *target.Target, cmd *cli.Command, doc st
 
 		r, err := t.Reference(ctx, link.id)
 		if err != nil {
-			return hostops.NewTask{}, fmt.Errorf("%s %s: %w", link.flag, link.id, err)
+			return tasksource.NewTask{}, fmt.Errorf("%s %s: %w", link.flag, link.id, err)
 		}
 
 		*link.to = r

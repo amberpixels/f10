@@ -69,10 +69,10 @@ func landSpike(ctx context.Context, w io.Writer, in FinishInput, d finishDecisio
 	l := landing{ended: "the spike " + in.Task.ID + " closed"}
 
 	if in.Flags.Keep {
-		l.kept = KeptName(ctx, in.Main, d.name, in.Task.Members())
+		l.kept = keptName(ctx, in.Main, d.name, in.Task.Members())
 	}
 
-	released, err := ReleaseDependents(ctx, in.Main, d.name, d.def, false)
+	released, err := releaseDependents(ctx, in.Main, d.name, d.def, false)
 	if err != nil {
 		return l, err
 	}
@@ -158,7 +158,7 @@ func landMerge(ctx context.Context, w io.Writer, in FinishInput, d finishDecisio
 
 	recordLanded()
 
-	released, err := ReleaseDependents(ctx, in.Main, name, def, true)
+	released, err := releaseDependents(ctx, in.Main, name, def, true)
 	_ = errs.check("releasing dependents", err)
 
 	notes = append(notes, released...)
@@ -213,7 +213,7 @@ func landPull(ctx context.Context, in FinishInput, name, def string, p forge.PR)
 			notes = textx.AppendNote(notes, note)
 		}
 
-		if p, err = in.Host.MergePR(ctx, p, name, method, MergeBody(in, description, method)); err != nil {
+		if p, err = in.Host.MergePR(ctx, p, name, method, mergeBody(in, description, method)); err != nil {
 			return forge.PR{}, nil, err
 		}
 	case forge.Merged:
@@ -328,10 +328,10 @@ func stateNote(err error) string {
 	return "the PR body's state block was not rewritten: " + err.Error()
 }
 
-// MergeBody is the host commit's body: the description minus its state
+// mergeBody is the host commit's body: the description minus its state
 // block, then a Task: line per member, so a squash still names what it
 // shipped. A rebase, or glab's plain merge (""), keeps the branch's trailers.
-func MergeBody(in FinishInput, description, method string) string {
+func mergeBody(in FinishInput, description, method string) string {
 	if !in.Traces || (method != "--squash" && method != "--merge") {
 		return ""
 	}

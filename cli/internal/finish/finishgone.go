@@ -7,9 +7,9 @@ import (
 	"io"
 	"strings"
 
-	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 )
 
 // A goneError is a checkout a finish that stopped halfway left: no branch,
@@ -49,7 +49,7 @@ func finishParent(ctx context.Context, w io.Writer, in FinishInput, gone goneErr
 	}
 
 	kids, err := in.Subtasks(ctx, in.Task)
-	if errors.Is(err, hostops.ErrNoParentLink) || (err == nil && len(kids) == 0) {
+	if errors.Is(err, tasksource.ErrNoParentLink) || (err == nil && len(kids) == 0) {
 		return gone.err
 	}
 

@@ -8,7 +8,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/amberpixels/f10/cli/internal/drives"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
@@ -25,7 +25,7 @@ func (in *DriveInput) Wake(ctx context.Context, d time.Duration) error {
 
 	var record string
 	if in.Rec != nil && in.Root != "" {
-		record = drives.Path(in.Root, in.Rec.Number)
+		record = drivestore.Path(in.Root, in.Rec.Number)
 	}
 
 	var roots []string

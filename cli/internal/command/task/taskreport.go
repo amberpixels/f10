@@ -8,12 +8,12 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/tasktree"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -78,7 +78,7 @@ func WriteParentTree(ctx context.Context, cmd *cli.Command, t *target.Target, to
 
 	kids, err := stack.TrackerFor(t).Children(ctx, r)
 	switch {
-	case errors.Is(err, hostops.ErrNoParentLink):
+	case errors.Is(err, tasksource.ErrNoParentLink):
 		ui.Warnf(cmd.ErrWriter, "%s: %v: no subtasks to list", r.ID, err)
 	case err != nil:
 		return err
@@ -89,9 +89,9 @@ func WriteParentTree(ctx context.Context, cmd *cli.Command, t *target.Target, to
 		return writeTaskFacts(cmd, token, r.ID, k)
 	}
 
-	nodes := hostops.SubtaskNodes(
+	nodes := tasksource.SubtaskNodes(
 		childTreeRows(kids),
-		hostops.TreeOpts{Head: &hostops.TreeRow{ID: r.ID, Title: k.Title, URL: k.URL}, URL: true},
+		tasksource.TreeOpts{Head: &tasksource.TreeRow{ID: r.ID, Title: k.Title, URL: k.URL}, URL: true},
 	)
 
 	stack.RememberRefsFor(ctx, t, stack.ChildRefs(kids)...)

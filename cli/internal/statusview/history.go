@@ -14,9 +14,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/timing"
 )
 
-// ReviewRound counts one findings file. Ask is a finding still waiting on
+// reviewRound counts one findings file. Ask is a finding still waiting on
 // a verdict: an `ask`, or none written yet.
-type ReviewRound struct {
+type reviewRound struct {
 	Round   string `json:"round"`
 	Found   int    `json:"found"`
 	Fixed   int    `json:"fixed"`
@@ -24,13 +24,13 @@ type ReviewRound struct {
 	Ask     int    `json:"ask"`
 }
 
-// FileOutcomes reads the task's findings and verdict files: a round is the
+// fileOutcomes reads the task's findings and verdict files: a round is the
 // remote half's when its reviewer is not local (a file both halves wrote
 // counts once each), and a verdict goes by its subject: task, plan or change.
 // Verdict files written before since are dropped: the judge writes them per
 // task, so an earlier PR's verdicts share the directory.
-func FileOutcomes(storageRoot, task string, since time.Time) Outcomes {
-	var o Outcomes
+func fileOutcomes(storageRoot, task string, since time.Time) outcomes {
+	var o outcomes
 
 	for _, rf := range reviewRounds(storageRoot, task) {
 		if rf.remote {
@@ -60,10 +60,10 @@ func FileOutcomes(storageRoot, task string, since time.Time) Outcomes {
 	return o
 }
 
-// ShipSteps is the steps the session's last ship run claimed before until.
+// shipSteps is the steps the session's last ship run claimed before until.
 // Only a phase skill begins a run, so resolve or catchup mid-pipeline does
 // not end it; a step claimed again right after itself is one entry.
-func ShipSteps(events []ledger.Event, session string, until time.Time) []string {
+func shipSteps(events []ledger.Event, session string, until time.Time) []string {
 	var steps []string
 
 	inShip := false
@@ -104,7 +104,7 @@ func ShipSteps(events []ledger.Event, session string, until time.Time) []string 
 // roundFile is one half of a findings file: its counts, whether it is the
 // remote half, and when the file was last written.
 type roundFile struct {
-	round  ReviewRound
+	round  reviewRound
 	raised int // findings new in this round, a prior one reopened not counted
 	remote bool
 	at     time.Time
@@ -139,7 +139,7 @@ func reviewRounds(storageRoot, task string) []roundFile {
 			}
 
 			rounds = append(rounds, roundFile{
-				round: ReviewRound{
+				round: reviewRound{
 					Round: f.Round, Found: t.Found, Fixed: t.Fixed, Skipped: t.Skipped, Ask: t.Open,
 				},
 				raised: t.Raised,
@@ -154,7 +154,7 @@ func reviewRounds(storageRoot, task string) []roundFile {
 
 // reviewText is one round's counts, or each round's, named, when there are
 // several.
-func reviewText(rounds []ReviewRound) string {
+func reviewText(rounds []reviewRound) string {
 	if len(rounds) == 1 {
 		return roundText(rounds[0])
 	}
@@ -167,7 +167,7 @@ func reviewText(rounds []ReviewRound) string {
 	return strings.Join(parts, "; ")
 }
 
-func roundText(r ReviewRound) string {
+func roundText(r reviewRound) string {
 	if r.Found == 0 {
 		return "clean"
 	}

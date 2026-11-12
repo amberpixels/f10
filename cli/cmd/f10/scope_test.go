@@ -12,16 +12,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/projects"
 	"github.com/amberpixels/f10/cli/internal/scope"
 	"github.com/amberpixels/f10/cli/internal/standup"
+	"github.com/amberpixels/f10/cli/internal/testkit"
 )
-
-func scopeRepo(t *testing.T, parent, name string) string {
-	t.Helper()
-
-	r := initRepo(t, filepath.Join(parent, name), "main")
-	r.Git("commit", "-q", "--allow-empty", "-m", "init")
-
-	return r.Dir
-}
 
 func standupJSON(t *testing.T, args ...string) standup.Standup {
 	t.Helper()
@@ -54,13 +46,13 @@ func repoList(s standup.Standup) string {
 // Every -C is read, in order; a worktree and its main checkout are one
 // repository, read once. A comma is part of a path, not a separator.
 func TestStandupReadsEveryCheckoutOnce(t *testing.T) {
-	isolateEnv(t)
+	testkit.IsolateEnv(t)
 
-	root := canonical(t, t.TempDir())
-	a := scopeRepo(t, root, "svc,a")
-	b := scopeRepo(t, root, "svc-b")
+	root := testkit.Canonical(t, t.TempDir())
+	a := testkit.ScopeRepo(t, root, "svc,a")
+	b := testkit.ScopeRepo(t, root, "svc-b")
 	tree := filepath.Join(root, "svc-b.wt")
-	git(t, b, "worktree", "add", "-q", "-b", "side", tree)
+	testkit.Git(t, b, "worktree", "add", "-q", "-b", "side", tree)
 
 	s := standupJSON(t, "-C", a, "-C", tree, "-C", b)
 
@@ -81,10 +73,10 @@ func TestStandupReadsEveryCheckoutOnce(t *testing.T) {
 // Commands other than standup and board answer for one checkout; board
 // over several is TestBoardCheckoutsExpand.
 func TestOtherCommandsTakeOneCheckout(t *testing.T) {
-	isolateEnv(t)
+	testkit.IsolateEnv(t)
 
-	root := canonical(t, t.TempDir())
-	a, b := scopeRepo(t, root, "a"), scopeRepo(t, root, "b")
+	root := testkit.Canonical(t, t.TempDir())
+	a, b := testkit.ScopeRepo(t, root, "a"), testkit.ScopeRepo(t, root, "b")
 
 	if _, err := runApp(t, "-C", a, "-C", b, "config").outErr(); err == nil ||
 		!strings.Contains(err.Error(), "(got 2)") || !strings.Contains(err.Error(), "take several") {
@@ -100,17 +92,17 @@ func TestOtherCommandsTakeOneCheckout(t *testing.T) {
 // path that is not one is an error, and an unknown group names the
 // declared ones.
 func TestStandupGroups(t *testing.T) {
-	home := isolateEnv(t)
+	home := testkit.IsolateEnv(t)
 
-	root := canonical(t, t.TempDir())
-	scopeRepo(t, root, "acme-api")
-	scopeRepo(t, root, "acme-web")
+	root := testkit.Canonical(t, t.TempDir())
+	testkit.ScopeRepo(t, root, "acme-api")
+	testkit.ScopeRepo(t, root, "acme-web")
 
 	if err := os.MkdirAll(filepath.Join(root, "acme-notes"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
-	writeUserFile(t, home, scope.StandupConfigFile,
+	testkit.WriteUserFile(t, home, scope.StandupConfigFile,
 		"---\ngroups:\n  work: ["+root+"/acme-*]\n  broken: ["+root+"/acme-notes]\n---\n")
 
 	out, err := runApp(t, "standup", "--json", "--week", "--group", "work").outErr()
@@ -140,7 +132,7 @@ func TestStandupGroups(t *testing.T) {
 
 // --all is the F10_ROOTS walk, so it is off until the variable is set.
 func TestStandupAllNeedsRoots(t *testing.T) {
-	isolateEnv(t)
+	testkit.IsolateEnv(t)
 	t.Setenv(projects.RootsEnv, "")
 
 	if _, err := runApp(t, "standup", "--week", "--all").outErr(); err == nil ||
@@ -148,9 +140,9 @@ func TestStandupAllNeedsRoots(t *testing.T) {
 		t.Errorf("err = %v, want %s named", err, projects.RootsEnv)
 	}
 
-	root := canonical(t, t.TempDir())
-	scopeRepo(t, root, "r1")
-	scopeRepo(t, root, "r2")
+	root := testkit.Canonical(t, t.TempDir())
+	testkit.ScopeRepo(t, root, "r1")
+	testkit.ScopeRepo(t, root, "r2")
 	t.Setenv(projects.RootsEnv, filepath.Join(root, "*"))
 
 	out, err := runApp(t, "standup", "--json", "--week", "--all").outErr()
@@ -183,7 +175,7 @@ func declareTracker(t *testing.T, dir, kind string) {
 		}
 	}
 
-	git(t, dir, "commit", "-q", "--allow-empty", "-m", "ACME-1 work")
+	testkit.Git(t, dir, "commit", "-q", "--allow-empty", "-m", "ACME-1 work")
 }
 
 // Checkouts merge a task only on a shared tracker: a declared Jira with one
@@ -200,10 +192,10 @@ func TestStandupMergesOnASharedTracker(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(cmp.Or(c.kind, "undeclared"), func(t *testing.T) {
-			isolateEnv(t)
+			testkit.IsolateEnv(t)
 
-			root := canonical(t, t.TempDir())
-			a, b := scopeRepo(t, root, "svc-a"), scopeRepo(t, root, "svc-b")
+			root := testkit.Canonical(t, t.TempDir())
+			a, b := testkit.ScopeRepo(t, root, "svc-a"), testkit.ScopeRepo(t, root, "svc-b")
 			declareTracker(t, a, c.kind)
 			declareTracker(t, b, c.kind)
 

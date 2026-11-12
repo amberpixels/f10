@@ -59,12 +59,12 @@ func (in *DriveInput) takeInbox(tasks []DriveTask) {
 				id, id, asks.Way(a.By), a.AnsweredAt.Local().Format("15:04")))
 		}
 
-		from := HeardInbox
+		from := heardInbox
 		if a.DeliveredAt.IsZero() || a.Skill == "finish" {
-			from = FromInbox
+			from = fromInbox
 		}
 
-		in.Answers.Give(Answer{Task: id, Text: a.Answer, From: from, At: a.AnsweredAt})
+		in.Answers.Give(answer{Task: id, Text: a.Answer, From: from, At: a.AnsweredAt})
 
 		in.taken(a.Key())
 	}
@@ -136,12 +136,12 @@ func CloseDriveAsks(dir, root string, n int, now time.Time) {
 	}
 }
 
-func (in *DriveInput) TakeAnswers(tasks []DriveTask) error {
+func (in *DriveInput) takeAnswers(tasks []DriveTask) error {
 	in.Answers = NewAnswerBook()
 
 	for _, a := range in.Args.Answers {
 		if id, text, ok := keyedAnswer(a, tasks); ok {
-			in.Answers.Give(Answer{Task: id, Text: text, From: fromFlag})
+			in.Answers.Give(answer{Task: id, Text: text, From: fromFlag})
 
 			continue
 		}
@@ -150,7 +150,7 @@ func (in *DriveInput) TakeAnswers(tasks []DriveTask) error {
 			return errors.New("several --answer values name no task: key each one, --answer GH-1=\"1. …\"")
 		}
 
-		in.Answers.Give(Answer{Text: a, From: fromFlag})
+		in.Answers.Give(answer{Text: a, From: fromFlag})
 	}
 
 	return nil
@@ -195,7 +195,7 @@ func (in *DriveInput) finishAnswer(id string) (string, error) {
 			return c, nil
 		}
 
-		return "", fmt.Errorf("the answer to finish is %q: answer %s or %s", a, FinishLeaveOpen, FinishMerge)
+		return "", fmt.Errorf("the answer to finish is %q: answer %s or %s", a, finishLeaveOpen, finishMerge)
 	}
 
 	if c := finishChoice(in.Answers.Bare); c != "" {
@@ -212,7 +212,7 @@ func finishChoice(answer string) string {
 	a := strings.ToLower(strings.TrimSpace(answer))
 	a = strings.TrimSpace(strings.TrimPrefix(a, "1."))
 
-	if a == FinishMerge || a == FinishLeaveOpen {
+	if a == finishMerge || a == finishLeaveOpen {
 		return a
 	}
 
