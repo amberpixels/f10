@@ -24,9 +24,9 @@ func TestReviewRoundsOnTheEdgeFixture(t *testing.T) {
 		testkit.WriteFile(t, filepath.Join(root, "reviews", "FT-1", name), string(raw))
 	}
 
-	o := FileOutcomes(root, "FT-1", time.Time{})
+	o := fileOutcomes(root, "FT-1", time.Time{})
 
-	want := []ReviewRound{
+	want := []reviewRound{
 		{Round: "1", Found: 6, Fixed: 1, Skipped: 1, Ask: 3},
 		{Round: "2", Found: 4, Fixed: 1, Skipped: 1, Ask: 1},
 	}

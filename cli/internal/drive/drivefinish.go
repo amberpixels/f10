@@ -27,23 +27,23 @@ func (in *DriveInput) readyToMerge(ctx context.Context, r *DriveRun) error {
 
 	def, err := stack.LocalDefault(ctx, in.Main)
 	if err != nil {
-		return Halt(id, "finish", err.Error())
+		return halt(id, "finish", err.Error())
 	}
 
 	if err := in.View().fetch.Fetch(ctx, in.Main); err != nil {
-		return Halt(id, "finish", err.Error())
+		return halt(id, "finish", err.Error())
 	}
 
 	pushed, err := gitx.Ref(ctx, r.O.Path, "origin/"+branch)
 	if err != nil {
-		return Halt(id, "finish", err.Error())
+		return halt(id, "finish", err.Error())
 	}
 
 	base, head := "origin/"+def, pushed
 
 	if pushed == "" {
 		if base, err = finish.LandingBase(ctx, in.Main, def); err != nil {
-			return Halt(id, "finish", err.Error())
+			return halt(id, "finish", err.Error())
 		}
 
 		head = "refs/heads/" + branch
@@ -53,7 +53,7 @@ func (in *DriveInput) readyToMerge(ctx context.Context, r *DriveRun) error {
 	// "not an ancestor" would pick the lease and rewrite origin's branch
 	clean, err := gitx.MergesCleanly(ctx, r.O.Path, base, head)
 	if err != nil {
-		return Halt(id, "finish", err.Error())
+		return halt(id, "finish", err.Error())
 	}
 
 	if clean {
@@ -63,7 +63,7 @@ func (in *DriveInput) readyToMerge(ctx context.Context, r *DriveRun) error {
 	caughtUp := false
 	if pushed != "" {
 		if caughtUp, err = gitx.IsAncestor(ctx, r.O.Path, base, "HEAD"); err != nil {
-			return Halt(id, "finish", err.Error())
+			return halt(id, "finish", err.Error())
 		}
 	}
 
@@ -71,7 +71,7 @@ func (in *DriveInput) readyToMerge(ctx context.Context, r *DriveRun) error {
 	// catchup left and what the push would send, so HEAD is what is tried
 	if !caughtUp && pushed != "" && r.LastCatchup != nil {
 		if caughtUp, err = gitx.MergesCleanly(ctx, r.O.Path, base, "HEAD"); err != nil {
-			return Halt(id, "finish", err.Error())
+			return halt(id, "finish", err.Error())
 		}
 	}
 
@@ -84,7 +84,7 @@ func (in *DriveInput) readyToMerge(ctx context.Context, r *DriveRun) error {
 	}
 
 	if err := branchmeta.Set(ctx, in.Main, branch, branchmeta.Landed, def); err != nil {
-		return Halt(id, "finish", fmt.Sprintf("marking %s landed on %s: %v", branch, def, err))
+		return halt(id, "finish", fmt.Sprintf("marking %s landed on %s: %v", branch, def, err))
 	}
 
 	fmt.Fprintf(in.Out, "%s finish: %s conflicts with %s, catching up first\n", in.id(id), branch, base)
@@ -96,8 +96,8 @@ func (in *DriveInput) readyToMerge(ctx context.Context, r *DriveRun) error {
 // The answers drive's own finish question takes, for a PR someone else
 // opened: merge it, or clean up locally and leave it open.
 const (
-	FinishMerge     = "merge"
-	FinishLeaveOpen = "local"
+	finishMerge     = "merge"
+	finishLeaveOpen = "local"
 )
 
 // DriveFinish is what a drive's finish needs from its run; the rest comes
@@ -121,7 +121,7 @@ func DriveFinishInput(t *target.Target, main string, h hostops.Host, req DriveFi
 	}
 
 	in.Suffix, in.Branch = req.Suffix, req.Branch
-	in.Flags.Merge, in.Flags.LeaveOpen = req.Pr == FinishMerge, req.Pr == FinishLeaveOpen
+	in.Flags.Merge, in.Flags.LeaveOpen = req.Pr == finishMerge, req.Pr == finishLeaveOpen
 	in.Progress, in.Handoff, in.Deferred = req.Progress, req.Handoff, req.Deferred
 	// a driven finish asks no second question, since a resume carries only
 	// the latest answer: the PR body says which riders close, and the report
@@ -133,12 +133,12 @@ func DriveFinishInput(t *target.Target, main string, h hostops.Host, req DriveFi
 
 // RunFinish runs finish in process; its refusals halt the task, except a PR
 // someone else opened, which asks.
-func (in *DriveInput) RunFinish(ctx context.Context, r *DriveRun) DriveResult {
+func (in *DriveInput) RunFinish(ctx context.Context, r *DriveRun) driveResult {
 	task, id := r.Task, r.Task.Ref.ID
 
 	pr, err := in.finishAnswer(id)
 	if err != nil {
-		return Halted(id, "finish", err.Error())
+		return halted(id, "finish", err.Error())
 	}
 
 	fmt.Fprintf(in.Out, "%s finish: running\n", in.id(id))
@@ -172,9 +172,9 @@ func (in *DriveInput) RunFinish(ctx context.Context, r *DriveRun) DriveResult {
 	}
 
 	if fp := (finish.ForeignPullError{}); errors.As(err, &fp) {
-		ask := fmt.Sprintf("1. %s was opened by %s: [%s | %s]", fp.URL, fp.Author, FinishLeaveOpen, FinishMerge)
+		ask := fmt.Sprintf("1. %s was opened by %s: [%s | %s]", fp.URL, fp.Author, finishLeaveOpen, finishMerge)
 
-		return DriveResult{
+		return driveResult{
 			Row:   "asked at finish",
 			Code:  ui.ExitAsk,
 			Lines: []string{id + " asks at finish: " + ask},
@@ -183,7 +183,7 @@ func (in *DriveInput) RunFinish(ctx context.Context, r *DriveRun) DriveResult {
 	}
 
 	if err != nil {
-		return Halted(id, "finish", err.Error())
+		return halted(id, "finish", err.Error())
 	}
 
 	if in.Record != nil {
@@ -196,7 +196,7 @@ func (in *DriveInput) RunFinish(ctx context.Context, r *DriveRun) DriveResult {
 		lines = append(lines, id+" finished; "+pulled)
 	}
 
-	return DriveResult{Row: drivectl.RowFinished, Lines: append(lines, handoffBlock(id, hand)...)}
+	return driveResult{Row: drivectl.RowFinished, Lines: append(lines, handoffBlock(id, hand)...)}
 }
 
 // RetryPull retries a pull a finish deferred, once a tick, in a drive that

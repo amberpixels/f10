@@ -67,7 +67,7 @@ func TestDriveRecordIsPickedUpByTheSameCommand(t *testing.T) {
 	fx.f.Script(testkit.Worktrees, testkit.Porcelain(), testkit.Porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.f.Script(
-		"herdr agent prompt "+testkit.AgentOf("GH-1")+" "+SkillPrompt("judge", "GH-1", nil, runplan.ShipFlow{}, false),
+		"herdr agent prompt "+testkit.AgentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, runplan.ShipFlow{}, false),
 		"{}",
 	)
 	fx.f.Script(testkit.WsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
@@ -406,7 +406,7 @@ func TestDriveListLeavesARunningDrive(t *testing.T) {
 }
 
 func TestRecordArgs(t *testing.T) {
-	got := RecordArgs(
+	got := recordArgs(
 		[]string{
 			"GH-1", "--answer", "1. x", "--every=5s", "--flow", "local", "--resume", "2",
 			"--parallel", "3", "GH-2:opus", "--parallel=4",
@@ -523,11 +523,11 @@ func TestOpenRecordKeepsTheCap(t *testing.T) {
 }
 
 func TestTaskStandingQueued(t *testing.T) {
-	if got := TaskStanding(drivestore.Task{Queued: true}, true); got != "queued" {
+	if got := taskStanding(drivestore.Task{Queued: true}, true); got != "queued" {
 		t.Errorf("a queued task in a running drive stands %q", got)
 	}
 
-	if got := TaskStanding(drivestore.Task{Queued: true}, false); got != "not reached" {
+	if got := taskStanding(drivestore.Task{Queued: true}, false); got != "not reached" {
 		t.Errorf("a queued task in a stopped drive stands %q", got)
 	}
 }
@@ -536,16 +536,16 @@ func TestTaskStandingQueued(t *testing.T) {
 // running the skill it last had in flight.
 func TestTaskStandingWaiting(t *testing.T) {
 	parked := drivestore.Task{Skill: "ship", Phase: drivestore.PhaseParked}
-	if got := TaskStanding(parked, true); got != "waiting on its base" {
+	if got := taskStanding(parked, true); got != "waiting on its base" {
 		t.Errorf("a parked task stands %q", got)
 	}
 
 	held := drivestore.Task{Skill: "finish", Phase: drivestore.PhaseWaiting}
-	if got := TaskStanding(held, true); got != "waiting to finish after its base" {
+	if got := taskStanding(held, true); got != "waiting to finish after its base" {
 		t.Errorf("a finish held for its base stands %q", got)
 	}
 
-	if got := TaskStanding(parked, false); got != "stopped at ship" {
+	if got := taskStanding(parked, false); got != "stopped at ship" {
 		t.Errorf("a parked task in a stopped drive stands %q", got)
 	}
 }
@@ -577,7 +577,7 @@ func TestFinishedLazily(t *testing.T) {
 			}
 
 			asked := false
-			got := FinishedLazily(root, "GH-1",
+			got := finishedLazily(root, "GH-1",
 				func() (bool, error) { return c.branched, nil },
 				func() hostops.TaskInfo { asked = true; return hostops.TaskInfo{Closed: c.closed} })
 
@@ -623,15 +623,15 @@ func TestRecordFollowsThePhase(t *testing.T) {
 	want(drivestore.PhaseQueued, true)
 
 	in.Unqueue(r)
-	in.Enter(r, AtRunning)
+	in.Enter(r, atRunning)
 	want(drivestore.PhaseRunning, false)
 
-	in.Enter(r, AtParked)
+	in.Enter(r, atParked)
 	want(drivestore.PhaseParked, false)
 
-	in.Enter(r, AtWaiting)
+	in.Enter(r, atWaiting)
 	want(drivestore.PhaseWaiting, false)
 
-	in.End(t.Context(), r, DriveResult{Row: "done: ship"})
+	in.End(t.Context(), r, driveResult{Row: "done: ship"})
 	want(drivestore.PhaseEnded, false)
 }

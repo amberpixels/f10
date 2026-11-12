@@ -72,16 +72,16 @@ func (in *DriveInput) send(ctx context.Context, r *DriveRun, skill string) error
 		if answer == "" {
 			// a catchup clears a mark but restores the ship stop it noted, so
 			// git, not the note, says whether that stop still holds
-			if at := ResumeAt(skill, run); at != "" && stack.BranchUnsettled(ctx, in.Main, r.O.Path, r.O.Branch) == "" {
+			if at := resumeAt(skill, run); at != "" && stack.BranchUnsettled(ctx, in.Main, r.O.Path, r.O.Branch) == "" {
 				why := "stopped for a catchup, the branch is settled"
 				switch {
-				case OriginWait(run):
+				case originWait(run):
 					why = "its base is on origin now"
 				case run.Wait != "":
 					why = "its base has code now"
 				}
 
-				fmt.Fprintf(in.Out, "%s %s: %s: %s\n", in.id(id), skill, why, ResumeShown(run, at))
+				fmt.Fprintf(in.Out, "%s %s: %s: %s\n", in.id(id), skill, why, resumeShown(run, at))
 
 				return in.prompt(ctx, r, ws, skill, at)
 			}
@@ -135,10 +135,10 @@ func (in *DriveInput) prompt(
 		agentctl.AgentName(id, r.Task.Suffix, r.O.Path),
 		r.O.Path,
 	); err != nil {
-		return Halt(id, skill, err.Error())
+		return halt(id, skill, err.Error())
 	}
 
-	p := Steered(SkillPrompt(skill, r.Task.Ref.Label(), r.O.Dep, r.Flow, r.Finishes), steering)
+	p := steered(skillPrompt(skill, r.Task.Ref.Label(), r.O.Dep, r.Flow, r.Finishes), steering)
 	if err := in.deliver(ctx, r, p); err != nil {
 		return err
 	}
@@ -178,9 +178,9 @@ func (in *DriveInput) RetryEnter(ctx context.Context, r *DriveRun) {
 	}
 }
 
-// Steered puts steering after the skill's subject, before any chained
+// steered puts steering after the skill's subject, before any chained
 // clause and the driven marker, so the skill reads it as its own.
-func Steered(prompt, steering string) string {
+func steered(prompt, steering string) string {
 	if steering == "" {
 		return prompt
 	}

@@ -32,7 +32,7 @@ func TestDriveCatchesUpAShipTypedByHand(t *testing.T) {
 	resume := "herdr agent prompt " + testkit.AgentOf("GH-1") + " /f10:ship GH-1 resume at pr (entry 4) --driven"
 
 	fx.f.Script(
-		"herdr agent prompt "+testkit.AgentOf("GH-1")+" "+SkillPrompt("plan", "GH-1", nil, runplan.ShipFlow{}, false),
+		"herdr agent prompt "+testkit.AgentOf("GH-1")+" "+skillPrompt("plan", "GH-1", nil, runplan.ShipFlow{}, false),
 		"{}",
 	)
 
@@ -196,7 +196,7 @@ func TestDriveHaltsOnlyOnRepeatedFailureWithNoProgress(t *testing.T) {
 // The fingerprint leaves out what moves on every turn, and takes in what
 // only progress moves.
 func TestTaskStateFingerprint(t *testing.T) {
-	base := TaskState{Head: "c1", Run: &state.Run{Plan: "done", Ship: "failed", Leaf: "implement"}}
+	base := taskState{Head: "c1", Run: &state.Run{Plan: "done", Ship: "failed", Leaf: "implement"}}
 
 	same := base
 	same.Run = &state.Run{Plan: "done", Ship: "failed", Leaf: "implement", Note: "another note"}
@@ -205,7 +205,7 @@ func TestTaskStateFingerprint(t *testing.T) {
 		t.Error("a new note changed the fingerprint")
 	}
 
-	for name, moved := range map[string]TaskState{
+	for name, moved := range map[string]taskState{
 		"commit":   {Head: "c2", Run: base.Run},
 		"review":   {Head: "c1", Reviews: 1, Run: base.Run},
 		"pr":       {Head: "c1", Pr: "7", Run: base.Run},
@@ -224,20 +224,20 @@ func TestTaskStateShipped(t *testing.T) {
 	running := &state.Run{Ship: "running", Pipeline: pipeline}
 
 	cases := map[string]struct {
-		s    TaskState
+		s    taskState
 		want bool
 	}{
 		"no pipeline, PR open and pushed": {
-			s:    TaskState{Head: "c", Origin: "c", Code: true, Pr: "7"},
+			s:    taskState{Head: "c", Origin: "c", Code: true, Pr: "7"},
 			want: true,
 		},
-		"no pipeline, push behind": {s: TaskState{Head: "c", Origin: "b", Code: true, Pr: "7"}},
-		"no pipeline, no PR":       {s: TaskState{Head: "c", Origin: "c", Code: true}},
+		"no pipeline, push behind": {s: taskState{Head: "c", Origin: "b", Code: true, Pr: "7"}},
+		"no pipeline, no PR":       {s: taskState{Head: "c", Origin: "c", Code: true}},
 		"stopped at the change judge": {
-			s: TaskState{Head: "c", Origin: "c", Code: true, Pr: "7", Reviews: 1, Run: running},
+			s: taskState{Head: "c", Origin: "c", Code: true, Pr: "7", Reviews: 1, Run: running},
 		},
 		"every gate in": {
-			s: TaskState{
+			s: taskState{
 				Head:         "c",
 				Origin:       "c",
 				Code:         true,
@@ -249,7 +249,7 @@ func TestTaskStateShipped(t *testing.T) {
 			want: true,
 		},
 		"commit flow": {
-			s: TaskState{
+			s: taskState{
 				Head: "c",
 				Code: true,
 				Run:  &state.Run{Ship: "running", Pipeline: []string{"implement", "commit"}},
@@ -264,7 +264,7 @@ func TestTaskStateShipped(t *testing.T) {
 		}
 	}
 
-	failed := TaskState{Head: "c", Origin: "c", Code: true, Pr: "7", Run: &state.Run{Ship: "failed"}}
+	failed := taskState{Head: "c", Origin: "c", Code: true, Pr: "7", Run: &state.Run{Ship: "failed"}}
 	if failed.Has("ship") {
 		t.Error("an explicit ship stop read as shipped")
 	}
@@ -284,9 +284,9 @@ func TestCatchupAttemptsCountTheFingerprint(t *testing.T) {
 
 	in.Out = &out
 
-	attempt := func(fp string) *DriveResult {
-		res, ok := EndOf(
-			in.AttemptAt(r, "catchup", fp, Halted("GH-1", "ship", "GH-1 still conflicts with main")),
+	attempt := func(fp string) *driveResult {
+		res, ok := endOf(
+			in.AttemptAt(r, "catchup", fp, halted("GH-1", "ship", "GH-1 still conflicts with main")),
 		)
 		if !ok {
 			return nil
@@ -331,7 +331,7 @@ func TestAttemptLinesSayWhatTheyCount(t *testing.T) {
 	in.Out = &out
 
 	for _, fp := range []string{"a", "b", "b"} {
-		if res := in.AttemptAt(r, "ship", fp, DriveResult{Reason: "pr: base not on origin"}); res != nil {
+		if res := in.AttemptAt(r, "ship", fp, driveResult{Reason: "pr: base not on origin"}); res != nil {
 			t.Fatalf("halted early: %+v", res)
 		}
 	}

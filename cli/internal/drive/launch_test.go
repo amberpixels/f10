@@ -27,7 +27,7 @@ func TestDriveLaunchesWithTheFirstSkill(t *testing.T) {
 	}
 
 	want := "herdr agent start " + testkit.AgentOf("GH-1") + " --kind claude --pane pane:1 -- " +
-		SkillPrompt("judge", "GH-1", nil, runplan.ShipFlow{}, false)
+		skillPrompt("judge", "GH-1", nil, runplan.ShipFlow{}, false)
 	if len(fx.f.Launches) != 1 || fx.f.Launches[0] != want {
 		t.Errorf("launches = %q, want %q", fx.f.Launches, want)
 	}

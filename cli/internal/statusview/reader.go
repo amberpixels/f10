@@ -51,7 +51,7 @@ type statusReader struct {
 	eventsOnce sync.Once
 	events     []ledger.Event
 	gatesOnce  sync.Once
-	gates      GateSource
+	gates      gateSource
 	drivesOnce sync.Once
 	active     []drivestore.Live // the drive records, read once for both the rows and the gates
 }
@@ -84,7 +84,7 @@ func (rd *statusReader) Task(ctx context.Context, v StatusView, token string, gu
 	}
 
 	in, err := taskStatusFor(ctx, rd.t, r, suffix)
-	if errors.Is(err, ErrNoRunToRead) && !guessed {
+	if errors.Is(err, errNoRunToRead) && !guessed {
 		rows, cerr := rd.parentRows(ctx, r)
 
 		switch {
@@ -103,11 +103,11 @@ func (rd *statusReader) Task(ctx context.Context, v StatusView, token string, gu
 		return statusPrinted{}, err
 	}
 
-	runs, others := TaskRuns(InRoot(rd.live, in.Root), in.ID)
+	runs, others := taskRuns(InRoot(rd.live, in.Root), in.ID)
 	ship := rd.shipment(ctx, in, runs)
 
 	if len(runs) == 0 {
-		fb := TaskFallback(in, others, ship)
+		fb := taskFallback(in, others, ship)
 
 		if v.JSON {
 			return statusPrinted{Printed: true}, ui.JSON(v.Out, fb)
@@ -118,7 +118,7 @@ func (rd *statusReader) Task(ctx context.Context, v StatusView, token string, gu
 		return statusPrinted{Printed: true}, nil
 	}
 
-	gates := make([][]Gate, len(runs))
+	gates := make([][]gate, len(runs))
 	for i, r := range runs {
 		gates[i] = rd.gatesOf(ctx, in.ID, in.Branch, in.Root, r)
 	}
@@ -126,7 +126,7 @@ func (rd *statusReader) Task(ctx context.Context, v StatusView, token string, gu
 	asks := slices.ContainsFunc(runs, func(r *state.Run) bool { return r.Ask != "" })
 
 	return statusPrinted{Printed: true, asks: asks},
-		WriteRuns(v, runs, gates, &ship, true, in.agent, rd.now)
+		writeRuns(v, runs, gates, &ship, true, in.agent, rd.now)
 }
 
 // ledger is the project's events. A ledger that is missing or will not
@@ -137,9 +137,9 @@ func (rd *statusReader) ledger(ctx context.Context) []ledger.Event {
 	return rd.events
 }
 
-func (rd *statusReader) gateSource(ctx context.Context) GateSource {
+func (rd *statusReader) gateSource(ctx context.Context) gateSource {
 	rd.gatesOnce.Do(func() {
-		rd.gates = GateSource{
+		rd.gates = gateSource{
 			events: rd.ledger(ctx),
 			Main:   rd.main,
 			Eff:    rd.t.Effective,
@@ -148,7 +148,7 @@ func (rd *statusReader) gateSource(ctx context.Context) GateSource {
 			host:   rd.host,
 			Shared: rd.t.Layout.StorageRoot.Path(),
 		}
-		rd.gates.driveFlows = DriveFlows(rd.drives())
+		rd.gates.driveFlows = driveFlows(rd.drives())
 	})
 
 	return rd.gates
@@ -172,15 +172,15 @@ func (rd *statusReader) idOf(ctx context.Context) func(string) string {
 
 // gatesOf is a task's gates, its findings and verdicts read from its
 // checkout's storage root, else the shared one.
-func (rd *statusReader) gatesOf(ctx context.Context, id, branch, root string, run *state.Run) []Gate {
+func (rd *statusReader) gatesOf(ctx context.Context, id, branch, root string, run *state.Run) []gate {
 	gs := rd.gateSource(ctx)
 
 	return gs.gatesOf(ctx, id, branch, root, gs.StorageFor(ctx, root), run)
 }
 
 // rows is the row reads bound to this call.
-func (rd *statusReader) rows(ctx context.Context) RowSource {
-	return RowSource{
+func (rd *statusReader) rows(ctx context.Context) rowSource {
+	return rowSource{
 		Live:    rd.live,
 		Events:  rd.ledger(ctx),
 		main:    rd.main,
@@ -201,7 +201,7 @@ func (rd *statusReader) rows(ctx context.Context) RowSource {
 		},
 		Resolve: rd.idOf(ctx),
 		host:    rd.host,
-		Driven:  DrivenTasks(rd.drives()),
+		Driven:  drivenTasks(rd.drives()),
 		gates:   rd.gatesOf,
 	}
 }
@@ -211,10 +211,10 @@ func (rd *statusReader) rows(ctx context.Context) RowSource {
 // skill call reseeds its run, and the block takes the run's; with no run,
 // the host is asked for the PR's state the no-run block shows.
 //
-//nolint:lostfield // a read: ReadShipment fills the fields
-func (rd *statusReader) shipment(ctx context.Context, in TaskStatusInput, runs []*state.Run) Shipment {
+//nolint:lostfield // a read: readShipment fills the fields
+func (rd *statusReader) shipment(ctx context.Context, in taskStatusInput, runs []*state.Run) Shipment {
 	known := ledger.LookupRefs(ctx, rd.t.RefProject(ctx), []string{in.ID})[in.ID]
-	s := ReadShipment(ctx, in, rd.ledger(ctx), known)
+	s := readShipment(ctx, in, rd.ledger(ctx), known)
 
 	if len(runs) == 0 {
 		s.AskPR(ctx, in)
@@ -240,7 +240,7 @@ func (rd *statusReader) launches(ctx context.Context, v StatusView, sid string) 
 		return statusPrinted{}, nil
 	}
 
-	rows := DropRows(rd.rows(ctx).RowsFrom(ctx, kids), func(r TaskRow) bool { return r.Stage == StageDone })
+	rows := dropRows(rd.rows(ctx).RowsFrom(ctx, kids), func(r TaskRow) bool { return r.Stage == StageDone })
 	if len(rows) == 0 {
 		return statusPrinted{}, nil
 	}
@@ -249,7 +249,7 @@ func (rd *statusReader) launches(ctx context.Context, v StatusView, sid string) 
 }
 
 func (rd *statusReader) printRows(v StatusView, rows []TaskRow, head string) (statusPrinted, error) {
-	asks := slices.ContainsFunc(rows, func(r TaskRow) bool { return r.Stage == StageAsking })
+	asks := slices.ContainsFunc(rows, func(r TaskRow) bool { return r.Stage == stageAsking })
 
 	return statusPrinted{Printed: true, asks: asks}, writeTaskRows(v, rows, head)
 }

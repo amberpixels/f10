@@ -46,28 +46,28 @@ func TestDecideWatch(t *testing.T) {
 			name: "merged, report mode",
 			task: WatchedTask{Pr: mergedPR(), LocalSHA: "abc"},
 			mode: "report",
-			kind: WatchMerged,
+			kind: watchMerged,
 		},
 		{
 			name: "merged, finish mode",
 			task: WatchedTask{Pr: mergedPR(), LocalSHA: "abc", Agent: agentctl.StatusIdle, Listed: true},
 			mode: "finish",
-			kind: WatchMerged,
+			kind: watchMerged,
 			act:  true,
 		},
 		{
 			name: "merged, no workspace", task: WatchedTask{Pr: mergedPR(), LocalSHA: "abc", Listed: true},
-			mode: "finish", kind: WatchMerged, act: true,
+			mode: "finish", kind: watchMerged, act: true,
 		},
 		{
 			name: "merged, agent status unknown", task: WatchedTask{Pr: mergedPR(), LocalSHA: "abc"},
-			mode: "finish", kind: WatchMerged,
+			mode: "finish", kind: watchMerged,
 		},
 		{
 			name: "merged, agent working",
 			task: WatchedTask{Pr: mergedPR(), Agent: agentctl.StatusWorking, Listed: true},
 			mode: "finish",
-			kind: WatchMerged,
+			kind: watchMerged,
 		},
 		{
 			name: "host did not answer",
@@ -79,18 +79,18 @@ func TestDecideWatch(t *testing.T) {
 		},
 		{
 			name: "merged with commits the PR lacks", task: WatchedTask{Pr: mergedPR(), LocalSHA: "def"},
-			mode: "finish", kind: WatchMerged,
+			mode: "finish", kind: watchMerged,
 		},
 		{
 			name: "closed", task: WatchedTask{Pr: &forge.PR{URL: "u", Status: forge.Closed}},
-			mode: "finish", kind: WatchClosed,
+			mode: "finish", kind: watchClosed,
 		},
 		{name: "open, nothing to say", task: WatchedTask{Pr: &forge.PR{Status: forge.Open}}, mode: "report"},
 		{
 			name: "stalled",
 			task: WatchedTask{Run: running, Agent: agentctl.StatusIdle},
 			mode: "report",
-			kind: WatchStalled,
+			kind: watchStalled,
 		},
 		{
 			name: "idle, under the grace",
@@ -102,12 +102,12 @@ func TestDecideWatch(t *testing.T) {
 			task: WatchedTask{Run: running, Agent: agentctl.StatusWorking},
 			mode: "report",
 		},
-		{name: "blocked", task: WatchedTask{Run: blocked}, mode: "report", kind: WatchStopped},
+		{name: "blocked", task: WatchedTask{Run: blocked}, mode: "report", kind: watchStopped},
 		{
 			name: "shipped",
 			task: WatchedTask{Run: &state.Run{Ship: "done", Updated: watchNow}},
 			mode: "report",
-			kind: WatchStopped,
+			kind: watchStopped,
 		},
 	}
 
@@ -115,7 +115,7 @@ func TestDecideWatch(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			c.task.ID = "FT-1"
 
-			rep, act := DecideWatch(c.task, c.mode, watchNow)
+			rep, act := decideWatch(c.task, c.mode, watchNow)
 
 			kind := ""
 			if rep != nil {
@@ -128,15 +128,15 @@ func TestDecideWatch(t *testing.T) {
 		})
 	}
 
-	rep, _ := DecideWatch(WatchedTask{ID: "FT-1", Run: blocked}, "report", watchNow)
+	rep, _ := decideWatch(WatchedTask{ID: "FT-1", Run: blocked}, "report", watchNow)
 	if rep.Ask != blocked.Ask || rep.Text != "ship blocked at judge: rethink" {
 		t.Errorf("blocked report = %+v", rep)
 	}
 }
 
-type collected []WatchReport
+type collected []watchReport
 
-func (c *collected) Report(r WatchReport) { *c = append(*c, r) }
+func (c *collected) Report(r watchReport) { *c = append(*c, r) }
 
 // The same fact is told once; a new one, and a task gone, change the store.
 func TestReconcileReportsOnce(t *testing.T) {
@@ -144,7 +144,7 @@ func TestReconcileReportsOnce(t *testing.T) {
 
 	now := watchNow
 	in := WatchInput{Mode: "report", Now: func() time.Time { return now }, Out: &out}
-	store := map[string]WatchReport{"FT-9": {Kind: WatchStalled, Key: "x", At: now}}
+	store := map[string]watchReport{"FT-9": {Kind: watchStalled, Key: "x", At: now}}
 
 	blocked := &state.Run{Ship: "blocked", Updated: now}
 	tasks := []WatchedTask{{ID: "FT-1", Run: blocked}}
@@ -174,7 +174,7 @@ func TestReconcileNeverRetellsAFact(t *testing.T) {
 	var out collected
 
 	in := WatchInput{Mode: "report", Now: func() time.Time { return watchNow }, Out: &out}
-	store := map[string]WatchReport{}
+	store := map[string]watchReport{}
 
 	merged := WatchedTask{ID: "FT-1", Pr: mergedPR(), LocalSHA: "abc"}
 	ahead := WatchedTask{ID: "FT-1", Pr: mergedPR(), LocalSHA: "def"}
@@ -197,8 +197,8 @@ func TestReconcileFinishes(t *testing.T) {
 		err  error
 		kind string
 	}{
-		{err: nil, kind: WatchFinished},
-		{err: errors.New("dirty"), kind: WatchRefused},
+		{err: nil, kind: watchFinished},
+		{err: errors.New("dirty"), kind: watchRefused},
 		{err: drivestore.HeldError{Key: "FT-1", Holder: drivestore.Holder{Drive: 2}}, kind: ""},
 	} {
 		var out collected
@@ -215,7 +215,7 @@ func TestReconcileFinishes(t *testing.T) {
 			},
 		}
 
-		in.Reconcile(t.Context(), []WatchedTask{task}, map[string]WatchReport{})
+		in.Reconcile(t.Context(), []WatchedTask{task}, map[string]watchReport{})
 
 		if calls != 1 {
 			t.Errorf("%v: finish ran %d times", c.err, calls)
@@ -234,11 +234,11 @@ func TestReconcileFinishes(t *testing.T) {
 
 func TestWatchStoreRoundTrip(t *testing.T) {
 	root := t.TempDir()
-	want := map[string]WatchReport{
-		"FT-1": {Kind: WatchMerged, Text: "t", Next: "n", Key: "k", At: watchNow},
+	want := map[string]watchReport{
+		"FT-1": {Kind: watchMerged, Text: "t", Next: "n", Key: "k", At: watchNow},
 	}
 
-	if err := SaveWatchStore(root, want); err != nil {
+	if err := saveWatchStore(root, want); err != nil {
 		t.Fatal(err)
 	}
 
@@ -247,12 +247,12 @@ func TestWatchStoreRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if r := got["FT-1"]; r.Key != "k" || r.Kind != WatchMerged || !r.At.Equal(watchNow) {
+	if r := got["FT-1"]; r.Key != "k" || r.Kind != watchMerged || !r.At.Equal(watchNow) {
 		t.Errorf("read back %+v", got)
 	}
 }
 
-// CollectWatched reads only task worktrees, marks an owned and a handed
+// collectWatched reads only task worktrees, marks an owned and a handed
 // back one, and counts only local task branches toward watching.
 func TestCollectWatched(t *testing.T) {
 	fx := finishtest.NewJanitorFixture(t)
@@ -287,7 +287,7 @@ func TestCollectWatched(t *testing.T) {
 		Now:      time.Now,
 	}
 
-	tasks, local, err := CollectWatched(t.Context(), in)
+	tasks, local, err := collectWatched(t.Context(), in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -361,7 +361,7 @@ func TestRecheckFinish(t *testing.T) {
 				f.Script("git rev-parse -q --verify refs/heads/GH-1/x", c.tip)
 			}
 
-			err := RecheckFinish(t.Context(), c.backend, t.TempDir(), task)
+			err := recheckFinish(t.Context(), c.backend, t.TempDir(), task)
 			if (err == nil) != c.ok {
 				t.Errorf("err = %v, want ok=%v", err, c.ok)
 			}
@@ -375,7 +375,7 @@ func TestHostTrouble(t *testing.T) {
 	var out collected
 
 	in := WatchInput{Mode: "report", Now: func() time.Time { return watchNow }, Out: &out}
-	store := map[string]WatchReport{}
+	store := map[string]watchReport{}
 	tasks := []WatchedTask{{ID: "FT-1", HostErr: errors.New("gh: HTTP 401")}, {ID: "FT-2"}}
 
 	in.HostTrouble(tasks, store)
@@ -385,13 +385,13 @@ func TestHostTrouble(t *testing.T) {
 		t.Errorf("reports = %+v", out)
 	}
 
-	if _, ok := store[WatchHostKey]; !ok {
+	if _, ok := store[watchHostKey]; !ok {
 		t.Error("f10 watch would not show the host trouble")
 	}
 
 	in.HostTrouble(tasks[1:], store)
 
-	if _, ok := store[WatchHostKey]; ok {
+	if _, ok := store[watchHostKey]; ok {
 		t.Error("the host answered, and its trouble stayed")
 	}
 }
@@ -411,7 +411,7 @@ func TestCollectWatchedSkipsAnUnreadableMark(t *testing.T) {
 		Warn: func(line string) { warned = append(warned, line) },
 	}
 
-	tasks, _, err := CollectWatched(t.Context(), in)
+	tasks, _, err := collectWatched(t.Context(), in)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -425,7 +425,7 @@ func TestCollectWatchedSkipsAnUnreadableMark(t *testing.T) {
 		t.Errorf("warned = %q", warned)
 	}
 
-	if rep, _ := DecideWatch(tasks[0], "finish", time.Now()); rep != nil {
+	if rep, _ := decideWatch(tasks[0], "finish", time.Now()); rep != nil {
 		t.Errorf("a task whose mark is unreadable got a report: %+v", rep)
 	}
 }
@@ -453,7 +453,7 @@ func TestWatchRetriesADeferredPull(t *testing.T) {
 		Now:  func() time.Time { return watchNow },
 		Warn: func(l string) { said = append(said, l) },
 	}
-	store := map[string]WatchReport{}
+	store := map[string]watchReport{}
 
 	for range 2 {
 		if !in.RetryPull(t.Context(), store) {
@@ -461,7 +461,7 @@ func TestWatchRetriesADeferredPull(t *testing.T) {
 		}
 	}
 
-	if len(out) != 1 || out[0].Kind != WatchUnpulled {
+	if len(out) != 1 || out[0].Kind != watchUnpulled {
 		t.Errorf("reports = %+v, want one unpulled", out)
 	}
 
@@ -472,7 +472,7 @@ func TestWatchRetriesADeferredPull(t *testing.T) {
 		t.Error("a landed pull still keeps the project")
 	}
 
-	if _, ok := store[WatchPullKey]; ok || len(said) != 1 {
+	if _, ok := store[watchPullKey]; ok || len(said) != 1 {
 		t.Errorf("store %v, said %q; want the entry gone and the pull said", store, said)
 	}
 

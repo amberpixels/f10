@@ -19,8 +19,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/timing"
 )
 
-// A Gate is one row of a task's flow: a plain step, its review or a judge.
-type Gate struct {
+// A gate is one row of a task's flow: a plain step, its review or a judge.
+type gate struct {
 	Step    string                `json:"step"`
 	Label   string                `json:"label,omitempty"`  // the entry's display name, shown in place of Step
 	State   string                `json:"state,omitempty"`  // plain steps and judges
@@ -28,14 +28,14 @@ type Gate struct {
 	Action  string                `json:"action,omitempty"` // drive's finish: what it is doing
 	Judged  string                `json:"judged,omitempty"` // a judge: task, plan or change
 	Outcome *archive.JudgeOutcome `json:"outcome,omitempty"`
-	Local   *ReviewHalf           `json:"local,omitempty"`
-	Remote  *ReviewHalf           `json:"remote,omitempty"`
+	Local   *reviewHalf           `json:"local,omitempty"`
+	Remote  *reviewHalf           `json:"remote,omitempty"`
 }
 
 // Shown is the gate's name as a person reads it: its label, else its step.
-func (g Gate) Shown() string { return cmp.Or(g.Label, g.Step) }
+func (g gate) Shown() string { return cmp.Or(g.Label, g.Step) }
 
-func (g Gate) Text() string {
+func (g gate) Text() string {
 	switch {
 	case g.Local != nil || g.Remote != nil:
 		var parts []string
@@ -56,15 +56,15 @@ func (g Gate) Text() string {
 	return g.StateText()
 }
 
-func (g Gate) StateText() string {
+func (g gate) StateText() string {
 	switch {
-	case (g.State == GateRunning || g.State == gateQueued) && g.Via != "" && g.Action != "":
+	case (g.State == gateRunning || g.State == gateQueued) && g.Via != "" && g.Action != "":
 		return g.State + " (" + g.Via + "): " + g.Action
-	case (g.State == GateRunning || g.State == gateQueued) && g.Via != "":
+	case (g.State == gateRunning || g.State == gateQueued) && g.Via != "":
 		return g.State + " (" + g.Via + ")"
 	case g.State == gateWaiting && g.Action != "":
 		return g.State + " " + g.Action
-	case g.State == GateDone && g.Outcome != nil:
+	case g.State == gateDone && g.Outcome != nil:
 		text := g.Outcome.Verdict
 		if done := g.Outcome.Done(); done != "" {
 			text += " (" + done + ")"
@@ -80,11 +80,11 @@ func (g Gate) StateText() string {
 	return g.State
 }
 
-func (g Gate) CompactState() string {
+func (g gate) CompactState() string {
 	switch g.State {
-	case GateRunning:
+	case gateRunning:
 		return "…"
-	case GateDone:
+	case gateDone:
 		if g.Outcome != nil {
 			return g.Outcome.Verdict
 		}
@@ -94,12 +94,12 @@ func (g Gate) CompactState() string {
 }
 
 // style is the badge status whose palette the gate prints in.
-func (g Gate) style() string {
+func (g gate) style() string {
 	states := []string{g.State}
 	if g.Local != nil || g.Remote != nil {
 		states = nil
 
-		for _, h := range []*ReviewHalf{g.Local, g.Remote} {
+		for _, h := range []*reviewHalf{g.Local, g.Remote} {
 			if h != nil {
 				states = append(states, h.State)
 			}
@@ -107,7 +107,7 @@ func (g Gate) style() string {
 	}
 
 	switch {
-	case slices.Contains(states, GateRunning):
+	case slices.Contains(states, gateRunning):
 		return "running"
 	case slices.ContainsFunc(states, state.Stopped):
 		return "failed"
@@ -115,24 +115,24 @@ func (g Gate) style() string {
 		return "blocked"
 	case slices.Contains(states, gateOpen):
 		return "partial"
-	case !slices.ContainsFunc(states, func(s string) bool { return s != GateDone && s != gateSettled }):
+	case !slices.ContainsFunc(states, func(s string) bool { return s != gateDone && s != gateSettled }):
 		return "done"
 	}
 
 	return state.Upcoming
 }
 
-type ReviewHalf struct {
+type reviewHalf struct {
 	State  string        `json:"state"`
 	Via    string        `json:"via,omitempty"`
 	Action string        `json:"action,omitempty"` // running: review, or resolve settling it
 	Detail string        `json:"detail,omitempty"` // unknown: why
-	Rounds []ReviewRound `json:"rounds,omitempty"`
+	Rounds []reviewRound `json:"rounds,omitempty"`
 }
 
-func (h *ReviewHalf) text() string {
+func (h *reviewHalf) text() string {
 	switch h.State {
-	case GateRunning:
+	case gateRunning:
 		what := fmt.Sprintf("round %d running", len(h.Rounds)+1)
 
 		switch h.Action {
@@ -169,13 +169,13 @@ func (h *ReviewHalf) text() string {
 	return h.State
 }
 
-func (h *ReviewHalf) compact() string {
+func (h *reviewHalf) compact() string {
 	if h == nil {
 		return "-"
 	}
 
 	switch h.State {
-	case GateRunning:
+	case gateRunning:
 		return "…"
 	case gateUnknown:
 		return "?"
@@ -205,11 +205,11 @@ func (h *ReviewHalf) compact() string {
 // blocked, partial) on the step it stopped at.
 const (
 	GateOff      = "not in this flow"
-	GateUpcoming = state.Upcoming
-	GateRunning  = "running"
+	gateUpcoming = state.Upcoming
+	gateRunning  = "running"
 	gateQueued   = "queued"
 	gateWaiting  = "waiting" // a driven ship parked on its base's code
-	GateDone     = "done"
+	gateDone     = "done"
 	gateSkipped  = "skipped"
 	gateOpen     = "open"
 	gateSettled  = "settled"
@@ -218,10 +218,10 @@ const (
 
 // How a running gate was started.
 const (
-	ViaShip   = "in ship"
+	viaShip   = "in ship"
 	viaDriven = "driven"
 	viaManual = "manual"
-	ViaDrive  = "drive" // finish, which drive runs in its own process
+	viaDrive  = "drive" // finish, which drive runs in its own process
 	viaHost   = "on host"
 )
 
@@ -229,12 +229,12 @@ const (
 // half is unknown and the rest of the status still prints.
 var remoteTimeout = 5 * time.Second
 
-type RemoteState struct {
+type remoteState struct {
 	Found, Done, Handled, Settled bool
 	Err                           error
 }
 
-type GateInput struct {
+type gateInput struct {
 	Task, Branch, Checkout string
 
 	Run      *state.Run // live, or the ledger's last claim; nil for none
@@ -246,12 +246,12 @@ type GateInput struct {
 	// RemoteFlow is a remote reviewer declared: it reviews every PR
 	RemoteFlow bool
 
-	Outcomes Outcomes
-	Remote   func(ctx context.Context) RemoteState // nil: no host to ask
+	Outcomes outcomes
+	Remote   func(ctx context.Context) remoteState // nil: no host to ask
 	Now      time.Time
 }
 
-func (in GateInput) ClaimedAt(session, step string) time.Time {
+func (in gateInput) ClaimedAt(session, step string) time.Time {
 	var at time.Time
 
 	for _, e := range in.Events {
@@ -270,7 +270,7 @@ func (in GateInput) ClaimedAt(session, step string) time.Time {
 // flow is the entries the task runs through: ship's, then finish when
 // drive finishes the branch. plan and resolve are no gates: the plan phase
 // row shows the one, a review gate folds in the other.
-func (in GateInput) flow() flow.Flow {
+func (in gateInput) flow() flow.Flow {
 	entries := in.Pipeline
 	if in.Run != nil && len(in.Run.Pipeline) > 0 {
 		entries = in.Run.Entries()
@@ -286,10 +286,10 @@ func (in GateInput) flow() flow.Flow {
 // stepStates follows the claims ship's session made: steps before the one
 // it is on are done, that one has the run's status, the rest are upcoming.
 // finish is done once drive recorded it.
-func (in GateInput) stepStates(entries flow.Flow) []string {
+func (in gateInput) stepStates(entries flow.Flow) []string {
 	states := make([]string, len(entries))
 	for i := range states {
-		states[i] = GateUpcoming
+		states[i] = gateUpcoming
 	}
 
 	shipLen := len(entries)
@@ -297,7 +297,7 @@ func (in GateInput) stepStates(entries flow.Flow) []string {
 		shipLen--
 
 		if in.Driven == "finish" {
-			states[shipLen] = GateDone
+			states[shipLen] = gateDone
 		}
 	}
 
@@ -309,7 +309,7 @@ func (in GateInput) stepStates(entries flow.Flow) []string {
 	ship := entries[:shipLen].Strings()
 	at, j := -1, 0
 
-	for _, step := range ShipSteps(in.Events, r.Session, in.Now) {
+	for _, step := range shipSteps(in.Events, r.Session, in.Now) {
 		if k := slices.Index(ship[j:], step); k >= 0 {
 			at, j = j+k, j+k+1
 		}
@@ -324,17 +324,17 @@ func (in GateInput) stepStates(entries flow.Flow) []string {
 
 		switch {
 		case r.Ship == "done" && (at < 0 || k <= at):
-			s = GateDone
+			s = gateDone
 		case r.Ship == "done":
 			s = gateSkipped
 		case k < at:
-			s = GateDone
+			s = gateDone
 		case k == at && r.Wait != "" && state.Stopped(r.Ship):
 			s = gateWaiting
 		case k == at:
 			s = r.Ship
 		default:
-			s = GateUpcoming
+			s = gateUpcoming
 		}
 
 		states[k] = s
@@ -343,23 +343,23 @@ func (in GateInput) stepStates(entries flow.Flow) []string {
 	return states
 }
 
-func (in GateInput) finishGate(st string) Gate {
-	g := Gate{Step: "finish", State: st}
-	if st != GateUpcoming || in.Finish.State == "" || !in.shipDone() {
+func (in gateInput) finishGate(st string) gate {
+	g := gate{Step: "finish", State: st}
+	if st != gateUpcoming || in.Finish.State == "" || !in.shipDone() {
 		return g
 	}
 
-	g.Via, g.Action = ViaDrive, in.Finish.Action
+	g.Via, g.Action = viaDrive, in.Finish.Action
 
 	g.State = gateQueued
 	if in.Finish.Running() {
-		g.State = GateRunning
+		g.State = gateRunning
 	}
 
 	return g
 }
 
-func (in GateInput) shipDone() bool {
+func (in gateInput) shipDone() bool {
 	if in.Run != nil && in.Run.Ship == "done" {
 		return true
 	}
@@ -369,31 +369,31 @@ func (in GateInput) shipDone() bool {
 
 // reviewBy is who the review entry at i runs, an optional CI review
 // settled as the flow resolution settles it.
-func (in GateInput) reviewBy(entries flow.Flow, i int) facts.By {
+func (in gateInput) reviewBy(entries flow.Flow, i int) facts.By {
 	by, _ := facts.ReviewBy(entries[i].Arg)
 	by, _ = by.Settle(in.RemoteFlow, entries.PublishedBefore(i))
 
 	return by
 }
 
-func (in GateInput) half(entries flow.Flow, steps []string, remote, inFlow bool) *ReviewHalf {
+func (in gateInput) half(entries flow.Flow, steps []string, remote, inFlow bool) *reviewHalf {
 	h := in.readHalf(entries, steps, remote)
 
 	// a half the flow does not declare shows once something ran it
-	if !inFlow && h.State == GateUpcoming {
+	if !inFlow && h.State == gateUpcoming {
 		return nil
 	}
 
 	return h
 }
 
-func (in GateInput) readHalf(entries flow.Flow, steps []string, remote bool) *ReviewHalf {
+func (in gateInput) readHalf(entries flow.Flow, steps []string, remote bool) *reviewHalf {
 	rounds, last := in.Outcomes.Local, in.Outcomes.LocalAt
 	if remote {
 		rounds, last = in.Outcomes.Remote, in.Outcomes.RemoteAt
 	}
 
-	h := &ReviewHalf{State: GateUpcoming, Rounds: rounds}
+	h := &reviewHalf{State: gateUpcoming, Rounds: rounds}
 
 	if len(rounds) > 0 {
 		h.State = gateSettled
@@ -412,8 +412,8 @@ func (in GateInput) readHalf(entries flow.Flow, steps []string, remote bool) *Re
 		}
 
 		switch s := steps[i]; {
-		case s == GateRunning:
-			h.State, h.Via, h.Action = GateRunning, ViaShip, "review"
+		case s == gateRunning:
+			h.State, h.Via, h.Action = gateRunning, viaShip, "review"
 
 			// a round written since ship entered the review is being resolved;
 			// with both halves in the entry, only once both have landed
@@ -443,7 +443,7 @@ func (in GateInput) readHalf(entries flow.Flow, steps []string, remote bool) *Re
 
 	for _, skill := range []string{"resolve", "review"} {
 		if m := in.started(skill, remote, last); m != nil {
-			h.State, h.Via, h.Action = GateRunning, m.via, skill
+			h.State, h.Via, h.Action = gateRunning, m.via, skill
 
 			return h
 		}
@@ -452,7 +452,7 @@ func (in GateInput) readHalf(entries flow.Flow, steps []string, remote bool) *Re
 	return h
 }
 
-func (in GateInput) hostHalf(ctx context.Context, h *ReviewHalf) {
+func (in gateInput) hostHalf(ctx context.Context, h *reviewHalf) {
 	rs := in.Remote(ctx)
 
 	switch {
@@ -460,27 +460,27 @@ func (in GateInput) hostHalf(ctx context.Context, h *ReviewHalf) {
 		h.State, h.Detail = gateUnknown, "timed out"
 	case rs.Err != nil:
 		h.State, h.Detail = gateUnknown, firstErrLine(rs.Err)
-	case !rs.Found || h.State == GateRunning:
+	case !rs.Found || h.State == gateRunning:
 	case !rs.Done:
-		h.State, h.Via = GateRunning, viaHost
+		h.State, h.Via = gateRunning, viaHost
 	case rs.Settled:
 		h.State = gateSettled
 	case !rs.Handled:
 		h.State = gateOpen
-	case h.State == GateUpcoming:
+	case h.State == gateUpcoming:
 		h.State = gateSettled
 	}
 }
 
-func (in GateInput) judge(g *Gate, judged string, entries flow.Flow, steps []string) {
+func (in gateInput) judge(g *gate, judged string, entries flow.Flow, steps []string) {
 	out, last := in.Outcomes.ChangeJudge, in.Outcomes.changeAt
 	if judged == "plan" {
 		out, last = in.Outcomes.PlanJudge, in.Outcomes.planAt
 	}
 
-	g.State = GateUpcoming
+	g.State = gateUpcoming
 	if out != nil {
-		g.State, g.Outcome = GateDone, out
+		g.State, g.Outcome = gateDone, out
 	}
 
 	for i, e := range entries {
@@ -489,8 +489,8 @@ func (in GateInput) judge(g *Gate, judged string, entries flow.Flow, steps []str
 		}
 
 		switch s := steps[i]; {
-		case s == GateRunning && judged == "change":
-			g.State, g.Via = GateRunning, ViaShip
+		case s == gateRunning && judged == "change":
+			g.State, g.Via = gateRunning, viaShip
 
 			return
 		case state.Stopped(s) && judged == "change":
@@ -507,22 +507,22 @@ func (in GateInput) judge(g *Gate, judged string, entries flow.Flow, steps []str
 	}
 
 	if m := in.started("judge", false, last); m != nil {
-		g.State, g.Via, g.Outcome = GateRunning, m.via, nil
+		g.State, g.Via, g.Outcome = gateRunning, m.via, nil
 	}
 }
 
 // taskJudge is the judge fetch runs on a task older than stale_after, shown
 // only once it ran or the plan phase is on it.
-func (in GateInput) taskJudge() (Gate, bool) {
-	g := Gate{Step: "judge", Judged: "task"}
+func (in gateInput) taskJudge() (gate, bool) {
+	g := gate{Step: "judge", Judged: "task"}
 
 	switch r := in.Run; {
-	case r != nil && r.Leaf == "judge" && (r.Plan == GateRunning || state.Stopped(r.Plan)):
+	case r != nil && r.Leaf == "judge" && (r.Plan == gateRunning || state.Stopped(r.Plan)):
 		g.State = r.Plan
 	case in.Outcomes.TaskJudge != nil:
-		g.State, g.Outcome = GateDone, in.Outcomes.TaskJudge
+		g.State, g.Outcome = gateDone, in.Outcomes.TaskJudge
 	default:
-		return Gate{}, false
+		return gate{}, false
 	}
 
 	return g, true
@@ -532,7 +532,7 @@ func (in GateInput) taskJudge() (Gate, bool) {
 // since, not a ship run's, whose session has not stopped or moved on and is
 // younger than the state TTL, since Stop writes no stop for a session that
 // ran no phase; `ci` makes a review the remote half's.
-func (in GateInput) started(skill string, remote bool, since time.Time) *startMark {
+func (in gateInput) started(skill string, remote bool, since time.Time) *startMark {
 	var (
 		mark *startMark
 		// a session's ship run is on until a claim takes ship off running;
@@ -592,13 +592,13 @@ func (in GateInput) started(skill string, remote bool, since time.Time) *startMa
 
 // onTask: the hook writes run_started before any fetch, with no task, so the
 // branch and the checkout tie a row to the task.
-func (in GateInput) onTask(e ledger.Event) bool {
+func (in gateInput) onTask(e ledger.Event) bool {
 	return (in.Branch != "" && e.Branch == in.Branch) ||
 		(in.Checkout != "" && e.Checkout != "" && gitx.Resolved(e.Checkout) == gitx.Resolved(in.Checkout))
 }
 
-// TaskGates builds the gates, nil when nothing declares a flow.
-func TaskGates(ctx context.Context, in GateInput) []Gate {
+// taskGates builds the gates, nil when nothing declares a flow.
+func taskGates(ctx context.Context, in gateInput) []gate {
 	entries := in.flow()
 	if len(entries) == 0 {
 		return nil
@@ -607,7 +607,7 @@ func TaskGates(ctx context.Context, in GateInput) []Gate {
 	steps := in.stepStates(entries)
 
 	var (
-		gates               []Gate
+		gates               []gate
 		review              = -1
 		judges              = map[string]int{}
 		local, remote, isPR bool
@@ -622,14 +622,14 @@ func TaskGates(ctx context.Context, in GateInput) []Gate {
 
 			if review < 0 {
 				review = len(gates)
-				gates = append(gates, Gate{Step: "review"})
+				gates = append(gates, gate{Step: "review"})
 			}
 		case "judge":
 			judged := entries.JudgeKind(i)
 
 			if _, ok := judges[judged]; !ok {
 				judges[judged] = len(gates)
-				gates = append(gates, Gate{Step: "judge", Judged: judged})
+				gates = append(gates, gate{Step: "judge", Judged: judged})
 			}
 		case "finish":
 			gates = append(gates, in.finishGate(steps[i]))
@@ -638,7 +638,7 @@ func TaskGates(ctx context.Context, in GateInput) []Gate {
 				isPR = true
 			}
 
-			g := Gate{Step: e.String(), Label: e.Label, State: steps[i]}
+			g := gate{Step: e.String(), Label: e.Label, State: steps[i]}
 			if g.State == gateWaiting {
 				g.Action = "on " + in.Run.Wait
 			}
@@ -650,7 +650,7 @@ func TaskGates(ctx context.Context, in GateInput) []Gate {
 	remote = remote || (in.RemoteFlow && isPR)
 
 	lh, rh := in.half(entries, steps, false, local), in.half(entries, steps, true, remote)
-	if remote && rh.State != gateSettled && rh.State != GateRunning && in.Remote != nil {
+	if remote && rh.State != gateSettled && rh.State != gateRunning && in.Remote != nil {
 		in.hostHalf(ctx, rh)
 	}
 
@@ -659,9 +659,9 @@ func TaskGates(ctx context.Context, in GateInput) []Gate {
 		// every review entry was a dropped ci?
 		gates[review].State = GateOff
 	case lh == nil && rh == nil:
-		gates = append(gates, Gate{Step: "review", State: GateOff})
+		gates = append(gates, gate{Step: "review", State: GateOff})
 	case review < 0:
-		gates = append(gates, Gate{Step: "review", Local: lh, Remote: rh})
+		gates = append(gates, gate{Step: "review", Local: lh, Remote: rh})
 	default:
 		gates[review].Local, gates[review].Remote = lh, rh
 	}
@@ -672,7 +672,7 @@ func TaskGates(ctx context.Context, in GateInput) []Gate {
 
 	// the stale task's judge is in no flow: it leads once it ran or the run is on it
 	if g, ok := in.taskJudge(); ok {
-		gates = append([]Gate{g}, gates...)
+		gates = append([]gate{g}, gates...)
 	}
 
 	// a judge the flow does not declare shows once something ran it
@@ -683,16 +683,16 @@ func TaskGates(ctx context.Context, in GateInput) []Gate {
 			continue
 		}
 
-		g := Gate{Step: "judge", Judged: judged}
+		g := gate{Step: "judge", Judged: judged}
 		in.judge(&g, judged, entries, steps)
 
-		if g.State != GateUpcoming {
+		if g.State != gateUpcoming {
 			gates, extra = append(gates, g), true
 		}
 	}
 
 	if len(judges) == 0 && !extra {
-		gates = append(gates, Gate{Step: "judge", State: GateOff})
+		gates = append(gates, gate{Step: "judge", State: GateOff})
 	}
 
 	return gates

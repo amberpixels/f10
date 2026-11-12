@@ -9,11 +9,11 @@ import (
 	"github.com/amberpixels/f10/cli/internal/stack"
 )
 
-// ReleaseDependents clears other branches' `start --after` dependency on the
+// releaseDependents clears other branches' `start --after` dependency on the
 // finished one and marks them landed: their pr must target the default
 // branch now, and their next ship or catchup must bring it in first. merged
 // says the finished branch's code reached the default branch.
-func ReleaseDependents(ctx context.Context, dir, branch, def string, merged bool) ([]string, error) {
+func releaseDependents(ctx context.Context, dir, branch, def string, merged bool) ([]string, error) {
 	records, err := branchmeta.LoadAll(ctx, dir)
 	if err != nil {
 		return nil, fmt.Errorf("reading which branches depend on %s: %w", branch, err)

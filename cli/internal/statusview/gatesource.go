@@ -24,8 +24,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
-// GateSource is what every task's gates read alike.
-type GateSource struct {
+// gateSource is what every task's gates read alike.
+type gateSource struct {
 	events []ledger.Event
 	Main   string           // where the branch config lives
 	Eff    *facts.Effective // the flows, the paces and the review every task resolves against
@@ -35,12 +35,12 @@ type GateSource struct {
 	Shared string // the storage root every checkout shares
 	// driveFlows is the flow each drive record holds its tasks under, by
 	// lead id: a task the drive has not opened has no branch to record it
-	driveFlows map[string]DriveFlow
+	driveFlows map[string]driveFlow
 }
 
 // StorageFor is where a task's findings and verdicts are: its checkout's
 // storage root, else the shared one.
-func (src GateSource) StorageFor(ctx context.Context, root string) string {
+func (src gateSource) StorageFor(ctx context.Context, root string) string {
 	if root != "" {
 		return layout.Locate(ctx, root).StorageRoot.Path()
 	}
@@ -52,7 +52,7 @@ func (src GateSource) StorageFor(ctx context.Context, root string) string {
 // when given, else the one its branch records, else the default. A pace that
 // no longer resolves leaves the flow as declared, since status must still
 // show the task.
-func (src GateSource) Pipeline(ctx context.Context, name, branch, pace string) flow.Flow {
+func (src gateSource) Pipeline(ctx context.Context, name, branch, pace string) flow.Flow {
 	declared := src.Eff.Flows[name]
 	if src.Eff.PaceSet == nil {
 		return declared.Ship()
@@ -76,8 +76,8 @@ func (src GateSource) Pipeline(ctx context.Context, name, branch, pace string) f
 	return entries.Ship()
 }
 
-func (src GateSource) gatesOf(ctx context.Context, id, branch, root, storage string, run *state.Run) []Gate {
-	in := GateInput{
+func (src gateSource) gatesOf(ctx context.Context, id, branch, root, storage string, run *state.Run) []gate {
+	in := gateInput{
 		Task:       id,
 		Branch:     branch,
 		Checkout:   root,
@@ -130,35 +130,35 @@ func (src GateSource) gatesOf(ctx context.Context, id, branch, root, storage str
 			h = h.In(root)
 		}
 
-		in.Remote = func(ctx context.Context) RemoteState {
+		in.Remote = func(ctx context.Context) remoteState {
 			return readRemote(ctx, h, src.review, branch)
 		}
 	}
 
-	return TaskGates(ctx, in)
+	return taskGates(ctx, in)
 }
 
-// A DriveFlow is the flow and the --pace a drive record names, and whether
+// A driveFlow is the flow and the --pace a drive record names, and whether
 // that drive's driver still runs: only a running one can be opening a
 // branch right now.
-type DriveFlow struct {
+type driveFlow struct {
 	Name    string
 	pace    string
 	Running bool
 }
 
-// DriveFlows maps each task of a drive neither cancelled nor done to the
+// driveFlows maps each task of a drive neither cancelled nor done to the
 // flow the drive took, the newest drive winning. A drive without --flow
 // records none, read as default: an area's pick is ship's to make.
-func DriveFlows(active []drivestore.Live) map[string]DriveFlow {
-	out := map[string]DriveFlow{}
+func driveFlows(active []drivestore.Live) map[string]driveFlow {
+	out := map[string]driveFlow{}
 
 	for _, d := range active {
 		for _, t := range d.Tasks {
 			if lead := ref.TypedLead(t.ID); out[lead].Name == "" {
 				// a record that no longer parses keeps its flow, under no pace
 				a, _ := drivectl.ParseDriveArgs(d.Args)
-				out[lead] = DriveFlow{Name: cmp.Or(d.Flow, "default"), pace: a.Pace, Running: d.Running}
+				out[lead] = driveFlow{Name: cmp.Or(d.Flow, "default"), pace: a.Pace, Running: d.Running}
 			}
 		}
 	}
@@ -166,7 +166,7 @@ func DriveFlows(active []drivestore.Live) map[string]DriveFlow {
 	return out
 }
 
-func readRemote(ctx context.Context, h hostops.Host, f facts.Review, branch string) RemoteState {
+func readRemote(ctx context.Context, h hostops.Host, f facts.Review, branch string) remoteState {
 	ctx, cancel := context.WithTimeout(ctx, remoteTimeout)
 	defer cancel()
 
@@ -174,13 +174,13 @@ func readRemote(ctx context.Context, h hostops.Host, f facts.Review, branch stri
 
 	switch {
 	case ctx.Err() != nil:
-		return RemoteState{Err: ctx.Err()}
+		return remoteState{Err: ctx.Err()}
 	case errors.Is(err, forge.ErrNotFound):
-		return RemoteState{}
+		return remoteState{}
 	case err != nil:
-		return RemoteState{Err: err}
+		return remoteState{Err: err}
 	case p.URL == "":
-		return RemoteState{}
+		return remoteState{}
 	}
 
 	rv, err := reviews.NewReviewer(ctx, h, f, path.Base(p.URL))
@@ -189,16 +189,16 @@ func readRemote(ctx context.Context, h hostops.Host, f facts.Review, branch stri
 
 		r, err = rv.Latest(ctx)
 		if err == nil {
-			return RemoteState{Found: true, Done: r.Done, Handled: r.Handled, Settled: r.Settled}
+			return remoteState{Found: true, Done: r.Done, Handled: r.Handled, Settled: r.Settled}
 		}
 	}
 
 	switch {
 	case ctx.Err() != nil:
-		return RemoteState{Err: ctx.Err()}
+		return remoteState{Err: ctx.Err()}
 	case errors.Is(err, reviews.ErrNoReview):
-		return RemoteState{}
+		return remoteState{}
 	}
 
-	return RemoteState{Err: err}
+	return remoteState{Err: err}
 }

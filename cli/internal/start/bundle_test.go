@@ -75,7 +75,7 @@ func TestSettleBundle(t *testing.T) {
 		f := testkit.NewFakes(t)
 		f.Script(refsRider, testkit.Heads("GH-2/own"))
 
-		_, err := SettleBundle(t.Context(), "/code/repo", testkit.Bundle12, "")
+		_, err := settleBundle(t.Context(), "/code/repo", testkit.Bundle12, "")
 		if err == nil || !strings.Contains(err.Error(), "GH-2 is already on branch GH-2/own") {
 			t.Errorf("err = %v, want the rider's branch named", err)
 		}
@@ -86,7 +86,7 @@ func TestSettleBundle(t *testing.T) {
 		f.Meta.Seed("GH-3+GH-2/x", branchmeta.Riders, "GH-2")
 		f.Script(refsRider, "")
 
-		_, err := SettleBundle(t.Context(), "/code/repo", testkit.Bundle12, "")
+		_, err := settleBundle(t.Context(), "/code/repo", testkit.Bundle12, "")
 		if err == nil || !strings.Contains(err.Error(), "GH-3+GH-2/x") {
 			t.Errorf("err = %v, want the other bundle's branch named", err)
 		}
@@ -99,7 +99,7 @@ func TestSettleBundle(t *testing.T) {
 		f.Script(refsRider, "")
 		f.Script(riderKey("refs/remotes/origin/", "GH-2"), "refs/remotes/origin/GH-5+GH-2/x\n")
 
-		_, err := SettleBundle(t.Context(), "/code/repo", testkit.Bundle12, "")
+		_, err := settleBundle(t.Context(), "/code/repo", testkit.Bundle12, "")
 		if err == nil || !strings.Contains(err.Error(), "GH-2 is already on branch GH-5+GH-2/x") {
 			t.Errorf("err = %v, want the remote bundle named", err)
 		}
@@ -110,7 +110,7 @@ func TestSettleBundle(t *testing.T) {
 		f.Meta.Seed("GH-1+GH-3/x", branchmeta.Riders, "GH-3")
 		f.Meta.Seed("GH-1+GH-3/x", branchmeta.Task, "GH-1")
 
-		_, err := SettleBundle(t.Context(), "/code/repo", testkit.Bundle12, "GH-1+GH-3/x")
+		_, err := settleBundle(t.Context(), "/code/repo", testkit.Bundle12, "GH-1+GH-3/x")
 		if err == nil || !strings.Contains(err.Error(), "ships GH-1+GH-3; riders are fixed at start") {
 			t.Errorf("err = %v, want the recorded bundle named", err)
 		}
@@ -119,7 +119,7 @@ func TestSettleBundle(t *testing.T) {
 	t.Run("the task rides in another bundle", func(t *testing.T) {
 		testkit.NewFakes(t)
 
-		_, err := SettleBundle(t.Context(), "/code/repo", testkit.Bundle12, "GH-5+GH-1/x")
+		_, err := settleBundle(t.Context(), "/code/repo", testkit.Bundle12, "GH-5+GH-1/x")
 		if err == nil || !strings.Contains(err.Error(), "GH-1 is already on branch GH-5+GH-1/x, led by GH-5") {
 			t.Errorf("err = %v, want the branch's own lead named", err)
 		}
@@ -133,7 +133,7 @@ func TestSettleBundle(t *testing.T) {
 		f.Meta.Seed("GH-1+GH-2/x", branchmeta.Riders, "GH-2")
 		f.Script(refsRider, "")
 
-		if _, err := SettleBundle(t.Context(), "/code/repo", testkit.Bundle12, "GH-1+GH-2/x"); err != nil {
+		if _, err := settleBundle(t.Context(), "/code/repo", testkit.Bundle12, "GH-1+GH-2/x"); err != nil {
 			t.Errorf("err = %v reopening the bundle's own branch", err)
 		}
 	})
@@ -142,7 +142,7 @@ func TestSettleBundle(t *testing.T) {
 		f := testkit.NewFakes(t)
 		f.Script(refsRider, "")
 
-		got, err := SettleBundle(t.Context(), "/code/repo", testkit.Gh1, "GH-1+GH-2/x")
+		got, err := settleBundle(t.Context(), "/code/repo", testkit.Gh1, "GH-1+GH-2/x")
 		if err != nil || got.Label() != "GH-1+GH-2" {
 			t.Errorf("settleBundle = %s, %v; want the bundle GH-1+GH-2", got.Label(), err)
 		}
@@ -151,7 +151,7 @@ func TestSettleBundle(t *testing.T) {
 	t.Run("a task alone is never refused", func(t *testing.T) {
 		testkit.NewFakes(t)
 
-		if got, err := SettleBundle(t.Context(), "/code/repo", testkit.Gh1, ""); err != nil || got.Bundle != nil {
+		if got, err := settleBundle(t.Context(), "/code/repo", testkit.Gh1, ""); err != nil || got.Bundle != nil {
 			t.Errorf("settleBundle = %+v, %v for a single task", got, err)
 		}
 	})

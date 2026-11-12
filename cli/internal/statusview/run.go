@@ -15,11 +15,11 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
-// WriteRuns prints runs, each with its gates, or encodes them under --json.
+// writeRuns prints runs, each with its gates, or encodes them under --json.
 // head is the task's shipment, printed once above the runs in place of each
 // run's task and url rows; nil for runs listed without a task. agent is the
 // profile the task's branch records, "" for the kind's default.
-func WriteRuns(v StatusView, runs []*state.Run, gates [][]Gate, head *Shipment, showRoot bool, agent string,
+func writeRuns(v StatusView, runs []*state.Run, gates [][]gate, head *Shipment, showRoot bool, agent string,
 	now time.Time,
 ) error {
 	if v.JSON {
@@ -63,7 +63,7 @@ func WriteRuns(v StatusView, runs []*state.Run, gates [][]Gate, head *Shipment, 
 // writeRunsUnder prints the facts head and each run's rows as one table, every
 // value in one column, so a yaml fence colors the block as one mapping. The
 // first run goes on under the head; each later one follows a blank line.
-func writeRunsUnder(w io.Writer, head []render.Fact, runs []*state.Run, gates [][]Gate, showRoot bool, agent string,
+func writeRunsUnder(w io.Writer, head []render.Fact, runs []*state.Run, gates [][]gate, showRoot bool, agent string,
 	now time.Time, limit int,
 ) error {
 	blocks := make([][]render.Fact, max(1, len(runs)))
@@ -101,9 +101,9 @@ func writeRunsUnder(w io.Writer, head []render.Fact, runs []*state.Run, gates []
 	return nil
 }
 
-// CurrentPhase is the furthest phase a run has reached, with its status:
+// currentPhase is the furthest phase a run has reached, with its status:
 // `capture running`, `ship blocked at judge`.
-func CurrentPhase(r *state.Run) string {
+func currentPhase(r *state.Run) string {
 	phase := r.Furthest()
 
 	return phase + " " + r.PhaseText(phase)
@@ -115,18 +115,18 @@ type RunJSON struct {
 	*state.Run
 
 	Agent string `json:"agent,omitempty"`
-	Gates []Gate `json:"gates,omitempty"`
+	Gates []gate `json:"gates,omitempty"`
 
 	// the task's files and facts, repeated per run as the agent is; the
 	// files predate the shipment and repeat what it holds
-	Verdicts []VerdictPath `json:"verdicts,omitempty"`
-	Reviews  []ReviewPath  `json:"reviews,omitempty"`
+	Verdicts []verdictPath `json:"verdicts,omitempty"`
+	Reviews  []reviewPath  `json:"reviews,omitempty"`
 	Shipment *Shipment     `json:"shipment,omitempty"`
 }
 
 // RunView is how one run block prints.
 type RunView struct {
-	Gates    []Gate
+	Gates    []gate
 	ShowRoot bool   // listing runs: for one session the root is the directory you are in
 	Agent    string // the profile the task's branch records, "" for the kind's default
 	Now      time.Time

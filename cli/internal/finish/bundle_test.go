@@ -200,7 +200,7 @@ func TestBodyCloses(t *testing.T) {
 	riders := []ref.Ref{{ID: "GH-2", Number: "2"}, {ID: "GH-3", Number: "3"}, {ID: "GH-4", Number: "4"}}
 	body := "Closes #1\nfixes https://github.com/a/b/issues/2\nPart of #3\nCloses #44"
 
-	if got := BodyCloses(body, riders); !slices.Equal(got, []string{"GH-2"}) {
+	if got := bodyCloses(body, riders); !slices.Equal(got, []string{"GH-2"}) {
 		t.Errorf("BodyCloses = %v, want [GH-2]", got)
 	}
 }
@@ -264,11 +264,11 @@ func TestFinishWithATrackerDriverClosesNothing(t *testing.T) {
 // A rerun after a failed merge closes a rider an earlier run kept open.
 func TestCloseAgain(t *testing.T) {
 	body := KeepOpen("Closes #1\nCloses #2", "2")
-	if got := CloseAgain(body, "2"); got != "Closes #1\nCloses #2" {
+	if got := closeAgain(body, "2"); got != "Closes #1\nCloses #2" {
 		t.Errorf("closeAgain = %q, want the keyword back", got)
 	}
 
-	if got := CloseAgain("Part of #22", "2"); got != "Part of #22" {
+	if got := closeAgain("Part of #22", "2"); got != "Part of #22" {
 		t.Errorf("closeAgain touched another issue: %q", got)
 	}
 }

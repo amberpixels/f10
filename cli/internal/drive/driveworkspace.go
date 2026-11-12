@@ -58,16 +58,16 @@ func workspaceName(ws *agentctl.Workspace) string {
 	return ws.Label + " (" + ws.ID + ")"
 }
 
-// A TickView is what one tick reads once for every task in flight: the
+// A tickView is what one tick reads once for every task in flight: the
 // workspaces, the live runs, and one fetch of origin.
-type TickView struct {
+type tickView struct {
 	Wss    []agentctl.Workspace // nil before the first tick's look
 	live   []*state.Run
 	fetch  stack.FetchOnce
 	opened map[*DriveRun]bool // the tasks opened since the look, which it does not show
 }
 
-func (v *TickView) JustOpened(r *DriveRun) {
+func (v *tickView) JustOpened(r *DriveRun) {
 	if v.opened == nil {
 		v.opened = map[*DriveRun]bool{}
 	}
@@ -76,7 +76,7 @@ func (v *TickView) JustOpened(r *DriveRun) {
 }
 
 // lookAll is one tick's view.
-func (in *DriveInput) lookAll(ctx context.Context) (*TickView, error) {
+func (in *DriveInput) lookAll(ctx context.Context) (*tickView, error) {
 	wss, err := worktree.Agents(in.Main).Workspaces(ctx)
 	if err != nil {
 		return nil, err
@@ -87,7 +87,7 @@ func (in *DriveInput) lookAll(ctx context.Context) (*TickView, error) {
 		return nil, err
 	}
 
-	return &TickView{Wss: wss, live: live}, nil
+	return &tickView{Wss: wss, live: live}, nil
 }
 
 // run is path's live run as the tick read it, else read now.
@@ -124,9 +124,9 @@ func (in *DriveInput) stallCheck(r *DriveRun) start.StallCheck {
 
 // View is this tick's look, or before the first tick an empty one that
 // still keeps the fetch.
-func (in *DriveInput) View() *TickView {
+func (in *DriveInput) View() *tickView {
 	if in.Tick == nil {
-		in.Tick = &TickView{}
+		in.Tick = &tickView{}
 	}
 
 	return in.Tick

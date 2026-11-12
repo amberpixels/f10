@@ -192,7 +192,7 @@ func TestKeptName(t *testing.T) {
 		f := testkit.NewFakes(t)
 		f.Script("git rev-parse -q --verify refs/heads/"+c.want, "")
 
-		if got := KeptName(t.Context(), "/repo", c.branch, c.ids); got != c.want {
+		if got := keptName(t.Context(), "/repo", c.branch, c.ids); got != c.want {
 			t.Errorf("keptName(%q) = %q, want %q", c.branch, got, c.want)
 		}
 	}
@@ -201,7 +201,7 @@ func TestKeptName(t *testing.T) {
 	f.Script("git rev-parse -q --verify refs/heads/kept/x", "abc")
 	f.Script("git rev-parse -q --verify refs/heads/kept/x-2", "")
 
-	if got := KeptName(t.Context(), "/repo", "GH-1/x", []string{"GH-1"}); got != "kept/x-2" {
+	if got := keptName(t.Context(), "/repo", "GH-1/x", []string{"GH-1"}); got != "kept/x-2" {
 		t.Errorf("a taken name = %q", got)
 	}
 }
@@ -286,7 +286,7 @@ func TestSpikePlan(t *testing.T) {
 		p := filepath.Join(t.TempDir(), "plan.md")
 		testkit.WriteFile(t, p, body)
 
-		if got := SpikePlan(p); got != want {
+		if got := spikePlan(p); got != want {
 			t.Errorf("spikePlan(%q) = %v, want %v", body, got, want)
 		}
 	}

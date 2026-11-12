@@ -13,10 +13,10 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
-// MainPullKey is the lease every finish pulling the main checkout takes, so
+// mainPullKey is the lease every finish pulling the main checkout takes, so
 // two finishes at once (a drive's, the watcher's, the command) never race on
 // origin's refs.
-const MainPullKey = "main-pull"
+const mainPullKey = "main-pull"
 
 // mainPullWait bounds the wait for another finish's pull.
 const mainPullWait = 2 * time.Minute
@@ -33,7 +33,7 @@ func pullMain(ctx context.Context, root, main, def, sha string) (string, bool) {
 		return note, false
 	}
 
-	note = DeferredPullNote(err, main, def)
+	note = deferredPullNote(err, main, def)
 
 	if root == "" {
 		return note + "; nothing records the retry here, so pull it by hand", true
@@ -46,14 +46,14 @@ func pullMain(ctx context.Context, root, main, def, sha string) (string, bool) {
 	return note, true
 }
 
-// ErrPullBusy is another finish holding the pull's lease past mainPullWait.
-var ErrPullBusy = errors.New("another finish held the pull")
+// errPullBusy is another finish holding the pull's lease past mainPullWait.
+var errPullBusy = errors.New("another finish held the pull")
 
 func pullDefault(ctx context.Context, root, main, def, sha string) (string, error) {
 	if root != "" {
-		lease, err := drivestore.Await(ctx, root, MainPullKey, drivestore.Holder{}, mainPullWait)
+		lease, err := drivestore.Await(ctx, root, mainPullKey, drivestore.Holder{}, mainPullWait)
 		if err != nil {
-			return "", fmt.Errorf("%w: %w", ErrPullBusy, err)
+			return "", fmt.Errorf("%w: %w", errPullBusy, err)
 		}
 		defer lease.Release()
 	}
@@ -85,8 +85,8 @@ func pullDefault(ctx context.Context, root, main, def, sha string) (string, erro
 	return note, nil
 }
 
-// DeferredPullNote names why the pull failed and what settles it.
-func DeferredPullNote(err error, main, def string) string {
+// deferredPullNote names why the pull failed and what settles it.
+func deferredPullNote(err error, main, def string) string {
 	const retry = "; f10 retries the pull"
 
 	switch {
@@ -98,7 +98,7 @@ func DeferredPullNote(err error, main, def string) string {
 	case gitx.StaleRef(err):
 		return fmt.Sprintf("%s not pulled: a stale origin ref is in the way; "+
 			"settle it with git -C %s remote prune origin%s", def, main, retry)
-	case gitx.RefLocked(err), errors.Is(err, ErrPullBusy):
+	case gitx.RefLocked(err), errors.Is(err, errPullBusy):
 		return fmt.Sprintf("%s not pulled: another git held origin's refs%s, "+
 			"or run git -C %s pull --ff-only", def, retry, main)
 	default:

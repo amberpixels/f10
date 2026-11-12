@@ -28,8 +28,8 @@ import (
 // in the host's UI, a worktree removed by hand. Every keep rule is checked
 // before anything is deleted, and one branch failing never stops the next.
 
-// JanitorEvery is how long start and finish wait between two janitor runs.
-const JanitorEvery = 6 * time.Hour
+// janitorEvery is how long start and finish wait between two janitor runs.
+const janitorEvery = 6 * time.Hour
 
 // JanitorStamp's mtime is the last run.
 const JanitorStamp = "janitor.stamp"
@@ -39,7 +39,7 @@ const JanitorStamp = "janitor.stamp"
 func SweepIfDue(ctx context.Context, w io.Writer, stamp string, now time.Time,
 	run func(context.Context) ([]string, error),
 ) {
-	if !JanitorDue(stamp, now) {
+	if !janitorDue(stamp, now) {
 		return
 	}
 
@@ -59,10 +59,10 @@ func SweepIfDue(ctx context.Context, w io.Writer, stamp string, now time.Time,
 	}
 }
 
-func JanitorDue(stamp string, now time.Time) bool {
+func janitorDue(stamp string, now time.Time) bool {
 	fi, err := os.Stat(stamp)
 
-	return err != nil || now.Sub(fi.ModTime()) >= JanitorEvery
+	return err != nil || now.Sub(fi.ModTime()) >= janitorEvery
 }
 
 func TouchStamp(stamp string, now time.Time) error {
@@ -101,7 +101,7 @@ func JanitorFor(t *target.Target) JanitorInput {
 	return in
 }
 
-type StaleBranch struct {
+type staleBranch struct {
 	Name                string
 	Ids                 []string // the tasks it ships, a bundle's lead first
 	LocalSHA, originSHA string   // "" where the branch is not
@@ -169,7 +169,7 @@ func JanitorDefault(ctx context.Context, main string) (string, error) {
 // else its name. On origin a bare id counts only in the shapes start creates,
 // so a name merely mentioning one is someone else's. held is every branch a
 // checkout has, main's included.
-func TaskBranches(ctx context.Context, in JanitorInput, def string) ([]StaleBranch, map[string]bool, error) {
+func TaskBranches(ctx context.Context, in JanitorInput, def string) ([]staleBranch, map[string]bool, error) {
 	locals, err := gitx.Refs(ctx, in.Main, "refs/heads/")
 	if err != nil {
 		return nil, nil, err
@@ -198,9 +198,9 @@ func TaskBranches(ctx context.Context, in JanitorInput, def string) ([]StaleBran
 	}
 
 	match := ref.Matcher(in.Prefix)
-	byName := map[string]*StaleBranch{}
+	byName := map[string]*staleBranch{}
 
-	add := func(name string, local bool) *StaleBranch {
+	add := func(name string, local bool) *staleBranch {
 		if b, ok := byName[name]; ok {
 			return b
 		}
@@ -235,7 +235,7 @@ func TaskBranches(ctx context.Context, in JanitorInput, def string) ([]StaleBran
 			return nil
 		}
 
-		byName[name] = &StaleBranch{Name: name, Ids: ids}
+		byName[name] = &staleBranch{Name: name, Ids: ids}
 
 		return byName[name]
 	}
@@ -253,12 +253,12 @@ func TaskBranches(ctx context.Context, in JanitorInput, def string) ([]StaleBran
 		}
 	}
 
-	out := make([]StaleBranch, 0, len(byName))
+	out := make([]staleBranch, 0, len(byName))
 	for _, b := range byName {
 		out = append(out, *b)
 	}
 
-	slices.SortFunc(out, func(a, b StaleBranch) int { return strings.Compare(a.Name, b.Name) })
+	slices.SortFunc(out, func(a, b staleBranch) int { return strings.Compare(a.Name, b.Name) })
 
 	return out, held, nil
 }
@@ -274,7 +274,7 @@ type Sweeper struct {
 
 // Request is the request that decides b: an open one when any is, else
 // the newest; nil when there is none.
-func (j *Sweeper) Request(ctx context.Context, b StaleBranch) (*forge.PR, error) {
+func (j *Sweeper) Request(ctx context.Context, b staleBranch) (*forge.PR, error) {
 	prs, err := j.In.Host.PullsByHead(ctx, b.Name)
 	if err != nil {
 		return nil, fmt.Errorf("%s did not list its requests: %w", j.In.Host.Name, err)
@@ -295,7 +295,7 @@ func (j *Sweeper) Request(ctx context.Context, b StaleBranch) (*forge.PR, error)
 
 // SweepUnpushed removes a branch finish would read as never pushed once its
 // changes are in the default branch; its work ended with its last commit.
-func (j *Sweeper) SweepUnpushed(ctx context.Context, b StaleBranch) (time.Time, bool) {
+func (j *Sweeper) SweepUnpushed(ctx context.Context, b staleBranch) (time.Time, bool) {
 	if b.LocalSHA == "" || b.originSHA != "" {
 		return time.Time{}, false
 	}
@@ -323,7 +323,7 @@ func (j *Sweeper) say(format string, args ...any) {
 
 // sweep reports whether b was (or, dry, would be) removed, and when its
 // request ended.
-func (j *Sweeper) sweep(ctx context.Context, b StaleBranch) (time.Time, bool) {
+func (j *Sweeper) sweep(ctx context.Context, b staleBranch) (time.Time, bool) {
 	var (
 		p   *forge.PR
 		err error
@@ -370,7 +370,7 @@ func (j *Sweeper) sweep(ctx context.Context, b StaleBranch) (time.Time, bool) {
 }
 
 // keep is why a branch whose request merged or closed stays, or "".
-func (j *Sweeper) keep(ctx context.Context, b StaleBranch, p *forge.PR) string {
+func (j *Sweeper) keep(ctx context.Context, b staleBranch, p *forge.PR) string {
 	for _, tip := range []struct{ sha, whose string }{{b.LocalSHA, "its"}, {b.originSHA, "origin's"}} {
 		if tip.sha == "" || tip.sha == p.HeadSHA {
 			continue
@@ -431,7 +431,7 @@ func (j *Sweeper) unlanded(ctx context.Context, tip string, p *forge.PR) ([]gitx
 
 // remove drops origin's copy only for the user's own request. A step failing
 // is a line, and the branch counts as kept.
-func (j *Sweeper) remove(ctx context.Context, b StaleBranch, p *forge.PR) bool {
+func (j *Sweeper) remove(ctx context.Context, b staleBranch, p *forge.PR) bool {
 	why := "never pushed, already in " + j.Def
 	if p != nil {
 		why = p.URL + " " + p.Status
@@ -465,7 +465,7 @@ func (j *Sweeper) remove(ctx context.Context, b StaleBranch, p *forge.PR) bool {
 	}
 
 	if p != nil && p.Status == forge.Merged {
-		released, err := ReleaseDependents(ctx, j.In.Main, b.Name, j.Def, true)
+		released, err := releaseDependents(ctx, j.In.Main, b.Name, j.Def, true)
 		if err != nil {
 			j.say("kept %s: %v", b.Name, err)
 
@@ -524,7 +524,7 @@ func (j *Sweeper) own(ctx context.Context, p *forge.PR) bool {
 // archive keeps the plan of a task with a branch left (a second attempt may
 // still read it) and one written after the request ended (the task was
 // planned again); a kept plan keeps its images.
-func (j *Sweeper) archive(branches []StaleBranch, removed map[string]time.Time) {
+func (j *Sweeper) archive(branches []staleBranch, removed map[string]time.Time) {
 	left := map[string][]string{}
 	cleared := map[string]time.Time{}
 	ends := map[string]archive.SeriesEnd{} // what closes each task's series: its removed branch

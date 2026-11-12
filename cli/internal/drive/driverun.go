@@ -135,7 +135,7 @@ type driveState struct {
 	// agents open; 0 caps nothing
 	Parallel int
 	Wss      []agentctl.Workspace // the last look's workspaces, for the cap's working check
-	Tick     *TickView            // this tick's look; before the first, one with no workspaces
+	Tick     *tickView            // this tick's look; before the first, one with no workspaces
 
 	Draining atomic.Bool // set by SIGUSR1: stop at the next tick, ending no task
 	launched bool        // a session typed this drive: not a --resume, not an --answer relay
@@ -155,9 +155,9 @@ type DriveTask struct {
 	finished bool
 }
 
-// A DriveResult is how one task ended: its row in the report, and when it
+// A driveResult is how one task ended: its row in the report, and when it
 // stopped, the exit code and the lines beneath the report.
-type DriveResult struct {
+type driveResult struct {
 	Row   string
 	Code  int
 	Lines []string
@@ -189,7 +189,7 @@ type DriveRun struct {
 	Flow     runplan.ShipFlow // the flow this task ships through: its branch's record, else the run's
 	Finishes bool             // drive ends the task with finish: the pace says so, or a spike closes
 	Pos      int              // the index in its skills of the skill in flight, or the next one
-	End      *DriveResult
+	End      *driveResult
 	// freshAt is when this drive opened the task to start its agent: run
 	// state older than it was written by an agent that is gone, and is not read
 	freshAt time.Time
@@ -276,15 +276,15 @@ func (p runPhase) recorded() string {
 		return drivestore.PhasePending
 	case AtHeld, atQueued:
 		return drivestore.PhaseQueued
-	case AtRunning:
+	case atRunning:
 		return drivestore.PhaseRunning
 	case atVerifying:
 		return drivestore.PhaseVerifying
 	case atRetrying:
 		return drivestore.PhaseRetrying
-	case AtParked:
+	case atParked:
 		return drivestore.PhaseParked
-	case AtWaiting:
+	case atWaiting:
 		return drivestore.PhaseWaiting
 	}
 
@@ -294,12 +294,12 @@ func (p runPhase) recorded() string {
 const (
 	atPending   runPhase = iota // not opened: its base has no commit, or it was never reached
 	AtHeld                      // not opened: the cap holds it
-	AtRunning                   // a skill in flight, or about to be sent
+	atRunning                   // a skill in flight, or about to be sent
 	atQueued                    // opened, its next skill held by the cap
 	atVerifying                 // the drive's own verify after a catchup runs, in job
 	atRetrying                  // an attempt failed: the next poll sends the action again
-	AtParked                    // a skill waits for its base's code, or its branch on origin
-	AtWaiting                   // finish waits for its base to be through
+	atParked                    // a skill waits for its base's code, or its branch on origin
+	atWaiting                   // finish waits for its base to be through
 )
 
 // DriveSkills reads the skills off the flow: plan when the flow leads with

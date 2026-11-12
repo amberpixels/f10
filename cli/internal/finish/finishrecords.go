@@ -28,7 +28,7 @@ func finishRecords(w io.Writer, in FinishInput, branch string) {
 	}
 
 	for _, rec := range recs {
-		match := AttemptRows(in, branch, rec.Tasks)
+		match := attemptRows(in, branch, rec.Tasks)
 		if !slices.ContainsFunc(rec.Tasks, func(t drivestore.Task) bool { return !drivectl.RowDone(t) && match(t) }) {
 			continue
 		}
@@ -39,11 +39,11 @@ func finishRecords(w io.Writer, in FinishInput, branch string) {
 	}
 }
 
-// AttemptRows matches the rows of the attempt finish acted on, since one
+// attemptRows matches the rows of the attempt finish acted on, since one
 // attempt finished leaves the task's others alive. A bare finish, or one
 // that found the lone <id>-* branch, types no suffix: the branch's ending
 // names the attempt, the same way the branch index finds it.
-func AttemptRows(in FinishInput, branch string, rows []drivestore.Task) func(drivestore.Task) bool {
+func attemptRows(in FinishInput, branch string, rows []drivestore.Task) func(drivestore.Task) bool {
 	ofTask := func(row string) (string, bool) {
 		id, suffix := ref.SplitSuffix(row)
 
@@ -101,7 +101,7 @@ func checkLore(in FinishInput, merging bool) (string, error) {
 }
 
 // loreChange is the change the merge closes; a FinishInput built without
-// finish (a test, MergeBody alone) reads the task id.
+// finish (a test, mergeBody alone) reads the task id.
 func (in FinishInput) loreChange() string {
 	return cmp.Or(in.Change, in.Task.ID)
 }

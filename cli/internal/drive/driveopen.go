@@ -109,7 +109,7 @@ func (in *DriveInput) open(ctx context.Context, r *DriveRun) error {
 
 	r.O, r.Pos, r.Flow, r.Finishes = o, pos, fl, finishes
 	in.View().JustOpened(r)
-	in.Enter(r, AtRunning)
+	in.Enter(r, atRunning)
 	if o.Fresh {
 		r.freshAt = in.Now().Truncate(time.Second) // the state file keeps whole seconds
 	}
@@ -236,11 +236,11 @@ func (in *DriveInput) Position(ctx context.Context, o start.OpenedTask, skills [
 // caught up before any skill, finish included; finish waits for the base,
 // and a branch that conflicts is marked landed and caught up first.
 func (in *DriveInput) Next(ctx context.Context, r *DriveRun) error {
-	wasWaiting, held := r.Phase == AtWaiting, r.HoldsSlot()
+	wasWaiting, held := r.Phase == atWaiting, r.HoldsSlot()
 
 	spike, err := in.SpikeDone(ctx, r)
 	if err != nil {
-		return Halt(r.Task.Ref.ID, "finish", err.Error())
+		return halt(r.Task.Ref.ID, "finish", err.Error())
 	}
 
 	if spike && !r.Finishes {
@@ -249,7 +249,7 @@ func (in *DriveInput) Next(ctx context.Context, r *DriveRun) error {
 
 	skills := in.Skills(r)
 	if r.Pos >= len(skills) {
-		return endWith(DriveResult{Row: "done: " + strings.Join(skills, " ")})
+		return endWith(driveResult{Row: "done: " + strings.Join(skills, " ")})
 	}
 
 	skill := skills[r.Pos]
@@ -259,25 +259,25 @@ func (in *DriveInput) Next(ctx context.Context, r *DriveRun) error {
 	}
 
 	// a drive resumed onto a ship stopped before pr waits for origin, not code
-	if skill == "ship" && r.Base != nil && r.Phase != AtParked {
-		if run, _ := in.run(r.O.Path); OriginWait(run) {
+	if skill == "ship" && r.Base != nil && r.Phase != atParked {
+		if run, _ := in.run(r.O.Path); originWait(run) {
 			r.ParkedOrigin = true
 		}
 	}
 
 	if skill != "finish" && r.Base != nil && !in.BaseReady(ctx, r) {
-		if r.Phase != AtParked {
+		if r.Phase != atParked {
 			fmt.Fprintf(in.Out, "%s %s: waiting on %s for %s\n",
 				in.id(r.Task.Ref.ID), skill, in.id(r.Base.Task.Ref.ID), r.waitsFor())
 		}
 
-		in.Enter(r, AtParked)
+		in.Enter(r, atParked)
 
 		return nil
 	}
 
-	if r.Phase == AtParked {
-		in.Enter(r, AtRunning)
+	if r.Phase == atParked {
+		in.Enter(r, atRunning)
 	}
 
 	r.parkedHead, r.ParkedOrigin = "", false
@@ -293,7 +293,7 @@ func (in *DriveInput) Next(ctx context.Context, r *DriveRun) error {
 			in.finishStep(ctx, r.O.Branch, branchmeta.FinishQueued, "waiting for "+r.Base.Task.Ref.ID)
 		}
 
-		in.Enter(r, AtWaiting)
+		in.Enter(r, atWaiting)
 
 		return nil
 	}
@@ -301,7 +301,7 @@ func (in *DriveInput) Next(ctx context.Context, r *DriveRun) error {
 	// a finish still waiting stays waiting above, so the record never reads
 	// running between two polls
 	if wasWaiting {
-		in.Enter(r, AtRunning)
+		in.Enter(r, atRunning)
 	}
 
 	// finish runs here and sends no skill; anything else held back by the
@@ -323,7 +323,7 @@ func (in *DriveInput) Next(ctx context.Context, r *DriveRun) error {
 	// the progress rule, so a clean PR merges as it stands
 	if skill != "finish" {
 		if err := in.MarkBehind(ctx, r); err != nil {
-			return Halt(r.Task.Ref.ID, skill, err.Error())
+			return halt(r.Task.Ref.ID, skill, err.Error())
 		}
 	}
 
@@ -337,7 +337,7 @@ func (in *DriveInput) Next(ctx context.Context, r *DriveRun) error {
 	}
 
 	if err != nil {
-		return Halt(r.Task.Ref.ID, skill, err.Error())
+		return halt(r.Task.Ref.ID, skill, err.Error())
 	}
 
 	switch {
@@ -345,7 +345,7 @@ func (in *DriveInput) Next(ctx context.Context, r *DriveRun) error {
 		skill = "catchup"
 
 		if err := in.recordCatchup(ctx, r, key); err != nil {
-			return Halt(r.Task.Ref.ID, skill, err.Error())
+			return halt(r.Task.Ref.ID, skill, err.Error())
 		}
 	case skill == "finish":
 		return endWith(in.RunFinish(ctx, r))
@@ -404,7 +404,7 @@ func (in *DriveInput) BaseReady(ctx context.Context, r *DriveRun) bool {
 // committed between the ship's look and this read gets ship sent at once.
 func (in *DriveInput) park(ctx context.Context, r *DriveRun, run *state.Run) error {
 	b := r.Base
-	if b != nil && OriginWait(run) {
+	if b != nil && originWait(run) {
 		return in.ParkForOrigin(ctx, r)
 	}
 
@@ -414,7 +414,7 @@ func (in *DriveInput) park(ctx context.Context, r *DriveRun, run *state.Run) err
 
 	head, why := in.baseHead(ctx, b)
 	if why != "" {
-		return Halt(r.Task.Ref.ID, r.Skill, why)
+		return halt(r.Task.Ref.ID, r.Skill, why)
 	}
 
 	if head != r.WaitHead && in.Released(ctx, b) {
@@ -424,7 +424,7 @@ func (in *DriveInput) park(ctx context.Context, r *DriveRun, run *state.Run) err
 	}
 
 	r.parkedHead, r.WaitHead = head, head
-	in.Enter(r, AtParked)
+	in.Enter(r, atParked)
 
 	fmt.Fprintf(in.Out, "%s ship: waiting on %s for code\n", in.id(r.Task.Ref.ID), in.id(b.Task.Ref.ID))
 
@@ -443,7 +443,7 @@ func (in *DriveInput) ParkForOrigin(ctx context.Context, r *DriveRun) error {
 	// stops pr the same way again, and nothing here will push it
 	if b.through() {
 		if r.WaitHead == "through" {
-			return Halt(r.Task.Ref.ID, r.Skill,
+			return halt(r.Task.Ref.ID, r.Skill,
 				fmt.Sprintf("%s ended in this drive, yet its pr step still found %s not on origin",
 					in.id(b.Task.Ref.ID), b.O.Branch))
 		}
@@ -455,14 +455,14 @@ func (in *DriveInput) ParkForOrigin(ctx context.Context, r *DriveRun) error {
 
 	sha, why := in.originHead(ctx, b)
 	if why != "" {
-		return Halt(r.Task.Ref.ID, r.Skill, why)
+		return halt(r.Task.Ref.ID, r.Skill, why)
 	}
 
 	if sha != "" {
 		if r.WaitHead == "origin "+sha {
 			why = fmt.Sprintf("its pr step found %s not on origin though origin/%s is at %s",
 				b.O.Branch, b.O.Branch, sha)
-			return Halt(r.Task.Ref.ID, r.Skill, why)
+			return halt(r.Task.Ref.ID, r.Skill, why)
 		}
 
 		r.WaitHead = "origin " + sha
@@ -471,7 +471,7 @@ func (in *DriveInput) ParkForOrigin(ctx context.Context, r *DriveRun) error {
 	}
 
 	r.parkedHead = ""
-	in.Enter(r, AtParked)
+	in.Enter(r, atParked)
 
 	fmt.Fprintf(in.Out, "%s ship: waiting on %s for origin\n", in.id(r.Task.Ref.ID), in.id(b.Task.Ref.ID))
 
@@ -497,9 +497,9 @@ func (in *DriveInput) originHead(ctx context.Context, b *DriveRun) (string, stri
 	return sha, ""
 }
 
-// OriginWait is a ship stopped before pr on a base origin lacks: a wait whose
+// originWait is a ship stopped before pr on a base origin lacks: a wait whose
 // leaf is a pr entry, where the implement guard's wait is on the base's code.
-func OriginWait(run *state.Run) bool {
+func originWait(run *state.Run) bool {
 	return run != nil && run.Wait != "" && state.Stopped(run.Ship) && flow.Parse(run.Leaf).Step == "pr"
 }
 
@@ -514,11 +514,11 @@ func (r *DriveRun) waitsFor() string {
 
 // baseHalted ends a dependent whose base halted after releasing it, at the
 // boundary before skill: its work stays on its branch.
-func baseHalted(r *DriveRun, skill string) DriveResult {
+func baseHalted(r *DriveRun, skill string) driveResult {
 	id, base := r.Task.Ref.ID, r.Base.Task.Ref.ID
 	reason := fmt.Sprintf("base %s halted, its work stays on %s", base, r.O.Branch)
 
-	return DriveResult{
+	return driveResult{
 		Row:    "halted: base " + base + " halted",
 		Code:   ui.ExitHalted,
 		Lines:  []string{fmt.Sprintf("%s halted before %s: %s", id, skill, reason)},
@@ -527,10 +527,10 @@ func baseHalted(r *DriveRun, skill string) DriveResult {
 	}
 }
 
-// SkillPrompt: plan is bare and ship names only a non-default flow, since
+// skillPrompt: plan is bare and ship names only a non-default flow, since
 // driven mode takes every gap on its default and reuses a saved plan; every
 // skill but plan and ship takes a bundle's lead, which finds the branch.
-func SkillPrompt(skill, id string, dep *launch.Dependency, fl runplan.ShipFlow, finishing bool) string {
+func skillPrompt(skill, id string, dep *launch.Dependency, fl runplan.ShipFlow, finishing bool) string {
 	var p string
 
 	if skill != "plan" && skill != "ship" {
@@ -551,14 +551,14 @@ func SkillPrompt(skill, id string, dep *launch.Dependency, fl runplan.ShipFlow, 
 	}
 
 	if finishing && skill == "ship" {
-		p += " && " + FinishClause
+		p += " && " + finishClause
 	}
 
 	return launch.Driven(p)
 }
 
-// FinishClause tells a driven ship that drive finishes the task after it.
-const FinishClause = "drive finishes it after ship and removes this worktree"
+// finishClause tells a driven ship that drive finishes the task after it.
+const finishClause = "drive finishes it after ship and removes this worktree"
 
 // onProfile is the open line's tail naming the profile a fresh agent
 // started on, "" for the kind's default or an agent left as it was.

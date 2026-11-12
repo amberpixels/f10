@@ -106,7 +106,7 @@ func TestDriveDrainsAtATick(t *testing.T) {
 func TestWakeReturnsOnAWrite(t *testing.T) {
 	in := &DriveInput{}
 	in.StateDir, in.WakeStep = t.TempDir(), 10*time.Millisecond
-	in.Runs = []*DriveRun{{Phase: AtRunning, O: start.OpenedTask{Path: "/code/repo.GH-1"}}}
+	in.Runs = []*DriveRun{{Phase: atRunning, O: start.OpenedTask{Path: "/code/repo.GH-1"}}}
 
 	write := func(name, root string) {
 		time.Sleep(50 * time.Millisecond)
@@ -140,7 +140,7 @@ func TestWakeReturnsOnAWrite(t *testing.T) {
 }
 
 func TestRecordArgsDropsForeground(t *testing.T) {
-	if got := RecordArgs(
+	if got := recordArgs(
 		[]string{"--foreground", "GH-1", "--every", "5s"},
 	); !slices.Equal(
 		got,
@@ -201,7 +201,7 @@ func TestDriveTitle(t *testing.T) {
 		"/code/repo/.f10":     "repo: drive 3",
 		"/home/u/.f10/widget": "widget: drive 3",
 	} {
-		if got := DriveTitle(daemon.Run{Root: root, Drive: 3}); got != want {
+		if got := driveTitle(daemon.Run{Root: root, Drive: 3}); got != want {
 			t.Errorf("driveTitle(%s) = %q, want %q", root, got, want)
 		}
 	}

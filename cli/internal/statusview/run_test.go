@@ -15,7 +15,7 @@ import (
 func TestGatesFollowTheRecordedPace(t *testing.T) {
 	declared := flow.Of(strings.Fields("plan judge implement cleanup pr review:local judge pr"))
 	eff := &facts.Effective{Flows: map[string]flow.Flow{"default": declared}, PaceSet: facts.NewPaceSet()}
-	src := GateSource{Eff: eff, Main: "/code/repo"}
+	src := gateSource{Eff: eff, Main: "/code/repo"}
 
 	meta := branchmetatest.Use(t)
 	meta.Seed("GH-1", branchmeta.Pace, "ultra")

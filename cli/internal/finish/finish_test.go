@@ -288,7 +288,7 @@ func TestMergeBody(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		if got := MergeBody(c.in, c.description, c.method); got != c.want {
+		if got := mergeBody(c.in, c.description, c.method); got != c.want {
 			t.Errorf("%s: %q, want %q", c.name, got, c.want)
 		}
 	}
@@ -683,7 +683,7 @@ func TestFinishDefersAFailedPull(t *testing.T) {
 		t.Errorf("the plan was not archived: %v", err)
 	}
 
-	if _, ok := drivestore.Probe(fx.in.Root, MainPullKey); ok {
+	if _, ok := drivestore.Probe(fx.in.Root, mainPullKey); ok {
 		t.Error("the main-pull lease outlived the failed pull")
 	}
 
@@ -722,14 +722,14 @@ func TestDeferredPullNote(t *testing.T) {
 		want string
 	}{
 		{lock, "main not pulled: another git held origin's refs; f10 retries the pull"},
-		{fmt.Errorf("%w: lease", ErrPullBusy), "another git held origin's refs"},
+		{fmt.Errorf("%w: lease", errPullBusy), "another git held origin's refs"},
 		{errors.New("boom"), "main not pulled: boom; settle it with git -C /m pull --ff-only; f10 retries the pull"},
 		{
 			&gitx.ExitError{Args: []string{"pull"}, Code: 1, Stderr: "error: 'refs/remotes/origin/foo' exists; cannot create"},
 			"a stale origin ref is in the way; settle it with git -C /m remote prune origin",
 		},
 	} {
-		if got := DeferredPullNote(c.err, "/m", "main"); !strings.Contains(got, c.want) {
+		if got := deferredPullNote(c.err, "/m", "main"); !strings.Contains(got, c.want) {
 			t.Errorf("deferredPullNote(%v) = %q, want %q in it", c.err, got, c.want)
 		}
 	}
@@ -1074,7 +1074,7 @@ func TestRemoveImagesInRepo(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if note := RemoveImages(storage.InRepo(main), "GH-1"); note != "" {
+	if note := removeImages(storage.InRepo(main), "GH-1"); note != "" {
 		t.Errorf("removeImages = %q, want no note", note)
 	}
 
@@ -1198,12 +1198,12 @@ func TestFinishMergedWithoutWorktreeKeepsTheRecords(t *testing.T) {
 	fx.in.Task, fx.in.Close, fx.in.HostCloses = testkit.Bundle12, []string{"GH-2"}, true
 	fx.in.LoreStore = &lore.Store{Root: filepath.Join(fx.main, ".f10", "lore")}
 
-	var sized []BranchSize
+	var sized []branchSize
 
 	seam.Swap(
 		t,
-		&RecordSize,
-		func(_ context.Context, _, _, _ string, s BranchSize) { sized = append(sized, s) },
+		&recordSize,
+		func(_ context.Context, _, _, _ string, s branchSize) { sized = append(sized, s) },
 	)
 
 	out, err := fx.run(t)
@@ -1288,7 +1288,7 @@ func TestAttemptRows(t *testing.T) {
 		{"", "feat/GH-1-dark-mode-b", []string{"GH-1-b"}},
 	} {
 		in := FinishInput{Task: testkit.Gh1, Suffix: c.suffix}
-		match := AttemptRows(in, c.branch, rows)
+		match := attemptRows(in, c.branch, rows)
 
 		var got []string
 
@@ -1887,17 +1887,17 @@ func TestFinishLocalCommitClosesTheTask(t *testing.T) {
 // names; a rider kept open, or a tracker that is not the host's, gets none.
 func TestClosingLines(t *testing.T) {
 	in := FinishInput{Task: testkit.Bundle12, HostCloses: true}
-	if got := ClosingLines(in); got != "Closes #1" {
+	if got := closingLines(in); got != "Closes #1" {
 		t.Errorf("rider kept open: %q", got)
 	}
 
 	in.Close = []string{"GH-2"}
-	if got := ClosingLines(in); got != "Closes #1\nCloses #2" {
+	if got := closingLines(in); got != "Closes #1\nCloses #2" {
 		t.Errorf("rider closed: %q", got)
 	}
 
 	in.HostCloses = false
-	if got := ClosingLines(in); got != "" {
+	if got := closingLines(in); got != "" {
 		t.Errorf("not the host's issues, or a driver's tracker: %q", got)
 	}
 }
@@ -2099,14 +2099,14 @@ func TestFinishRecordsTheBranchSize(t *testing.T) {
 		diff    = "git diff --numstat --no-renames "
 	)
 
-	sized := func(base string) *BranchSize {
-		return &BranchSize{Lines: 18, Md: 6, Files: 3, Base: base}
+	sized := func(base string) *branchSize {
+		return &branchSize{Lines: 18, Md: 6, Files: 3, Base: base}
 	}
 
 	for _, tc := range []struct {
 		name  string
 		setup func(fx *finishFixture)
-		want  *BranchSize
+		want  *branchSize
 	}{
 		{
 			name:  "against the default branch",
@@ -2167,9 +2167,9 @@ func TestFinishRecordsTheBranchSize(t *testing.T) {
 			fx.openPR()
 			tc.setup(fx)
 
-			var got []BranchSize
+			var got []branchSize
 
-			seam.Swap(t, &RecordSize, func(_ context.Context, _, branch, task string, s BranchSize) {
+			seam.Swap(t, &recordSize, func(_ context.Context, _, branch, task string, s branchSize) {
 				if branch != "GH-1" || task != "GH-1" {
 					t.Errorf("recorded for %s on %s", task, branch)
 				}
@@ -2268,7 +2268,7 @@ func TestFinishTargetTakesTheBareCallsBranch(t *testing.T) {
 	fx.f.Script(testkit.Worktrees, testkit.Porcelain("GH-1", fx.main+".other", "GH-1-b", fx.wt))
 	fx.in.Branch = "GH-1-b"
 
-	name, path, _, err := FinishTarget(t.Context(), fx.in)
+	name, path, _, err := finishTarget(t.Context(), fx.in)
 	if err != nil || name != "GH-1-b" || path != fx.wt {
 		t.Errorf("finishTarget = %q %q %v, want GH-1-b at %s", name, path, err, fx.wt)
 	}
@@ -2324,7 +2324,7 @@ func TestFinishMergedOnly(t *testing.T) {
 	fx.in.Flags.MergedOnly = true
 	fx.openPR()
 
-	if _, err := fx.run(t); !errors.Is(err, ErrNotMerged) {
+	if _, err := fx.run(t); !errors.Is(err, errNotMerged) {
 		t.Fatalf("err = %v, want errNotMerged", err)
 	}
 
@@ -2597,14 +2597,14 @@ func TestFinishParentArchivedButOpenAndFailedClose(t *testing.T) {
 // Only the host's issues get a close; a declared tracker of another kind gets nil.
 func TestCloseTaskFor(t *testing.T) {
 	tg := testkit.ChildTarget(t, "gh")
-	if CloseTaskFor(tg, hostops.NewHost("gh", tg.Dir)) == nil {
+	if closeTaskFor(tg, hostops.NewHost("gh", tg.Dir)) == nil {
 		t.Error("host issues: no close")
 	}
 
 	tg.Effective.TrackerKind = facts.TrackerJira
 	tg.Effective.Facts = append(tg.Effective.Facts, facts.Fact{Key: "tracker.kind", Origin: facts.DeclaredIn("main")})
 
-	if CloseTaskFor(tg, hostops.NewHost("gh", tg.Dir)) != nil {
+	if closeTaskFor(tg, hostops.NewHost("gh", tg.Dir)) != nil {
 		t.Error("a Jira tracker: a close was bound")
 	}
 }

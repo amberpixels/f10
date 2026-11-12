@@ -20,9 +20,9 @@ import (
 // branch worth tracking: its worktree is made at the commit it landed as, on
 // a branch named for the task, for a post-merge review.
 
-// PickupTask prefers a closing keyword's issue (this repository's only) on a
+// pickupTask prefers a closing keyword's issue (this repository's only) on a
 // host-issues tracker, else an id in the body, title or branch, in that order.
-func PickupTask(prefix string, hostIssues bool, p forge.PR) string {
+func pickupTask(prefix string, hostIssues bool, p forge.PR) string {
 	if hostIssues && prefix != "" {
 		repo := p.URL
 		if i := worktree.PullPathRE.FindStringIndex(repo); i != nil {
@@ -54,7 +54,7 @@ func PickupTask(prefix string, hostIssues bool, p forge.PR) string {
 	return ""
 }
 
-func RefusePull(p forge.PR) error {
+func refusePull(p forge.PR) error {
 	switch {
 	case p.Fork:
 		return fmt.Errorf("%s comes from a fork: PRs from forks are not supported yet", p.URL)
@@ -71,9 +71,9 @@ func RefusePull(p forge.PR) error {
 	return nil
 }
 
-// SyncPickup fast-forwards a local branch start found only when it is behind
+// syncPickup fast-forwards a local branch start found only when it is behind
 // and checked out nowhere; otherwise a note says how it differs.
-func SyncPickup(ctx context.Context, main, branch string, checkedOut bool) (string, error) {
+func syncPickup(ctx context.Context, main, branch string, checkedOut bool) (string, error) {
 	local, remote := "refs/heads/"+branch, "refs/remotes/origin/"+branch
 
 	upToDate, err := gitx.IsAncestor(ctx, main, remote, local)

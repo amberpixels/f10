@@ -20,7 +20,7 @@ func DefaultParallel() int { return min(max(runtime.NumCPU()/2, 2), 8) }
 // HoldsSlot: a run on its way keeps its slot from one skill to the next;
 // one parked, waiting or queued has given it up.
 func (r *DriveRun) HoldsSlot() bool {
-	return r.active() && r.Phase != AtParked && r.Phase != AtWaiting && r.Phase != atQueued
+	return r.active() && r.Phase != atParked && r.Phase != atWaiting && r.Phase != atQueued
 }
 
 // SlotFree reports whether r may send a skill under the cap. A turn already
@@ -69,14 +69,14 @@ func (in *DriveInput) Unqueue(r *DriveRun) {
 	case AtHeld:
 		in.Enter(r, atPending)
 	case atQueued:
-		in.Enter(r, AtRunning)
-	case atPending, AtRunning, atVerifying, atRetrying, AtParked, AtWaiting:
+		in.Enter(r, atRunning)
+	case atPending, atRunning, atVerifying, atRetrying, atParked, atWaiting:
 	}
 }
 
-// An OpenGate decides, for one startRunnable pass, which released tasks
+// An openGate decides, for one startRunnable pass, which released tasks
 // open under the cap. The zero gate admits every task.
-type OpenGate struct {
+type openGate struct {
 	On    bool
 	Limit int
 	Wss   []agentctl.Workspace
@@ -86,7 +86,7 @@ type OpenGate struct {
 }
 
 // Workspace is the one showing r's checkout, nil for none.
-func (g *OpenGate) Workspace(r *DriveRun) *agentctl.Workspace {
+func (g *openGate) Workspace(r *DriveRun) *agentctl.Workspace {
 	path := r.O.Path
 	if !r.Opened() && r.Task.Branch != "" {
 		path = g.Trees[r.Task.Branch]
@@ -102,7 +102,7 @@ func (g *OpenGate) Workspace(r *DriveRun) *agentctl.Workspace {
 // Order puts the tasks with an agent already open first, since they add no
 // session and are the work a resume finds under way; the rest keep the
 // drive's order.
-func (g *OpenGate) Order(runs []*DriveRun) []*DriveRun {
+func (g *openGate) Order(runs []*DriveRun) []*DriveRun {
 	if !g.On {
 		return runs
 	}
@@ -117,7 +117,7 @@ func (g *OpenGate) Order(runs []*DriveRun) []*DriveRun {
 
 // Admit reports whether r opens now, counting it if so. A task whose agent
 // is mid-turn always opens, since the drive cannot stop that turn.
-func (g *OpenGate) Admit(in *DriveInput, r *DriveRun) bool {
+func (g *openGate) Admit(in *DriveInput, r *DriveRun) bool {
 	if !g.On {
 		return true
 	}
@@ -139,7 +139,7 @@ func (g *OpenGate) Admit(in *DriveInput, r *DriveRun) bool {
 	return true
 }
 
-func (g *OpenGate) rank(r *DriveRun) int {
+func (g *openGate) rank(r *DriveRun) int {
 	if !r.Opened() && g.Workspace(r) != nil {
 		return 0
 	}
@@ -153,10 +153,10 @@ func (g *OpenGate) rank(r *DriveRun) int {
 //
 //nolint:lostfield // a gate reads the runs and workspaces, not every field of them
 //nolint:lostfield // a gate reads the runs and workspaces, not every field of them
-func (in *DriveInput) openGate(ctx context.Context, runs []*DriveRun, wss []agentctl.Workspace) (*OpenGate, error) {
+func (in *DriveInput) openGate(ctx context.Context, runs []*DriveRun, wss []agentctl.Workspace) (*openGate, error) {
 	unopened := slices.ContainsFunc(runs, func(r *DriveRun) bool { return !r.Opened() && r.End == nil })
 	if in.Parallel <= 0 || len(runs) <= in.Parallel || !unopened {
-		return &OpenGate{}, nil
+		return &openGate{}, nil
 	}
 
 	if wss == nil {
@@ -168,7 +168,7 @@ func (in *DriveInput) openGate(ctx context.Context, runs []*DriveRun, wss []agen
 		in.Wss = wss
 	}
 
-	g := &OpenGate{On: true, Limit: in.Parallel, Wss: wss, Trees: map[string]string{}}
+	g := &openGate{On: true, Limit: in.Parallel, Wss: wss, Trees: map[string]string{}}
 
 	// only an unopened task with a branch is found by its checkout
 	if slices.ContainsFunc(runs, func(r *DriveRun) bool { return !r.Opened() && r.End == nil && r.Task.Branch != "" }) {

@@ -69,7 +69,7 @@ func catchupPass(
 	t *testing.T,
 	in WatchInput,
 	tasks []WatchedTask,
-	store map[string]WatchReport,
+	store map[string]watchReport,
 ) collected {
 	t.Helper()
 
@@ -106,12 +106,12 @@ func TestWatchCatchesUpAnOpenPR(t *testing.T) {
 		warned string
 	}{
 		"key off":             {task: func(*WatchedTask) {}},
-		"behind, idle, clean": {key: true, prompt: true, kind: WatchCatchup},
+		"behind, idle, clean": {key: true, prompt: true, kind: watchCatchup},
 		"agent working":       {key: true, task: func(w *WatchedTask) { w.Agent = agentctl.StatusWorking }},
 		"no listing":          {key: true, task: func(w *WatchedTask) { w.Listed = false; w.Agent = "" }},
 		"waiting on an ask": {key: true, task: func(w *WatchedTask) {
 			w.Run = &state.Run{Ship: "blocked", Leaf: "judge", Ask: "1. Go on? [yes | no]", Updated: watchNow}
-		}, kind: WatchStopped},
+		}, kind: watchStopped},
 		"tree dirty": {key: true, script: func(fx *finishtest.JanitorFixture) {
 			fx.F.Script("git status --porcelain", " M a.go")
 		}},
@@ -124,11 +124,11 @@ func TestWatchCatchesUpAnOpenPR(t *testing.T) {
 		// a mark a finish or a ship guard left is a catchup nobody else sends
 		"already marked": {key: true, script: func(fx *finishtest.JanitorFixture) {
 			fx.F.Meta.Seed("GH-1/x", branchmeta.Landed, "main")
-		}, prompt: true, kind: WatchCatchup},
+		}, prompt: true, kind: watchCatchup},
 		"diverged from origin": {
 			key:  true,
 			task: func(w *WatchedTask) { w.LocalSHA = "h9" },
-			kind: WatchBehind,
+			kind: watchBehind,
 		},
 		"not on origin": {key: true, script: func(fx *finishtest.JanitorFixture) {
 			fx.F.Script("git rev-parse -q --verify refs/remotes/origin/GH-1/x", "")
@@ -136,17 +136,17 @@ func TestWatchCatchesUpAnOpenPR(t *testing.T) {
 		"no workspace": {
 			key:  true,
 			task: func(w *WatchedTask) { w.Ws, w.Agent = "", "" },
-			kind: WatchBehind,
+			kind: watchBehind,
 		},
 		"retargeted": {
 			key:  true,
 			task: func(w *WatchedTask) { w.Pr.Base = "feature" },
-			kind: WatchBehind,
+			kind: watchBehind,
 		},
 		"closed": {
 			key:  true,
 			task: func(w *WatchedTask) { w.Pr.Status = forge.Closed },
-			kind: WatchClosed,
+			kind: watchClosed,
 		},
 		"fetch fails": {key: true, script: func(fx *finishtest.JanitorFixture) {
 			fx.F.Fail("git fetch origin", shell.Result{Code: 128, Stderr: "no route to host"})
@@ -196,7 +196,7 @@ func TestWatchCatchesUpAnOpenPR(t *testing.T) {
 				Warn: func(line string) { warned = append(warned, line) },
 			}
 
-			store := map[string]WatchReport{}
+			store := map[string]watchReport{}
 			out := catchupPass(t, in, []WatchedTask{task}, store)
 
 			kind := ""
@@ -229,7 +229,7 @@ func TestWatchCatchesUpAnOpenPR(t *testing.T) {
 			}
 
 			if !tc.key ||
-				tc.task != nil && (task.Off || task.Owner != "" || !task.Listed || WaitingOnAsk(task.Run)) {
+				tc.task != nil && (task.Off || task.Owner != "" || !task.Listed || waitingOnAsk(task.Run)) {
 				if fx.F.Called("git fetch origin") {
 					t.Error("origin was fetched")
 				}
@@ -281,7 +281,7 @@ func TestWatchCatchesUpAStackedPR(t *testing.T) {
 			Prompt: func(context.Context, WatchedTask, string) error { prompts++; return nil },
 		}
 
-		store := map[string]WatchReport{}
+		store := map[string]watchReport{}
 		out := catchupPass(t, in, []WatchedTask{task}, store)
 		marked := fx.F.Called("set branch.GH-1/x." + string(branchmeta.Moved) + " b2")
 
@@ -308,10 +308,10 @@ func TestWatchReportsAnAgentItCannotPrompt(t *testing.T) {
 		Prompt: func(context.Context, WatchedTask, string) error { return agentctl.ErrAgentNotFound },
 	}
 
-	store := map[string]WatchReport{}
+	store := map[string]watchReport{}
 	out := catchupPass(t, in, []WatchedTask{undrivenTask()}, store)
 
-	if len(out) != 1 || out[0].Kind != WatchBehind || !strings.Contains(out[0].Text, "not found") ||
+	if len(out) != 1 || out[0].Kind != watchBehind || !strings.Contains(out[0].Text, "not found") ||
 		!fx.F.Called("unset branch.GH-1/x."+string(branchmeta.Landed)) || store["GH-1"].Catchup != nil ||
 		!fx.F.Called("git reset --hard p1") {
 		t.Errorf("reported %+v, unset %v, record %+v", out, fx.F.Called("git config --unset"), store["GH-1"].Catchup)
@@ -333,10 +333,10 @@ func TestWatchSettlesASentCatchup(t *testing.T) {
 		kept   bool // the record stays
 		failed bool // and is marked failed
 	}{
-		"ended clean, merged": {push: plain, kind: WatchCatchup},
+		"ended clean, merged": {push: plain, kind: watchCatchup},
 		"ended clean, rebased": {script: func(fx *finishtest.JanitorFixture) {
 			fx.F.Fail("git merge-base --is-ancestor p1 HEAD", shell.Result{Code: 1})
-		}, push: lease, kind: WatchCatchup},
+		}, push: lease, kind: watchCatchup},
 		"head equals origin": {script: func(fx *finishtest.JanitorFixture) {
 			fx.F.Script("git rev-parse -q --verify HEAD", "p1")
 		}},
@@ -350,30 +350,30 @@ func TestWatchSettlesASentCatchup(t *testing.T) {
 		// git shows clean is pushed under it
 		"ended clean on background work": {
 			task: func(w *WatchedTask) { w.Background = watchNow.Add(-time.Minute) },
-			push: plain, kind: WatchCatchup,
+			push: plain, kind: watchCatchup,
 		},
 		// past the bound the mark says nothing, and what is left is a failure
 		"background work past its bound": {script: func(fx *finishtest.JanitorFixture) {
 			fx.F.Meta.Seed("GH-1/x", branchmeta.Landed, "main")
 		}, task: func(w *WatchedTask) {
 			w.Background = watchNow.Add(-stack.VerifyLimit)
-		}, kind: WatchCatchup, kept: true, failed: true},
+		}, kind: watchCatchup, kept: true, failed: true},
 		"mark still set": {script: func(fx *finishtest.JanitorFixture) {
 			fx.F.Meta.Seed("GH-1/x", branchmeta.Landed, "main")
-		}, kind: WatchCatchup, kept: true, failed: true},
+		}, kind: watchCatchup, kept: true, failed: true},
 		"rebase left open": {script: func(fx *finishtest.JanitorFixture) {
 			fx.F.Script("git rev-parse --git-path rebase-merge", fx.F.T.TempDir())
-		}, kind: WatchCatchup, kept: true, failed: true},
+		}, kind: watchCatchup, kept: true, failed: true},
 		"lease held": {held: true},
 		"push rejected": {script: func(fx *finishtest.JanitorFixture) {
 			fx.F.Fail(plain, shell.Result{Code: 1, Stderr: "rejected"})
-		}, push: plain, kind: WatchCatchup, kept: true},
+		}, push: plain, kind: watchCatchup, kept: true},
 		// a commit pushed to the request meanwhile is never overwritten
 		"origin moved meanwhile": {script: func(fx *finishtest.JanitorFixture) {
 			fx.F.Script("git rev-parse -q --verify refs/remotes/origin/GH-1/x", "p2")
 			fx.F.Fail("git merge-base --is-ancestor p2 HEAD", shell.Result{Code: 1})
-		}, kind: WatchCatchup, kept: true, failed: true},
-		"request closed": {task: func(w *WatchedTask) { w.Pr.Status = forge.Closed }, kind: WatchClosed},
+		}, kind: watchCatchup, kept: true, failed: true},
+		"request closed": {task: func(w *WatchedTask) { w.Pr.Status = forge.Closed }, kind: watchClosed},
 	}
 
 	for name, tc := range cases {
@@ -413,8 +413,8 @@ func TestWatchSettlesASentCatchup(t *testing.T) {
 				Prompt: func(context.Context, WatchedTask, string) error { prompts++; return nil },
 			}
 
-			store := map[string]WatchReport{"GH-1": {
-				Kind: WatchCatchup, Key: "catchup sent m2 h1", At: watchNow,
+			store := map[string]watchReport{"GH-1": {
+				Kind: watchCatchup, Key: "catchup sent m2 h1", At: watchNow,
 				Catchup: &drivestore.Catchup{Target: "m2", Head: "p1", Origin: "p1", Base: "origin/main", At: watchNow},
 			}}
 
@@ -469,8 +469,8 @@ func TestWatchStoreKeepsTheCatchupRecord(t *testing.T) {
 	root := t.TempDir()
 	rec := &drivestore.Catchup{Target: "m2", Head: "h1", Origin: "p1", Base: "origin/main", At: watchNow, Failed: true}
 
-	want := map[string]WatchReport{"FT-1": {Kind: WatchCatchup, Key: "k", At: watchNow, Catchup: rec}}
-	if err := SaveWatchStore(root, want); err != nil {
+	want := map[string]watchReport{"FT-1": {Kind: watchCatchup, Key: "k", At: watchNow, Catchup: rec}}
+	if err := saveWatchStore(root, want); err != nil {
 		t.Fatal(err)
 	}
 
@@ -488,9 +488,9 @@ func TestWatchStoreKeepsTheCatchupRecord(t *testing.T) {
 	var out collected
 
 	in := WatchInput{Mode: "report", Now: func() time.Time { return watchNow }, Out: &out}
-	in.Tell(got, "FT-1", watchNow, &WatchReport{Kind: WatchStopped, Key: "s"})
+	in.Tell(got, "FT-1", watchNow, &watchReport{Kind: watchStopped, Key: "s"})
 
-	if got["FT-1"].Catchup == nil || got["FT-1"].Kind != WatchStopped {
+	if got["FT-1"].Catchup == nil || got["FT-1"].Kind != watchStopped {
 		t.Errorf("after a newer report: %+v", got["FT-1"])
 	}
 }
@@ -513,7 +513,7 @@ func TestWatchHandsAConflictToTheAgent(t *testing.T) {
 		},
 	}
 
-	store := map[string]WatchReport{}
+	store := map[string]watchReport{}
 	catchupPass(t, in, []WatchedTask{undrivenTask()}, store)
 
 	if len(prompts) != 1 || !strings.Contains(prompts[0], "the watcher rebased GH-1/x onto origin/main") ||
@@ -532,7 +532,7 @@ func TestWatchStoreReadsAnOlderCatchupRecord(t *testing.T) {
 		"  catchup:\n    target: m2\n    head: h1\n    origin: p1\n    base: origin/main\n" +
 		"    at: 2026-10-28T12:00:00Z\n"
 
-	if err := os.WriteFile(filepath.Join(root, WatchFile), []byte(old), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, watchFile), []byte(old), 0o600); err != nil {
 		t.Fatal(err)
 	}
 

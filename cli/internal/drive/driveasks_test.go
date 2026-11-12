@@ -39,7 +39,7 @@ func (fx *driveFixture) asking(t *testing.T) {
 	fx.f.Script(testkit.Worktrees, testkit.Porcelain(), testkit.Porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.f.Script(
-		"herdr agent prompt "+testkit.AgentOf("GH-1")+" "+SkillPrompt("judge", "GH-1", nil, runplan.ShipFlow{}, false),
+		"herdr agent prompt "+testkit.AgentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, runplan.ShipFlow{}, false),
 		"{}",
 	)
 	fx.f.Script(testkit.WsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))

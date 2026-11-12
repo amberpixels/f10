@@ -4,7 +4,7 @@ import (
 	"strings"
 )
 
-func GateLines(gates []Gate) [][2]string {
+func gateLines(gates []gate) [][2]string {
 	out := make([][2]string, len(gates))
 
 	for i, g := range gates {
@@ -14,8 +14,8 @@ func GateLines(gates []Gate) [][2]string {
 	return out
 }
 
-// CompactGates is the parent rows' gate column.
-func CompactGates(gates []Gate) string {
+// compactGates is the parent rows' gate column.
+func compactGates(gates []gate) string {
 	var parts []string
 
 	for _, g := range gates {

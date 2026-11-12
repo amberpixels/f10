@@ -40,7 +40,7 @@ func PickupFor(ctx context.Context, t *target.Target, token string) (*hostops.Pi
 		return nil, forge.PR{}, err
 	}
 
-	if err := RefusePull(p); err != nil {
+	if err := refusePull(p); err != nil {
 		return nil, forge.PR{}, err
 	}
 
@@ -58,7 +58,7 @@ func PickedTask(prefix string, hostIssues bool, pick *hostops.Pickup, pr forge.P
 		return task, nil
 	}
 
-	if task = PickupTask(prefix, hostIssues, pr); task == "" {
+	if task = pickupTask(prefix, hostIssues, pr); task == "" {
 		return "", ui.Exit(ui.ExitDeclined, "%s names no task in its body, title or branch %s: "+
 			"rerun with --task <ID>", pick.URL, pick.Branch)
 	}

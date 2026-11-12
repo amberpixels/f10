@@ -33,12 +33,12 @@ func (in *DriveInput) catchupHere(
 	// an idle agent on a run still running may sit on a dialog over files
 	// git is about to rewrite, so it halts here as a prompt would
 	if err := start.RefuseStalled(in.stallCheck(r), ws, agentctl.AgentName(id, r.Task.Suffix, dir), dir); err != nil {
-		return Halt(id, "catchup", err.Error())
+		return halt(id, "catchup", err.Error())
 	}
 
 	tree, err := stack.ReadTree(ctx, dir)
 	if errors.Is(err, stack.ErrOpUnread) {
-		return Halt(id, "catchup", err.Error())
+		return halt(id, "catchup", err.Error())
 	}
 
 	if tree.Op.Kind != "" {
@@ -104,7 +104,7 @@ func (in *DriveInput) catchupHere(
 	if p.Method == stack.MethodNone || p.Method == stack.MethodSkip {
 		key, err := in.mark(ctx, r)
 		if err != nil {
-			return Halt(id, "catchup", err.Error())
+			return halt(id, "catchup", err.Error())
 		}
 
 		// a marked branch that already holds its base may be a drive drained
@@ -171,8 +171,8 @@ func (in *DriveInput) catchupPrompt(
 }
 
 // catchupHalt is the end a catchup that fails its last attempt gives.
-func catchupHalt(r *DriveRun, reason string) DriveResult {
-	halt := Halted(r.Task.Ref.ID, "catchup", reason)
+func catchupHalt(r *DriveRun, reason string) driveResult {
+	halt := halted(r.Task.Ref.ID, "catchup", reason)
 	halt.Lines = append(halt.Lines, "next: settle it with /f10:catchup in "+r.O.Path+", then rerun the drive")
 
 	return halt
@@ -182,7 +182,7 @@ func (in *DriveInput) startVerify(ctx context.Context, r *DriveRun) {
 	dir, log := r.O.Path, filepath.Join(cmp.Or(in.Root, os.TempDir()), "catchup", r.Task.Ref.ID+".log")
 
 	in.Enter(r, atVerifying)
-	r.Job = StartVerifyJob(ctx, func(ctx context.Context) (stack.VerifyRun, error) {
+	r.Job = startVerifyJob(ctx, func(ctx context.Context) (stack.VerifyRun, error) {
 		return in.Catchup.Verify(ctx, dir, log)
 	})
 }
@@ -231,7 +231,7 @@ func (in *DriveInput) catchupStalled(
 	ctx context.Context,
 	r *DriveRun,
 	run *state.Run,
-	halt DriveResult,
+	halt driveResult,
 ) error {
 	if run != nil {
 		if wt, ok := state.OpenWait(in.StateDir, run.Session); ok && wt.Reason != observe.WaitTurn {
@@ -326,7 +326,7 @@ func (in *DriveInput) verified(ctx context.Context, r *DriveRun, job *verifyJob)
 	r.catchupPlan = nil
 
 	if err := stack.ClearMarks(ctx, in.Main, r.O.Branch, p); err != nil {
-		return Halt(id, "catchup", err.Error())
+		return halt(id, "catchup", err.Error())
 	}
 
 	// the count clears once the entry the catchup guarded goes through, so a
@@ -397,7 +397,7 @@ func (in *DriveInput) conflictAttempt(
 
 	fp, paths, err := stack.CatchupConflict(ctx, in.Main, r.O.Path, r.O.Branch, key)
 	if err != nil {
-		return Halt(r.Task.Ref.ID, skill, err.Error())
+		return halt(r.Task.Ref.ID, skill, err.Error())
 	}
 
 	reason := r.O.Branch + " still conflicts with " + cmp.Or(c.Base, "its base") + " after a catchup"
@@ -405,8 +405,8 @@ func (in *DriveInput) conflictAttempt(
 		reason += ": " + paths
 	}
 
-	err = in.AttemptAt(r, "catchup", fp, Halted(r.Task.Ref.ID, skill, reason))
-	if res, ok := EndOf(err); ok {
+	err = in.AttemptAt(r, "catchup", fp, halted(r.Task.Ref.ID, skill, reason))
+	if res, ok := endOf(err); ok {
 		res.Lines = append(res.Lines, "next: settle it with /f10:catchup in "+r.O.Path+", then rerun the drive")
 
 		return endWith(res)
@@ -440,7 +440,7 @@ func (in *DriveInput) pushAfterCatchup(
 
 		return nil
 	case err != nil:
-		return endWith(PushHalted(id, skill, err))
+		return endWith(pushHalted(id, skill, err))
 	case how != "":
 		fmt.Fprintf(in.Out, "%s %s: %s caught up with %s, %s\n", in.id(id), skill, branch, base, how)
 	}
@@ -448,10 +448,10 @@ func (in *DriveInput) pushAfterCatchup(
 	return nil
 }
 
-// PushHalted halts on a failed push, saying how to bring in what origin
+// pushHalted halts on a failed push, saying how to bring in what origin
 // gained when that is the cause.
-func PushHalted(id, skill string, err error) DriveResult {
-	res := Halted(id, skill, err.Error())
+func pushHalted(id, skill string, err error) driveResult {
+	res := halted(id, skill, err.Error())
 
 	moved := stack.OriginMovedError{}
 

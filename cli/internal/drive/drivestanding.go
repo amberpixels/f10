@@ -22,14 +22,14 @@ func guardStop(run *state.Run) bool {
 }
 
 // awaitsDecision is a stop a catchup must not run over: a question or a
-// blocked decision, not one a catchup leaves in place (HeldStop).
+// blocked decision, not one a catchup leaves in place (heldStop).
 func awaitsDecision(run *state.Run) bool {
-	return run != nil && drivectl.StoppedRun(run) && !HeldStop(run) && (run.Ask != "" || blockedRun(run))
+	return run != nil && drivectl.StoppedRun(run) && !heldStop(run) && (run.Ask != "" || blockedRun(run))
 }
 
-// HeldStop is a ship stop a catchup leaves in place: the guard's, or a
+// heldStop is a ship stop a catchup leaves in place: the guard's, or a
 // ship parked on its base, which resumes once the catchup ends clean.
-func HeldStop(run *state.Run) bool { return guardStop(run) || run.Wait != "" }
+func heldStop(run *state.Run) bool { return guardStop(run) || run.Wait != "" }
 
 // phaseRunning reports run's plan or ship phase still running: the two
 // phases a turn owns, so the turn has not reported its end.
@@ -60,11 +60,11 @@ func phaseDone(run *state.Run, skill string) bool {
 	return s == "done" || s == "prior"
 }
 
-// ResumeAt is the steering that resumes a ship the catchup guard stopped,
+// resumeAt is the steering that resumes a ship the catchup guard stopped,
 // or one parked on its base, naming its place when the flow names the entry
 // twice; a failed catchup keeps the place of the entry it guarded, which is
 // where ship resumes.
-func ResumeAt(skill string, run *state.Run) string {
+func resumeAt(skill string, run *state.Run) string {
 	if skill != "ship" || run.Ask != "" || !state.Stopped(run.Ship) {
 		return ""
 	}
@@ -94,9 +94,9 @@ func ResumeAt(skill string, run *state.Run) string {
 	return s
 }
 
-// ResumeShown is ResumeAt's steering as a person reads it: the resumed
+// resumeShown is resumeAt's steering as a person reads it: the resumed
 // entry by its label, when the flow gives it one.
-func ResumeShown(run *state.Run, at string) string {
+func resumeShown(run *state.Run, at string) string {
 	if label := run.LabelAt(run.At); label != "" {
 		return "resume at " + label
 	}

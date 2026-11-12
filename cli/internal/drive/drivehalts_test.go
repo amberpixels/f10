@@ -24,9 +24,9 @@ func TestOnTaskAppliesAReturnedEnd(t *testing.T) {
 	in := &DriveInput{
 		Out: &out,
 	}
-	r := &DriveRun{Task: DriveTask{Ref: ref.Ref{ID: "GH-1"}}, Phase: AtRunning}
+	r := &DriveRun{Task: DriveTask{Ref: ref.Ref{ID: "GH-1"}}, Phase: atRunning}
 
-	wrapped := fmt.Errorf("sending: %w", Halt("GH-1", "ship", "no agent"))
+	wrapped := fmt.Errorf("sending: %w", halt("GH-1", "ship", "no agent"))
 	if err := in.OnTask(t.Context(), r, wrapped); err != nil {
 		t.Fatalf("onTask = %v, want the end applied", err)
 	}
@@ -35,7 +35,7 @@ func TestOnTaskAppliesAReturnedEnd(t *testing.T) {
 		t.Fatalf("end = %+v\n%s", r.End, out.String())
 	}
 
-	other := &DriveRun{Task: DriveTask{Ref: ref.Ref{ID: "GH-2"}}, Phase: AtRunning}
+	other := &DriveRun{Task: DriveTask{Ref: ref.Ref{ID: "GH-2"}}, Phase: atRunning}
 	boom := errors.New("herdr is gone")
 
 	if err := in.OnTask(t.Context(), other, boom); !errors.Is(err, boom) || other.End != nil {
@@ -50,7 +50,7 @@ func TestLookReListsOnlyATaskOpenedThisTick(t *testing.T) {
 	f.Script(testkit.WsList, listing("GH-1", "idle"))
 
 	in := &DriveInput{StateDir: t.TempDir(), TTL: state.DefaultTTL, Now: time.Now}
-	in.Tick = &TickView{
+	in.Tick = &tickView{
 		Wss: []agentctl.Workspace{{ID: "ws:GH-1", Path: "/code/repo.GH-1", Status: agentctl.StatusIdle}},
 	}
 	r := &DriveRun{Task: DriveTask{Ref: ref.Ref{ID: "GH-1"}}, O: start.OpenedTask{Path: "/code/repo.GH-1"}}

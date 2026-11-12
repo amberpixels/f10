@@ -12,9 +12,9 @@ func TestAnswerBook(t *testing.T) {
 	at := time.Unix(1_800_000_000, 0)
 
 	b := NewAnswerBook()
-	b.Give(Answer{Text: "1. yes"})
-	b.Give(Answer{Task: "GH-1", Text: "1. local"})
-	b.Give(Answer{Task: "GH-2", Text: "2. b", From: HeardInbox, At: at})
+	b.Give(answer{Text: "1. yes"})
+	b.Give(answer{Task: "GH-1", Text: "1. local"})
+	b.Give(answer{Task: "GH-2", Text: "2. b", From: heardInbox, At: at})
 
 	if want := map[string]string{"": "1. yes", "GH-1": "1. local"}; !maps.Equal(b.Pending(), want) {
 		t.Errorf("pending = %v, want %v", b.Pending(), want)
@@ -41,8 +41,8 @@ func TestAnswerBook(t *testing.T) {
 	}
 
 	// an inbox answer replaces the flag's for the same task
-	b.Give(Answer{Task: "GH-3", Text: "from the flag"})
-	b.Give(Answer{Task: "GH-3", Text: "from the inbox", From: FromInbox})
+	b.Give(answer{Task: "GH-3", Text: "from the flag"})
+	b.Give(answer{Task: "GH-3", Text: "from the inbox", From: fromInbox})
 
 	if a, _ := b.Keyed("GH-3"); a.Text != "from the inbox" {
 		t.Errorf("keyed(GH-3) = %q", a.Text)

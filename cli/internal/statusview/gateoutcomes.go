@@ -10,10 +10,10 @@ import (
 	"github.com/amberpixels/f10/cli/internal/textx"
 )
 
-// Outcomes is what the reviews and judges of a task left, with the time
+// outcomes is what the reviews and judges of a task left, with the time
 // of the newest of each, so a later call reads as running.
-type Outcomes struct {
-	Local, Remote                     []ReviewRound
+type outcomes struct {
+	Local, Remote                     []reviewRound
 	TaskJudge, PlanJudge, ChangeJudge *archive.JudgeOutcome
 
 	LocalAt, RemoteAt, taskAt, planAt, changeAt time.Time
@@ -25,9 +25,9 @@ type Outcomes struct {
 // SeriesOutcomes reads the open series of a task with a branch, so a
 // follow-up PR never shows the first one's gates; a task with no branch
 // left reads the newest series lore holds, its open one being empty.
-func SeriesOutcomes(store *lore.Store, storageRoot, task string, open bool) Outcomes {
+func SeriesOutcomes(store *lore.Store, storageRoot, task string, open bool) outcomes {
 	var (
-		o      Outcomes
+		o      outcomes
 		change = task
 		since  time.Time
 	)
@@ -42,7 +42,7 @@ func SeriesOutcomes(store *lore.Store, storageRoot, task string, open bool) Outc
 	}
 
 	if storageRoot != "" {
-		o = FileOutcomes(storageRoot, task, since)
+		o = fileOutcomes(storageRoot, task, since)
 	}
 
 	if store == nil {
@@ -121,7 +121,7 @@ func newestSeries(store *lore.Store, task string) string {
 // current is lore's counts answering for a half: as new as the newest
 // findings file (lore keeps whole seconds) and holding every finding the
 // files raised, so a lore write that failed leaves the files the answer.
-func current(fromLore []ReviewRound, raised int, loreAt, fileAt time.Time) bool {
+func current(fromLore []reviewRound, raised int, loreAt, fileAt time.Time) bool {
 	switch {
 	case fromLore == nil:
 		return false
@@ -142,7 +142,7 @@ func latest(a, b time.Time) time.Time {
 
 // roundsFromLore is lore's counts as the latest round, numbered after the
 // files when they hold rounds: lore keeps findings, not rounds.
-func roundsFromLore(counts, files []ReviewRound) []ReviewRound {
+func roundsFromLore(counts, files []reviewRound) []reviewRound {
 	r := counts[0]
 	r.Round = "1"
 
@@ -150,14 +150,14 @@ func roundsFromLore(counts, files []ReviewRound) []ReviewRound {
 		r.Round = files[len(files)-1].Round
 	}
 
-	return []ReviewRound{r}
+	return []reviewRound{r}
 }
 
 //nolint:lostfield // a reduction: the outcomes count findings, not every entry field
-func loreOutcomes(entries []lore.Entry) Outcomes {
+func loreOutcomes(entries []lore.Entry) outcomes {
 	var (
-		o                      Outcomes
-		local, remote          *ReviewRound
+		o                      outcomes
+		local, remote          *reviewRound
 		taskAt, planAt, change time.Time
 	)
 
@@ -170,7 +170,7 @@ func loreOutcomes(entries []lore.Entry) Outcomes {
 			}
 
 			if *r == nil {
-				*r = &ReviewRound{}
+				*r = &reviewRound{}
 			}
 
 			(*r).Found++
@@ -207,11 +207,11 @@ func loreOutcomes(entries []lore.Entry) Outcomes {
 	}
 
 	if local != nil {
-		o.Local = []ReviewRound{*local}
+		o.Local = []reviewRound{*local}
 	}
 
 	if remote != nil {
-		o.Remote = []ReviewRound{*remote}
+		o.Remote = []reviewRound{*remote}
 	}
 
 	o.taskAt, o.planAt, o.changeAt = taskAt, planAt, change

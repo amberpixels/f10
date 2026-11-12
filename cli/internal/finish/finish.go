@@ -50,7 +50,7 @@ func Ref(ctx context.Context, t *target.Target, token string) (ref.Ref, string, 
 	return r, suffix, "", err
 }
 
-var ErrNotMerged = errors.New("its request has not merged on the host, and only merged work is finished here")
+var errNotMerged = errors.New("its request has not merged on the host, and only merged work is finished here")
 
 func Lease(root, id string) (*drivestore.Lease, error) {
 	lease, err := drivestore.Acquire(root, id, 0)
@@ -154,12 +154,12 @@ func InputFor(t *target.Target, main string, h hostops.Host, task ref.Ref) Finis
 		Storage:    t.Layout.StorageRoot,
 		Title:      worktree.TitleLookup(t, task.Number),
 		Subtasks:   stack.TrackerFor(t).AllChildren,
-		CloseTask:  CloseTaskFor(t, h.In(main)),
+		CloseTask:  closeTaskFor(t, h.In(main)),
 	}
 }
 
-// CloseTaskFor closes the task on the host only where the host is the tracker.
-func CloseTaskFor(t *target.Target, h hostops.Host) func(context.Context, ref.Ref) error {
+// closeTaskFor closes the task on the host only where the host is the tracker.
+func closeTaskFor(t *target.Target, h hostops.Host) func(context.Context, ref.Ref) error {
 	if !t.HostCloses() {
 		return nil
 	}

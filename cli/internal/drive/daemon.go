@@ -27,7 +27,7 @@ func WriteDaemonStatus(ctx context.Context, w io.Writer, links *render.TaskLinks
 		rep.Started.Format(time.DateTime), len(rep.Runs), len(rep.Watches))
 
 	for _, r := range rep.Runs {
-		fmt.Fprintf(w, "\n%s\n", DriveTitle(r))
+		fmt.Fprintf(w, "\n%s\n", driveTitle(r))
 		fmt.Fprintf(w, "  pid    %d, since %s\n  log    %s\n", r.PID, r.Since.Format(time.DateTime), r.Log)
 
 		if r.Drive == 0 {
@@ -50,7 +50,7 @@ func WriteDaemonStatus(ctx context.Context, w io.Writer, links *render.TaskLinks
 			links.Load(ctx, project, ids...)
 
 			for _, t := range rec.Tasks {
-				fmt.Fprintf(w, "  %s %s\n", render.PadRight(links.ID(project, t.ID), 6), TaskStanding(t, true))
+				fmt.Fprintf(w, "  %s %s\n", render.PadRight(links.ID(project, t.ID), 6), taskStanding(t, true))
 			}
 		}
 	}
@@ -68,7 +68,7 @@ func WriteDaemonStatus(ctx context.Context, w io.Writer, links *render.TaskLinks
 	}
 }
 
-func DriveTitle(r daemon.Run) string {
+func driveTitle(r daemon.Run) string {
 	project := projectName(r.Root)
 	if r.Drive == 0 {
 		return project + ": drive starting"
@@ -111,7 +111,7 @@ func ThroughDaemon(ctx context.Context, w io.Writer, t *target.Target, argv []st
 	if len(a.Answers) == 0 {
 		req.Resume = a.Resume
 		if a.Resume == 0 {
-			req.Key = drivestore.Key(RecordArgs(argv))
+			req.Key = drivestore.Key(recordArgs(argv))
 		}
 	}
 
@@ -121,7 +121,7 @@ func ThroughDaemon(ctx context.Context, w io.Writer, t *target.Target, argv []st
 	// a task the drive leaves unfinished is watched once the drive ends
 	drivectl.WatchProject(ctx, w, t)
 
-	return FollowDrive(ctx, w, dir, ver, req, nil)
+	return followDrive(ctx, w, dir, ver, req, nil)
 }
 
 // setDriveParallel writes a given --parallel into the record --resume names
@@ -135,7 +135,7 @@ func setDriveParallel(w io.Writer, root string, argv []string, a drivectl.DriveA
 	if a.Resume > 0 {
 		rec, err = drivestore.Read(root, a.Resume)
 	} else {
-		rec, err = drivestore.Find(root, RecordArgs(argv))
+		rec, err = drivestore.Find(root, recordArgs(argv))
 	}
 
 	if err != nil || rec == nil || rec.Parallel == a.Parallel {
@@ -151,9 +151,9 @@ func setDriveParallel(w io.Writer, root string, argv []string, a drivectl.DriveA
 	}
 }
 
-// FollowDrive follows the drive until it exits, into the next daemon when
+// followDrive follows the drive until it exits, into the next daemon when
 // an upgrade drained it. spawn starts a daemon; nil is this binary's.
-func FollowDrive(
+func followDrive(
 	ctx context.Context,
 	w io.Writer,
 	dir, ver string,

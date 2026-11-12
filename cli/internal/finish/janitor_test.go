@@ -15,7 +15,7 @@ func TestJanitorDue(t *testing.T) {
 	stamp := filepath.Join(t.TempDir(), JanitorStamp)
 	now := time.Now()
 
-	if !JanitorDue(stamp, now) {
+	if !janitorDue(stamp, now) {
 		t.Error("no stamp: not due")
 	}
 
@@ -23,11 +23,11 @@ func TestJanitorDue(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if JanitorDue(stamp, now) {
+	if janitorDue(stamp, now) {
 		t.Error("an hour-old stamp: due")
 	}
 
-	if !JanitorDue(stamp, now.Add(JanitorEvery)) {
+	if !janitorDue(stamp, now.Add(janitorEvery)) {
 		t.Error("a stamp past the interval: not due")
 	}
 }
@@ -50,8 +50,8 @@ func TestSweepIfDue(t *testing.T) {
 
 	SweepIfDue(t.Context(), &out, stamp, now, run)
 
-	if runs != 1 || JanitorDue(stamp, now) {
-		t.Fatalf("runs = %d, due after the run = %v", runs, JanitorDue(stamp, now))
+	if runs != 1 || janitorDue(stamp, now) {
+		t.Fatalf("runs = %d, due after the run = %v", runs, janitorDue(stamp, now))
 	}
 
 	want := []string{"janitor: removed GH-1/x", "janitor: warning: gh did not answer"}

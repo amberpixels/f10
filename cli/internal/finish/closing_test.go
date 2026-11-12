@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-// What KeepOpen rewrites, CloseAgain rewrites back, in every form pickup reads.
+// What KeepOpen rewrites, closeAgain rewrites back, in every form pickup reads.
 func TestKeepOpenRoundTrip(t *testing.T) {
 	for _, body := range []string{
 		"Closes #12",
@@ -16,12 +16,12 @@ func TestKeepOpenRoundTrip(t *testing.T) {
 			t.Errorf("keepOpen(%q) = %q, still closing", body, kept)
 		}
 
-		if again := CloseAgain(kept, "12"); !ClosingRE.MatchString(again) {
+		if again := closeAgain(kept, "12"); !ClosingRE.MatchString(again) {
 			t.Errorf("closeAgain(%q) = %q, not closing", kept, again)
 		}
 	}
 
-	if !ClosingRE.MatchString(ClosingLine("7")) {
+	if !ClosingRE.MatchString(closingLine("7")) {
 		t.Error("closingLine is not read as closing")
 	}
 }

@@ -90,7 +90,7 @@ func (j *verifyJob) halt() {
 	}
 }
 
-func StartVerifyJob(ctx context.Context, run func(context.Context) (stack.VerifyRun, error)) *verifyJob {
+func startVerifyJob(ctx context.Context, run func(context.Context) (stack.VerifyRun, error)) *verifyJob {
 	ctx, stop := context.WithCancel(ctx)
 	job := &verifyJob{Done: make(chan struct{}), stop: stop}
 

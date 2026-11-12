@@ -30,7 +30,7 @@ func hookEvent(at time.Time, session, kind string, p ledger.Payload) ledger.Even
 	return e
 }
 
-func texts(gates []Gate) map[string]string {
+func texts(gates []gate) map[string]string {
 	out := map[string]string{}
 
 	for _, g := range gates {
@@ -49,7 +49,7 @@ func texts(gates []Gate) map[string]string {
 	return out
 }
 
-func checkTexts(t *testing.T, gates []Gate, want map[string]string) {
+func checkTexts(t *testing.T, gates []gate, want map[string]string) {
 	t.Helper()
 
 	got := texts(gates)
@@ -77,7 +77,7 @@ func TestGatesDuringShip(t *testing.T) {
 
 	run := &state.Run{Session: "s1", Task: "FT-1", Ship: "running", Leaf: "review:local", Pipeline: gatePipeline}
 
-	gates := TaskGates(context.Background(), GateInput{
+	gates := taskGates(context.Background(), gateInput{
 		Task: "FT-1", Branch: "FT-1/thing", Run: run, Events: events, RemoteFlow: true, Now: at(6),
 	})
 
@@ -95,13 +95,13 @@ func TestGatesDuringShip(t *testing.T) {
 	}
 
 	// the reviewer wrote round 1 after ship entered the review: resolve is on it
-	gates = TaskGates(context.Background(), GateInput{
+	gates = taskGates(context.Background(), gateInput{
 		Task:   "FT-1",
 		Run:    run,
 		Events: events,
 		Now:    at(6),
-		Outcomes: Outcomes{
-			Local:   []ReviewRound{{Round: "1", Found: 2, Ask: 2}},
+		Outcomes: outcomes{
+			Local:   []reviewRound{{Round: "1", Found: 2, Ask: 2}},
 			LocalAt: at(4).Add(30 * time.Second),
 		},
 	})
@@ -121,9 +121,9 @@ func TestGatesParkedOnTheBase(t *testing.T) {
 		Pipeline: gatePipeline,
 	}
 
-	gates := TaskGates(
+	gates := taskGates(
 		context.Background(),
-		GateInput{Task: "FT-2", Run: run, Now: time.Unix(1_800_000_000, 0)},
+		gateInput{Task: "FT-2", Run: run, Now: time.Unix(1_800_000_000, 0)},
 	)
 
 	checkTexts(t, gates, map[string]string{"implement": "waiting on FT-1", "cleanup": "upcoming"})
@@ -135,24 +135,24 @@ func TestGatesOptionalCI(t *testing.T) {
 	pipeline := []string{"implement", "pr", "review:local+ci?", "pr"}
 	now := time.Unix(1_800_000_000, 0)
 
-	alone := TaskGates(
+	alone := taskGates(
 		context.Background(),
-		GateInput{Task: "FT-1", Pipeline: flow.Of(pipeline), Now: now},
+		gateInput{Task: "FT-1", Pipeline: flow.Of(pipeline), Now: now},
 	)
 	checkTexts(t, alone, map[string]string{"review": "local: upcoming"})
 
-	both := TaskGates(
+	both := taskGates(
 		context.Background(),
-		GateInput{Task: "FT-1", Pipeline: flow.Of(pipeline), RemoteFlow: true, Now: now},
+		gateInput{Task: "FT-1", Pipeline: flow.Of(pipeline), RemoteFlow: true, Now: now},
 	)
 	checkTexts(t, both, map[string]string{"review": "local: upcoming · remote: upcoming"})
 
 	// a flow whose only review is a dropped ci? keeps one review gate, off
-	ciOnly := TaskGates(context.Background(), GateInput{
+	ciOnly := taskGates(context.Background(), gateInput{
 		Task: "FT-1", Pipeline: flow.Of([]string{"implement", "pr", "review:ci?"}), Now: now,
 	})
 
-	var reviews []Gate
+	var reviews []gate
 	for _, g := range ciOnly {
 		if g.Step == "review" {
 			reviews = append(reviews, g)
@@ -179,7 +179,7 @@ func TestGatesBothHalvesInOneEntry(t *testing.T) {
 	}
 	run := &state.Run{Session: "s1", Task: "FT-1", Ship: "running", Leaf: "review:local+ci", Pipeline: pipeline}
 
-	upcoming := TaskGates(context.Background(), GateInput{
+	upcoming := taskGates(context.Background(), gateInput{
 		Task: "FT-1", Pipeline: flow.Of(pipeline), Events: events[:3], Now: at(3),
 	})
 	checkTexts(t, upcoming, map[string]string{"review": "local: upcoming · remote: upcoming"})
@@ -188,9 +188,9 @@ func TestGatesBothHalvesInOneEntry(t *testing.T) {
 		t.Errorf("%d gates, want implement, pr, review, pr, judge off: %v", n, texts(upcoming))
 	}
 
-	running := TaskGates(
+	running := taskGates(
 		context.Background(),
-		GateInput{Task: "FT-1", Run: run, Events: events, Now: at(4)},
+		gateInput{Task: "FT-1", Run: run, Events: events, Now: at(4)},
 	)
 	checkTexts(t, running, map[string]string{
 		"review": "local: round 1 running (in ship) · remote: round 1 running (in ship)",
@@ -198,20 +198,20 @@ func TestGatesBothHalvesInOneEntry(t *testing.T) {
 
 	// the local reviewer wrote its findings; the CI review has not landed, so
 	// nothing is resolving yet
-	local := TaskGates(context.Background(), GateInput{
+	local := taskGates(context.Background(), gateInput{
 		Task: "FT-1", Run: run, Events: events, Now: at(5),
-		Outcomes: Outcomes{Local: []ReviewRound{{Round: "1", Found: 1, Ask: 1}}, LocalAt: at(4)},
+		Outcomes: outcomes{Local: []reviewRound{{Round: "1", Found: 1, Ask: 1}}, LocalAt: at(4)},
 	})
 	checkTexts(t, local, map[string]string{
 		"review": "local: round 1 in, waiting for the other review (in ship) · remote: round 1 running (in ship)",
 	})
 
 	// both halves landed: the one resolve settles them
-	both := TaskGates(context.Background(), GateInput{
+	both := taskGates(context.Background(), gateInput{
 		Task: "FT-1", Run: run, Events: events, Now: at(6),
-		Outcomes: Outcomes{
-			Local: []ReviewRound{{Round: "1", Found: 1, Ask: 1}}, LocalAt: at(4),
-			Remote: []ReviewRound{{Round: "1", Found: 1, Ask: 1}}, RemoteAt: at(5),
+		Outcomes: outcomes{
+			Local: []reviewRound{{Round: "1", Found: 1, Ask: 1}}, LocalAt: at(4),
+			Remote: []reviewRound{{Round: "1", Found: 1, Ask: 1}}, RemoteAt: at(5),
 		},
 	})
 	checkTexts(t, both, map[string]string{
@@ -219,11 +219,11 @@ func TestGatesBothHalvesInOneEntry(t *testing.T) {
 	})
 
 	done := &state.Run{Session: "s1", Task: "FT-1", Ship: "done", Pipeline: pipeline}
-	settled := TaskGates(context.Background(), GateInput{
+	settled := taskGates(context.Background(), gateInput{
 		Task: "FT-1", Run: done, Events: events, Now: at(9),
-		Outcomes: Outcomes{
-			Local: []ReviewRound{{Round: "1", Found: 1, Fixed: 1}}, LocalAt: at(6),
-			Remote: []ReviewRound{{Round: "1", Found: 2, Skipped: 2}}, RemoteAt: at(6),
+		Outcomes: outcomes{
+			Local: []reviewRound{{Round: "1", Found: 1, Fixed: 1}}, LocalAt: at(6),
+			Remote: []reviewRound{{Round: "1", Found: 2, Skipped: 2}}, RemoteAt: at(6),
 		},
 	})
 	checkTexts(t, settled, map[string]string{
@@ -321,7 +321,7 @@ func TestGatesStartedOutsideShip(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			gates := TaskGates(context.Background(), GateInput{
+			gates := taskGates(context.Background(), gateInput{
 				Task: "FT-1", Branch: "FT-1/thing", Checkout: "/code/repo.FT-1", Run: done,
 				Events: append(append([]ledger.Event{}, base...), tc.extra...),
 				Now:    at(9),
@@ -342,37 +342,37 @@ func TestGatesOutcomes(t *testing.T) {
 
 	for _, tc := range []struct {
 		name string
-		in   GateInput
+		in   gateInput
 		want map[string]string
 	}{
 		{
 			"settled locally, no judge, no remote reviewer",
-			GateInput{Outcomes: Outcomes{Local: []ReviewRound{{Round: "1", Found: 4, Fixed: 3, Skipped: 1}}}},
+			gateInput{Outcomes: outcomes{Local: []reviewRound{{Round: "1", Found: 4, Fixed: 3, Skipped: 1}}}},
 			map[string]string{"review": "local: 4 found (3 fixed, 1 skipped)", "judge": "not in this flow"},
 		},
 		{
 			"open findings",
-			GateInput{Outcomes: Outcomes{Local: []ReviewRound{{Round: "1", Found: 3, Fixed: 1, Ask: 2}}}},
+			gateInput{Outcomes: outcomes{Local: []reviewRound{{Round: "1", Found: 3, Fixed: 1, Ask: 2}}}},
 			map[string]string{"review": "local: 2 open of 3 found"},
 		},
 		{
 			"a remote review the host has not handled",
-			GateInput{RemoteFlow: true, Remote: func(context.Context) RemoteState {
-				return RemoteState{Found: true, Done: true}
+			gateInput{RemoteFlow: true, Remote: func(context.Context) remoteState {
+				return remoteState{Found: true, Done: true}
 			}},
 			map[string]string{"review": "local: upcoming · remote: open (not handled)"},
 		},
 		{
 			"a remote review settled on the host",
-			GateInput{RemoteFlow: true, Remote: func(context.Context) RemoteState {
-				return RemoteState{Found: true, Done: true, Handled: true, Settled: true}
+			gateInput{RemoteFlow: true, Remote: func(context.Context) remoteState {
+				return remoteState{Found: true, Done: true, Handled: true, Settled: true}
 			}},
 			map[string]string{"review": "local: upcoming · remote: settled"},
 		},
 		{
 			"a host past the timeout",
-			GateInput{RemoteFlow: true, Remote: func(context.Context) RemoteState {
-				return RemoteState{Err: context.DeadlineExceeded}
+			gateInput{RemoteFlow: true, Remote: func(context.Context) remoteState {
+				return remoteState{Err: context.DeadlineExceeded}
 			}},
 			map[string]string{"review": "local: upcoming · remote: unknown (timed out)"},
 		},
@@ -380,14 +380,14 @@ func TestGatesOutcomes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.in.Task, tc.in.Run, tc.in.Now = "FT-1", ship, time.Now()
 
-			checkTexts(t, TaskGates(context.Background(), tc.in), tc.want)
+			checkTexts(t, taskGates(context.Background(), tc.in), tc.want)
 		})
 	}
 
 	// a judge the flow does not declare shows once it ran
-	gates := TaskGates(context.Background(), GateInput{
+	gates := taskGates(context.Background(), gateInput{
 		Task: "FT-1", Run: ship, Now: time.Now(),
-		Outcomes: Outcomes{PlanJudge: &archive.JudgeOutcome{Verdict: "proceed"}},
+		Outcomes: outcomes{PlanJudge: &archive.JudgeOutcome{Verdict: "proceed"}},
 	})
 
 	checkTexts(t, gates, map[string]string{"judge plan": "plan: proceed"})
@@ -397,7 +397,7 @@ func TestGatesOutcomes(t *testing.T) {
 	}
 
 	// a plan judge before ship and a change judge after it
-	gates = TaskGates(context.Background(), GateInput{
+	gates = taskGates(context.Background(), gateInput{
 		Task: "FT-1",
 		Now:  time.Now(),
 		Run: &state.Run{
@@ -407,7 +407,7 @@ func TestGatesOutcomes(t *testing.T) {
 			Pipeline: []string{"judge", "implement", "review:local", "pr", "judge"},
 		},
 		Finishes: true,
-		Outcomes: Outcomes{
+		Outcomes: outcomes{
 			PlanJudge:   &archive.JudgeOutcome{Verdict: "proceed", Reason: "sound"},
 			ChangeJudge: &archive.JudgeOutcome{Verdict: "rethink", Reason: "symptom"},
 		},
@@ -419,13 +419,13 @@ func TestGatesOutcomes(t *testing.T) {
 		"finish":       "upcoming",
 	})
 
-	if got := CompactGates(gates); got != "󰊛 PJ proceed · 󰚔 L upcoming · R - · 󰊛 J rethink" {
+	if got := compactGates(gates); got != "󰊛 PJ proceed · 󰚔 L upcoming · R - · 󰊛 J rethink" {
 		t.Errorf("compact = %q", got)
 	}
 
 	t.Setenv("F10_STATUS_GLYPHS", "PR MR rv jd")
 
-	if got := CompactGates(gates); got != "jd PJ proceed · rv L upcoming · R - · jd J rethink" {
+	if got := compactGates(gates); got != "jd PJ proceed · rv L upcoming · R - · jd J rethink" {
 		t.Errorf("with F10_STATUS_GLYPHS: compactGates = %q", got)
 	}
 }
@@ -490,7 +490,7 @@ func TestOutcomesPreferLore(t *testing.T) {
 
 	o := ReadOutcomes(store, storage, "FT-1")
 
-	if want := (ReviewRound{Round: "1", Found: 2, Fixed: 1, Skipped: 1}); len(o.Local) != 1 ||
+	if want := (reviewRound{Round: "1", Found: 2, Fixed: 1, Skipped: 1}); len(o.Local) != 1 ||
 		o.Local[0] != want {
 		t.Errorf("local from lore = %+v, want %+v", o.Local, want)
 	}
@@ -514,7 +514,7 @@ func TestOutcomesRoundTwo(t *testing.T) {
 	testkit.WriteFile(t, filepath.Join(reviews, "2.md"), "task: FT-1\nround: 2\nreviewer: local\nverdict: findings\n\n"+
 		"## Prior round\n\n### 1.1 A - fixed\n\n### 1.2 B - still open\n\n## Findings\n\n### 2.1 C\ncategory: x\n")
 
-	if o := FileOutcomes(storage, "FT-1", time.Time{}); o.LocalRaised != 3 {
+	if o := fileOutcomes(storage, "FT-1", time.Time{}); o.LocalRaised != 3 {
 		t.Fatalf("raised = %d, want 3: 1.1, 1.2 and 2.1, the reopened 1.2 once", o.LocalRaised)
 	}
 
@@ -543,7 +543,7 @@ func TestOutcomesRoundTwo(t *testing.T) {
 	testkit.WriteLore(t, whole, entry("fixed"), entry("open"), entry("open"))
 
 	o := ReadOutcomes(&lore.Store{Root: whole}, storage, "FT-1")
-	if want := (ReviewRound{Round: "2", Found: 3, Fixed: 1, Ask: 2}); len(o.Local) != 1 ||
+	if want := (reviewRound{Round: "2", Found: 3, Fixed: 1, Ask: 2}); len(o.Local) != 1 ||
 		o.Local[0] != want {
 		t.Errorf("lore with every finding = %+v, want %+v", o.Local, want)
 	}
@@ -552,21 +552,21 @@ func TestOutcomesRoundTwo(t *testing.T) {
 func TestStorageFor(t *testing.T) {
 	shared := t.TempDir()
 
-	if got := (GateSource{Shared: shared}).StorageFor(context.Background(), ""); got != shared {
+	if got := (gateSource{Shared: shared}).StorageFor(context.Background(), ""); got != shared {
 		t.Errorf("no checkout: %q, want %q", got, shared)
 	}
 }
 
 func TestRenderGates(t *testing.T) {
 	r := &state.Run{Task: "FT-1", Capture: "prior", Plan: "done", Ship: "running", Leaf: "review (local)"}
-	gates := []Gate{
-		{Step: "implement", State: GateDone},
+	gates := []gate{
+		{Step: "implement", State: gateDone},
 		{
 			Step:   "review",
-			Local:  &ReviewHalf{State: GateRunning, Via: ViaShip},
-			Remote: &ReviewHalf{State: GateUpcoming},
+			Local:  &reviewHalf{State: gateRunning, Via: viaShip},
+			Remote: &reviewHalf{State: gateUpcoming},
 		},
-		{Step: "judge", Judged: "change", State: GateUpcoming},
+		{Step: "judge", Judged: "change", State: gateUpcoming},
 	}
 
 	var out bytes.Buffer
@@ -603,7 +603,7 @@ func TestRenderGates(t *testing.T) {
 
 	// a parent's rows carry the compact column, a finished task alone every line
 	rows := []TaskRow{
-		{ID: "FT-1", Title: "Thing", Stage: StageReviewing, Step: "review", Gates: gates},
+		{ID: "FT-1", Title: "Thing", Stage: stageReviewing, Step: "review", Gates: gates},
 	}
 
 	out.Reset()
@@ -632,9 +632,9 @@ func TestRenderGates(t *testing.T) {
 // The judge fetch runs on a stale task leads the gates once it ran or the
 // plan phase is on it, and shows nowhere before that.
 func TestGatesTaskJudge(t *testing.T) {
-	none := TaskGates(
+	none := taskGates(
 		context.Background(),
-		GateInput{Task: "FT-1", Pipeline: flow.Of(gatePipeline), Now: time.Now()},
+		gateInput{Task: "FT-1", Pipeline: flow.Of(gatePipeline), Now: time.Now()},
 	)
 	if _, ok := texts(none)["judge task"]; ok {
 		t.Errorf("a task judge with nothing behind it: %v", texts(none))
@@ -642,7 +642,7 @@ func TestGatesTaskJudge(t *testing.T) {
 
 	// ship stopped at its own judge carries the same leaf; plan is done, so
 	// it is no task judge
-	atShip := TaskGates(context.Background(), GateInput{
+	atShip := taskGates(context.Background(), gateInput{
 		Task:     "FT-1",
 		Pipeline: flow.Of(gatePipeline),
 		Now:      time.Now(),
@@ -661,35 +661,35 @@ func TestGatesTaskJudge(t *testing.T) {
 
 	for _, tc := range []struct {
 		name string
-		in   GateInput
+		in   gateInput
 		want string
 	}{
 		{
 			"verdict",
-			GateInput{Outcomes: Outcomes{TaskJudge: &archive.JudgeOutcome{Verdict: "stop", Reason: "done in FT-9"}}},
+			gateInput{Outcomes: outcomes{TaskJudge: &archive.JudgeOutcome{Verdict: "stop", Reason: "done in FT-9"}}},
 			"task: stop - done in FT-9",
 		},
-		{"running", GateInput{Run: &state.Run{Plan: "running", Ship: "upcoming", Leaf: "judge"}}, "task: running"},
-		{"blocked", GateInput{
+		{"running", gateInput{Run: &state.Run{Plan: "running", Ship: "upcoming", Leaf: "judge"}}, "task: running"},
+		{"blocked", gateInput{
 			Run:      &state.Run{Plan: "blocked", Ship: "upcoming", Leaf: "judge"},
-			Outcomes: Outcomes{TaskJudge: &archive.JudgeOutcome{Verdict: "rethink"}},
+			Outcomes: outcomes{TaskJudge: &archive.JudgeOutcome{Verdict: "rethink"}},
 		}, "task: blocked"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.in.Task, tc.in.Pipeline, tc.in.Now = "FT-1", flow.Of(gatePipeline), time.Now()
 
-			gates := TaskGates(context.Background(), tc.in)
+			gates := taskGates(context.Background(), tc.in)
 			if len(gates) == 0 || gates[0].Judged != "task" || gates[0].Text() != tc.want {
 				t.Errorf("first gate = %+v, want the task judge reading %q (all: %v)", gates, tc.want, texts(gates))
 			}
 		})
 	}
 
-	gates := TaskGates(context.Background(), GateInput{
+	gates := taskGates(context.Background(), gateInput{
 		Task: "FT-1", Pipeline: flow.Of(gatePipeline), Now: time.Now(),
-		Outcomes: Outcomes{TaskJudge: &archive.JudgeOutcome{Verdict: "proceed"}},
+		Outcomes: outcomes{TaskJudge: &archive.JudgeOutcome{Verdict: "proceed"}},
 	})
-	if got := CompactGates(gates); got != "󰊛 TJ proceed · 󰚔 L upcoming · R - · 󰊛 J upcoming" {
+	if got := compactGates(gates); got != "󰊛 TJ proceed · 󰚔 L upcoming · R - · 󰊛 J upcoming" {
 		t.Errorf("compact = %q", got)
 	}
 }
@@ -762,17 +762,17 @@ func TestGatesDriveFinish(t *testing.T) {
 		finish branchmeta.DriveFinish
 		want   string
 	}{
-		{"no record", shipped, "", branchmeta.DriveFinish{}, GateUpcoming},
-		{"ship not done", working, "", queued(""), GateUpcoming},
+		{"no record", shipped, "", branchmeta.DriveFinish{}, gateUpcoming},
+		{"ship not done", working, "", queued(""), gateUpcoming},
 		{"queued", shipped, "", queued(""), "queued (drive)"},
 		{"queued once drive recorded ship", nil, "ship", queued(""), "queued (drive)"},
 		{"waiting for a base", shipped, "", queued("waiting for FT-0"), "queued (drive): waiting for FT-0"},
 		{"catching up", shipped, "", queued("catching up with main"), "queued (drive): catching up with main"},
 		{"merging", shipped, "", running("merging #204"), "running (drive): merging #204"},
-		{"finished", shipped, "finish", running("removing worktree"), GateDone},
+		{"finished", shipped, "finish", running("removing worktree"), gateDone},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			gates := TaskGates(context.Background(), GateInput{
+			gates := taskGates(context.Background(), gateInput{
 				Task: "FT-1", Pipeline: flow.Of(gatePipeline), Now: time.Now(),
 				Run: tc.run, Finishes: true, Driven: tc.driven, Finish: tc.finish,
 			})
@@ -788,9 +788,9 @@ func TestGatesDriveFinish(t *testing.T) {
 // it, or no drive opened it.
 func TestGatesNoFinishRecord(t *testing.T) {
 	shipped := &state.Run{Session: "s1", Task: "FT-1", Plan: "done", Ship: "done", Pipeline: gatePipeline}
-	gates := TaskGates(
+	gates := taskGates(
 		context.Background(),
-		GateInput{Task: "FT-1", Run: shipped, Driven: "ship", Now: time.Now()},
+		gateInput{Task: "FT-1", Run: shipped, Driven: "ship", Now: time.Now()},
 	)
 
 	if got, ok := texts(gates)["finish"]; ok {
@@ -801,11 +801,11 @@ func TestGatesNoFinishRecord(t *testing.T) {
 // A flow with no review or judge leaves both out of the compact row, while
 // the full listing still names them as not in this flow.
 func TestCompactGatesOmitsStepsNotInTheFlow(t *testing.T) {
-	gates := TaskGates(context.Background(), GateInput{
+	gates := taskGates(context.Background(), gateInput{
 		Task: "FT-1", Pipeline: flow.Of([]string{"implement", "pr"}), Now: time.Now(),
 	})
 
-	if got := CompactGates(gates); got != "" {
+	if got := compactGates(gates); got != "" {
 		t.Errorf("compact = %q, want none", got)
 	}
 
@@ -836,8 +836,8 @@ func TestDriveFlows(t *testing.T) {
 	}
 	defer lease.Release()
 
-	got := DriveFlows(drivestore.Active(root))
-	want := map[string]DriveFlow{
+	got := driveFlows(drivestore.Active(root))
+	want := map[string]driveFlow{
 		"FT-1": {Name: "prose", Running: true},
 		"FT-2": {Name: "prose", Running: true},
 		"FT-4": {Name: "default"},
@@ -874,10 +874,10 @@ func TestJudgeDecisionText(t *testing.T) {
 		{"overridden", 0, "proceed with changes (overridden by the user) - why"},
 		{"something new", 0, "proceed with changes (something new) - why"},
 	} {
-		g := Gate{
+		g := gate{
 			Step:   "judge",
 			Judged: "change",
-			State:  GateDone,
+			State:  gateDone,
 			Outcome: &archive.JudgeOutcome{
 				Verdict: "proceed with changes", Reason: "why", Decision: tc.decision, Changes: tc.changes,
 			},
@@ -951,12 +951,12 @@ func TestGatesShowEntryLabels(t *testing.T) {
 		Pipeline: []string{"implement", "pr", "review:local", "pr"}, Labels: []string{"", "", "", "pr-polish"},
 	}
 
-	gates := TaskGates(
+	gates := taskGates(
 		context.Background(),
-		GateInput{Task: "FT-1", Run: run, Events: events, Now: at(5)},
+		gateInput{Task: "FT-1", Run: run, Events: events, Now: at(5)},
 	)
 
-	var polish *Gate
+	var polish *gate
 
 	for i, g := range gates {
 		if g.Label == "pr-polish" {
@@ -972,7 +972,7 @@ func TestGatesShowEntryLabels(t *testing.T) {
 		t.Errorf("json = %s", b)
 	}
 
-	if rows := GateLines(
+	if rows := gateLines(
 		gates,
 	); !slices.ContainsFunc(
 		rows,
@@ -982,11 +982,11 @@ func TestGatesShowEntryLabels(t *testing.T) {
 	}
 
 	// with no run yet, the branch's flow gives the labels
-	gates = TaskGates(context.Background(), GateInput{
+	gates = taskGates(context.Background(), gateInput{
 		Task: "FT-1", Pipeline: run.Entries(), Now: at(5),
 	})
-	if i := slices.IndexFunc(gates, func(g Gate) bool { return g.Shown() == "pr-polish" }); i < 0 ||
-		gates[i].State != GateUpcoming {
+	if i := slices.IndexFunc(gates, func(g gate) bool { return g.Shown() == "pr-polish" }); i < 0 ||
+		gates[i].State != gateUpcoming {
 		t.Errorf("gates = %+v, want pr-polish upcoming", gates)
 	}
 }
@@ -995,7 +995,7 @@ func TestGatesShowEntryLabels(t *testing.T) {
 // round written before it does not read as this review's.
 func TestClaimedAtCutsTheLabel(t *testing.T) {
 	at := time.Unix(1_800_000_000, 0)
-	in := GateInput{Events: []ledger.Event{shipClaim(at, "s1", "review:local[review-final]")}}
+	in := gateInput{Events: []ledger.Event{shipClaim(at, "s1", "review:local[review-final]")}}
 
 	if got := in.ClaimedAt("s1", "review:local"); !got.Equal(at) {
 		t.Errorf("claimedAt = %v, want %v", got, at)

@@ -43,7 +43,7 @@ func TestDriveFlagTable(t *testing.T) {
 				t.Errorf("--resume with %s: err = %v, want taken %v", f.Name, err, f.Resume)
 			}
 
-			kept := RecordArgs(append([]string{"GH-1"}, given...))
+			kept := recordArgs(append([]string{"GH-1"}, given...))
 			if matched := len(kept) > 1; matched == f.Tunes {
 				t.Errorf("recordArgs(%q) = %q, want matched %v", given, kept, !f.Tunes)
 			}

@@ -97,7 +97,7 @@ func TestFollowDriveEndsWithItsCode(t *testing.T) {
 
 	var out syncBuffer
 
-	err := FollowDrive(
+	err := followDrive(
 		t.Context(),
 		&out,
 		dir,
@@ -128,7 +128,7 @@ func TestFollowDriveStopsWithAStop(t *testing.T) {
 
 	done := make(chan error, 1)
 
-	go func() { done <- FollowDrive(t.Context(), &out, dir, "0.1.0", runReq(waitsForDrain), counted) }()
+	go func() { done <- followDrive(t.Context(), &out, dir, "0.1.0", runReq(waitsForDrain), counted) }()
 
 	awaitDrive(t, dir, 5)
 
@@ -168,7 +168,7 @@ func TestFollowDriveFollowsAnUpgrade(t *testing.T) {
 
 	done := make(chan error, 1)
 
-	go func() { done <- FollowDrive(t.Context(), &out, dir, "0.1.0", runReq(waitsForDrain), old) }()
+	go func() { done <- followDrive(t.Context(), &out, dir, "0.1.0", runReq(waitsForDrain), old) }()
 
 	awaitDrive(t, dir, 5)
 
@@ -209,7 +209,7 @@ func TestFollowDriveFollowsAResume(t *testing.T) {
 
 	var out syncBuffer
 
-	err := FollowDrive(
+	err := followDrive(
 		t.Context(),
 		&out,
 		dir,

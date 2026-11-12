@@ -54,7 +54,7 @@ func TestPickupTask(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		if got := PickupTask("GH", c.hostIssues, c.p); got != c.want {
+		if got := pickupTask("GH", c.hostIssues, c.p); got != c.want {
 			t.Errorf("%s: pickupTask = %q, want %q", c.name, got, c.want)
 		}
 	}
@@ -62,14 +62,14 @@ func TestPickupTask(t *testing.T) {
 
 func TestRefusePull(t *testing.T) {
 	open := forge.PR{Status: forge.Open, URL: "https://gh/pull/3", Head: "x"}
-	if err := RefusePull(open); err != nil {
+	if err := refusePull(open); err != nil {
 		t.Errorf("an open PR from origin was refused: %v", err)
 	}
 
 	fork := open
 	fork.Fork = true
 
-	if err := RefusePull(fork); err == nil || !strings.Contains(err.Error(), "forks are not supported yet") {
+	if err := refusePull(fork); err == nil || !strings.Contains(err.Error(), "forks are not supported yet") {
 		t.Errorf("a fork PR = %v, want the fork refusal", err)
 	}
 
@@ -79,40 +79,40 @@ func TestRefusePull(t *testing.T) {
 		Head:   "x",
 		Fork:   true,
 	}
-	if err := RefusePull(glFork); err == nil {
+	if err := refusePull(glFork); err == nil {
 		t.Error("a GitLab MR from another project was not refused")
 	}
 
 	merged := open
 	merged.Status = forge.Merged
 
-	if err := RefusePull(merged); err == nil || !strings.Contains(err.Error(), "no merge commit") {
+	if err := refusePull(merged); err == nil || !strings.Contains(err.Error(), "no merge commit") {
 		t.Errorf("a merged PR with no merge commit = %v, want it refused for that", err)
 	}
 
 	merged.Landed = "abc"
 
-	if err := RefusePull(merged); err != nil {
+	if err := refusePull(merged); err != nil {
 		t.Errorf("a merged PR was refused: %v", err)
 	}
 
 	closed := open
 	closed.Status = forge.Closed
 
-	if err := RefusePull(closed); err == nil || !strings.Contains(err.Error(), "no head commit") {
+	if err := refusePull(closed); err == nil || !strings.Contains(err.Error(), "no head commit") {
 		t.Errorf("a closed PR with no head commit = %v, want it refused for that", err)
 	}
 
 	closed.HeadSHA = "def"
 
-	if err := RefusePull(closed); err != nil {
+	if err := refusePull(closed); err != nil {
 		t.Errorf("a closed PR was refused: %v", err)
 	}
 
 	headless := open
 	headless.Head = ""
 
-	if err := RefusePull(headless); err == nil {
+	if err := refusePull(headless); err == nil {
 		t.Error("an open PR with no head branch was not refused")
 	}
 
@@ -120,7 +120,7 @@ func TestRefusePull(t *testing.T) {
 		unknown := merged
 		unknown.Status = forge.Status(state)
 
-		if err := RefusePull(unknown); err == nil || !strings.Contains(err.Error(), "open, merged and closed") {
+		if err := refusePull(unknown); err == nil || !strings.Contains(err.Error(), "open, merged and closed") {
 			t.Errorf("a PR in state %q = %v, want it refused", state, err)
 		}
 	}
@@ -241,7 +241,7 @@ func TestSyncPickup(t *testing.T) {
 				}
 			}
 
-			note, err := SyncPickup(t.Context(), "/code/repo", "b", c.checkedOut)
+			note, err := syncPickup(t.Context(), "/code/repo", "b", c.checkedOut)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -272,7 +272,7 @@ func TestClosingKeywordsAgree(t *testing.T) {
 			host = "https://gitlab.com/o/r/-/merge_requests/30"
 		}
 
-		picked := PickupTask("GH", true, forge.PR{URL: host, Body: body, Head: "x"}) == "GH-12"
+		picked := pickupTask("GH", true, forge.PR{URL: host, Body: body, Head: "x"}) == "GH-12"
 
 		if !rewritten || !picked {
 			t.Errorf("%q: finish rewrites %v, pickup finds %v; want both", body, rewritten, picked)

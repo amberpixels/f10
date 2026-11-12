@@ -15,7 +15,7 @@ func TestReleaseDependentsRecordsTip(t *testing.T) {
 	r, tip := testkit.NewStackedRepo(t)
 	r.At(testkit.Later, "config", "--unset", branchmeta.Tip.For("FT-1/a"))
 
-	if _, err := ReleaseDependents(t.Context(), r.Dir, "FT-2/b", "main", true); err != nil {
+	if _, err := releaseDependents(t.Context(), r.Dir, "FT-2/b", "main", true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -29,7 +29,7 @@ func TestReleaseDependentsRecordsTip(t *testing.T) {
 func TestReleaseDependentsSpikeClearsTip(t *testing.T) {
 	r, _ := testkit.NewStackedRepo(t)
 
-	if _, err := ReleaseDependents(t.Context(), r.Dir, "FT-2/b", "main", false); err != nil {
+	if _, err := releaseDependents(t.Context(), r.Dir, "FT-2/b", "main", false); err != nil {
 		t.Fatal(err)
 	}
 

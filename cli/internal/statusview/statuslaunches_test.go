@@ -17,7 +17,7 @@ func TestDropRowsLiftsTheDroppedRowsChildren(t *testing.T) {
 		{ID: "F", Depth: 0},
 	}
 
-	got := DropRows(rows, func(r TaskRow) bool { return r.Stage == StageDone })
+	got := dropRows(rows, func(r TaskRow) bool { return r.Stage == StageDone })
 
 	var b strings.Builder
 	for _, r := range got {

@@ -96,7 +96,7 @@ func Drive(ctx context.Context, w io.Writer, in *DriveInput) (err error) {
 	for _, i := range order {
 		r := &DriveRun{Task: tasks[i], LastCatchup: in.SavedCatchup(tasks[i])}
 		if r.Task.finished {
-			in.End(ctx, r, DriveResult{Row: drivectl.RowAlreadyFinished})
+			in.End(ctx, r, driveResult{Row: drivectl.RowAlreadyFinished})
 		}
 
 		runs = append(runs, r)
@@ -123,7 +123,7 @@ func Drive(ctx context.Context, w io.Writer, in *DriveInput) (err error) {
 		}
 
 		if why, ok := in.lease(r); !ok {
-			in.End(ctx, r, DriveResult{Row: why, Code: ui.ExitHalted, Drives: true})
+			in.End(ctx, r, driveResult{Row: why, Code: ui.ExitHalted, Drives: true})
 		}
 	}
 
@@ -133,7 +133,7 @@ func Drive(ctx context.Context, w io.Writer, in *DriveInput) (err error) {
 
 	defer in.LeaveRuns(context.WithoutCancel(ctx), runs)
 
-	for !Stopping(runs) {
+	for !stopping(runs) {
 		if err := in.Sleep(ctx, in.Args.Every); err != nil {
 			return err
 		}
@@ -149,7 +149,7 @@ func Drive(ctx context.Context, w io.Writer, in *DriveInput) (err error) {
 		if in.Rec != nil && in.Rec.Cancelled != nil {
 			for _, r := range runs {
 				if r.End == nil {
-					in.End(ctx, r, DriveResult{Row: "cancelled", Code: ui.ExitHalted, Drives: true})
+					in.End(ctx, r, driveResult{Row: "cancelled", Code: ui.ExitHalted, Drives: true})
 				}
 			}
 
@@ -256,16 +256,16 @@ func (in *DriveInput) profileFlagged(i int) bool {
 	return in.Args.Agent != "" || i >= 0 && i < len(in.Args.Profiles) && in.Args.Profiles[i] != ""
 }
 
-// Stopping reports whether the drive ends: no task is active, or one asks
+// stopping reports whether the drive ends: no task is active, or one asks
 // and every active task is held on a base. An ask does not stop the rest,
 // so a guard stop elsewhere still gets its catchup while the ask waits.
-func Stopping(runs []*DriveRun) bool {
+func stopping(runs []*DriveRun) bool {
 	asked, active, moving := false, false, false
 
 	for _, r := range runs {
 		asked = asked || r.End != nil && r.End.Code == ui.ExitAsk
 		active = active || r.active()
-		moving = moving || r.active() && r.Phase != AtParked && r.Phase != AtWaiting
+		moving = moving || r.active() && r.Phase != atParked && r.Phase != atWaiting
 	}
 
 	return !active || asked && !moving
@@ -345,7 +345,7 @@ func (in *DriveInput) MarkMoved(ctx context.Context, runs []*DriveRun, wss []age
 		// a parked ship's own guard brings the base in when it resumes, and
 		// so does one the cap queued after parking; an attached turn may be
 		// a catchup, which a mark mid-turn would halt
-		if !r.active() || r.Phase == AtParked || r.Queued() || r.Skill == "catchup" || r.attached || b == nil ||
+		if !r.active() || r.Phase == atParked || r.Queued() || r.Skill == "catchup" || r.attached || b == nil ||
 			!b.Opened() {
 			continue
 		}

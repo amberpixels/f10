@@ -50,9 +50,9 @@ func healFinished(root string, rec *drivestore.Record, finished func(string) boo
 	}
 }
 
-// RecordArgs is the command line a record is matched on: the flags that only
+// recordArgs is the command line a record is matched on: the flags that only
 // tune a drive dropped, since none of them names another drive.
-func RecordArgs(argv []string) []string {
+func recordArgs(argv []string) []string {
 	var out []string
 
 	for i := 0; i < len(argv); i++ {
@@ -99,7 +99,7 @@ func (in *DriveInput) OpenRecord(tasks []DriveTask) error {
 				in.Rec.Number)
 		}
 	default:
-		in.Rec, err = drivestore.Find(in.Root, RecordArgs(in.Argv))
+		in.Rec, err = drivestore.Find(in.Root, recordArgs(in.Argv))
 	}
 
 	if err != nil {
@@ -109,7 +109,7 @@ func (in *DriveInput) OpenRecord(tasks []DriveTask) error {
 	if in.Rec == nil {
 		in.Rec = &drivestore.Record{
 			Created:  in.Now(),
-			Args:     RecordArgs(in.Argv),
+			Args:     recordArgs(in.Argv),
 			Flow:     in.Args.Flow,
 			Agent:    in.Args.Agent,
 			Session:  in.Session,
@@ -336,7 +336,7 @@ func (in *DriveInput) resumeLine() string {
 		return "f10 drive --resume " + strconv.Itoa(in.Rec.Number)
 	}
 
-	return ResumeCommand(in.Argv)
+	return resumeCommand(in.Argv)
 }
 
 // DriveList prints the records, newest first. finished reports a row's task
@@ -407,7 +407,7 @@ func DriveList(
 			id := links.ID(project, t.ID) + ":"
 			nodes[j] = tasktree.Node{Cells: []tasktree.Cell{
 				{Text: t.ID + ":", Render: func(string) string { return id }},
-				{Text: TaskStanding(t, running)},
+				{Text: taskStanding(t, running)},
 			}}
 		}
 
@@ -445,7 +445,7 @@ func RowFinishedFor(ctx context.Context, t *target.Target) func(string) bool {
 		}
 
 		head := r.Head()
-		seen[id] = FinishedLazily(tr.Storage, head.ID,
+		seen[id] = finishedLazily(tr.Storage, head.ID,
 			func() (bool, error) { return stack.HasTaskBranch(ctx, main, head.ID) },
 			func() hostops.TaskInfo {
 				info, _ := tr.Info(ctx, head) // an unread tracker leaves the archive to decide
@@ -457,9 +457,9 @@ func RowFinishedFor(ctx context.Context, t *target.Target) func(string) bool {
 	}
 }
 
-// FinishedLazily is FinishedTask with its reads made lazily: the tracker is
+// finishedLazily is FinishedTask with its reads made lazily: the tracker is
 // asked only when no branch, live plan or archived plan already decides.
-func FinishedLazily(root storage.Root, id string, branched func() (bool, error), info func() hostops.TaskInfo) bool {
+func finishedLazily(root storage.Root, id string, branched func() (bool, error), info func() hostops.TaskInfo) bool {
 	if b, err := branched(); err != nil || b {
 		return false
 	}
@@ -472,7 +472,7 @@ func FinishedLazily(root storage.Root, id string, branched func() (bool, error),
 	return stack.FinishedTask(ti, root, id, false)
 }
 
-func TaskStanding(t drivestore.Task, running bool) string {
+func taskStanding(t drivestore.Task, running bool) string {
 	switch {
 	case t.Outcome != nil:
 		return t.Outcome.Row

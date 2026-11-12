@@ -14,7 +14,7 @@ func TestJanitorKeepsABranchItCannotRead(t *testing.T) {
 
 	j := &Sweeper{In: JanitorInput{Main: "/code/repo"}, Def: "main"}
 
-	if _, removed := j.SweepUnpushed(t.Context(), StaleBranch{Name: "GH-1", LocalSHA: "abc"}); removed {
+	if _, removed := j.SweepUnpushed(t.Context(), staleBranch{Name: "GH-1", LocalSHA: "abc"}); removed {
 		t.Fatal("removed a branch whose upstream could not be read")
 	}
 

@@ -29,13 +29,13 @@ func TestStalledReadsBackgroundWorkAsWorking(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			got := Stalled(
+			got := stalled(
 				agentctl.StatusIdle,
 				nil,
 				"catchup",
 				sent,
 				look.Sub(launched),
-				StallGrace,
+				stallGrace,
 				tc.bg,
 				tc.now,
 			)

@@ -22,9 +22,9 @@ import (
 // LaunchesHead heads the tree of what this session launched.
 const LaunchesHead = "launched here"
 
-// DropRows leaves out the rows drop picks, in tree order: what hung under a
+// dropRows leaves out the rows drop picks, in tree order: what hung under a
 // dropped row moves up to its level.
-func DropRows(rows []TaskRow, drop func(TaskRow) bool) []TaskRow {
+func dropRows(rows []TaskRow, drop func(TaskRow) bool) []TaskRow {
 	var (
 		out []TaskRow
 		cut []int // the depths of the dropped rows above this one

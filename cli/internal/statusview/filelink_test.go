@@ -10,8 +10,8 @@ import (
 
 // The plan row sits in the facts block, which links it once and never wraps.
 func TestStatusFallbackLinksPlan(t *testing.T) {
-	fb := TaskFallback(
-		TaskStatusInput{ID: "GH-1", Root: "/tmp"},
+	fb := taskFallback(
+		taskStatusInput{ID: "GH-1", Root: "/tmp"},
 		nil,
 		Shipment{Task: "GH-1", Plan: "/tmp/.f10/plans/GH-1.md"},
 	)

@@ -43,25 +43,25 @@ import (
 // keep the task moving.
 const watchStallGrace = 10 * time.Minute
 
-// WatchFile records what each pass last reported, so a fact is told once.
-const WatchFile = "watch.yaml"
+// watchFile records what each pass last reported, so a fact is told once.
+const watchFile = "watch.yaml"
 
 // What a pass reports about a task.
 const (
-	WatchMerged   = "merged"   // its request merged on the host
-	WatchClosed   = "closed"   // its request closed without a merge
-	WatchStalled  = "stalled"  // its agent idle while its run says running
-	WatchStopped  = "stopped"  // its run stopped: done, blocked, failed or partial
-	WatchFinished = "finished" // the watcher finished it
-	WatchRefused  = "refused"  // the watcher's finish was refused
+	watchMerged   = "merged"   // its request merged on the host
+	watchClosed   = "closed"   // its request closed without a merge
+	watchStalled  = "stalled"  // its agent idle while its run says running
+	watchStopped  = "stopped"  // its run stopped: done, blocked, failed or partial
+	watchFinished = "finished" // the watcher finished it
+	watchRefused  = "refused"  // the watcher's finish was refused
 	// the host did not answer for a task's request
 	watchUnanswered = "unanswered"
-	// WatchUnpulled is a pull of the default branch a finish deferred, which the watcher retries
-	WatchUnpulled = "unpulled"
-	// WatchCatchup is a catchup the watcher sent, pushed, or did not end clean
-	WatchCatchup = "catchup"
-	// WatchBehind is a branch behind its target, and the watcher cannot catch it up
-	WatchBehind = "behind"
+	// watchUnpulled is a pull of the default branch a finish deferred, which the watcher retries
+	watchUnpulled = "unpulled"
+	// watchCatchup is a catchup the watcher sent, pushed, or did not end clean
+	watchCatchup = "catchup"
+	// watchBehind is a branch behind its target, and the watcher cannot catch it up
+	watchBehind = "behind"
 )
 
 // watchClause tells a driven catchup the watcher sent it: nobody follows
@@ -83,7 +83,7 @@ type WatchInput struct {
 	Now        func() time.Time
 	// Finish finishes a merged task under its lease; nil in report mode
 	Finish func(context.Context, WatchedTask) error
-	Out    Reporter
+	Out    reporter
 	Warn   func(string) // a line for the pass's output that is no report; nil drops it
 	// Catchup is watch_catchup: on; prompt is nil with no backend to reach
 	// an agent
@@ -97,7 +97,7 @@ type WatchInput struct {
 
 // RetryPull retries a pull a finish deferred, under watch: finish alone,
 // since pulling is an act. A cause already told is not told again.
-func (in WatchInput) RetryPull(ctx context.Context, store map[string]WatchReport) bool {
+func (in WatchInput) RetryPull(ctx context.Context, store map[string]watchReport) bool {
 	if in.Mode != "finish" {
 		return false
 	}
@@ -108,25 +108,25 @@ func (in WatchInput) RetryPull(ctx context.Context, store map[string]WatchReport
 			in.warnf("%s", line)
 		}
 
-		delete(store, WatchPullKey)
+		delete(store, watchPullKey)
 
 		return false
 	}
 
-	if store[WatchPullKey].Key == line {
+	if store[watchPullKey].Key == line {
 		return true
 	}
 
-	rep := WatchReport{Task: WatchPullKey, Kind: WatchUnpulled, Text: line, Key: line, At: in.Now()}
+	rep := watchReport{Task: watchPullKey, Kind: watchUnpulled, Text: line, Key: line, At: in.Now()}
 	in.Out.Report(rep)
-	store[WatchPullKey] = rep
+	store[watchPullKey] = rep
 
 	return true
 }
 
 // HostTrouble is told every pass, naming the tasks left out, since those
 // tasks go silent; f10 watch shows it until the host answers again.
-func (in WatchInput) HostTrouble(tasks []WatchedTask, store map[string]WatchReport) {
+func (in WatchInput) HostTrouble(tasks []WatchedTask, store map[string]watchReport) {
 	var (
 		ids   []string
 		cause error
@@ -139,13 +139,13 @@ func (in WatchInput) HostTrouble(tasks []WatchedTask, store map[string]WatchRepo
 	}
 
 	if cause == nil {
-		delete(store, WatchHostKey)
+		delete(store, watchHostKey)
 
 		return
 	}
 
-	rep := WatchReport{
-		Task: WatchHostKey,
+	rep := watchReport{
+		Task: watchHostKey,
 		Kind: watchUnanswered,
 		Text: fmt.Sprintf("%v; %s left out of this pass", cause, strings.Join(ids, ", ")),
 		Next: "check the host CLI's login in the shell that registered the project, then run f10 start or f10 drive there",
@@ -154,12 +154,12 @@ func (in WatchInput) HostTrouble(tasks []WatchedTask, store map[string]WatchRepo
 	}
 
 	in.Out.Report(rep)
-	store[WatchHostKey] = rep
+	store[watchHostKey] = rep
 }
 
 // Reconcile forgets tasks gone from the project, except a finish, kept a
 // day for f10 watch.
-func (in WatchInput) Reconcile(ctx context.Context, tasks []WatchedTask, store map[string]WatchReport) {
+func (in WatchInput) Reconcile(ctx context.Context, tasks []WatchedTask, store map[string]watchReport) {
 	now := in.Now()
 	seen := map[string]bool{}
 
@@ -170,7 +170,7 @@ func (in WatchInput) Reconcile(ctx context.Context, tasks []WatchedTask, store m
 			in.Tell(store, task.ID, now, in.catchupStep(ctx, task, store))
 		}
 
-		rep, act := DecideWatch(task, in.Mode, now)
+		rep, act := decideWatch(task, in.Mode, now)
 
 		if act && in.Finish != nil {
 			rep = in.finishReport(ctx, task)
@@ -180,15 +180,15 @@ func (in WatchInput) Reconcile(ctx context.Context, tasks []WatchedTask, store m
 	}
 
 	for id, r := range store {
-		project := id == WatchHostKey || id == WatchPullKey
-		if !seen[id] && !project && (r.Kind != WatchFinished || now.Sub(r.At) > 24*time.Hour) {
+		project := id == watchHostKey || id == watchPullKey
+		if !seen[id] && !project && (r.Kind != watchFinished || now.Sub(r.At) > 24*time.Hour) {
 			delete(store, id)
 		}
 	}
 }
 
 // Tell carries the stored report's told keys and catchup record over.
-func (in WatchInput) Tell(store map[string]WatchReport, id string, now time.Time, rep *WatchReport) {
+func (in WatchInput) Tell(store map[string]watchReport, id string, now time.Time, rep *watchReport) {
 	if rep == nil {
 		return
 	}
@@ -214,12 +214,12 @@ func (in WatchInput) Tell(store map[string]WatchReport, id string, now time.Time
 // ReadTargets fetches origin once, for every task that could be caught up
 // or has a catchup to settle. A failed fetch reads nothing: a stale origin
 // could hide a move, and a push lease needs the current sha.
-func (in WatchInput) ReadTargets(ctx context.Context, tasks []WatchedTask, store map[string]WatchReport) {
+func (in WatchInput) ReadTargets(ctx context.Context, tasks []WatchedTask, store map[string]watchReport) {
 	var want []int
 
 	for i, t := range tasks {
 		if t.Owner != "" || t.Off || t.HostErr != nil || !t.Listed || t.Agent == agentctl.StatusWorking ||
-			WaitingOnAsk(t.Run) {
+			waitingOnAsk(t.Run) {
 			continue
 		}
 
@@ -268,7 +268,7 @@ func (in WatchInput) warnf(format string, args ...any) {
 }
 
 // finishReport: a lease someone took meanwhile is no report, they own it now.
-func (in WatchInput) finishReport(ctx context.Context, task WatchedTask) *WatchReport {
+func (in WatchInput) finishReport(ctx context.Context, task WatchedTask) *watchReport {
 	err := in.Finish(ctx, task)
 
 	if held := (drivestore.HeldError{}); errors.As(err, &held) {
@@ -277,18 +277,18 @@ func (in WatchInput) finishReport(ctx context.Context, task WatchedTask) *WatchR
 
 	url := task.Pr.URL
 	if err != nil {
-		return &WatchReport{
-			Kind: WatchRefused,
+		return &watchReport{
+			Kind: watchRefused,
 			Text: url + " merged, and finishing it was refused: " + err.Error(),
 			Next: "f10 finish " + task.ID,
-			Key:  WatchRefused + " " + url, // a refusal's text may vary between passes
+			Key:  watchRefused + " " + url, // a refusal's text may vary between passes
 		}
 	}
 
-	return &WatchReport{
-		Kind: WatchFinished,
+	return &watchReport{
+		Kind: watchFinished,
 		Text: "finished by the watcher: " + url + " merged, worktree removed, plan archived",
-		Key:  WatchFinished + " " + url,
+		Key:  watchFinished + " " + url,
 	}
 }
 
@@ -315,8 +315,8 @@ func (in WatchInput) parked(t WatchedTask) bool {
 	return backgroundPending(t.Background, in.Now())
 }
 
-func (in WatchInput) catchupStep(ctx context.Context, task WatchedTask, store map[string]WatchReport) *WatchReport {
-	if task.fetch == nil || task.Agent == agentctl.StatusWorking || WaitingOnAsk(task.Run) {
+func (in WatchInput) catchupStep(ctx context.Context, task WatchedTask, store map[string]watchReport) *watchReport {
+	if task.fetch == nil || task.Agent == agentctl.StatusWorking || waitingOnAsk(task.Run) {
 		return nil
 	}
 
@@ -343,8 +343,8 @@ func (in WatchInput) catchupStep(ctx context.Context, task WatchedTask, store ma
 // overwritten; one not clean with the agent idle is told once and left as
 // it is, since an operation in progress there may be someone's hand merge.
 func (in WatchInput) settleCatchup(
-	ctx context.Context, task WatchedTask, rec *drivestore.Catchup, store map[string]WatchReport,
-) *WatchReport {
+	ctx context.Context, task WatchedTask, rec *drivestore.Catchup, store map[string]watchReport,
+) *watchReport {
 	if task.Pr == nil || task.Pr.Status != forge.Open {
 		setCatchup(store, task.ID, nil) // its request is gone: nothing to keep current
 
@@ -371,11 +371,11 @@ func (in WatchInput) settleCatchup(
 		rec.Failed = true
 		in.failedAt(ctx, task, rec)
 
-		return &WatchReport{
-			Kind: WatchCatchup,
+		return &watchReport{
+			Kind: watchCatchup,
 			Text: fmt.Sprintf("catching %s up with %s did not end clean: %s", task.Branch, rec.Base, reason),
 			Next: "/f10:catchup in " + task.Path,
-			Key:  WatchCatchup + " failed " + rec.Target + " " + rec.Head,
+			Key:  watchCatchup + " failed " + rec.Target + " " + rec.Head,
 		}
 	}
 
@@ -411,11 +411,11 @@ func (in WatchInput) settleCatchup(
 		rec.Failed, rec.Head = true, head
 		in.failedAt(ctx, task, rec)
 
-		return &WatchReport{
-			Kind: WatchCatchup,
+		return &watchReport{
+			Kind: watchCatchup,
 			Text: err.Error(),
 			Next: "bring origin/" + task.Branch + " into " + task.Path + ", then /f10:catchup there",
-			Key:  WatchCatchup + " origin moved " + task.originSHA,
+			Key:  watchCatchup + " origin moved " + task.originSHA,
 		}
 	case errors.Is(err, stack.ErrBaseNotPushed):
 		return nil // a later pass, once the base is on origin
@@ -429,10 +429,10 @@ func (in WatchInput) settleCatchup(
 		return nil // nothing to push, or nowhere to push it
 	}
 
-	return &WatchReport{
-		Kind: WatchCatchup,
+	return &watchReport{
+		Kind: watchCatchup,
 		Text: fmt.Sprintf("%s caught up with %s, %s", task.Branch, rec.Base, how),
-		Key:  WatchCatchup + " pushed " + head,
+		Key:  watchCatchup + " pushed " + head,
 	}
 }
 
@@ -450,12 +450,12 @@ func (in WatchInput) failedAt(ctx context.Context, task WatchedTask, rec *drives
 }
 
 // pushFailed is told once per cause, the record kept so the next pass retries.
-func (in WatchInput) pushFailed(task WatchedTask, rec *drivestore.Catchup, err error) *WatchReport {
-	return &WatchReport{
-		Kind: WatchCatchup,
+func (in WatchInput) pushFailed(task WatchedTask, rec *drivestore.Catchup, err error) *watchReport {
+	return &watchReport{
+		Kind: watchCatchup,
 		Text: fmt.Sprintf("%s caught up with %s, and pushing it failed: %v", task.Branch, rec.Base, err),
 		Next: "push " + task.Branch + " from " + task.Path + ", with --force-with-lease after a rebase",
-		Key:  WatchCatchup + " push failed " + rec.Target + " " + rec.Head,
+		Key:  watchCatchup + " push failed " + rec.Target + " " + rec.Head,
 	}
 }
 
@@ -465,19 +465,19 @@ func (in WatchInput) pushFailed(task WatchedTask, rec *drivestore.Catchup, err e
 // last catchup that did not end clean, blocks another until its
 // fingerprint moves.
 func (in WatchInput) sendCatchup(
-	ctx context.Context, task WatchedTask, failed *drivestore.Catchup, store map[string]WatchReport,
-) *WatchReport {
+	ctx context.Context, task WatchedTask, failed *drivestore.Catchup, store map[string]watchReport,
+) *watchReport {
 	pr, aim := task.Pr, task.target
 	if pr == nil || pr.Status != forge.Open || task.originSHA == "" || aim.SHA == "" {
 		return nil
 	}
 
-	behind := func(reason, text string) *WatchReport {
-		return &WatchReport{
-			Kind: WatchBehind,
+	behind := func(reason, text string) *watchReport {
+		return &watchReport{
+			Kind: watchBehind,
 			Text: text,
 			Next: "/f10:catchup in " + task.Path,
-			Key:  WatchBehind + " " + aim.SHA + " " + reason,
+			Key:  watchBehind + " " + aim.SHA + " " + reason,
 		}
 	}
 
@@ -559,8 +559,8 @@ func (in WatchInput) sendCatchup(
 // engine and prompts the agent with what is left; a prompt that cannot go
 // out puts the branch back as it was.
 func (in WatchInput) integrate(
-	ctx context.Context, task WatchedTask, store map[string]WatchReport, behind func(string, string) *WatchReport,
-) *WatchReport {
+	ctx context.Context, task WatchedTask, store map[string]watchReport, behind func(string, string) *watchReport,
+) *watchReport {
 	aim := task.target
 
 	if err := branchmeta.Set(ctx, in.Main, task.Branch, aim.Key, aim.Value); err != nil {
@@ -622,7 +622,7 @@ func (in WatchInput) integrate(
 	if err := in.Prompt(
 		ctx,
 		task,
-		Steered(launch.Driven("/f10:catchup")+" && "+watchClause(rec.Head), steering),
+		steered(launch.Driven("/f10:catchup")+" && "+watchClause(rec.Head), steering),
 	); err != nil {
 		in.undo(ctx, task, rec.Head, stopped, p.Method)
 		unmark()
@@ -638,10 +638,10 @@ func (in WatchInput) integrate(
 
 	setCatchup(store, task.ID, rec)
 
-	return &WatchReport{
-		Kind: WatchCatchup,
+	return &watchReport{
+		Kind: watchCatchup,
 		Text: fmt.Sprintf("catching %s up with %s, which moved past it", task.Branch, aim.Name),
-		Key:  WatchCatchup + " sent " + aim.SHA + " " + rec.Head,
+		Key:  watchCatchup + " sent " + aim.SHA + " " + rec.Head,
 	}
 }
 
@@ -662,7 +662,7 @@ func (in WatchInput) undo(ctx context.Context, task WatchedTask, head string, st
 	}
 }
 
-// worktreeBusy is RecheckFinish's read for a catchup: a working agent or an
+// worktreeBusy is recheckFinish's read for a catchup: a working agent or an
 // unclean tree waits for the next pass.
 func (in WatchInput) worktreeBusy(ctx context.Context, task WatchedTask) bool {
 	if in.Agents != nil {
@@ -707,7 +707,7 @@ type WatchedTask struct {
 	busy      string         // why its worktree cannot take a catchup, or ""
 }
 
-type WatchReport struct {
+type watchReport struct {
 	Task string `yaml:"-"`
 	Kind string `yaml:"kind"`
 	Text string `yaml:"text"`
@@ -727,15 +727,15 @@ type WatchReport struct {
 // watchToldMax bounds a task's told keys; the oldest go first.
 const watchToldMax = 32
 
-// A Reporter is where a pass tells what it found; the daemon keeps the
+// A reporter is where a pass tells what it found; the daemon keeps the
 // pass's output as the project's watch log.
-type Reporter interface {
-	Report(WatchReport)
+type reporter interface {
+	Report(watchReport)
 }
 
 type LineReporter struct{ Out io.Writer }
 
-func (l LineReporter) Report(r WatchReport) {
+func (l LineReporter) Report(r watchReport) {
 	line := r.Task + " " + r.Kind + ": " + r.Text
 	if r.Ask != "" {
 		line += "; asks: " + r.Ask
@@ -751,7 +751,7 @@ func (l LineReporter) Report(r WatchReport) {
 // WatchPass reports false once the project has no task worktree and no
 // local task branch, so the daemon drops it.
 func WatchPass(ctx context.Context, in WatchInput) (bool, error) {
-	tasks, branches, err := CollectWatched(ctx, in)
+	tasks, branches, err := collectWatched(ctx, in)
 	if err != nil {
 		return false, err
 	}
@@ -769,7 +769,7 @@ func WatchPass(ctx context.Context, in WatchInput) (bool, error) {
 	in.HostTrouble(tasks, store)
 	pending := in.RetryPull(ctx, store)
 
-	if err := SaveWatchStore(in.Root, store); err != nil {
+	if err := saveWatchStore(in.Root, store); err != nil {
 		return false, err
 	}
 
@@ -778,23 +778,23 @@ func WatchPass(ctx context.Context, in WatchInput) (bool, error) {
 	return len(tasks) > 0 || (in.Mode == "finish" && (branches > 0 || pending)), nil
 }
 
-// WatchPullKey is the store's entry for a deferred pull, about the project,
+// watchPullKey is the store's entry for a deferred pull, about the project,
 // not one task.
-const WatchPullKey = "pull"
+const watchPullKey = "pull"
 
-// WatchHostKey is the store's entry for the host not answering, about the
+// watchHostKey is the store's entry for the host not answering, about the
 // project, not one task.
-const WatchHostKey = "host"
+const watchHostKey = "host"
 
-func setCatchup(store map[string]WatchReport, id string, rec *drivestore.Catchup) {
+func setCatchup(store map[string]watchReport, id string, rec *drivestore.Catchup) {
 	r := store[id]
 	r.Catchup = rec
 	store[id] = r
 }
 
-// DecideWatch answers the request first, then a stalled agent, then a
+// decideWatch answers the request first, then a stalled agent, then a
 // stopped run.
-func DecideWatch(t WatchedTask, mode string, now time.Time) (*WatchReport, bool) {
+func decideWatch(t WatchedTask, mode string, now time.Time) (*watchReport, bool) {
 	// a host that did not answer leaves the request unknown: saying
 	// anything else about the task this pass could hide a merge
 	if t.Owner != "" || t.Off || t.HostErr != nil {
@@ -805,11 +805,11 @@ func DecideWatch(t WatchedTask, mode string, now time.Time) (*WatchReport, bool)
 		switch p.Status {
 		case forge.Merged:
 			if t.LocalSHA != "" && t.LocalSHA != p.HeadSHA {
-				return &WatchReport{
-					Kind: WatchMerged,
+				return &watchReport{
+					Kind: watchMerged,
 					Text: p.URL + " merged, and " + t.Branch + " has commits it lacks",
 					Next: "look at " + t.Path + " before f10 finish " + t.ID,
-					Key:  WatchMerged + " " + p.URL + " " + t.LocalSHA,
+					Key:  watchMerged + " " + p.URL + " " + t.LocalSHA,
 				}, false
 			}
 
@@ -817,18 +817,18 @@ func DecideWatch(t WatchedTask, mode string, now time.Time) (*WatchReport, bool)
 			// while someone is using it, or while nobody can tell
 			act := mode == "finish" && t.Listed && t.Agent != agentctl.StatusWorking
 
-			return &WatchReport{
-				Kind: WatchMerged,
+			return &watchReport{
+				Kind: watchMerged,
 				Text: p.URL + " merged",
 				Next: "f10 finish " + t.ID,
-				Key:  WatchMerged + " " + p.URL,
+				Key:  watchMerged + " " + p.URL,
 			}, act
 		case forge.Closed:
-			return &WatchReport{
-				Kind: WatchClosed,
+			return &watchReport{
+				Kind: watchClosed,
 				Text: p.URL + " closed without a merge",
 				Next: "f10 finish " + t.ID + " --local, or reopen it",
-				Key:  WatchClosed + " " + p.URL,
+				Key:  watchClosed + " " + p.URL,
 			}, false
 		}
 	}
@@ -841,12 +841,12 @@ func DecideWatch(t WatchedTask, mode string, now time.Time) (*WatchReport, bool)
 	updated := run.Updated.UTC().Format(time.RFC3339)
 
 	for _, phase := range []string{"ship", "plan"} {
-		if Stalled(t.Agent, run, phase, time.Time{}, now.Sub(run.Updated), watchStallGrace, t.Background, now) {
-			return &WatchReport{
-				Kind: WatchStalled,
+		if stalled(t.Agent, run, phase, time.Time{}, now.Sub(run.Updated), watchStallGrace, t.Background, now) {
+			return &watchReport{
+				Kind: watchStalled,
 				Text: fmt.Sprintf("agent idle while its run says %s %s", phase, run.PhaseText(phase)),
 				Next: "answer it in workspace " + cmp.Or(t.Ws, t.Path),
-				Key:  WatchStalled + " " + updated,
+				Key:  watchStalled + " " + updated,
 			}, false
 		}
 	}
@@ -860,12 +860,12 @@ func DecideWatch(t WatchedTask, mode string, now time.Time) (*WatchReport, bool)
 		text += ": " + run.Note
 	}
 
-	return &WatchReport{
-		Kind: WatchStopped,
+	return &watchReport{
+		Kind: watchStopped,
 		Text: text,
 		Next: run.Next,
 		Ask:  run.Ask,
-		Key:  WatchStopped + " " + updated,
+		Key:  watchStopped + " " + updated,
 	}, false
 }
 
@@ -884,7 +884,7 @@ func runStopText(run *state.Run) string {
 	return "stopped"
 }
 
-func CollectWatched(ctx context.Context, in WatchInput) ([]WatchedTask, int, error) {
+func collectWatched(ctx context.Context, in WatchInput) ([]WatchedTask, int, error) {
 	def, err := finish.JanitorDefault(ctx, in.Main)
 	if err != nil {
 		return nil, 0, err
@@ -964,9 +964,9 @@ func CollectWatched(ctx context.Context, in WatchInput) ([]WatchedTask, int, err
 	return tasks, len(branches), nil
 }
 
-// WatcherFinishInput is the finish the watcher runs: merged requests only,
+// watcherFinishInput is the finish the watcher runs: merged requests only,
 // and a bundle's riders closed as the PR body says, since no one is asked.
-func WatcherFinishInput(t *target.Target, main string, h hostops.Host, r ref.Ref, branch string) finish.FinishInput {
+func watcherFinishInput(t *target.Target, main string, h hostops.Host, r ref.Ref, branch string) finish.FinishInput {
 	in := finish.InputFor(t, main, h, r)
 	in.Branch, in.Flags.MergedOnly, in.FollowBody = branch, true, true
 	// never ProcessPlace: the self-close path would end the daemon, and its
@@ -986,7 +986,7 @@ func WatcherFinish(ctx context.Context, w io.Writer, t *target.Target, main, roo
 	}
 	defer lease.Release()
 
-	if err := RecheckFinish(ctx, worktree.ReachableAgents(main), main, task); err != nil {
+	if err := recheckFinish(ctx, worktree.ReachableAgents(main), main, task); err != nil {
 		return err
 	}
 
@@ -1002,7 +1002,7 @@ func WatcherFinish(ctx context.Context, w io.Writer, t *target.Target, main, roo
 
 	var buf bytes.Buffer
 
-	err = finish.Finish(ctx, &buf, WatcherFinishInput(t, main, h, r, task.Branch))
+	err = finish.Finish(ctx, &buf, watcherFinishInput(t, main, h, r, task.Branch))
 
 	for line := range strings.SplitSeq(strings.TrimSpace(buf.String()), "\n") {
 		if line != "" {
@@ -1017,9 +1017,9 @@ func WatcherFinish(ctx context.Context, w io.Writer, t *target.Target, main, roo
 	return err
 }
 
-// RecheckFinish reads again, under the lease, what the pass read before it:
+// recheckFinish reads again, under the lease, what the pass read before it:
 // an agent that started working, or a commit the PR lacks, keeps the task.
-func RecheckFinish(ctx context.Context, b agentctl.Backend, main string, task WatchedTask) error {
+func recheckFinish(ctx context.Context, b agentctl.Backend, main string, task WatchedTask) error {
 	tip, err := gitx.Ref(ctx, main, "refs/heads/"+task.Branch)
 	if err != nil {
 		return fmt.Errorf("reading %s's tip: %w", task.Branch, err)
@@ -1045,10 +1045,10 @@ func RecheckFinish(ctx context.Context, b agentctl.Backend, main string, task Wa
 	return nil
 }
 
-func LoadWatchStore(root string) (map[string]WatchReport, error) {
-	store := map[string]WatchReport{}
+func LoadWatchStore(root string) (map[string]watchReport, error) {
+	store := map[string]watchReport{}
 
-	raw, err := os.ReadFile(filepath.Join(root, WatchFile))
+	raw, err := os.ReadFile(filepath.Join(root, watchFile))
 	if errors.Is(err, os.ErrNotExist) {
 		return store, nil
 	}
@@ -1058,13 +1058,13 @@ func LoadWatchStore(root string) (map[string]WatchReport, error) {
 	}
 
 	if err := yaml.Unmarshal(raw, &store); err != nil {
-		return nil, fmt.Errorf("watch: %s: %w", WatchFile, err)
+		return nil, fmt.Errorf("watch: %s: %w", watchFile, err)
 	}
 
 	return store, nil
 }
 
-func SaveWatchStore(root string, store map[string]WatchReport) error {
+func saveWatchStore(root string, store map[string]watchReport) error {
 	raw, err := yaml.Marshal(store)
 	if err != nil {
 		return fmt.Errorf("watch: %w", err)
@@ -1074,7 +1074,7 @@ func SaveWatchStore(root string, store map[string]WatchReport) error {
 		return fmt.Errorf("watch: %w", err)
 	}
 
-	if err := os.WriteFile(filepath.Join(root, WatchFile), raw, 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(root, watchFile), raw, 0o600); err != nil {
 		return fmt.Errorf("watch: %w", err)
 	}
 
@@ -1089,6 +1089,6 @@ func OnOff(on bool) string {
 	return "off"
 }
 
-// WaitingOnAsk: the next prompt such an idle agent gets should be the
+// waitingOnAsk: the next prompt such an idle agent gets should be the
 // answer, not a catchup.
-func WaitingOnAsk(run *state.Run) bool { return run != nil && run.Ask != "" }
+func waitingOnAsk(run *state.Run) bool { return run != nil && run.Ask != "" }

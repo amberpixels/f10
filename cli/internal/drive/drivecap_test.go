@@ -26,14 +26,14 @@ func capRuns(n int) []*DriveRun {
 
 // openRun marks r open in its own workspace, its chain under way.
 func openRun(r *DriveRun) {
-	r.Phase = AtRunning
+	r.Phase = atRunning
 	r.O.Path = "/code/repo." + r.Task.Ref.ID
 	r.O.Ws.ID = "ws:" + r.Task.Ref.ID
 }
 
 // liveGate is a cap gate over the workspaces of every opened run.
-func liveGate(in *DriveInput) *OpenGate {
-	g := &OpenGate{On: true, Limit: in.Parallel, Trees: map[string]string{}}
+func liveGate(in *DriveInput) *openGate {
+	g := &openGate{On: true, Limit: in.Parallel, Trees: map[string]string{}}
 
 	for _, r := range in.Runs {
 		if r.Opened() {
@@ -52,7 +52,7 @@ func liveGate(in *DriveInput) *OpenGate {
 
 // pass is the gate alone, without the shell: the gate decides, and
 // an admitted task opens with its chain under way.
-func pass(in *DriveInput, g *OpenGate) {
+func pass(in *DriveInput, g *openGate) {
 	for _, r := range g.Order(in.Runs) {
 		if r.Opened() || r.End != nil {
 			continue
@@ -88,7 +88,7 @@ func TestCapHoldsTenTasksToFour(t *testing.T) {
 		// the oldest task on a skill finishes, its workspace closed by finish
 		for _, r := range in.Runs {
 			if r.HoldsSlot() {
-				r.End = &DriveResult{Row: "finished"}
+				r.End = &driveResult{Row: "finished"}
 				r.O.Path = ""
 
 				break
@@ -118,7 +118,7 @@ func TestCapAskFreesTheSlot(t *testing.T) {
 		t.Fatalf("GH-3 and GH-4 should queue behind the cap of 2")
 	}
 
-	in.Runs[0].End = &DriveResult{Row: "asked at judge", Code: ui.ExitAsk}
+	in.Runs[0].End = &driveResult{Row: "asked at judge", Code: ui.ExitAsk}
 	pass(in, liveGate(in))
 
 	if !in.Runs[2].Opened() || in.Runs[2].Queued() {
@@ -140,7 +140,7 @@ func TestCapSlotFree(t *testing.T) {
 	in.Runs = capRuns(2)
 	openRun(in.Runs[0])
 	openRun(in.Runs[1])
-	in.Runs[1].Phase = AtParked
+	in.Runs[1].Phase = atParked
 
 	if in.SlotFree(in.Runs[1]) {
 		t.Error("a parked task took a slot GH-1 holds")
@@ -152,14 +152,14 @@ func TestCapSlotFree(t *testing.T) {
 	}
 
 	in.Wss = nil
-	in.Runs[0].Phase = AtWaiting
+	in.Runs[0].Phase = atWaiting
 
 	if !in.SlotFree(in.Runs[1]) {
 		t.Error("finish waiting on its base still held the slot")
 	}
 
 	in.Parallel = 0
-	in.Runs[0].Phase = AtRunning
+	in.Runs[0].Phase = atRunning
 
 	if !in.SlotFree(in.Runs[1]) {
 		t.Error("a drive with no cap held a task back")
@@ -177,7 +177,7 @@ func TestCapOpenCeiling(t *testing.T) {
 
 	for _, r := range in.Runs[:2] {
 		openRun(r)
-		r.End = &DriveResult{Row: "asked at plan", Code: ui.ExitAsk}
+		r.End = &driveResult{Row: "asked at plan", Code: ui.ExitAsk}
 	}
 
 	pass(in, liveGate(in))
@@ -187,7 +187,7 @@ func TestCapOpenCeiling(t *testing.T) {
 	}
 
 	// a halted task's agent is the user's, so it frees the ceiling
-	in.Runs[1].End = &DriveResult{Row: "halted at plan", Code: ui.ExitHalted}
+	in.Runs[1].End = &driveResult{Row: "halted at plan", Code: ui.ExitHalted}
 	pass(in, liveGate(in))
 
 	if !in.Runs[2].Opened() {
@@ -206,7 +206,7 @@ func TestCapResumeTakesOpenAgentsFirst(t *testing.T) {
 	in.Runs[1].Task.Branch = "GH-2"
 	in.Runs[2].Task.Branch = "GH-3"
 
-	g := &OpenGate{
+	g := &openGate{
 		On: true, Limit: 1, Open: 2,
 		Trees: map[string]string{"GH-2": "/code/repo.GH-2", "GH-3": "/code/repo.GH-3"},
 		Wss: []agentctl.Workspace{
@@ -285,7 +285,7 @@ func TestDriveAskFreesTheSlot(t *testing.T) {
 	}
 
 	fx.f.Script(
-		"herdr agent prompt "+testkit.AgentOf("GH-1")+" "+SkillPrompt("judge", "GH-1", nil, runplan.ShipFlow{}, false),
+		"herdr agent prompt "+testkit.AgentOf("GH-1")+" "+skillPrompt("judge", "GH-1", nil, runplan.ShipFlow{}, false),
 		"{}",
 	)
 	fx.expects("GH-2", "judge")

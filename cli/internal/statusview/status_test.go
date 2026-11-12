@@ -31,7 +31,7 @@ func TestTaskRuns(t *testing.T) {
 	catchup := &state.Run{Session: "catchup", Capture: "upcoming", Plan: "upcoming", Ship: "upcoming", Done: "catchup"}
 	planning := &state.Run{Session: "planning", Skill: "plan", Capture: "upcoming", Plan: "running", Ship: "upcoming"}
 
-	own, others := TaskRuns([]*state.Run{catchup, capture, ship, other, fresh, fetching, planning}, "GH-1")
+	own, others := taskRuns([]*state.Run{catchup, capture, ship, other, fresh, fetching, planning}, "GH-1")
 
 	if got := sessions(own); got != "ship fresh fetching planning" {
 		t.Errorf("own = %q, want the matching task and the runs fetch has not named yet, in order", got)
@@ -61,14 +61,14 @@ func TestStatusFallbackReportsPlanAndPR(t *testing.T) {
 	}
 
 	h := hostops.NewHost("gh", root)
-	in := TaskStatusInput{ID: "GH-1", Branch: "GH-1", Root: root, Plan: plan, Host: &h}
+	in := taskStatusInput{ID: "GH-1", Branch: "GH-1", Root: root, Plan: plan, Host: &h}
 	capture := &state.Run{Capture: "running", Plan: "upcoming", Ship: "upcoming"}
 
-	ship := ReadShipment(t.Context(), in, nil, ledger.TaskRef{})
+	ship := readShipment(t.Context(), in, nil, ledger.TaskRef{})
 	ship.AskPR(t.Context(), in)
 
 	var out bytes.Buffer
-	TaskFallback(in, []*state.Run{capture}, ship).Render(&out, 0, false)
+	taskFallback(in, []*state.Run{capture}, ship).Render(&out, 0, false)
 
 	for _, want := range []string{
 		"none for GH-1 in " + root,
@@ -90,7 +90,7 @@ func TestStatusFallbackLeavesOutWhatDoesNotExist(t *testing.T) {
 
 	root := t.TempDir()
 	h := hostops.NewHost("gh", root)
-	in := TaskStatusInput{
+	in := taskStatusInput{
 		ID:     "GH-1",
 		Branch: "GH-1",
 		Root:   root,
@@ -98,10 +98,10 @@ func TestStatusFallbackLeavesOutWhatDoesNotExist(t *testing.T) {
 		Host:   &h,
 	}
 
-	ship := ReadShipment(t.Context(), in, nil, ledger.TaskRef{})
+	ship := readShipment(t.Context(), in, nil, ledger.TaskRef{})
 	ship.AskPR(t.Context(), in)
 
-	fb := TaskFallback(in, nil, ship)
+	fb := taskFallback(in, nil, ship)
 
 	var out bytes.Buffer
 	fb.Render(&out, 0, false)
@@ -177,7 +177,7 @@ func TestTaskRunsFromTheWriter(t *testing.T) {
 				step(r)
 			}
 
-			own, _ := TaskRuns([]*state.Run{r}, "GH-1")
+			own, _ := taskRuns([]*state.Run{r}, "GH-1")
 
 			if got := len(own) == 1; got != tc.own {
 				t.Errorf("own = %v, want %v for %+v", got, tc.own, *r)
@@ -190,7 +190,7 @@ func TestTaskRunsFromTheWriter(t *testing.T) {
 func TestRenderRunKeepsTheAsk(t *testing.T) {
 	r := &state.Run{Task: "GH-1", Capture: "prior", Plan: "done", Ship: "blocked", Leaf: "judge", Ask: "1. Keep it?"}
 
-	own, _ := TaskRuns([]*state.Run{r}, "GH-1")
+	own, _ := taskRuns([]*state.Run{r}, "GH-1")
 	if len(own) != 1 {
 		t.Fatal("the driven run is not the task's own")
 	}
@@ -239,7 +239,7 @@ func TestCurrentPhase(t *testing.T) {
 		{state.Run{Capture: "running", Plan: "upcoming", Ship: "upcoming"}, "capture running"},
 		{state.Run{Capture: "prior", Plan: "done", Ship: "blocked", Leaf: "judge"}, "ship blocked at judge"},
 	} {
-		if got := CurrentPhase(&tc.run); got != tc.want {
+		if got := currentPhase(&tc.run); got != tc.want {
 			t.Errorf("currentPhase(%+v) = %q, want %q", tc.run, got, tc.want)
 		}
 	}
@@ -280,8 +280,8 @@ func TestBareTaskID(t *testing.T) {
 			}
 
 			if got := cmp.Or(
-				SessionTaskID("sess-1"),
-				CheckoutTaskID(t.Context(), tg),
+				sessionTaskID("sess-1"),
+				checkoutTaskID(t.Context(), tg),
 			); got != tc.want {
 				t.Errorf("bare task = %q, want %q", got, tc.want)
 			}
@@ -307,7 +307,7 @@ func TestBareTaskIDFromTheWorktreeName(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if got := CheckoutTaskID(t.Context(), tg); got != want {
+		if got := checkoutTaskID(t.Context(), tg); got != want {
 			t.Errorf("checkoutTaskID in %s = %q, want %q", filepath.Base(dir), got, want)
 		}
 	}
@@ -323,7 +323,7 @@ func TestReadShipmentFromTheLedger(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	in := TaskStatusInput{ID: "GH-1", Branch: "GH-1", Plan: plan, Handoff: filepath.Join(dir, "none.md")}
+	in := taskStatusInput{ID: "GH-1", Branch: "GH-1", Plan: plan, Handoff: filepath.Join(dir, "none.md")}
 	events := []ledger.Event{{
 		Kind:    ledger.PROpened,
 		Task:    "GH-1",
@@ -331,7 +331,7 @@ func TestReadShipmentFromTheLedger(t *testing.T) {
 	}}
 
 	known := ledger.TaskRef{ID: "GH-1", Title: "Add a retry", URL: "https://gh/issues/1"}
-	s := ReadShipment(t.Context(), in, events, known)
+	s := readShipment(t.Context(), in, events, known)
 
 	want := Shipment{
 		Task: "GH-1", Title: "Add a retry", URL: "https://gh/issues/1", Branch: "GH-1",
@@ -349,10 +349,10 @@ func TestReadShipmentPRByBranch(t *testing.T) {
 	f.Script(testkit.GhView, testkit.PrOpen)
 
 	h := hostops.NewHost("gh", t.TempDir())
-	in := TaskStatusInput{ID: "GH-1", Branch: "GH-1", Host: &h}
+	in := taskStatusInput{ID: "GH-1", Branch: "GH-1", Host: &h}
 	pushed := []ledger.Event{{Kind: ledger.Pushed, Task: "GH-1", Payload: ledger.NewPayload(ledger.Payload{})}}
 
-	if s := ReadShipment(t.Context(), in, nil, ledger.TaskRef{}); s.PR != "" {
+	if s := readShipment(t.Context(), in, nil, ledger.TaskRef{}); s.PR != "" {
 		t.Errorf("an unpushed task has pr %q, want none", s.PR)
 	}
 
@@ -360,7 +360,7 @@ func TestReadShipmentPRByBranch(t *testing.T) {
 		t.Error("status asked the host for a task that never pushed")
 	}
 
-	s := ReadShipment(t.Context(), in, pushed, ledger.TaskRef{})
+	s := readShipment(t.Context(), in, pushed, ledger.TaskRef{})
 	if s.PR != "https://gh/pr/9" {
 		t.Errorf("pr = %q, want the branch's PR", s.PR)
 	}
@@ -369,7 +369,7 @@ func TestReadShipmentPRByBranch(t *testing.T) {
 	f.Script(testkit.GhView)
 	s.AskPR(t.Context(), in)
 
-	if fb := TaskFallback(in, nil, s); fb.PR != "https://gh/pr/9" || fb.PRState != "open" {
+	if fb := taskFallback(in, nil, s); fb.PR != "https://gh/pr/9" || fb.PRState != "open" {
 		t.Errorf("fallback pr = %q (%s), want the shipment's PR and its state", fb.PR, fb.PRState)
 	}
 }
@@ -379,17 +379,17 @@ func TestReadShipmentPRByBranch(t *testing.T) {
 func TestStatusJSONCarriesTheFiles(t *testing.T) {
 	head := Shipment{
 		Task:     "GH-1",
-		Verdicts: []VerdictPath{{Subject: "plan", Path: "/s/verdicts/GH-1/1.md"}},
-		Reviews:  []ReviewPath{{Round: "1", Path: "/s/reviews/GH-1/1.md"}},
+		Verdicts: []verdictPath{{Subject: "plan", Path: "/s/verdicts/GH-1/1.md"}},
+		Reviews:  []reviewPath{{Round: "1", Path: "/s/reviews/GH-1/1.md"}},
 	}
 
 	var out bytes.Buffer
 
 	r := &state.Run{Task: "GH-1", Capture: "prior", Plan: "done", Ship: "done"}
-	if err := WriteRuns(
+	if err := writeRuns(
 		StatusView{Out: &out, JSON: true},
 		[]*state.Run{r},
-		[][]Gate{nil},
+		[][]gate{nil},
 		&head,
 		false,
 		"",
@@ -410,7 +410,7 @@ func TestStatusJSONCarriesTheFiles(t *testing.T) {
 
 	out.Reset()
 
-	fb := TaskFallback(TaskStatusInput{ID: "GH-1"}, nil, head)
+	fb := taskFallback(taskStatusInput{ID: "GH-1"}, nil, head)
 	if err := ui.JSON(&out, fb); err != nil {
 		t.Fatal(err)
 	}
@@ -428,10 +428,10 @@ func TestWriteRunsUnderTheShipment(t *testing.T) {
 
 	var out bytes.Buffer
 
-	if err := WriteRuns(
+	if err := writeRuns(
 		StatusView{Out: &out},
 		[]*state.Run{r},
-		[][]Gate{nil},
+		[][]gate{nil},
 		&head,
 		false,
 		"",
@@ -457,14 +457,14 @@ func TestWriteRunsUnderTheShipment(t *testing.T) {
 func TestWriteRunsGatesShareTheColumn(t *testing.T) {
 	r := &state.Run{Task: "GH-1", Capture: "prior", Plan: "running", Ship: "upcoming"}
 	head := Shipment{Task: "GH-1", Branch: "GH-1/some-branch"}
-	gates := []Gate{{Step: "judge", Judged: "plan", State: "upcoming"}}
+	gates := []gate{{Step: "judge", Judged: "plan", State: "upcoming"}}
 
 	var out bytes.Buffer
 
-	if err := WriteRuns(
+	if err := writeRuns(
 		StatusView{Out: &out},
 		[]*state.Run{r},
-		[][]Gate{gates},
+		[][]gate{gates},
 		&head,
 		true,
 		"",
@@ -488,10 +488,10 @@ func TestWriteRunsNamesThePlanFileApart(t *testing.T) {
 
 	var out bytes.Buffer
 
-	if err := WriteRuns(
+	if err := writeRuns(
 		StatusView{Out: &out},
 		[]*state.Run{r},
-		[][]Gate{nil},
+		[][]gate{nil},
 		&head,
 		false,
 		"",
@@ -541,16 +541,16 @@ func TestReadShipmentCommitRow(t *testing.T) {
 
 	r.At(testkit.Before, "checkout", "-q", "-b", "FT-2/b", "origin/main")
 
-	in := TaskStatusInput{ID: "FT-2", Branch: "FT-2/b", Main: r.Dir}
+	in := taskStatusInput{ID: "FT-2", Branch: "FT-2/b", Main: r.Dir}
 
-	if s := ReadShipment(t.Context(), in, nil, ledger.TaskRef{}); s.Commit != "" {
+	if s := readShipment(t.Context(), in, nil, ledger.TaskRef{}); s.Commit != "" {
 		t.Errorf("a fresh branch has commit %q, want none", s.Commit)
 	}
 
 	r.Commit(testkit.During, "c.go", "package main // c\n", "c")
 
 	want := r.At(testkit.During, "rev-parse", "--short", "HEAD")
-	if s := ReadShipment(t.Context(), in, nil, ledger.TaskRef{}); s.Commit != want {
+	if s := readShipment(t.Context(), in, nil, ledger.TaskRef{}); s.Commit != want {
 		t.Errorf("commit = %q, want the branch head %q", s.Commit, want)
 	}
 }

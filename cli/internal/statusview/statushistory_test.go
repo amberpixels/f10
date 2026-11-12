@@ -51,16 +51,16 @@ func TestShipSteps(t *testing.T) {
 	}
 
 	want := []string{"implement", "cleanup", "pr", "review", "judge", "pr"}
-	if got := ShipSteps(events, "s1", at(9)); !slices.Equal(got, want) {
+	if got := shipSteps(events, "s1", at(9)); !slices.Equal(got, want) {
 		t.Errorf("shipSteps = %v, want %v", got, want)
 	}
 
-	if got := ShipSteps(events, "s1", at(30)); !slices.Equal(got, []string{"implement"}) {
+	if got := shipSteps(events, "s1", at(30)); !slices.Equal(got, []string{"implement"}) {
 		t.Errorf("the later run: shipSteps = %v, want [implement]", got)
 	}
 
 	// claims with no ship run started in the session: an older run
-	if got := ShipSteps(events, "s2", at(30)); got != nil {
+	if got := shipSteps(events, "s2", at(30)); got != nil {
 		t.Errorf("no ship run: shipSteps = %v, want nil", got)
 	}
 }
@@ -93,12 +93,12 @@ source: remote
 verdict: ask
 `)
 
-	o := FileOutcomes(root, "FT-1", time.Time{})
-	if want := []ReviewRound{{Round: "1", Found: 1, Fixed: 1}}; !slices.Equal(o.Local, want) {
+	o := fileOutcomes(root, "FT-1", time.Time{})
+	if want := []reviewRound{{Round: "1", Found: 1, Fixed: 1}}; !slices.Equal(o.Local, want) {
 		t.Errorf("local = %+v, want %+v", o.Local, want)
 	}
 
-	if want := []ReviewRound{{Round: "1", Found: 2, Skipped: 1, Ask: 1}}; !slices.Equal(o.Remote, want) {
+	if want := []reviewRound{{Round: "1", Found: 2, Skipped: 1, Ask: 1}}; !slices.Equal(o.Remote, want) {
 		t.Errorf("remote = %+v, want %+v", o.Remote, want)
 	}
 
@@ -153,8 +153,8 @@ category: correctness
 		"task: FT-1\nround: 1\nreviewer: claude[bot]\nverdict: clean\n",
 	)
 
-	o := FileOutcomes(root, "FT-1", time.Time{})
-	want := []ReviewRound{
+	o := fileOutcomes(root, "FT-1", time.Time{})
+	want := []reviewRound{
 		{Round: "1", Found: 3, Fixed: 1, Skipped: 1, Ask: 1},
 		{Round: "2", Found: 2, Fixed: 1, Ask: 1},
 	}
@@ -163,7 +163,7 @@ category: correctness
 		t.Errorf("local rounds = %+v, want %+v", o.Local, want)
 	}
 
-	if !slices.Equal(o.Remote, []ReviewRound{{Round: "1"}}) || o.RemoteAt.IsZero() {
+	if !slices.Equal(o.Remote, []reviewRound{{Round: "1"}}) || o.RemoteAt.IsZero() {
 		t.Errorf("remote rounds = %+v at %v, want 4.md's clean round", o.Remote, o.RemoteAt)
 	}
 
@@ -178,7 +178,7 @@ category: correctness
 		"task: FT-1\nsubject: plan FT-1\nverdict: proceed\nreason: sound\n",
 	)
 
-	o = FileOutcomes(root, "FT-1", time.Time{})
+	o = fileOutcomes(root, "FT-1", time.Time{})
 	if j := o.ChangeJudge; j == nil || j.Verdict != "proceed with changes" || j.Reason != "tighten the parser" {
 		t.Errorf("change judge = %+v, want 10.md's verdict", j)
 	}
@@ -187,7 +187,7 @@ category: correctness
 		t.Errorf("plan judge = %+v, want 12.md's verdict", j)
 	}
 
-	if o := FileOutcomes(
+	if o := fileOutcomes(
 		root,
 		"FT-2",
 		time.Time{},

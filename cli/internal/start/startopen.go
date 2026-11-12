@@ -208,7 +208,7 @@ func OpenTask(ctx context.Context, in StartInput) (OpenedTask, error) {
 	name, base, dep, existing := settled.name, settled.base, settled.dep, settled.existing
 
 	if in.Pick == nil {
-		if in.Task, err = SettleBundle(ctx, in.Main, in.Task, existing.Name); err != nil {
+		if in.Task, err = settleBundle(ctx, in.Main, in.Task, existing.Name); err != nil {
 			return OpenedTask{}, err
 		}
 	}
@@ -298,7 +298,7 @@ func openWorktree(
 	path := stack.WorktreeOf(wts, name)
 
 	if in.Pick != nil && !in.Pick.Landed() && !existing.Remote {
-		note, err := SyncPickup(ctx, in.Main, name, path != "")
+		note, err := syncPickup(ctx, in.Main, name, path != "")
 		if err != nil {
 			return "", nil, err
 		}

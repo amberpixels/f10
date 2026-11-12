@@ -8,7 +8,7 @@ import (
 
 // A halt drive records reads back through the ledger's readers.
 func TestHaltPayloadReadsBack(t *testing.T) {
-	p := HaltPayload(DriveResult{Skill: "ship", Reason: "stalled"})
+	p := haltPayload(driveResult{Skill: "ship", Reason: "stalled"})
 
 	e := ledger.Event{Kind: ledger.TaskHalted, Payload: ledger.NewPayload(p)}
 	if e.Skill() != "ship" || e.Reason() != "stalled" {
