@@ -4,10 +4,10 @@ import (
 	"testing"
 )
 
-const ghChecks = "gh api graphql -f query=" + HeadChecksQuery + " -F owner={owner} -F name={repo} -F number=9"
+const ghChecks = "gh api graphql --paginate -f query=" + HeadChecksQuery + " -F owner={owner} -F name={repo} -F number=9"
 
 func rollup(contexts string) string {
-	return `{"data":{"repository":{"pullRequest":{"commits":{"nodes":[{"commit":{"oid":"h3ad",` +
+	return `{"data":{"repository":{"pullRequest":{"prev":{"nodes":[]},"head":{"nodes":[{"commit":{"oid":"h3ad",` +
 		`"statusCheckRollup":{"contexts":{"nodes":[` + contexts + `]}}}}]}}}}}`
 }
 
@@ -70,12 +70,49 @@ func TestHeadChecksKeepsTheLogURL(t *testing.T) {
 // A commit with no rollup has no checks: the PR's own head stands.
 func TestHeadChecksWithNoRollup(t *testing.T) {
 	script(t, map[string]string{
-		ghChecks: `{"data":{"repository":{"pullRequest":{"commits":{"nodes":[{"commit":{"oid":"h3ad","statusCheckRollup":null}}]}}}}}`,
+		ghChecks: `{"data":{"repository":{"pullRequest":{"prev":{"nodes":[{"commit":{"statusCheckRollup":null}},` +
+			`{"commit":{"statusCheckRollup":null}}]},"head":{"nodes":[{"commit":{"oid":"h3ad","statusCheckRollup":null}}]}}}}}`,
 	})
 
 	got, err := Host{Name: "gh"}.HeadChecks(t.Context(), PR{Number: 9})
 	if err != nil || got.State != "" || got.SHA != "h3ad" {
 		t.Errorf("HeadChecks = %+v, %v; want no checks on h3ad", got, err)
+	}
+}
+
+// gh prints a page per document: a red check on the second page counts.
+func TestHeadChecksReadsEveryPage(t *testing.T) {
+	script(t, map[string]string{ghChecks: rollup(docsSkipped) + "\n" + rollup(lintFailed)})
+
+	got, err := Host{Name: "gh"}.HeadChecks(t.Context(), PR{Number: 9})
+	if err != nil || got.State != Red || Names(got.Failed) != "lint" {
+		t.Errorf("HeadChecks = %+v, %v; want red from the second page", got, err)
+	}
+}
+
+// A head with no checks whose previous commit had some has CI still to
+// start: it is pending, never merged as a repository with none.
+func TestHeadChecksBeforeCIStarts(t *testing.T) {
+	script(t, map[string]string{
+		ghChecks: `{"data":{"repository":{"pullRequest":{"prev":{"nodes":[{"commit":{"statusCheckRollup":{"state":"SUCCESS"}}},` +
+			`{"commit":{"statusCheckRollup":null}}]},"head":{"nodes":[{"commit":{"oid":"h3ad","statusCheckRollup":null}}]}}}}}`,
+	})
+
+	got, err := Host{Name: "gh"}.HeadChecks(t.Context(), PR{Number: 9})
+	if err != nil || got.State != Pending || got.SHA != "h3ad" {
+		t.Errorf("HeadChecks = %+v, %v; want pending on h3ad", got, err)
+	}
+
+	for name, mr := range map[string]string{
+		"older head pipeline": `{"sha":"h3ad","head_pipeline":{"id":5,"sha":"old","status":"success"}}`,
+		"no head pipeline":    `{"sha":"h3ad","head_pipeline":null,"pipeline":{"id":5}}`,
+	} {
+		script(t, map[string]string{"glab mr view GH-1 -F json": mr})
+
+		got, err := Host{Name: "glab"}.HeadChecks(t.Context(), PR{Number: 4, Head: "GH-1"})
+		if err != nil || got.State != Pending || got.SHA != "h3ad" {
+			t.Errorf("%s: HeadChecks = %+v, %v; want pending on h3ad", name, got, err)
+		}
 	}
 }
 

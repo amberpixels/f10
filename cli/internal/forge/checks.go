@@ -3,6 +3,10 @@ package forge
 import (
 	"cmp"
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"strconv"
 	"strings"
 )
@@ -34,45 +38,58 @@ func Names(checks []Check) string {
 }
 
 // HeadChecksQuery reads every check context on a request's head commit,
-// each with whether the request's target branch requires it.
-const HeadChecksQuery = "query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) " +
-	"{ pullRequest(number: $number) { commits(last: 1) { nodes { commit { oid statusCheckRollup { contexts(first: 100) " +
-	"{ nodes { __typename " +
+// each with whether the request's target branch requires it, a page of 100
+// at a time; prev is the last two commits' rollups, to tell a head whose
+// checks have not registered yet from a repository with none.
+const HeadChecksQuery = "query($owner: String!, $name: String!, $number: Int!, $endCursor: String) " +
+	"{ repository(owner: $owner, name: $name) { pullRequest(number: $number) { " +
+	"prev: commits(last: 2) { nodes { commit { statusCheckRollup { state } } } } " +
+	"head: commits(last: 1) { nodes { commit { oid statusCheckRollup { " +
+	"contexts(first: 100, after: $endCursor) { pageInfo { hasNextPage endCursor } nodes { __typename " +
 	"... on CheckRun { name status conclusion detailsUrl isRequired(pullRequestNumber: $number) } " +
 	"... on StatusContext { context state targetUrl isRequired(pullRequestNumber: $number) } " +
 	"} } } } } } } } }"
 
+// checksPage is one page of HeadChecksQuery.
+type checksPage struct {
+	Data struct {
+		Repository struct {
+			PullRequest struct {
+				Prev struct {
+					Nodes []struct {
+						Commit struct {
+							Rollup *struct{} `json:"statusCheckRollup"`
+						} `json:"commit"`
+					} `json:"nodes"`
+				} `json:"prev"`
+				Head struct {
+					Nodes []struct {
+						Commit struct {
+							OID    string `json:"oid"`
+							Rollup *struct {
+								Contexts struct {
+									Nodes []checkContext `json:"nodes"`
+								} `json:"contexts"`
+							} `json:"statusCheckRollup"`
+						} `json:"commit"`
+					} `json:"nodes"`
+				} `json:"head"`
+			} `json:"pullRequest"`
+		} `json:"repository"`
+	} `json:"data"`
+}
+
 // HeadChecks reads the checks on p's head. On GitHub the target branch's
 // required checks count when it declares any, else all of them, since a
 // branch with no protection would otherwise gate on nothing; on GitLab the
-// head pipeline decides, as GitLab has no required flag.
+// head pipeline decides, as GitLab has no required flag. A head with no
+// checks whose previous commit had some is Pending: its CI has not started.
 func (h Host) HeadChecks(ctx context.Context, p PR) (HeadChecks, error) {
 	if h.glab() {
 		return h.pipelineChecks(ctx, p)
 	}
 
-	var payload struct {
-		Data struct {
-			Repository struct {
-				PullRequest struct {
-					Commits struct {
-						Nodes []struct {
-							Commit struct {
-								OID    string `json:"oid"`
-								Rollup *struct {
-									Contexts struct {
-										Nodes []checkContext `json:"nodes"`
-									} `json:"contexts"`
-								} `json:"statusCheckRollup"`
-							} `json:"commit"`
-						} `json:"nodes"`
-					} `json:"commits"`
-				} `json:"pullRequest"`
-			} `json:"repository"`
-		} `json:"data"`
-	}
-
-	err := h.decode(ctx, &payload, "api", "graphql", "-f", "query="+HeadChecksQuery,
+	raw, err := h.run(ctx, "api", "graphql", "--paginate", "-f", "query="+HeadChecksQuery,
 		"-F", "owner={owner}", "-F", "name={repo}", "-F", "number="+strconv.Itoa(p.Number))
 	if err != nil {
 		return HeadChecks{}, err
@@ -80,19 +97,48 @@ func (h Host) HeadChecks(ctx context.Context, p PR) (HeadChecks, error) {
 
 	out := HeadChecks{SHA: p.HeadSHA}
 
-	nodes := payload.Data.Repository.PullRequest.Commits.Nodes
-	if len(nodes) == 0 {
+	var (
+		counted         []checkContext
+		rolled, prevHad bool
+	)
+
+	// gh prints one document per page
+	dec := json.NewDecoder(strings.NewReader(raw))
+
+	for {
+		var page checksPage
+		if err := dec.Decode(&page); errors.Is(err, io.EOF) {
+			break
+		} else if err != nil {
+			return HeadChecks{}, fmt.Errorf("parsing %s output: %w", h.Name, err)
+		}
+
+		pr := page.Data.Repository.PullRequest
+		if prev := pr.Prev.Nodes; len(prev) == 2 && prev[0].Commit.Rollup != nil {
+			prevHad = true
+		}
+
+		if len(pr.Head.Nodes) == 0 {
+			continue
+		}
+
+		head := pr.Head.Nodes[0].Commit
+		out.SHA = head.OID
+
+		if head.Rollup != nil {
+			rolled = true
+			counted = append(counted, head.Rollup.Contexts.Nodes...)
+		}
+	}
+
+	if !rolled {
+		if prevHad {
+			out.State = Pending
+		}
+
 		return out, nil
 	}
 
-	head := nodes[0].Commit
-	out.SHA = head.OID
-
-	if head.Rollup == nil {
-		return out, nil
-	}
-
-	counted := head.Rollup.Contexts.Nodes
 	for _, c := range counted {
 		if c.Required {
 			out.Required = true
@@ -196,6 +242,8 @@ func (h Host) pipelineChecks(ctx context.Context, p PR) (HeadChecks, error) {
 			SHA    string `json:"sha"`
 			Status string `json:"status"`
 		} `json:"head_pipeline"`
+		// the request's latest pipeline, on any of its commits
+		Pipeline *struct{} `json:"pipeline"`
 	}
 
 	// by branch, the selector PR reads by, falling back to the number
@@ -205,14 +253,18 @@ func (h Host) pipelineChecks(ctx context.Context, p PR) (HeadChecks, error) {
 
 	out := HeadChecks{SHA: mr.SHA}
 
+	// an earlier commit's pipeline and none on the head: the head's has not started
 	pl := mr.HeadPipeline
-	if pl == nil {
+	switch {
+	case pl == nil && mr.Pipeline != nil, pl != nil && pl.SHA != "" && mr.SHA != "" && pl.SHA != mr.SHA:
+		out.State = Pending
+
+		return out, nil
+	case pl == nil:
 		return out, nil
 	}
 
-	if pl.SHA != "" {
-		out.SHA = pl.SHA
-	}
+	out.SHA = cmp.Or(out.SHA, pl.SHA)
 
 	out.State = jobState(pl.Status)
 	if out.State == Green || out.State == "" {

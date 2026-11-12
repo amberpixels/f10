@@ -516,7 +516,7 @@ A project whose PR adapter runs a script around `gh` leaves no such event, so fo
 Each judge verdict and each review findings file gets a row of its own after `plan` and `handoff`: `judge <subject>` (task, plan or change), with the file's number added when a subject was judged twice, and `review <round>`.
 Verdicts from before the open series are an earlier PR's and stay out, as the judge gate drops them.
 `--json` carries the same files as `verdicts` (`subject`, `path`) and `reviews` (`round`, `path`).
-`--json` also carries the whole block as a `shipment` object, on each run entry (repeated per run, as `agent` is) and on the no-run block: `task`, `title`, `url`, `branch`, `pr`, `pr_state` (only when the host was asked), `commit`, `plan`, `handoff`, `demo`, `verdicts` and `reviews`, each left out when empty except `task`.
+`--json` also carries the whole block as a `shipment` object, on each run entry (repeated per run, as `agent` is) and on the no-run block: `task`, `title`, `url`, `branch`, `pr`, `pr_state` (only when the host was asked), `checks` (an open PR's head checks, as `f10 pr checks --json` prints them, when the host answered), `commit`, `plan`, `handoff`, `demo`, `verdicts` and `reviews`, each left out when empty except `task`.
 The flat keys a reader written before the object relies on stay beside it: `verdicts` and `reviews` on a run entry, and those plus `plan`, `pr` and `pr_state` on the no-run block.
 A run entry's own `plan` key is the plan phase's status, not the plan file.
 The run's step rows go on under it as `label: value`, in the same value column, so the whole block reads as one table, and `--plain` prints the same block.
@@ -565,7 +565,7 @@ An open PR whose head is red reads `checks red` beside its number, from the roll
 That rollup counts every check, while finish counts only the required ones where the target branch declares any, so finish may still merge a PR the column marks.
 `F10_STATUS_GLYPHS` replaces all four, in that order (open PR, merged PR, review, judge), for a terminal without the font: `F10_STATUS_GLYPHS='PR MR rv jd'`.
 `--json` holds them in a `gates` array, on a run and on a row.
-`--json` prints the rows as an array: `id`, `title`, `url`, `depth`, `after`, `stage`, `step`, `pr`, `pr_state`, and `note`, `next`, `ask` where set.
+`--json` prints the rows as an array: `id`, `title`, `url`, `depth`, `after`, `stage`, `step`, `pr`, `pr_state`, and `checks` (an open PR's head rollup: `green`, `red` or `pending`), `note`, `next`, `ask` where set.
 
 A task with no children reports as before: its live run, else its plan and PR.
 A task with no branch left (`f10 finish` removed it) prints its facts block (**Status**, above) when the ledger, the tracker or the plan archive says it finished, and `--json` prints a one-row array; otherwise it fails as before, with `no run to read`.

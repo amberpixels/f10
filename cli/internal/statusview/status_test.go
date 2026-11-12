@@ -90,10 +90,10 @@ func TestStatusPRRowCarriesTheChecks(t *testing.T) {
 	for _, c := range []struct {
 		name, checks, want string
 	}{
-		{"red", `{"data":{"repository":{"pullRequest":{"commits":{"nodes":[{"commit":{"oid":"h3ad",` +
+		{"red", `{"data":{"repository":{"pullRequest":{"prev":{"nodes":[]},"head":{"nodes":[{"commit":{"oid":"h3ad",` +
 			`"statusCheckRollup":{"contexts":{"nodes":[{"__typename":"CheckRun","name":"lint",` +
 			`"status":"COMPLETED","conclusion":"FAILURE"}]}}}}]}}}}}`, "#9 open · checks red (lint)"},
-		{"pending", `{"data":{"repository":{"pullRequest":{"commits":{"nodes":[{"commit":{"oid":"h3ad",` +
+		{"pending", `{"data":{"repository":{"pullRequest":{"prev":{"nodes":[]},"head":{"nodes":[{"commit":{"oid":"h3ad",` +
 			`"statusCheckRollup":{"contexts":{"nodes":[{"__typename":"CheckRun","name":"test",` +
 			`"status":"QUEUED"}]}}}}]}}}}}`, "#9 open · checks pending (test)"},
 		{"unread", "FAIL", "#9 open\n"},

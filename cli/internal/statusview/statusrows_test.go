@@ -86,6 +86,14 @@ func TestStageOf(t *testing.T) {
 			},
 			false, stageWaiting, "to finish after FT-1",
 		},
+		{
+			"finish holds on checks",
+			facts{
+				Run:        &state.Run{Capture: "prior", Plan: "done", Ship: "done", Final: "pr"},
+				DrivePhase: drivestore.PhaseWaiting, DriveChecks: true,
+			},
+			false, stageWaiting, "on checks",
+		},
 		{"nothing", facts{}, false, stageNotStarted, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

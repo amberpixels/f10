@@ -1,8 +1,8 @@
 ---
 name: finish
-description: "f10 finish skill - close a task without leaving this session: merge its PR or MR (a branch never pushed merges into the local default branch), archive the plan, close the Herdr workspace, remove the worktree and its branch, pull main; a spike with no PR closes without a merge, its report archived and its experiment discarded or, with --keep, kept on a branch. Use when the user says \"/f10:finish [<task-id>] [--yes] [--merge | --local | --keep]\" or asks to finish, close out or clean up a merged task, or to clean up after reviewing someone else's PR."
-allowed-tools: Bash, AskUserQuestion
-argument-hint: "[<task-id>] [--merge | --local | --keep]"
+description: "f10 finish skill - close a task without leaving this session: merge its PR or MR (a branch never pushed merges into the local default branch), archive the plan, close the Herdr workspace, remove the worktree and its branch, pull main; a spike with no PR closes without a merge, its report archived and its experiment discarded or, with --keep, kept on a branch. Use when the user says \"/f10:finish [<task-id>] [--yes] [--merge | --local | --keep] [--ignore-checks]\" or asks to finish, close out or clean up a merged task, or to clean up after reviewing someone else's PR."
+allowed-tools: Bash, Monitor, AskUserQuestion
+argument-hint: "[<task-id>] [--merge | --local | --keep] [--ignore-checks]"
 ---
 
 # f10 · finish

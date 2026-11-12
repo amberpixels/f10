@@ -13,7 +13,7 @@ import (
 const checks9 = testkit.GhChecks + "9"
 
 func headChecks(contexts string) string {
-	return `{"data":{"repository":{"pullRequest":{"commits":{"nodes":[{"commit":{"oid":"h3ad",` +
+	return `{"data":{"repository":{"pullRequest":{"prev":{"nodes":[]},"head":{"nodes":[{"commit":{"oid":"h3ad",` +
 		`"statusCheckRollup":{"contexts":{"nodes":[` + contexts + `]}}}}]}}}}}`
 }
 
