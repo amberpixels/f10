@@ -1,6 +1,15 @@
-✓ FT-210  done  finish  󰘭 #216 merged
-            Keep a drive as a record
-     judge  plan: proceed
- implement  done
-   cleanup  done
-        pr  done
+task:            FT-210
+title:           Keep a drive as a record
+url:           ↗ https://github.com/a/b/issues/210
+pr:            ↗ https://github.com/a/b/pull/216
+plan:            /code/f10/.f10/plans/archive/FT-210.md
+demo:            /code/f10/.f10/demo/FT-210/report.html
+judge plan:      /code/f10/.f10/verdicts/FT-210/1.md
+judge change:    /code/f10/.f10/verdicts/FT-210/2.md
+review 1:        /code/f10/.f10/reviews/archive/FT-210.1/1.md
+review 2:        /code/f10/.f10/reviews/archive/FT-210.1/2.md
+pr state:        merged
+  judge:         plan: proceed
+  implement:     done
+  cleanup:       done
+  pr:            done

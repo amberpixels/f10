@@ -1,10 +1,12 @@
 package statusview
 
 import (
+	"cmp"
 	"context"
 	"path/filepath"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/findings"
@@ -15,6 +17,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/tasktitle"
 )
 
 // Shipment is the facts block a ship report opens with, reprinted from what
@@ -30,6 +33,7 @@ type Shipment struct {
 	Commit  string `json:"commit,omitempty"`
 	Plan    string `json:"plan,omitempty"`
 	Handoff string `json:"handoff,omitempty"`
+	Demo    string `json:"demo,omitempty"`
 
 	Verdicts []verdictPath `json:"verdicts,omitempty"`
 	Reviews  []reviewPath  `json:"reviews,omitempty"`
@@ -50,6 +54,7 @@ func (s *Shipment) Facts(link bool) []render.Fact {
 		{Label: "commit", Value: s.Commit},
 		{Label: "plan", Value: s.Plan, Path: link},
 		{Label: "handoff", Value: s.Handoff, Path: link},
+		{Label: "demo", Value: s.Demo, Path: link},
 	}
 
 	// a subject judged twice takes each file's number, so every label names one file
@@ -139,6 +144,38 @@ func readShipment(ctx context.Context, in taskStatusInput, events []ledger.Event
 		s.Handoff = in.Handoff
 	}
 
+	if in.storage != "" {
+		s.Demo = demoReport(storage.Root(in.storage), in.ID)
+	}
+
+	return s
+}
+
+// demoReport is the task's demo report, "" before one is written.
+func demoReport(root storage.Root, id string) string {
+	if path := filepath.Join(root.Demo(id), "report.html"); fsx.Exists(path) {
+		return path
+	}
+
+	return ""
+}
+
+// finishedShipment is a finished task's block, read from what f10 finish
+// archived: the plan, the handoff and the series its last PR closed.
+func finishedShipment(root storage.Root, row TaskRow, known ledger.TaskRef) Shipment {
+	s := Shipment{
+		Task:    row.ID,
+		Title:   cmp.Or(known.Title, tasktitle.Clean(row.Title, row.ID)),
+		URL:     cmp.Or(known.URL, row.URL),
+		PR:      row.PR,
+		PRState: row.PRState,
+		Plan:    archive.NewestArchived(root.Archive(), row.ID),
+		Handoff: archive.NewestArchived(storage.ArchiveOf(root.Handoffs()), row.ID),
+		Demo:    demoReport(root, row.ID),
+	}
+
+	s.Verdicts, s.Reviews = FinishedShipFiles(root.Path(), row.ID)
+
 	return s
 }
 
@@ -148,10 +185,7 @@ func ShipFiles(root, id string) ([]verdictPath, []reviewPath) {
 	reviews := storage.Root(root).Reviews(id)
 	since := archive.SeriesStart(reviews)
 
-	var (
-		verdicts []verdictPath
-		rounds   []reviewPath
-	)
+	var verdicts []verdictPath
 
 	for _, v := range archive.JudgeFiles(root, id) {
 		if !v.At.Before(since) {
@@ -159,9 +193,42 @@ func ShipFiles(root, id string) ([]verdictPath, []reviewPath) {
 		}
 	}
 
-	for _, path := range findings.Series(reviews) {
+	return verdicts, roundPaths(reviews)
+}
+
+// FinishedShipFiles is ShipFiles for a finished task: f10 finish moved its
+// findings to the archive, so the rounds are the newest closed series', and
+// the verdicts those written since the series before it closed. A task
+// finished before its findings were archived reads the live directory.
+func FinishedShipFiles(root, id string) ([]verdictPath, []reviewPath) {
+	closed := archive.ClosedPRs(storage.Root(root).Reviews(id))
+	if len(closed) == 0 {
+		return ShipFiles(root, id)
+	}
+
+	var since time.Time
+	if len(closed) > 1 {
+		since = archive.SeriesEndAt(closed[len(closed)-2])
+	}
+
+	var verdicts []verdictPath
+
+	for _, v := range archive.JudgeFiles(root, id) {
+		if !v.At.Before(since) {
+			verdicts = append(verdicts, verdictPath{Subject: v.Judged, Path: v.Path})
+		}
+	}
+
+	return verdicts, roundPaths(closed[len(closed)-1])
+}
+
+// roundPaths is the findings files in dir, a row each by its round.
+func roundPaths(dir string) []reviewPath {
+	var rounds []reviewPath
+
+	for _, path := range findings.Series(dir) {
 		rounds = append(rounds, reviewPath{Round: strings.TrimSuffix(filepath.Base(path), ".md"), Path: path})
 	}
 
-	return verdicts, rounds
+	return rounds
 }

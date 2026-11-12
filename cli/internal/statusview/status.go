@@ -281,17 +281,14 @@ func taskFallback(in taskStatusInput, others []*state.Run, ship Shipment) fallba
 	return fb
 }
 
-// writeTaskRows prints task rows as a tree, headed by parent unless the
-// one row is a finished task alone, or encodes them under --json.
+// writeTaskRows prints task rows as a tree headed by parent, or encodes them
+// under --json.
 func writeTaskRows(v StatusView, rows []TaskRow, parent string) error {
 	if v.JSON {
 		return ui.JSON(v.Out, rows)
 	}
 
 	rv := RowView{Parent: parent, Plain: v.Plain}
-	if len(rows) == 1 && rows[0].Full {
-		rv.Parent = ""
-	}
 
 	switch {
 	case rv.Plain:

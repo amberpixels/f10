@@ -62,8 +62,6 @@ type TaskRow struct {
 	Next    string `json:"next,omitempty"`
 	Ask     string `json:"ask,omitempty"`
 	Gates   []gate `json:"gates,omitempty"`
-
-	Full bool `json:"-"` // a finished task alone: every gate on a line of its own
 }
 
 // Finish settles the row's stage and the lines printed under it.
@@ -91,10 +89,9 @@ func (row *TaskRow) Finish(f lookaround.TaskFacts, baseDone bool) {
 	}
 }
 
-// GateColumn is the row's compact gates; a finished task alone prints
-// every gate on a line instead.
+// GateColumn is the row's compact gates.
 func (row *TaskRow) GateColumn() string {
-	if row.Full || len(row.Gates) == 0 {
+	if len(row.Gates) == 0 {
 		return ""
 	}
 
@@ -119,7 +116,16 @@ func (row *TaskRow) cells(v RowView, withGates bool, faint lipgloss.Style) ([]ta
 		cells[len(cells)-1].Render = func(s string) string { return render.Hyperlink(pr, s) }
 	}
 
-	notes := make([]tasktree.Note, 0, 3)
+	// plain output prints no link, so a relayed tree keeps its urls as text
+	notes := make([]tasktree.Note, 0, 5)
+	if v.Plain {
+		for _, u := range [][2]string{{"url", row.URL}, {"pr", row.PR}} {
+			if u[1] != "" {
+				notes = append(notes, tasktree.Note{Label: u[0], Text: u[1], Whole: true})
+			}
+		}
+	}
+
 	if gc := row.GateColumn(); v.Plain && gc != "" {
 		notes = append(notes, tasktree.Note{Label: "gates", Text: gc})
 	}
@@ -132,19 +138,13 @@ func (row *TaskRow) cells(v RowView, withGates bool, faint lipgloss.Style) ([]ta
 }
 
 // subLines is what prints under a row: the ask, the halt reason and what
-// unblocks it, then a finished task's gates.
+// unblocks it.
 func (row *TaskRow) subLines() [][2]string {
 	var out [][2]string
 
 	for _, sub := range [][2]string{{"ask", row.Ask}, {"halt", row.Note}, {"next", row.Next}} {
 		if sub[1] != "" {
 			out = append(out, sub)
-		}
-	}
-
-	if row.Full {
-		for _, l := range gateLines(row.Gates) {
-			out = append(out, [2]string{strings.TrimSpace(l[0]), l[1]})
 		}
 	}
 

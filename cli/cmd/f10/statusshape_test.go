@@ -99,7 +99,7 @@ func TestHookStatusTextReportsTheSessionTasksAsk(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	text, asks := hookcmd.HookStatusText(t.Context(), "sess-1")
+	text, asks := hookcmd.HookStatusText(t.Context(), "sess-1", "")
 	if !asks || !strings.Contains(text, "1. Refactor?") {
 		t.Errorf("asks = %v, text:\n%s", asks, text)
 	}
@@ -135,5 +135,34 @@ func TestStateShowPrintsTheRunBlock(t *testing.T) {
 	cut := func(s string) string { before, _, _ := strings.Cut(s, "updated"); return before }
 	if cut(got) != cut(want.String()) {
 		t.Errorf("state show =\n%s\nwant the run block\n%s", got, want.String())
+	}
+}
+
+// A status for one task id answers from that task's checkout: its block with
+// no turn for the model, unless the run asks; a token naming no task passes.
+func TestHookStatusTextForATask(t *testing.T) {
+	fx := newLaunchFixture(t)
+
+	fx.worktree(t, "DM-3", state.Run{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"})
+	fx.worktree(t, "DM-4", state.Run{
+		Capture: "prior", Plan: "done", Ship: "blocked", Leaf: "judge", Ask: "1. Refactor? [refactor | stop]",
+	})
+
+	text, pass := hookcmd.HookStatusText(t.Context(), "sess-1", "DM-3")
+	if pass || !strings.HasPrefix(text, "task:") || !strings.Contains(text, "DM-3") {
+		t.Errorf("DM-3: pass = %v, text:\n%s", pass, text)
+	}
+
+	if text, pass := hookcmd.HookStatusText(
+		t.Context(),
+		"sess-1",
+		"DM-4",
+	); !pass ||
+		!strings.Contains(text, "1. Refactor?") {
+		t.Errorf("DM-4: pass = %v, text:\n%s", pass, text)
+	}
+
+	if _, pass := hookcmd.HookStatusText(t.Context(), "sess-1", "whatever"); !pass {
+		t.Error("a token naming no task was answered")
 	}
 }

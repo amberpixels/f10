@@ -95,13 +95,13 @@ func hookTaskID(ctx context.Context, cwd, url string) string {
 	return r.ID
 }
 
-// HookStatusText is what a bare `f10 status` prints for the session in the
-// hook's directory, and whether it printed a question a driven agent waits on.
-func HookStatusText(ctx context.Context, session string) (string, bool) {
+// HookStatusText is what `f10 status [token]` prints for the session in the
+// hook's directory, and whether the model must take the turn.
+func HookStatusText(ctx context.Context, session, token string) (string, bool) {
 	dir, err := os.Getwd()
 	if err != nil {
 		return ui.Prefixed(err.Error()), false
 	}
 
-	return statusview.StatusText(ctx, dir, session)
+	return statusview.StatusText(ctx, dir, session, token)
 }

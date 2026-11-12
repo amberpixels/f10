@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
@@ -74,8 +76,8 @@ func NewStatusReader(t *target.Target, now time.Time) (*statusReader, error) {
 
 // Task prints what `status <token>` prints, reading the task's checkout
 // first so a task with a run never waits on the host. With no run, a parent
-// lists its children and a finished task its done row; a guessed token
-// prints nothing, so the bare output stands.
+// lists its children and a finished task prints its block (its done row
+// under --json); a guessed token prints nothing, so the bare output stands.
 func (rd *statusReader) Task(ctx context.Context, v StatusView, token string, guessed bool) (statusPrinted, error) {
 	id, suffix := ref.SplitSuffix(token)
 
@@ -96,7 +98,11 @@ func (rd *statusReader) Task(ctx context.Context, v StatusView, token string, gu
 		}
 
 		if row := rd.finishedRow(ctx, r.Head()); row != nil {
-			return rd.printRows(v, []TaskRow{*row}, r.ID)
+			if v.JSON {
+				return rd.printRows(v, []TaskRow{*row}, r.ID)
+			}
+
+			return statusPrinted{Printed: true}, rd.writeFinished(ctx, v, *row)
 		}
 	}
 
@@ -286,20 +292,77 @@ func (rd *statusReader) finishedRow(ctx context.Context, r ref.Ref) *TaskRow {
 	}
 
 	rows := rd.rows(ctx).RowsFrom(ctx, []stack.ChildRow{k})
-	rows[0].Full = true
 
 	return &rows[0]
 }
 
-// StatusText is what a bare `f10 status` prints for session in dir, with no
-// color and no links, and whether it printed a question to relay.
-func StatusText(ctx context.Context, dir, session string) (string, bool) {
+// writeFinished prints a finished task's block, read from the archive.
+func (rd *statusReader) writeFinished(ctx context.Context, v StatusView, row TaskRow) error {
+	known := ledger.LookupRefs(ctx, rd.t.RefProject(ctx), []string{row.ID})[row.ID]
+	ship := finishedShipment(rd.t.Layout.StorageRoot, row, known)
+	rows := finishedFacts(ship, row.Gates, render.LinksFor(v.Out, v.Plain).On)
+
+	return render.WriteFacts(v.Out, rows, render.LabelWidth(rows), ui.Width(v.Out))
+}
+
+// finishedFacts is a finished task's block rows: the shipment, the PR's
+// state, then the gates as the step rows a live block prints under ship.
+func finishedFacts(ship Shipment, gates []gate, link bool) []render.Fact {
+	rows := ship.Facts(link)
+	if ship.PRState != "" {
+		rows = append(rows, RunFact("pr state", ship.PRState, lipgloss.NewStyle()))
+	}
+
+	return append(rows, gateFacts(gates)...)
+}
+
+// StatusText is what `f10 status --plain` prints for session in dir, bare
+// or for token, and whether the model must take the turn: the output holds
+// a question to relay, or token names no task, so it is the skill's to read.
+func StatusText(ctx context.Context, dir, session, token string) (string, bool) {
 	var out bytes.Buffer
 
-	asks, err := BareStatus(ctx, StatusView{Out: &out, Warn: &out}, dir, false, session, false)
+	v := StatusView{Out: &out, Warn: &out, Plain: true}
+
+	var (
+		asks bool
+		err  error
+	)
+
+	if token == "" {
+		asks, err = BareStatus(ctx, v, dir, false, session, false)
+	} else {
+		rd, ok := taskReader(ctx, dir, token)
+		if !ok {
+			return "", true
+		}
+
+		var p statusPrinted
+
+		p, err = rd.Task(ctx, v, token, false)
+		asks = p.asks
+	}
+
 	if err != nil {
 		out.WriteString(ui.Prefixed(err.Error()) + "\n")
 	}
 
 	return strings.TrimSpace(out.String()), asks
+}
+
+// taskReader is the reader for a status of token in dir; ok is false when
+// token names no task there.
+func taskReader(ctx context.Context, dir, token string) (*statusReader, bool) {
+	t, err := target.At(ctx, dir, false, "status")
+	if err != nil {
+		return nil, false
+	}
+
+	if _, err := t.Reference(ctx, token); err != nil {
+		return nil, false
+	}
+
+	rd, err := NewStatusReader(t, time.Now())
+
+	return rd, err == nil
 }

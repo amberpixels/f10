@@ -354,7 +354,7 @@ func TestIssueCreatedNamesTheCapturedTask(t *testing.T) {
 func TestBareStatusIsAnsweredWithoutAModelTurn(t *testing.T) {
 	env := testEnv(t)
 	asked := ""
-	env.StatusText = func(_ context.Context, session string) (string, bool) {
+	env.StatusText = func(_ context.Context, session, _ string) (string, bool) {
 		asked = session
 
 		return "task     FT-12\nship     ◎ running: implement\n", false
@@ -393,16 +393,63 @@ func TestBareStatusIsAnsweredWithoutAModelTurn(t *testing.T) {
 	if _, err := os.Stat(state.Path(env.StateDir, "s1")); !os.IsNotExist(err) {
 		t.Error("a status answer seeded a run")
 	}
+}
 
-	// with a task id, the question it may relay needs the model
+// A status for one task id is answered too, the id passed through; one whose
+// output asks, one the token names no task for, and any other argument reach
+// the model.
+func TestStatusForATaskIsAnsweredWithoutAModelTurn(t *testing.T) {
+	env := testEnv(t)
+	token := ""
+	env.StatusText = func(_ context.Context, _, tok string) (string, bool) {
+		token = tok
+
+		return "task:    FT-12\npr state: merged", false
+	}
+
+	out := Dispatch(context.Background(), payload(t, "ue-status-args"), env)
+	if !strings.Contains(string(out), `"decision":"block"`) || !strings.Contains(string(out), "task:    FT-12") {
+		t.Errorf("verdict: %s", out)
+	}
+
+	if token != "FT-12" {
+		t.Errorf("status asked for %q, want FT-12", token)
+	}
+
+	if _, err := os.Stat(state.Path(env.StateDir, "s1")); !os.IsNotExist(err) {
+		t.Error("a status answer seeded a run")
+	}
+
+	env.StatusText = func(context.Context, string, string) (string, bool) { return "ask:  1. Proceed? [yes | no]", true }
 	if out := Dispatch(context.Background(), payload(t, "ue-status-args"), env); out != nil {
-		t.Errorf("status with an argument answered: %s", out)
+		t.Errorf("a task status with an ask was answered: %s", out)
+	}
+
+	for _, args := range []string{"--help", "where is FT-12"} {
+		called := false
+		env.StatusText = func(context.Context, string, string) (string, bool) {
+			called = true
+
+			return "x", false
+		}
+
+		var p map[string]any
+		if err := json.Unmarshal(payload(t, "ue-status-args"), &p); err != nil {
+			t.Fatal(err)
+		}
+
+		p["command_args"] = args
+
+		raw, _ := json.Marshal(p)
+		if out := Dispatch(context.Background(), raw, env); out != nil || called {
+			t.Errorf("%q: answered %s (status read: %v)", args, out, called)
+		}
 	}
 }
 
 func TestStatusWithNothingToSay(t *testing.T) {
 	env := testEnv(t)
-	env.StatusText = func(context.Context, string) (string, bool) { return "", false }
+	env.StatusText = func(context.Context, string, string) (string, bool) { return "", false }
 
 	out := Dispatch(context.Background(), payload(t, "ue-status-bare"), env)
 	if !strings.Contains(string(out), "no f10 run in this session") {
@@ -414,7 +461,7 @@ func TestStatusWithNothingToSay(t *testing.T) {
 // a task id does.
 func TestBareStatusWithAnAskTakesAModelTurn(t *testing.T) {
 	env := testEnv(t)
-	env.StatusText = func(context.Context, string) (string, bool) { return "launched here  1 asking", true }
+	env.StatusText = func(context.Context, string, string) (string, bool) { return "launched here  1 asking", true }
 
 	if out := Dispatch(context.Background(), payload(t, "ue-status-bare"), env); out != nil {
 		t.Errorf("a status with an ask was answered: %s", out)

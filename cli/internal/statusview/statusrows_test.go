@@ -22,6 +22,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -360,40 +361,101 @@ func TestRenderRows(t *testing.T) {
 	}
 }
 
-// A finished task alone is a one-row tree with every gate on a line.
-func TestRenderFinishedRow(t *testing.T) {
-	row := TaskRow{
-		ID:      "FT-210",
-		URL:     "https://github.com/a/b/issues/210",
+// A finished task prints the facts block, its PR's state and its gates as
+// step rows, never a tree.
+func TestRenderFinishedBlock(t *testing.T) {
+	ship := Shipment{
+		Task:    "FT-210",
 		Title:   "Keep a drive as a record",
-		Stage:   StageDone,
-		Step:    "finish",
+		URL:     "https://github.com/a/b/issues/210",
 		PR:      "https://github.com/a/b/pull/216",
 		PRState: "merged",
-		Full:    true,
-		Gates: []gate{
-			{
-				Step:    "judge",
-				Judged:  "plan",
-				State:   gateDone,
-				Outcome: &archive.JudgeOutcome{Verdict: "proceed"},
-			},
-			{Step: "implement", State: gateDone},
-			{Step: "cleanup", State: gateDone},
-			{Step: "pr", State: gateDone},
+		Plan:    "/code/f10/.f10/plans/archive/FT-210.md",
+		Demo:    "/code/f10/.f10/demo/FT-210/report.html",
+		Verdicts: []verdictPath{
+			{Subject: "plan", Path: "/code/f10/.f10/verdicts/FT-210/1.md"},
+			{Subject: "change", Path: "/code/f10/.f10/verdicts/FT-210/2.md"},
+		},
+		Reviews: []reviewPath{
+			{Round: "1", Path: "/code/f10/.f10/reviews/archive/FT-210.1/1.md"},
+			{Round: "2", Path: "/code/f10/.f10/reviews/archive/FT-210.1/2.md"},
 		},
 	}
+	gates := []gate{
+		{Step: "judge", Judged: "plan", State: gateDone, Outcome: &archive.JudgeOutcome{Verdict: "proceed"}},
+		{Step: "implement", State: gateDone},
+		{Step: "cleanup", State: gateDone},
+		{Step: "pr", State: gateDone},
+	}
+
+	rows := finishedFacts(ship, gates, false)
 
 	var out bytes.Buffer
-	if err := RenderRows(
-		&out,
-		[]TaskRow{row},
-		RowView{Plain: true, Width: 100},
-	); err != nil {
+	if err := render.WriteFacts(&out, rows, render.LabelWidth(rows), 100); err != nil {
 		t.Fatal(err)
 	}
 
 	statusGolden(t, "finished", out.String())
+}
+
+// A finished task's files are the series its last PR closed: the rounds
+// f10 finish archived, and the verdicts written since the series before it.
+func TestFinishedShipFiles(t *testing.T) {
+	root := storage.Root(t.TempDir())
+	write := func(path string, at time.Time) {
+		t.Helper()
+
+		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := os.WriteFile(
+			path,
+			[]byte("task: FT-1\nsubject: plan FT-1\nverdict: proceed\nreason: ok\n"),
+			0o600,
+		); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := os.Chtimes(path, at, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	t0 := time.Unix(1_800_000_000, 0)
+	reviews := root.Reviews("FT-1")
+
+	// the first PR's series, closed at t0+1h, and the second's, closed at t0+3h
+	write(filepath.Join(reviews, "1.md"), t0)
+	write(root.Verdicts("FT-1")+"/1.md", t0)
+
+	if _, err := archive.ArchiveReviews(reviews, archive.SeriesEnd{PR: 1, At: t0.Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+
+	write(filepath.Join(reviews, "1.md"), t0.Add(2*time.Hour))
+	write(filepath.Join(reviews, "2.md"), t0.Add(2*time.Hour))
+	write(root.Verdicts("FT-1")+"/2.md", t0.Add(2*time.Hour))
+	write(root.Verdicts("FT-1")+"/3.md", t0.Add(2*time.Hour))
+
+	if _, err := archive.ArchiveReviews(reviews, archive.SeriesEnd{PR: 2, At: t0.Add(3 * time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+
+	verdicts, rounds := FinishedShipFiles(root.Path(), "FT-1")
+	if len(verdicts) != 2 || len(rounds) != 2 {
+		t.Fatalf("verdicts %+v, rounds %+v: want two of each", verdicts, rounds)
+	}
+
+	for _, p := range append([]string{verdicts[0].Path, verdicts[1].Path}, rounds[0].Path, rounds[1].Path) {
+		if _, err := os.Stat(p); err != nil {
+			t.Errorf("%s: %v", p, err)
+		}
+	}
+
+	if !strings.Contains(rounds[0].Path, filepath.Join("archive", "FT-1.2")) {
+		t.Errorf("rounds read from %s, want the newest closed series", rounds[0].Path)
+	}
 }
 
 // A task with a checkout is read there and never asks for children; with no
@@ -415,11 +477,13 @@ func TestStatusTaskWithNoRun(t *testing.T) {
 		archived bool // FT-1's plan is archived: finished
 		printed  bool
 		stage    string // the one row printed, for a finished task
+		text     bool   // read without --json: a finished task's block
 		err      error
 		warned   bool
 	}{
 		{name: "has a checkout", checkout: true, printed: true},
 		{name: "finished", kids: "[]", archived: true, printed: true, stage: StageDone},
+		{name: "finished, as text", kids: "[]", archived: true, printed: true, text: true},
 		{name: "parent", kids: `[{"number":2,"title":"kid","state":"open","html_url":"https://x/2","body":"","labels":[]}]`, printed: true},
 		{name: "host down", fail: true, err: errNoRunToRead, warned: true},
 		{name: "guessed", guessed: true, err: errNoRunToRead},
@@ -480,7 +544,7 @@ func TestStatusTaskWithNoRun(t *testing.T) {
 
 			p, err := rd.Task(
 				t.Context(),
-				StatusView{Out: &out, Warn: &warn, JSON: true},
+				StatusView{Out: &out, Warn: &warn, JSON: !tc.text, Plain: tc.text},
 				"FT-1",
 				tc.guessed,
 			)
@@ -498,6 +562,10 @@ func TestStatusTaskWithNoRun(t *testing.T) {
 
 			if (tc.guessed || tc.checkout) && f.Called(subIssues) {
 				t.Error("the tracker was asked for children")
+			}
+
+			if tc.text && (!strings.HasPrefix(out.String(), "task:") || strings.Contains(out.String(), "✓")) {
+				t.Errorf("a finished task printed no block:\n%s", out.String())
 			}
 
 			if tc.stage != "" {

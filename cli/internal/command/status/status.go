@@ -29,7 +29,7 @@ func Command() *cli.Command {
 			ui.JSONFlag("emit the same runs as JSON"),
 			&cli.BoolFlag{
 				Name: "plain",
-				Usage: "print a parent's, a finished task's or the launched-here tree as plain text, without urls, " +
+				Usage: "print a parent's or the launched-here tree as plain text, each url on a line of its own, " +
 					"cut to $COLUMNS (else 100), for a skill to relay",
 			},
 		},
