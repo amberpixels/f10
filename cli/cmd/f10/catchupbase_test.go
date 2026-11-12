@@ -630,3 +630,73 @@ func TestRecordTipTakesTheNewerBase(t *testing.T) {
 		t.Errorf("tip %q, want origin's %s", got, newer)
 	}
 }
+
+// A stopped rebase detaches HEAD, so the mark has to find the branch being
+// rebased; written under an empty branch name, git refuses the whole config.
+func TestCatchupMarkDuringStoppedOperation(t *testing.T) {
+	for _, method := range []string{"rebase", "merge"} {
+		t.Run(method, func(t *testing.T) {
+			r, _ := newStackedRepo(t)
+
+			r.At(later, "checkout", "-q", "FT-2/b")
+			r.Commit(later, "a.go", "package main // a, from the base\n", "base touches a")
+			r.At(later, "checkout", "-q", "FT-1/a")
+
+			sha := r.sha("FT-2/b")
+
+			stop := exec.Command("git", method, "FT-2/b")
+			stop.Dir = r.Dir
+
+			if out, err := stop.CombinedOutput(); err == nil {
+				t.Fatalf("git %s did not conflict:\n%s", method, out)
+			}
+
+			mark := string(branchmeta.Moved) + " " + sha
+
+			// padded, as a pasted row may be: what is stored and printed is not
+			padded := " " + string(branchmeta.Moved) + "   " + sha
+
+			out, err := runApp(t, "-C", r.Dir, "pr", "catchup", "--mark", padded).outErr()
+			if err != nil {
+				t.Fatalf("--mark: %v\n%s", err, out)
+			}
+
+			if want := "branch: FT-1/a\nmark: " + mark + "\n"; out != want {
+				t.Errorf("output %q, want %q", out, want)
+			}
+
+			if got := r.At(later, "config", "--get", branchmeta.Moved.For("FT-1/a")); got != sha {
+				t.Errorf("mark on FT-1/a: %q, want %s", got, sha)
+			}
+
+			cfg, err := os.ReadFile(filepath.Join(r.Dir, ".git", "config"))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if strings.Contains(string(cfg), `[branch ""]`) {
+				t.Errorf("a key under an empty branch name:\n%s", cfg)
+			}
+
+			r.At(later, "status", "--short") // fatal on a config git refuses
+		})
+	}
+}
+
+func TestCatchupMarkRefusesWhatIsNoMark(t *testing.T) {
+	r, _ := newStackedRepo(t)
+
+	for _, mark := range []string{"", "f10-task FT-9", "f10-base-moved", "f10-landed  ", "f10-base-moved not-a-commit"} {
+		_, err := runApp(t, "-C", r.Dir, "pr", "catchup", "--mark="+mark).outErr()
+		if err == nil {
+			t.Errorf("--mark %q: no error", mark)
+		}
+	}
+
+	r.At(later, "checkout", "-q", "--detach")
+
+	_, err := runApp(t, "-C", r.Dir, "pr", "catchup", "--mark", "f10-landed main").outErr()
+	if err == nil || !strings.Contains(err.Error(), "no branch") {
+		t.Errorf("detached HEAD: %v", err)
+	}
+}

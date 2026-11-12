@@ -3,6 +3,7 @@ package pr
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 
@@ -33,6 +34,11 @@ func prCatchupCommand() *cli.Command {
 				Usage: "decide as ship's guard before this `ENTRY`: implement, pr or judge",
 			},
 			&cli.BoolFlag{Name: "no-fetch", Usage: "read the refs at hand instead of fetching origin first"},
+			&cli.StringFlag{
+				Name: "mark",
+				Usage: "write the mark row a guard printed, `'KEY VALUE'`, on the branch, " +
+					"also the one a stopped rebase is rebasing; decides and fetches nothing",
+			},
 		},
 		Action: runCatchupBase,
 	}
@@ -46,6 +52,23 @@ func runCatchupBase(ctx context.Context, cmd *cli.Command) error {
 
 	t, err := target.For(ctx, cmd)
 	if err != nil {
+		return err
+	}
+
+	if cmd.IsSet("mark") {
+		if guard != "" {
+			return errors.New("--mark writes a mark a guard already printed: it takes no --guard")
+		}
+
+		main := cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot)
+
+		branch, stored, err := stack.SetMark(ctx, t.Layout.CheckoutRoot, main, cmd.String("mark"))
+		if err != nil {
+			return err
+		}
+
+		_, err = fmt.Fprintf(cmd.Writer, "branch: %s\nmark: %s\n", branch, stored)
+
 		return err
 	}
 

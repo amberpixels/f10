@@ -63,7 +63,7 @@ f10 pr create --title T --body-file F [--label L]... [--assignee A]... [--draft]
 f10 pr edit [PR | id] [--title T] [--body-file F]   # rewrite the open PR's title or body; base, labels and assignees stay; a bundle's title names its riders after the lead id
 f10 pr comment [PR | id] [--reply-to URL [--quote T]] < text    # comment, or reply in a review's thread; prints the url, never posts the same text twice
 f10 pr status [PR | id] --name N --state S -m TEXT [--sha SHA]   # a commit status on the open PR's head; one set the same way is left alone
-f10 pr catchup [--guard implement|pr|judge] [--no-fetch]   # what a catchup of the current branch brings in: base, how found, method and why, the conflict mark
+f10 pr catchup [--guard implement|pr|judge] [--no-fetch] | --mark '<key> <value>'   # what a catchup of the current branch brings in: base, how found, method and why, the conflict mark; --mark writes that mark on the branch
 f10 review pick [n] [--latest] [--json]               # the latest unhandled remote review, as markdown
 f10 review wait [n] [--budget 10m] [--every 20s]      # poll it to done within a budget
 f10 review ack [n] [--id <id>]                        # leave the declared handled marker on it, or on the review --id names
@@ -794,10 +794,13 @@ It fetches origin first (`--no-fetch` reads the refs at hand) and prints `key: v
 | `how` | how the base was found, in a sentence |
 | `method` | `merge`, `rebase`, `onto` (the base's history was rewritten: `git rebase --onto <base> <upstream>`), `none` (the base is already in the branch) or `skip` (a guard with nothing to do) |
 | `why` | the frontmatter key that set the method (`catchup:`, `catchup_stacked:`), or that it is the default |
-| `mark` | the key and value a conflict sets (`f10-landed <default>`, `f10-base-moved <sha>`) |
+| `mark` | the key and value a conflict sets (`f10-landed <default>`, `f10-base-moved <sha>`), written with `--mark` |
 | `code` | for an `f10-after-branch` base: `yes`, or `none` when it has no commit of its own, merges not counted |
 
 `--guard <entry>` decides as ship's guard before `implement`, `pr` or `judge`: before `pr` and `judge` every base is read from origin, a branch already on origin is merged so its push never forces, and `catchup: off`, the default branch itself, no recorded base before implement or a base not on origin yet before `pr` print `method: skip`.
+`--mark '<key> <value>'` writes the `mark` row on the branch and prints the branch and the mark; it decides nothing, fetches nothing and takes no `--guard`.
+The branch is the one checked out, or the one a stopped rebase is rebasing, since a rebase detaches HEAD; with neither it fails, and it refuses a key that is not `f10-landed` or `f10-base-moved`, and an `f10-base-moved` value that names no commit.
+A guard that stops on a conflict marks the branch this way, never with `git config` by hand, which under a stopped rebase writes the key under an empty branch name that git then refuses to read.
 `f10-base-moved` overrides the local-first order of an `f10-after-branch` base because the drive's and the watcher's push gates check that sha against origin, so a newer local tip would carry commits neither checked; a marked sha the base branch no longer holds fails, naming the key to unset.
 A base is rewritten when the branch holds the recorded `f10-base-tip` and the base does not, as after a squash merge or a rebase of the base.
 `onto` then replays only the branch's own commits, whatever `catchup:` or `catchup_stacked:` says; the guard still merges a branch on origin.
