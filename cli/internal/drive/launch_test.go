@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/seam"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 )
 
@@ -16,7 +16,7 @@ import (
 // never typed into the pane.
 func TestDriveLaunchesWithTheFirstSkill(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "judge")
-	fx.task("GH-1", hostops.TaskInfo{Body: "first"}, "")
+	fx.task("GH-1", tasksource.TaskInfo{Body: "first"}, "")
 	fx.f.Script(testkit.Worktrees, testkit.Porcelain(), testkit.Porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.expects("GH-1", "judge")

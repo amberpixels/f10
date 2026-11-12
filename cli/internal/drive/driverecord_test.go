@@ -14,12 +14,12 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/drivectl"
 	"github.com/amberpixels/f10/cli/internal/drivestore"
-	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -29,7 +29,7 @@ import (
 func TestDriveSkipsATaskAnotherDriveOwns(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "judge")
 	fx.in.Root = t.TempDir()
-	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, "")
+	fx.task("GH-1", tasksource.TaskInfo{Body: "x"}, "")
 
 	// bouncing off the lease says nothing about the owner's task
 	fx.in.Record = func(_ context.Context, _ string, e ledger.Event) { t.Errorf("recorded %+v", e) }
@@ -63,7 +63,7 @@ func TestDriveRecordIsPickedUpByTheSameCommand(t *testing.T) {
 
 	fx := newDriveFixture(t, "GH-1", "judge")
 	fx.in.Root = root
-	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, "")
+	fx.task("GH-1", tasksource.TaskInfo{Body: "x"}, "")
 	fx.f.Script(testkit.Worktrees, testkit.Porcelain(), testkit.Porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.f.Script(
@@ -97,7 +97,7 @@ func TestDriveRecordIsPickedUpByTheSameCommand(t *testing.T) {
 
 	fx = newDriveFixture(t, "GH-1", "judge", "--answer", "1. proceed")
 	fx.in.Root = root
-	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, testkit.Heads("GH-1"))
+	fx.task("GH-1", tasksource.TaskInfo{Body: "x"}, testkit.Heads("GH-1"))
 	fx.f.Script(testkit.Worktrees, testkit.Porcelain("GH-1", "/code/repo.GH-1"))
 	fx.f.Script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1",
 		`{"result":{"workspace":{"workspace_id":"ws:GH-1"},"root_pane":{"pane_id":"pane:1"},"already_open":true}}`)
@@ -145,7 +145,7 @@ func TestDriveRecordIsPickedUpByTheSameCommand(t *testing.T) {
 func TestDriveDropsUnusedAnswers(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "judge", "--answer", "GH-1=1. proceed")
 	fx.in.Root = t.TempDir()
-	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, "")
+	fx.task("GH-1", tasksource.TaskInfo{Body: "x"}, "")
 	fx.f.Script(testkit.Worktrees, testkit.Porcelain(), testkit.Porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.expects("GH-1", "judge")
@@ -255,7 +255,7 @@ func answerTasks(ids ...string) []DriveTask {
 // drive stopped mid-ship: the skill is counted done, not prompted again.
 func TestDriveSkipsAPromptTheAgentAlreadyFinished(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "plan", "ship")
-	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, "")
+	fx.task("GH-1", tasksource.TaskInfo{Body: "x"}, "")
 	fx.f.Script(testkit.Worktrees, testkit.Porcelain(), testkit.Porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.expects("GH-1", "plan")
@@ -285,7 +285,7 @@ func TestDriveSkipsAPromptTheAgentAlreadyFinished(t *testing.T) {
 func TestDriveStopsWhenCancelled(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "judge", "ship")
 	fx.in.Root = t.TempDir()
-	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, "")
+	fx.task("GH-1", tasksource.TaskInfo{Body: "x"}, "")
 	fx.f.Script(testkit.Worktrees, testkit.Porcelain(), testkit.Porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.expects("GH-1", "judge")
@@ -579,7 +579,7 @@ func TestFinishedLazily(t *testing.T) {
 			asked := false
 			got := finishedLazily(root, "GH-1",
 				func() (bool, error) { return c.branched, nil },
-				func() hostops.TaskInfo { asked = true; return hostops.TaskInfo{Closed: c.closed} })
+				func() tasksource.TaskInfo { asked = true; return tasksource.TaskInfo{Closed: c.closed} })
 
 			if got != c.want || asked != c.wantInfo {
 				t.Errorf("finishedLazily = %v, tracker asked %v; want %v, %v", got, asked, c.want, c.wantInfo)

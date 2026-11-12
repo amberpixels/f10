@@ -18,6 +18,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/textx"
 	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 	"github.com/amberpixels/f10/cli/internal/worktree"
@@ -117,7 +118,7 @@ func StartedMove(t *target.Target) func(context.Context, ref.Ref) error {
 	}
 
 	return func(ctx context.Context, task ref.Ref) error {
-		return hostops.TasksFor(t).Update(ctx, io.Discard, task, hostops.Props{Status: word})
+		return tasksource.TasksFor(t).Update(ctx, io.Discard, task, hostops.Props{Status: word})
 	}
 }
 

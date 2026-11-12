@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 )
 
@@ -67,7 +67,7 @@ func TestOpenSubtasks(t *testing.T) {
 		err      string
 	}{
 		"no lookup":      {},
-		"no parent link": {children: func(context.Context, ref.Ref) ([]stack.ChildRow, error) { return nil, hostops.ErrNoParentLink }},
+		"no parent link": {children: func(context.Context, ref.Ref) ([]stack.ChildRow, error) { return nil, tasksource.ErrNoParentLink }},
 		"a read error": {
 			children: func(context.Context, ref.Ref) ([]stack.ChildRow, error) { return nil, failed },
 			err:      "FT-1: reading its subtasks: boom",
@@ -100,7 +100,7 @@ func TestShapeChildrenKeepsClosedForStatus(t *testing.T) {
 	tr := stack.Tracker{Resolve: func(ctx context.Context, tok string) (ref.Ref, error) {
 		return ref.Lookup{Prefix: "FT"}.Find(ctx, tok)
 	}}
-	raw := []hostops.RawChild{
+	raw := []tasksource.RawChild{
 		{ID: "FT-2", Title: "second", State: "closed", After: "FT-1"},
 		{ID: "FT-1", Title: "first", State: "CLOSED"},
 	}

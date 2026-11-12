@@ -9,9 +9,9 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/tasktree"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -31,7 +31,7 @@ func runTaskChildren(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	rows, err := stack.TrackerFor(t).Children(ctx, r)
-	if errors.Is(err, hostops.ErrNoParentLink) {
+	if errors.Is(err, tasksource.ErrNoParentLink) {
 		return ui.Exit(ui.ExitDeclined, "%s: %v", r.ID, err)
 	}
 
@@ -66,9 +66,9 @@ func WriteTree(w io.Writer, rows []stack.ChildRow) error {
 		return err
 	}
 
-	nodes := hostops.SubtaskNodes(
+	nodes := tasksource.SubtaskNodes(
 		childTreeRows(rows),
-		hostops.TreeOpts{Extra: func(i int) ([]tasktree.Cell, []tasktree.Note) {
+		tasksource.TreeOpts{Extra: func(i int) ([]tasktree.Cell, []tasktree.Note) {
 			r := rows[i]
 
 			var cells []tasktree.Cell
@@ -93,10 +93,10 @@ func WriteTree(w io.Writer, rows []stack.ChildRow) error {
 }
 
 // childTreeRows is the subtasks as subtask tree rows.
-func childTreeRows(rows []stack.ChildRow) []hostops.TreeRow {
-	out := make([]hostops.TreeRow, len(rows))
+func childTreeRows(rows []stack.ChildRow) []tasksource.TreeRow {
+	out := make([]tasksource.TreeRow, len(rows))
 	for i, r := range rows {
-		out[i] = hostops.TreeRow{ID: r.ID, Title: r.Title, URL: r.URL, Depth: r.Depth}
+		out[i] = tasksource.TreeRow{ID: r.ID, Title: r.Title, URL: r.URL, Depth: r.Depth}
 	}
 
 	return out

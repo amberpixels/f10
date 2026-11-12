@@ -1,4 +1,4 @@
-package hostops
+package tasksource
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/target"
@@ -27,8 +28,8 @@ type taskSource interface {
 	Info(ctx context.Context, r ref.Ref) (TaskInfo, error)
 	URL(ctx context.Context, r ref.Ref) (string, error)
 	Index(ctx context.Context) (string, error)
-	List(ctx context.Context, limit int) ([]Row, error)
-	Search(ctx context.Context, query string) ([]Row, error)
+	List(ctx context.Context, limit int) ([]hostops.Row, error)
+	Search(ctx context.Context, query string) ([]hostops.Row, error)
 	Children(ctx context.Context, r ref.Ref) ([]RawChild, error)
 	// Created is zero when the tracker keeps no date f10 can read.
 	Created(ctx context.Context, r ref.Ref) (time.Time, error)
@@ -37,7 +38,7 @@ type taskSource interface {
 	Title(ctx context.Context, r ref.Ref) (string, error)
 
 	Comment(ctx context.Context, warnTo io.Writer, r ref.Ref, body string) (string, error)
-	Update(ctx context.Context, warnTo io.Writer, r ref.Ref, p Props) error
+	Update(ctx context.Context, warnTo io.Writer, r ref.Ref, p hostops.Props) error
 	// Relink's unwritten is the refusal's last clause: only the caller knows
 	// whether properties were written before the link.
 	Relink(ctx context.Context, warnTo io.Writer, r ref.Ref, parent, unwritten string) error
@@ -48,7 +49,7 @@ type taskSource interface {
 // takes it; parent and after are zero when not given.
 type NewTask struct {
 	Doc           string
-	Props         Props
+	Props         hostops.Props
 	Parent, After ref.Ref
 }
 
@@ -61,7 +62,7 @@ func TasksFor(t *target.Target) taskSource {
 	var rest taskSource = RefusedSource{Target: t, Driver: d}
 
 	if t.HostIssues() {
-		if h, err := HostOf(t); err != nil {
+		if h, err := hostops.HostOf(t); err != nil {
 			rest = RefusedSource{Target: t, Driver: d, noCLI: err}
 		} else {
 			rest = HostSource{t: t, h: h}
@@ -126,7 +127,7 @@ func (s FallbackSource) Index(ctx context.Context) (string, error) {
 	return url, err
 }
 
-func (s FallbackSource) List(ctx context.Context, limit int) ([]Row, error) {
+func (s FallbackSource) List(ctx context.Context, limit int) ([]hostops.Row, error) {
 	rows, err := s.first.List(ctx, limit)
 	if declined(err) {
 		return s.Rest.List(ctx, limit)
@@ -135,7 +136,7 @@ func (s FallbackSource) List(ctx context.Context, limit int) ([]Row, error) {
 	return rows, err
 }
 
-func (s FallbackSource) Search(ctx context.Context, query string) ([]Row, error) {
+func (s FallbackSource) Search(ctx context.Context, query string) ([]hostops.Row, error) {
 	rows, err := s.first.Search(ctx, query)
 	if declined(err) {
 		return s.Rest.Search(ctx, query)
@@ -180,7 +181,7 @@ func (s FallbackSource) Comment(ctx context.Context, warnTo io.Writer, r ref.Ref
 	return url, err
 }
 
-func (s FallbackSource) Update(ctx context.Context, warnTo io.Writer, r ref.Ref, p Props) error {
+func (s FallbackSource) Update(ctx context.Context, warnTo io.Writer, r ref.Ref, p hostops.Props) error {
 	err := s.first.Update(ctx, warnTo, r, p)
 	if declined(err) {
 		return s.Rest.Update(ctx, warnTo, r, p)
@@ -223,7 +224,7 @@ func (s driverSource) Read(ctx context.Context, r ref.Ref) (string, ledger.TaskR
 		return "", ledger.TaskRef{}, err
 	}
 
-	doc = OneIDHeading(doc, r, s.t.Effective.TitleTemplate)
+	doc = hostops.OneIDHeading(doc, r, s.t.Effective.TitleTemplate)
 
 	return doc, ledger.TaskRef{ID: r.ID, Title: driverTitleFor(s.t, r, doc)}, nil
 }
@@ -266,11 +267,11 @@ func (s driverSource) Index(ctx context.Context) (string, error) {
 }
 
 // List ignores limit: the contract's list is the driver's first page.
-func (s driverSource) List(ctx context.Context, _ int) ([]Row, error) {
+func (s driverSource) List(ctx context.Context, _ int) ([]hostops.Row, error) {
 	return s.rows(ctx, "list", trackerdriver.VerbList)
 }
 
-func (s driverSource) Search(ctx context.Context, query string) ([]Row, error) {
+func (s driverSource) Search(ctx context.Context, query string) ([]hostops.Row, error) {
 	return s.rows(ctx, "search", trackerdriver.VerbSearch, query)
 }
 
@@ -308,17 +309,17 @@ func (s driverSource) Comment(ctx context.Context, warnTo io.Writer, r ref.Ref, 
 	return strings.TrimSpace(out), err
 }
 
-func (s driverSource) Update(ctx context.Context, warnTo io.Writer, r ref.Ref, p Props) error {
+func (s driverSource) Update(ctx context.Context, warnTo io.Writer, r ref.Ref, p hostops.Props) error {
 	if _, err := s.write(
 		ctx,
 		warnTo,
 		"",
 		trackerdriver.VerbUpdate,
-		append([]string{r.Number}, p.args()...)...); err != nil {
+		append([]string{r.Number}, p.Args()...)...); err != nil {
 		return err
 	}
 
-	RetitleAfter(ctx, warnTo, s.t, r, "updated")
+	hostops.RetitleAfter(ctx, warnTo, s.t, r, "updated")
 
 	return nil
 }
@@ -335,7 +336,7 @@ func (s driverSource) Relink(ctx context.Context, warnTo io.Writer, r ref.Ref, p
 // Create passes the parent and the body's After: base as numbers, as every
 // driver verb's argument is.
 func (s driverSource) Create(ctx context.Context, warnTo io.Writer, nt NewTask) (ref.Ref, string, error) {
-	args := nt.Props.args()
+	args := nt.Props.Args()
 
 	for _, link := range []struct {
 		flag string
@@ -349,18 +350,18 @@ func (s driverSource) Create(ctx context.Context, warnTo io.Writer, nt NewTask) 
 	return driverCreate(ctx, warnTo, s.t, s.d, nt.Doc, args)
 }
 
-func (s driverSource) rows(ctx context.Context, what, verb string, args ...string) ([]Row, error) {
+func (s driverSource) rows(ctx context.Context, what, verb string, args ...string) ([]hostops.Row, error) {
 	out, err := s.d.Run(ctx, verb, args...)
 	if err != nil {
 		return nil, err
 	}
 
-	var rows []Row
+	var rows []hostops.Row
 	if err := json.Unmarshal([]byte(out), &rows); err != nil {
 		return nil, fmt.Errorf("parsing driver %s rows: %w", what, err)
 	}
 
-	return StripTitles(rows, s.t.Effective.TitleTemplate), nil
+	return hostops.StripTitles(rows, s.t.Effective.TitleTemplate), nil
 }
 
 // write runs a verb taking stdin and passes its warning on; a declined
@@ -377,7 +378,7 @@ func (s driverSource) write(ctx context.Context, warnTo io.Writer, in, verb stri
 // HostSource is the host's issues as the tracker.
 type HostSource struct {
 	t *target.Target
-	h Host
+	h hostops.Host
 }
 
 //nolint:lostfield // a lookup by id, not a conversion
@@ -389,7 +390,7 @@ func (s HostSource) Read(ctx context.Context, r ref.Ref) (string, ledger.TaskRef
 
 	return doc, ledger.TaskRef{
 		ID:    r.ID,
-		Title: tasktitle.Clean(s.h.title(iss.Title, r.Number), r.ID),
+		Title: tasktitle.Clean(s.h.StripTitle(iss.Title, r.Number), r.ID),
 		URL:   iss.URL,
 	}, nil
 }
@@ -405,7 +406,11 @@ func (s HostSource) Ref(ctx context.Context, r ref.Ref) (ledger.TaskRef, error) 
 		return ledger.TaskRef{}, fmt.Errorf("%s returned no title for issue %s", s.h.Name, r.Number)
 	}
 
-	return ledger.TaskRef{ID: r.ID, Title: tasktitle.Clean(s.h.title(iss.Title, r.Number), r.ID), URL: iss.URL}, nil
+	return ledger.TaskRef{
+		ID:    r.ID,
+		Title: tasktitle.Clean(s.h.StripTitle(iss.Title, r.Number), r.ID),
+		URL:   iss.URL,
+	}, nil
 }
 
 // Info reads the item whatever it is, since start refuses a PR by its own
@@ -427,12 +432,12 @@ func (s HostSource) URL(ctx context.Context, r ref.Ref) (string, error) {
 
 func (s HostSource) Index(ctx context.Context) (string, error) { return s.h.IssuesURL(ctx) }
 
-func (s HostSource) List(ctx context.Context, limit int) ([]Row, error) {
+func (s HostSource) List(ctx context.Context, limit int) ([]hostops.Row, error) {
 	return s.h.ListIssues(ctx, "", s.t.Effective.IDPrefix, s.t.Effective.PriorityLabels, limit)
 }
 
-func (s HostSource) Search(ctx context.Context, query string) ([]Row, error) {
-	return s.h.ListIssues(ctx, query, s.t.Effective.IDPrefix, s.t.Effective.PriorityLabels, IssuePage)
+func (s HostSource) Search(ctx context.Context, query string) ([]hostops.Row, error) {
+	return s.h.ListIssues(ctx, query, s.t.Effective.IDPrefix, s.t.Effective.PriorityLabels, hostops.IssuePage)
 }
 
 func (s HostSource) Children(ctx context.Context, r ref.Ref) ([]RawChild, error) {
@@ -473,7 +478,7 @@ func (s HostSource) Comment(ctx context.Context, _ io.Writer, r ref.Ref, body st
 	return url, nil
 }
 
-func (s HostSource) Update(ctx context.Context, _ io.Writer, r ref.Ref, p Props) error {
+func (s HostSource) Update(ctx context.Context, _ io.Writer, r ref.Ref, p hostops.Props) error {
 	return s.h.Update(ctx, r.Number, p, s.t.Effective.PriorityLabels)
 }
 
@@ -520,11 +525,11 @@ func (s RefusedSource) Index(context.Context) (string, error) {
 	return "", s.Refuse(trackerdriver.VerbIndex)
 }
 
-func (s RefusedSource) List(context.Context, int) ([]Row, error) {
+func (s RefusedSource) List(context.Context, int) ([]hostops.Row, error) {
 	return nil, s.Refuse(trackerdriver.VerbList)
 }
 
-func (s RefusedSource) Search(context.Context, string) ([]Row, error) {
+func (s RefusedSource) Search(context.Context, string) ([]hostops.Row, error) {
 	return nil, s.Refuse(trackerdriver.VerbSearch)
 }
 
@@ -552,7 +557,7 @@ func (s RefusedSource) Comment(context.Context, io.Writer, ref.Ref, string) (str
 	return "", s.RefuseWrite(trackerdriver.VerbComment, UnwrittenNothing)
 }
 
-func (s RefusedSource) Update(context.Context, io.Writer, ref.Ref, Props) error {
+func (s RefusedSource) Update(context.Context, io.Writer, ref.Ref, hostops.Props) error {
 	return s.RefuseWrite(trackerdriver.VerbUpdate, UnwrittenNothing)
 }
 

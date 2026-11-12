@@ -119,7 +119,7 @@ func (h Host) IssueTitle(ctx context.Context, number string) (string, error) {
 		return "", fmt.Errorf("%s returned no title for issue %s", h.Name, number)
 	}
 
-	return h.title(iss.Title, number), nil
+	return h.StripTitle(iss.Title, number), nil
 }
 
 func (h Host) ListIssues(
@@ -275,7 +275,7 @@ func (h Host) Update(ctx context.Context, number string, p Props, priorities map
 	add, remove := slices.Clone(p.Labels), []string(nil)
 
 	if p.Priority != "" {
-		label := priorityLabel(p.Priority, priorities)
+		label := PriorityLabel(p.Priority, priorities)
 		if label == "" {
 			return fmt.Errorf("priority %s: tracker.priority in project.md maps no label to it", p.Priority)
 		}
@@ -340,16 +340,17 @@ func (h Host) SetTitle(ctx context.Context, number, title string) error {
 	return h.EditIssue(ctx, number, forge.IssueEdit{Title: title})
 }
 
+// StripTitle is raw with the prefix the title template wrote taken off.
+func (h Host) StripTitle(raw, number string) string {
+	return h.Titles.Strip(raw, h.taskID(number), number)
+}
+
 func (h Host) taskID(number string) string {
 	if h.Prefix == "" {
 		return number
 	}
 
 	return h.Prefix + "-" + number
-}
-
-func (h Host) title(raw, number string) string {
-	return h.Titles.Strip(raw, h.taskID(number), number)
 }
 
 func (h Host) retitled(raw, number string) string {

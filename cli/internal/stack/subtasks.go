@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 )
 
 // OpenSubtasks is the check start and drive make before a task runs as one
@@ -17,7 +17,7 @@ func OpenSubtasks(ctx context.Context, tr Tracker, r ref.Ref) ([]string, error) 
 	}
 
 	kids, err := tr.Children(ctx, r)
-	if errors.Is(err, hostops.ErrNoParentLink) {
+	if errors.Is(err, tasksource.ErrNoParentLink) {
 		return nil, nil
 	}
 

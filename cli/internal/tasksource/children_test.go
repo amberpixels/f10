@@ -1,4 +1,4 @@
-package hostops_test
+package tasksource_test
 
 import (
 	"context"
@@ -6,11 +6,11 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/facts"
-	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/seam"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 )
 
@@ -23,7 +23,7 @@ func TestChildrenGitHub404(t *testing.T) {
 		shell.Result{Code: 1, Stderr: "gh: Not Found (HTTP 404)"})
 
 	_, err := stack.TrackerFor(tg).Children(t.Context(), ref.Ref{ID: "FT-71", Number: "71"})
-	if !errors.Is(err, hostops.ErrNoParentLink) {
+	if !errors.Is(err, tasksource.ErrNoParentLink) {
 		t.Errorf("err = %v, want errNoParentLink", err)
 	}
 }
@@ -51,7 +51,7 @@ func TestChildrenDriverDeclines(t *testing.T) {
 		ref.Ref{ID: "FT-71", Number: "71"},
 	); !errors.Is(
 		err,
-		hostops.ErrNoParentLink,
+		tasksource.ErrNoParentLink,
 	) {
 		t.Errorf("err = %v, want errNoParentLink", err)
 	}

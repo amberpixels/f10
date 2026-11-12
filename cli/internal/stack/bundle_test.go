@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 )
 
@@ -19,13 +19,13 @@ func TestBundleAfter(t *testing.T) {
 		Resolve: func(_ context.Context, token string) (ref.Ref, error) {
 			return ref.Ref{ID: strings.ToUpper(token)}, nil
 		},
-		Info: func(_ context.Context, r ref.Ref) (hostops.TaskInfo, error) {
+		Info: func(_ context.Context, r ref.Ref) (tasksource.TaskInfo, error) {
 			body, ok := bodies[r.ID]
 			if !ok {
-				return hostops.TaskInfo{}, errors.New("no such task")
+				return tasksource.TaskInfo{}, errors.New("no such task")
 			}
 
-			return hostops.TaskInfo{Body: body}, nil
+			return tasksource.TaskInfo{Body: body}, nil
 		},
 	}
 

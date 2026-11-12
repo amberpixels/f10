@@ -21,6 +21,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -90,7 +91,7 @@ func (rd *statusReader) Task(ctx context.Context, v StatusView, token string, gu
 		switch {
 		case cerr == nil && len(rows) > 0:
 			return rd.printRows(v, rows, r.ID)
-		case cerr != nil && !errors.Is(cerr, hostops.ErrNoParentLink):
+		case cerr != nil && !errors.Is(cerr, tasksource.ErrNoParentLink):
 			ui.Warnf(v.Warn, "reading the subtasks: %v", cerr)
 		}
 
@@ -279,7 +280,7 @@ func (rd *statusReader) finishedRow(ctx context.Context, r ref.Ref) *TaskRow {
 	}
 
 	k := stack.ChildRow{ID: r.ID, Finished: true}
-	if title, err := hostops.TasksFor(rd.t).Title(ctx, r); err == nil {
+	if title, err := tasksource.TasksFor(rd.t).Title(ctx, r); err == nil {
 		k.Title = title
 		stack.RememberRefsFor(ctx, rd.t, ledger.TaskRef{ID: r.ID, Title: tasktitle.Clean(k.Title, r.ID)})
 	}

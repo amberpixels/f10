@@ -27,6 +27,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -2551,7 +2552,7 @@ func TestFinishParentRefusesUnfinishedSubtasks(t *testing.T) {
 func TestFinishNoBranchNoSubtasksRefuses(t *testing.T) {
 	for name, kids := range map[string]func(context.Context, ref.Ref) ([]stack.ChildRow, error){
 		"none":           func(context.Context, ref.Ref) ([]stack.ChildRow, error) { return nil, nil },
-		"no parent link": func(context.Context, ref.Ref) ([]stack.ChildRow, error) { return nil, hostops.ErrNoParentLink },
+		"no parent link": func(context.Context, ref.Ref) ([]stack.ChildRow, error) { return nil, tasksource.ErrNoParentLink },
 	} {
 		fx := newParentFixture(t)
 		fx.in.Subtasks = kids

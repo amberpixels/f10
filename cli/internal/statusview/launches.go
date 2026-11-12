@@ -10,11 +10,11 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drivestore"
-	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -112,7 +112,7 @@ func launchKids(ctx context.Context, warn io.Writer, t *target.Target, sid strin
 
 		// a finished task reads nothing further: its row would only drop
 		branched, err := stack.HasTaskBranch(ctx, main, r.ID)
-		if err == nil && (tok.started && !branched || stack.FinishedTask(hostops.TaskInfo{}, root, r.ID, branched)) {
+		if err == nil && (tok.started && !branched || stack.FinishedTask(tasksource.TaskInfo{}, root, r.ID, branched)) {
 			continue
 		}
 
@@ -164,7 +164,7 @@ func launchBase(
 		out = r.Head().ID
 
 		has, err := stack.HasTaskBranch(ctx, main, out)
-		if err != nil || stack.FinishedTask(hostops.TaskInfo{}, stack.TrackerFor(t).Storage, out, has) {
+		if err != nil || stack.FinishedTask(tasksource.TaskInfo{}, stack.TrackerFor(t).Storage, out, has) {
 			out = ""
 		}
 	}

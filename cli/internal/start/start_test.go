@@ -9,11 +9,11 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -273,7 +273,7 @@ func TestStartRefusesAParent(t *testing.T) {
 	}{
 		"every subtask finished": {rows: []stack.ChildRow{{ID: "GH-2", Finished: true}}},
 		"no subtasks":            {rows: []stack.ChildRow{}},
-		"no parent link":         {err: hostops.ErrNoParentLink},
+		"no parent link":         {err: tasksource.ErrNoParentLink},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := testkit.NewFakes(t)

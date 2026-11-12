@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -50,7 +50,7 @@ func TestTaskCommentDeclinedAndFailed(t *testing.T) {
 	_, _, err := runAppStdin(t, strings.NewReader("hi\n"), "-C",
 		createRepo(t, "echo 'notion: 504' >&2\nexit 1\n"), "task", "comment", "FT-12").streams()
 	if err == nil || !strings.Contains(err.Error(), "notion: 504") ||
-		!strings.Contains(err.Error(), hostops.MayPosted) {
+		!strings.Contains(err.Error(), tasksource.MayPosted) {
 		t.Errorf("failed comment: err = %v, want the driver's stderr and the may-posted warning", err)
 	}
 

@@ -1,4 +1,4 @@
-package hostops_test
+package tasksource_test
 
 import (
 	"path/filepath"
@@ -14,6 +14,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 	"github.com/amberpixels/f10/cli/internal/worktree"
@@ -70,7 +71,7 @@ func TestIssuesRefusesADeclaredNonHostTracker(t *testing.T) {
 		},
 	}
 
-	_, err := hostops.TasksFor(notion).Title(t.Context(), ref.Ref{Number: "7"})
+	_, err := tasksource.TasksFor(notion).Title(t.Context(), ref.Ref{Number: "7"})
 	if err == nil || !strings.Contains(err.Error(), "Notion") ||
 		!strings.Contains(err.Error(), filepath.Join(root, "driver")) {
 		t.Errorf("Title() = %v, want the Notion refusal naming the driver path", err)
@@ -85,8 +86,8 @@ func TestIssuesRefusesADeclaredNonHostTracker(t *testing.T) {
 		},
 	}
 
-	if _, ok := hostops.TasksFor(github).(hostops.HostSource); !ok {
-		t.Errorf("a GitHub tracker = %T, want its host", hostops.TasksFor(github))
+	if _, ok := tasksource.TasksFor(github).(tasksource.HostSource); !ok {
+		t.Errorf("a GitHub tracker = %T, want its host", tasksource.TasksFor(github))
 	}
 }
 
@@ -106,18 +107,18 @@ func TestDeclinedVerbRefusalNamesTheNeed(t *testing.T) {
 		trackerdriver.VerbBranch,
 	}
 	for _, verb := range verbs {
-		err := hostops.RefusedSource{Target: tg, Driver: tg.Driver()}.Refuse(verb)
+		err := tasksource.RefusedSource{Target: tg, Driver: tg.Driver()}.Refuse(verb)
 		if err == nil || !strings.Contains(err.Error(), path) || !strings.Contains(err.Error(), "`"+verb+"`") ||
-			!strings.Contains(err.Error(), hostops.VerbNeeds[verb]) {
+			!strings.Contains(err.Error(), tasksource.VerbNeeds[verb]) {
 			t.Errorf("refuse(%s) = %v, want the driver path, the verb and what needs it", verb, err)
 		}
 	}
 
 	if !strings.Contains(
-		hostops.VerbNeeds[trackerdriver.VerbList],
+		tasksource.VerbNeeds[trackerdriver.VerbList],
 		"`f10 task open --print` and the board's next rows",
 	) {
-		t.Errorf("list need = %q", hostops.VerbNeeds[trackerdriver.VerbList])
+		t.Errorf("list need = %q", tasksource.VerbNeeds[trackerdriver.VerbList])
 	}
 
 	if _, err := worktree.TitleLookup(

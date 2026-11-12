@@ -23,6 +23,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -248,7 +249,7 @@ func fetchFallback(err error) error {
 
 // ReadDoc feeds the ledger's task refs, so a later ref costs no tracker call.
 func ReadDoc(ctx context.Context, t *target.Target, r ref.Ref) (string, error) {
-	doc, k, err := hostops.TasksFor(t).Read(ctx, r)
+	doc, k, err := tasksource.TasksFor(t).Read(ctx, r)
 	if err == nil {
 		stack.RememberRefsFor(ctx, t, k)
 	}
@@ -347,7 +348,7 @@ func runTaskOpen(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	url, err := hostops.TasksFor(t).URL(ctx, r)
+	url, err := tasksource.TasksFor(t).URL(ctx, r)
 	if err != nil {
 		return err
 	}
@@ -356,7 +357,7 @@ func runTaskOpen(ctx context.Context, cmd *cli.Command) error {
 }
 
 func TaskListURL(ctx context.Context, t *target.Target) (string, error) {
-	return hostops.TasksFor(t).Index(ctx)
+	return tasksource.TasksFor(t).Index(ctx)
 }
 
 func WriteTaskList(ctx context.Context, t *target.Target, w, warn io.Writer) error {
@@ -404,7 +405,7 @@ func RankRows(rows []hostops.Row) []hostops.Row {
 }
 
 func SearchRows(ctx context.Context, t *target.Target, query string) ([]hostops.Row, error) {
-	rows, err := hostops.TasksFor(t).Search(ctx, query)
+	rows, err := tasksource.TasksFor(t).Search(ctx, query)
 	stack.RememberRefsFor(ctx, t, hostops.RowRefs(rows)...)
 
 	return rows, err
@@ -442,7 +443,7 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	r, url, err := hostops.TasksFor(t).Create(ctx, cmd.ErrWriter, nt)
+	r, url, err := tasksource.TasksFor(t).Create(ctx, cmd.ErrWriter, nt)
 	if err != nil {
 		return err
 	}
@@ -460,13 +461,13 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 
 // readNewTask reads the properties and resolves the parent and the body's
 // After: base once, before any source sees them.
-func readNewTask(ctx context.Context, t *target.Target, cmd *cli.Command, doc string) (hostops.NewTask, error) {
+func readNewTask(ctx context.Context, t *target.Target, cmd *cli.Command, doc string) (tasksource.NewTask, error) {
 	p, err := readProps(cmd)
 	if err != nil {
-		return hostops.NewTask{}, err
+		return tasksource.NewTask{}, err
 	}
 
-	nt := hostops.NewTask{Doc: doc, Props: p}
+	nt := tasksource.NewTask{Doc: doc, Props: p}
 
 	for _, link := range []struct {
 		flag, id string
@@ -481,7 +482,7 @@ func readNewTask(ctx context.Context, t *target.Target, cmd *cli.Command, doc st
 
 		r, err := t.Reference(ctx, link.id)
 		if err != nil {
-			return hostops.NewTask{}, fmt.Errorf("%s %s: %w", link.flag, link.id, err)
+			return tasksource.NewTask{}, fmt.Errorf("%s %s: %w", link.flag, link.id, err)
 		}
 
 		*link.to = r

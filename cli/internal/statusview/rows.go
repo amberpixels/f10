@@ -25,6 +25,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/tasktree"
 )
 
@@ -417,13 +418,13 @@ func RenderRows(w io.Writer, rows []TaskRow, v RowView) error {
 	// plain output keeps its rows narrow: the gates go on a line beneath
 	withGates := !v.Plain && slices.ContainsFunc(rows, func(r TaskRow) bool { return r.GateColumn() != "" })
 
-	tr := make([]hostops.TreeRow, len(rows))
+	tr := make([]tasksource.TreeRow, len(rows))
 	for i, r := range rows {
-		tr[i] = hostops.TreeRow{ID: r.ID, Title: r.Title, URL: r.URL, Depth: r.Depth}
+		tr[i] = tasksource.TreeRow{ID: r.ID, Title: r.Title, URL: r.URL, Depth: r.Depth}
 		links.Known("", r.ID, r.URL)
 	}
 
-	nodes := hostops.SubtaskNodes(tr, hostops.TreeOpts{
+	nodes := tasksource.SubtaskNodes(tr, tasksource.TreeOpts{
 		TitleBelow: true,
 		ID: func(i int) tasktree.Cell {
 			c := tasktree.Cell{Text: stateGlyph(rows[i].Stage) + " " + rows[i].ID}

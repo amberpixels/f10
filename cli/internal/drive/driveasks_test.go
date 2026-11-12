@@ -9,8 +9,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/asks"
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/drivestore"
-	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/runplan"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -35,7 +35,7 @@ func inboxFixture(t *testing.T, args ...string) (*driveFixture, *int) {
 
 // asking scripts GH-1 sent judge, then stopping on a question.
 func (fx *driveFixture) asking(t *testing.T) {
-	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, "")
+	fx.task("GH-1", tasksource.TaskInfo{Body: "x"}, "")
 	fx.f.Script(testkit.Worktrees, testkit.Porcelain(), testkit.Porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.f.Script(

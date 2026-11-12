@@ -12,6 +12,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 )
 
 // The words task stale prints; fetch acts on each and works out nothing.
@@ -63,7 +64,7 @@ func CreatedAtFor(ctx context.Context, t *target.Target, r ref.Ref, flag string)
 		return at, nil
 	}
 
-	return hostops.TasksFor(t).Created(ctx, r)
+	return tasksource.TasksFor(t).Created(ctx, r)
 }
 
 // Staleness is the line task stale prints. A proceed on the task within

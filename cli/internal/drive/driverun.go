@@ -12,7 +12,6 @@ import (
 	"github.com/amberpixels/f10/cli/internal/drivectl"
 	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/forge"
-	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/render"
@@ -21,6 +20,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 )
 
@@ -146,7 +146,7 @@ type driveState struct {
 type DriveTask struct {
 	Ref      ref.Ref
 	Suffix   string
-	info     hostops.TaskInfo
+	info     tasksource.TaskInfo
 	profile  agentctl.Profile // what the agent starts on, resolved
 	flagged  bool             // the command line chose it, over the branch's record
 	Branch   string           // the task's local branch, or "" before it started

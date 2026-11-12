@@ -1,12 +1,12 @@
-package hostops_test
+package tasksource_test
 
 import (
 	"fmt"
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/facts"
-	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/probe"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 )
 
@@ -18,12 +18,12 @@ func TestTasksPicksTheSource(t *testing.T) {
 		cli    string
 		want   string
 	}{
-		{false, facts.TrackerGitHub, "gh", "hostops.HostSource"},
-		{false, facts.TrackerGitHub, "", "hostops.RefusedSource"},
-		{false, facts.TrackerNotion, "gh", "hostops.RefusedSource"},
-		{true, facts.TrackerGitHub, "gh", "hostops.FallbackSource hostops.HostSource"},
-		{true, facts.TrackerGitHub, "", "hostops.FallbackSource hostops.RefusedSource"},
-		{true, facts.TrackerNotion, "gh", "hostops.FallbackSource hostops.RefusedSource"},
+		{false, facts.TrackerGitHub, "gh", "tasksource.HostSource"},
+		{false, facts.TrackerGitHub, "", "tasksource.RefusedSource"},
+		{false, facts.TrackerNotion, "gh", "tasksource.RefusedSource"},
+		{true, facts.TrackerGitHub, "gh", "tasksource.FallbackSource tasksource.HostSource"},
+		{true, facts.TrackerGitHub, "", "tasksource.FallbackSource tasksource.RefusedSource"},
+		{true, facts.TrackerNotion, "gh", "tasksource.FallbackSource tasksource.RefusedSource"},
 	} {
 		name := fmt.Sprintf("driver %v, %s, cli %q", tc.driver, tc.kind, tc.cli)
 		t.Run(name, func(t *testing.T) {
@@ -34,10 +34,10 @@ func TestTasksPicksTheSource(t *testing.T) {
 				testkit.WriteDriver(t, tg.Layout.StorageRoot.Path())
 			}
 
-			src := hostops.TasksFor(tg)
+			src := tasksource.TasksFor(tg)
 			got := fmt.Sprintf("%T", src)
 
-			if f, ok := src.(hostops.FallbackSource); ok {
+			if f, ok := src.(tasksource.FallbackSource); ok {
 				got += fmt.Sprintf(" %T", f.Rest)
 			}
 

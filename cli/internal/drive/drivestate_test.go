@@ -10,13 +10,13 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/forge"
-	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -70,7 +70,7 @@ func TestDriveCatchesUpAShipTypedByHand(t *testing.T) {
 // commits and an open PR carrying them, has shipped.
 func TestDriveTakesAShippedBranchFromGit(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "ship")
-	fx.task("GH-1", hostops.TaskInfo{Body: "x"}, "")
+	fx.task("GH-1", tasksource.TaskInfo{Body: "x"}, "")
 	fx.f.Script(testkit.Worktrees, testkit.Porcelain(), testkit.Porcelain("GH-1", "/code/repo.GH-1"))
 	fx.opens("GH-1", "ws:GH-1", "pane:1")
 	fx.expects("GH-1", "ship")
@@ -134,7 +134,7 @@ func TestDriveHaltsOnlyOnRepeatedFailureWithNoProgress(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			fx := newDriveFixture(t, "GH-1", "ship")
-			fx.task("GH-1", hostops.TaskInfo{Body: "x"}, "")
+			fx.task("GH-1", tasksource.TaskInfo{Body: "x"}, "")
 			fx.f.Script(testkit.Worktrees, testkit.Porcelain(), testkit.Porcelain("GH-1", "/code/repo.GH-1"))
 			fx.opens("GH-1", "ws:GH-1", "pane:1")
 			fx.expects("GH-1", "ship")

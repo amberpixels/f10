@@ -11,6 +11,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 )
 
 // A ChildRow is one open subtask. Rows come in tree order: a child whose
@@ -33,15 +34,15 @@ type ChildRow struct {
 
 // RawChildrenFor is the task's subtasks as the tracker holds them;
 // ErrNoParentLink when it has no parent link to read.
-func RawChildrenFor(ctx context.Context, t *target.Target, task ref.Ref) ([]hostops.RawChild, error) {
-	return hostops.TasksFor(t).Children(ctx, task)
+func RawChildrenFor(ctx context.Context, t *target.Target, task ref.Ref) ([]tasksource.RawChild, error) {
+	return tasksource.TasksFor(t).Children(ctx, task)
 }
 
 func ShapeChildren(
 	ctx context.Context,
 	tr Tracker,
 	main string,
-	raw []hostops.RawChild,
+	raw []tasksource.RawChild,
 	keepClosed bool,
 ) ([]ChildRow, error) {
 	rows := []ChildRow{}
@@ -91,7 +92,7 @@ func ShapeChildren(
 			return nil, err
 		}
 
-		row.Finished = FinishedTask(hostops.TaskInfo{}, tr.Storage, r.ID, branched)
+		row.Finished = FinishedTask(tasksource.TaskInfo{}, tr.Storage, r.ID, branched)
 		rows = append(rows, row)
 	}
 

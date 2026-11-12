@@ -10,6 +10,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
 )
 
@@ -31,7 +32,7 @@ func LinkAfter(body, link string) string {
 // Funcs rather than a target, so the flows run under test without one.
 type Tracker struct {
 	Resolve func(ctx context.Context, token string) (ref.Ref, error)
-	Info    func(ctx context.Context, task ref.Ref) (hostops.TaskInfo, error)
+	Info    func(ctx context.Context, task ref.Ref) (tasksource.TaskInfo, error)
 	// Children is the task's open subtasks; nil, like ErrNoParentLink, is a
 	// tracker with no parent link
 	Children func(ctx context.Context, task ref.Ref) ([]ChildRow, error)
@@ -51,8 +52,8 @@ func TrackerFor(t *target.Target) Tracker {
 
 	tr := Tracker{
 		Resolve: t.Reference,
-		Info: func(ctx context.Context, task ref.Ref) (hostops.TaskInfo, error) {
-			return hostops.TasksFor(t).Info(ctx, task)
+		Info: func(ctx context.Context, task ref.Ref) (tasksource.TaskInfo, error) {
+			return tasksource.TasksFor(t).Info(ctx, task)
 		},
 		Storage: t.Layout.StorageRoot,
 		titles:  t.Effective.TitleTemplate,
@@ -80,7 +81,7 @@ func TrackerFor(t *target.Target) Tracker {
 // FinishedTask is the one "is this task done with": no branch, no live plan
 // (a re-plan is pending work whatever the tracker says), and closed or its
 // plan archived, which catches a merge whose PR body closed no issue.
-func FinishedTask(info hostops.TaskInfo, root storage.Root, id string, hasBranch bool) bool {
+func FinishedTask(info tasksource.TaskInfo, root storage.Root, id string, hasBranch bool) bool {
 	if hasBranch || root.PlanLive(id) {
 		return false
 	}

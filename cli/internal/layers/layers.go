@@ -57,6 +57,7 @@ var Table = []Rule{
 	{Prefix: "internal/target", Rank: 1},
 	{Prefix: "internal/render", Rank: 2, Peers: true},
 	{Prefix: "internal/hostops", Rank: 2, Peers: true},
+	{Prefix: "internal/tasksource", Rank: 2, Peers: true},
 	{Prefix: "internal/stack", Rank: 2, Peers: true},
 	{Prefix: "internal/worktree", Rank: 2, Peers: true},
 	{Prefix: "internal/archive", Rank: 2, Peers: true},

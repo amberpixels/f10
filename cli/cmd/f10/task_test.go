@@ -14,6 +14,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -258,7 +259,7 @@ func TestTaskCreateFailureMayExist(t *testing.T) {
 		"echo created it\n": "not one task id",
 	} {
 		_, _, err := runAppStdin(t, strings.NewReader("# A\n"), "-C", createRepo(t, script), "task", "create").streams()
-		if err == nil || !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), hostops.MayExist) {
+		if err == nil || !strings.Contains(err.Error(), want) || !strings.Contains(err.Error(), tasksource.MayExist) {
 			t.Errorf("%q: err = %v, want %q and the may-exist warning", script, err, want)
 		}
 	}
@@ -272,7 +273,7 @@ func TestTaskCreateNotWrittenDropsMayExist(t *testing.T) {
 	_, _, err := runAppStdin(t, strings.NewReader("# A\n"), "-C", createRepo(t, script), "task", "create",
 		"--label", "bug").streams()
 	if err == nil || !strings.Contains(err.Error(), `is not an option of "Tags"`) ||
-		strings.Contains(err.Error(), hostops.MayExist) {
+		strings.Contains(err.Error(), tasksource.MayExist) {
 		t.Errorf("err = %v, want the driver's stderr and no may-exist warning", err)
 	}
 }
@@ -382,7 +383,7 @@ func TestTaskCreateOnHostIssuesRefusesSet(t *testing.T) {
 		_, _, err := runAppStdin(t, strings.NewReader("# A\n"), "-C", repo, "task", "create", "--set",
 			"Kind=Bug").streams()
 		if err == nil || !strings.Contains(err.Error(), "nothing was created") ||
-			strings.Contains(err.Error(), hostops.MayExist) {
+			strings.Contains(err.Error(), tasksource.MayExist) {
 			t.Errorf("%s: err = %v, want a refusal saying nothing was created", name, err)
 		}
 

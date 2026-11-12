@@ -14,13 +14,13 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/drivectl"
 	"github.com/amberpixels/f10/cli/internal/drivestore"
-	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/tasktree"
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
@@ -447,7 +447,7 @@ func RowFinishedFor(ctx context.Context, t *target.Target) func(string) bool {
 		head := r.Head()
 		seen[id] = finishedLazily(tr.Storage, head.ID,
 			func() (bool, error) { return stack.HasTaskBranch(ctx, main, head.ID) },
-			func() hostops.TaskInfo {
+			func() tasksource.TaskInfo {
 				info, _ := tr.Info(ctx, head) // an unread tracker leaves the archive to decide
 
 				return info
@@ -459,12 +459,12 @@ func RowFinishedFor(ctx context.Context, t *target.Target) func(string) bool {
 
 // finishedLazily is FinishedTask with its reads made lazily: the tracker is
 // asked only when no branch, live plan or archived plan already decides.
-func finishedLazily(root storage.Root, id string, branched func() (bool, error), info func() hostops.TaskInfo) bool {
+func finishedLazily(root storage.Root, id string, branched func() (bool, error), info func() tasksource.TaskInfo) bool {
 	if b, err := branched(); err != nil || b {
 		return false
 	}
 
-	var ti hostops.TaskInfo
+	var ti tasksource.TaskInfo
 	if !root.PlanLive(id) && !root.PlanArchived(id) {
 		ti = info()
 	}
