@@ -161,3 +161,26 @@ func TestSplit(t *testing.T) {
 		}
 	}
 }
+
+// git accepts `branch..key`, then refuses every command that reads the config.
+func TestEmptyBranchIsRefused(t *testing.T) {
+	t.Parallel()
+
+	ctx, dir := t.Context(), gitRepo(t)
+
+	if err := branchmeta.Set(ctx, dir, "", branchmeta.Moved, "abc"); err == nil {
+		t.Error("Set on an empty branch: no error")
+	}
+
+	if err := branchmeta.Unset(ctx, dir, "", branchmeta.Moved); err == nil {
+		t.Error("Unset on an empty branch: no error")
+	}
+
+	if _, err := branchmeta.Get(ctx, dir, "", branchmeta.Moved); err == nil {
+		t.Error("Get on an empty branch: no error")
+	}
+
+	if out := gitx.Out(ctx, dir, "config", "--get-regexp", `^branch\.\.`); out != "" {
+		t.Errorf("written under an empty branch name: %s", out)
+	}
+}

@@ -257,6 +257,29 @@ func Branch(ctx context.Context, dir string) (string, error) {
 	return Exec(ctx, dir, "branch", "--show-current")
 }
 
+// WorkedBranch is the branch dir has checked out, or the one a stopped
+// rebase is rebasing: a rebase detaches HEAD and keeps the name in its
+// state directory. "" with no error when neither names one.
+func WorkedBranch(ctx context.Context, dir string) (string, error) {
+	branch, err := Branch(ctx, dir)
+	if err != nil || branch != "" {
+		return branch, err
+	}
+
+	for _, sub := range []string{"rebase-merge", "rebase-apply"} {
+		path, err := gitPath(ctx, dir, sub)
+		if err != nil {
+			return "", err
+		}
+
+		if name, ok := strings.CutPrefix(readTrim(filepath.Join(path, "head-name")), "refs/heads/"); ok {
+			return name, nil
+		}
+	}
+
+	return "", nil
+}
+
 // CurrentBranch is the branch dir has checked out, or "" when detached.
 func CurrentBranch(ctx context.Context, dir string) string {
 	return Out(ctx, dir, "branch", "--show-current")

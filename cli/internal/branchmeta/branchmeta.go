@@ -5,6 +5,7 @@ package branchmeta
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -110,18 +111,40 @@ func current() Backend {
 	return backend
 }
 
+// named refuses an empty branch: git writes `branch..<key>` without
+// complaint, then fails every command that reads the config.
+func named(branch string, key Key) error {
+	if branch == "" {
+		return fmt.Errorf("%s: no branch to keep it on", key)
+	}
+
+	return nil
+}
+
 // Get is one key on branch; absent is "" with no error.
 func Get(ctx context.Context, dir, branch string, key Key) (string, error) {
+	if err := named(branch, key); err != nil {
+		return "", err
+	}
+
 	return current().Get(ctx, dir, branch, key)
 }
 
 // Set writes one key on branch.
 func Set(ctx context.Context, dir, branch string, key Key, value string) error {
+	if err := named(branch, key); err != nil {
+		return err
+	}
+
 	return current().Set(ctx, dir, branch, key, value)
 }
 
 // Unset removes one key on branch, failing when it is absent.
 func Unset(ctx context.Context, dir, branch string, key Key) error {
+	if err := named(branch, key); err != nil {
+		return err
+	}
+
 	return current().Unset(ctx, dir, branch, key)
 }
 

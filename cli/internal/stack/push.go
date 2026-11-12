@@ -11,6 +11,30 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 )
 
+// SetMark writes the mark a guard printed (`<key> <value>`) on the branch dir
+// works on, and returns it. Resolving the catchup again would name no mark: a
+// stopped rebase leaves HEAD on the base, which reads as already in.
+func SetMark(ctx context.Context, dir, main, mark string) (string, error) {
+	name, value, _ := strings.Cut(strings.TrimSpace(mark), " ")
+
+	key, value := branchmeta.Key(name), strings.TrimSpace(value)
+	if key != branchmeta.Landed && key != branchmeta.Moved || value == "" {
+		return "", fmt.Errorf("--mark %q: want `%s <branch>` or `%s <sha>`, as the mark row prints it",
+			mark, branchmeta.Landed, branchmeta.Moved)
+	}
+
+	branch, err := gitx.WorkedBranch(ctx, dir)
+	if err != nil {
+		return "", err
+	}
+
+	if branch == "" {
+		return "", fmt.Errorf("no branch to mark in %s: HEAD is detached and no rebase is in progress", dir)
+	}
+
+	return branch, branchmeta.Set(ctx, main, branch, key, value)
+}
+
 // ClearMarks unsets the catchup marks once the base is in and verify is
 // green, and records the base the branch now stands on, as the step does.
 func ClearMarks(ctx context.Context, main, branch string, p CatchupPlan) error {

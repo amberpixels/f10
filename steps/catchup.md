@@ -26,7 +26,7 @@ f10 records what a catchup needs as git config keys on the branch, `branch.<bran
 
 `f10-landed` and `f10-base-moved` stay set until a catchup clears the marks.
 
-To **clear the marks**, `git config --unset` each of `branch."$(git branch --show-current)".f10-landed` and `.f10-base-moved` that is set.
+To **clear the marks**, `git config --unset` each of `branch.<branch>.f10-landed` and `.f10-base-moved` that is set, where `<branch>` is the `branch` row `f10 pr catchup` printed.
 Then set `.f10-base-tip` to the `sha` row when `found` is `f10-after-branch`.
 Otherwise unset `.f10-base-tip`, because the base is now the default branch.
 
@@ -155,7 +155,8 @@ The guard differs from the run above in these ways:
   Put the operation and its other side in the `state` row, and `/f10:catchup` in `next`.
 - **A conflict fails the run.**
   The guard settles no conflict and asks nothing.
-  Before failing, mark the branch with the `mark` line, `git config branch.<branch>.<key> <value>`, so point 2 finds the same base later.
+  Before failing, mark the branch with `f10 pr catchup --mark '<the mark row's value>'`, so point 2 finds the same base later.
+  Never write the mark with `git config` by hand, because a stopped rebase detaches HEAD and the branch name then reads as empty.
   Then run `git merge --abort` or `git rebase --abort`, so the branch is as it was, with any mark kept.
   Put `/f10:catchup` in the `next` row.
   Run `f10-state.sh stop guard` after the failing `set`, so `f10 drive` reads the stop as the guard's.
