@@ -37,6 +37,10 @@ func Command() *cli.Command {
 			},
 			&cli.BoolFlag{Name: "merge", Usage: "merge the PR even when someone else opened it"},
 			&cli.BoolFlag{
+				Name:  "ignore-checks",
+				Usage: "merge even when the PR head's checks failed or are still running",
+			},
+			&cli.BoolFlag{
 				Name:  "local",
 				Usage: "clean up the worktree, branch and workspace and leave the PR open: a review handed back",
 			},
@@ -118,7 +122,9 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 	in.Suffix, in.Branch = suffix, branch
 	in.Flags = finish.Flags{
 		Yes: cmd.Bool("yes"), Merge: cmd.Bool("merge"), LeaveOpen: cmd.Bool("local"), Keep: cmd.Bool("keep"),
+		IgnoreChecks: cmd.Bool("ignore-checks"),
 	}
+	in.ChecksWait = finish.ChecksBudget
 	in.Close = closing
 	in.Sweep = func(ctx context.Context) {
 		finish.SweepIfDue(

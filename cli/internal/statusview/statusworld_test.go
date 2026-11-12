@@ -182,7 +182,8 @@ func prFieldsArg() string {
 
 // searchKey is the one GraphQL search forge sends for the requests of ids.
 func searchKey(ids ...string) string {
-	const nodes = "{ nodes { ... on PullRequest { number title url state headRefName createdAt mergedAt closedAt } } }"
+	const nodes = "{ nodes { ... on PullRequest { number title url state headRefName createdAt mergedAt closedAt " +
+		"commits(last: 1) { nodes { commit { statusCheckRollup { state } } } } } } }"
 
 	var decl, fields, vars []string
 

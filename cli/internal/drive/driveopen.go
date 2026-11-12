@@ -299,8 +299,8 @@ func (in *DriveInput) next(ctx context.Context, r *DriveRun) error {
 	}
 
 	// a finish still waiting stays waiting above, so the record never reads
-	// running between two polls
-	if wasWaiting {
+	// running between two polls; one held on checks stays until finish says
+	if wasWaiting && r.checks == nil {
 		in.enter(r, atRunning)
 	}
 
@@ -316,7 +316,7 @@ func (in *DriveInput) next(ctx context.Context, r *DriveRun) error {
 
 	// a spike merges nothing, so it needs no catchup and no clean merge
 	if skill == "finish" && spike {
-		return endWith(in.runFinish(ctx, r))
+		return in.finishOrHold(ctx, r)
 	}
 
 	// finish tries the merge itself and catches up only a conflict, under
@@ -348,7 +348,7 @@ func (in *DriveInput) next(ctx context.Context, r *DriveRun) error {
 			return halt(r.Task.Ref.ID, skill, err.Error())
 		}
 	case skill == "finish":
-		return endWith(in.runFinish(ctx, r))
+		return in.finishOrHold(ctx, r)
 	}
 
 	return in.send(ctx, r, skill)

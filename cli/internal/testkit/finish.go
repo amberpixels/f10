@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
@@ -18,6 +19,10 @@ const (
 	DropRemoteRef = "git update-ref -d refs/remotes/origin/GH-1"
 	CurBr         = "git branch --show-current"
 	WsList        = "herdr workspace list"
+
+	// GhChecks is the head checks read, every PR number
+	GhChecks = "gh api graphql -f query=" + forge.HeadChecksQuery + " -F owner={owner} -F name={repo} -F number="
+	NoChecks = `{"data":{"repository":{"pullRequest":{"commits":{"nodes":[]}}}}}`
 
 	PrOpen   = `{"state":"OPEN","url":"https://gh/pr/9","number":9,"baseRefName":"main","mergeCommit":null}`
 	PrMerged = `{"state":"MERGED","url":"https://gh/pr/9","number":9,"baseRefName":"main","mergeCommit":{"oid":"m3rge"}}`

@@ -2833,27 +2833,27 @@ func TestDriveFinishAsksForSomeoneElsesPR(t *testing.T) {
 
 	run := &DriveRun{Task: DriveTask{Ref: testkit.Gh1}}
 
-	res := in.runFinish(t.Context(), run)
+	res, _ := in.runFinish(t.Context(), run)
 	if res.Code != ui.ExitAsk || len(res.Lines) != 1 || !strings.Contains(res.Lines[0], "[local | merge]") {
 		t.Fatalf("runFinish on someone else's PR = %+v, want an ask", res)
 	}
 
 	in.Answers.Give(answer{Task: "GH-1", Text: "1. local"})
 
-	if res = in.runFinish(t.Context(), run); res.Code != 0 {
+	if res, _ = in.runFinish(t.Context(), run); res.Code != 0 {
 		t.Fatalf("runFinish answered local = %+v, want finished", res)
 	}
 
 	// a bare answer that is no finish choice belongs to some agent's question
 	in.Answers.Give(answer{Text: "1. yes"})
 
-	if res = in.runFinish(t.Context(), run); res.Code != ui.ExitAsk || in.Answers.Bare != "1. yes" {
+	if res, _ = in.runFinish(t.Context(), run); res.Code != ui.ExitAsk || in.Answers.Bare != "1. yes" {
 		t.Errorf("a bare non-choice answer = %+v, left %q; want it left for an agent", res, in.Answers.Bare)
 	}
 
 	in.Answers.Give(answer{Task: "GH-1", Text: "maybe"})
 
-	if res = in.runFinish(t.Context(), run); res.Code != ui.ExitHalted {
+	if res, _ = in.runFinish(t.Context(), run); res.Code != ui.ExitHalted {
 		t.Errorf("a keyed answer that is no choice = %+v, want a halt", res)
 	}
 
@@ -2881,7 +2881,7 @@ func TestDriveFinishPassesTheRunsBranch(t *testing.T) {
 
 	run := &DriveRun{Task: DriveTask{Ref: testkit.Gh1, Suffix: "b"}, O: start.OpenedTask{Branch: "GH-1-b"}}
 
-	if res := in.runFinish(t.Context(), run); res.Code != 0 {
+	if res, _ := in.runFinish(t.Context(), run); res.Code != 0 {
 		t.Fatalf("runFinish = %+v, want finished", res)
 	}
 
@@ -4026,7 +4026,7 @@ func TestDriveFinishWithADeferredPullIsFinished(t *testing.T) {
 		}
 	}()
 
-	res := in.runFinish(t.Context(), &DriveRun{Task: DriveTask{Ref: testkit.Gh1}})
+	res, _ := in.runFinish(t.Context(), &DriveRun{Task: DriveTask{Ref: testkit.Gh1}})
 	if res.Row != drivectl.RowFinished || res.Code != 0 || len(res.Lines) != 1 ||
 		!strings.Contains(res.Lines[0], "GH-1 finished; main not pulled") {
 		t.Errorf("runFinish = %+v, want finished with the note", res)

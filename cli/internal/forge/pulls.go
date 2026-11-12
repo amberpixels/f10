@@ -173,6 +173,17 @@ type pull struct {
 		State      string `json:"state"`      // a status context: SUCCESS, FAILURE, PENDING, ERROR
 	} `json:"statusCheckRollup"`
 
+	// HeadCommit is GraphQL's last commit, for its rollup state alone
+	HeadCommit struct {
+		Nodes []struct {
+			Commit struct {
+				Rollup *struct {
+					State string `json:"state"`
+				} `json:"statusCheckRollup"`
+			} `json:"commit"`
+		} `json:"nodes"`
+	} `json:"commits"`
+
 	HeadPipeline *struct {
 		Status string `json:"status"`
 	} `json:"head_pipeline"`
@@ -315,13 +326,15 @@ func mergeable(gh, ghState, gl string) string {
 // status context, glab the head pipeline.
 func (p pull) checks() string {
 	if pl := cmp.Or(p.HeadPipeline, p.Pipeline); pl != nil {
-		switch strings.ToLower(pl.Status) {
-		case "success":
+		return pipelineState(pl.Status)
+	}
+
+	if n := p.HeadCommit.Nodes; len(n) > 0 && n[0].Commit.Rollup != nil {
+		switch strings.ToUpper(n[0].Commit.Rollup.State) {
+		case "SUCCESS":
 			return Green
-		case "failed", "canceled":
+		case "FAILURE", "ERROR":
 			return Red
-		case "":
-			return ""
 		default:
 			return Pending
 		}

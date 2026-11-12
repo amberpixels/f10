@@ -74,6 +74,7 @@ type finishDecision struct {
 	self       bool
 	loreNote   string   // a failing lore check under lore_gate: warn
 	close      []string // the riders the merge closes, once settleClose decided
+	checked    string   // the head sha whose checks passed, which the merge is pinned to
 }
 
 // stays names what a failure before the removal keeps for the rerun.
@@ -187,6 +188,12 @@ func decideFinish(ctx context.Context, in FinishInput) (finishDecision, error) {
 		d.kind = landingUnpushed
 	default:
 		d.kind = landingPull
+	}
+
+	if d.kind == landingPull && d.pull.Status == forge.Open {
+		if d.checked, err = gateChecks(ctx, in, d.pull); err != nil {
+			return d, err
+		}
 	}
 
 	// before anything leaves the machine: a block refuses with nothing changed

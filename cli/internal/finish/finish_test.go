@@ -1110,6 +1110,8 @@ func TestFinishOnGitLab(t *testing.T) {
 		`{"state":"opened","web_url":"https://gl/mr/4","iid":4,"target_branch":"main"}`,
 		`{"state":"merged","web_url":"https://gl/mr/4","iid":4,"target_branch":"main","squash_commit_sha":"m3rge","merge_commit_sha":"other"}`,
 	)
+	// the checks read, by number: the fixture names no source branch
+	fx.f.Script("glab mr view 4 -F json", `{"iid":4,"head_pipeline":null}`)
 	fx.f.Script("glab repo view -F json", `{"squash_option":"default_on"}`)
 	fx.f.Script("glab mr merge GH-1 --remove-source-branch --auto-merge=false --yes --squash", "")
 	fx.f.Script(testkit.LsRem, "")
@@ -2291,7 +2293,13 @@ func TestFinishReportsProgress(t *testing.T) {
 		}
 
 		// removing the worktree deletes the branch and the record: nothing after it
-		want := []string{"merging #9", "pulling main", "archiving the plan", "removing worktree"}
+		want := []string{
+			"reading the checks on #9",
+			"merging #9",
+			"pulling main",
+			"archiving the plan",
+			"removing worktree",
+		}
 		if strings.Join(got, ",") != strings.Join(want, ",") {
 			t.Errorf("progress = %q, want %q", got, want)
 		}

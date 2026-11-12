@@ -58,6 +58,7 @@ type TaskRow struct {
 	Step    string `json:"step,omitempty"`
 	PR      string `json:"pr,omitempty"`
 	PRState string `json:"pr_state,omitempty"`
+	Checks  string `json:"checks,omitempty"` // an open PR's head rollup: green, red or pending
 	Note    string `json:"note,omitempty"`
 	Next    string `json:"next,omitempty"`
 	Ask     string `json:"ask,omitempty"`
@@ -324,6 +325,9 @@ func (src rowSource) Gather(ctx context.Context, k stack.ChildRow) (TaskRow, loo
 
 	if f.PR != nil {
 		row.PR, row.PRState = f.PR.URL, f.PR.Status
+		if f.PR.Status == forge.Open {
+			row.Checks = f.PR.Checks
+		}
 	} else {
 		row.PR = f.PRURL
 	}
@@ -475,7 +479,8 @@ func stageCounts(rows []TaskRow) string {
 }
 
 // prColumn is `#128`, with the state beside it unless the PR is open, an
-// open or merged PR's icon before it so the number reads as a PR.
+// open or merged PR's icon before it so the number reads as a PR. An open
+// PR whose head is red says so, since finish refuses it.
 func prColumn(r TaskRow) string {
 	if r.PR == "" {
 		return ""
@@ -485,6 +490,10 @@ func prColumn(r TaskRow) string {
 
 	switch r.PRState {
 	case "", forge.Open:
+		if r.Checks == forge.Red {
+			col += " checks red"
+		}
+
 		return statusGlyph(glyphOpenPR) + " " + col
 	case forge.Merged:
 		return statusGlyph(glyphMergedPR) + " " + col + " " + r.PRState

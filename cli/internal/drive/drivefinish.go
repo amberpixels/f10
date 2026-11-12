@@ -8,7 +8,9 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drivectl"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/finish"
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
@@ -131,14 +133,41 @@ func DriveFinishInput(t *target.Target, main string, h hostops.Host, req DriveFi
 	return in, nil
 }
 
+// finishOrHold runs finish, and holds the task on a head whose checks are
+// still running, the way a finish waits on its base, until ChecksBudget.
+func (in *DriveInput) finishOrHold(ctx context.Context, r *DriveRun) error {
+	res, pending := in.runFinish(ctx, r)
+	if pending == nil {
+		return endWith(res)
+	}
+
+	ce := *pending
+	if r.checks == nil || r.checks.sha != ce.Checks.SHA {
+		r.checks = &checksHold{sha: ce.Checks.SHA, since: in.Now()}
+		fmt.Fprintf(in.Out, "%s finish: waiting on checks (%s)\n", in.id(r.Task.Ref.ID), forge.Names(ce.Checks.Running))
+	}
+
+	if ce.Waited = in.Now().Sub(r.checks.since); ce.Waited >= finish.ChecksBudget {
+		r.checks = nil
+
+		return halt(r.Task.Ref.ID, "finish", ce.Error())
+	}
+
+	in.finishStep(ctx, r.O.Branch, branchmeta.FinishQueued, "waiting on checks")
+	in.enter(r, atWaiting)
+	in.saveTask(r, func(t *drivestore.Task) { t.Checks = ce.Checks.SHA })
+
+	return nil
+}
+
 // runFinish runs finish in process; its refusals halt the task, except a PR
-// someone else opened, which asks.
-func (in *DriveInput) runFinish(ctx context.Context, r *DriveRun) driveResult {
+// someone else opened, which asks, and a pending head, returned for a hold.
+func (in *DriveInput) runFinish(ctx context.Context, r *DriveRun) (driveResult, *finish.ChecksError) {
 	task, id := r.Task, r.Task.Ref.ID
 
 	pr, err := in.finishAnswer(id)
 	if err != nil {
-		return halted(id, "finish", err.Error())
+		return halted(id, "finish", err.Error()), nil
 	}
 
 	fmt.Fprintf(in.Out, "%s finish: running\n", in.id(id))
@@ -179,12 +208,20 @@ func (in *DriveInput) runFinish(ctx context.Context, r *DriveRun) driveResult {
 			Code:  ui.ExitAsk,
 			Lines: []string{id + " asks at finish: " + ask},
 			ask:   ask,
-		}
+		}, nil
+	}
+
+	if ce := (finish.ChecksError{}); errors.As(err, &ce) && ce.Pending() {
+		return driveResult{}, &ce
 	}
 
 	if err != nil {
-		return halted(id, "finish", err.Error())
+		r.checks = nil
+
+		return halted(id, "finish", err.Error()), nil
 	}
+
+	r.checks = nil
 
 	if in.Record != nil {
 		in.Record(ctx, in.Main, finish.FinishedEvent(id, "", in.Now()))
@@ -196,7 +233,7 @@ func (in *DriveInput) runFinish(ctx context.Context, r *DriveRun) driveResult {
 		lines = append(lines, id+" finished; "+pulled)
 	}
 
-	return driveResult{Row: drivectl.RowFinished, Lines: append(lines, handoffBlock(id, hand)...)}
+	return driveResult{Row: drivectl.RowFinished, Lines: append(lines, handoffBlock(id, hand)...)}, nil
 }
 
 // retryPull retries a pull a finish deferred, once a tick, in a drive that

@@ -112,17 +112,22 @@ func (h Host) HeadRef(number string) string {
 
 // MergePR merges the request on branch and reads it back, since the merge
 // commit exists only after. method is "--squash", "--merge", "--rebase", or
-// "" for GitLab's plain merge, where the project fixes the strategy.
+// "" for GitLab's plain merge, where the project fixes the strategy. A head
+// pins the merge to that sha, so a push since the checks were read refuses.
 //
 // Never --admin: a refusing host has a reason. glab's auto-merge is off so
 // a running pipeline refuses rather than queues; its squash message
 // replaces the whole commit message, so the title goes on top. gh's squash
 // gets the title as its subject, else GitHub uses a lone commit's subject.
-func (h Host) MergePR(ctx context.Context, p PR, branch, method, body string) (PR, error) {
+func (h Host) MergePR(ctx context.Context, p PR, branch, head, method, body string) (PR, error) {
 	args := h.pick(
 		[]string{"pr", "merge", branch},
 		[]string{"mr", "merge", branch, "--remove-source-branch", "--auto-merge=false", "--yes"},
 	)
+	if head != "" {
+		args = append(args, h.pick([]string{"--match-head-commit", head}, []string{"--sha", head})...)
+	}
+
 	if method != "" {
 		args = append(args, method)
 	}

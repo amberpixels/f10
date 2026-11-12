@@ -11,8 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
-
 	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
@@ -233,6 +231,10 @@ func (rd *statusReader) shipment(ctx context.Context, in taskStatusInput, runs [
 		r.URL = cmp.Or(r.URL, known.URL)
 	}
 
+	if s.PR != "" {
+		s.AskPR(ctx, in)
+	}
+
 	s.URL = cmp.Or(runs[0].URL, s.URL)
 
 	return s
@@ -308,10 +310,7 @@ func (rd *statusReader) writeFinished(ctx context.Context, v StatusView, row Tas
 // finishedFacts is a finished task's block rows: the shipment, the PR's
 // state, then the gates as the step rows a live block prints under ship.
 func finishedFacts(ship Shipment, gates []gate, link bool) []render.Fact {
-	rows := ship.Facts(link)
-	if ship.PRState != "" {
-		rows = append(rows, RunFact("pr state", ship.PRState, lipgloss.NewStyle()))
-	}
+	rows := append(ship.Facts(link), ship.stateFacts()...)
 
 	return append(rows, gateFacts(gates)...)
 }

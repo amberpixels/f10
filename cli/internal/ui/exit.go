@@ -29,6 +29,9 @@ const (
 	// ExitRiders is finish of a bundle whose riders have no --close answer
 	// yet: the finish skill asks which the PR delivers and reruns.
 	ExitRiders = 7
+	// ExitPending is pr checks on a head whose checks are still running, the
+	// code gh pr checks uses; red is 1.
+	ExitPending = 8
 )
 
 const prefix = "f10: "

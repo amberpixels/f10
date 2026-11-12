@@ -8,7 +8,7 @@ judge plan:      /code/f10/.f10/verdicts/FT-210/1.md
 judge change:    /code/f10/.f10/verdicts/FT-210/2.md
 review 1:        /code/f10/.f10/reviews/archive/FT-210.1/1.md
 review 2:        /code/f10/.f10/reviews/archive/FT-210.1/2.md
-pr state:        merged
+pr state:        #216 merged
   judge:         plan: proceed
   implement:     done
   cleanup:       done

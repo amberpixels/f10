@@ -58,6 +58,7 @@ f10 demo open [id]       # the demo report, in the browser (--link writes the pa
 f10 pr open [n | id]     # the PR or MR: a number is one, a task id its open one, else its last; none, their list; gh or glab decided by the remote (--link, --print as for task)
 f10 pr base [PR | id] [--origin]      # the base: the open PR's target, else the recorded stacked base, else the default branch
 f10 pr diff [PR | id] [--name-only]   # the change against that base: here with uncommitted work, else the open PR's diff, else the branch
+f10 pr checks [PR | id] [--json]      # the open PR's head checks: green, red, pending or none, the sha, each failed job with its log url; exit 1 on red, 8 on pending
 f10 pr view [PR | id] [--comments]    # branch, base, task and open PR (head sha, target, mine) with its description; says so when there is no PR
 f10 pr create --title T --body-file F [--label L]... [--assignee A]... [--draft]   # open a PR for the branch here against pr base; prints its url, or an open one's; a bundle's title names its riders after the lead id
 f10 pr edit [PR | id] [--title T] [--body-file F]   # rewrite the open PR's title or body; base, labels and assignees stay; a bundle's title names its riders after the lead id
@@ -83,7 +84,7 @@ f10 forward <id>[-suffix] <text...>   # hand a command or a steering note to the
 f10 drive <id | id+id>[:profile]... | <id> -- <id> [--flow <name> | --local] [--pace <name>] [--agent <profile> | --model <model>] [--parallel <n>] [--answer [<id>=]<text>] [--every 30s] [--foreground]   # a list through a flow, each task once its base has a commit; runs in the daemon
 f10 daemon status | stop [--now] | logs [<drive>] [-f]   # the per-user process drives run in
 f10 asks [list [--json] | answer <task> [N=VALUE ...]]   # the questions driven agents wait on, across projects; bare walks them in a terminal
-f10 finish [<id>[-suffix]] [--yes] [--close <ids|all|none>] [--keep]   # no id: the branch's task; merge the PR (a branch never pushed: here), pull main, archive the plan, close the workspace, remove the worktree; a spike with no PR closes without a merge; a parent whose subtasks are done closes
+f10 finish [<id>[-suffix]] [--yes] [--ignore-checks] [--close <ids|all|none>] [--keep]   # no id: the branch's task; merge the PR (a branch never pushed: here), pull main, archive the plan, close the workspace, remove the worktree; a spike with no PR closes without a merge; a parent whose subtasks are done closes
 f10 janitor [--dry-run]  # remove task branches whose PR merged or closed outside finish, locally and on origin; start and finish run it every 6 hours
 
 f10 lore add <kind> --change <id> [--anchor path:line[-end][@commit][#symbol]]... [--supersedes <id>] [kind flags] [-m <text> | -F <file> | stdin]   # write one lore entry, print its id
@@ -253,6 +254,21 @@ After its report, start runs the [janitor](#janitor) when its last run is 6 hour
 
 `f10 finish 42` is the inverse of start, in the order that keeps the local side honest.
 It finds the task's branch the way start does (the branch linked by `f10-task` or `f10-tasks`, else the exact name, else the one `<id>` / `<id>-*` / `<id>+*` branch, else the one local branch carrying the id past a prefix, like `feat/<id>-slug`) and the checkout that has it checked out; without either it stops, since finish removes only a branch it can tie to the task.
+Before an open PR merges, finish reads the checks on its head, as `f10 pr checks` does, and refuses with nothing changed unless they pass.
+On GitHub the target branch's required checks count when it declares any, else all of them, because a branch with no protection would otherwise gate on nothing.
+On GitLab the head pipeline decides, because GitLab marks no check as required.
+Green, or no checks at all, merges.
+The merge is pinned to the head that was read, so a push since then makes the host refuse.
+Red refuses, naming each failed job with its log url.
+Pending waits up to 20 minutes, reading the checks again every 15 seconds.
+Past that, it refuses, saying the checks were still running.
+A host that cannot answer the read refuses too.
+`--ignore-checks` merges anyway.
+`--yes` does not imply it, because automated finishes pass `--yes`.
+A drive's finish does not wait itself.
+Instead the drive holds the task as `waiting on checks` and tries again each poll, for up to 20 minutes per head, and it halts on red.
+The watcher finishes only merged PRs, so it never reads the checks.
+
 For a bundle, finish needs `--close`: the riders the PR delivers, comma-separated, `all` or `none`.
 Without it, finish exits **7** before changing anything, naming the riders the PR body closes as the default, and the finish skill asks.
 `--close` overrides the body.

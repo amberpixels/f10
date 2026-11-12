@@ -75,11 +75,51 @@ func TestStatusFallbackReportsPlanAndPR(t *testing.T) {
 		"- · capture running",
 		plan,
 		"pr:        ↗ https://gh/pr/9",
-		"pr state:    open",
+		"pr state:    #9 open",
 	} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("output lacks %q:\n%s", want, out.String())
 		}
+	}
+}
+
+// An open PR's row carries its head's checks, failed jobs named; a checks
+// read that fails leaves the row without them.
+func TestStatusPRRowCarriesTheChecks(t *testing.T) {
+	for _, c := range []struct {
+		name, checks, want string
+	}{
+		{"red", `{"data":{"repository":{"pullRequest":{"commits":{"nodes":[{"commit":{"oid":"h3ad",` +
+			`"statusCheckRollup":{"contexts":{"nodes":[{"__typename":"CheckRun","name":"lint",` +
+			`"status":"COMPLETED","conclusion":"FAILURE"}]}}}}]}}}}}`, "#9 open · checks red (lint)"},
+		{"pending", `{"data":{"repository":{"pullRequest":{"commits":{"nodes":[{"commit":{"oid":"h3ad",` +
+			`"statusCheckRollup":{"contexts":{"nodes":[{"__typename":"CheckRun","name":"test",` +
+			`"status":"QUEUED"}]}}}}]}}}}}`, "#9 open · checks pending (test)"},
+		{"unread", "FAIL", "#9 open\n"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f := testkit.NewFakes(t)
+			f.Script(testkit.GhView, testkit.PrOpen)
+
+			if c.checks == "FAIL" {
+				f.Fail(testkit.GhChecks+"9", shell.Result{Code: 1, Stderr: "rate limited"})
+			} else {
+				f.Script(testkit.GhChecks+"9", c.checks)
+			}
+
+			h := hostops.NewHost("gh", t.TempDir())
+			in := taskStatusInput{ID: "GH-1", Branch: "GH-1", Host: &h}
+
+			ship := readShipment(t.Context(), in, nil, ledger.TaskRef{})
+			ship.AskPR(t.Context(), in)
+
+			var out bytes.Buffer
+			taskFallback(in, nil, ship).Render(&out, 0, false)
+
+			if !strings.Contains(out.String(), "pr state:    "+c.want) {
+				t.Errorf("output lacks %q:\n%s", c.want, out.String())
+			}
+		})
 	}
 }
 

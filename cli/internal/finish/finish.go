@@ -122,6 +122,9 @@ type FinishInput struct {
 	// CloseTask closes a parent its subtasks delivered; nil where the tracker is
 	// not the host, which f10 has no "done" word for
 	CloseTask func(context.Context, ref.Ref) error
+	// ChecksWait is how long a pending head may hold the merge; zero refuses it
+	// at once, for the drive, which holds the task itself
+	ChecksWait time.Duration
 }
 
 // Flags are the caller's choices; everything else finish derives.
@@ -132,6 +135,9 @@ type Flags struct {
 	Keep      bool // a spike's experiment is committed onto a kept/ branch, not discarded
 	// MergedOnly refuses all but an already merged request: the watcher never merges
 	MergedOnly bool
+	// IgnoreChecks merges past red or pending checks; --yes never implies it,
+	// since automated finishes pass --yes
+	IgnoreChecks bool
 }
 
 // InputFor fills what comes from the task and the project's settings,

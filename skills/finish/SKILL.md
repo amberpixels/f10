@@ -16,6 +16,8 @@ This skill only runs the command and relays its output (`${CLAUDE_PLUGIN_ROOT}/m
   Without it, the command finishes the branch's task and its report names it; off a task branch it refuses.
 - `--merge` / `--local`: for someone else's PR, merge it, or clean up locally and leave it open (point 3 asks when neither is given).
 - `--keep`: keep a spike's experiment, committed on a `kept/` branch, instead of discarding it.
+- `--ignore-checks`: merge even when the PR head's checks failed or are still running.
+  Pass it only when the user asks for it, never to get past a refusal on their behalf.
 - Everything else goes to `f10 finish` verbatim.
 
 ```
@@ -35,3 +37,4 @@ f10 finish <arguments>
    Ask once with one multi-select `AskUserQuestion`: which riders does the PR deliver, one option per rider, the ones the body closes recommended.
    Rerun the same command with `--close <the chosen ids, comma-separated>`, or `--close none` when none is chosen, and relay its report: the lead and the chosen riders close on merge, the rest stay open.
 5. Every other refusal is final: print the message verbatim and stop.
+   That includes red or still-running checks, whose message names the failed jobs.
