@@ -12,9 +12,9 @@ import (
 // started, else its body's After: line. The graph is rebuilt every run from
 // those, so nothing is stored and a resume reads the same answer.
 
-// Graph refuses a base outside the list that is not finished, and a cycle,
+// graph refuses a base outside the list that is not finished, and a cycle,
 // before anything is created.
-func (in *DriveInput) Graph(ctx context.Context, tasks []DriveTask) ([]int, []string, error) {
+func (in *DriveInput) graph(ctx context.Context, tasks []DriveTask) ([]int, []string, error) {
 	var notes []string
 
 	for i := range tasks {

@@ -36,7 +36,7 @@ func liveGate(in *DriveInput) *openGate {
 	g := &openGate{On: true, Limit: in.Parallel, Trees: map[string]string{}}
 
 	for _, r := range in.Runs {
-		if r.Opened() {
+		if r.opened() {
 			g.Wss = append(g.Wss, agentctl.Workspace{ID: r.O.Ws.ID, Path: r.O.Path, Status: agentctl.StatusIdle})
 		}
 	}
@@ -54,7 +54,7 @@ func liveGate(in *DriveInput) *openGate {
 // an admitted task opens with its chain under way.
 func pass(in *DriveInput, g *openGate) {
 	for _, r := range g.Order(in.Runs) {
-		if r.Opened() || r.End != nil {
+		if r.opened() || r.End != nil {
 			continue
 		}
 
@@ -64,7 +64,7 @@ func pass(in *DriveInput, g *openGate) {
 			continue
 		}
 
-		in.Unqueue(r)
+		in.unqueue(r)
 		openRun(r)
 	}
 }
@@ -81,13 +81,13 @@ func TestCapHoldsTenTasksToFour(t *testing.T) {
 	for tick := range 20 {
 		pass(in, liveGate(in))
 
-		if n := in.Busy(nil); n > 4 {
+		if n := in.busy(nil); n > 4 {
 			t.Fatalf("tick %d: %d tasks on a skill, over the cap of 4", tick, n)
 		}
 
 		// the oldest task on a skill finishes, its workspace closed by finish
 		for _, r := range in.Runs {
-			if r.HoldsSlot() {
+			if r.holdsSlot() {
 				r.End = &driveResult{Row: "finished"}
 				r.O.Path = ""
 
@@ -97,8 +97,8 @@ func TestCapHoldsTenTasksToFour(t *testing.T) {
 	}
 
 	for _, r := range in.Runs {
-		if r.End == nil || r.Queued() {
-			t.Errorf("%s did not finish: queued %v", r.Task.Ref.ID, r.Queued())
+		if r.End == nil || r.queued() {
+			t.Errorf("%s did not finish: queued %v", r.Task.Ref.ID, r.queued())
 		}
 	}
 }
@@ -114,18 +114,18 @@ func TestCapAskFreesTheSlot(t *testing.T) {
 
 	pass(in, liveGate(in))
 
-	if !in.Runs[2].Queued() || !in.Runs[3].Queued() || in.Runs[2].Opened() {
+	if !in.Runs[2].queued() || !in.Runs[3].queued() || in.Runs[2].opened() {
 		t.Fatalf("GH-3 and GH-4 should queue behind the cap of 2")
 	}
 
 	in.Runs[0].End = &driveResult{Row: "asked at judge", Code: ui.ExitAsk}
 	pass(in, liveGate(in))
 
-	if !in.Runs[2].Opened() || in.Runs[2].Queued() {
+	if !in.Runs[2].opened() || in.Runs[2].queued() {
 		t.Error("GH-3 did not take the slot GH-1's ask freed")
 	}
 
-	if in.Runs[3].Opened() || !in.Runs[3].Queued() {
+	if in.Runs[3].opened() || !in.Runs[3].queued() {
 		t.Error("GH-4 opened past the cap")
 	}
 }
@@ -142,26 +142,26 @@ func TestCapSlotFree(t *testing.T) {
 	openRun(in.Runs[1])
 	in.Runs[1].Phase = atParked
 
-	if in.SlotFree(in.Runs[1]) {
+	if in.slotFree(in.Runs[1]) {
 		t.Error("a parked task took a slot GH-1 holds")
 	}
 
 	in.Wss = []agentctl.Workspace{{ID: "ws:GH-2", Status: agentctl.StatusWorking}}
-	if !in.SlotFree(in.Runs[1]) {
+	if !in.slotFree(in.Runs[1]) {
 		t.Error("a task mid-turn was held back: the drive cannot stop its turn")
 	}
 
 	in.Wss = nil
 	in.Runs[0].Phase = atWaiting
 
-	if !in.SlotFree(in.Runs[1]) {
+	if !in.slotFree(in.Runs[1]) {
 		t.Error("finish waiting on its base still held the slot")
 	}
 
 	in.Parallel = 0
 	in.Runs[0].Phase = atRunning
 
-	if !in.SlotFree(in.Runs[1]) {
+	if !in.slotFree(in.Runs[1]) {
 		t.Error("a drive with no cap held a task back")
 	}
 }
@@ -182,7 +182,7 @@ func TestCapOpenCeiling(t *testing.T) {
 
 	pass(in, liveGate(in))
 
-	if in.Runs[2].Opened() || !in.Runs[2].Queued() {
+	if in.Runs[2].opened() || !in.Runs[2].queued() {
 		t.Error("GH-3 opened with two asks holding agents open under a cap of 1")
 	}
 
@@ -190,7 +190,7 @@ func TestCapOpenCeiling(t *testing.T) {
 	in.Runs[1].End = &driveResult{Row: "halted at plan", Code: ui.ExitHalted}
 	pass(in, liveGate(in))
 
-	if !in.Runs[2].Opened() {
+	if !in.Runs[2].opened() {
 		t.Error("GH-3 stayed queued behind a halted task's agent")
 	}
 }
@@ -217,11 +217,11 @@ func TestCapResumeTakesOpenAgentsFirst(t *testing.T) {
 
 	pass(in, g)
 
-	if !in.Runs[1].Opened() || in.Runs[0].Opened() {
+	if !in.Runs[1].opened() || in.Runs[0].opened() {
 		t.Error("the fresh GH-1 took the slot ahead of GH-2's open agent")
 	}
 
-	if !in.Runs[2].Opened() {
+	if !in.Runs[2].opened() {
 		t.Error("GH-3's running turn was queued: the drive cannot stop it")
 	}
 }

@@ -36,7 +36,7 @@ func (in *DriveInput) Report(runs []*DriveRun, notes []string) error {
 
 			halted[id] = r.End.Code == ui.ExitHalted
 			code = max(code, r.End.Code)
-		case r.Queued():
+		case r.queued():
 			rows = append(rows, render.Fact{Label: shown, Value: "queued"})
 		case r.active() && r.Phase == atParked:
 			rows = append(rows, render.Fact{Label: shown, Value: "waiting on " + in.id(r.Base.Task.Ref.ID)})

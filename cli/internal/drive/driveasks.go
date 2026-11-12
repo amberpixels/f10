@@ -136,7 +136,7 @@ func CloseDriveAsks(dir, root string, n int, now time.Time) {
 	}
 }
 
-func (in *DriveInput) TakeAnswers(tasks []DriveTask) error {
+func (in *DriveInput) takeAnswers(tasks []DriveTask) error {
 	in.Answers = NewAnswerBook()
 
 	for _, a := range in.Args.Answers {

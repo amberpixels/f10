@@ -69,7 +69,7 @@ func (in *DriveInput) poll(
 
 	switch r.Phase {
 	case atWaiting, atParked, atQueued:
-		return in.Next(ctx, r)
+		return in.next(ctx, r)
 	case atVerifying:
 		job := r.Job
 		if !job.Finished() {
@@ -77,18 +77,18 @@ func (in *DriveInput) poll(
 		}
 
 		r.Job = nil
-		in.Enter(r, atRunning)
+		in.enter(r, atRunning)
 
 		return in.verified(ctx, r, job)
 	case atRetrying:
-		in.Enter(r, atRunning)
+		in.enter(r, atRunning)
 		r.retry = true
 
 		return in.send(ctx, r, r.Skill)
 	case atPending, AtHeld, atRunning:
 	}
 
-	ws := worktree.WorkspaceByID(in.View().Wss, r.O.Ws.ID)
+	ws := worktree.WorkspaceByID(in.view().Wss, r.O.Ws.ID)
 	if ws == nil {
 		return in.workspaceGone(r)
 	}
@@ -129,7 +129,7 @@ func (in *DriveInput) poll(
 	}
 
 	if !r.begun && !recent {
-		in.RetryEnter(ctx, r)
+		in.retryEnter(ctx, r)
 
 		if now.Sub(r.SentAt) > startWindow {
 			// a prompt never taken may sit under a startup dialog, so it is not typed again
@@ -165,7 +165,7 @@ func (in *DriveInput) poll(
 
 			fmt.Fprintf(in.Out, "%s ship: the catchup guard conflicted, catching up\n", in.id(id))
 
-			return in.Next(ctx, r)
+			return in.next(ctx, r)
 		case run.Ask != "" || blockedRun(run):
 			// blocked is a decision, a judge's stop or a stale task's verdict:
 			// sending the skill again would roll it again
@@ -215,7 +215,7 @@ func (in *DriveInput) poll(
 		return err
 	}
 
-	return in.Next(ctx, r)
+	return in.next(ctx, r)
 }
 
 // guardAgain halts a ship whose guard conflicted the same way three times

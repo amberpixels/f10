@@ -149,8 +149,8 @@ func TestReconcileReportsOnce(t *testing.T) {
 	blocked := &state.Run{Ship: "blocked", Updated: now}
 	tasks := []WatchedTask{{ID: "FT-1", Run: blocked}}
 
-	in.Reconcile(t.Context(), tasks, store)
-	in.Reconcile(t.Context(), tasks, store)
+	in.reconcile(t.Context(), tasks, store)
+	in.reconcile(t.Context(), tasks, store)
 
 	if len(out) != 1 {
 		t.Fatalf("reported %d times, want once: %+v", len(out), out)
@@ -161,7 +161,7 @@ func TestReconcileReportsOnce(t *testing.T) {
 	}
 
 	tasks[0].Run = &state.Run{Ship: "blocked", Updated: now.Add(time.Minute)}
-	in.Reconcile(t.Context(), tasks, store)
+	in.reconcile(t.Context(), tasks, store)
 
 	if len(out) != 2 {
 		t.Errorf("a newer stop was not reported: %+v", out)
@@ -180,7 +180,7 @@ func TestReconcileNeverRetellsAFact(t *testing.T) {
 	ahead := WatchedTask{ID: "FT-1", Pr: mergedPR(), LocalSHA: "def"}
 
 	for _, task := range []WatchedTask{merged, ahead, merged, ahead} {
-		in.Reconcile(t.Context(), []WatchedTask{task}, store)
+		in.reconcile(t.Context(), []WatchedTask{task}, store)
 	}
 
 	if len(out) != 2 {
@@ -215,7 +215,7 @@ func TestReconcileFinishes(t *testing.T) {
 			},
 		}
 
-		in.Reconcile(t.Context(), []WatchedTask{task}, map[string]watchReport{})
+		in.reconcile(t.Context(), []WatchedTask{task}, map[string]watchReport{})
 
 		if calls != 1 {
 			t.Errorf("%v: finish ran %d times", c.err, calls)
@@ -378,8 +378,8 @@ func TestHostTrouble(t *testing.T) {
 	store := map[string]watchReport{}
 	tasks := []WatchedTask{{ID: "FT-1", HostErr: errors.New("gh: HTTP 401")}, {ID: "FT-2"}}
 
-	in.HostTrouble(tasks, store)
-	in.HostTrouble(tasks, store)
+	in.hostTrouble(tasks, store)
+	in.hostTrouble(tasks, store)
 
 	if len(out) != 2 || !strings.Contains(out[0].Text, "HTTP 401") || !strings.Contains(out[0].Text, "FT-1 left out") {
 		t.Errorf("reports = %+v", out)
@@ -389,7 +389,7 @@ func TestHostTrouble(t *testing.T) {
 		t.Error("f10 watch would not show the host trouble")
 	}
 
-	in.HostTrouble(tasks[1:], store)
+	in.hostTrouble(tasks[1:], store)
 
 	if _, ok := store[watchHostKey]; ok {
 		t.Error("the host answered, and its trouble stayed")
@@ -456,7 +456,7 @@ func TestWatchRetriesADeferredPull(t *testing.T) {
 	store := map[string]watchReport{}
 
 	for range 2 {
-		if !in.RetryPull(t.Context(), store) {
+		if !in.retryPull(t.Context(), store) {
 			t.Fatal("a deferred pull left the project unwatched")
 		}
 	}
@@ -468,7 +468,7 @@ func TestWatchRetriesADeferredPull(t *testing.T) {
 	f.Script("git pull --ff-only", "")
 	f.Script("git merge-base --is-ancestor m3rge main", "")
 
-	if in.RetryPull(t.Context(), store) {
+	if in.retryPull(t.Context(), store) {
 		t.Error("a landed pull still keeps the project")
 	}
 
@@ -476,7 +476,7 @@ func TestWatchRetriesADeferredPull(t *testing.T) {
 		t.Errorf("store %v, said %q; want the entry gone and the pull said", store, said)
 	}
 
-	if (WatchInput{Mode: "report", Root: root, Main: main}).RetryPull(t.Context(), store) {
+	if (WatchInput{Mode: "report", Root: root, Main: main}).retryPull(t.Context(), store) {
 		t.Error("watch: report pulled")
 	}
 }

@@ -27,7 +27,7 @@ func TestOnTaskAppliesAReturnedEnd(t *testing.T) {
 	r := &DriveRun{Task: DriveTask{Ref: ref.Ref{ID: "GH-1"}}, Phase: atRunning}
 
 	wrapped := fmt.Errorf("sending: %w", halt("GH-1", "ship", "no agent"))
-	if err := in.OnTask(t.Context(), r, wrapped); err != nil {
+	if err := in.onTask(t.Context(), r, wrapped); err != nil {
 		t.Fatalf("onTask = %v, want the end applied", err)
 	}
 
@@ -38,7 +38,7 @@ func TestOnTaskAppliesAReturnedEnd(t *testing.T) {
 	other := &DriveRun{Task: DriveTask{Ref: ref.Ref{ID: "GH-2"}}, Phase: atRunning}
 	boom := errors.New("herdr is gone")
 
-	if err := in.OnTask(t.Context(), other, boom); !errors.Is(err, boom) || other.End != nil {
+	if err := in.onTask(t.Context(), other, boom); !errors.Is(err, boom) || other.End != nil {
 		t.Fatalf("onTask = %v, end = %+v: want the error passed up", err, other.End)
 	}
 }
@@ -56,13 +56,13 @@ func TestLookReListsOnlyATaskOpenedThisTick(t *testing.T) {
 	r := &DriveRun{Task: DriveTask{Ref: ref.Ref{ID: "GH-1"}}, O: start.OpenedTask{Path: "/code/repo.GH-1"}}
 	r.O.Ws.ID = "ws:GH-1"
 
-	if _, _, err := in.Look(t.Context(), r); err != nil || f.Called(testkit.WsList) {
+	if _, _, err := in.look(t.Context(), r); err != nil || f.Called(testkit.WsList) {
 		t.Fatalf("look = %v, listed %v: want the tick's look", err, f.Called(testkit.WsList))
 	}
 
-	in.View().JustOpened(r)
+	in.view().JustOpened(r)
 
-	if _, _, err := in.Look(t.Context(), r); err != nil || !f.Called(testkit.WsList) {
+	if _, _, err := in.look(t.Context(), r); err != nil || !f.Called(testkit.WsList) {
 		t.Fatalf("look = %v, listed %v: want a fresh list for a task opened this tick", err, f.Called(testkit.WsList))
 	}
 }

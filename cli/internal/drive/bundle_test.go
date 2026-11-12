@@ -23,7 +23,7 @@ func TestDriveParsesABundle(t *testing.T) {
 	in := &DriveInput{
 		Args: drivectl.DriveArgs{Tasks: []string{"GH-1+GH-2", "GH-5"}, Span: true},
 	}
-	if _, _, err := in.Span(t.Context()); err == nil {
+	if _, _, err := in.span(t.Context()); err == nil {
 		t.Error("a bundle as a range end was taken")
 	}
 }

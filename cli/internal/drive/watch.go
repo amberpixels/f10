@@ -95,9 +95,9 @@ type WatchInput struct {
 	Storage storage.Root
 }
 
-// RetryPull retries a pull a finish deferred, under watch: finish alone,
+// retryPull retries a pull a finish deferred, under watch: finish alone,
 // since pulling is an act. A cause already told is not told again.
-func (in WatchInput) RetryPull(ctx context.Context, store map[string]watchReport) bool {
+func (in WatchInput) retryPull(ctx context.Context, store map[string]watchReport) bool {
 	if in.Mode != "finish" {
 		return false
 	}
@@ -124,9 +124,9 @@ func (in WatchInput) RetryPull(ctx context.Context, store map[string]watchReport
 	return true
 }
 
-// HostTrouble is told every pass, naming the tasks left out, since those
+// hostTrouble is told every pass, naming the tasks left out, since those
 // tasks go silent; f10 watch shows it until the host answers again.
-func (in WatchInput) HostTrouble(tasks []WatchedTask, store map[string]watchReport) {
+func (in WatchInput) hostTrouble(tasks []WatchedTask, store map[string]watchReport) {
 	var (
 		ids   []string
 		cause error
@@ -157,9 +157,9 @@ func (in WatchInput) HostTrouble(tasks []WatchedTask, store map[string]watchRepo
 	store[watchHostKey] = rep
 }
 
-// Reconcile forgets tasks gone from the project, except a finish, kept a
+// reconcile forgets tasks gone from the project, except a finish, kept a
 // day for f10 watch.
-func (in WatchInput) Reconcile(ctx context.Context, tasks []WatchedTask, store map[string]watchReport) {
+func (in WatchInput) reconcile(ctx context.Context, tasks []WatchedTask, store map[string]watchReport) {
 	now := in.Now()
 	seen := map[string]bool{}
 
@@ -167,7 +167,7 @@ func (in WatchInput) Reconcile(ctx context.Context, tasks []WatchedTask, store m
 		seen[task.ID] = true
 
 		if in.Catchup {
-			in.Tell(store, task.ID, now, in.catchupStep(ctx, task, store))
+			in.tell(store, task.ID, now, in.catchupStep(ctx, task, store))
 		}
 
 		rep, act := decideWatch(task, in.Mode, now)
@@ -176,7 +176,7 @@ func (in WatchInput) Reconcile(ctx context.Context, tasks []WatchedTask, store m
 			rep = in.finishReport(ctx, task)
 		}
 
-		in.Tell(store, task.ID, now, rep)
+		in.tell(store, task.ID, now, rep)
 	}
 
 	for id, r := range store {
@@ -187,8 +187,8 @@ func (in WatchInput) Reconcile(ctx context.Context, tasks []WatchedTask, store m
 	}
 }
 
-// Tell carries the stored report's told keys and catchup record over.
-func (in WatchInput) Tell(store map[string]watchReport, id string, now time.Time, rep *watchReport) {
+// tell carries the stored report's told keys and catchup record over.
+func (in WatchInput) tell(store map[string]watchReport, id string, now time.Time, rep *watchReport) {
 	if rep == nil {
 		return
 	}
@@ -211,10 +211,10 @@ func (in WatchInput) Tell(store map[string]watchReport, id string, now time.Time
 	store[id] = *rep
 }
 
-// ReadTargets fetches origin once, for every task that could be caught up
+// readTargets fetches origin once, for every task that could be caught up
 // or has a catchup to settle. A failed fetch reads nothing: a stale origin
 // could hide a move, and a push lease needs the current sha.
-func (in WatchInput) ReadTargets(ctx context.Context, tasks []WatchedTask, store map[string]watchReport) {
+func (in WatchInput) readTargets(ctx context.Context, tasks []WatchedTask, store map[string]watchReport) {
 	var want []int
 
 	for i, t := range tasks {
@@ -762,12 +762,12 @@ func WatchPass(ctx context.Context, in WatchInput) (bool, error) {
 	}
 
 	if in.Catchup {
-		in.ReadTargets(ctx, tasks, store)
+		in.readTargets(ctx, tasks, store)
 	}
 
-	in.Reconcile(ctx, tasks, store)
-	in.HostTrouble(tasks, store)
-	pending := in.RetryPull(ctx, store)
+	in.reconcile(ctx, tasks, store)
+	in.hostTrouble(tasks, store)
+	pending := in.retryPull(ctx, store)
 
 	if err := saveWatchStore(in.Root, store); err != nil {
 		return false, err

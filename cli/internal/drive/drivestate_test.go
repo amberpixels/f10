@@ -286,7 +286,7 @@ func TestCatchupAttemptsCountTheFingerprint(t *testing.T) {
 
 	attempt := func(fp string) *driveResult {
 		res, ok := endOf(
-			in.AttemptAt(r, "catchup", fp, halted("GH-1", "ship", "GH-1 still conflicts with main")),
+			in.attemptAt(r, "catchup", fp, halted("GH-1", "ship", "GH-1 still conflicts with main")),
 		)
 		if !ok {
 			return nil
@@ -331,7 +331,7 @@ func TestAttemptLinesSayWhatTheyCount(t *testing.T) {
 	in.Out = &out
 
 	for _, fp := range []string{"a", "b", "b"} {
-		if res := in.AttemptAt(r, "ship", fp, driveResult{Reason: "pr: base not on origin"}); res != nil {
+		if res := in.attemptAt(r, "ship", fp, driveResult{Reason: "pr: base not on origin"}); res != nil {
 			t.Fatalf("halted early: %+v", res)
 		}
 	}

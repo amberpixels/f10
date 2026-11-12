@@ -234,7 +234,7 @@ func (fx *driveFixture) expects(id, skill string) {
 		id,
 		nil,
 		runplan.ShipFlow{},
-		slices.Contains(fx.in.SequenceOf(runplan.ShipFlow{}), "finish"),
+		slices.Contains(fx.in.sequenceOf(runplan.ShipFlow{}), "finish"),
 	)
 	fx.f.Script("herdr agent prompt "+testkit.AgentOf(id)+" "+prompt, "{}")
 }
@@ -1523,7 +1523,7 @@ func TestDrivePositionCountsTheWorktreesPlan(t *testing.T) {
 			fx := newDriveFixture(t, "GH-1")
 			fx.f.Meta.Seed("GH-1", branchmeta.Drive, tc.recorded)
 
-			pos, err := fx.in.Position(
+			pos, err := fx.in.position(
 				t.Context(),
 				start.OpenedTask{Branch: "GH-1", Path: "/code/repo.GH-1", Plan: tc.plan},
 				tc.chain,
@@ -1543,7 +1543,7 @@ func TestDriveRangeSkipsWhatIsNotATask(t *testing.T) {
 	fx.infos["GH-4"] = tasksource.TaskInfo{Pull: true}
 	fx.task("GH-6", tasksource.TaskInfo{Body: "c"}, "")
 
-	tasks, notes, err := fx.in.ResolveTasks(t.Context())
+	tasks, notes, err := fx.in.resolveTasks(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1563,7 +1563,7 @@ func TestDriveRefusesAListedPullRequest(t *testing.T) {
 	fx := newDriveFixture(t, "GH-4")
 	fx.infos["GH-4"] = tasksource.TaskInfo{Pull: true}
 
-	if _, _, err := fx.in.ResolveTasks(t.Context()); err == nil || !strings.Contains(err.Error(), "pull request") {
+	if _, _, err := fx.in.resolveTasks(t.Context()); err == nil || !strings.Contains(err.Error(), "pull request") {
 		t.Errorf("err = %v", err)
 	}
 }
@@ -1575,12 +1575,12 @@ func TestDriveGraph(t *testing.T) {
 	graph := func(t *testing.T, fx *driveFixture) ([]string, error) {
 		t.Helper()
 
-		tasks, _, err := fx.in.ResolveTasks(t.Context())
+		tasks, _, err := fx.in.resolveTasks(t.Context())
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		order, _, err := fx.in.Graph(t.Context(), tasks)
+		order, _, err := fx.in.graph(t.Context(), tasks)
 
 		var ids []string
 		for _, i := range order {
@@ -1622,12 +1622,12 @@ func TestDriveGraph(t *testing.T) {
 		fx.task("GH-3", tasksource.TaskInfo{Body: "After: GH-1"}, testkit.Heads("GH-3"))
 		fx.f.Meta.Seed("GH-3", branchmeta.After, "GH-2")
 
-		tasks, _, err := fx.in.ResolveTasks(t.Context())
+		tasks, _, err := fx.in.resolveTasks(t.Context())
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		_, notes, err := fx.in.Graph(t.Context(), tasks)
+		_, notes, err := fx.in.graph(t.Context(), tasks)
 		if err != nil || tasks[2].Base != "GH-2" {
 			t.Fatalf("base = %q, %v", tasks[2].Base, err)
 		}
@@ -1716,7 +1716,7 @@ func TestDriveRefusesAParent(t *testing.T) {
 			fx.task("GH-1", tasksource.TaskInfo{Body: "free"}, "")
 			withChildren(fx, map[string][]stack.ChildRow{"GH-1": kids})
 
-			if _, _, err := fx.in.ResolveTasks(t.Context()); err != nil {
+			if _, _, err := fx.in.resolveTasks(t.Context()); err != nil {
 				t.Errorf("refused: %v", err)
 			}
 		})
@@ -1727,7 +1727,7 @@ func TestDriveRefusesAParent(t *testing.T) {
 		fx.task("GH-1", tasksource.TaskInfo{Body: "free"}, "")
 		withChildren(fx, nil)
 
-		if _, _, err := fx.in.ResolveTasks(t.Context()); err != nil {
+		if _, _, err := fx.in.resolveTasks(t.Context()); err != nil {
 			t.Errorf("refused: %v", err)
 		}
 	})
@@ -1741,7 +1741,7 @@ func TestDriveRefusesAParent(t *testing.T) {
 			return nil, nil
 		}
 
-		if _, _, err := fx.in.ResolveTasks(t.Context()); err != nil {
+		if _, _, err := fx.in.resolveTasks(t.Context()); err != nil {
 			t.Errorf("refused: %v", err)
 		}
 	})
@@ -1756,7 +1756,7 @@ func TestDriveRefusesAParent(t *testing.T) {
 			return nil, nil
 		}
 
-		if _, _, err := fx.in.ResolveTasks(t.Context()); err != nil {
+		if _, _, err := fx.in.resolveTasks(t.Context()); err != nil {
 			t.Errorf("refused: %v", err)
 		}
 	})
@@ -2833,27 +2833,27 @@ func TestDriveFinishAsksForSomeoneElsesPR(t *testing.T) {
 
 	run := &DriveRun{Task: DriveTask{Ref: testkit.Gh1}}
 
-	res := in.RunFinish(t.Context(), run)
+	res := in.runFinish(t.Context(), run)
 	if res.Code != ui.ExitAsk || len(res.Lines) != 1 || !strings.Contains(res.Lines[0], "[local | merge]") {
 		t.Fatalf("runFinish on someone else's PR = %+v, want an ask", res)
 	}
 
 	in.Answers.Give(answer{Task: "GH-1", Text: "1. local"})
 
-	if res = in.RunFinish(t.Context(), run); res.Code != 0 {
+	if res = in.runFinish(t.Context(), run); res.Code != 0 {
 		t.Fatalf("runFinish answered local = %+v, want finished", res)
 	}
 
 	// a bare answer that is no finish choice belongs to some agent's question
 	in.Answers.Give(answer{Text: "1. yes"})
 
-	if res = in.RunFinish(t.Context(), run); res.Code != ui.ExitAsk || in.Answers.Bare != "1. yes" {
+	if res = in.runFinish(t.Context(), run); res.Code != ui.ExitAsk || in.Answers.Bare != "1. yes" {
 		t.Errorf("a bare non-choice answer = %+v, left %q; want it left for an agent", res, in.Answers.Bare)
 	}
 
 	in.Answers.Give(answer{Task: "GH-1", Text: "maybe"})
 
-	if res = in.RunFinish(t.Context(), run); res.Code != ui.ExitHalted {
+	if res = in.runFinish(t.Context(), run); res.Code != ui.ExitHalted {
 		t.Errorf("a keyed answer that is no choice = %+v, want a halt", res)
 	}
 
@@ -2881,7 +2881,7 @@ func TestDriveFinishPassesTheRunsBranch(t *testing.T) {
 
 	run := &DriveRun{Task: DriveTask{Ref: testkit.Gh1, Suffix: "b"}, O: start.OpenedTask{Branch: "GH-1-b"}}
 
-	if res := in.RunFinish(t.Context(), run); res.Code != 0 {
+	if res := in.runFinish(t.Context(), run); res.Code != 0 {
 		t.Fatalf("runFinish = %+v, want finished", res)
 	}
 
@@ -3122,7 +3122,7 @@ func TestDriveReleasedCountsOnlyTheBasesOwnCommits(t *testing.T) {
 	fx.f.Script("git rev-list --count --no-merges refs/heads/GH-2 --not refs/heads/main refs/remotes/origin/main "+
 		"refs/heads/GH-1 c1", "0")
 
-	if fx.in.Released(t.Context(), b) {
+	if fx.in.released(t.Context(), b) {
 		t.Error("released with no commit of its own")
 	}
 
@@ -3134,17 +3134,17 @@ func TestDriveReleasedCountsOnlyTheBasesOwnCommits(t *testing.T) {
 		"1",
 	)
 
-	if fx.in.Released(t.Context(), b) {
+	if fx.in.released(t.Context(), b) {
 		t.Error("released by its squashed base's commits")
 	}
 
-	if !fx.in.Released(t.Context(), b) {
+	if !fx.in.released(t.Context(), b) {
 		t.Error("not released once it has a commit of its own")
 	}
 
 	b.End = &driveResult{Code: ui.ExitHalted}
 
-	if fx.in.Released(t.Context(), b) {
+	if fx.in.released(t.Context(), b) {
 		t.Error("a halted base released its dependent")
 	}
 }
@@ -3338,13 +3338,13 @@ func TestDriveSpikeShortcutNeedsABranchNeverPushed(t *testing.T) {
 	r := &DriveRun{Task: DriveTask{Ref: ref.Ref{ID: "GH-1"}}, Pos: 1}
 	r.O.Path, r.O.Branch = "/code/repo.GH-1", "GH-1"
 
-	if done, _ := fx.in.SpikeDone(t.Context(), r); !done {
+	if done, _ := fx.in.spikeDone(t.Context(), r); !done {
 		t.Error("a spike never pushed took no shortcut")
 	}
 
 	fx.f.Script("git rev-parse -q --verify refs/remotes/origin/GH-1", "abc")
 
-	if done, _ := fx.in.SpikeDone(t.Context(), r); done {
+	if done, _ := fx.in.spikeDone(t.Context(), r); done {
 		t.Error("a pushed spike took the shortcut")
 	}
 }
@@ -3420,7 +3420,7 @@ func TestDriveEndParksFinishRecord(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1")
 	r := &DriveRun{Phase: atRunning, Finishes: true, O: start.OpenedTask{Branch: "GH-1"}}
 
-	fx.in.End(t.Context(), r, driveResult{Row: "asked at finish", Code: ui.ExitAsk})
+	fx.in.end(t.Context(), r, driveResult{Row: "asked at finish", Code: ui.ExitAsk})
 
 	if !fx.f.Meta.Wrote("GH-1", branchmeta.Finish, branchmeta.FinishQueued) {
 		t.Errorf("an ask did not park the finish record; calls: %v", fx.f.Calls)
@@ -3431,7 +3431,7 @@ func TestDriveEndParksFinishRecord(t *testing.T) {
 	}
 
 	fx.f.Calls = nil
-	fx.in.End(t.Context(), r, driveResult{Row: "finished"})
+	fx.in.end(t.Context(), r, driveResult{Row: "finished"})
 
 	if fx.f.Called("set branch.GH-1." + string(branchmeta.Finish)) {
 		t.Error("a finished task's record was written again")
@@ -3706,12 +3706,12 @@ func TestDriveResendsAnOriginWaitOnceItsBaseFinished(t *testing.T) {
 	}
 
 	r.ParkedOrigin = true
-	if fx.in.BaseReady(t.Context(), r) {
+	if fx.in.baseReady(t.Context(), r) {
 		t.Fatal("a base origin lacks read as ready")
 	}
 
 	b.End = &driveResult{Row: "done: ship"}
-	if !fx.in.BaseReady(t.Context(), r) {
+	if !fx.in.baseReady(t.Context(), r) {
 		t.Error("a finished base did not release the origin wait")
 	}
 }
@@ -3789,7 +3789,7 @@ func TestDriveHaltsAnOriginWaitThatStopsAgain(t *testing.T) {
 			}
 			fx.f.Script("git rev-parse -q --verify refs/remotes/origin/GH-1", tc.origin)
 
-			if err := fx.in.OnTask(t.Context(), r, fx.in.ParkForOrigin(t.Context(), r)); err != nil {
+			if err := fx.in.onTask(t.Context(), r, fx.in.parkForOrigin(t.Context(), r)); err != nil {
 				t.Fatal(err)
 			}
 
@@ -3820,7 +3820,7 @@ func TestDriveHoldsAResumedOriginWait(t *testing.T) {
 	var out bytes.Buffer
 
 	fx.in.Out = &out
-	if err := fx.in.Next(t.Context(), r); err != nil {
+	if err := fx.in.next(t.Context(), r); err != nil {
 		t.Fatal(err)
 	}
 
@@ -3877,7 +3877,7 @@ func TestDriveMarksNoParkedTask(t *testing.T) {
 	b := &DriveRun{Phase: atRunning, O: start.OpenedTask{Branch: "GH-1"}}
 	r := &DriveRun{Phase: atParked, Base: b, O: start.OpenedTask{Branch: "GH-2"}}
 
-	if err := fx.in.MarkMoved(t.Context(), []*DriveRun{b, r}, nil); err != nil {
+	if err := fx.in.markMoved(t.Context(), []*DriveRun{b, r}, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -4026,7 +4026,7 @@ func TestDriveFinishWithADeferredPullIsFinished(t *testing.T) {
 		}
 	}()
 
-	res := in.RunFinish(t.Context(), &DriveRun{Task: DriveTask{Ref: testkit.Gh1}})
+	res := in.runFinish(t.Context(), &DriveRun{Task: DriveTask{Ref: testkit.Gh1}})
 	if res.Row != drivectl.RowFinished || res.Code != 0 || len(res.Lines) != 1 ||
 		!strings.Contains(res.Lines[0], "GH-1 finished; main not pulled") {
 		t.Errorf("runFinish = %+v, want finished with the note", res)
@@ -4055,15 +4055,15 @@ func TestDriveRetriesADeferredPull(t *testing.T) {
 	in.Out = &out
 
 	// a drive that ran no finish never pulls main
-	in.RetryPull(t.Context())
+	in.retryPull(t.Context())
 
 	if f.Called("git pull") {
 		t.Fatal("a drive that ran no finish pulled main")
 	}
 
 	in.RanFinish = true
-	in.RetryPull(t.Context())
-	in.RetryPull(t.Context())
+	in.retryPull(t.Context())
+	in.retryPull(t.Context())
 
 	if n := strings.Count(out.String(), "main not pulled"); n != 1 {
 		t.Errorf("a diverged main was said %d times:\n%s", n, out.String())
@@ -4073,7 +4073,7 @@ func TestDriveRetriesADeferredPull(t *testing.T) {
 	f.Script("git merge-base --is-ancestor m3rge main", "")
 	out.Reset()
 
-	in.RetryPull(t.Context())
+	in.retryPull(t.Context())
 
 	if !strings.Contains(out.String(), "pulled main up to m3rge") {
 		t.Errorf("retry after the pull lands:\n%s", out.String())
@@ -4118,7 +4118,7 @@ func TestDriveEndStopsARunningVerify(t *testing.T) {
 		return stack.RunVerify(ctx, t.TempDir(), []string{"sleep 30"}, log)
 	})
 
-	fx.in.End(t.Context(), r, driveResult{Row: "cancelled", Code: ui.ExitHalted, Drives: true})
+	fx.in.end(t.Context(), r, driveResult{Row: "cancelled", Code: ui.ExitHalted, Drives: true})
 
 	select {
 	case <-r.Job.Done:
@@ -4141,7 +4141,7 @@ func TestLeaveRunsHaltsAVerifyBeforeReturning(t *testing.T) {
 		return stack.RunVerify(ctx, t.TempDir(), []string{"sleep 30"}, log)
 	})
 
-	fx.in.LeaveRuns(t.Context(), []*DriveRun{r})
+	fx.in.leaveRuns(t.Context(), []*DriveRun{r})
 
 	if !r.Job.Finished() {
 		t.Fatal("leaveRuns returned with the verify still running")

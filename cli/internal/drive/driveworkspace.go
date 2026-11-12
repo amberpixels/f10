@@ -16,11 +16,11 @@ func (in *DriveInput) prTarget(ctx context.Context, r *DriveRun) (stack.PRTarget
 	return stack.PRTargetOf(ctx, in.Main, r.O.Branch)
 }
 
-// Look reads the workspace by the id open settled on, since a checkout can
+// look reads the workspace by the id open settled on, since a checkout can
 // show in more than one; one gone mid-run took the agent with it.
-func (in *DriveInput) Look(ctx context.Context, r *DriveRun) (*agentctl.Workspace, *state.Run, error) {
+func (in *DriveInput) look(ctx context.Context, r *DriveRun) (*agentctl.Workspace, *state.Run, error) {
 	// a task opened this tick is not in the tick's look
-	if ws := worktree.WorkspaceByID(in.View().Wss, r.O.Ws.ID); ws != nil && !in.View().opened[r] {
+	if ws := worktree.WorkspaceByID(in.view().Wss, r.O.Ws.ID); ws != nil && !in.view().opened[r] {
 		run, err := in.run(r.O.Path)
 
 		return ws, run, err
@@ -92,11 +92,11 @@ func (in *DriveInput) lookAll(ctx context.Context) (*tickView, error) {
 
 // run is path's live run as the tick read it, else read now.
 func (in *DriveInput) run(path string) (*state.Run, error) {
-	if in.View().Wss == nil {
+	if in.view().Wss == nil {
 		return in.runNow(path)
 	}
 
-	if runs := statusview.InRoot(in.View().live, path); len(runs) > 0 {
+	if runs := statusview.InRoot(in.view().live, path); len(runs) > 0 {
 		return runs[0], nil
 	}
 
@@ -122,9 +122,9 @@ func (in *DriveInput) stallCheck(r *DriveRun) start.StallCheck {
 	return start.StallCheck{StateDir: in.StateDir, Ttl: in.TTL, Now: r.SentAt, Since: r.freshAt}
 }
 
-// View is this tick's look, or before the first tick an empty one that
+// view is this tick's look, or before the first tick an empty one that
 // still keeps the fetch.
-func (in *DriveInput) View() *tickView {
+func (in *DriveInput) view() *tickView {
 	if in.Tick == nil {
 		in.Tick = &tickView{}
 	}

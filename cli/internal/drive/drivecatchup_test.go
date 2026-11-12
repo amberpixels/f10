@@ -627,12 +627,12 @@ func TestIntegrateBranchThenNothingLeft(t *testing.T) {
 	}
 	run := &DriveRun{O: start.OpenedTask{Branch: "FT-1/a", Path: r.Dir}}
 
-	if tree, err := d.CatchupLeft(t.Context(), run); err != nil || tree.Left() != "" {
+	if tree, err := d.catchupLeft(t.Context(), run); err != nil || tree.Left() != "" {
 		left := tree.Left()
 		t.Fatalf("left = %q, %v, want nothing", left, err)
 	}
 
-	base, err := d.CatchupBase(t.Context(), run)
+	base, err := d.catchupBase(t.Context(), run)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -666,7 +666,7 @@ func TestCatchupLeftNamesAMarker(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if tree, err := d.CatchupLeft(t.Context(), run); err != nil || !strings.Contains(tree.Left(), "a.go") {
+	if tree, err := d.catchupLeft(t.Context(), run); err != nil || !strings.Contains(tree.Left(), "a.go") {
 		left := tree.Left()
 		t.Errorf("left = %q, %v, want the marker in a.go", left, err)
 	}
@@ -852,7 +852,7 @@ func TestDriveRefusesARetargetedPullRequest(t *testing.T) {
 				Task: DriveTask{Ref: ref.Ref{ID: "GH-1"}},
 				O:    start.OpenedTask{Branch: "GH-1", Path: "/code/repo.GH-1"},
 			}
-			err := fx.in.MarkBehind(t.Context(), r)
+			err := fx.in.markBehind(t.Context(), r)
 			marked := fx.f.Called("set branch.GH-1." + string(branchmeta.Landed))
 
 			if base == "main" {
@@ -895,7 +895,7 @@ func TestDriveMarksNothingBehindAnUnreadPullRequest(t *testing.T) {
 				Task: DriveTask{Ref: ref.Ref{ID: "GH-1"}},
 				O:    start.OpenedTask{Branch: "GH-1", Path: "/code/repo.GH-1"},
 			}
-			err := fx.in.MarkBehind(t.Context(), r)
+			err := fx.in.markBehind(t.Context(), r)
 			marked := fx.f.Called("set branch.GH-1." + string(branchmeta.Landed))
 
 			if err != nil || marked != tc.marked {
@@ -928,7 +928,7 @@ func TestDriveKeepsTheCatchupRecordForAResume(t *testing.T) {
 		Task:        task,
 		LastCatchup: &drivestore.Catchup{Target: "m2", Origin: "p1", Base: "main", Integrated: true},
 	}
-	fx.in.KeepCatchup(r)
+	fx.in.keepCatchup(r)
 
 	back, err := drivestore.Read(fx.in.Root, fx.in.Rec.Number)
 	if err != nil {
@@ -937,12 +937,12 @@ func TestDriveKeepsTheCatchupRecordForAResume(t *testing.T) {
 
 	fx.in.Rec = back
 
-	got := fx.in.SavedCatchup(task)
+	got := fx.in.savedCatchup(task)
 	if got == nil || *got != *r.LastCatchup {
 		t.Fatalf("resumed with %+v, want %+v", got, r.LastCatchup)
 	}
 
-	// a copy: a change on the resumed run is written only through KeepCatchup
+	// a copy: a change on the resumed run is written only through keepCatchup
 	got.Spent = true
 	if fx.in.Rec.Task("GH-1").Catchup.Spent {
 		t.Error("the resumed record shares the drive record's copy")

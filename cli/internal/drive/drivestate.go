@@ -213,13 +213,13 @@ func (in *DriveInput) attempt(
 		return in.count(r, &r.leftAttempts, action, fp, halt)
 	}
 
-	return in.AttemptAt(r, action, fp, halt)
+	return in.attemptAt(r, action, fp, halt)
 }
 
-// AttemptAt is attempt with the state to compare given: a catchup's is the
+// attemptAt is attempt with the state to compare given: a catchup's is the
 // conflict it left, since a catchup that merges moves the head without
 // progress, and the reason it gives changes wording between catchups.
-func (in *DriveInput) AttemptAt(r *DriveRun, action, fp string, halt driveResult) error {
+func (in *DriveInput) attemptAt(r *DriveRun, action, fp string, halt driveResult) error {
 	return in.count(r, &r.attempts, action, fp, halt)
 }
 
@@ -282,7 +282,7 @@ func (in *DriveInput) failed(ctx context.Context, r *DriveRun, halt driveResult)
 		return err
 	}
 
-	in.Enter(r, atRetrying)
+	in.enter(r, atRetrying)
 
 	return nil
 }
@@ -313,7 +313,7 @@ func (in *DriveInput) settle(
 	}
 
 	if passed > 0 {
-		return in.Next(ctx, r)
+		return in.next(ctx, r)
 	}
 
 	if !retry {

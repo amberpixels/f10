@@ -7,7 +7,6 @@ package layers
 
 import (
 	"fmt"
-	"path"
 	"sort"
 	"strings"
 )
@@ -138,7 +137,7 @@ func Check(imports map[string][]string, table []Rule) []Violation {
 
 		for _, to := range tos {
 			tr, ok := RankOf(to, table)
-			if !ok || to == from || ownTestHelper(from, to) {
+			if !ok || to == from {
 				continue
 			}
 
@@ -165,12 +164,6 @@ func Check(imports map[string][]string, table []Rule) []Violation {
 	sort.Slice(out, func(i, j int) bool { return out[i].String() < out[j].String() })
 
 	return out
-}
-
-// ownTestHelper says to is from's own test helper package, <pkg>/<pkg>test:
-// it imports from, so it ranks above it, and only from's tests import it.
-func ownTestHelper(from, to string) bool {
-	return to == from+"/"+path.Base(from)+"test"
 }
 
 // RankOf is the rule that ranks pkg, a path relative to the module root.

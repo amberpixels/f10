@@ -67,9 +67,9 @@ func TestDriveRetriesEnterOnceForATypedSend(t *testing.T) {
 	in.Out = &out
 
 	for range 2 {
-		in.RetryEnter(t.Context(), typed)
-		in.RetryEnter(t.Context(), launched)
-		in.RetryEnter(t.Context(), recent)
+		in.retryEnter(t.Context(), typed)
+		in.retryEnter(t.Context(), launched)
+		in.retryEnter(t.Context(), recent)
 	}
 
 	if len(m.Enters) != 1 || !bytes.Contains(out.Bytes(), []byte("Enter resent")) {

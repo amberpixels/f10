@@ -14,10 +14,10 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
-// LeaveRuns runs on every way out of the loop, drained and failed included:
+// leaveRuns runs on every way out of the loop, drained and failed included:
 // an interrupted drive leaves no finish record claiming it still runs, and
 // no catchup verify running in its own process group.
-func (in *DriveInput) LeaveRuns(ctx context.Context, runs []*DriveRun) {
+func (in *DriveInput) leaveRuns(ctx context.Context, runs []*DriveRun) {
 	for _, r := range runs {
 		if r.active() {
 			in.parkFinish(ctx, r)
@@ -29,9 +29,9 @@ func (in *DriveInput) LeaveRuns(ctx context.Context, runs []*DriveRun) {
 	}
 }
 
-// End prints the result now, so a halt or an ask is on screen when it
+// end prints the result now, so a halt or an ask is on screen when it
 // happens, and puts a halt in the ledger for status to read after the exit.
-func (in *DriveInput) End(ctx context.Context, r *DriveRun, res driveResult) {
+func (in *DriveInput) end(ctx context.Context, r *DriveRun, res driveResult) {
 	r.End = &res
 
 	// a cancelled or halted run takes its catchup's verify with it
@@ -157,10 +157,10 @@ func endOf(err error) (driveResult, bool) {
 	return driveResult{}, false
 }
 
-// OnTask applies an end r's path returned; any other error goes on up.
-func (in *DriveInput) OnTask(ctx context.Context, r *DriveRun, err error) error {
+// onTask applies an end r's path returned; any other error goes on up.
+func (in *DriveInput) onTask(ctx context.Context, r *DriveRun, err error) error {
 	if res, ok := endOf(err); ok {
-		in.End(ctx, r, res)
+		in.end(ctx, r, res)
 
 		return nil
 	}

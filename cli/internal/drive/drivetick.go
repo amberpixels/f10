@@ -33,27 +33,27 @@ func Drive(ctx context.Context, w io.Writer, in *DriveInput) (err error) {
 	in.Out, in.leases = w, map[string]*drivestore.Lease{}
 	in.resolveProfiles()
 
-	tasks, notes, err := in.ResolveTasks(ctx)
+	tasks, notes, err := in.resolveTasks(ctx)
 	if err != nil {
 		return err
 	}
 
-	order, graphNotes, err := in.Graph(ctx, tasks)
+	order, graphNotes, err := in.graph(ctx, tasks)
 	if err != nil {
 		return err
 	}
 
 	notes = append(notes, graphNotes...)
 
-	if err := in.OpenRecord(tasks); err != nil {
+	if err := in.openRecord(tasks); err != nil {
 		return err
 	}
 
-	if err := in.RecordLaunch(); err != nil {
+	if err := in.recordLaunch(); err != nil {
 		notes = append(notes, "the drive was not recorded as this session's launch: "+err.Error())
 	}
 
-	// runs after ReleaseAll: an answer claimed while this drive still held
+	// runs after releaseAll: an answer claimed while this drive still held
 	// its lease is seen here, or by its claimer once the lease is free
 	defer func() {
 		if !in.resumeAnswered(tasks) {
@@ -67,9 +67,9 @@ func Drive(ctx context.Context, w io.Writer, in *DriveInput) (err error) {
 
 		err = cli.Exit("", daemon.ExitResume)
 	}()
-	defer in.ReleaseAll()
+	defer in.releaseAll()
 
-	if err := in.TakeAnswers(tasks); err != nil {
+	if err := in.takeAnswers(tasks); err != nil {
 		return err
 	}
 
@@ -94,9 +94,9 @@ func Drive(ctx context.Context, w io.Writer, in *DriveInput) (err error) {
 	byID := map[string]*DriveRun{}
 
 	for _, i := range order {
-		r := &DriveRun{Task: tasks[i], LastCatchup: in.SavedCatchup(tasks[i])}
+		r := &DriveRun{Task: tasks[i], LastCatchup: in.savedCatchup(tasks[i])}
 		if r.Task.finished {
-			in.End(ctx, r, driveResult{Row: drivectl.RowAlreadyFinished})
+			in.end(ctx, r, driveResult{Row: drivectl.RowAlreadyFinished})
 		}
 
 		runs = append(runs, r)
@@ -123,7 +123,7 @@ func Drive(ctx context.Context, w io.Writer, in *DriveInput) (err error) {
 		}
 
 		if why, ok := in.lease(r); !ok {
-			in.End(ctx, r, driveResult{Row: why, Code: ui.ExitHalted, Drives: true})
+			in.end(ctx, r, driveResult{Row: why, Code: ui.ExitHalted, Drives: true})
 		}
 	}
 
@@ -131,7 +131,7 @@ func Drive(ctx context.Context, w io.Writer, in *DriveInput) (err error) {
 		return err
 	}
 
-	defer in.LeaveRuns(context.WithoutCancel(ctx), runs)
+	defer in.leaveRuns(context.WithoutCancel(ctx), runs)
 
 	for !stopping(runs) {
 		if err := in.Sleep(ctx, in.Args.Every); err != nil {
@@ -149,14 +149,14 @@ func Drive(ctx context.Context, w io.Writer, in *DriveInput) (err error) {
 		if in.Rec != nil && in.Rec.Cancelled != nil {
 			for _, r := range runs {
 				if r.End == nil {
-					in.End(ctx, r, driveResult{Row: "cancelled", Code: ui.ExitHalted, Drives: true})
+					in.end(ctx, r, driveResult{Row: "cancelled", Code: ui.ExitHalted, Drives: true})
 				}
 			}
 
 			break
 		}
 
-		in.RetryPull(ctx)
+		in.retryPull(ctx)
 
 		view, err := in.lookAll(ctx)
 		if err != nil {
@@ -171,12 +171,12 @@ func Drive(ctx context.Context, w io.Writer, in *DriveInput) (err error) {
 				continue
 			}
 
-			if err := in.OnTask(ctx, r, in.poll(ctx, r)); err != nil {
+			if err := in.onTask(ctx, r, in.poll(ctx, r)); err != nil {
 				return fmt.Errorf("%s: %w", r.Task.Ref.ID, err)
 			}
 		}
 
-		if err := in.MarkMoved(ctx, runs, wss); err != nil {
+		if err := in.markMoved(ctx, runs, wss); err != nil {
 			return err
 		}
 
@@ -285,11 +285,11 @@ func (in *DriveInput) startRunnable(
 	}
 
 	for _, r := range gate.Order(runs) {
-		if r.Opened() || r.End != nil {
+		if r.opened() || r.End != nil {
 			continue
 		}
 
-		if r.Base != nil && !in.Released(ctx, r.Base) {
+		if r.Base != nil && !in.released(ctx, r.Base) {
 			continue
 		}
 
@@ -299,9 +299,9 @@ func (in *DriveInput) startRunnable(
 			continue
 		}
 
-		in.Unqueue(r)
+		in.unqueue(r)
 
-		if err := in.OnTask(ctx, r, in.open(ctx, r)); err != nil {
+		if err := in.onTask(ctx, r, in.open(ctx, r)); err != nil {
 			return fmt.Errorf("%s: %w", r.Task.Ref.ID, err)
 		}
 
@@ -309,7 +309,7 @@ func (in *DriveInput) startRunnable(
 			continue
 		}
 
-		if err := in.OnTask(ctx, r, in.Next(ctx, r)); err != nil {
+		if err := in.onTask(ctx, r, in.next(ctx, r)); err != nil {
 			return fmt.Errorf("%s: %w", r.Task.Ref.ID, err)
 		}
 	}
@@ -317,14 +317,14 @@ func (in *DriveInput) startRunnable(
 	return nil
 }
 
-// Released: a base lets its dependents start once through, or once it has
+// released: a base lets its dependents start once through, or once it has
 // code of its own, which only a commit or pr step makes with verify green.
-func (in *DriveInput) Released(ctx context.Context, b *DriveRun) bool {
+func (in *DriveInput) released(ctx context.Context, b *DriveRun) bool {
 	if b.through() {
 		return true
 	}
 
-	if !b.Opened() || b.End != nil {
+	if !b.opened() || b.End != nil {
 		return false
 	}
 
@@ -336,17 +336,17 @@ func (in *DriveInput) Released(ctx context.Context, b *DriveRun) bool {
 	return stack.BaseHasCode(ctx, in.Main, b.O.Branch, def)
 }
 
-// MarkMoved marks a running dependent whose base branch moved past it, read
+// markMoved marks a running dependent whose base branch moved past it, read
 // while the base agent is not mid-turn, so its next boundary catches up; a
 // catchup in flight clears the mark itself, and a finished base is landed's.
-func (in *DriveInput) MarkMoved(ctx context.Context, runs []*DriveRun, wss []agentctl.Workspace) error {
+func (in *DriveInput) markMoved(ctx context.Context, runs []*DriveRun, wss []agentctl.Workspace) error {
 	for _, r := range runs {
 		b := r.Base
 		// a parked ship's own guard brings the base in when it resumes, and
 		// so does one the cap queued after parking; an attached turn may be
 		// a catchup, which a mark mid-turn would halt
-		if !r.active() || r.Phase == atParked || r.Queued() || r.Skill == "catchup" || r.attached || b == nil ||
-			!b.Opened() {
+		if !r.active() || r.Phase == atParked || r.queued() || r.Skill == "catchup" || r.attached || b == nil ||
+			!b.opened() {
 			continue
 		}
 
@@ -400,10 +400,10 @@ func (in *DriveInput) MarkMoved(ctx context.Context, runs []*DriveRun, wss []age
 	return nil
 }
 
-// MarkBehind marks a pushed branch whose pull request's target moved past it,
+// markBehind marks a pushed branch whose pull request's target moved past it,
 // at the boundary before its next skill, so the open PR never sits behind; a
-// listed base still in flight is MarkMoved's, and finish has readyToMerge.
-func (in *DriveInput) MarkBehind(ctx context.Context, r *DriveRun) error {
+// listed base still in flight is markMoved's, and finish has readyToMerge.
+func (in *DriveInput) markBehind(ctx context.Context, r *DriveRun) error {
 	id, branch := r.Task.Ref.ID, r.O.Branch
 
 	if r.Base != nil && !r.Base.through() {
@@ -425,7 +425,7 @@ func (in *DriveInput) MarkBehind(ctx context.Context, r *DriveRun) error {
 		return nil
 	}
 
-	if err := in.View().fetch.Fetch(ctx, in.Main); err != nil {
+	if err := in.view().fetch.Fetch(ctx, in.Main); err != nil {
 		return skip("fetching origin", err)
 	}
 
@@ -488,9 +488,9 @@ func (in *DriveInput) MarkBehind(ctx context.Context, r *DriveRun) error {
 	return nil
 }
 
-// SavedCatchup is the catchup record an earlier run of this drive kept for
+// savedCatchup is the catchup record an earlier run of this drive kept for
 // t, so a resumed drive leases its push as the first one would have.
-func (in *DriveInput) SavedCatchup(t DriveTask) *drivestore.Catchup {
+func (in *DriveInput) savedCatchup(t DriveTask) *drivestore.Catchup {
 	if in.Rec == nil {
 		return nil
 	}

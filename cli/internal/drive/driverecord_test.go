@@ -190,10 +190,10 @@ func TestOpenRecordKeepsAnswersNotTaken(t *testing.T) {
 	}
 	in.Args.Answers = []string{"GH-2=2. maybe"}
 
-	if err := in.OpenRecord(answerTasks("GH-1", "GH-2")); err != nil {
+	if err := in.openRecord(answerTasks("GH-1", "GH-2")); err != nil {
 		t.Fatal(err)
 	}
-	defer in.ReleaseAll()
+	defer in.releaseAll()
 
 	if want := []string{"GH-1=1. yes", "GH-2=2. maybe"}; !slices.Equal(in.Args.Answers, want) {
 		t.Errorf("answers = %q, want %q", in.Args.Answers, want)
@@ -205,13 +205,13 @@ func TestOpenRecordKeepsAnswersNotTaken(t *testing.T) {
 		Argv: []string{"GH-1", "GH-2"},
 		Now:  time.Now,
 	}
-	if err := second.OpenRecord(nil); err == nil || !strings.Contains(err.Error(), "drive 1 is running") {
+	if err := second.openRecord(nil); err == nil || !strings.Contains(err.Error(), "drive 1 is running") {
 		t.Errorf("second openRecord = %v", err)
 	}
 }
 
 // A bare answer whose text holds "=" stays bare: the rerun's replaces the
-// kept one, or TakeAnswers sees two bare answers and refuses.
+// kept one, or takeAnswers sees two bare answers and refuses.
 func TestOpenRecordReplacesABareAnswerHoldingEquals(t *testing.T) {
 	root := t.TempDir()
 
@@ -228,16 +228,16 @@ func TestOpenRecordReplacesABareAnswerHoldingEquals(t *testing.T) {
 	in.Args.Answers = []string{"use x=1"}
 
 	tasks := answerTasks("GH-1")
-	if err := in.OpenRecord(tasks); err != nil {
+	if err := in.openRecord(tasks); err != nil {
 		t.Fatal(err)
 	}
-	defer in.ReleaseAll()
+	defer in.releaseAll()
 
 	if want := []string{"use x=1"}; !slices.Equal(in.Args.Answers, want) {
 		t.Errorf("answers = %q, want %q", in.Args.Answers, want)
 	}
 
-	if err := in.TakeAnswers(tasks); err != nil || in.Answers.Bare != "use x=1" {
+	if err := in.takeAnswers(tasks); err != nil || in.Answers.Bare != "use x=1" {
 		t.Errorf("takeAnswers = %v, answer %q", err, in.Answers.Bare)
 	}
 }
@@ -435,15 +435,15 @@ func TestOpenRecordRecordsTheLaunch(t *testing.T) {
 			change(in)
 		}
 
-		if err := in.OpenRecord(nil); err != nil {
+		if err := in.openRecord(nil); err != nil {
 			t.Fatal(err)
 		}
 
-		if err := in.RecordLaunch(); err != nil {
+		if err := in.recordLaunch(); err != nil {
 			t.Fatal(err)
 		}
 
-		in.ReleaseAll()
+		in.releaseAll()
 
 		return in
 	}
@@ -486,11 +486,11 @@ func TestOpenRecordKeepsTheCap(t *testing.T) {
 			Args:            drivectl.DriveArgs{Parallel: parallel},
 			Now:             time.Now,
 		}
-		if err := in.OpenRecord(nil); err != nil {
+		if err := in.openRecord(nil); err != nil {
 			t.Fatal(err)
 		}
 
-		in.ReleaseAll()
+		in.releaseAll()
 
 		return in
 	}
@@ -622,16 +622,16 @@ func TestRecordFollowsThePhase(t *testing.T) {
 	in.Queue(r)
 	want(drivestore.PhaseQueued, true)
 
-	in.Unqueue(r)
-	in.Enter(r, atRunning)
+	in.unqueue(r)
+	in.enter(r, atRunning)
 	want(drivestore.PhaseRunning, false)
 
-	in.Enter(r, atParked)
+	in.enter(r, atParked)
 	want(drivestore.PhaseParked, false)
 
-	in.Enter(r, atWaiting)
+	in.enter(r, atWaiting)
 	want(drivestore.PhaseWaiting, false)
 
-	in.End(t.Context(), r, driveResult{Row: "done: ship"})
+	in.end(t.Context(), r, driveResult{Row: "done: ship"})
 	want(drivestore.PhaseEnded, false)
 }

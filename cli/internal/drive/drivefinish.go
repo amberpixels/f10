@@ -30,7 +30,7 @@ func (in *DriveInput) readyToMerge(ctx context.Context, r *DriveRun) error {
 		return halt(id, "finish", err.Error())
 	}
 
-	if err := in.View().fetch.Fetch(ctx, in.Main); err != nil {
+	if err := in.view().fetch.Fetch(ctx, in.Main); err != nil {
 		return halt(id, "finish", err.Error())
 	}
 
@@ -131,9 +131,9 @@ func DriveFinishInput(t *target.Target, main string, h hostops.Host, req DriveFi
 	return in, nil
 }
 
-// RunFinish runs finish in process; its refusals halt the task, except a PR
+// runFinish runs finish in process; its refusals halt the task, except a PR
 // someone else opened, which asks.
-func (in *DriveInput) RunFinish(ctx context.Context, r *DriveRun) driveResult {
+func (in *DriveInput) runFinish(ctx context.Context, r *DriveRun) driveResult {
 	task, id := r.Task, r.Task.Ref.ID
 
 	pr, err := in.finishAnswer(id)
@@ -199,10 +199,10 @@ func (in *DriveInput) RunFinish(ctx context.Context, r *DriveRun) driveResult {
 	return driveResult{Row: drivectl.RowFinished, Lines: append(lines, handoffBlock(id, hand)...)}
 }
 
-// RetryPull retries a pull a finish deferred, once a tick, in a drive that
+// retryPull retries a pull a finish deferred, once a tick, in a drive that
 // ran a finish, since pulling is an act; a line already printed is not
 // printed again, so a diverged main is said once.
-func (in *DriveInput) RetryPull(ctx context.Context) {
+func (in *DriveInput) retryPull(ctx context.Context) {
 	if !in.RanFinish {
 		return
 	}
@@ -233,7 +233,7 @@ func (in *DriveInput) finishStep(ctx context.Context, branch, st, action string)
 // stops short of finish: status reads the record as "drive finishes this
 // branch", so it stays, and never claims a finish running with no drive.
 func (in *DriveInput) parkFinish(ctx context.Context, r *DriveRun) {
-	if !r.Opened() || !r.Finishes {
+	if !r.opened() || !r.Finishes {
 		return
 	}
 

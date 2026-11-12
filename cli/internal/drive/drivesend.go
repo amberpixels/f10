@@ -20,7 +20,7 @@ import (
 func (in *DriveInput) send(ctx context.Context, r *DriveRun, skill string) error {
 	id := r.Task.Ref.ID
 
-	ws, run, err := in.Look(ctx, r)
+	ws, run, err := in.look(ctx, r)
 	if err != nil {
 		return err
 	}
@@ -34,7 +34,7 @@ func (in *DriveInput) send(ctx context.Context, r *DriveRun, skill string) error
 	}
 
 	in.saveTask(r, func(t *drivestore.Task) { t.Skill, t.Outcome = skill, nil })
-	in.KeepCatchup(r)
+	in.keepCatchup(r)
 
 	answeredAt, answered := in.Answers.Heard(id)
 
@@ -107,7 +107,7 @@ func (in *DriveInput) send(ctx context.Context, r *DriveRun, skill string) error
 			return err
 		}
 
-		return in.Next(ctx, r)
+		return in.next(ctx, r)
 	default:
 		return in.prompt(ctx, r, ws, skill, "")
 	}
@@ -163,10 +163,10 @@ func (in *DriveInput) deliver(ctx context.Context, r *DriveRun, text string) err
 	return nil
 }
 
-// RetryEnter checks, once and EnterRetry after a typed send, that the text
+// retryEnter checks, once and EnterRetry after a typed send, that the text
 // left the agent's input box, pressing Enter again if it did not. A failed
 // check is printed, and the start window still decides.
-func (in *DriveInput) RetryEnter(ctx context.Context, r *DriveRun) {
+func (in *DriveInput) retryEnter(ctx context.Context, r *DriveRun) {
 	if r.Typed == "" || r.enterRetried || in.Now().Sub(r.SentAt) < launch.EnterRetry {
 		return
 	}

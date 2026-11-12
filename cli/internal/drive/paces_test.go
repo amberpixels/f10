@@ -64,7 +64,7 @@ func TestDriveKeepsTheRecordedPace(t *testing.T) {
 			Paced: paced,
 		}
 
-		fl, note, err := in.KeepPace(t.Context(), "GH-1", runplan.ShipFlow{Pace: tc.run})
+		fl, note, err := in.keepPace(t.Context(), "GH-1", runplan.ShipFlow{Pace: tc.run})
 		if err != nil || fl.Pace != tc.want || !strings.Contains(note, tc.note) ||
 			f.Called("set branch.GH-1."+string(branchmeta.Pace)+" "+tc.flag) != tc.writes {
 			t.Errorf("recorded %q: pace %q, note %q, err %v, calls %v", tc.recorded, fl.Pace, note, err, f.Calls)

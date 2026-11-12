@@ -64,7 +64,7 @@ func (in *DriveInput) catchupHere(
 	}
 
 	ci := in.Catchup.Input(in.Main, dir)
-	ci.Fetched = &in.View().fetch
+	ci.Fetched = &in.view().fetch
 	ci.ShipStopped = run != nil && (run.Status("ship") == "failed" || run.Status("ship") == "partial")
 
 	tasks := r.Task.Ref.Members()
@@ -90,7 +90,7 @@ func (in *DriveInput) catchupHere(
 			c.Integrated = true
 		}
 
-		in.KeepCatchup(r)
+		in.keepCatchup(r)
 	}
 
 	r.catchupPlan = &p
@@ -112,14 +112,14 @@ func (in *DriveInput) catchupHere(
 		if key == "" {
 			fmt.Fprintf(in.Out, "%s catchup: %s already holds %s\n", in.id(id), r.O.Branch, cmp.Or(p.Base, "its base"))
 
-			return in.Next(ctx, r)
+			return in.next(ctx, r)
 		}
 
 		// a rewrite no catchup on record made predates the origin read, so
 		// that record cannot lease a force-push
 		if c := r.LastCatchup; c != nil && !c.Integrated {
 			c.Spent = true
-			in.KeepCatchup(r)
+			in.keepCatchup(r)
 		}
 	}
 
@@ -181,7 +181,7 @@ func catchupHalt(r *DriveRun, reason string) driveResult {
 func (in *DriveInput) startVerify(ctx context.Context, r *DriveRun) {
 	dir, log := r.O.Path, filepath.Join(cmp.Or(in.Root, os.TempDir()), "catchup", r.Task.Ref.ID+".log")
 
-	in.Enter(r, atVerifying)
+	in.enter(r, atVerifying)
 	r.Job = startVerifyJob(ctx, func(ctx context.Context) (stack.VerifyRun, error) {
 		return in.Catchup.Verify(ctx, dir, log)
 	})
@@ -194,7 +194,7 @@ func (in *DriveInput) startVerify(ctx context.Context, r *DriveRun) {
 func (in *DriveInput) catchupSettled(ctx context.Context, r *DriveRun, retry bool) error {
 	id, dir := r.Task.Ref.ID, r.O.Path
 
-	tree, err := in.CatchupLeft(ctx, r)
+	tree, err := in.catchupLeft(ctx, r)
 	reason := tree.Left()
 
 	switch {
@@ -242,10 +242,10 @@ func (in *DriveInput) catchupStalled(
 	return in.catchupSettled(ctx, r, true)
 }
 
-// CatchupLeft is the engine's read of what keeps the branch from being
+// catchupLeft is the engine's read of what keeps the branch from being
 // caught up with the base this catchup brought in.
-func (in *DriveInput) CatchupLeft(ctx context.Context, r *DriveRun) (stack.TreeState, error) {
-	p, err := in.CatchupBase(ctx, r)
+func (in *DriveInput) catchupLeft(ctx context.Context, r *DriveRun) (stack.TreeState, error) {
+	p, err := in.catchupBase(ctx, r)
 	if err != nil {
 		return stack.TreeState{}, err
 	}
@@ -253,11 +253,11 @@ func (in *DriveInput) CatchupLeft(ctx context.Context, r *DriveRun) (stack.TreeS
 	return in.Catchup.Left(ctx, in.Main, r.O.Path, r.O.Branch, p)
 }
 
-// CatchupBase is the base the catchup brought in: the one this drive
+// catchupBase is the base the catchup brought in: the one this drive
 // integrated, else, for a drive that did not (resumed), the one the marks
 // name, read as f10 pr catchup reads it without a fetch. Re-reading after a
 // turn would move it to the base branch's newer tip once a mark is cleared.
-func (in *DriveInput) CatchupBase(ctx context.Context, r *DriveRun) (stack.CatchupPlan, error) {
+func (in *DriveInput) catchupBase(ctx context.Context, r *DriveRun) (stack.CatchupPlan, error) {
 	if r.catchupPlan != nil {
 		return *r.catchupPlan, nil
 	}
@@ -283,7 +283,7 @@ func (in *DriveInput) verified(ctx context.Context, r *DriveRun, job *verifyJob)
 		)
 	}
 
-	p, err := in.CatchupBase(ctx, r)
+	p, err := in.catchupBase(ctx, r)
 	if err != nil {
 		return in.failed(ctx, r, catchupHalt(r, err.Error()))
 	}
@@ -298,11 +298,11 @@ func (in *DriveInput) verified(ctx context.Context, r *DriveRun, job *verifyJob)
 			"verify is red after the catchup: "+job.res.Failed+" failed, its output is in "+job.res.Log,
 		)
 
-		if err := in.AttemptAt(r, "catchup", drivestore.Fingerprint(p.SHA, "", job.res.Failed), halt); err != nil {
+		if err := in.attemptAt(r, "catchup", drivestore.Fingerprint(p.SHA, "", job.res.Failed), halt); err != nil {
 			return err
 		}
 
-		ws, _, err := in.Look(ctx, r)
+		ws, _, err := in.look(ctx, r)
 		if err != nil {
 			return err
 		}
@@ -313,7 +313,7 @@ func (in *DriveInput) verified(ctx context.Context, r *DriveRun, job *verifyJob)
 	}
 
 	// the agent may have committed since verify started, so git is read again
-	tree, err := in.CatchupLeft(ctx, r)
+	tree, err := in.catchupLeft(ctx, r)
 	if reason := tree.Left(); err == nil && reason != "" {
 		r.catchupLeft = reason
 		err = fmt.Errorf("the catchup did not end clean: %s", reason)
@@ -337,7 +337,7 @@ func (in *DriveInput) verified(ctx context.Context, r *DriveRun, job *verifyJob)
 		return err
 	}
 
-	return in.Next(ctx, r)
+	return in.next(ctx, r)
 }
 
 // recordCatchup notes what the catchup about to go out starts from, kept on
@@ -346,7 +346,7 @@ func (in *DriveInput) verified(ctx context.Context, r *DriveRun, job *verifyJob)
 // landed, so a rebase would push over them. Ahead of origin is the drive's
 // own unpushed work, and fine.
 func (in *DriveInput) recordCatchup(ctx context.Context, r *DriveRun, key branchmeta.Key) error {
-	rec, err := stack.CatchupRecord(ctx, in.Main, r.O.Path, r.O.Branch, key, in.Now(), &in.View().fetch)
+	rec, err := stack.CatchupRecord(ctx, in.Main, r.O.Path, r.O.Branch, key, in.Now(), &in.view().fetch)
 	if err != nil {
 		return err
 	}
@@ -364,13 +364,13 @@ func (in *DriveInput) recordCatchup(ctx context.Context, r *DriveRun, key branch
 	}
 
 	r.LastCatchup = rec
-	in.KeepCatchup(r)
+	in.keepCatchup(r)
 
 	return nil
 }
 
-// KeepCatchup writes the task's catchup record to the drive record.
-func (in *DriveInput) KeepCatchup(r *DriveRun) {
+// keepCatchup writes the task's catchup record to the drive record.
+func (in *DriveInput) keepCatchup(r *DriveRun) {
 	if in.Rec == nil {
 		return
 	}
@@ -405,7 +405,7 @@ func (in *DriveInput) conflictAttempt(
 		reason += ": " + paths
 	}
 
-	err = in.AttemptAt(r, "catchup", fp, halted(r.Task.Ref.ID, skill, reason))
+	err = in.attemptAt(r, "catchup", fp, halted(r.Task.Ref.ID, skill, reason))
 	if res, ok := endOf(err); ok {
 		res.Lines = append(res.Lines, "next: settle it with /f10:catchup in "+r.O.Path+", then rerun the drive")
 
@@ -424,7 +424,7 @@ func (in *DriveInput) pushAfterCatchup(
 	id, branch := r.Task.Ref.ID, r.O.Branch
 
 	how, err := stack.PushCatchup(ctx, r.O.Path, branch, r.LastCatchup)
-	in.KeepCatchup(r)
+	in.keepCatchup(r)
 
 	if c := r.LastCatchup; base == "" && c != nil {
 		base = c.Base

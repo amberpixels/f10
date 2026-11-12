@@ -32,20 +32,10 @@ type DriveInput struct {
 	driveState
 }
 
-// Enter moves r to phase p and writes its standing to the record.
-func (in *DriveInput) Enter(r *DriveRun, p runPhase) {
-	if r.Phase == p {
-		return
-	}
-
-	r.Phase = p
-	in.saveTask(r, func(t *drivestore.Task) { t.Phase, t.Queued = p.recorded(), r.Queued() })
-}
-
 // Skills is what drive prompts r through, in order; a spike its pace does
 // not finish gets finish once it closes.
 func (in *DriveInput) Skills(r *DriveRun) []string {
-	skills := in.SequenceOf(r.Flow)
+	skills := in.sequenceOf(r.Flow)
 	if r.Finishes && !slices.Contains(skills, "finish") {
 		skills = append(slices.Clip(skills), "finish")
 	}
@@ -53,7 +43,17 @@ func (in *DriveInput) Skills(r *DriveRun) []string {
 	return skills
 }
 
-func (in *DriveInput) SequenceOf(fl runplan.ShipFlow) []string {
+// enter moves r to phase p and writes its standing to the record.
+func (in *DriveInput) enter(r *DriveRun, p runPhase) {
+	if r.Phase == p {
+		return
+	}
+
+	r.Phase = p
+	in.saveTask(r, func(t *drivestore.Task) { t.Phase, t.Queued = p.recorded(), r.queued() })
+}
+
+func (in *DriveInput) sequenceOf(fl runplan.ShipFlow) []string {
 	if in.Sequence != nil {
 		return in.Sequence(fl)
 	}
@@ -128,7 +128,7 @@ type driveState struct {
 	links      *render.TaskLinks // prints this drive's task ids for people
 	project    string            // the name the links print task ids under, read once they load
 	inboxNotes []string
-	PullLine   string // the last line RetryPull printed, or a finish's deferred note
+	PullLine   string // the last line retryPull printed, or a finish's deferred note
 	RanFinish  bool   // a finish ran here, so this drive may pull main
 
 	// Parallel caps the tasks running a skill at once, and twice it the
@@ -210,12 +210,12 @@ type DriveRun struct {
 	Job *verifyJob
 }
 
-func (r *DriveRun) Opened() bool { return r.Phase != atPending && r.Phase != AtHeld }
+func (r *DriveRun) opened() bool { return r.Phase != atPending && r.Phase != AtHeld }
 
-// Queued: the cap holds the task, opened or not.
-func (r *DriveRun) Queued() bool { return r.Phase == AtHeld || r.Phase == atQueued }
+// queued: the cap holds the task, opened or not.
+func (r *DriveRun) queued() bool { return r.Phase == AtHeld || r.Phase == atQueued }
 
-func (r *DriveRun) active() bool { return r.Opened() && r.End == nil }
+func (r *DriveRun) active() bool { return r.opened() && r.End == nil }
 
 // current is run unless its agent is gone, as for a run a cancelled start
 // left behind in a checkout this drive gave a new agent.

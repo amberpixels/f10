@@ -77,9 +77,9 @@ func recordArgs(argv []string) []string {
 	return out
 }
 
-// OpenRecord folds the record's kept answers under the ones given now; a
+// openRecord folds the record's kept answers under the ones given now; a
 // root of "" keeps no record.
-func (in *DriveInput) OpenRecord(tasks []DriveTask) error {
+func (in *DriveInput) openRecord(tasks []DriveTask) error {
 	in.Parallel = cmp.Or(in.Args.Parallel, in.DefaultParallel)
 
 	if in.Root == "" {
@@ -182,9 +182,9 @@ func (in *DriveInput) OpenRecord(tasks []DriveTask) error {
 	return nil
 }
 
-// RecordLaunch: a --resume (a drained drive, a drive resuming itself) and an
+// recordLaunch: a --resume (a drained drive, a drive resuming itself) and an
 // --answer relayed from another session are nobody's launch.
-func (in *DriveInput) RecordLaunch() error {
+func (in *DriveInput) recordLaunch() error {
 	if !in.launched || in.Rec == nil {
 		return nil
 	}
@@ -313,8 +313,8 @@ func (in *DriveInput) unlease(r *DriveRun, runs []*DriveRun) {
 	delete(in.leases, key)
 }
 
-// ReleaseAll drops every lease the drive still holds, its own last.
-func (in *DriveInput) ReleaseAll() {
+// releaseAll drops every lease the drive still holds, its own last.
+func (in *DriveInput) releaseAll() {
 	for key, l := range in.leases {
 		l.Release()
 		delete(in.leases, key)

@@ -85,10 +85,10 @@ func catchupPass(
 	}
 
 	if in.Catchup {
-		in.ReadTargets(t.Context(), tasks, store)
+		in.readTargets(t.Context(), tasks, store)
 	}
 
-	in.Reconcile(t.Context(), tasks, store)
+	in.reconcile(t.Context(), tasks, store)
 
 	return out
 }
@@ -488,7 +488,7 @@ func TestWatchStoreKeepsTheCatchupRecord(t *testing.T) {
 	var out collected
 
 	in := WatchInput{Mode: "report", Now: func() time.Time { return watchNow }, Out: &out}
-	in.Tell(got, "FT-1", watchNow, &watchReport{Kind: watchStopped, Key: "s"})
+	in.tell(got, "FT-1", watchNow, &watchReport{Kind: watchStopped, Key: "s"})
 
 	if got["FT-1"].Catchup == nil || got["FT-1"].Kind != watchStopped {
 		t.Errorf("after a newer report: %+v", got["FT-1"])

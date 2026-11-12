@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -26,8 +27,14 @@ func TestModuleFollowsTheTable(t *testing.T) {
 	// a test's imports couple packages too, and the unix-only and other
 	// files differ in what they import, so both platforms are read
 	for _, goos := range []string{"", "windows"} {
-		cmd := exec.CommandContext(t.Context(), "go", "list", "-f",
-			`{{.ImportPath}} {{join .Imports " "}} {{join .TestImports " "}} {{join .XTestImports " "}}`, module+"...")
+		cmd := exec.CommandContext(
+			t.Context(),
+			"go",
+			"list",
+			"-f",
+			`{{.ImportPath}} {{join .Imports " "}} | {{join .TestImports " "}} {{join .XTestImports " "}}`,
+			module+"...",
+		)
 		if goos != "" {
 			cmd.Env = append(os.Environ(), "GOOS="+goos)
 		}
@@ -46,8 +53,23 @@ func TestModuleFollowsTheTable(t *testing.T) {
 				imports[from] = nil
 			}
 
+			inTests := false
+
 			for _, imp := range fields[1:] {
-				if to, ok := strings.CutPrefix(imp, module); ok && !slices.Contains(imports[from], to) {
+				if imp == "|" {
+					inTests = true
+
+					continue
+				}
+
+				to, ok := strings.CutPrefix(imp, module)
+				// a package's own <pkg>test helper imports it, so it ranks
+				// above it, and only the package's tests may import it back
+				if inTests && to == from+"/"+path.Base(from)+"test" {
+					continue
+				}
+
+				if ok && !slices.Contains(imports[from], to) {
 					imports[from] = append(imports[from], to)
 				}
 			}
@@ -157,12 +179,12 @@ func TestCommentRuleFlagsAStrayAndAMissingComment(t *testing.T) {
 	}
 
 	for name, src := range files {
-		path := filepath.Join(root, name)
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		file := filepath.Join(root, name)
+		if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
 			t.Fatal(err)
 		}
 
-		if err := os.WriteFile(path, []byte(src), 0o600); err != nil {
+		if err := os.WriteFile(file, []byte(src), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -189,22 +211,22 @@ func commentProblems(t *testing.T, root string) []string {
 	docs := map[string][]string{}
 	mains := map[string]bool{}
 
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(root, func(file string, d fs.DirEntry, err error) error {
 		switch {
 		case err != nil:
 			return err
-		case d.IsDir() && path != root && (d.Name() == "testdata" || strings.HasPrefix(d.Name(), ".")):
+		case d.IsDir() && file != root && (d.Name() == "testdata" || strings.HasPrefix(d.Name(), ".")):
 			return filepath.SkipDir
-		case d.IsDir() || filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go"):
+		case d.IsDir() || filepath.Ext(file) != ".go" || strings.HasSuffix(file, "_test.go"):
 			return nil
 		}
 
-		f, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.PackageClauseOnly|parser.ParseComments)
+		f, err := parser.ParseFile(token.NewFileSet(), file, nil, parser.PackageClauseOnly|parser.ParseComments)
 		if err != nil {
 			return err
 		}
 
-		dir, _ := filepath.Rel(root, filepath.Dir(path))
+		dir, _ := filepath.Rel(root, filepath.Dir(file))
 		if _, ok := docs[dir]; !ok {
 			docs[dir] = nil
 		}
