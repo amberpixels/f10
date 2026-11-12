@@ -42,8 +42,28 @@ func Command() *cli.Command {
 				Usage: "the CI state of a PR/MR's head: green, red, pending or none, with each failed job's log " +
 					"(exit 1: red, 8: pending)",
 				ArgsUsage: "[PR | task-id]",
-				Flags:     []cli.Flag{ui.JSONFlag("the head's checks as JSON")},
-				Action:    runPRChecks,
+				Flags: []cli.Flag{
+					ui.JSONFlag("the head's checks as JSON"),
+					&cli.BoolFlag{Name: "brief", Usage: "one line: the state, and the failed or running jobs"},
+					&cli.BoolFlag{
+						Name: "triage",
+						Usage: "add what a triage decides by: the first real failure, that job on the default branch, " +
+							"and what was already tried since the checks were last green",
+					},
+					&cli.BoolFlag{
+						Name:  "log",
+						Usage: "print the log of the first failed job that was not cancelled, its last lines when long",
+					},
+					&cli.BoolFlag{
+						Name:  "rerun",
+						Usage: "rerun the failed jobs of a red head and record it; refused once per head",
+					},
+					&cli.StringFlag{
+						Name:  "record",
+						Usage: "record an `ACTION` taken on a red head: fix, refused once since the checks were last green",
+					},
+				},
+				Action: runPRChecks,
 			},
 			{
 				Name:      "base",

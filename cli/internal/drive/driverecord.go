@@ -484,6 +484,8 @@ func taskStanding(t drivestore.Task, running bool) string {
 		return "waiting on checks"
 	case running && t.Phase == drivestore.PhaseWaiting:
 		return "waiting to finish after its base"
+	case running && t.Skill == "ci":
+		return "triaging checks"
 	case running && t.Skill != "":
 		return "running " + t.Skill
 	case t.Skill != "":

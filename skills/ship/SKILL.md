@@ -41,6 +41,12 @@ Deploy has its own confirmation (the **deploy** step).
 2. Follow those steps in the order the Arguments item gives.
 3. Load each flow entry just before it runs, in one call with its badge: `f10-state.sh set ship running <entry>; f10-load-project.sh <step>`, and follow the step from that load.
    A `review` entry loads `review resolve`, and a `pr` entry loads `pr handoff` unless its `handoff off` dial is set, because the pr step runs the handoff; the catchup guard (below) adds `catchup` to the load of each entry it guards.
+4. **Read the checks at each boundary** once the branch has an open PR (after the first `pr` entry), in the same call as the load: `f10-state.sh set ship running <entry>; f10 pr checks --brief; f10-load-project.sh <step>`.
+   It costs no turn, because the line comes back with the step.
+   - `checks: red`: run `f10-load-project.sh ci catchup` and the **ci** step before the entry, under the entry's badge.
+     When the entry pushes (`pr`, `push`, or a judge after `pr`), the step leaves its fix for that push.
+   - `checks: pending`, `green` or `none`: go on, because only finish waits on checks.
+   - A default branch that is red too does not stop the run: the step notes it, and the run asks once at its end, interactive or driven.
 
 **Flows** are the frontmatter's `flows:`, a name to its ordered entries, a list or one string split on spaces or arrows (`plan judge implement cleanup:comments,prose pr review:ci deploy:staging`); none declared is `default: plan implement pr`.
 `f10 flow` lists them and what selects each.
@@ -140,4 +146,4 @@ Any other failure leaves the shipment standing: `f10-state.sh set ship partial <
 A driven run reports back too; nothing is asked.
 
 **Exit**
-- Stop after the flow's last entry (a spike's: implement) and the report back, with the final report: the facts block with the **shipment** rows the last delivering entry declares, plus a judge's, demo's or handoff's when they ran (branch, PR/MR url, sha, deploy url, a spike report's path, a project-defined step's rows, a demo report, a handoff file from a `handoff` entry or a `pr` entry, printed once) and a `comment` row with the url report back got, a `checks` row when the shipment is a PR (the state `f10 pr checks` prints, read once and never waited on, with the failed jobs named in the prose beneath), then review status ("stopped at PR" is a normal end), deploy status, a bug's or refactor's proof or a spike's answer (implement's line) and its close, what changed, the decisions and lessons lines, and a one-line reminder of gaps left on their defaults; a driven ship that drive finishes ends with the `Next:` line `modes/driven.md` gives.
+- Stop after the flow's last entry (a spike's: implement) and the report back, with the final report: the facts block with the **shipment** rows the last delivering entry declares, plus a judge's, demo's or handoff's when they ran (branch, PR/MR url, sha, deploy url, a spike report's path, a project-defined step's rows, a demo report, a handoff file from a `handoff` entry or a `pr` entry, printed once) and a `comment` row with the url report back got, a `checks` row when the shipment is a PR (the state `f10 pr checks` prints, read once and never waited on, with the failed jobs named in the prose beneath; a red read runs the **ci** step with its push first, then reads once more for the row), then review status ("stopped at PR" is a normal end), deploy status, a bug's or refactor's proof or a spike's answer (implement's line) and its close, what changed, the decisions and lessons lines, and a one-line reminder of gaps left on their defaults; a driven ship that drive finishes ends with the `Next:` line `modes/driven.md` gives.

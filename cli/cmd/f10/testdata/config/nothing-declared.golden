@@ -76,6 +76,7 @@
   },
   "watch": "finish",
   "watchCatchup": false,
+  "watchCI": false,
   "reportBack": true,
   "paces": [
     {
@@ -207,6 +208,11 @@
     },
     {
       "key": "watch_catchup",
+      "value": "off",
+      "origin": "default"
+    },
+    {
+      "key": "watch_ci",
       "value": "off",
       "origin": "default"
     },

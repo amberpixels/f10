@@ -32,7 +32,7 @@ var (
 		"catchup", "cleanup", "commit", "demo", "deploy", "handoff", "implement", "judge", "pr", "push", "resolve",
 		"review",
 	}
-	nonFlowSteps = []string{"audit", "brainstorm", "capture", "debug", "explain", "fetch", "plan", "standup"}
+	nonFlowSteps = []string{"audit", "brainstorm", "capture", "ci", "debug", "explain", "fetch", "plan", "standup"}
 	guardedSteps = flow.Guarded
 )
 

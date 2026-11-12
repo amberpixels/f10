@@ -51,8 +51,8 @@ func backgroundAt(dir string, run *state.Run) time.Time {
 }
 
 func idleWhile(run *state.Run, skill string) string {
-	if skill == "catchup" {
-		return "and its catchup has not reported"
+	if phaseless(skill) {
+		return "and its " + skill + " has not reported"
 	}
 
 	return "while its run says " + skill + " " + run.PhaseText(skill)
@@ -209,6 +209,12 @@ func (in *DriveInput) poll(
 
 	if skill == "catchup" {
 		return in.catchupSettled(ctx, r, true)
+	}
+
+	// a triage runs before finish and moves nothing on: finish reads the
+	// checks again
+	if skill == "ci" {
+		return in.next(ctx, r)
 	}
 
 	if err := in.advance(ctx, r, skill); err != nil {

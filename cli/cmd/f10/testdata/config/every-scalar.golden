@@ -80,6 +80,7 @@
   ],
   "watch": "report",
   "watchCatchup": true,
+  "watchCI": true,
   "reportBack": false,
   "upkeepPaths": [
     "docs/**"
@@ -243,6 +244,11 @@
     },
     {
       "key": "watch_catchup",
+      "value": "on",
+      "origin": "declared (main, frontmatter)"
+    },
+    {
+      "key": "watch_ci",
       "value": "on",
       "origin": "declared (main, frontmatter)"
     },

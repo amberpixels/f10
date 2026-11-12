@@ -28,6 +28,7 @@ driver_timeout: 2m
 drive_env: [FOO_TOKEN]
 watch: report
 watch_catchup: on
+watch_ci: on
 report_back: off
 standup:
   upkeep: ["docs/**"]

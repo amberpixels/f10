@@ -93,6 +93,7 @@ Each skill is an **entry point** into the chain:
 | `/f10:handoff [<id \| PR \| this branch>]` | handoff | a file listing what the change leaves after merge: data changes, jobs to run by hand, settings, deploy order, breaks for consumers and accepted debt, rewritten only when the branch head moves; every PR carries its body under `## Handoff` |
 | `/f10:explain <PR \| id \| this branch \| local \| concept \| path>` | explain | for a change, what it was and what it is now. For a thing, what it is |
 | `/f10:catchup` | catchup | the branch merged or rebased onto its base, conflicts settled, verify green, nothing pushed |
+| `/f10:ci [<id>]` | ci | a red CI run on the PR triaged: one fix round when the change broke it, the failed jobs rerun once when it flaked, an ask when the default branch is red too. Ship, a drive and (with `watch_ci: on`) the watcher send it by themselves |
 | `/f10:standup [--since <date> \| --week] [-C <checkout> \| --group <name> \| --all] [--other]` | standup | a report of your work by day, project and task. It is printed, and drafted wherever your settings or the project's overlay name a delivery adapter. The next report starts where this one ended |
 | `/f10:status [id]` | nothing: a hook answers it, bare or with an id | the run's status in words. With an id, another worktree's run and its agent's question, relayed and answered |
 | `/f10:asks [id]` | nothing: it runs `f10 asks` | the questions driven agents wait on, across projects, asked in one questionnaire. Each answer resumes its drive or reaches its agent |

@@ -168,9 +168,13 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("finish is on (the pace's finish), and finish merges through the host: %w", hostErr)
 	}
 
-	var pullOf func(context.Context, string) (forge.PR, error)
+	var (
+		pullOf   func(context.Context, string) (forge.PR, error)
+		checksOf func(context.Context, string) (forge.HeadChecks, string, error)
+	)
+
 	if hostErr == nil {
-		pullOf = h.PR
+		pullOf, checksOf = h.PR, h.OpenChecks
 	}
 
 	in := &drive.DriveInput{
@@ -196,6 +200,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		AsksDir:         asks.Dir(),
 		DefaultParallel: drive.DefaultParallel(),
 		Pull:            pullOf,
+		Checks:          checksOf,
 		Driver:          drv,
 		Tracker:         stack.TrackerFor(t),
 		Title:           func(r ref.Ref) func(context.Context) (string, error) { return worktree.TitleLookup(t, r.Number) },
@@ -238,7 +243,8 @@ func WatchCommand() *cli.Command {
 			"f10 start and f10 drive hand the project to the daemon, which runs a pass every few minutes; " +
 			"watch: finish (the default), report or off in project.md says what a pass may do, " +
 			"and watch_catchup: on lets it catch an open PR up with its target, " +
-			"leaving conflicts and verify to the task's agent.",
+			"leaving conflicts and verify to the task's agent. A red PR is reported once per head, " +
+			"and watch_ci: on sends it to the task's agent to triage.",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{Name: "pass", Hidden: true, Usage: "run one pass over this project, as the daemon does"},
 		},
@@ -278,6 +284,7 @@ func runWatch(ctx context.Context, cmd *cli.Command) error {
 	w := cmd.Writer
 	fmt.Fprintf(w, "watch    %s\n", t.Effective.Watch)
 	fmt.Fprintf(w, "catchup  %s\n", drive.OnOff(t.Effective.WatchCatchup))
+	fmt.Fprintf(w, "ci       %s\n", drive.OnOff(t.Effective.WatchCI))
 
 	if len(store) == 0 {
 		fmt.Fprintln(w, "nothing reported yet")
@@ -390,6 +397,7 @@ func runWatchPass(ctx context.Context, cmd *cli.Command, t *target.Target) error
 		Out:      drive.LineReporter{Out: cmd.Writer},
 		Warn:     func(line string) { fmt.Fprintln(cmd.Writer, line) },
 		Catchup:  t.Effective.WatchCatchup,
+		CI:       t.Effective.WatchCI,
 		Storage:  t.Layout.StorageRoot,
 		// a pass stays short, so verify is always the agent's turn
 		Engine: stack.NewCatchupEngine(
@@ -399,6 +407,10 @@ func runWatchPass(ctx context.Context, cmd *cli.Command, t *target.Target) error
 			t.Effective.Traces,
 			main,
 		),
+	}
+
+	if h, err := hostops.HostOf(t); err == nil {
+		in.Checks = h.HeadChecks
 	}
 
 	if b := worktree.ReachableAgents(main); b != nil {

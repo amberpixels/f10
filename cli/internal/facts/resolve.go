@@ -134,6 +134,7 @@ func (e *Effective) resolve(fm *layered, declared map[string]section, lay *layou
 	e.ReportBack = e.scalar(fm, "report_back") != "off"
 	e.Watch = e.scalar(fm, "watch")
 	e.WatchCatchup = e.scalar(fm, "watch_catchup") == "on"
+	e.WatchCI = e.scalar(fm, "watch_ci") == "on"
 
 	if e.UpkeepPaths = fm.Standup.Upkeep; e.UpkeepPaths != nil {
 		e.Facts = append(e.Facts, Fact{

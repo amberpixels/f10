@@ -93,6 +93,10 @@ type WatchInput struct {
 	// for a catchup merge's trailers
 	Engine  *stack.CatchupEngine
 	Storage storage.Root
+	// CI is watch_ci: on, which sends a red head to its agent; Checks reads
+	// a request's head checks, nil with no host to ask
+	CI     bool
+	Checks func(context.Context, forge.PR) (forge.HeadChecks, error)
 }
 
 // retryPull retries a pull a finish deferred, under watch: finish alone,
@@ -170,6 +174,8 @@ func (in WatchInput) reconcile(ctx context.Context, tasks []WatchedTask, store m
 			in.tell(store, task.ID, now, in.catchupStep(ctx, task, store))
 		}
 
+		in.tell(store, task.ID, now, in.ciStep(ctx, task, store))
+
 		rep, act := decideWatch(task, in.Mode, now)
 
 		if act && in.Finish != nil {
@@ -207,7 +213,7 @@ func (in WatchInput) tell(store map[string]watchReport, id string, now time.Time
 		rep.Told = rep.Told[len(rep.Told)-watchToldMax:]
 	}
 
-	rep.Catchup = prev.Catchup
+	rep.Catchup, rep.CI = prev.Catchup, prev.CI
 	store[id] = *rep
 }
 
@@ -722,6 +728,8 @@ type watchReport struct {
 	// Catchup is the catchup the watcher sent and has not settled, kept on
 	// the stored report like Told
 	Catchup *drivestore.Catchup `yaml:"catchup,omitempty"`
+	// CI is the head checks the watcher last read, kept like Catchup
+	CI *watchCI `yaml:"ci,omitempty"`
 }
 
 // watchToldMax bounds a task's told keys; the oldest go first.

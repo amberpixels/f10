@@ -56,3 +56,50 @@ func TestChecksExit(t *testing.T) {
 		}
 	}
 }
+
+// --brief is one line ship reads beside its badge.
+func TestChecksLine(t *testing.T) {
+	for want, hc := range map[string]forge.HeadChecks{
+		"checks: red (lint, test)": {State: forge.Red, Failed: []forge.Check{{Name: "lint"}, {Name: "test"}}},
+		"checks: pending (build)":  {State: forge.Pending, Running: []forge.Check{{Name: "build"}}},
+		"checks: green":            {State: forge.Green},
+		"checks: none":             {},
+	} {
+		if got := ChecksLine(hc); got != want {
+			t.Errorf("ChecksLine = %q, want %q", got, want)
+		}
+	}
+}
+
+// --triage adds the failure to read, its job on the default branch, and
+// what this red spell tried; a cancelled job reads as cancelled.
+func TestTriageFacts(t *testing.T) {
+	tr := &checkTriage{
+		First:   &forge.Check{Name: "lint", Run: "77"},
+		Default: forge.Green,
+		Tried:   []string{"rerun at abc1234"},
+	}
+
+	got := factsText(TriageFacts(tr))
+	want := "first=lint (run 77)\ndefault=green\ntried=rerun at abc1234\n"
+
+	if got != want {
+		t.Errorf("triage facts:\n%s\nwant:\n%s", got, want)
+	}
+
+	if got := factsText(
+		TriageFacts(&checkTriage{First: &forge.Check{Name: "x"}}),
+	); !strings.Contains(
+		got,
+		"default=none\ntried=nothing",
+	) {
+		t.Errorf("no history and nothing tried:\n%s", got)
+	}
+
+	cancelled := factsText(
+		ChecksFacts("u", forge.HeadChecks{State: forge.Red, Failed: []forge.Check{{Name: "t", Cancelled: true}}}),
+	)
+	if !strings.Contains(cancelled, "cancelled t=") {
+		t.Errorf("cancelled job:\n%s", cancelled)
+	}
+}

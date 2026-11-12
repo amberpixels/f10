@@ -41,11 +41,17 @@ func phaseRunning(run *state.Run, phase string) bool {
 // done only by a signal written after the prompt: both times are whole
 // seconds, and no catchup reports within the second it was sent.
 func unreported(run *state.Run, skill string, since time.Time) bool {
-	if skill != "catchup" {
+	if !phaseless(skill) {
 		return phaseRunning(run, skill)
 	}
 
-	return run == nil || run.Done != "catchup" || !run.DoneAt.After(since)
+	return run == nil || run.Done != skill || !run.DoneAt.After(since)
+}
+
+// phaseless reports a turn with no phase of its own, catchup or a ci
+// triage, which ends on its done signal.
+func phaseless(skill string) bool {
+	return skill == "catchup" || skill == "ci"
 }
 
 // phaseDone reports a run past skill: plan and ship own a phase, which

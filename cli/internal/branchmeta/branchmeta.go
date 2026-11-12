@@ -55,10 +55,29 @@ const (
 	Pace Key = "f10-pace"
 	// Watch is "false" once `f10 watch off` hands the task back.
 	Watch Key = "f10-watch"
+	// CI is what a triage of red checks tried during one red spell
+	// (ci.go); any green read clears it.
+	CI Key = "f10-ci"
 )
 
 // keys is every Key, for splitting a listed entry's name.
-var keys = []Key{Task, Riders, After, AfterBranch, Landed, Moved, Tip, Agent, Finish, Drive, Chain, Flow, Pace, Watch}
+var keys = []Key{
+	Task,
+	Riders,
+	After,
+	AfterBranch,
+	Landed,
+	Moved,
+	Tip,
+	Agent,
+	Finish,
+	Drive,
+	Chain,
+	Flow,
+	Pace,
+	Watch,
+	CI,
+}
 
 // For is the full config name of the key on branch, as git and its errors
 // spell it.
@@ -175,6 +194,7 @@ type Record struct {
 	Flow        string
 	Pace        string
 	Watch       string
+	CI          Triage
 }
 
 func (r *Record) set(key Key, value string) {
@@ -209,6 +229,8 @@ func (r *Record) set(key Key, value string) {
 		r.Pace = value
 	case Watch:
 		r.Watch = value
+	case CI:
+		r.CI = ParseTriage(value)
 	case Chain: // an older drive's, which only the drive's unset reads
 	}
 }

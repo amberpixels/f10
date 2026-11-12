@@ -108,8 +108,11 @@ type driveDeps struct {
 	Title   func(ref.Ref) func(context.Context) (string, error)
 	Started func(context.Context, ref.Ref) error // nil when tracker.status declares no started word
 	Finish  func(ctx context.Context, w io.Writer, req DriveFinish) error
-	Now     func() time.Time
-	Sleep   func(context.Context, time.Duration) error
+	// Checks reads the checks on branch's open request, with its url; ""
+	// for a branch with none open. nil when the host cannot be reached
+	Checks func(ctx context.Context, branch string) (forge.HeadChecks, string, error)
+	Now    func() time.Time
+	Sleep  func(context.Context, time.Duration) error
 	// Record puts an event in the ledger, placed in dir; nil records nothing
 	Record func(ctx context.Context, dir string, e ledger.Event)
 	// Pull reads a branch's PR on the host when the drive reconciles a
@@ -215,6 +218,9 @@ type DriveRun struct {
 	Job *verifyJob
 	// checks is the pending head finish holds for; nil once nothing waits on it
 	checks *checksHold
+	// triaged is the red head and triage record a ci turn was last sent
+	// for, so a triage that leaves both as they were halts
+	triaged string
 }
 
 // checksHold is a head whose checks were still running, and when the drive
