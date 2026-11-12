@@ -58,6 +58,7 @@ f10 demo open [id]       # the demo report, in the browser (--link writes the pa
 f10 pr open [n | id]     # the PR or MR: a number is one, a task id its open one, else its last; none, their list; gh or glab decided by the remote (--link, --print as for task)
 f10 pr base [PR | id] [--origin]      # the base: the open PR's target, else the recorded stacked base, else the default branch
 f10 pr diff [PR | id] [--name-only]   # the change against that base: here with uncommitted work, else the open PR's diff, else the branch
+f10 pr checks [PR | id] [--json]      # the open PR's head checks: green, red, pending or none, the sha, each failed job with its log url; exit 1 on red, 8 on pending
 f10 pr view [PR | id] [--comments]    # branch, base, task and open PR (head sha, target, mine) with its description; says so when there is no PR
 f10 pr create --title T --body-file F [--label L]... [--assignee A]... [--draft]   # open a PR for the branch here against pr base; prints its url, or an open one's; a bundle's title names its riders after the lead id
 f10 pr edit [PR | id] [--title T] [--body-file F]   # rewrite the open PR's title or body; base, labels and assignees stay; a bundle's title names its riders after the lead id
@@ -83,7 +84,7 @@ f10 forward <id>[-suffix] <text...>   # hand a command or a steering note to the
 f10 drive <id | id+id>[:profile]... | <id> -- <id> [--flow <name> | --local] [--pace <name>] [--agent <profile> | --model <model>] [--parallel <n>] [--answer [<id>=]<text>] [--every 30s] [--foreground]   # a list through a flow, each task once its base has a commit; runs in the daemon
 f10 daemon status | stop [--now] | logs [<drive>] [-f]   # the per-user process drives run in
 f10 asks [list [--json] | answer <task> [N=VALUE ...]]   # the questions driven agents wait on, across projects; bare walks them in a terminal
-f10 finish [<id>[-suffix]] [--yes] [--close <ids|all|none>] [--keep]   # no id: the branch's task; merge the PR (a branch never pushed: here), pull main, archive the plan, close the workspace, remove the worktree; a spike with no PR closes without a merge; a parent whose subtasks are done closes
+f10 finish [<id>[-suffix]] [--yes] [--ignore-checks] [--close <ids|all|none>] [--keep]   # no id: the branch's task; merge the PR (a branch never pushed: here), pull main, archive the plan, close the workspace, remove the worktree; a spike with no PR closes without a merge; a parent whose subtasks are done closes
 f10 janitor [--dry-run]  # remove task branches whose PR merged or closed outside finish, locally and on origin; start and finish run it every 6 hours
 
 f10 lore add <kind> --change <id> [--anchor path:line[-end][@commit][#symbol]]... [--supersedes <id>] [kind flags] [-m <text> | -F <file> | stdin]   # write one lore entry, print its id
@@ -253,6 +254,21 @@ After its report, start runs the [janitor](#janitor) when its last run is 6 hour
 
 `f10 finish 42` is the inverse of start, in the order that keeps the local side honest.
 It finds the task's branch the way start does (the branch linked by `f10-task` or `f10-tasks`, else the exact name, else the one `<id>` / `<id>-*` / `<id>+*` branch, else the one local branch carrying the id past a prefix, like `feat/<id>-slug`) and the checkout that has it checked out; without either it stops, since finish removes only a branch it can tie to the task.
+Before an open PR merges, finish reads the checks on its head, as `f10 pr checks` does, and refuses with nothing changed unless they pass.
+On GitHub the target branch's required checks count when it declares any, else all of them, because a branch with no protection would otherwise gate on nothing.
+On GitLab the head pipeline decides, because GitLab marks no check as required.
+Green, or no checks at all, merges.
+The merge is pinned to the head that was read, so a push since then makes the host refuse.
+Red refuses, naming each failed job with its log url.
+Pending waits up to 20 minutes, reading the checks again every 15 seconds.
+Past that, it refuses, saying the checks were still running.
+A host that cannot answer the read refuses too.
+`--ignore-checks` merges anyway.
+`--yes` does not imply it, because automated finishes pass `--yes`.
+A drive's finish does not wait itself.
+Instead the drive holds the task as `waiting on checks` and tries again each poll, for up to 20 minutes per head, and it halts on red.
+The watcher finishes only merged PRs, so it never reads the checks.
+
 For a bundle, finish needs `--close`: the riders the PR delivers, comma-separated, `all` or `none`.
 Without it, finish exits **7** before changing anything, naming the riders the PR body closes as the default, and the finish skill asks.
 `--close` overrides the body.
@@ -500,7 +516,7 @@ A project whose PR adapter runs a script around `gh` leaves no such event, so fo
 Each judge verdict and each review findings file gets a row of its own after `plan` and `handoff`: `judge <subject>` (task, plan or change), with the file's number added when a subject was judged twice, and `review <round>`.
 Verdicts from before the open series are an earlier PR's and stay out, as the judge gate drops them.
 `--json` carries the same files as `verdicts` (`subject`, `path`) and `reviews` (`round`, `path`).
-`--json` also carries the whole block as a `shipment` object, on each run entry (repeated per run, as `agent` is) and on the no-run block: `task`, `title`, `url`, `branch`, `pr`, `pr_state` (only when the host was asked), `commit`, `plan`, `handoff`, `demo`, `verdicts` and `reviews`, each left out when empty except `task`.
+`--json` also carries the whole block as a `shipment` object, on each run entry (repeated per run, as `agent` is) and on the no-run block: `task`, `title`, `url`, `branch`, `pr`, `pr_state` (only when the host was asked), `checks` (an open PR's head checks, as `f10 pr checks --json` prints them, when the host answered), `commit`, `plan`, `handoff`, `demo`, `verdicts` and `reviews`, each left out when empty except `task`.
 The flat keys a reader written before the object relies on stay beside it: `verdicts` and `reviews` on a run entry, and those plus `plan`, `pr` and `pr_state` on the no-run block.
 A run entry's own `plan` key is the plan phase's status, not the plan file.
 The run's step rows go on under it as `label: value`, in the same value column, so the whole block reads as one table, and `--plain` prints the same block.
@@ -508,6 +524,10 @@ With a run under it, the plan file's row is `plan file`, because the run's `plan
 
 A finished task, its branch gone, prints the same block, read from what `f10 finish` archived: the newest archived plan and handoff, a `review <round>` row per findings file of the series its last PR closed (`reviews/archive/<id>.<n>/`), a `judge` row per verdict written since the series before it closed, and the demo report.
 `pr state` and the gates as step rows follow, and `--json` still prints its one `done` row.
+
+The `pr state` row shows whenever the host was asked about the branch's PR, a live run included: the PR number and its state, and for an open PR its head's checks as `f10 pr checks` reads them, `#128 open · checks red (lint)`.
+The failed jobs are named in parentheses, or the running ones while the checks are pending, and `--json` carries the whole read as `checks` on the shipment.
+The host reads stop half a second short of a caller's deadline, such as the status hook's, so a slow host leaves the row without its checks, or leaves the row out, and the rest of the block still prints.
 
 `f10 status <id>` lists the task's **gates** under the `ship` row, while the run is going and after it finished, and the block of a task with no branch left prints them as step rows under `pr state`:
 
@@ -541,9 +561,11 @@ ship:           running: review:local
 
 A parent's rows carry the same gates as one column after the step (a `gates` line under `--plain`), `󰚔 L 3/4 · R open · 󰊛 J proceed`: `L` and `R` the local and CI reviews (fixed of found, `N open`, `clean`, `ok`), `TJ`, `PJ` and `J` the task, plan and change judges, `-` a review the flow does not run, `…` running, `?` unknown; a review or judge the flow leaves out is left out of the column.
 The icons are Nerd Font `md-*` glyphs, the only range Claude Code's output keeps one cell wide: `󰚔` before the reviews, `󰊛` before each judge, and in the PR column `󰓂` before an open PR, `󰘭` before a merged one.
+An open PR whose head is red reads `checks red` beside its number, from the rollup state the request search already returns, so the column costs no extra host call.
+That rollup counts every check, while finish counts only the required ones where the target branch declares any, so finish may still merge a PR the column marks.
 `F10_STATUS_GLYPHS` replaces all four, in that order (open PR, merged PR, review, judge), for a terminal without the font: `F10_STATUS_GLYPHS='PR MR rv jd'`.
 `--json` holds them in a `gates` array, on a run and on a row.
-`--json` prints the rows as an array: `id`, `title`, `url`, `depth`, `after`, `stage`, `step`, `pr`, `pr_state`, and `note`, `next`, `ask` where set.
+`--json` prints the rows as an array: `id`, `title`, `url`, `depth`, `after`, `stage`, `step`, `pr`, `pr_state`, and `checks` (an open PR's head rollup: `green`, `red` or `pending`), `note`, `next`, `ask` where set.
 
 A task with no children reports as before: its live run, else its plan and PR.
 A task with no branch left (`f10 finish` removed it) prints its facts block (**Status**, above) when the ledger, the tracker or the plan archive says it finished, and `--json` prints a one-row array; otherwise it fails as before, with `no run to read`.

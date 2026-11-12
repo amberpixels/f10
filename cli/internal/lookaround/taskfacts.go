@@ -33,6 +33,7 @@ type TaskFacts struct {
 	Driven       bool   // a running drive lists it
 	Queued       bool   // its drive's cap holds it back
 	DrivePhase   string // where its running drive says it stands, a drivestore.Phase name
+	DriveChecks  bool   // a waiting DrivePhase holds finish on running checks
 	Findings     *Findings
 	Verdict      string
 }

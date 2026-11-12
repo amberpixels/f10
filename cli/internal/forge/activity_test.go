@@ -71,7 +71,8 @@ func TestActivityGitHub(t *testing.T) {
 // Earlier requests for every id are one query, a text and a head-branch
 // search per id, a request both find kept once.
 func TestEarlierRequestsOneCall(t *testing.T) {
-	nodes := "{ nodes { ... on PullRequest { number title url state headRefName createdAt mergedAt closedAt } } }"
+	nodes := "{ nodes { ... on PullRequest { number title url state headRefName createdAt mergedAt closedAt " +
+		"commits(last: 1) { nodes { commit { statusCheckRollup { state } } } } } } }"
 	query := "query($t0: String!, $h0: String!, $t1: String!, $h1: String!) { " +
 		"t0: search(query: $t0, type: ISSUE, first: 50) " + nodes + " " +
 		"h0: search(query: $h0, type: ISSUE, first: 50) " + nodes + " " +
@@ -83,7 +84,8 @@ func TestEarlierRequestsOneCall(t *testing.T) {
 			" -F t0=repo:{owner}/{repo} is:pr FT-1 -F h0=repo:{owner}/{repo} is:pr head:FT-1" +
 			" -F t1=repo:{owner}/{repo} is:pr FT-2 -F h1=repo:{owner}/{repo} is:pr head:FT-2": `{"data":{
 		  "t0":{"nodes":[{"number":3,"state":"MERGED","headRefName":"FT-1/a"}]},
-		  "h0":{"nodes":[{"number":3,"state":"MERGED","headRefName":"FT-1/a"},{"number":4,"headRefName":"FT-1/b"}]},
+		  "h0":{"nodes":[{"number":3,"state":"MERGED","headRefName":"FT-1/a"},{"number":4,"headRefName":"FT-1/b",
+		    "commits":{"nodes":[{"commit":{"statusCheckRollup":{"state":"FAILURE"}}}]}}]},
 		  "t1":{"nodes":[]},"h1":{"nodes":[]}}}`,
 	})
 
@@ -91,6 +93,11 @@ func TestEarlierRequestsOneCall(t *testing.T) {
 	if err != nil || len(got["FT-1"]) != 2 || got["FT-1"][0].Number != 3 || got["FT-1"][1].Number != 4 ||
 		len(got["FT-2"]) != 0 {
 		t.Errorf("got %+v, %v", got, err)
+	}
+
+	if got["FT-1"][1].Checks != Red || got["FT-1"][0].Checks != "" {
+		t.Errorf("checks = %q, %q; want red from the head's rollup, none without one",
+			got["FT-1"][1].Checks, got["FT-1"][0].Checks)
 	}
 
 	if none, err := (Host{Name: "gh"}).EarlierRequests(t.Context(), nil); err != nil || len(none) != 0 {

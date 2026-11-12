@@ -259,8 +259,8 @@ func (fb fallback) Render(w io.Writer, limit int, link bool) {
 		rows = append(rows, RunFact("agent", textx.OrDash(r.Task)+" · "+currentPhase(r), plain))
 	}
 
-	if fb.PRState != "" {
-		rows = append(rows, RunFact("pr state", fb.PRState, plain))
+	if fb.Shipment != nil {
+		rows = append(rows, fb.Shipment.stateFacts()...)
 	}
 
 	_ = render.WriteFacts(w, rows, render.LabelWidth(rows), limit)

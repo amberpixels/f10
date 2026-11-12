@@ -68,6 +68,7 @@ func launchKids(ctx context.Context, warn io.Writer, t *target.Target, sid strin
 		started bool
 		queued  bool
 		phase   string
+		checks  bool
 	}
 
 	var tokens []token
@@ -78,7 +79,16 @@ func launchKids(ctx context.Context, warn io.Writer, t *target.Target, sid strin
 			tokens = append(tokens, token{text: l.Value, started: true})
 		case state.LaunchDrive:
 			for _, task := range driveTasks(t.Layout.StorageRoot.Path(), l.Value) {
-				tokens = append(tokens, token{text: task.ID, after: task.After, queued: task.Queued, phase: task.Phase})
+				tokens = append(
+					tokens,
+					token{
+						text:   task.ID,
+						after:  task.After,
+						queued: task.Queued,
+						phase:  task.Phase,
+						checks: task.Checks != "",
+					},
+				)
 			}
 		}
 	}
@@ -101,7 +111,7 @@ func launchKids(ctx context.Context, warn io.Writer, t *target.Target, sid strin
 		}
 
 		r = r.Head()
-		k := stack.ChildRow{ID: r.ID, Suffix: suffix, Queued: tok.queued, Phase: tok.phase}
+		k := stack.ChildRow{ID: r.ID, Suffix: suffix, Queued: tok.queued, Phase: tok.phase, OnChecks: tok.checks}
 
 		if slices.ContainsFunc(
 			kids,

@@ -129,7 +129,7 @@ func landMerge(ctx context.Context, w io.Writer, in FinishInput, d finishDecisio
 	} else {
 		in.step("merging " + in.Host.Ref(p.Number))
 
-		if p, notes, err = landPull(ctx, in, name, def, p); err != nil {
+		if p, notes, err = landPull(ctx, in, name, def, p, d.checked); err != nil {
 			return landing{}, err
 		}
 
@@ -177,7 +177,13 @@ func landMerge(ctx context.Context, w io.Writer, in FinishInput, d finishDecisio
 // landPull merges an open request or confirms a merged one. Requests based
 // on the branch move to the merged one's base before the branch goes, since
 // the delete would close them; the notes say which moved.
-func landPull(ctx context.Context, in FinishInput, name, def string, p forge.PR) (forge.PR, []string, error) {
+func landPull(
+	ctx context.Context,
+	in FinishInput,
+	name, def string,
+	p forge.PR,
+	head string,
+) (forge.PR, []string, error) {
 	var notes []string
 
 	switch p.Status {
@@ -213,7 +219,7 @@ func landPull(ctx context.Context, in FinishInput, name, def string, p forge.PR)
 			notes = textx.AppendNote(notes, note)
 		}
 
-		if p, err = in.Host.MergePR(ctx, p, name, method, mergeBody(in, description, method)); err != nil {
+		if p, err = in.Host.MergePR(ctx, p, name, head, method, mergeBody(in, description, method)); err != nil {
 			return forge.PR{}, nil, err
 		}
 	case forge.Merged:

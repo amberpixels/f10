@@ -50,7 +50,12 @@ func (in *DriveInput) enter(r *DriveRun, p runPhase) {
 	}
 
 	r.Phase = p
-	in.saveTask(r, func(t *drivestore.Task) { t.Phase, t.Queued = p.recorded(), r.queued() })
+	in.saveTask(r, func(t *drivestore.Task) {
+		t.Phase, t.Queued = p.recorded(), r.queued()
+		if p != atWaiting {
+			t.Checks = ""
+		}
+	})
 }
 
 func (in *DriveInput) sequenceOf(fl runplan.ShipFlow) []string {
@@ -208,6 +213,18 @@ type DriveRun struct {
 	// Job is the verify the drive runs after its own catchup, polled in
 	// place of the agent while the phase is verifying
 	Job *verifyJob
+	// checks is the pending head finish holds for; nil once nothing waits on it
+	checks *checksHold
+}
+
+// checksHold is a head whose checks were still running, and when the drive
+// first saw it so; a push starts a new hold, and with it a new budget.
+// answer is the foreign-PR answer the held finish took: taking it removed it
+// from the book, so the retries carry it here.
+type checksHold struct {
+	sha    string
+	since  time.Time
+	answer string
 }
 
 func (r *DriveRun) opened() bool { return r.Phase != atPending && r.Phase != AtHeld }
@@ -299,7 +316,7 @@ const (
 	atVerifying                 // the drive's own verify after a catchup runs, in job
 	atRetrying                  // an attempt failed: the next poll sends the action again
 	atParked                    // a skill waits for its base's code, or its branch on origin
-	atWaiting                   // finish waits for its base to be through
+	atWaiting                   // finish waits for its base to be through, or the head's checks
 )
 
 // DriveSkills reads the skills off the flow: plan when the flow leads with

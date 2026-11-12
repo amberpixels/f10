@@ -405,7 +405,9 @@ func (h Host) EarlierRequests(ctx context.Context, ids []string) (map[string][]P
 		args   = []string{"api", "graphql"}
 	)
 
-	const nodes = "{ nodes { ... on PullRequest { number title url state headRefName createdAt mergedAt closedAt } } }"
+	// the head's rollup state lets a task tree mark a red PR with no read per PR
+	const nodes = "{ nodes { ... on PullRequest { number title url state headRefName createdAt mergedAt closedAt " +
+		"commits(last: 1) { nodes { commit { statusCheckRollup { state } } } } } } }"
 
 	for i, id := range ids {
 		for _, q := range []struct{ alias, search string }{{"t", id}, {"h", "head:" + id}} {

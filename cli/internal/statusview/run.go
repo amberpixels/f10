@@ -39,7 +39,7 @@ func writeRuns(v StatusView, runs []*state.Run, gates [][]gate, head *Shipment, 
 	if head != nil {
 		return writeRunsUnder(
 			v.Out,
-			head.Facts(render.LinksFor(v.Out, v.Plain).On),
+			append(head.Facts(render.LinksFor(v.Out, v.Plain).On), head.stateFacts()...),
 			runs,
 			gates,
 			showRoot,

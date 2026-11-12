@@ -58,6 +58,7 @@ type TaskRow struct {
 	Step    string `json:"step,omitempty"`
 	PR      string `json:"pr,omitempty"`
 	PRState string `json:"pr_state,omitempty"`
+	Checks  string `json:"checks,omitempty"` // an open PR's head rollup: green, red or pending
 	Note    string `json:"note,omitempty"`
 	Next    string `json:"next,omitempty"`
 	Ask     string `json:"ask,omitempty"`
@@ -169,6 +170,8 @@ func stageOf(f lookaround.TaskFacts, baseDone bool) (string, string) {
 		return stageHalted, cmp.Or(r.LeafShown(), r.Furthest())
 	case f.DrivePhase == drivestore.PhaseParked:
 		return stageWaiting, "on " + cmp.Or(f.Base, "its base")
+	case f.DrivePhase == drivestore.PhaseWaiting && f.DriveChecks:
+		return stageWaiting, "on checks"
 	case f.DrivePhase == drivestore.PhaseWaiting:
 		return stageWaiting, "to finish after " + cmp.Or(f.Base, "its base")
 	case r == nil && f.Queued:
@@ -278,9 +281,10 @@ func (src rowSource) RowsFrom(ctx context.Context, kids []stack.ChildRow) []Task
 func (src rowSource) Gather(ctx context.Context, k stack.ChildRow) (TaskRow, lookaround.TaskFacts) {
 	row := TaskRow{ID: k.ID, Title: k.Title, URL: k.URL, Depth: k.Depth, After: k.After}
 	f := lookaround.TaskFacts{
-		Queued:     k.Queued,
-		DrivePhase: k.Phase,
-		Driven:     src.Driven[strings.ToUpper(k.ID)],
+		Queued:      k.Queued,
+		DrivePhase:  k.Phase,
+		DriveChecks: k.OnChecks,
+		Driven:      src.Driven[strings.ToUpper(k.ID)],
 	}
 
 	if k.Finished {
@@ -324,6 +328,9 @@ func (src rowSource) Gather(ctx context.Context, k stack.ChildRow) (TaskRow, loo
 
 	if f.PR != nil {
 		row.PR, row.PRState = f.PR.URL, f.PR.Status
+		if f.PR.Status == forge.Open {
+			row.Checks = f.PR.Checks
+		}
 	} else {
 		row.PR = f.PRURL
 	}
@@ -475,7 +482,10 @@ func stageCounts(rows []TaskRow) string {
 }
 
 // prColumn is `#128`, with the state beside it unless the PR is open, an
-// open or merged PR's icon before it so the number reads as a PR.
+// open or merged PR's icon before it so the number reads as a PR. An open
+// PR whose head rollup is red says so: the rollup counts every check, so
+// finish, which counts only required ones where a branch declares any, may
+// still merge it.
 func prColumn(r TaskRow) string {
 	if r.PR == "" {
 		return ""
@@ -485,6 +495,10 @@ func prColumn(r TaskRow) string {
 
 	switch r.PRState {
 	case "", forge.Open:
+		if r.Checks == forge.Red {
+			col += " checks red"
+		}
+
 		return statusGlyph(glyphOpenPR) + " " + col
 	case forge.Merged:
 		return statusGlyph(glyphMergedPR) + " " + col + " " + r.PRState

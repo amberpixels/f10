@@ -18,7 +18,7 @@ func TestMergePullGlabSquashMessage(t *testing.T) {
 	f.Script(merge, "")
 	f.Script(view, `{"state":"merged","web_url":"https://gl/mr/9","squash_commit_sha":"sq"}`)
 
-	p, err := h.MergePR(t.Context(), forge.PR{Title: "Add the thing"}, "GH-1", "--squash", "Task: GH-1\n")
+	p, err := h.MergePR(t.Context(), forge.PR{Title: "Add the thing"}, "GH-1", "", "--squash", "Task: GH-1\n")
 	if err != nil || p.Landed != "sq" {
 		t.Fatalf("merged = %+v, %v", p, err)
 	}
@@ -50,7 +50,7 @@ func TestMergePullGhSquashSubject(t *testing.T) {
 		f.Script(c.merge, "")
 		f.Script(testkit.GhView, testkit.PrMerged)
 
-		if _, err := h.MergePR(t.Context(), c.p, "GH-1", "--squash", "Task: GH-1\n"); err != nil {
+		if _, err := h.MergePR(t.Context(), c.p, "GH-1", "", "--squash", "Task: GH-1\n"); err != nil {
 			t.Fatalf("%s: %v", c.name, err)
 		}
 

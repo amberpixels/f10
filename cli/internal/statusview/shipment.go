@@ -8,8 +8,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/findings"
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ledger"
@@ -30,10 +33,12 @@ type Shipment struct {
 	Branch  string `json:"branch,omitempty"`
 	PR      string `json:"pr,omitempty"`
 	PRState string `json:"pr_state,omitempty"` // when the host was asked
-	Commit  string `json:"commit,omitempty"`
-	Plan    string `json:"plan,omitempty"`
-	Handoff string `json:"handoff,omitempty"`
-	Demo    string `json:"demo,omitempty"`
+	// Checks is an open PR's head checks, when the host answered in time
+	Checks  *forge.HeadChecks `json:"checks,omitempty"`
+	Commit  string            `json:"commit,omitempty"`
+	Plan    string            `json:"plan,omitempty"`
+	Handoff string            `json:"handoff,omitempty"`
+	Demo    string            `json:"demo,omitempty"`
 
 	Verdicts []verdictPath `json:"verdicts,omitempty"`
 	Reviews  []reviewPath  `json:"reviews,omitempty"`
@@ -79,17 +84,82 @@ func (s *Shipment) Facts(link bool) []render.Fact {
 	return slices.DeleteFunc(rows, func(f render.Fact) bool { return f.Value == "" })
 }
 
-// AskPR reads the branch's PR from the host, once: a PR the host does not
-// know leaves the ledger's url standing.
+// AskPR reads the branch's PR from the host, once, and an open one's
+// checks last: a PR the host does not know leaves the ledger's url standing,
+// and a checks read that fails or runs out of time leaves the row without them.
 func (s *Shipment) AskPR(ctx context.Context, in taskStatusInput) {
 	if s.pulled || in.Host == nil || in.Branch == "" {
 		return
 	}
 
 	s.pulled = true
-	if p, err := in.Host.PR(ctx, in.Branch); err == nil && p.URL != "" {
-		s.PR, s.PRState = p.URL, p.Status
+
+	ctx, cancel := withinDeadline(ctx)
+	defer cancel()
+
+	p, err := in.Host.PR(ctx, in.Branch)
+	if err != nil || p.URL == "" {
+		return
 	}
+
+	s.PR, s.PRState = p.URL, p.Status
+
+	if p.Status == forge.Open {
+		if hc, err := in.Host.HeadChecks(ctx, p); err == nil {
+			s.Checks = &hc
+		}
+	}
+}
+
+// hostMargin is what AskPR leaves of a caller's deadline, such as the
+// status hook's, so a slow host costs the pr state row, never the block.
+const hostMargin = 500 * time.Millisecond
+
+func withinDeadline(ctx context.Context) (context.Context, context.CancelFunc) {
+	if d, ok := ctx.Deadline(); ok {
+		return context.WithDeadline(ctx, d.Add(-hostMargin))
+	}
+
+	return context.WithCancel(ctx)
+}
+
+// PRLine is the pr state row, `#128 open · checks red (lint)`; "" when the
+// host was not asked.
+func (s *Shipment) PRLine() string {
+	if s.PRState == "" {
+		return ""
+	}
+
+	line := s.PRState
+	if s.PR != "" {
+		line = forge.PullNumber(s.PR) + " " + line
+	}
+
+	if s.Checks == nil || s.Checks.State == "" {
+		return line
+	}
+
+	line += " · checks " + s.Checks.State
+
+	switch names := forge.Names(s.Checks.Failed); {
+	case names != "":
+		line += " (" + names + ")"
+	case s.Checks.State == forge.Pending:
+		if names = forge.Names(s.Checks.Running); names != "" {
+			line += " (" + names + ")"
+		}
+	}
+
+	return line
+}
+
+// stateFacts is the pr state row, when the host was asked.
+func (s *Shipment) stateFacts() []render.Fact {
+	if line := s.PRLine(); line != "" {
+		return []render.Fact{RunFact("pr state", line, lipgloss.NewStyle())}
+	}
+
+	return nil
 }
 
 // verdictPath is a judge verdict file the facts block links, by its subject.

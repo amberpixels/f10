@@ -51,6 +51,9 @@ type Task struct {
 	// Catchup is the catchup the drive last sent for the task, so a resumed
 	// drive still leases its push; the repeat count stays in the drive's memory
 	Catchup *Catchup `yaml:"catchup,omitempty"`
+	// Checks is the head sha a waiting finish holds for, its checks still
+	// running; "" while the phase waits on a base
+	Checks string `yaml:"checks,omitempty"`
 }
 
 // The phases a drive record names a task's standing by.
@@ -61,7 +64,7 @@ const (
 	PhaseVerifying = "verifying" // the drive's own verify after a catchup
 	PhaseRetrying  = "retrying"  // sending its action again after a failed attempt
 	PhaseParked    = "parked"    // a skill waits for its base's code, or its branch on origin
-	PhaseWaiting   = "waiting"   // finish waits for its base to be through
+	PhaseWaiting   = "waiting"   // finish waits for its base to be through, or the head's checks
 	PhaseEnded     = "ended"     // its outcome is in
 )
 

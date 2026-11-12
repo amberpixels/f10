@@ -38,6 +38,14 @@ func Command() *cli.Command {
 				Action:    runPROpen,
 			},
 			{
+				Name: "checks",
+				Usage: "the CI state of a PR/MR's head: green, red, pending or none, with each failed job's log " +
+					"(exit 1: red, 8: pending)",
+				ArgsUsage: "[PR | task-id]",
+				Flags:     []cli.Flag{ui.JSONFlag("the head's checks as JSON")},
+				Action:    runPRChecks,
+			},
+			{
 				Name:      "base",
 				Usage:     "the branch a change is based on: its open PR/MR's target, else the stacked base, else the default branch",
 				ArgsUsage: "[PR | task-id]",

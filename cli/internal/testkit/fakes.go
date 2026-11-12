@@ -34,6 +34,9 @@ type Fakes struct {
 	// Absent answers a call with a key under one of these prefixes, and no
 	// script of its own, the way git answers a ref or config it lacks
 	Absent []string
+	// Defaults answers a call under one of these prefixes, and no script of
+	// its own, with that stdout
+	Defaults map[string]string
 	// Launches are the agent starts argvLaunch answered for a test
 	Launches []string
 	// Meta holds the branch records; its writes join calls in order
@@ -57,6 +60,8 @@ func NewFakes(t *testing.T) *Fakes {
 	f.Script(AllHeads, "")
 	// no branch is linked to a task, origin has no task branch, and finish
 	// measures an empty branch (so records no size), until a test says so
+	// a PR's head has no checks until a test says so
+	f.Defaults = map[string]string{GhChecks: NoChecks}
 	f.Absent = []string{
 		"git for-each-ref --format=%(refname) refs/remotes/origin/", "git diff --numstat ",
 		"git rev-list --ancestry-path --merges",
@@ -110,6 +115,12 @@ func (f *Fakes) Answer(key string) shell.Result {
 		for _, p := range f.Absent {
 			if strings.HasPrefix(key, p) {
 				return shell.Result{}
+			}
+		}
+
+		for p, out := range f.Defaults {
+			if strings.HasPrefix(key, p) {
+				return shell.Result{Stdout: out}
 			}
 		}
 

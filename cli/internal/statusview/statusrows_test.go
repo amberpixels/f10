@@ -86,6 +86,14 @@ func TestStageOf(t *testing.T) {
 			},
 			false, stageWaiting, "to finish after FT-1",
 		},
+		{
+			"finish holds on checks",
+			facts{
+				Run:        &state.Run{Capture: "prior", Plan: "done", Ship: "done", Final: "pr"},
+				DrivePhase: drivestore.PhaseWaiting, DriveChecks: true,
+			},
+			false, stageWaiting, "on checks",
+		},
 		{"nothing", facts{}, false, stageNotStarted, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -629,6 +637,17 @@ func TestPRColumnIcons(t *testing.T) {
 		if got := prColumn(TaskRow{PR: pr, PRState: state}); got != want {
 			t.Errorf("%s: %q, want %q", state, got, want)
 		}
+	}
+
+	// a red head marks only an open PR: a merged one's checks no longer matter
+	for state, want := range map[string]string{forge.Open: "\U000F04C2 #7 checks red", forge.Merged: "\U000F062D #7 merged"} {
+		if got := prColumn(TaskRow{PR: pr, PRState: state, Checks: forge.Red}); got != want {
+			t.Errorf("%s with red checks: %q, want %q", state, got, want)
+		}
+	}
+
+	if got := prColumn(TaskRow{PR: pr, PRState: forge.Open, Checks: forge.Pending}); got != "\U000F04C2 #7" {
+		t.Errorf("pending checks marked the column: %q", got)
 	}
 
 	t.Setenv("F10_STATUS_GLYPHS", "PR MR rv jd")

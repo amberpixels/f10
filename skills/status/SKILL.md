@@ -52,5 +52,7 @@ Never reorder it, summarise it, or turn it into a table, because the binary alre
 4. No `ask` row: the status is the whole answer.
    Stop.
    A task with no live run of its own prints the facts block, with its `plan` and `pr` rows where they exist, then `run none for <id>`, what the agent in its checkout is on now (`agent`), and the PR's state (`pr state`).
+   The `pr state` row also shows under a live run once the task has a PR, and for an open PR it carries the head's checks (`#128 open · checks red (lint)`).
+   Relay it as it reads.
    That block never carries an `ask` row.
    A finished task, its branch gone, prints the same block from what `f10 finish` archived: the plan, each findings round and verdict file, the handoff and the demo report, a row each, then `pr state` and its gates as step rows.
