@@ -133,21 +133,26 @@ func DriveFinishInput(t *target.Target, main string, h hostops.Host, req DriveFi
 	return in, nil
 }
 
-// finishOrHold runs finish, and holds the task on a head whose checks are
-// still running, the way a finish waits on its base, until ChecksBudget.
+// finishOrHold runs finish, holds the task on a head whose checks are
+// still running, the way a finish waits on its base, until ChecksBudget,
+// and sends a red head to the agent to triage.
 func (in *DriveInput) finishOrHold(ctx context.Context, r *DriveRun) error {
-	res, pending := in.runFinish(ctx, r)
-	if pending == nil {
+	res, refused := in.runFinish(ctx, r)
+	if refused == nil {
 		return endWith(res)
 	}
 
-	ce := *pending.err
+	ce := *refused.err
+	if !ce.Pending() {
+		return in.triage(ctx, r, ce, refused.answer)
+	}
+
 	if r.checks == nil || r.checks.sha != ce.Checks.SHA {
 		r.checks = &checksHold{sha: ce.Checks.SHA, since: in.Now()}
 		fmt.Fprintf(in.Out, "%s finish: waiting on checks (%s)\n", in.id(r.Task.Ref.ID), forge.Names(ce.Checks.Running))
 	}
 
-	r.checks.answer = pending.answer
+	r.checks.answer = refused.answer
 
 	if ce.Waited = in.Now().Sub(r.checks.since); ce.Waited >= finish.ChecksBudget {
 		r.checks = nil
@@ -162,15 +167,16 @@ func (in *DriveInput) finishOrHold(ctx context.Context, r *DriveRun) error {
 	return nil
 }
 
-// heldFinish is a finish refused on a head still running checks, with the
-// foreign-PR answer it ran on.
+// heldFinish is a finish refused on a head whose checks are running or
+// red, with the foreign-PR answer it ran on.
 type heldFinish struct {
 	err    *finish.ChecksError
 	answer string
 }
 
 // runFinish runs finish in process; its refusals halt the task, except a PR
-// someone else opened, which asks, and a pending head, returned for a hold.
+// someone else opened, which asks, and a pending or red head, returned for
+// a hold or a triage.
 func (in *DriveInput) runFinish(ctx context.Context, r *DriveRun) (driveResult, *heldFinish) {
 	task, id := r.Task, r.Task.Ref.ID
 
@@ -224,7 +230,7 @@ func (in *DriveInput) runFinish(ctx context.Context, r *DriveRun) (driveResult, 
 		}, nil
 	}
 
-	if ce := (finish.ChecksError{}); errors.As(err, &ce) && ce.Pending() {
+	if ce := (finish.ChecksError{}); errors.As(err, &ce) && (ce.Pending() || ce.Checks.State == forge.Red) {
 		return driveResult{}, &heldFinish{err: &ce, answer: pr}
 	}
 

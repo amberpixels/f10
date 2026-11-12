@@ -59,6 +59,8 @@ f10 pr open [n | id]     # the PR or MR: a number is one, a task id its open one
 f10 pr base [PR | id] [--origin]      # the base: the open PR's target, else the recorded stacked base, else the default branch
 f10 pr diff [PR | id] [--name-only]   # the change against that base: here with uncommitted work, else the open PR's diff, else the branch
 f10 pr checks [PR | id] [--json]      # the open PR's head checks: green, red, pending or none, the sha, each failed job with its log url; exit 1 on red, 8 on pending
+f10 pr checks [--brief | --triage | --log]   # one line; or with what a triage decides by: the first real failure, that job on the default branch, what was tried; or that failure's log
+f10 pr checks --rerun | --record fix|left  # rerun a red head's failed jobs, record a fix round, or record a head left red; each refused once spent (see Checks triage)
 f10 pr view [PR | id] [--comments]    # branch, base, task and open PR (head sha, target, mine) with its description; says so when there is no PR
 f10 pr create --title T --body-file F [--label L]... [--assignee A]... [--draft]   # open a PR for the branch here against pr base; prints its url, or an open one's; a bundle's title names its riders after the lead id
 f10 pr edit [PR | id] [--title T] [--body-file F]   # rewrite the open PR's title or body; base, labels and assignees stay; a bundle's title names its riders after the lead id
@@ -266,8 +268,23 @@ A host that cannot answer the read refuses too.
 `--ignore-checks` merges anyway.
 `--yes` does not imply it, because automated finishes pass `--yes`.
 A drive's finish does not wait itself.
-Instead the drive holds the task as `waiting on checks` and tries again each poll, for up to 20 minutes per head, and it halts on red.
-The watcher finishes only merged PRs, so it never reads the checks.
+Instead the drive holds the task as `waiting on checks` and tries again each poll, for up to 20 minutes per head.
+On red it sends `/f10:ci` to the task's agent and shows the task as `triaging checks` (**Checks triage** below).
+A drive whose pace does not finish holds a shipped PR the same way before it ends the task, so a head that turns red is triaged first.
+The watcher finishes only merged PRs, so its finish never waits on checks; its own read of an open PR's checks is under **Watch** (**red**).
+
+### Checks triage
+
+A red head is triaged by the `ci` step, which `/f10:ci` runs on its own and ship runs before its next entry.
+It reads the first failed job that was not cancelled (`f10 pr checks --log`), runs verify locally, and reads how the same job last ended on the default branch (`f10 pr checks --triage`).
+Red verify is the change's own failure, so it gets one fix round.
+Green verify with the job green on the default branch is a flake, so the failed jobs are rerun once (`f10 pr checks --rerun`).
+Green verify with the job red on the default branch is always a question, because the default branch needs its own fix.
+The limits live on the branch as `branch.<branch>.f10-ci`, local and never pushed.
+A fix round counts for the branch, because it pushes a new head, and a rerun counts for its head.
+Any read that finds the head green clears the record.
+`--record fix` and `--rerun` refuse an action already spent, so a second red ends in a question.
+A drive sends the step to the agent when finish meets red, and halts when a triage leaves the same red head with nothing new recorded.
 
 For a bundle, finish needs `--close`: the riders the PR delivers, comma-separated, `all` or `none`.
 Without it, finish exits **7** before changing anything, naming the riders the PR body closes as the default, and the finish skill asks.
@@ -790,7 +807,7 @@ A driven agent's ask (`f10-state.sh ask`, `modes/driven.md`), and a drive's own 
 ## Watch
 
 The daemon watches every project `f10 start` or `f10 drive` ran in, for the tasks no drive owns: a task started by hand whose PR merged on the host, an agent left idle, a run that stopped with nobody looking.
-`watch: finish` is the default: a pass also finishes a task whose PR merged; `watch: report` only reports, and `watch: off` watches nothing; `watch_catchup: on` lets a pass also keep an open PR up to date with its target (**behind** and **catchup** below).
+`watch: finish` is the default: a pass also finishes a task whose PR merged; `watch: report` only reports, and `watch: off` watches nothing; `watch_catchup: on` lets a pass also keep an open PR up to date with its target (**behind** and **catchup** below), and `watch_ci: on` lets it send a red PR to its agent (**red** below).
 Owning is the task's lease (**Drive**): a task a drive or a finish holds is never looked at, and the watcher's own finish takes the lease first, so a drive started later is refused with `owned by the f10 watcher`.
 
 - **Registering.** After its report, `f10 start` hands the daemon the project's storage root, its main checkout and the same allowlisted environment a drive gets; `f10 drive` does the same before it follows its drive. It never replaces or waits on a running daemon: a daemon of another version is used as it is, and one that is stopping is skipped with one line, so the next `f10 start` or `f10 drive` hands the project over. A failure is one `watch: warning:` line, never a failed command. The project stays watched across daemon restarts and upgrades (`watch.json` in the run dir, which keeps the newest registration's environment, tokens included), and leaves the list once a pass finds no task worktree left (under `watch: finish`, no local task branch either, since its janitor still has work), once its main checkout is gone, or after ten passes in a row fail. A registration that arrives while a pass runs gets one more pass after it, so a task started meanwhile is seen. `watch: off` in the frontmatter registers nothing.
@@ -799,6 +816,7 @@ Owning is the task's lease (**Drive**): a task a drive or a finish holds is neve
   - **closed**: the PR closed without a merge; reported, never cleaned up.
   - **stalled**: the agent idle while its run says plan or ship is running and the run has not changed for 10 minutes: the test a drive halts on, with a longer grace, measured from the run's last write since a pass keeps no memory between runs.
   - **stopped**: the run ended `blocked` (with its question), `failed`, `partial`, or ship `done`.
+  - **red**: the open PR's head checks failed, told once per head with the first failed job that was not cancelled. A head that read green is not read again until it moves, so a quiet PR costs no call. Under `watch_ci: on`, an idle agent with a clean tree and no background work gets `/f10:ci --driven` once per head, under the task's lease; a task handed back with `f10 watch off`, or one a drive holds, is never sent one. Off by default, because an unattended agent would commit and push a fix.
   - **catchup** and **behind**, under `watch_catchup: on` only. When any undriven task has an open PR and an idle agent, or a catchup in flight, the pass fetches origin once and reads what each such branch targets as the catchup step does (the branch it was started after, else the default branch), cross-checked against the PR's base. A target that moved past a branch whose tip is origin's, with an idle agent and a clean tree, is marked (`f10-landed` or `f10-base-moved`, the drive's marks; one already there, left by a finish, a ship guard or a failed catchup, is set again) and integrated by the same engine the drive uses, under the task's lease. The agent is then prompted with a driven catchup for what is left: the conflicts git stopped on, then verify. The watcher always leaves verify to the agent, so a pass stays short. A prompt that cannot go out puts the branch back where it was. A later pass reads the end from git (the mark gone, no merge or rebase open, the target held, no conflict marker, a clean tree) and pushes the branch under the lease, plain after a merge and `--force-with-lease` after a rebase, against the origin tip the catchup started from: a commit pushed to the PR meanwhile is never overwritten, and such a catchup is told once as not pushed. One that did not end clean is told with `/f10:catchup` to run in the worktree, the branch left as it is, and is sent again only once its fingerprint moves (the target, or what the branch conflicts on). **behind** is a PR the watcher will not catch up: no agent in its workspace, a PR retargeted to a branch the task was not started on, or a branch whose tip is not origin's. A working agent or a dirty tree waits for a later pass, and so does an idle agent whose last turn launched background work, for up to 30 minutes from the launch: no catchup is sent to it, and a catchup in flight that did not end clean is not failed, while one git shows clean is still pushed. A task a drive holds, or one handed back, is never touched.
 
   A pass lists only this checkout's branches, so it asks the network nothing before the host, except the one fetch `watch_catchup: on` needs. An agent whose status cannot be read (no listing from Herdr) is never finished. A host that does not answer for a task's PR leaves the task out of the pass, and the pass says so in one line naming the error and the tasks left out, every pass until the host answers; `f10 watch` shows it under `host`.

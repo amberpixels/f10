@@ -178,7 +178,7 @@ var Guarded = []string{"implement", "pr", "judge"}
 // which drive runs. A label never takes one of these names, so status and
 // stats never show a step that did not run.
 var GenericSteps = []string{
-	"audit", "brainstorm", "capture", "catchup", "cleanup", "commit", "debug", "demo", "deploy", "explain",
+	"audit", "brainstorm", "capture", "catchup", "ci", "cleanup", "commit", "debug", "demo", "deploy", "explain",
 	"fetch", "finish", "handoff", "implement", "judge", "plan", "pr", "push", "resolve", "review", "standup",
 }
 

@@ -9,7 +9,7 @@ Every f10 run starts by loading it.
 - **skill** - an entry point the user invokes (`/f10:*`).
   A skill runs one or more steps.
   `/f10:start`, `/f10:drive`, `/f10:finish`, `/f10:status`, `/f10:board`, `/f10:read` and `/f10:asks` run the binary and no step.
-- **step** - a unit of work in `steps/*.md`: `brainstorm`, `debug`, `capture`, `fetch`, `plan`, `judge`, `explain`, `catchup`, `implement`, `cleanup`, `commit`, `pr`, `push`, `review`, `resolve`, `demo`, `handoff`, `deploy`, `standup`, `audit`.
+- **step** - a unit of work in `steps/*.md`: `brainstorm`, `debug`, `capture`, `fetch`, `plan`, `judge`, `explain`, `catchup`, `implement`, `cleanup`, `commit`, `pr`, `push`, `review`, `resolve`, `ci`, `demo`, `handoff`, `deploy`, `standup`, `audit`.
   The skill owns the invocation: argument, modes, authorization and where the session stops.
   The step owns the work.
   Where they disagree, the skill wins on the invocation and the step on the work.
@@ -182,7 +182,7 @@ Unless `project.md` says `public`:
 
 ## Commits
 
-Every step that commits (commit, push, pr, resolve, judge, catchup, the ship skill's catchup guard) commits this way.
+Every step that commits (commit, push, pr, resolve, judge, catchup, ci, the ship skill's catchup guard) commits this way.
 
 - Small, conventional commits in the repo's style, with no AI attribution lines.
 - **Trailers**: the message ends in the lines `f10 trace trailers` prints, as its own last `-m` paragraph.
@@ -191,7 +191,7 @@ Every step that commits (commit, push, pr, resolve, judge, catchup, the ship ski
   Then `git commit -m "<subject>" [-m "<body>"] -m "$trailers"`.
   With `traces: off` it prints nothing, and the message stays as it was (`docs/traces.md`).
 - `--step` names the step whose work the commit carries.
-  It is `implement` for implemented code, and the committing step for its own work (`resolve`, `judge`, `catchup`), with any extra flags its caller names.
+  It is `implement` for implemented code, and the committing step for its own work, with any extra flags its caller names.
 
 ## Task references
 

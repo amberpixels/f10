@@ -249,7 +249,7 @@ func (in *DriveInput) next(ctx context.Context, r *DriveRun) error {
 
 	skills := in.Skills(r)
 	if r.Pos >= len(skills) {
-		return endWith(driveResult{Row: "done: " + strings.Join(skills, " ")})
+		return in.endAfterChecks(ctx, r, skills)
 	}
 
 	skill := skills[r.Pos]

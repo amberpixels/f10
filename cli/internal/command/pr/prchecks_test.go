@@ -2,13 +2,17 @@ package pr
 
 import (
 	"errors"
+	"io"
 	"strings"
 	"testing"
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/render"
+	"github.com/amberpixels/f10/cli/internal/testkit"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -55,4 +59,120 @@ func TestChecksExit(t *testing.T) {
 			t.Errorf("checksExit(%q) = %d, want %d", state, code, want)
 		}
 	}
+}
+
+// --brief is one line ship reads beside its badge.
+func TestChecksLine(t *testing.T) {
+	for want, hc := range map[string]forge.HeadChecks{
+		"checks: red (lint, test)": {State: forge.Red, Failed: []forge.Check{{Name: "lint"}, {Name: "test"}}},
+		"checks: pending (build)":  {State: forge.Pending, Running: []forge.Check{{Name: "build"}}},
+		"checks: green":            {State: forge.Green},
+		"checks: none":             {},
+	} {
+		if got := ChecksLine(hc); got != want {
+			t.Errorf("ChecksLine = %q, want %q", got, want)
+		}
+	}
+}
+
+// --triage adds the failure to read, its job on the default branch, and
+// what this red spell tried; a cancelled job reads as cancelled.
+func TestTriageFacts(t *testing.T) {
+	tr := &checkTriage{
+		First:   &forge.Check{Name: "lint", Run: "77"},
+		Default: forge.Green,
+		Tried:   []string{"rerun at abc1234"},
+	}
+
+	got := factsText(TriageFacts(tr))
+	want := "first=lint (run 77)\ndefault=green\ntried=rerun at abc1234\n"
+
+	if got != want {
+		t.Errorf("triage facts:\n%s\nwant:\n%s", got, want)
+	}
+
+	if got := factsText(
+		TriageFacts(&checkTriage{First: &forge.Check{Name: "x"}}),
+	); !strings.Contains(
+		got,
+		"default=none\ntried=nothing",
+	) {
+		t.Errorf("no history and nothing tried:\n%s", got)
+	}
+
+	cancelled := factsText(
+		ChecksFacts("u", forge.HeadChecks{State: forge.Red, Failed: []forge.Check{{Name: "t", Cancelled: true}}}),
+	)
+	if !strings.Contains(cancelled, "cancelled t=") {
+		t.Errorf("cancelled job:\n%s", cancelled)
+	}
+}
+
+// One fix round per red spell and one rerun per head: a second of either
+// is refused before anything runs, and a rerun on a new head is allowed.
+func TestActOnChecksKeepsTheLimits(t *testing.T) {
+	f := testkit.NewFakes(t)
+	f.Script("gh run rerun 77 --failed", "")
+
+	h := hostops.NewHost("gh", "")
+	red := func(sha string) forge.HeadChecks {
+		return forge.HeadChecks{State: forge.Red, SHA: sha, Failed: []forge.Check{{Name: "lint", Run: "77"}}}
+	}
+
+	act := func(hc forge.HeadChecks, rerun bool) error {
+		return actOnChecks(t.Context(), io.Discard, h, hc, "/code/repo", "FT-1", "", true, rerun)
+	}
+
+	if err := act(red("aaa"), false); err != nil {
+		t.Fatalf("first fix = %v", err)
+	}
+
+	if err := act(red("bbb"), false); err == nil {
+		t.Error("a second fix round on a new head was allowed")
+	}
+
+	if err := act(red("bbb"), true); err != nil {
+		t.Fatalf("first rerun = %v", err)
+	}
+
+	if err := act(red("bbb"), true); err == nil || countOf(f.Calls, "gh run rerun 77 --failed") != 1 {
+		t.Errorf(
+			"a second rerun of bbb = %v, reruns %d; want refused before rerunning",
+			err,
+			countOf(f.Calls, "gh run rerun 77 --failed"),
+		)
+	}
+
+	if err := act(red("ccc"), true); err != nil {
+		t.Errorf("a rerun on a new head = %v, want allowed", err)
+	}
+
+	if err := act(forge.HeadChecks{State: forge.Green, SHA: "ddd"}, true); err == nil {
+		t.Error("a rerun of a green head was allowed")
+	}
+
+	if err := actOnChecks(t.Context(), io.Discard, h, red("eee"), "/code/repo", "FT-1", "", false, false); err == nil {
+		t.Error("a fix recorded for a branch that is not here was allowed")
+	}
+
+	// a green read ends the spell, so the next spell gets its fix round
+	if err := branchmeta.ClearOnGreen(t.Context(), "/code/repo", "FT-1", true); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := act(red("fff"), false); err != nil {
+		t.Errorf("a fix after green = %v, want allowed", err)
+	}
+}
+
+func countOf(calls []string, call string) int {
+	n := 0
+
+	for _, c := range calls {
+		if c == call {
+			n++
+		}
+	}
+
+	return n
 }

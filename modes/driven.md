@@ -13,7 +13,7 @@ Strip the token, then read the rest of the argument as usual.
 Driven mode holds for the whole run.
 If a skill chains into another (`/f10:plan ... && /f10:ship ...`), it passes `--driven` on to the next one.
 
-These skills take the token: catchup, cleanup, debug, judge, plan, resolve, review, ship and standup.
+These skills take the token: catchup, ci, cleanup, debug, judge, plan, resolve, review, ship and standup.
 Brainstorm, capture, demo and explain never see it, because nothing prompts them from another session.
 A skill that only runs the binary (`modes/binary.md`) has no run to drive, so the token does not apply to it.
 
@@ -82,7 +82,8 @@ The task halts only in these cases:
   A failure after which the state moved starts the count over.
 - **A decision.** A run stopped `blocked` without an ask, such as a judge's stop or a stale task's verdict, halts at once, because sending the step again would roll the decision again.
 - **A stall the branch does not explain** (**A turn ends at its report**, above), or a prompt the agent never took, because typing into a pane that may hold a dialog could answer it.
-- **Checks at finish.** A head whose checks failed halts at once, naming the failed jobs.
+- **Checks at finish.** A head whose checks failed is sent to the task's agent as `/f10:ci`, shown as `triaging checks`, and finish reads the checks again once the triage reports.
+  It halts when the step asks, or when a triage leaves the same red head with no new fix or rerun recorded, naming the failed jobs.
   A head whose checks are still running holds the task as `waiting on checks`, and finish runs again each poll.
   It halts once the same head has been pending for 20 minutes.
   A push starts the wait over, because the new head has checks of its own.

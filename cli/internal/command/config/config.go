@@ -56,6 +56,7 @@ type View struct {
 	DriveEnv        []string             `json:"driveEnv,omitempty"`
 	Watch           string               `json:"watch"`
 	WatchCatchup    bool                 `json:"watchCatchup"`
+	WatchCI         bool                 `json:"watchCI"`
 	ReportBack      bool                 `json:"reportBack"`
 	UpkeepPaths     []string             `json:"upkeepPaths,omitempty"`
 	Verify          []facts.VerifyDecl   `json:"verify,omitempty"`
@@ -202,6 +203,7 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 		DriveEnv:        eff.DriveEnv,
 		Watch:           eff.Watch,
 		WatchCatchup:    eff.WatchCatchup,
+		WatchCI:         eff.WatchCI,
 		ReportBack:      eff.ReportBack,
 		UpkeepPaths:     eff.UpkeepPaths,
 		Verify:          eff.Verify,

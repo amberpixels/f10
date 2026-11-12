@@ -21,10 +21,29 @@ type HeadChecks struct {
 	Running  []Check `json:"running,omitempty"`
 }
 
-// A Check is one check run, status or pipeline job, with its log url.
+// A Check is one check run, status or pipeline job, with its log url. Run
+// is what a rerun names: the Actions run, or the GitLab pipeline.
 type Check struct {
-	Name string `json:"name"`
-	URL  string `json:"url,omitempty"`
+	Name      string `json:"name"`
+	URL       string `json:"url,omitempty"`
+	Run       string `json:"run,omitempty"`
+	Cancelled bool   `json:"cancelled,omitempty"` // it stopped because another job failed
+}
+
+// First is the failure to read first: the first that is not cancelled,
+// since a cancelled job only followed another's failure.
+func (hc *HeadChecks) First() (Check, bool) {
+	for _, c := range hc.Failed {
+		if !c.Cancelled {
+			return c, true
+		}
+	}
+
+	if len(hc.Failed) > 0 {
+		return hc.Failed[0], true
+	}
+
+	return Check{}, false
 }
 
 // Names is the checks' names, comma-joined.
@@ -152,7 +171,12 @@ func (h Host) HeadChecks(ctx context.Context, p PR) (HeadChecks, error) {
 			continue
 		}
 
-		out.add(c.verdict(), Check{Name: c.name(), URL: c.url()})
+		out.add(c.verdict(), Check{
+			Name:      c.name(),
+			URL:       c.url(),
+			Run:       actionsRun(c.url()),
+			Cancelled: strings.EqualFold(c.Conclusion, "CANCELLED"),
+		})
 	}
 
 	return out, nil
@@ -288,7 +312,12 @@ func (h Host) pipelineChecks(ctx context.Context, p PR) (HeadChecks, error) {
 	}
 
 	for _, j := range jobs {
-		c := Check{Name: j.Name, URL: j.WebURL}
+		c := Check{
+			Name:      j.Name,
+			URL:       j.WebURL,
+			Run:       strconv.FormatInt(pl.ID, 10),
+			Cancelled: strings.EqualFold(j.Status, "canceled"),
+		}
 
 		switch s := jobState(j.Status); {
 		case s == Red && !j.AllowFailure:

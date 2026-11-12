@@ -44,6 +44,7 @@ type Declared struct {
 	DriveEnv       []string          `yaml:"drive_env,omitempty"`     // environment keys a drive passes to its commands, beyond the built-in ones
 	Watch          string            `yaml:"watch,omitempty"`         // what the daemon does for tasks no drive owns
 	WatchCatchup   string            `yaml:"watch_catchup,omitempty"` // the watcher also catches an undriven open PR up with its target
+	WatchCI        string            `yaml:"watch_ci,omitempty"`      // the watcher also sends a red undriven PR to its agent to triage
 	ReportBack     string            `yaml:"report_back,omitempty"`
 	Review         ReviewDecl        `yaml:"review,omitempty"`
 	Standup        StandupDecl       `yaml:"standup,omitempty"`
@@ -268,6 +269,13 @@ var scalarKeys = []scalarKey{
 	{
 		key:   "watch_catchup",
 		field: func(d *Declared) *string { return &d.WatchCatchup },
+		vocab: []string{"on", "off"},
+		def:   "off",
+	},
+	// off by default, since an unattended agent would commit and push a fix
+	{
+		key:   "watch_ci",
+		field: func(d *Declared) *string { return &d.WatchCI },
 		vocab: []string{"on", "off"},
 		def:   "off",
 	},
