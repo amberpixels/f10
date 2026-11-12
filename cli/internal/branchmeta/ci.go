@@ -11,6 +11,9 @@ import (
 const (
 	TriedFix   = "fix"
 	TriedRerun = "rerun"
+	// TriedLeft is the user's answer to leave a head red, or ship's note
+	// that the default branch is red too, so no later read asks again
+	TriedLeft = "left"
 )
 
 // A Triage is the CI key's value: `<sha>:<action>` entries, space-joined.
@@ -31,7 +34,7 @@ func ParseTriage(s string) Triage {
 
 	for f := range strings.FieldsSeq(s) {
 		sha, action, ok := strings.Cut(f, ":")
-		if ok && sha != "" && (action == TriedFix || action == TriedRerun) {
+		if ok && sha != "" && (action == TriedFix || action == TriedRerun || action == TriedLeft) {
 			t.Tried = append(t.Tried, Tried{SHA: sha, Action: action})
 		}
 	}
@@ -59,10 +62,18 @@ func (t Triage) Rerun(sha string) bool {
 	return slices.Contains(t.Tried, Tried{SHA: sha, Action: TriedRerun})
 }
 
+// Left reports sha left red on purpose.
+func (t Triage) Left(sha string) bool {
+	return slices.Contains(t.Tried, Tried{SHA: sha, Action: TriedLeft})
+}
+
 // Allows reports whether action may still be taken on sha.
 func (t Triage) Allows(sha, action string) bool {
-	if action == TriedFix {
+	switch action {
+	case TriedFix:
 		return !t.Fixed()
+	case TriedLeft:
+		return !t.Left(sha)
 	}
 
 	return !t.Rerun(sha)
@@ -88,8 +99,11 @@ func RecordTriage(ctx context.Context, dir, branch, sha, action string) error {
 
 	t := ParseTriage(v)
 	if !t.Allows(sha, action) {
-		if action == TriedFix {
+		switch action {
+		case TriedFix:
 			return fmt.Errorf("%s: a fix round was already made since the checks were last green", branch)
+		case TriedLeft:
+			return fmt.Errorf("%s: %s is already left red", branch, sha[:min(7, len(sha))])
 		}
 
 		return fmt.Errorf("%s: the failed jobs at %s were already rerun", branch, sha[:min(7, len(sha))])

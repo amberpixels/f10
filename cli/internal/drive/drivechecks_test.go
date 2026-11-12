@@ -238,3 +238,24 @@ func TestDriveHoldKeepsTheFinishAnswer(t *testing.T) {
 		t.Errorf("retry = %+v, finish passed %q; want finished on merge both times", res, got)
 	}
 }
+
+// A head CI has not registered yet reads as no checks: the drive waits a
+// short grace for it, then ends the task as a repo with no CI.
+func TestDriveWithoutFinishWaitsForChecksToAppear(t *testing.T) {
+	in, now := checksDrive()
+	in.Checks = func(context.Context, string) (forge.HeadChecks, string, error) {
+		return forge.HeadChecks{SHA: "h3ad"}, "https://gh/pr/9", nil
+	}
+
+	r := &DriveRun{Task: DriveTask{Ref: testkit.Gh1}, Phase: atRunning}
+
+	if err := in.endAfterChecks(t.Context(), r, []string{"ship"}); err != nil || r.Phase != atWaiting {
+		t.Fatalf("no checks yet = %v, phase %v; want held", err, r.Phase)
+	}
+
+	*now = now.Add(checksAppearGrace)
+
+	if res, ok := endOf(in.endAfterChecks(t.Context(), r, []string{"ship"})); !ok || res.Row != "done: ship" {
+		t.Errorf("no checks past the grace = %+v, want done", res)
+	}
+}

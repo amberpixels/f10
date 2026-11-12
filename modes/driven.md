@@ -13,7 +13,7 @@ Strip the token, then read the rest of the argument as usual.
 Driven mode holds for the whole run.
 If a skill chains into another (`/f10:plan ... && /f10:ship ...`), it passes `--driven` on to the next one.
 
-These skills take the token: catchup, cleanup, debug, judge, plan, resolve, review, ship and standup.
+These skills take the token: catchup, ci, cleanup, debug, judge, plan, resolve, review, ship and standup.
 Brainstorm, capture, demo and explain never see it, because nothing prompts them from another session.
 A skill that only runs the binary (`modes/binary.md`) has no run to drive, so the token does not apply to it.
 

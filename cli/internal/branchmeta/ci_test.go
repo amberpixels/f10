@@ -17,6 +17,11 @@ func TestTriageLimits(t *testing.T) {
 		t.Error("a rerun must count for its own sha alone")
 	}
 
+	left := ParseTriage("aaa:left")
+	if !left.Left("aaa") || left.Left("bbb") || left.Allows("aaa", TriedLeft) || !left.Allows("aaa", TriedFix) {
+		t.Error("a head left red must count for that head alone, and leave the fix round alone")
+	}
+
 	if (Triage{}).Fixed() || !(Triage{}).Allows("x", TriedFix) {
 		t.Error("an empty record must allow a fix")
 	}

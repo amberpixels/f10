@@ -24,12 +24,15 @@ f10 keeps what this step tried as a git config key on the branch, `branch.<branc
 A fix round counts for the whole branch, because it pushes a new head, and a limit kept per head would let the next red head be fixed again.
 A rerun counts for its head, because a rerun leaves the head where it was.
 Any read that finds the head green clears the record, so the limits hold for one red spell.
-`f10 pr checks --record fix` and `f10 pr checks --rerun` write it, and refuse an action already spent.
+`f10 pr checks --record fix`, `f10 pr checks --record left` and `f10 pr checks --rerun` write it, and refuse an action already spent.
+A `left` entry counts for its head, and marks a head the user chose to leave red.
 
 1. **Read what the decision needs**, in one call: `f10 pr checks --triage`.
    - Green or pending means the head moved on since the caller looked.
      Say so in one line and end the step, because pending waits for no one but finish.
    - Red prints `first` (the first failed job that was not cancelled, and its run), `default` (how that job last ended on the default branch), and `tried` (this red spell's record).
+   - A `tried` line `left at <this head>` means the user, or ship's note on a red default branch, already chose to leave this head red.
+     Say so in one line and end the step, so a later boundary or tick does not ask again.
 2. **Bring the base in first** when the branch is behind or conflicts with it.
    Run the **catchup** step's **As a guard** with `f10 pr catchup --guard pr`, as before a `pr` entry.
    A guard that integrates pushes the result, never forcing, then ends this step, because the new head runs CI again on code that includes the base.
@@ -64,7 +67,8 @@ Any read that finds the head green clears the record, so the limits hold for one
 
    Interactive, it is one `AskUserQuestion`.
    Driven, it is one ask, `f10-state.sh ask "<text>"; f10-state.sh set ship blocked ci` (`modes/driven.md`), with no `done ci`, because the run waits on the answer.
-   Ship mid-flow takes the default branch's case differently: it notes it with `f10-state.sh note` and goes on, and the question is asked at the end of the run.
+   Ship mid-flow takes the default branch's case differently: it runs `f10 pr checks --record left`, notes it with `f10-state.sh note` and goes on, and the question is asked at the end of the run.
+   **Leave it red** is recorded the same way, `f10 pr checks --record left`, so no later read of this head asks again.
    **Fix again** and **rerun once more** are the user's override of the record: the step runs `git config --unset branch.<branch>.f10-ci`, then the point the answer names.
 
 **Report**: one line, the outcome and the job: `ci: lint failed on the change - fixed in 3f2a1c9, pushed`, `ci: test flaked - reran run 77`, or the ask.

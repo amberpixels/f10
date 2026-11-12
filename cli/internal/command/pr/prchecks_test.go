@@ -120,7 +120,7 @@ func TestActOnChecksKeepsTheLimits(t *testing.T) {
 	}
 
 	act := func(hc forge.HeadChecks, rerun bool) error {
-		return actOnChecks(t.Context(), io.Discard, h, hc, "/code/repo", "FT-1", true, rerun)
+		return actOnChecks(t.Context(), io.Discard, h, hc, "/code/repo", "FT-1", "", true, rerun)
 	}
 
 	if err := act(red("aaa"), false); err != nil {
@@ -151,7 +151,7 @@ func TestActOnChecksKeepsTheLimits(t *testing.T) {
 		t.Error("a rerun of a green head was allowed")
 	}
 
-	if err := actOnChecks(t.Context(), io.Discard, h, red("eee"), "/code/repo", "FT-1", false, false); err == nil {
+	if err := actOnChecks(t.Context(), io.Discard, h, red("eee"), "/code/repo", "FT-1", "", false, false); err == nil {
 		t.Error("a fix recorded for a branch that is not here was allowed")
 	}
 

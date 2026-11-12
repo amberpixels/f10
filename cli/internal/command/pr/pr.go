@@ -59,8 +59,9 @@ func Command() *cli.Command {
 						Usage: "rerun the failed jobs of a red head and record it; refused once per head",
 					},
 					&cli.StringFlag{
-						Name:  "record",
-						Usage: "record an `ACTION` taken on a red head: fix, refused once since the checks were last green",
+						Name: "record",
+						Usage: "record an `ACTION` taken on a red head: fix, refused once since the checks were last green; " +
+							"left, the head left red on purpose so no later read asks again",
 					},
 				},
 				Action: runPRChecks,

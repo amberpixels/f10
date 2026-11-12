@@ -60,7 +60,7 @@ f10 pr base [PR | id] [--origin]      # the base: the open PR's target, else the
 f10 pr diff [PR | id] [--name-only]   # the change against that base: here with uncommitted work, else the open PR's diff, else the branch
 f10 pr checks [PR | id] [--json]      # the open PR's head checks: green, red, pending or none, the sha, each failed job with its log url; exit 1 on red, 8 on pending
 f10 pr checks [--brief | --triage | --log]   # one line; or with what a triage decides by: the first real failure, that job on the default branch, what was tried; or that failure's log
-f10 pr checks --rerun | --record fix  # rerun a red head's failed jobs, or record a fix round; each refused once spent (see Checks triage)
+f10 pr checks --rerun | --record fix|left  # rerun a red head's failed jobs, record a fix round, or record a head left red; each refused once spent (see Checks triage)
 f10 pr view [PR | id] [--comments]    # branch, base, task and open PR (head sha, target, mine) with its description; says so when there is no PR
 f10 pr create --title T --body-file F [--label L]... [--assignee A]... [--draft]   # open a PR for the branch here against pr base; prints its url, or an open one's; a bundle's title names its riders after the lead id
 f10 pr edit [PR | id] [--title T] [--body-file F]   # rewrite the open PR's title or body; base, labels and assignees stay; a bundle's title names its riders after the lead id

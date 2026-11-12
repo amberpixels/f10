@@ -1,6 +1,7 @@
 package pr
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -45,8 +46,9 @@ func runPRChecks(ctx context.Context, cmd *cli.Command) error {
 		return errors.New("--rerun and --record are one action each: pass one")
 	}
 
-	if record != "" && record != branchmeta.TriedFix {
-		return fmt.Errorf("--record takes %s; a rerun records itself through --rerun", branchmeta.TriedFix)
+	if record != "" && record != branchmeta.TriedFix && record != branchmeta.TriedLeft {
+		return fmt.Errorf("--record takes %s or %s; a rerun records itself through --rerun",
+			branchmeta.TriedFix, branchmeta.TriedLeft)
 	}
 
 	t, err := target.For(ctx, cmd)
@@ -92,7 +94,7 @@ func runPRChecks(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if record != "" || rerun {
-		return actOnChecks(ctx, cmd.Writer, h, hc, s.Main, s.Branch, local, rerun)
+		return actOnChecks(ctx, cmd.Writer, h, hc, s.Main, s.Branch, record, local, rerun)
 	}
 
 	if cmd.Bool("log") {
@@ -127,7 +129,12 @@ func runPRChecks(ctx context.Context, cmd *cli.Command) error {
 // actOnChecks records a fix, or reruns the failed jobs, on a red head. The
 // record refuses a second action of a kind, so a triage asks instead.
 func actOnChecks(
-	ctx context.Context, w io.Writer, h hostops.Host, hc forge.HeadChecks, dir, branch string, local, rerun bool,
+	ctx context.Context,
+	w io.Writer,
+	h hostops.Host,
+	hc forge.HeadChecks,
+	dir, branch, record string,
+	local, rerun bool,
 ) error {
 	if hc.State != forge.Red {
 		return fmt.Errorf(
@@ -141,7 +148,7 @@ func actOnChecks(
 		return fmt.Errorf("%s is not a branch here: a triage runs in the task's worktree", branch)
 	}
 
-	action := branchmeta.TriedFix
+	action := cmp.Or(record, branchmeta.TriedFix)
 	if rerun {
 		action = branchmeta.TriedRerun
 	}
@@ -173,7 +180,7 @@ func actOnChecks(
 	}
 
 	if !rerun {
-		fmt.Fprintf(w, "recorded a fix round on %s\n", gitx.ShortSHA(hc.SHA))
+		fmt.Fprintf(w, "recorded %s on %s\n", action, gitx.ShortSHA(hc.SHA))
 	}
 
 	return nil

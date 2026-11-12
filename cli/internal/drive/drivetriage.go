@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drivestore"
@@ -32,8 +33,12 @@ func (in *DriveInput) endAfterChecks(ctx context.Context, r *DriveRun, skills []
 		done.Lines = append(done.Lines, r.Task.Ref.ID+" triage record not cleared: "+err.Error())
 	}
 
+	// a head CI has not registered yet reads as none: it waits a short
+	// grace, so a repo with no CI is not held for the whole budget
+	waits := hc.State == forge.Pending || (hc.State == "" && url != "" && !r.noChecksPast(in.Now(), hc.SHA))
+
 	switch {
-	case url == "" || (hc.State != forge.Red && hc.State != forge.Pending):
+	case url == "" || (hc.State != forge.Red && !waits):
 		r.checks = nil
 
 		return endWith(done)
@@ -57,6 +62,15 @@ func (in *DriveInput) endAfterChecks(ctx context.Context, r *DriveRun, skills []
 	in.saveTask(r, func(t *drivestore.Task) { t.Checks = hc.SHA })
 
 	return nil
+}
+
+// checksAppearGrace is how long a head with no checks is held after ship,
+// for CI to register it, before the drive reads it as having none.
+const checksAppearGrace = 2 * time.Minute
+
+// noChecksPast reports a head held with no checks for longer than the grace.
+func (r *DriveRun) noChecksPast(now time.Time, sha string) bool {
+	return r.checks != nil && r.checks.sha == sha && now.Sub(r.checks.since) >= checksAppearGrace
 }
 
 // triage sends a red head to the task's agent as /f10:ci. The step decides
