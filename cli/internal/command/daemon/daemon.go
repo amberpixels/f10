@@ -1,3 +1,5 @@
+// Package daemon is the f10 daemon command: it runs the per-user process that
+// drives and watches tasks, and reports on it, stops it or shows its log.
 package daemon
 
 import (

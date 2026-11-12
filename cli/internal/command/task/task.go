@@ -1,3 +1,5 @@
+// Package task is the f10 task, f10 plan and f10 demo commands: reading,
+// creating and updating the project's tasks and opening their plans and demos.
 package task
 
 import (

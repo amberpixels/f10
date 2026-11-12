@@ -1,3 +1,5 @@
+// Package drive is the f10 drive command: it parses a drive's arguments and
+// hands them to the drive service.
 package drive
 
 import (

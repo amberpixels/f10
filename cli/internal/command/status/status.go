@@ -1,3 +1,5 @@
+// Package status is the f10 status command: where a run stands, read from
+// the status service.
 package status
 
 import (

@@ -1,7 +1,8 @@
 // Package layers holds the module's import rule: every package has a rank,
 // and a package imports only packages of a lower rank, so feature groups
 // cannot depend on each other in cycles. The table is the architecture; a
-// change to it is a design change.
+// change to it is a design change. Its tests also hold the package comment
+// rule: the comment lives in <pkg>.go or doc.go, a binary's in main.go.
 package layers
 
 import (

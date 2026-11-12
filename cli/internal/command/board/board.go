@@ -1,3 +1,5 @@
+// Package board is the f10 board command: what changed in a window, or with
+// --state where every task stands, as text, JSON or an HTML page.
 package board
 
 import (

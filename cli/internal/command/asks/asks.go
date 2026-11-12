@@ -1,3 +1,5 @@
+// Package asks is the f10 asks command: the questions driven agents wait on,
+// listed, answered, or walked in a terminal.
 package asks
 
 import (

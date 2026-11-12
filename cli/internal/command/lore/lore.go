@@ -1,3 +1,5 @@
+// Package lore is the f10 lore command: it writes entries and answers why a
+// line is the way it is and which lessons a file carries.
 package lore
 
 import (

@@ -1,3 +1,4 @@
+// Package ledger is the f10 ledger command, which prints the recorded events.
 package ledger
 
 import (

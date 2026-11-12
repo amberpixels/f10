@@ -1,3 +1,5 @@
+// Package state is the plumbing verbs behind the status-line badge: a run's
+// phases, its task, its note and its pipeline.
 package state
 
 import (

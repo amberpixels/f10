@@ -1,7 +1,3 @@
-// Package drive runs a list of tasks through their flow from one process: each
-// in its own worktree and agent, dependents once their base has code, halting
-// when an agent asks and nothing else can move; and the watcher's passes over
-// tasks no drive owns.
 package drive
 
 import (

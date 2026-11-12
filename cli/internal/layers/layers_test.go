@@ -3,6 +3,8 @@ package layers
 import (
 	"bufio"
 	"bytes"
+	"go/parser"
+	"go/token"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -125,6 +127,124 @@ func TestTableRejectsLeafAndCommandImports(t *testing.T) {
 			t.Errorf("violation %d = %q, want %q", i, got[i], want[i])
 		}
 	}
+}
+
+func TestEveryPackageCommentHasItsHome(t *testing.T) {
+	t.Parallel()
+
+	for _, p := range commentProblems(t, filepath.Join("..", "..")) {
+		t.Error(p)
+	}
+}
+
+func TestCommentRuleFlagsAStrayAndAMissingComment(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	files := map[string]string{
+		"good/good.go":     "// Package good is fine.\npackage good\n",
+		"good/other.go":    "package good\n",
+		"doc/doc.go":       "// Package doc is fine.\npackage doc\n",
+		"doc/x_unix.go":    "//go:build unix\n\npackage doc\n",
+		"stray/stray.go":   "package stray\n",
+		"stray/other.go":   "// Package stray sits in the wrong file.\npackage stray\n",
+		"none/none.go":     "package none\n",
+		"twice/twice.go":   "// Package twice is here.\npackage twice\n",
+		"twice/doc.go":     "// Package twice is here too.\npackage twice\n",
+		"cmd/app/main.go":  "// Command app is fine.\npackage main\n",
+		"cmd/app/flags.go": "package main\n",
+		"bin/run.go":       "// Command run belongs in main.go.\npackage main\n",
+	}
+
+	for name, src := range files {
+		path := filepath.Join(root, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := os.WriteFile(path, []byte(src), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got := commentProblems(t, root)
+	want := []string{
+		"bin: package comment in run.go; it belongs in main.go",
+		"none: no package comment; write one in none.go or doc.go",
+		"stray: package comment in other.go; it belongs in stray.go or doc.go",
+		"twice: package comment in doc.go and twice.go; keep one",
+	}
+
+	if !slices.Equal(got, want) {
+		t.Errorf("problems = %q, want %q", got, want)
+	}
+}
+
+// commentProblems checks the comment rule over every package under root: the
+// comment lives in <dir>.go or doc.go, a binary's in main.go, and only there.
+// Reading the files itself keeps go test's cache honest.
+func commentProblems(t *testing.T, root string) []string {
+	t.Helper()
+
+	docs := map[string][]string{}
+	mains := map[string]bool{}
+
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		switch {
+		case err != nil:
+			return err
+		case d.IsDir() && path != root && (d.Name() == "testdata" || strings.HasPrefix(d.Name(), ".")):
+			return filepath.SkipDir
+		case d.IsDir() || filepath.Ext(path) != ".go" || strings.HasSuffix(path, "_test.go"):
+			return nil
+		}
+
+		f, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.PackageClauseOnly|parser.ParseComments)
+		if err != nil {
+			return err
+		}
+
+		dir, _ := filepath.Rel(root, filepath.Dir(path))
+		if _, ok := docs[dir]; !ok {
+			docs[dir] = nil
+		}
+
+		mains[dir] = f.Name.Name == "main"
+
+		if f.Doc != nil {
+			docs[dir] = append(docs[dir], d.Name())
+		}
+
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var out []string
+
+	for dir, files := range docs {
+		dir = filepath.ToSlash(dir)
+		home := []string{filepath.Base(dir) + ".go", "doc.go"}
+		if mains[dir] {
+			home = []string{"main.go"}
+		}
+
+		slices.Sort(files)
+
+		switch {
+		case len(files) == 0:
+			out = append(out, dir+": no package comment; write one in "+strings.Join(home, " or "))
+		case len(files) > 1:
+			out = append(out, dir+": package comment in "+strings.Join(files, " and ")+"; keep one")
+		case !slices.Contains(home, files[0]):
+			out = append(out, dir+": package comment in "+files[0]+"; it belongs in "+strings.Join(home, " or "))
+		}
+	}
+
+	slices.Sort(out)
+
+	return out
 }
 
 // statSources touches every Go file in the module: go test caches a result

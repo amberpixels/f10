@@ -1,3 +1,5 @@
+// Package start is the f10 start and f10 forward commands: it parses their
+// arguments and hands the work to the start service.
 package start
 
 import (
