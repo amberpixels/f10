@@ -799,7 +799,7 @@ It fetches origin first (`--no-fetch` reads the refs at hand) and prints `key: v
 
 `--guard <entry>` decides as ship's guard before `implement`, `pr` or `judge`: before `pr` and `judge` every base is read from origin, a branch already on origin is merged so its push never forces, and `catchup: off`, the default branch itself, no recorded base before implement or a base not on origin yet before `pr` print `method: skip`.
 `--mark '<key> <value>'` writes the `mark` row on the branch and prints the branch and the mark; it decides nothing, fetches nothing and takes no `--guard`.
-The branch is the one checked out, or the one a stopped rebase is rebasing, since a rebase detaches HEAD; with neither it fails, and it refuses a key that is not `f10-landed` or `f10-base-moved`.
+The branch is the one checked out, or the one a stopped rebase is rebasing, since a rebase detaches HEAD; with neither it fails, and it refuses a key that is not `f10-landed` or `f10-base-moved`, and an `f10-base-moved` value that names no commit.
 A guard that stops on a conflict marks the branch this way, never with `git config` by hand, which under a stopped rebase writes the key under an empty branch name that git then refuses to read.
 `f10-base-moved` overrides the local-first order of an `f10-after-branch` base because the drive's and the watcher's push gates check that sha against origin, so a newer local tip would carry commits neither checked; a marked sha the base branch no longer holds fails, naming the key to unset.
 A base is rewritten when the branch holds the recorded `f10-base-tip` and the base does not, as after a squash merge or a rebase of the base.

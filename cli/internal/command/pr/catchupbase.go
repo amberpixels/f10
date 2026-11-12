@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strings"
 
 	"github.com/urfave/cli/v3"
 
@@ -63,12 +62,12 @@ func runCatchupBase(ctx context.Context, cmd *cli.Command) error {
 
 		main := cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot)
 
-		branch, err := stack.SetMark(ctx, t.Layout.CheckoutRoot, main, cmd.String("mark"))
+		branch, stored, err := stack.SetMark(ctx, t.Layout.CheckoutRoot, main, cmd.String("mark"))
 		if err != nil {
 			return err
 		}
 
-		_, err = fmt.Fprintf(cmd.Writer, "branch: %s\nmark: %s\n", branch, strings.TrimSpace(cmd.String("mark")))
+		_, err = fmt.Fprintf(cmd.Writer, "branch: %s\nmark: %s\n", branch, stored)
 
 		return err
 	}

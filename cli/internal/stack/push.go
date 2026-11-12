@@ -12,27 +12,41 @@ import (
 )
 
 // SetMark writes the mark a guard printed (`<key> <value>`) on the branch dir
-// works on, and returns it. Resolving the catchup again would name no mark: a
-// stopped rebase leaves HEAD on the base, which reads as already in.
-func SetMark(ctx context.Context, dir, main, mark string) (string, error) {
+// works on, and returns that branch and the mark as stored. Resolving the
+// catchup again would name no mark: a stopped rebase leaves HEAD on the base,
+// which reads as already in.
+func SetMark(ctx context.Context, dir, main, mark string) (string, string, error) {
 	name, value, _ := strings.Cut(strings.TrimSpace(mark), " ")
-
 	key, value := branchmeta.Key(name), strings.TrimSpace(value)
+
+	refused := fmt.Errorf("--mark %q: want `%s <branch>` or `%s <sha>`, as the mark row prints it",
+		mark, branchmeta.Landed, branchmeta.Moved)
 	if key != branchmeta.Landed && key != branchmeta.Moved || value == "" {
-		return "", fmt.Errorf("--mark %q: want `%s <branch>` or `%s <sha>`, as the mark row prints it",
-			mark, branchmeta.Landed, branchmeta.Moved)
+		return "", "", refused
+	}
+
+	// a value naming no commit would fail the catchup the mark is meant to send
+	if key == branchmeta.Moved {
+		sha, err := gitx.Ref(ctx, main, value+"^{commit}")
+		if err != nil {
+			return "", "", err
+		}
+
+		if sha == "" {
+			return "", "", refused
+		}
 	}
 
 	branch, err := gitx.WorkedBranch(ctx, dir)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	if branch == "" {
-		return "", fmt.Errorf("no branch to mark in %s: HEAD is detached and no rebase is in progress", dir)
+		return "", "", fmt.Errorf("no branch to mark in %s: HEAD is detached and no rebase is in progress", dir)
 	}
 
-	return branch, branchmeta.Set(ctx, main, branch, key, value)
+	return branch, string(key) + " " + value, branchmeta.Set(ctx, main, branch, key, value)
 }
 
 // ClearMarks unsets the catchup marks once the base is in and verify is

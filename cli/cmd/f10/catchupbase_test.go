@@ -653,13 +653,16 @@ func TestCatchupMarkDuringStoppedOperation(t *testing.T) {
 
 			mark := string(branchmeta.Moved) + " " + sha
 
-			out, err := runApp(t, "-C", r.Dir, "pr", "catchup", "--mark", mark).outErr()
+			// padded, as a pasted row may be: what is stored and printed is not
+			padded := " " + string(branchmeta.Moved) + "   " + sha
+
+			out, err := runApp(t, "-C", r.Dir, "pr", "catchup", "--mark", padded).outErr()
 			if err != nil {
 				t.Fatalf("--mark: %v\n%s", err, out)
 			}
 
-			if !strings.Contains(out, "FT-1/a") {
-				t.Errorf("output does not name the branch:\n%s", out)
+			if want := "branch: FT-1/a\nmark: " + mark + "\n"; out != want {
+				t.Errorf("output %q, want %q", out, want)
 			}
 
 			if got := r.At(later, "config", "--get", branchmeta.Moved.For("FT-1/a")); got != sha {
@@ -683,7 +686,7 @@ func TestCatchupMarkDuringStoppedOperation(t *testing.T) {
 func TestCatchupMarkRefusesWhatIsNoMark(t *testing.T) {
 	r, _ := newStackedRepo(t)
 
-	for _, mark := range []string{"", "f10-task FT-9", "f10-base-moved", "f10-landed  "} {
+	for _, mark := range []string{"", "f10-task FT-9", "f10-base-moved", "f10-landed  ", "f10-base-moved not-a-commit"} {
 		_, err := runApp(t, "-C", r.Dir, "pr", "catchup", "--mark="+mark).outErr()
 		if err == nil {
 			t.Errorf("--mark %q: no error", mark)

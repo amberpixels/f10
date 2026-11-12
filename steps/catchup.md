@@ -27,6 +27,7 @@ f10 records what a catchup needs as git config keys on the branch, `branch.<bran
 `f10-landed` and `f10-base-moved` stay set until a catchup clears the marks.
 
 To **clear the marks**, `git config --unset` each of `branch.<branch>.f10-landed` and `.f10-base-moved` that is set, where `<branch>` is the `branch` row `f10 pr catchup` printed.
+A run that skipped point 2 has no such row, so it reads the branch with `git branch --show-current`, and only once the merge or rebase has concluded, because HEAD is back on the branch then.
 Then set `.f10-base-tip` to the `sha` row when `found` is `f10-after-branch`.
 Otherwise unset `.f10-base-tip`, because the base is now the default branch.
 
@@ -45,6 +46,7 @@ Otherwise unset `.f10-base-tip`, because the base is now the default branch.
 
 2. **Find the base and the method** with `f10 pr catchup`.
    It fetches origin and prints these `key: value` lines:
+   - `branch`, the branch being caught up.
    - `base`, the ref to integrate, and `sha`, its commit.
    - `upstream`, the base's old tip, printed only with `method: onto`.
    - `found` and `how`, what the base was found through and how.
