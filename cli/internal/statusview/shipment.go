@@ -198,11 +198,13 @@ func ShipFiles(root, id string) ([]verdictPath, []reviewPath) {
 
 // FinishedShipFiles is ShipFiles for a finished task: f10 finish moved its
 // findings to the archive, so the rounds are the newest closed series', and
-// the verdicts those written since the series before it closed. A task
-// finished before its findings were archived reads the live directory.
+// the verdicts those written since the series before it closed. Rounds still
+// in the live directory are the last PR's, closed without f10 finish.
 func FinishedShipFiles(root, id string) ([]verdictPath, []reviewPath) {
-	closed := archive.ClosedPRs(storage.Root(root).Reviews(id))
-	if len(closed) == 0 {
+	live := storage.Root(root).Reviews(id)
+
+	closed := archive.ClosedPRs(live)
+	if len(closed) == 0 || len(findings.Series(live)) > 0 {
 		return ShipFiles(root, id)
 	}
 

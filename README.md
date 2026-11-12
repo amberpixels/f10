@@ -417,7 +417,7 @@ When a task is named, `--json` takes the shape that `f10 status <id>` prints: a 
 
 Inside a session, `! f10 status` already has the session id.
 `/f10:status` and `/f10:status <id>` are answered by the plugin's hook before a model runs, so they cost no tokens.
-Two cases go to the model instead: a status that prints a question a driven agent waits on, and an argument that names no task.
+Three cases go to the model instead: a status that prints a question a driven agent waits on, an argument that names no task, and a task whose read takes longer than 3 seconds.
 The model puts the question to you and sends your answer.
 
 `f10 status 1042` reads another run, the one in the worktree that has the task's branch.

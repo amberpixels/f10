@@ -162,6 +162,11 @@ func TestHookStatusTextForATask(t *testing.T) {
 		t.Errorf("DM-4: pass = %v, text:\n%s", pass, text)
 	}
 
+	// a salted id names its task, as the CLI reads it
+	if text, pass := hookcmd.HookStatusText(t.Context(), "sess-1", "DM-3-attempt2"); pass {
+		t.Errorf("a salted id went to the model:\n%s", text)
+	}
+
 	if _, pass := hookcmd.HookStatusText(t.Context(), "sess-1", "whatever"); !pass {
 		t.Error("a token naming no task was answered")
 	}

@@ -456,6 +456,17 @@ func TestFinishedShipFiles(t *testing.T) {
 	if !strings.Contains(rounds[0].Path, filepath.Join("archive", "FT-1.2")) {
 		t.Errorf("rounds read from %s, want the newest closed series", rounds[0].Path)
 	}
+
+	// a third PR closed without f10 finish leaves its rounds in the live dir
+	write(filepath.Join(reviews, "1.md"), t0.Add(4*time.Hour))
+
+	if _, rounds := FinishedShipFiles(
+		root.Path(),
+		"FT-1",
+	); len(rounds) != 1 ||
+		filepath.Dir(rounds[0].Path) != reviews {
+		t.Errorf("rounds %+v, want the live directory's one round", rounds)
+	}
 }
 
 // A task with a checkout is read there and never asks for children; with no

@@ -316,6 +316,10 @@ func finishedFacts(ship Shipment, gates []gate, link bool) []render.Fact {
 	return append(rows, gateFacts(gates)...)
 }
 
+// hookStatusDeadline is how long the hook's status for a task may read,
+// below the 5 second timeout hooks.json gives the hook.
+const hookStatusDeadline = 3 * time.Second
+
 // StatusText is what `f10 status --plain` prints for session in dir, bare
 // or for token, and whether the model must take the turn: the output holds
 // a question to relay, or token names no task, so it is the skill's to read.
@@ -332,6 +336,11 @@ func StatusText(ctx context.Context, dir, session, token string) (string, bool) 
 	if token == "" {
 		asks, err = BareStatus(ctx, v, dir, false, session, false)
 	} else {
+		// a task with no run asks the tracker and the host; past the deadline
+		// the model takes the turn, inside the hook's own timeout
+		ctx, cancel := context.WithTimeout(ctx, hookStatusDeadline)
+		defer cancel()
+
 		rd, ok := taskReader(ctx, dir, token)
 		if !ok {
 			return "", true
@@ -340,6 +349,10 @@ func StatusText(ctx context.Context, dir, session, token string) (string, bool) 
 		var p statusPrinted
 
 		p, err = rd.Task(ctx, v, token, false)
+		if ctx.Err() != nil {
+			return "", true
+		}
+
 		asks = p.asks
 	}
 
@@ -358,7 +371,8 @@ func taskReader(ctx context.Context, dir, token string) (*statusReader, bool) {
 		return nil, false
 	}
 
-	if _, err := t.Reference(ctx, token); err != nil {
+	id, _ := ref.SplitSuffix(token)
+	if _, err := t.Reference(ctx, id); err != nil {
 		return nil, false
 	}
 

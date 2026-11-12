@@ -546,7 +546,7 @@ The icons are Nerd Font `md-*` glyphs, the only range Claude Code's output keeps
 `--json` prints the rows as an array: `id`, `title`, `url`, `depth`, `after`, `stage`, `step`, `pr`, `pr_state`, and `note`, `next`, `ask` where set.
 
 A task with no children reports as before: its live run, else its plan and PR.
-A task with no branch left (`f10 finish` removed it) prints its single `done` row when the ledger, the tracker or the plan archive says it finished, and `--json` a one-row array; otherwise it fails as before, with `no run to read`.
+A task with no branch left (`f10 finish` removed it) prints its facts block (**Status**, above) when the ledger, the tracker or the plan archive says it finished, and `--json` prints a one-row array; otherwise it fails as before, with `no run to read`.
 A task whose checkout has its branch is read from there first, so only a task with no run to read asks the host for children.
 
 ## Drive

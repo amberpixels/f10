@@ -21,7 +21,7 @@ Never reorder it, summarise it, or turn it into a table, because the binary alre
   Print it as point 1 does, then follow points 2-4 with the task the output names; a `launched here` tree is followed as point 3 follows a parent's.
   The hook answers a bare call itself, with no model turn, unless the output holds a question: an `ask` row in a block, or an `asking` row in a tree.
 - A task id: another run, the one the task's agent reports from the checkout that has its branch, usually a worktree `f10 start` opened.
-  The hook answers this form itself too, with no model turn, on the same rule: you see it only when the output holds a question, or when the argument names no task.
+  The hook answers this form itself too, with no model turn, on the same rule: you see it only when the output holds a question, when the argument names no task, or when reading the task takes longer than 3 seconds.
   Follow the numbered points below.
 
 !`command -v f10 >/dev/null 2>&1 && f10 status --plain || "${CLAUDE_PLUGIN_ROOT}/bin/f10-state.sh" show`
