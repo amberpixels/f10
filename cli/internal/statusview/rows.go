@@ -480,7 +480,9 @@ func stageCounts(rows []TaskRow) string {
 
 // prColumn is `#128`, with the state beside it unless the PR is open, an
 // open or merged PR's icon before it so the number reads as a PR. An open
-// PR whose head is red says so, since finish refuses it.
+// PR whose head rollup is red says so: the rollup counts every check, so
+// finish, which counts only required ones where a branch declares any, may
+// still merge it.
 func prColumn(r TaskRow) string {
 	if r.PR == "" {
 		return ""

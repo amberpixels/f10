@@ -187,6 +187,7 @@ func (hc *HeadChecks) add(verdict string, c Check) {
 
 // pipelineChecks reads a merge request's head pipeline and, for a failed or
 // running one, the jobs that make it so; a job allowed to fail never counts.
+// A skipped pipeline, or one stopped at a manual job, ran nothing to wait for.
 func (h Host) pipelineChecks(ctx context.Context, p PR) (HeadChecks, error) {
 	var mr struct {
 		SHA          string `json:"sha"`
@@ -213,7 +214,7 @@ func (h Host) pipelineChecks(ctx context.Context, p PR) (HeadChecks, error) {
 		out.SHA = pl.SHA
 	}
 
-	out.State = pipelineState(pl.Status)
+	out.State = jobState(pl.Status)
 	if out.State == Green || out.State == "" {
 		return out, nil
 	}

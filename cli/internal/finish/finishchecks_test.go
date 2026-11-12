@@ -144,3 +144,21 @@ func TestFinishMergedOnlyReadsNoChecks(t *testing.T) {
 		t.Error("a merged-only finish read the checks")
 	}
 }
+
+// A bundle's riders question comes back before the checks are read, so it
+// never waits on a pending head first.
+func TestFinishAsksForRidersBeforeTheChecks(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.openPR()
+	fx.in.Task, fx.in.HostCloses = testkit.Bundle12, true
+	fx.in.ChecksWait = time.Hour
+	fx.f.Script(checks9, headChecks(testRunning))
+
+	if _, err := fx.run(t); !errors.As(err, new(RidersError)) {
+		t.Fatalf("err = %v, want the riders question", err)
+	}
+
+	if fx.f.Called(testkit.GhChecks) {
+		t.Error("the checks were read before the riders question")
+	}
+}

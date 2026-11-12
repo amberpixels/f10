@@ -219,9 +219,12 @@ type DriveRun struct {
 
 // checksHold is a head whose checks were still running, and when the drive
 // first saw it so; a push starts a new hold, and with it a new budget.
+// answer is the foreign-PR answer the held finish took: taking it removed it
+// from the book, so the retries carry it here.
 type checksHold struct {
-	sha   string
-	since time.Time
+	sha    string
+	since  time.Time
+	answer string
 }
 
 func (r *DriveRun) opened() bool { return r.Phase != atPending && r.Phase != AtHeld }

@@ -87,6 +87,8 @@ func TestHeadChecksOnGitLab(t *testing.T) {
 		{"green", "success", Green, "", ""},
 		{"failed", "failed", Red, "lint", ""},
 		{"running", "running", Pending, "", "test"},
+		{"skipped", "skipped", Green, "", ""},
+		{"manual", "manual", Green, "", ""},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			script(t, map[string]string{

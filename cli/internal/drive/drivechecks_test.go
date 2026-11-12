@@ -111,3 +111,42 @@ func TestTaskStandingWaitingOnChecks(t *testing.T) {
 		t.Errorf("standing = %q, want the base wait", got)
 	}
 }
+
+// The answer to someone else's PR is taken once: a finish held on checks
+// runs again on that answer, and is never asked twice.
+func TestDriveHoldKeepsTheFinishAnswer(t *testing.T) {
+	in, _ := checksDrive()
+
+	var got []string
+
+	pending := true
+	in.Finish = func(_ context.Context, _ io.Writer, req DriveFinish) error {
+		got = append(got, req.Pr)
+
+		switch {
+		case req.Pr == "":
+			return finish.ForeignPullError{URL: "https://gh/pr/9", Author: "alice"}
+		case pending:
+			pending = false
+
+			return finish.ChecksError{
+				URL:    "https://gh/pr/9",
+				Checks: forge.HeadChecks{State: forge.Pending, SHA: "h3ad"},
+			}
+		}
+
+		return nil
+	}
+
+	run := &DriveRun{Task: DriveTask{Ref: testkit.Gh1}, Phase: atRunning}
+	in.Answers.Give(answer{Task: "GH-1", Text: "1. merge"})
+
+	if err := in.finishOrHold(t.Context(), run); err != nil || run.checks == nil {
+		t.Fatalf("first finish = %v, hold %+v; want held on checks", err, run.checks)
+	}
+
+	res, ok := endOf(in.finishOrHold(t.Context(), run))
+	if !ok || res.Code != 0 || strings.Join(got, ",") != "merge,merge" {
+		t.Errorf("retry = %+v, finish passed %q; want finished on merge both times", res, got)
+	}
+}

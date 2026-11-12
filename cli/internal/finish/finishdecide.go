@@ -190,18 +190,20 @@ func decideFinish(ctx context.Context, in FinishInput) (finishDecision, error) {
 		d.kind = landingPull
 	}
 
-	if d.kind == landingPull && d.pull.Status == forge.Open {
-		if d.checked, err = gateChecks(ctx, in, d.pull); err != nil {
-			return d, err
-		}
-	}
-
 	// before anything leaves the machine: a block refuses with nothing changed
 	if d.loreNote, err = checkLore(in, unpushed || d.pull.Status == forge.Open); err != nil {
 		return d, err
 	}
 
-	err = settleClose(in, &d, unpushed)
+	if err := settleClose(in, &d, unpushed); err != nil {
+		return d, err
+	}
+
+	// last, since it may wait on the host: every local refusal comes back first,
+	// and the sha it pins the merge to is read as late as possible
+	if d.kind == landingPull && d.pull.Status == forge.Open {
+		d.checked, err = gateChecks(ctx, in, d.pull)
+	}
 
 	return d, err
 }

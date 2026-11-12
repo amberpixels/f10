@@ -141,11 +141,13 @@ func (in *DriveInput) finishOrHold(ctx context.Context, r *DriveRun) error {
 		return endWith(res)
 	}
 
-	ce := *pending
+	ce := *pending.err
 	if r.checks == nil || r.checks.sha != ce.Checks.SHA {
 		r.checks = &checksHold{sha: ce.Checks.SHA, since: in.Now()}
 		fmt.Fprintf(in.Out, "%s finish: waiting on checks (%s)\n", in.id(r.Task.Ref.ID), forge.Names(ce.Checks.Running))
 	}
+
+	r.checks.answer = pending.answer
 
 	if ce.Waited = in.Now().Sub(r.checks.since); ce.Waited >= finish.ChecksBudget {
 		r.checks = nil
@@ -160,14 +162,25 @@ func (in *DriveInput) finishOrHold(ctx context.Context, r *DriveRun) error {
 	return nil
 }
 
+// heldFinish is a finish refused on a head still running checks, with the
+// foreign-PR answer it ran on.
+type heldFinish struct {
+	err    *finish.ChecksError
+	answer string
+}
+
 // runFinish runs finish in process; its refusals halt the task, except a PR
 // someone else opened, which asks, and a pending head, returned for a hold.
-func (in *DriveInput) runFinish(ctx context.Context, r *DriveRun) (driveResult, *finish.ChecksError) {
+func (in *DriveInput) runFinish(ctx context.Context, r *DriveRun) (driveResult, *heldFinish) {
 	task, id := r.Task, r.Task.Ref.ID
 
 	pr, err := in.finishAnswer(id)
 	if err != nil {
 		return halted(id, "finish", err.Error()), nil
+	}
+
+	if pr == "" && r.checks != nil {
+		pr = r.checks.answer
 	}
 
 	fmt.Fprintf(in.Out, "%s finish: running\n", in.id(id))
@@ -212,7 +225,7 @@ func (in *DriveInput) runFinish(ctx context.Context, r *DriveRun) (driveResult, 
 	}
 
 	if ce := (finish.ChecksError{}); errors.As(err, &ce) && ce.Pending() {
-		return driveResult{}, &ce
+		return driveResult{}, &heldFinish{err: &ce, answer: pr}
 	}
 
 	if err != nil {

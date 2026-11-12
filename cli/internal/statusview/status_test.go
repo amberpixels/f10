@@ -3,6 +3,7 @@ package statusview
 import (
 	"bytes"
 	"cmp"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -592,5 +593,23 @@ func TestReadShipmentCommitRow(t *testing.T) {
 	want := r.At(testkit.During, "rev-parse", "--short", "HEAD")
 	if s := readShipment(t.Context(), in, nil, ledger.TaskRef{}); s.Commit != want {
 		t.Errorf("commit = %q, want the branch head %q", s.Commit, want)
+	}
+}
+
+// Under a caller's deadline the host reads stop short of it, so the caller's
+// own context is still live when they give up.
+func TestAskPRLeavesTheCallersDeadline(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), hostMargin/2)
+	defer cancel()
+
+	inner, stop := withinDeadline(ctx)
+	defer stop()
+
+	if inner.Err() == nil {
+		t.Error("the host reads got time past the margin")
+	}
+
+	if ctx.Err() != nil {
+		t.Error("the caller's context ran out with the host reads")
 	}
 }

@@ -94,6 +94,9 @@ func (s *Shipment) AskPR(ctx context.Context, in taskStatusInput) {
 
 	s.pulled = true
 
+	ctx, cancel := withinDeadline(ctx)
+	defer cancel()
+
 	p, err := in.Host.PR(ctx, in.Branch)
 	if err != nil || p.URL == "" {
 		return
@@ -106,6 +109,18 @@ func (s *Shipment) AskPR(ctx context.Context, in taskStatusInput) {
 			s.Checks = &hc
 		}
 	}
+}
+
+// hostMargin is what AskPR leaves of a caller's deadline, such as the
+// status hook's, so a slow host costs the pr state row, never the block.
+const hostMargin = 500 * time.Millisecond
+
+func withinDeadline(ctx context.Context) (context.Context, context.CancelFunc) {
+	if d, ok := ctx.Deadline(); ok {
+		return context.WithDeadline(ctx, d.Add(-hostMargin))
+	}
+
+	return context.WithCancel(ctx)
 }
 
 // PRLine is the pr state row, `#128 open · checks red (lint)`; "" when the

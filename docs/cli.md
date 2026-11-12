@@ -525,6 +525,10 @@ With a run under it, the plan file's row is `plan file`, because the run's `plan
 A finished task, its branch gone, prints the same block, read from what `f10 finish` archived: the newest archived plan and handoff, a `review <round>` row per findings file of the series its last PR closed (`reviews/archive/<id>.<n>/`), a `judge` row per verdict written since the series before it closed, and the demo report.
 `pr state` and the gates as step rows follow, and `--json` still prints its one `done` row.
 
+The `pr state` row shows whenever the host was asked about the branch's PR, a live run included: the PR number and its state, and for an open PR its head's checks as `f10 pr checks` reads them, `#128 open · checks red (lint)`.
+The failed jobs are named in parentheses, or the running ones while the checks are pending, and `--json` carries the whole read as `checks` on the shipment.
+The host reads stop half a second short of a caller's deadline, such as the status hook's, so a slow host leaves the row without its checks, or leaves the row out, and the rest of the block still prints.
+
 `f10 status <id>` lists the task's **gates** under the `ship` row, while the run is going and after it finished, and the block of a task with no branch left prints them as step rows under `pr state`:
 
 ```
@@ -557,6 +561,8 @@ ship:           running: review:local
 
 A parent's rows carry the same gates as one column after the step (a `gates` line under `--plain`), `󰚔 L 3/4 · R open · 󰊛 J proceed`: `L` and `R` the local and CI reviews (fixed of found, `N open`, `clean`, `ok`), `TJ`, `PJ` and `J` the task, plan and change judges, `-` a review the flow does not run, `…` running, `?` unknown; a review or judge the flow leaves out is left out of the column.
 The icons are Nerd Font `md-*` glyphs, the only range Claude Code's output keeps one cell wide: `󰚔` before the reviews, `󰊛` before each judge, and in the PR column `󰓂` before an open PR, `󰘭` before a merged one.
+An open PR whose head is red reads `checks red` beside its number, from the rollup state the request search already returns, so the column costs no extra host call.
+That rollup counts every check, while finish counts only the required ones where the target branch declares any, so finish may still merge a PR the column marks.
 `F10_STATUS_GLYPHS` replaces all four, in that order (open PR, merged PR, review, judge), for a terminal without the font: `F10_STATUS_GLYPHS='PR MR rv jd'`.
 `--json` holds them in a `gates` array, on a run and on a row.
 `--json` prints the rows as an array: `id`, `title`, `url`, `depth`, `after`, `stage`, `step`, `pr`, `pr_state`, and `note`, `next`, `ask` where set.
