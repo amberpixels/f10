@@ -219,7 +219,7 @@ type PRRef struct {
 	Draft     bool   `json:"draft,omitempty"`
 	Head      string `json:"head,omitempty"`
 	Base      string `json:"base,omitempty"`
-	Mergeable string `json:"mergeable,omitempty"` // clean, conflicts or blocked
+	Mergeable string `json:"mergeable,omitempty"` // clean, conflicts, blocked or behind
 	Checks    string `json:"checks,omitempty"`    // green, red or pending
 }
 

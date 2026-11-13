@@ -560,7 +560,8 @@ func (in WatchInput) sendCatchup(
 		return &watchReport{
 			Kind: watchLeft,
 			Text: fmt.Sprintf("%s is behind %s and merges into it clean: left alone", task.Branch, aim.Name),
-			Key:  watchLeft + " " + pr.URL,
+			// once per pushed head: a catchup moves it, so a later leave is told again
+			Key: watchLeft + " " + task.originSHA,
 		}
 	}
 

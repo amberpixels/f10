@@ -618,3 +618,38 @@ func TestWatchCatchesUpALeftPROnceItConflicts(t *testing.T) {
 		t.Errorf("once conflicting: reported %+v, prompted %d", out, prompts)
 	}
 }
+
+// A left PR is told once per pushed head: another clean move of the target is
+// silent, while a new head (a catchup's push) is told again.
+func TestWatchTellsALeftPROncePerHead(t *testing.T) {
+	fx := finishtest.NewJanitorFixture(t)
+	scriptTarget(fx)
+
+	in := WatchInput{
+		Main: fx.In.Main, Root: t.TempDir(), Mode: "report", Catchup: true,
+		Prompt: func(context.Context, WatchedTask, string) error { return nil },
+	}
+
+	store := map[string]watchReport{}
+	if out := catchupPass(t, in, []WatchedTask{undrivenTask()}, store); len(out) != 1 || out[0].Kind != watchLeft {
+		t.Fatalf("first leave: %+v", out)
+	}
+
+	fx.F.Script("git rev-parse -q --verify refs/remotes/origin/main", "m3")
+	fx.F.Fail("git merge-base --is-ancestor m3 main0", shell.Result{Code: 1})
+	fx.F.Fail("git merge-base --is-ancestor m3 refs/heads/GH-1/x", shell.Result{Code: 1})
+	fx.F.Script("git merge-tree --write-tree --no-messages m3 HEAD", "tree")
+
+	if out := catchupPass(t, in, []WatchedTask{undrivenTask()}, store); len(out) != 0 {
+		t.Errorf("the same head was told again: %+v", out)
+	}
+
+	fx.F.Script("git rev-parse -q --verify refs/remotes/origin/GH-1/x", "p2")
+
+	task := undrivenTask()
+	task.LocalSHA = "p2"
+
+	if out := catchupPass(t, in, []WatchedTask{task}, store); len(out) != 1 || out[0].Kind != watchLeft {
+		t.Errorf("a new head was not told: %+v", out)
+	}
+}
