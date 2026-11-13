@@ -17,7 +17,8 @@ f10 records what a catchup needs as git config keys on the branch, `branch.<bran
 - `f10-after` and `f10-after-branch` are the base task and its branch, which `f10 start --after` records.
 - `f10-landed` says the branch must take in the default branch.
   `f10 finish` sets it when the base task merged.
-  `f10 drive` sets it, and so does the watcher under `watch_catchup: on`, when the branch's pull request falls behind the default branch or conflicts with it.
+  `f10 drive` sets it when the branch's pull request falls behind the default branch or conflicts with it.
+  The watcher under `watch_catchup: on` sets it only when the branch conflicts with the default branch or the host will not merge it while behind.
   Ship's guard sets it when bringing the default branch in conflicts.
 - `f10-base-moved` is set in the same ways, for an `f10-after-branch` base that moved past this branch.
   It names the base commit that the setter checked against origin before the branch is pushed.

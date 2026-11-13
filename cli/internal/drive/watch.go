@@ -62,6 +62,9 @@ const (
 	watchCatchup = "catchup"
 	// watchBehind is a branch behind its target, and the watcher cannot catch it up
 	watchBehind = "behind"
+	// watchLeft is a branch behind its target that merges into it clean, left
+	// alone so its CI is not restarted for nothing
+	watchLeft = "left"
 )
 
 // watchClause tells a driven catchup the watcher sent it: nobody follows
@@ -521,24 +524,57 @@ func (in WatchInput) sendCatchup(
 		return nil
 	}
 
+	if task.busy != "" {
+		return nil // a later pass
+	}
+
+	marked, err := branchmeta.Get(ctx, in.Main, task.Branch, aim.Key)
+	if err != nil {
+		in.warnf("%s skipped this pass, reading %s's %s mark: %v", task.ID, task.Branch, aim.Key, err)
+
+		return nil
+	}
+
+	var conflicts []gitx.Conflict
+
+	readConflicts := func() bool {
+		if conflicts, err = gitx.Conflicts(ctx, task.Path, aim.SHA, "HEAD"); err != nil {
+			in.warnf("%s skipped this pass, reading what %s conflicts on: %v", task.ID, task.Branch, err)
+
+			return false
+		}
+
+		return true
+	}
+
+	// a failed catchup on record was owed when it went out, and still is
+	owes := marked != "" || failed != nil
+
+	// the merge-tree runs only when the mark and the host leave it open
+	read := !owes && pr.Mergeable != forge.Behind
+	if read && !readConflicts() {
+		return nil
+	}
+
+	if !catchupOwed(owes, pr.Mergeable, conflicts) {
+		return &watchReport{
+			Kind: watchLeft,
+			Text: fmt.Sprintf("%s is behind %s and merges into it clean: left alone", task.Branch, aim.Name),
+			Key:  watchLeft + " " + pr.URL,
+		}
+	}
+
 	if task.Ws == "" || in.Prompt == nil {
 		return behind("no agent", fmt.Sprintf("%s moved past %s, and no agent is in its workspace to catch it up",
 			aim.Name, task.Branch))
 	}
 
-	if task.busy != "" {
-		return nil // a later pass
-	}
-
 	if failed != nil {
-		fp, _, err := stack.ConflictFingerprint(ctx, task.Path, aim.SHA)
-		if err != nil {
-			in.warnf("%s skipped this pass, reading what %s conflicts on: %v", task.ID, task.Branch, err)
-
+		if !read && !readConflicts() {
 			return nil
 		}
 
-		if fp == failed.Fingerprint {
+		if stack.FingerprintOf(aim.SHA, conflicts) == failed.Fingerprint {
 			return nil
 		}
 	}
@@ -559,6 +595,13 @@ func (in WatchInput) sendCatchup(
 	}
 
 	return in.integrate(ctx, task, store, behind)
+}
+
+// catchupOwed: a catchup's push restarts the PR's CI, so a behind branch gets
+// one only when already owed (a mark, a failed catchup), when the host will not
+// merge it behind, or when it conflicts.
+func catchupOwed(owes bool, mergeable string, conflicts []gitx.Conflict) bool {
+	return owes || mergeable == forge.Behind || len(conflicts) > 0
 }
 
 // integrate marks the branch behind its aim, integrates through the

@@ -554,10 +554,10 @@ func (r *row) stage(withLocal bool, since time.Time) {
 	case (r.Verdict == "rethink" || r.Verdict == "stop") && !r.live() && (r.tracked() || r.PR != nil):
 		set(StageBlocked, FromLocal)
 
-	case r.open() && !r.PR.Draft && r.PR.Mergeable != forge.Conflicts && r.PR.Mergeable != forge.Blocked &&
+	case r.open() && !r.PR.Draft && mergeReady(r.PR.Mergeable) &&
 		r.PR.Checks != forge.Red && blockClean(r):
 		set(StageReady, FromTrace)
-	case r.open() && !r.PR.Draft && r.PR.Mergeable != forge.Conflicts && r.PR.Mergeable != forge.Blocked &&
+	case r.open() && !r.PR.Draft && mergeReady(r.PR.Mergeable) &&
 		r.PR.Checks != forge.Red && r.PR.Decision == forge.Approved && r.PR.Block == nil:
 		set(StageReady, FromGuessed)
 
@@ -606,6 +606,11 @@ func blockAsks(r *row) bool {
 	b, ok := r.block()
 
 	return ok && b.Asks > 0
+}
+
+// mergeReady: the host's merge state holds nothing back.
+func mergeReady(mergeable string) bool {
+	return mergeable != forge.Conflicts && mergeable != forge.Blocked && mergeable != forge.Behind
 }
 
 func blockClean(r *row) bool {
