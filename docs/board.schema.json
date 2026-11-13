@@ -349,7 +349,8 @@
           "enum": [
             "clean",
             "conflicts",
-            "blocked"
+            "blocked",
+            "behind"
           ]
         },
         "checks": {

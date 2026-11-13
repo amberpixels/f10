@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/probe"
 	"github.com/amberpixels/f10/cli/internal/reviews"
 	"github.com/amberpixels/f10/cli/internal/target"
@@ -30,8 +31,7 @@ func TestPullNumberOf(t *testing.T) {
 // Only an open request is the branch's: a closed one before it is history.
 func TestOpenPullOfSkipsClosed(t *testing.T) {
 	f := testkit.NewFakes(t)
-	f.Script("gh pr list --head feat --state all --json number,state,headRefName,headRefOid,baseRefName,url,"+
-		"author,createdAt,mergedAt,closedAt --limit 100",
+	f.Script("gh pr list --head feat --state all --json "+forge.HeadFields+" --limit 100",
 		`[{"number":3,"state":"CLOSED","createdAt":"2026-10-02T00:00:00Z"},`+
 			`{"number":5,"state":"OPEN","createdAt":"2026-10-01T00:00:00Z"}]`)
 
@@ -46,8 +46,7 @@ func TestOpenPullOfSkipsClosed(t *testing.T) {
 // stands for the change.
 func TestLastPullOfTakesTheNewestAnyState(t *testing.T) {
 	f := testkit.NewFakes(t)
-	f.Script("gh pr list --head REPO-7 --state all --json number,state,headRefName,headRefOid,baseRefName,url,"+
-		"author,createdAt,mergedAt,closedAt --limit 100",
+	f.Script("gh pr list --head REPO-7 --state all --json "+forge.HeadFields+" --limit 100",
 		`[{"number":3,"state":"CLOSED","createdAt":"2026-10-01T00:00:00Z"},`+
 			`{"number":5,"state":"MERGED","baseRefName":"main","createdAt":"2026-10-02T00:00:00Z"}]`)
 

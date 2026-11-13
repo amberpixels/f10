@@ -430,7 +430,13 @@ func ConflictFingerprint(ctx context.Context, dir, target string) (string, strin
 		return "", "", err
 	}
 
-	return drivestore.Fingerprint(target, conflictWay(conflicts), ""), conflictPaths(conflicts), nil
+	return FingerprintOf(target, conflicts), conflictPaths(conflicts), nil
+}
+
+// FingerprintOf is ConflictFingerprint's fingerprint for conflicts already
+// read, so a caller that needs them too merges once.
+func FingerprintOf(target string, conflicts []gitx.Conflict) string {
+	return drivestore.Fingerprint(target, conflictWay(conflicts), "")
 }
 
 // conflictWay identifies conflicts by path and the blobs each side brought,

@@ -117,6 +117,23 @@ func TestPullReadsTheBoardFields(t *testing.T) {
 	}
 }
 
+// Behind is a host refusing to merge until the branch holds its target, told
+// apart from a request blocked on reviews or checks.
+func TestMergeableBehind(t *testing.T) {
+	for _, c := range []struct{ gh, ghState, gl, want string }{
+		{gh: "MERGEABLE", ghState: "BEHIND", want: Behind},
+		{gh: "MERGEABLE", ghState: "BLOCKED", want: Blocked},
+		{gh: "MERGEABLE", ghState: "CLEAN", want: Clean},
+		{gh: "CONFLICTING", ghState: "DIRTY", want: Conflicts},
+		{gl: "need_rebase", want: Behind},
+		{gl: "conflict", want: Conflicts},
+	} {
+		if got := mergeable(c.gh, c.ghState, c.gl); got != c.want {
+			t.Errorf("mergeable(%q, %q, %q) = %q, want %q", c.gh, c.ghState, c.gl, got, c.want)
+		}
+	}
+}
+
 // PullsSince is open requests unbounded and merged ones since the window.
 func TestPullsSince(t *testing.T) {
 	since := time.Date(2026, 10, 16, 0, 0, 0, 0, time.UTC)

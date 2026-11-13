@@ -10,7 +10,7 @@ argument-hint: "<task-id | PR url> [--plan | --local | --discuss] [--pace <name>
 Start a task beside this one: `f10 start` creates the branch and worktree, opens them as a Herdr workspace, starts a claude agent in its root pane and prompts it, marked `--driven` (`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`) unless `--discuss`.
 A plan the main checkout saved for the task (`/f10:plan` after a discussion there) stays where it is, in the storage root every worktree shares, and the agent ships it instead of planning again.
 This skill only runs the command and relays its output (`${CLAUDE_PLUGIN_ROOT}/modes/binary.md`); it runs no step and never waits on the new agent.
-The per-user f10 daemon then watches the task while no drive owns it: a merged PR, a stalled agent and a stopped run land in its watch log, which `f10 watch` reads, and under `watch_catchup: on` its open PR is kept up to date with its target (`docs/cli.md` → Watch).
+The per-user f10 daemon then watches the task while no drive owns it: a merged PR, a stalled agent and a stopped run land in its watch log, which `f10 watch` reads, and under `watch_catchup: on` its open PR is caught up with its target when it conflicts with it or must be (`docs/cli.md` → Watch).
 
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.

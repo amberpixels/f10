@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/finish/finishtest"
 	"github.com/amberpixels/f10/cli/internal/forge"
+	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -93,6 +94,11 @@ func catchupPass(
 	return out
 }
 
+// conflicting makes GH-1/x conflict with origin/main at m2.
+func conflicting(fx *finishtest.JanitorFixture) {
+	fx.F.Fail("git merge-tree --write-tree --no-messages m2 HEAD", shell.Result{Code: 1, Stdout: aOneWay})
+}
+
 func TestWatchCatchesUpAnOpenPR(t *testing.T) {
 	const mark = "set branch.GH-1/x." + string(branchmeta.Landed) + " main"
 
@@ -105,10 +111,16 @@ func TestWatchCatchesUpAnOpenPR(t *testing.T) {
 		kind   string
 		warned string
 	}{
-		"key off":             {task: func(*WatchedTask) {}},
-		"behind, idle, clean": {key: true, prompt: true, kind: watchCatchup},
-		"agent working":       {key: true, task: func(w *WatchedTask) { w.Agent = agentctl.StatusWorking }},
-		"no listing":          {key: true, task: func(w *WatchedTask) { w.Listed = false; w.Agent = "" }},
+		"key off": {task: func(*WatchedTask) {}},
+		// a move that merges clean is left alone, so the PR's CI is not restarted
+		"behind, idle, clean": {key: true, kind: watchLeft},
+		"behind, conflicting": {key: true, script: conflicting, prompt: true, kind: watchCatchup},
+		// a host that refuses to merge a behind branch owes a catchup without a conflict
+		"host requires up to date": {
+			key: true, task: func(w *WatchedTask) { w.Pr.Mergeable = forge.Behind }, prompt: true, kind: watchCatchup,
+		},
+		"agent working": {key: true, task: func(w *WatchedTask) { w.Agent = agentctl.StatusWorking }},
+		"no listing":    {key: true, task: func(w *WatchedTask) { w.Listed = false; w.Agent = "" }},
 		"waiting on an ask": {key: true, task: func(w *WatchedTask) {
 			w.Run = &state.Run{Ship: "blocked", Leaf: "judge", Ask: "1. Go on? [yes | no]", Updated: watchNow}
 		}, kind: watchStopped},
@@ -134,9 +146,15 @@ func TestWatchCatchesUpAnOpenPR(t *testing.T) {
 			fx.F.Script("git rev-parse -q --verify refs/remotes/origin/GH-1/x", "")
 		}},
 		"no workspace": {
+			key:    true,
+			task:   func(w *WatchedTask) { w.Ws, w.Agent = "", "" },
+			script: conflicting,
+			kind:   watchBehind,
+		},
+		"no workspace, clean": {
 			key:  true,
 			task: func(w *WatchedTask) { w.Ws, w.Agent = "", "" },
-			kind: watchBehind,
+			kind: watchLeft,
 		},
 		"retargeted": {
 			key:  true,
@@ -151,7 +169,7 @@ func TestWatchCatchesUpAnOpenPR(t *testing.T) {
 		"fetch fails": {key: true, script: func(fx *finishtest.JanitorFixture) {
 			fx.F.Fail("git fetch origin", shell.Result{Code: 128, Stderr: "no route to host"})
 		}, warned: "no route to host"},
-		"lease held":  {key: true, lease: true},
+		"lease held":  {key: true, script: conflicting, lease: true},
 		"handed back": {key: true, task: func(w *WatchedTask) { w.Off = true }},
 		"owned":       {key: true, task: func(w *WatchedTask) { w.Owner = "drive 2" }},
 	}
@@ -255,6 +273,7 @@ func TestWatchCatchesUpAnOpenPR(t *testing.T) {
 
 // A base that is another task's branch marks f10-base-moved with origin's
 // head of it, what the stacked request targets; a base origin lacks waits.
+// The branch conflicts with the base, so a catchup is owed.
 func TestWatchCatchesUpAStackedPR(t *testing.T) {
 	for _, onOrigin := range []bool{true, false} {
 		fx := finishtest.NewJanitorFixture(t)
@@ -262,7 +281,7 @@ func TestWatchCatchesUpAStackedPR(t *testing.T) {
 		fx.F.Meta.Seed("GH-1/x", branchmeta.AfterBranch, "GH-9/y")
 		fx.F.Script("git rev-parse -q --verify refs/heads/GH-9/y", "b2")
 		fx.F.Fail("git merge-base --is-ancestor b2 refs/heads/GH-1/x", shell.Result{Code: 1})
-		fx.F.Script("git merge-tree --write-tree --no-messages b2 HEAD", "tree")
+		fx.F.Fail("git merge-tree --write-tree --no-messages b2 HEAD", shell.Result{Code: 1, Stdout: aOneWay})
 
 		if onOrigin {
 			fx.F.Script("git rev-parse -q --verify refs/remotes/origin/GH-9/y", "b2")
@@ -301,6 +320,7 @@ func TestWatchCatchesUpAStackedPR(t *testing.T) {
 func TestWatchReportsAnAgentItCannotPrompt(t *testing.T) {
 	fx := finishtest.NewJanitorFixture(t)
 	scriptTarget(fx)
+	conflicting(fx)
 	fx.F.Script("git reset --hard p1", "")
 
 	in := WatchInput{
@@ -500,6 +520,7 @@ func TestWatchStoreKeepsTheCatchupRecord(t *testing.T) {
 func TestWatchHandsAConflictToTheAgent(t *testing.T) {
 	fx := finishtest.NewJanitorFixture(t)
 	scriptTarget(fx)
+	conflicting(fx)
 	fx.F.Script("git diff --name-only --diff-filter=U -z", "a.go")
 
 	var prompts []string
@@ -543,5 +564,92 @@ func TestWatchStoreReadsAnOlderCatchupRecord(t *testing.T) {
 
 	if r := got["FT-1"].Catchup; r == nil || r.Target != "m2" || r.Origin != "p1" || r.Spent || r.Failed {
 		t.Errorf("read back %+v", got["FT-1"].Catchup)
+	}
+}
+
+func TestCatchupOwed(t *testing.T) {
+	conflict := []gitx.Conflict{{Path: "a.go"}}
+
+	for _, c := range []struct {
+		owes      bool
+		mergeable string
+		conflicts []gitx.Conflict
+		want      bool
+	}{
+		{want: false},
+		{mergeable: forge.Clean, want: false},
+		{mergeable: forge.Blocked, want: false},
+		{owes: true, want: true},
+		{mergeable: forge.Behind, want: true},
+		{conflicts: conflict, want: true},
+	} {
+		if got := catchupOwed(c.owes, c.mergeable, c.conflicts); got != c.want {
+			t.Errorf("catchupOwed(%v, %q, %v) = %v, want %v", c.owes, c.mergeable, c.conflicts, got, c.want)
+		}
+	}
+}
+
+// A PR left alone while it merges clean is told once, and caught up on the
+// first pass that finds it conflicting.
+func TestWatchCatchesUpALeftPROnceItConflicts(t *testing.T) {
+	fx := finishtest.NewJanitorFixture(t)
+	scriptTarget(fx)
+
+	prompts := 0
+	in := WatchInput{
+		Main: fx.In.Main, Root: t.TempDir(), Mode: "report", Catchup: true,
+		Prompt: func(context.Context, WatchedTask, string) error { prompts++; return nil },
+	}
+
+	store := map[string]watchReport{}
+
+	for range 2 {
+		catchupPass(t, in, []WatchedTask{undrivenTask()}, store)
+	}
+
+	if store["GH-1"].Kind != watchLeft || len(store["GH-1"].Told) != 1 || prompts != 0 {
+		t.Fatalf("left alone: %+v, prompted %d", store["GH-1"], prompts)
+	}
+
+	conflicting(fx)
+
+	out := catchupPass(t, in, []WatchedTask{undrivenTask()}, store)
+	if len(out) != 1 || out[0].Kind != watchCatchup || prompts != 1 {
+		t.Errorf("once conflicting: reported %+v, prompted %d", out, prompts)
+	}
+}
+
+// A left PR is told once per pushed head: another clean move of the target is
+// silent, while a new head (a catchup's push) is told again.
+func TestWatchTellsALeftPROncePerHead(t *testing.T) {
+	fx := finishtest.NewJanitorFixture(t)
+	scriptTarget(fx)
+
+	in := WatchInput{
+		Main: fx.In.Main, Root: t.TempDir(), Mode: "report", Catchup: true,
+		Prompt: func(context.Context, WatchedTask, string) error { return nil },
+	}
+
+	store := map[string]watchReport{}
+	if out := catchupPass(t, in, []WatchedTask{undrivenTask()}, store); len(out) != 1 || out[0].Kind != watchLeft {
+		t.Fatalf("first leave: %+v", out)
+	}
+
+	fx.F.Script("git rev-parse -q --verify refs/remotes/origin/main", "m3")
+	fx.F.Fail("git merge-base --is-ancestor m3 main0", shell.Result{Code: 1})
+	fx.F.Fail("git merge-base --is-ancestor m3 refs/heads/GH-1/x", shell.Result{Code: 1})
+	fx.F.Script("git merge-tree --write-tree --no-messages m3 HEAD", "tree")
+
+	if out := catchupPass(t, in, []WatchedTask{undrivenTask()}, store); len(out) != 0 {
+		t.Errorf("the same head was told again: %+v", out)
+	}
+
+	fx.F.Script("git rev-parse -q --verify refs/remotes/origin/GH-1/x", "p2")
+
+	task := undrivenTask()
+	task.LocalSHA = "p2"
+
+	if out := catchupPass(t, in, []WatchedTask{task}, store); len(out) != 1 || out[0].Kind != watchLeft {
+		t.Errorf("a new head was not told: %+v", out)
 	}
 }

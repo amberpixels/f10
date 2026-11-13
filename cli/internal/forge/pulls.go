@@ -52,7 +52,7 @@ type PR struct {
 	MergedBy  string
 	Body      string
 	Decision  string     // Approved, ChangesRequested, ReviewRequired or ""
-	Mergeable string     // Clean, Conflicts, Blocked or ""
+	Mergeable string     // Clean, Conflicts, Blocked, Behind or ""
 	Checks    string     // Green, Red, Pending or "" with none
 	Commits   []PRCommit // the commits the host lists for it, where asked for
 	MergeSHA  []string   // the merge and squash commits it landed as
@@ -110,6 +110,9 @@ const (
 	Clean     = "clean"
 	Conflicts = "conflicts"
 	Blocked   = "blocked"
+	// Behind: the host will not merge it until its branch holds the target
+	// (GitHub's require-up-to-date protection, GitLab's fast-forward merge)
+	Behind = "behind"
 
 	Green   = "green"
 	Red     = "red"
@@ -292,7 +295,7 @@ func reviewState(s string) string {
 }
 
 // mergeable reads gh's two fields or glab's one into Clean, Conflicts,
-// Blocked or "" for unknown.
+// Blocked, Behind or "" for unknown.
 func mergeable(gh, ghState, gl string) string {
 	switch strings.ToUpper(gh) {
 	case "CONFLICTING":
@@ -303,7 +306,9 @@ func mergeable(gh, ghState, gl string) string {
 			return Clean
 		case "DIRTY":
 			return Conflicts
-		case "BLOCKED", "BEHIND", "DRAFT":
+		case "BEHIND":
+			return Behind
+		case "BLOCKED", "DRAFT":
 			return Blocked
 		default:
 			return Clean
@@ -313,8 +318,10 @@ func mergeable(gh, ghState, gl string) string {
 	switch strings.ToLower(gl) {
 	case "mergeable":
 		return Clean
-	case "conflict", "need_rebase":
+	case "conflict":
 		return Conflicts
+	case "need_rebase":
+		return Behind
 	case "":
 		return ""
 	default:
@@ -440,8 +447,9 @@ func (h Host) PullsSince(ctx context.Context, since time.Time) ([]PR, error) {
 	return append(open, merged...), nil
 }
 
-// HeadFields are what the janitor reads of a branch's requests.
-const HeadFields = "number,state,headRefName,headRefOid,baseRefName,url,author,createdAt,mergedAt,closedAt"
+// HeadFields are what the janitor and the watcher read of a branch's requests.
+const HeadFields = "number,state,headRefName,headRefOid,baseRefName,url,author,createdAt,mergedAt,closedAt," +
+	"mergeable,mergeStateStatus"
 
 // PullsByHead is every request whose head is branch, in any state, newest
 // first. A branch can carry several: one closed, then another opened.
