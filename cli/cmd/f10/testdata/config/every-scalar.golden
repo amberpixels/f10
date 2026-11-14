@@ -68,6 +68,7 @@
   "loreGate": "block",
   "staleAfter": "14d",
   "driverTimeout": "2m0s",
+  "bundleMaxLines": 300,
   "flows": {
     "default": [
       "plan",
@@ -226,6 +227,11 @@
       "key": "driver_timeout",
       "value": "2m",
       "origin": "declared (main, frontmatter)"
+    },
+    {
+      "key": "bundle_max_lines",
+      "value": "300",
+      "origin": "default"
     },
     {
       "key": "drive_env",

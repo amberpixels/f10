@@ -50,3 +50,29 @@ func AfterID(line string) string {
 
 	return id
 }
+
+// WithAfter is body with its first After: line naming id, appended as a
+// line of its own when the body has none; an id of "" drops the line.
+func WithAfter(body, id string) string {
+	lines := strings.Split(body, "\n")
+
+	for i, line := range lines {
+		if AfterID(line) == "" {
+			continue
+		}
+
+		if id == "" {
+			return strings.Join(append(lines[:i], lines[i+1:]...), "\n")
+		}
+
+		lines[i] = "After: " + id
+
+		return strings.Join(lines, "\n")
+	}
+
+	if id == "" {
+		return body
+	}
+
+	return strings.TrimRight(body, "\n") + "\n\nAfter: " + id + "\n"
+}

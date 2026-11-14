@@ -4,5 +4,6 @@ package tasksource
 type TaskInfo struct {
 	Body   string
 	Closed bool
-	Pull   bool // the number is a pull request: GitHub numbers issues and PRs alike
+	Pull   bool     // the number is a pull request: GitHub numbers issues and PRs alike
+	Labels []string // the host's labels; a driver reports none
 }

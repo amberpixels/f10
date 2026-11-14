@@ -5,11 +5,13 @@ package drive
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/urfave/cli/v3"
@@ -21,6 +23,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/drive"
 	"github.com/amberpixels/f10/cli/internal/drivectl"
+	"github.com/amberpixels/f10/cli/internal/driveplan"
 	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/forge"
@@ -61,6 +64,11 @@ func Command() *cli.Command {
 			"Each drive keeps a record under the storage root, picked up by the same command or --resume N, " +
 			"and holds a lease on each task: a task another drive holds is skipped, and f10 finish refuses it. " +
 			"list shows the drives; cancel N stops one from prompting further.\n" +
+			"plan proposes how to drive the tasks and changes nothing: small tasks of one kind sharing files or an area " +
+			"bundled under bundle_max_lines, the rest alone with the reason, After: lines to add, and --parallel; " +
+			"--facts FILE lays the drive skill's estimates on top, --json prints it for the skill, " +
+			"--hint prints one line when a plan saves a CI wait. A drive run with --planned ARGS is the one " +
+			"plan ARGS names afterwards instead of proposing again.\n" +
 			"The drive runs in the per-user f10 daemon, started when none runs: this command prints its progress, " +
 			"Ctrl+C stops only that, and rerunning it follows the drive again. --foreground runs it in this process.\n" +
 			"Exit 0: every task went through its flow. 4: an agent asks; rerun with --answer. " +
@@ -108,6 +116,10 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 		drive.CloseDriveAsks(asks.Dir(), t.Layout.StorageRoot.Path(), a.Cancel, time.Now())
 
 		return nil
+	}
+
+	if a.Plan != nil {
+		return runDrivePlan(ctx, cmd, a)
 	}
 
 	// the daemon may drain this drive before it opens anything: the signal
@@ -232,6 +244,83 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	return drive.Drive(ctx, cmd.Writer, in)
+}
+
+// runDrivePlan prints a proposal and changes nothing, so the daemon, a hook
+// or a status line may call it: no agents, no daemon, no record.
+func runDrivePlan(ctx context.Context, cmd *cli.Command, a drivectl.DriveArgs) error {
+	t, err := target.For(ctx, cmd)
+	if err != nil {
+		return err
+	}
+
+	res, err := drive.Plan(ctx, drive.PlanInput{
+		Storage:         t.Layout.StorageRoot,
+		Tracker:         stack.TrackerFor(t),
+		FlowByArea:      t.Effective.FlowByArea,
+		MaxLines:        t.Effective.BundleMaxLines,
+		DefaultParallel: drive.DefaultParallel(),
+	}, a)
+	if err != nil {
+		return err
+	}
+
+	w, pa := cmd.Writer, a.Plan
+
+	switch {
+	case pa.JSON:
+		return writePlanJSON(w, res)
+	case res.Agreed != nil && pa.Hint:
+		return nil
+	case res.Agreed != nil:
+		_, err := fmt.Fprintf(
+			w,
+			"agreed in drive %d: f10 drive %s\n",
+			res.Agreed.Number,
+			strings.Join(res.Agreed.Args, " "),
+		)
+
+		return err
+	case pa.Hint:
+		if line := res.Plan.Hint(pa.Key); line != "" {
+			_, err := fmt.Fprintln(w, line)
+
+			return err
+		}
+
+		return nil
+	}
+
+	return res.Plan.Write(w, res.Notes, res.Extra...)
+}
+
+func writePlanJSON(w io.Writer, res drive.PlanResult) error {
+	out := struct {
+		Agreed  int              `json:"agreed,omitempty"`
+		Command string           `json:"command"`
+		Plan    *driveplan.Plan  `json:"plan,omitempty"`
+		Tasks   []driveplan.Task `json:"tasks,omitempty"`
+		Notes   []string         `json:"notes,omitempty"`
+		Saving  string           `json:"saving,omitempty"`
+	}{Notes: res.Notes, Tasks: res.Tasks}
+
+	if res.Agreed != nil {
+		out.Agreed = res.Agreed.Number
+		out.Command = "f10 drive " + strings.Join(res.Agreed.Args, " ")
+	} else {
+		out.Plan = &res.Plan
+		out.Command = res.Plan.Command(res.Extra...)
+		out.Saving = res.Plan.Saving()
+	}
+
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+
+	if err := enc.Encode(out); err != nil {
+		return fmt.Errorf("writing the proposal: %w", err)
+	}
+
+	return nil
 }
 
 func WatchCommand() *cli.Command {

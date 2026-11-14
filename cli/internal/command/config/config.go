@@ -51,6 +51,7 @@ type View struct {
 	LoreGate        string               `json:"loreGate"`
 	StaleAfter      facts.StaleAfter     `json:"staleAfter,omitzero"`
 	DriverTimeout   string               `json:"driverTimeout"` // driver_timeout, as a Go duration
+	BundleMaxLines  int                  `json:"bundleMaxLines"`
 	Flows           map[string]flow.Flow `json:"flows"`
 	FlowByArea      map[string]string    `json:"flowByArea,omitempty"`
 	DriveEnv        []string             `json:"driveEnv,omitempty"`
@@ -198,6 +199,7 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 		LoreGate:        eff.LoreGate,
 		StaleAfter:      eff.StaleAfter,
 		DriverTimeout:   eff.DriverTimeout.String(),
+		BundleMaxLines:  eff.BundleMaxLines,
 		Flows:           eff.Flows,
 		FlowByArea:      eff.FlowByArea,
 		DriveEnv:        eff.DriveEnv,

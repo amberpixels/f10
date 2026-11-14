@@ -158,7 +158,7 @@ func Command() *cli.Command {
 			},
 			{
 				Name: "update",
-				Usage: "set the task's status, priority, labels, assignee, parent or a named property " +
+				Usage: "set the task's status, priority, labels, assignee, parent, After: line or a named property " +
 					"(exit 3: this tracker takes no updates here)",
 				ArgsUsage: "[task-id]",
 				Flags: []cli.Flag{
@@ -176,6 +176,10 @@ func Command() *cli.Command {
 					&cli.StringSliceFlag{
 						Name:  "set",
 						Usage: "`key=value` for a property the driver knows; repeat for several",
+					},
+					&cli.StringFlag{
+						Name:  "after",
+						Usage: "the task id its body's After: line names; none drops the line",
 					},
 				},
 				Action: runTaskUpdate,
