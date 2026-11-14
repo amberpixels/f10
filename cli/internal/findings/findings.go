@@ -37,6 +37,7 @@ type Finding struct {
 	Source   string // local or remote, in a file both halves wrote; empty: the header's reviewer
 	Verdict  string // as written, attachments included: `skip +reply`
 	Reason   string
+	Where    string // `path/to/file.go:123`, as written
 }
 
 var (
@@ -137,6 +138,8 @@ func Parse(text string) (*File, error) {
 				cur.Verdict = value
 			case "reason":
 				cur.Reason = value
+			case "where":
+				cur.Where = value
 			}
 		}
 	}
@@ -150,6 +153,24 @@ func Parse(text string) (*File, error) {
 	}
 
 	return f, nil
+}
+
+// Location splits Where into its path and line; ok is false when it names
+// no line.
+func (fd Finding) Location() (string, int, bool) {
+	path, rest, ok := strings.Cut(strings.Trim(fd.Where, "` "), ":")
+	if !ok || path == "" {
+		return "", 0, false
+	}
+
+	digits := rest
+	if i := strings.IndexFunc(rest, func(r rune) bool { return r < '0' || r > '9' }); i >= 0 {
+		digits = rest[:i]
+	}
+
+	line, err := strconv.Atoi(digits)
+
+	return path, line, err == nil && line > 0
 }
 
 // Halves is which reviewers the header names: `local`, a remote identity,

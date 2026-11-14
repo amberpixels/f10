@@ -205,6 +205,7 @@ type Filter struct {
 	Kind     string
 	Path     string // the payload's path: a plan, findings or verdict file
 	Round    string // the payload's round: a review round
+	Checkout string
 	Since    time.Time
 	IDs      []string
 	Tasks    []string
@@ -217,6 +218,7 @@ func (f Filter) filters() r3.Filters {
 
 	for column, v := range map[string]string{
 		"project": f.Project, "task": f.Task, "session": f.Session, "kind": f.Kind, "p_path": f.Path, "p_round": f.Round,
+		"checkout": f.Checkout,
 	} {
 		if v != "" {
 			filters = append(filters, r3.Eq(column, v))

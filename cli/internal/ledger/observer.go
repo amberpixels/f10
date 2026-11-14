@@ -29,6 +29,9 @@ const (
 	WaitEnded      = "wait_ended"
 	TaskSized      = "task_sized" // finish's: the branch's diffstat before it lands
 
+	RegressionFound   = "regression_found"   // a bug task's cause traced to the task that shipped it
+	RegressionClaimed = "regression_claimed" // a task whose text names the task it regressed
+
 	PlanSaved         = "plan_saved"
 	PlanSuperseded    = "plan_superseded"
 	ReviewRoundOpened = "review_round_opened"

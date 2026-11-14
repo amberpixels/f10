@@ -15,6 +15,7 @@ argument-hint: "<error | stack trace | description>"
 - `<error | trace | description>`: the bug report, run through the **debug** step.
   A confirmed cause runs **capture** with the debug brief, then **fetch** and **plan** on the new task id.
   An argument that reports no bug ("let's debug something") counts as none.
+  A bug that already is a task needs no call here: fetch runs the same step file on it before planning.
 - No argument:
   - An error or stack trace already in this conversation: that is the report.
     Say in one line which one you took, then start.

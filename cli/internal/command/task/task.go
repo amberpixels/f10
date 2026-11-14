@@ -93,6 +93,7 @@ func Command() *cli.Command {
 				}},
 				Action: runTaskStale,
 			},
+			regressionCommand(),
 			{
 				Name:      "open",
 				Usage:     "open the task in the browser; with no task id, the task list",

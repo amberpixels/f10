@@ -210,11 +210,15 @@ func TestStoredRowsDecodeWithoutLoss(t *testing.T) {
 
 	// kinds added after the fixture was frozen have no legacy rows to read
 	for k := range kinds {
-		if !seen[k] && k != TurnUsed {
+		if !seen[k] && !bornTyped[k] {
 			t.Errorf("the fixture has no %s row", k)
 		}
 	}
 }
+
+// bornTyped is the kinds added after typed payloads, which have no untyped
+// rows to keep reading.
+var bornTyped = map[string]bool{TurnUsed: true, RegressionFound: true, RegressionClaimed: true}
 
 type renamedV1 struct {
 	Who string `json:"who"`

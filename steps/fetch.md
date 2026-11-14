@@ -84,15 +84,17 @@ The step ends in an **investigation brief** (point 6): a short write-up of what 
    Do it in a few targeted reads (`conventions/latency.md` rule 5).
 
    Each kind adds what the investigation must prove:
-   - **bug** - reproduce it where the project can run it: a test, the CLI, or the verify commands.
-     Record the steps or input, and the expected behavior against the actual one.
-     Then trace the root cause to a `file:line`.
-     If this run already confirmed the reproduction and the root cause (the debug step), do not redo them.
-     Instead, check that the cited `file:line` still reads as the debug brief says, and carry both into this brief.
-     A bug that does not reproduce never becomes a plan, and neither does one whose cause is still a guess after a few reads.
-     Ask what the user saw, under which input and version, in one `AskUserQuestion` (driven: one ask, per `modes/driven.md`).
-     Retry once with the answer.
-     If it still does not reproduce, stop with `f10-state.sh set plan blocked` and a `note` naming what was tried and what to collect next.
+   - **bug** - run the debug step's sections **A bug that is a task** and **Attribute**: `f10-state.sh set plan running debug; f10-load-project.sh debug`.
+     They triage, reproduce, confirm the root cause at a `file:line`, record the task that introduced the bug, and give the brief its reproduction and its `Regression of:` line.
+     Three cases skip the pass:
+     - The frontmatter declares `debug: off`.
+       Trace the root cause from the code instead, and say in the brief that the pass was off.
+     - This run already holds a debug brief (`/f10:debug`).
+       Check that the cited `file:line` still reads as the brief says, carry the brief over, and run only **Attribute**.
+     - A saved plan exists for the task.
+       Ship runs fetch before it reuses a plan, so a rerun would otherwise reproduce again and record a second attribution.
+     The steering `as a feature` settles the kind as a feature (point 2), so no pass runs, which is the opt-out for a "bug" label on a missing feature.
+     A bug that does not reproduce still gets a plan, marked `Reproduction: unconfirmed` (the debug step says how).
    - **refactor** - find the behavior that must not change, the tests that pin it, and where coverage is missing.
    - **spike** - state the question so that an answer can be checked.
      Name the decision each answer feeds: the follow-up work that answer unlocks or kills.
@@ -121,4 +123,4 @@ The step ends in an **investigation brief** (point 6): a short write-up of what 
    There the brief becomes the inline plan `/f10:ship` prints in chat, with its gaps listed on their defaults.
 
 **On failure:** the tracker does not know the id, or the tracker is unreachable (`conventions/failure.md`).
-A bug fetch could not reproduce is not a failure: it is a declined outcome.
+A bug that does not reproduce is not a failure: its plan is marked `Reproduction: unconfirmed`.

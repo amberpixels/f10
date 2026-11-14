@@ -59,6 +59,8 @@ type View struct {
 	WatchCatchup    bool                 `json:"watchCatchup"`
 	WatchCI         bool                 `json:"watchCI"`
 	ReportBack      bool                 `json:"reportBack"`
+	Debug           bool                 `json:"debug"`
+	DebugCostly     string               `json:"debugCostly"`
 	UpkeepPaths     []string             `json:"upkeepPaths,omitempty"`
 	Verify          []facts.VerifyDecl   `json:"verify,omitempty"`
 	VerifyOrigin    facts.Origin         `json:"verifyOrigin,omitzero"`
@@ -207,6 +209,8 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 		WatchCatchup:    eff.WatchCatchup,
 		WatchCI:         eff.WatchCI,
 		ReportBack:      eff.ReportBack,
+		Debug:           eff.Debug,
+		DebugCostly:     eff.DebugCostly,
 		UpkeepPaths:     eff.UpkeepPaths,
 		Verify:          eff.Verify,
 		VerifyOrigin:    eff.VerifyOrigin,

@@ -42,7 +42,7 @@ Report it as an outcome:
 
 - ship stopping at an open PR because the pipeline declares no review
 - a gap left on its default
-- a bug fetch could not reproduce
+- a bug `/f10:debug` could not reproduce
 - a spike ending at its report
 - review findings you then fixed
 - a planless flow skipping the plan file

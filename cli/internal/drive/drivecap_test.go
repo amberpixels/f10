@@ -3,10 +3,13 @@ package drive
 import (
 	"fmt"
 	"io"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/tasksource"
@@ -323,5 +326,41 @@ func TestDriveAskFreesTheSlot(t *testing.T) {
 	if i, j := strings.Index(out, "GH-2: branch"), strings.Index(out, "GH-3: branch"); i < 0 || j < i ||
 		strings.Contains(out[i:j], "GH-3 judge: sent") {
 		t.Errorf("GH-3 opened alongside GH-2:\n%s", out)
+	}
+}
+
+// A task planned without a reproduction is named under the drive's report.
+func TestReportNamesASkippedReproduction(t *testing.T) {
+	in := &DriveInput{Out: io.Discard}
+	in.Runs = capRuns(3)
+
+	for i, repro := range []string{"skipped", "full", "unconfirmed"} {
+		r := in.Runs[i]
+		r.O.Path = t.TempDir()
+
+		e := ledger.MustEvent(ledger.RegressionFound, ledger.RegressionFoundPayload{
+			FoundBy: "none", Confidence: "unclear", Repro: repro,
+		})
+		// git reports a checkout with its symlinks resolved
+		resolved, err := filepath.EvalSymlinks(r.O.Path)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		e.Task, e.At, e.Checkout = r.Task.Ref.ID, time.Now(), resolved
+		ledger.Record(e)
+	}
+
+	// the same task id from another checkout is another project's
+	other := ledger.MustEvent(ledger.RegressionFound, ledger.RegressionFoundPayload{Repro: "skipped"})
+	other.Task, other.At, other.Checkout = "GH-2", time.Now(), t.TempDir()
+	ledger.Record(other)
+
+	got := strings.Join(in.reproLines(t.Context(), in.Runs), "\n")
+	want := "GH-1: reproduction skipped (costly), planned from a code reading\n" +
+		"GH-3: reproduction unconfirmed, planned from what was tried"
+
+	if got != want {
+		t.Errorf("got\n%s\nwant\n%s", got, want)
 	}
 }

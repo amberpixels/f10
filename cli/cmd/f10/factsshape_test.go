@@ -30,6 +30,8 @@ watch: report
 watch_catchup: on
 watch_ci: on
 report_back: off
+debug: off
+debug_costly: ask
 standup:
   upkeep: ["docs/**"]
 verify:

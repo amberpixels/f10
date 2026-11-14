@@ -32,6 +32,7 @@ Deploy has its own confirmation (the **deploy** step).
   Say in one line which task you took and where from, then run it as a `<task-id>`, forward mode included, so a saved plan is reused.
   `f10 task current` exiting non-zero: ask for a task in one line and wait (driven: an ask, per `modes/driven.md`).
 - Extra text beside the subject is steering.
+  For a bug, `no repro` skips the reproduction, `with repro` runs it in full, and `as a feature` plans the task as a feature, with no debug pass (`steps/debug.md`).
   `resume at <entry>` (sent by `f10 drive` once a catchup settled the stop) starts the flow at that entry and counts the ones before it done; `(entry <n>)` picks the `n`th entry of the badge's pipeline where the flow names it twice.
   The badge walks to that place: after `pipeline`, one call runs `set ship running` on each entry before it, in order, then on the entry itself.
 

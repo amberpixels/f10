@@ -10,6 +10,13 @@ The columns hold what every event has: `id`, `machine`, `at`, `project`, `projec
 `payload` holds the rest, a JSON object whose shape depends on `kind`.
 In the schema, `$defs/<kind>` lists the kind's payload versions, oldest first.
 
+## Regressions
+
+Two kinds record where a bug came from, both on the bug task's row and both written by `f10 task regression` ([cli.md](cli.md#regression)).
+`regression_found` is what the debug step established: the origin task, the commit, the faulty lines, how review let the fault through, and the reproduction outcome.
+`regression_claimed` is the origin the task's own text named when it was captured.
+The two can disagree, and both stand.
+
 ## Versions
 
 Every payload carries `v`, its version, which f10 sets when it writes the row.

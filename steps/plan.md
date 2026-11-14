@@ -20,6 +20,8 @@ Badge: `f10-state.sh set plan running` on entry, unless `fetch` already opened t
    - **Areas** follows when the frontmatter declares `flow_by_area`.
      It lists the areas the fetch brief settled, in the words the map uses.
      `/f10:ship` picks the flow from it when it runs on the plan alone.
+   - **Regression of** follows for a bug whose attribution named the task that introduced it (`steps/debug.md` → Attribute).
+     It holds the line `f10 task regression` printed, such as `Regression of: FT-414 (missed, confirmed)`.
    - **Depends on** follows when the task has a base task, which is when the steering names one (`f10 start --after`) or the task body ends in an `After:` line.
      It holds the base task's id and the path of its plan.
    - **Bundle** follows when the plan covers several tasks (`Bundle: ABC-1+ABC-2`).
@@ -31,7 +33,9 @@ Badge: `f10-state.sh set plan running` on entry, unless `fetch` already opened t
      How to choose the size comes after the full plan shape, below.
 
    A bug, a refactor and a spike each open with a section of their own, after the header lines and before the stages:
-   - **bug** - `## Reproduction` holds the steps or input, the expected behavior, the actual behavior, the root cause at `file:line`, and the test that will fail before the fix.
+   - **bug** - `## Reproduction` opens with the debug pass's outcome, `Reproduction: full`, `obvious`, `unconfirmed`, `skipped (costly)` or `skipped (no repro)`, or `Reproduction: not run (debug off)`.
+     Then it holds the steps or input, the expected behavior, the actual behavior, the root cause at `file:line`, and the test that will fail before the fix.
+     An `unconfirmed` or `skipped` one also says what was tried, so the reviewer and the judge see what is unproven.
      The first stage writes that test.
      Sometimes no automated test can reproduce the bug, as with a race, a third-party outage or UI timing.
      In that case the section says so and names a manual check instead.
