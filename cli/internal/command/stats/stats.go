@@ -62,7 +62,14 @@ func runStats(ctx context.Context, cmd *cli.Command) error {
 		task = r.ID
 	}
 
-	events, err := ledger.ReadEvents(ctx, ledger.Path(), ledger.Filter{Project: ledger.Where(ctx, t.Dir).Project})
+	project := ledger.Where(ctx, t.Dir).Project
+
+	scope := ledger.SinceScope(project, cutoff)
+	if task != "" {
+		scope = ledger.TaskScope(project, task)
+	}
+
+	events, err := ledger.ReadScope(ctx, ledger.Path(), scope)
 	if err != nil {
 		return err
 	}

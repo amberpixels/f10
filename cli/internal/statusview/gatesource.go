@@ -26,9 +26,9 @@ import (
 
 // gateSource is what every task's gates read alike.
 type gateSource struct {
-	events []ledger.Event
-	Main   string           // where the branch config lives
-	Eff    *facts.Effective // the flows, the paces and the review every task resolves against
+	events func(ctx context.Context, ids ...string) []ledger.Event // nil reads none
+	Main   string                                                  // where the branch config lives
+	Eff    *facts.Effective                                        // the flows, the paces and the review every task resolves against
 	review facts.Review
 	store  *lore.Store
 	host   *hostops.Host
@@ -76,13 +76,22 @@ func (src gateSource) Pipeline(ctx context.Context, name, branch, pace string) f
 	return entries.Ship()
 }
 
+// eventsOf is the task's ledger rows, its bundle lead's included.
+func (src gateSource) eventsOf(ctx context.Context, id, branch string) []ledger.Event {
+	if src.events == nil {
+		return nil
+	}
+
+	return src.events(ctx, id, bundleLead(id, branch))
+}
+
 func (src gateSource) gatesOf(ctx context.Context, id, branch, root, storage string, run *state.Run) []gate {
 	in := gateInput{
 		Task:       id,
 		Branch:     branch,
 		Checkout:   root,
 		Run:        run,
-		Events:     src.events,
+		Events:     src.eventsOf(ctx, id, branch),
 		RemoteFlow: src.review.Remote(),
 		Outcomes:   SeriesOutcomes(src.store, storage, id, branch != ""),
 		Now:        time.Now(),

@@ -195,31 +195,56 @@ func (l *Ledger) Append(ctx context.Context, events ...Event) {
 	}
 }
 
-// Filter narrows List; an empty field matches every row.
+// Filter narrows List; an empty field matches every row. Sessions is the
+// exception: a non-nil empty slice, a lookup that found no session, matches
+// none, so a bounded read never widens to the whole table.
 type Filter struct {
-	Project string
-	Task    string
-	Session string
-	Kind    string
-	Path    string // the payload's path: a plan, findings or verdict file
+	Project  string
+	Task     string
+	Session  string
+	Kind     string
+	Path     string // the payload's path: a plan, findings or verdict file
+	Round    string // the payload's round: a review round
+	Since    time.Time
+	IDs      []string
+	Tasks    []string
+	Sessions []string
+	Kinds    []string
 }
 
 func (f Filter) filters() r3.Filters {
 	var filters r3.Filters
 
 	for column, v := range map[string]string{
-		"project": f.Project, "task": f.Task, "session": f.Session, "kind": f.Kind, "p_path": f.Path,
+		"project": f.Project, "task": f.Task, "session": f.Session, "kind": f.Kind, "p_path": f.Path, "p_round": f.Round,
 	} {
 		if v != "" {
 			filters = append(filters, r3.Eq(column, v))
 		}
 	}
 
+	for column, vs := range map[string][]string{"id": f.IDs, "task": f.Tasks, "session": f.Sessions, "kind": f.Kinds} {
+		if len(vs) > 0 {
+			filters = append(filters, r3.In(column, vs))
+		}
+	}
+
+	if !f.Since.IsZero() {
+		filters = append(filters, r3.Gte("at", f.Since.UTC()))
+	}
+
 	return filters
 }
 
+// none reports a filter that matches no row without asking the database.
+func (f Filter) none() bool { return f.Sessions != nil && len(f.Sessions) == 0 }
+
 // List returns the events f matches, oldest first.
 func (l *Ledger) List(ctx context.Context, f Filter) ([]Event, error) {
+	if f.none() {
+		return nil, nil
+	}
+
 	events, _, err := l.repo.List(ctx, r3.Query{
 		Filters:    f.filters(),
 		Sorts:      r3.Sorts{r3.NewSortAscSpec(r3.NewFieldSpec("id"))},
@@ -230,6 +255,28 @@ func (l *Ledger) List(ctx context.Context, f Filter) ([]Event, error) {
 	}
 
 	return events, nil
+}
+
+// Last returns the newest event f matches, and false when none does.
+func (l *Ledger) Last(ctx context.Context, f Filter) (Event, bool, error) {
+	if f.none() {
+		return Event{}, false, nil
+	}
+
+	events, _, err := l.repo.List(ctx, r3.Query{
+		Filters:    f.filters(),
+		Sorts:      r3.Sorts{r3.NewSortDescSpec(r3.NewFieldSpec("id"))},
+		Pagination: r3.NewOffsetPagination(0, 1),
+	})
+	if err != nil {
+		return Event{}, false, fmt.Errorf("ledger: %w", err)
+	}
+
+	if len(events) == 0 {
+		return Event{}, false, nil
+	}
+
+	return events[0], true, nil
 }
 
 // ReadEvents is the events f matches in the database at path, oldest first,
@@ -253,6 +300,10 @@ func ReadEvents(ctx context.Context, path string, f Filter) ([]Event, error) {
 
 // Count is how many events f matches.
 func (l *Ledger) Count(ctx context.Context, f Filter) (int64, error) {
+	if f.none() {
+		return 0, nil
+	}
+
 	n, err := l.repo.Count(ctx, r3.Query{Filters: f.filters()})
 	if err != nil {
 		return 0, fmt.Errorf("ledger: %w", err)
