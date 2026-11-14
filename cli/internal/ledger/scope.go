@@ -13,6 +13,7 @@ import (
 // The raw reads; an IN list is %s, filled by in.
 const (
 	sessionsSince    = "SELECT DISTINCT session FROM events WHERE project = ? AND at >= ? AND session != ''"
+	looseTasksSince  = "SELECT DISTINCT task FROM events WHERE project = ? AND at >= ? AND session = '' AND task != ''"
 	sessionsOfTasks  = "SELECT DISTINCT session FROM events WHERE project = ? AND task IN (%s) AND session != ''"
 	looseRows        = "SELECT id FROM events WHERE project = ? AND task IN (%s) AND session = ''"
 	tasksOfSessions  = "SELECT DISTINCT task FROM events WHERE session IN (%s) AND task != ''"
@@ -64,6 +65,15 @@ func (l *Ledger) resolve(ctx context.Context, s Scope) ([]string, []string, erro
 		if tasks, err = l.tasksOf(ctx, recent); err != nil {
 			return nil, nil, err
 		}
+
+		// a task whose only recent row has no session, a size the daemon's
+		// finish recorded, is still active since the cutoff
+		loose, err := l.strings(ctx, looseTasksSince, s.Project, s.Since.UTC())
+		if err != nil {
+			return nil, nil, err
+		}
+
+		tasks = union(tasks, loose)
 	}
 
 	if len(tasks) == 0 {
@@ -87,7 +97,9 @@ func (l *Ledger) ScopeEvents(ctx context.Context, s Scope) ([]Event, error) {
 		return nil, err
 	}
 
-	events, err := l.List(ctx, Filter{Sessions: nonNil(sessions)})
+	// a session that ran f10 in another checkout recorded those rows
+	// under that checkout's project
+	events, err := l.List(ctx, Filter{Project: s.Project, Sessions: nonNil(sessions)})
 	if err != nil || len(tasks) == 0 {
 		return events, err
 	}

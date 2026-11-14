@@ -39,39 +39,59 @@ func queryPlan(t *testing.T, l *Ledger, query string, args ...any) []string {
 	return plan
 }
 
-// Every bounded read searches an index; none scans the table or an index whole.
-func TestBoundedReadsSearchAnIndex(t *testing.T) {
+// Every bounded read searches the index made for it: the planner falling
+// back to a wider one, such as the project's (project, at), reads rows that
+// grow with the ledger's age.
+func TestBoundedReadsSearchTheirIndex(t *testing.T) {
 	l := openT(t, tempPath(t))
 	at := time.Now().UTC()
 
 	for name, q := range map[string]struct {
-		sql  string
-		args []any
+		sql   string
+		args  []any
+		index string
 	}{
 		"last of a session's kind": {
 			"SELECT * FROM events WHERE session = ? AND kind = ? ORDER BY id DESC LIMIT 1",
 			[]any{"s", SessionStopped},
+			"events_session (session=? AND kind=?)",
 		},
-		"a session set": {"SELECT * FROM events WHERE session IN (?,?) ORDER BY id", []any{"s1", "s2"}},
+		"a session set": {
+			"SELECT * FROM events WHERE project = ? AND session IN (?,?) ORDER BY id",
+			[]any{"p", "s1", "s2"},
+			"events_session_project_id (session=? AND project=?)",
+		},
 		"a project's kind": {
 			"SELECT * FROM events WHERE project = ? AND kind = ? ORDER BY id",
 			[]any{"p", TaskFinished},
+			"events_project_kind_id (project=? AND kind=?)",
 		},
 		"a round's openings": {
 			"SELECT * FROM events WHERE task = ? AND kind = ? AND p_round = ? ORDER BY id",
 			[]any{"FT-1", ReviewRoundOpened, "1"},
+			"events_task_kind_round (task=? AND kind=? AND p_round=?)",
 		},
-		"rows by id":                 {"SELECT * FROM events WHERE id IN (?,?) ORDER BY id", []any{"a", "b"}},
-		"sessions since":             {sessionsSince, []any{"p", at}},
-		"sessions of tasks":          {in(sessionsOfTasks, 2), []any{"p", "FT-1", "FT-2"}},
-		"rows outside any session":   {in(looseRows, 2), []any{"p", "FT-1", "FT-2"}},
-		"tasks of sessions":          {in(tasksOfSessions, 2), []any{"s1", "s2"}},
-		"latest verdict per finding": {latestVerdictIDs, []any{"FT-1", FindingVerdict}},
+		"rows by id": {
+			"SELECT * FROM events WHERE id IN (?,?) ORDER BY id", []any{"a", "b"}, "(id=?)",
+		},
+		"sessions since":    {sessionsSince, []any{"p", at}, "events_project_at (project=? AND at>?)"},
+		"loose tasks since": {looseTasksSince, []any{"p", at}, "events_project_at (project=? AND at>?)"},
+		"sessions of tasks": {
+			in(sessionsOfTasks, 2), []any{"p", "FT-1", "FT-2"}, "events_project_task (project=? AND task=?)",
+		},
+		"rows outside any session": {
+			in(looseRows, 2), []any{"p", "FT-1", "FT-2"}, "events_project_task (project=? AND task=? AND session=?)",
+		},
+		"tasks of sessions": {
+			in(tasksOfSessions, 2), []any{"s1", "s2"}, "events_session_project_id (session=?)",
+		},
+		"latest verdict per finding": {
+			latestVerdictIDs, []any{"FT-1", FindingVerdict}, "events_task_kind_round (task=? AND kind=?)",
+		},
 	} {
-		for _, line := range queryPlan(t, l, q.sql, q.args...) {
-			if strings.HasPrefix(line, "SCAN") {
-				t.Errorf("%s scans: %s", name, line)
-			}
+		plan := strings.Join(queryPlan(t, l, q.sql, q.args...), "\n")
+		if !strings.Contains(plan, "SEARCH events USING ") || !strings.Contains(plan, q.index) {
+			t.Errorf("%s, want %s:\n%s", name, q.index, plan)
 		}
 	}
 }

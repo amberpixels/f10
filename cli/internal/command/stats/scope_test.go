@@ -17,8 +17,8 @@ import (
 // scopeFixture is StatEvents plus the shapes a scoped read could get wrong:
 // a session whose waits come before its task is known, a step spanning the
 // cutoff, a task with old sessions and one recent, a size recorded from
-// another task's session and one from no session, an unrelated task and
-// another project's rows.
+// another task's session and one from no session, a task whose only recent
+// row is a session-less size, an unrelated task and another project's rows.
 func scopeFixture(t *testing.T, day time.Time) (string, time.Time) {
 	t.Helper()
 
@@ -63,6 +63,13 @@ func scopeFixture(t *testing.T, day time.Time) (string, time.Time) {
 		set(31*d+5, "s5", "FT-4", "ship", "done"),
 		wait(31*d+5, "s5", "FT-4"),
 		ev(31*d+6, "", "FT-4", ledger.TaskSized, ledger.TaskSizedPayload{Lines: 80}),
+
+		// FT-5: worked before the cutoff, sized after it by a finish with no session
+		ship(12*d, "s6"),
+		set(12*d, "s6", "FT-5", "ship", "running", "implement"),
+		set(12*d+15, "s6", "FT-5", "ship", "done"),
+		wait(12*d+15, "s6", "FT-5"),
+		ev(30*d+40, "", "FT-5", ledger.TaskSized, ledger.TaskSizedPayload{Lines: 20}),
 
 		// FT-9: unrelated, old
 		ship(5*d, "s9"),
@@ -119,7 +126,7 @@ func TestScopedReadsKeepTheNumbers(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, task := range []string{"FT-1", "FT-3", "FT-4"} {
+	for _, task := range []string{"FT-1", "FT-3", "FT-4", "FT-5"} {
 		want := statscmd.StatRows(all, task, cutoff)
 		if len(want) != 1 {
 			t.Fatalf("%s: the fixture shows %d rows", task, len(want))
@@ -132,8 +139,8 @@ func TestScopedReadsKeepTheNumbers(t *testing.T) {
 	}
 
 	want := statscmd.StatRows(all, "", cutoff)
-	if tasks := len(want); tasks != 2 {
-		t.Fatalf("since: the fixture shows %d tasks, want FT-3 and FT-4", tasks)
+	if tasks := len(want); tasks != 3 {
+		t.Fatalf("since: the fixture shows %d tasks, want FT-3, FT-4 and FT-5", tasks)
 	}
 
 	got := statscmd.StatRows(read(t, path, ledger.SinceScope("p", cutoff)), "", cutoff)

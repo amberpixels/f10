@@ -53,7 +53,7 @@ test-race:
 # time the ledger reads stats, status and the Stop hook make on a 500k-event
 # ledger against their budgets; too slow to seed on every test run
 bench-ledger:
-    F10_BENCH_LEDGER=1 go test -run TestReadBudgets -v ./internal/ledger/
+    F10_BENCH_LEDGER=1 go test -run TestReadBudgets -v ./internal/statusview/
 
 # run the prompt evals in ../evals against the real model ([docs/evals.md](../docs/evals.md))
 eval *args:
