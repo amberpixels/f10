@@ -1,6 +1,7 @@
 package finish
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -11,10 +12,10 @@ import (
 func TestFinishedEvent(t *testing.T) {
 	for _, by := range []string{"", "watch"} {
 		e := FinishedEvent("GH-1", by, time.Time{})
-		got, set := e.Payload.Val["by"]
+		p, err := ledger.Decode[ledger.TaskFinishedPayload](e)
 
-		if e.Kind != ledger.TaskFinished || e.Source != ledger.Observed || e.Task != "GH-1" ||
-			set != (by != "") || (set && got != by) {
+		if err != nil || e.Kind != ledger.TaskFinished || e.Source != ledger.Observed || e.Task != "GH-1" ||
+			p.By != by || !slices.Equal(p.Args, []string{"GH-1"}) {
 			t.Errorf("by %q: %+v", by, e)
 		}
 	}

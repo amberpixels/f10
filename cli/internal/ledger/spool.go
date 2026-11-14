@@ -69,8 +69,8 @@ func fill(dbPath string, events []Event) {
 
 		e.At = e.At.UTC()
 
-		if e.Payload.Val == nil {
-			e.Payload.Val = Payload{}
+		if e.Payload.Val.m == nil {
+			e.Payload.Val.m = map[string]any{}
 		}
 	}
 }

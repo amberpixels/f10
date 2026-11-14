@@ -24,7 +24,7 @@ import (
 
 var gatePipeline = []string{"implement", "cleanup", "pr", "review:local", "judge", "pr"}
 
-func hookEvent(at time.Time, session, kind string, p ledger.Payload) ledger.Event {
+func hookEvent(at time.Time, session, kind string, p any) ledger.Event {
 	e := sessionEvent(at, session, kind, p)
 	e.Task, e.Branch, e.Checkout = "", "FT-1/thing", "/code/repo.FT-1"
 
@@ -67,13 +67,13 @@ func TestGatesDuringShip(t *testing.T) {
 	at := func(m int) time.Time { return t0.Add(time.Duration(m) * time.Minute) }
 
 	events := []ledger.Event{
-		hookEvent(at(0), "s1", ledger.RunStarted, ledger.Payload{"skill": "ship", "args": "FT-1"}),
+		hookEvent(at(0), "s1", ledger.RunStarted, ledger.RunStartedPayload{Skill: "ship", Args: "FT-1"}),
 		shipClaim(at(1), "s1", "implement"),
 		shipClaim(at(2), "s1", "cleanup"),
 		shipClaim(at(3), "s1", "pr"),
 		shipClaim(at(4), "s1", "review:local"),
 		// resolve called through the Skill tool inside ship: ship's, not manual
-		hookEvent(at(5), "s1", ledger.RunStarted, ledger.Payload{"skill": "resolve", "args": "FT-1"}),
+		hookEvent(at(5), "s1", ledger.RunStarted, ledger.RunStartedPayload{Skill: "resolve", Args: "FT-1"}),
 	}
 
 	run := &state.Run{Session: "s1", Task: "FT-1", Ship: "running", Leaf: "review:local", Pipeline: gatePipeline}
@@ -173,7 +173,7 @@ func TestGatesBothHalvesInOneEntry(t *testing.T) {
 
 	pipeline := []string{"implement", "pr", "review:local+ci", "pr"}
 	events := []ledger.Event{
-		hookEvent(at(0), "s1", ledger.RunStarted, ledger.Payload{"skill": "ship", "args": "FT-1"}),
+		hookEvent(at(0), "s1", ledger.RunStarted, ledger.RunStartedPayload{Skill: "ship", Args: "FT-1"}),
 		shipClaim(at(1), "s1", "implement"),
 		shipClaim(at(2), "s1", "pr"),
 		shipClaim(at(3), "s1", "review:local+ci"),
@@ -244,10 +244,10 @@ func TestGatesStartedOutsideShip(t *testing.T) {
 		Pipeline: []string{"implement", "pr", "review", "judge"},
 	}
 	base := []ledger.Event{
-		hookEvent(at(0), "s1", ledger.RunStarted, ledger.Payload{"skill": "ship"}),
+		hookEvent(at(0), "s1", ledger.RunStarted, ledger.RunStartedPayload{Skill: "ship"}),
 		shipClaim(at(1), "s1", "implement"),
 		shipClaim(at(2), "s1", "pr"),
-		sessionEvent(at(3), "s1", ledger.StateSet, ledger.Payload{"args": []any{"ship", "done"}, "ship": "done"}),
+		sessionEvent(at(3), "s1", ledger.StateSet, ledger.ClaimPayload{Args: []string{"ship", "done"}, Ship: "done"}),
 	}
 
 	for _, tc := range []struct {
@@ -257,58 +257,58 @@ func TestGatesStartedOutsideShip(t *testing.T) {
 	}{
 		{
 			"a review by hand in another session",
-			[]ledger.Event{hookEvent(at(4), "s2", ledger.RunStarted, ledger.Payload{"skill": "review", "args": "this branch"})},
+			[]ledger.Event{hookEvent(at(4), "s2", ledger.RunStarted, ledger.RunStartedPayload{Skill: "review", Args: "this branch"})},
 			map[string]string{"review": "local: round 1 running (manual)", "implement": "done", "pr": "done"},
 		},
 		{
 			"a driven review in the ship's own session, after ship",
-			[]ledger.Event{hookEvent(at(4), "s1", ledger.RunStarted, ledger.Payload{"skill": "review", "args": "FT-1 --driven"})},
+			[]ledger.Event{hookEvent(at(4), "s1", ledger.RunStarted, ledger.RunStartedPayload{Skill: "review", Args: "FT-1 --driven"})},
 			map[string]string{"review": "local: round 1 running (driven)"},
 		},
 		{
 			"a host engine review is the local half",
-			[]ledger.Event{hookEvent(at(4), "s2", ledger.RunStarted, ledger.Payload{"skill": "review", "args": "FT-1 host"})},
+			[]ledger.Event{hookEvent(at(4), "s2", ledger.RunStarted, ledger.RunStartedPayload{Skill: "review", Args: "FT-1 host"})},
 			map[string]string{"review": "local: round 1 running (manual)"},
 		},
 		{
 			"a remote review read in",
-			[]ledger.Event{hookEvent(at(4), "s2", ledger.RunStarted, ledger.Payload{"skill": "review", "args": "FT-1 ci"})},
+			[]ledger.Event{hookEvent(at(4), "s2", ledger.RunStarted, ledger.RunStartedPayload{Skill: "review", Args: "FT-1 ci"})},
 			map[string]string{"review": "local: upcoming · remote: round 1 running (manual)"},
 		},
 		{
 			"a review in the ship's session whose turn ended",
 			[]ledger.Event{
-				hookEvent(at(4), "s1", ledger.RunStarted, ledger.Payload{"skill": "review"}),
-				hookEvent(at(5), "s1", ledger.SessionStopped, ledger.Payload{}),
+				hookEvent(at(4), "s1", ledger.RunStarted, ledger.RunStartedPayload{Skill: "review"}),
+				hookEvent(at(5), "s1", ledger.SessionStopped, ledger.SessionStoppedPayload{}),
 			},
 			map[string]string{"review": "local: upcoming"},
 		},
 		{
 			"a review whose session moved on to another skill",
 			[]ledger.Event{
-				hookEvent(at(4), "s2", ledger.RunStarted, ledger.Payload{"skill": "review"}),
-				hookEvent(at(5), "s2", ledger.RunStarted, ledger.Payload{"skill": "explain"}),
+				hookEvent(at(4), "s2", ledger.RunStarted, ledger.RunStartedPayload{Skill: "review"}),
+				hookEvent(at(5), "s2", ledger.RunStarted, ledger.RunStartedPayload{Skill: "explain"}),
 			},
 			map[string]string{"review": "local: upcoming"},
 		},
 		{
 			"a review older than the state TTL, its stop never written",
-			[]ledger.Event{hookEvent(at(4).Add(-48*time.Hour), "s2", ledger.RunStarted, ledger.Payload{"skill": "review"})},
+			[]ledger.Event{hookEvent(at(4).Add(-48*time.Hour), "s2", ledger.RunStarted, ledger.RunStartedPayload{Skill: "review"})},
 			map[string]string{"review": "local: upcoming"},
 		},
 		{
 			"a review typed in a session whose ship stopped blocked",
 			[]ledger.Event{
-				sessionEvent(at(4), "s3", ledger.RunStarted, ledger.Payload{"skill": "ship"}),
-				sessionEvent(at(5), "s3", ledger.StateSet, ledger.Payload{"args": []any{"ship", "blocked", "judge"}, "ship": "blocked"}),
-				hookEvent(at(6), "s3", ledger.RunStarted, ledger.Payload{"skill": "review"}),
+				sessionEvent(at(4), "s3", ledger.RunStarted, ledger.RunStartedPayload{Skill: "ship"}),
+				sessionEvent(at(5), "s3", ledger.StateSet, ledger.ClaimPayload{Args: []string{"ship", "blocked", "judge"}, Ship: "blocked"}),
+				hookEvent(at(6), "s3", ledger.RunStarted, ledger.RunStartedPayload{Skill: "review"}),
 			},
 			map[string]string{"review": "local: round 1 running (manual)"},
 		},
 		{
 			"a review on another branch",
 			[]ledger.Event{func() ledger.Event {
-				e := hookEvent(at(4), "s2", ledger.RunStarted, ledger.Payload{"skill": "review"})
+				e := hookEvent(at(4), "s2", ledger.RunStarted, ledger.RunStartedPayload{Skill: "review"})
 				e.Branch, e.Checkout = "FT-2/other", "/code/repo.FT-2"
 
 				return e
@@ -317,7 +317,7 @@ func TestGatesStartedOutsideShip(t *testing.T) {
 		},
 		{
 			"a judge by hand after ship",
-			[]ledger.Event{hookEvent(at(4), "s2", ledger.RunStarted, ledger.Payload{"skill": "judge"})},
+			[]ledger.Event{hookEvent(at(4), "s2", ledger.RunStarted, ledger.RunStartedPayload{Skill: "judge"})},
 			map[string]string{"judge change": "change: running (manual)"},
 		},
 	} {
@@ -928,7 +928,7 @@ func TestGatesShowEntryLabels(t *testing.T) {
 	at := func(m int) time.Time { return t0.Add(time.Duration(m) * time.Minute) }
 
 	events := []ledger.Event{
-		hookEvent(at(0), "s1", ledger.RunStarted, ledger.Payload{"skill": "ship", "args": "FT-1"}),
+		hookEvent(at(0), "s1", ledger.RunStarted, ledger.RunStartedPayload{Skill: "ship", Args: "FT-1"}),
 		shipClaim(at(1), "s1", "implement"),
 		shipClaim(at(2), "s1", "pr"),
 		shipClaim(at(3), "s1", "review:local"),

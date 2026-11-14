@@ -94,26 +94,17 @@ func (in *DriveInput) recordHalt(ctx context.Context, r *DriveRun, res driveResu
 		return
 	}
 
-	in.Record(ctx, cmp.Or(r.O.Path, in.Main), ledger.Event{
-		At:      in.Now(),
-		Task:    r.Task.Ref.ID,
-		Kind:    ledger.TaskHalted,
-		Source:  ledger.Observed,
-		Payload: ledger.NewPayload(haltPayload(res)),
-	})
+	e := ledger.MustEvent(ledger.TaskHalted, haltPayload(res))
+	e.At, e.Task, e.Source = in.Now(), r.Task.Ref.ID, ledger.Observed
+	in.Record(ctx, cmp.Or(r.O.Path, in.Main), e)
 }
 
 // haltPayload is a halt's ledger payload: the attempts it counted, if any.
-func haltPayload(res driveResult) ledger.Payload {
-	p := ledger.Payload{"skill": res.Skill, "reason": res.Reason}
+func haltPayload(res driveResult) ledger.TaskHaltedPayload {
+	p := ledger.TaskHaltedPayload{Skill: res.Skill, Reason: res.Reason}
 
-	if len(res.Attempts) > 0 {
-		reasons := make([]string, 0, len(res.Attempts))
-		for _, a := range res.Attempts {
-			reasons = append(reasons, a.Reason)
-		}
-
-		p["attempts"] = reasons
+	for _, a := range res.Attempts {
+		p.Attempts = append(p.Attempts, a.Reason)
 	}
 
 	return p

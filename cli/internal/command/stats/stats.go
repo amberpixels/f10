@@ -181,14 +181,13 @@ func StatRows(events []ledger.Event, task string, cutoff time.Time) []statRow {
 			continue
 		}
 
-		lines, ok := e.Payload.Val.Int("lines")
-		if !ok {
+		size, err := ledger.Decode[ledger.TaskSizedPayload](e)
+		if err != nil {
 			continue
 		}
 
-		md, _ := e.Payload.Val.Int("md_lines")
 		r := row(e.Task, e.At)
-		r.lines, r.md = &lines, md
+		r.lines, r.md = &size.Lines, size.MdLines
 	}
 
 	var out []statRow

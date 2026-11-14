@@ -10,23 +10,23 @@ import (
 
 var t0 = time.Date(2026, 10, 28, 9, 0, 0, 0, time.UTC)
 
-func ev(minute float64, kind, task string, p ledger.Payload) ledger.Event {
-	if p == nil {
-		p = ledger.Payload{}
-	}
+func ev(minute float64, kind, task string, payload any) ledger.Event {
+	e := ledger.MustEvent(kind, payload)
+	e.At, e.Session, e.Task = t0.Add(time.Duration(minute*float64(time.Minute))), "s1", task
 
-	return ledger.Event{
-		At: t0.Add(time.Duration(minute * float64(time.Minute))), Session: "s1", Task: task, Kind: kind,
-		Payload: ledger.NewPayload(p),
-	}
+	return e
 }
 
 func run(minute float64, skill string) ledger.Event {
-	return ev(minute, ledger.RunStarted, "", ledger.Payload{"skill": skill})
+	return ev(minute, ledger.RunStarted, "", ledger.RunStartedPayload{Skill: skill})
 }
 
-func claim(minute float64, args ...any) ledger.Event {
-	e := ev(minute, ledger.StateSet, "FT-1", ledger.Payload{"args": args})
+func claim(minute float64, args ...string) ledger.Event {
+	return claimAt(minute, ledger.ClaimPayload{Args: args})
+}
+
+func claimAt(minute float64, c ledger.ClaimPayload) ledger.Event {
+	e := ev(minute, ledger.StateSet, "FT-1", c)
 	e.Source = ledger.Claimed
 
 	return e
@@ -34,8 +34,8 @@ func claim(minute float64, args ...any) ledger.Event {
 
 func wait(from, to float64, reason string) []ledger.Event {
 	return []ledger.Event{
-		ev(from, ledger.WaitStarted, "FT-1", ledger.Payload{"reason": reason}),
-		ev(to, ledger.WaitEnded, "FT-1", ledger.Payload{"reason": reason}),
+		ev(from, ledger.WaitStarted, "FT-1", ledger.WaitStartedPayload{Reason: reason}),
+		ev(to, ledger.WaitEnded, "FT-1", ledger.WaitEndedPayload{Reason: reason}),
 	}
 }
 
@@ -73,7 +73,7 @@ func TestWindows(t *testing.T) {
 			events: join(
 				run(0, "plan"),
 				wait(2, 5, "question"),
-				ev(8, ledger.PlanSaved, "FT-1", nil),
+				ev(8, ledger.PlanSaved, "FT-1", ledger.PlanSavedPayload{}),
 			),
 			want: []got{{"plan", 5}},
 		},
@@ -160,7 +160,7 @@ func TestWindows(t *testing.T) {
 			events: join(
 				run(0, "ship"),
 				claim(0, "ship", "running", "implement"),
-				ev(3, ledger.WaitStarted, "FT-1", ledger.Payload{"reason": "turn"}),
+				ev(3, ledger.WaitStarted, "FT-1", ledger.WaitStartedPayload{Reason: "turn"}),
 				claim(9, "ship", "running", "pr"),
 			),
 			want: []got{{"implement", 3}},
@@ -170,10 +170,10 @@ func TestWindows(t *testing.T) {
 			events: join(
 				run(0, "ship"),
 				claim(0, "ship", "running", "implement"),
-				ev(2, ledger.WaitStarted, "FT-1", ledger.Payload{"reason": "turn"}),
-				ev(2, ledger.SessionStopped, "FT-1", nil),
+				ev(2, ledger.WaitStarted, "FT-1", ledger.WaitStartedPayload{Reason: "turn"}),
+				ev(2, ledger.SessionStopped, "FT-1", ledger.SessionStoppedPayload{}),
 				claim(4, "plan", "done"),
-				ev(9, ledger.WaitEnded, "FT-1", ledger.Payload{"reason": "turn"}),
+				ev(9, ledger.WaitEnded, "FT-1", ledger.WaitEndedPayload{Reason: "turn"}),
 				claim(10, "ship", "running", "pr"),
 			),
 			want: []got{{"implement", 8}},
@@ -183,9 +183,9 @@ func TestWindows(t *testing.T) {
 			events: join(
 				run(0, "ship"),
 				claim(0, "ship", "running", "implement"),
-				ev(2, ledger.WaitStarted, "FT-1", ledger.Payload{"reason": "turn"}),
-				ev(2.5, ledger.Pushed, "FT-1", nil),
-				ev(9, ledger.WaitEnded, "FT-1", ledger.Payload{"reason": "turn"}),
+				ev(2, ledger.WaitStarted, "FT-1", ledger.WaitStartedPayload{Reason: "turn"}),
+				ev(2.5, ledger.Pushed, "FT-1", ledger.PushedPayload{}),
+				ev(9, ledger.WaitEnded, "FT-1", ledger.WaitEndedPayload{Reason: "turn"}),
 				claim(10, "ship", "running", "pr"),
 			),
 			want: []got{{"implement", 3}},
@@ -195,7 +195,7 @@ func TestWindows(t *testing.T) {
 			events: join(
 				run(0, "ship"),
 				claim(0, "ship", "running", "implement"),
-				ev(6, ledger.SessionStopped, "FT-1", ledger.Payload{"backstop": true}),
+				ev(6, ledger.SessionStopped, "FT-1", ledger.SessionStoppedPayload{Backstop: true}),
 			),
 			want: []got{{"implement", 6}},
 		},
@@ -219,10 +219,10 @@ func TestWindows(t *testing.T) {
 			events: join(
 				run(0, "ship"),
 				claim(0, "ship", "running", "review:local"),
-				ev(6, ledger.ReviewRoundOpened, "FT-1", ledger.Payload{"round": "1"}),
+				ev(6, ledger.ReviewRoundOpened, "FT-1", ledger.ReviewRoundOpenedPayload{Round: "1"}),
 				claim(7, "ship", "running", "review:local"),
 				wait(8, 9, "question"),
-				ev(10, ledger.ReviewRoundOpened, "FT-1", ledger.Payload{"round": "2"}),
+				ev(10, ledger.ReviewRoundOpened, "FT-1", ledger.ReviewRoundOpenedPayload{Round: "2"}),
 				claim(14, "ship", "running", "judge"),
 				claim(15, "ship", "done"),
 			),
@@ -234,7 +234,7 @@ func TestWindows(t *testing.T) {
 			events: join(
 				run(0, "ship"),
 				claim(0, "ship", "running", "review:local"),
-				ev(5, ledger.ReviewRoundOpened, "FT-1", ledger.Payload{"round": "1"}),
+				ev(5, ledger.ReviewRoundOpened, "FT-1", ledger.ReviewRoundOpenedPayload{Round: "1"}),
 				claim(8, "ship", "blocked", "review:local"),
 				wait(9, 30, "turn"),
 				claim(31, "ship", "running", "review:local"),
@@ -264,8 +264,8 @@ func TestWindows(t *testing.T) {
 				wait(10.5, 11.5, "permission"),
 				claim(14, "ship", "running", "pr"), // resent: no gap
 				claim(15, "ship", "done"),
-				ev(18, ledger.WaitStarted, "FT-1", ledger.Payload{"reason": "turn"}),
-				ev(30, ledger.WaitEnded, "FT-1", ledger.Payload{"reason": "turn"}),
+				ev(18, ledger.WaitStarted, "FT-1", ledger.WaitStartedPayload{Reason: "turn"}),
+				ev(30, ledger.WaitEnded, "FT-1", ledger.WaitEndedPayload{Reason: "turn"}),
 			),
 			steps: []string{Glue},
 			want:  []got{{"glue", 5}},
@@ -274,12 +274,12 @@ func TestWindows(t *testing.T) {
 			name: "a plan run's glue is its hand-off, up to the chained ship",
 			events: join(
 				run(0, "plan"),
-				ev(8, ledger.PlanSaved, "FT-1", nil),
+				ev(8, ledger.PlanSaved, "FT-1", ledger.PlanSavedPayload{}),
 				run(9, "ship"),
 				claim(10, "ship", "running", "implement"),
 				claim(20, "ship", "done"),
-				ev(21, ledger.WaitStarted, "FT-1", ledger.Payload{"reason": "turn"}),
-				ev(22, ledger.WaitEnded, "FT-1", ledger.Payload{"reason": "turn"}),
+				ev(21, ledger.WaitStarted, "FT-1", ledger.WaitStartedPayload{Reason: "turn"}),
+				ev(22, ledger.WaitEnded, "FT-1", ledger.WaitEndedPayload{Reason: "turn"}),
 			),
 			steps: []string{Glue},
 			want:  []got{{"glue", 1}, {"glue", 2}},
@@ -289,13 +289,13 @@ func TestWindows(t *testing.T) {
 			events: join(
 				run(0, "plan"),
 				claim(2, "plan", "blocked", "judge"),
-				ev(3, ledger.WaitStarted, "FT-1", ledger.Payload{"reason": "turn"}),
-				ev(10, ledger.WaitEnded, "FT-1", ledger.Payload{"reason": "turn"}),
+				ev(3, ledger.WaitStarted, "FT-1", ledger.WaitStartedPayload{Reason: "turn"}),
+				ev(10, ledger.WaitEnded, "FT-1", ledger.WaitEndedPayload{Reason: "turn"}),
 				run(100, "ship"),
 				claim(100, "ship", "running", "implement"),
 				claim(101, "ship", "done"),
-				ev(102, ledger.WaitStarted, "FT-1", ledger.Payload{"reason": "turn"}),
-				ev(103, ledger.WaitEnded, "FT-1", ledger.Payload{"reason": "turn"}),
+				ev(102, ledger.WaitStarted, "FT-1", ledger.WaitStartedPayload{Reason: "turn"}),
+				ev(103, ledger.WaitEnded, "FT-1", ledger.WaitEndedPayload{Reason: "turn"}),
 			),
 			steps: []string{Glue},
 			want:  []got{{"glue", 3}, {"glue", 1}},
@@ -306,13 +306,13 @@ func TestWindows(t *testing.T) {
 				run(0, "ship"),
 				claim(1, "ship", "running", "judge"),
 				claim(3, "ship", "blocked", "judge"),
-				ev(4, ledger.WaitStarted, "FT-1", ledger.Payload{"reason": "turn"}),
-				ev(40, ledger.WaitEnded, "FT-1", ledger.Payload{"reason": "turn"}),
+				ev(4, ledger.WaitStarted, "FT-1", ledger.WaitStartedPayload{Reason: "turn"}),
+				ev(40, ledger.WaitEnded, "FT-1", ledger.WaitEndedPayload{Reason: "turn"}),
 				claim(41, "ship", "running", "judge"),
 				claim(45, "ship", "running", "implement"),
 				claim(50, "ship", "done"),
-				ev(52, ledger.WaitStarted, "FT-1", ledger.Payload{"reason": "turn"}),
-				ev(53, ledger.WaitEnded, "FT-1", ledger.Payload{"reason": "turn"}),
+				ev(52, ledger.WaitStarted, "FT-1", ledger.WaitStartedPayload{Reason: "turn"}),
+				ev(53, ledger.WaitEnded, "FT-1", ledger.WaitEndedPayload{Reason: "turn"}),
 			),
 			steps: []string{Glue},
 			want:  []got{{"glue", 2}, {"glue", 2}},
@@ -381,7 +381,7 @@ func TestWindowsDropAWindowAnUnendedWaitRunsInto(t *testing.T) {
 	ws := Windows(join(
 		run(0, "ship"),
 		claim(0, "ship", "running", "implement"),
-		ev(3, ledger.WaitStarted, "FT-1", ledger.Payload{"reason": "question"}),
+		ev(3, ledger.WaitStarted, "FT-1", ledger.WaitStartedPayload{Reason: "question"}),
 		claim(9, "ship", "running", "pr"),
 	))
 	if len(ws) != 0 {
@@ -389,19 +389,17 @@ func TestWindowsDropAWindowAnUnendedWaitRunsInto(t *testing.T) {
 	}
 }
 
-// A claim built in memory holds its place as an int, a stored one as a
-// float64; both name the entry's label.
+// A claim's place names the entry's label.
 func TestWindowsLabelAClaimByItsPlace(t *testing.T) {
 	t.Parallel()
 
-	for _, at := range []any{2, float64(2)} {
-		c := claim(0, "ship", "running", "pr")
-		c.Payload.Val["labels"] = []any{"", "pr-polish"}
-		c.Payload.Val["at"] = at
+	c := claimAt(
+		0,
+		ledger.ClaimPayload{Args: []string{"ship", "running", "pr"}, Labels: []string{"", "pr-polish"}, At: 2},
+	)
 
-		ws := Windows(join(run(0, "ship"), c, wait(2, 4, "question"), claim(10, "ship", "done")))
-		if len(ws) == 0 || ws[0].Step != "pr" || ws[0].Label != "pr-polish" {
-			t.Errorf("at %T: windows %+v", at, ws)
-		}
+	ws := Windows(join(run(0, "ship"), c, wait(2, 4, "question"), claim(10, "ship", "done")))
+	if len(ws) == 0 || ws[0].Step != "pr" || ws[0].Label != "pr-polish" {
+		t.Errorf("windows %+v", ws)
 	}
 }

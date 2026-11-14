@@ -48,7 +48,7 @@ func TestStateCallsAreRecordedAsClaimed(t *testing.T) {
 		kinds = append(kinds, e.Kind)
 
 		if e.Kind == ledger.StateSet &&
-			(e.Task != "GH-7" || e.Payload.Val["ship"] != "blocked" || e.Payload.Val["leaf"] != "judge") {
+			(e.Task != "GH-7" || ledger.DecodeClaim(e).Run.Ship != "blocked" || ledger.DecodeClaim(e).Run.Leaf != "judge") {
 			t.Errorf("set event %+v", e)
 		}
 	}

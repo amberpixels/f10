@@ -10,7 +10,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/testkit"
 )
 
-func sessionEvent(at time.Time, session, kind string, p ledger.Payload) ledger.Event {
+func sessionEvent(at time.Time, session, kind string, p any) ledger.Event {
 	e := event(at, "FT-1", kind, p)
 	e.Session = session
 
@@ -18,7 +18,7 @@ func sessionEvent(at time.Time, session, kind string, p ledger.Payload) ledger.E
 }
 
 func shipClaim(at time.Time, session, step string) ledger.Event {
-	return sessionEvent(at, session, ledger.StateSet, ledger.Payload{"args": []any{"ship", "running", step}})
+	return sessionEvent(at, session, ledger.StateSet, ledger.ClaimPayload{Args: []string{"ship", "running", step}})
 }
 
 func TestShipSteps(t *testing.T) {
@@ -27,26 +27,26 @@ func TestShipSteps(t *testing.T) {
 
 	events := []ledger.Event{
 		// a plan run first in the same session: none of its claims count
-		sessionEvent(at(0), "s1", ledger.RunStarted, ledger.Payload{"skill": "plan"}),
-		sessionEvent(at(0), "s1", ledger.StateSet, ledger.Payload{"args": []any{"plan", "running"}}),
-		sessionEvent(at(1), "s1", ledger.RunStarted, ledger.Payload{"skill": "ship"}),
+		sessionEvent(at(0), "s1", ledger.RunStarted, ledger.RunStartedPayload{Skill: "plan"}),
+		sessionEvent(at(0), "s1", ledger.StateSet, ledger.ClaimPayload{Args: []string{"plan", "running"}}),
+		sessionEvent(at(1), "s1", ledger.RunStarted, ledger.RunStartedPayload{Skill: "ship"}),
 		shipClaim(at(2), "s1", "implement"),
 		shipClaim(at(3), "s1", "cleanup"),
 		shipClaim(at(4), "s1", "pr"),
-		sessionEvent(at(4), "s1", ledger.StateNote, ledger.Payload{"args": []any{"why"}}),
+		sessionEvent(at(4), "s1", ledger.StateNote, ledger.ClaimPayload{Args: []string{"why"}}),
 		shipClaim(at(5), "s1", "review"),
 		// resolve called by a review step through the Skill tool: still the ship run
-		sessionEvent(at(5), "s1", ledger.RunStarted, ledger.Payload{"skill": "resolve"}),
+		sessionEvent(at(5), "s1", ledger.RunStarted, ledger.RunStartedPayload{Skill: "resolve"}),
 		// a driven run resuming at the step it blocked on
-		sessionEvent(at(6), "s1", ledger.StateSet, ledger.Payload{"args": []any{"ship", "blocked", "judge"}}),
+		sessionEvent(at(6), "s1", ledger.StateSet, ledger.ClaimPayload{Args: []string{"ship", "blocked", "judge"}}),
 		shipClaim(at(6), "s1", "judge"),
 		shipClaim(at(7), "s1", "judge"),
 		shipClaim(at(8), "s1", "pr"),
-		sessionEvent(at(9), "s1", ledger.StateSet, ledger.Payload{"args": []any{"ship", "done"}}),
+		sessionEvent(at(9), "s1", ledger.StateSet, ledger.ClaimPayload{Args: []string{"ship", "done"}}),
 		// another session's claims
 		shipClaim(at(5), "s2", "deploy"),
 		// a later run in the same session
-		sessionEvent(at(20), "s1", ledger.RunStarted, ledger.Payload{"skill": "ship"}),
+		sessionEvent(at(20), "s1", ledger.RunStarted, ledger.RunStartedPayload{Skill: "ship"}),
 		shipClaim(at(21), "s1", "implement"),
 	}
 

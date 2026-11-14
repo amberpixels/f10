@@ -43,58 +43,9 @@ const (
 	Claimed  = "claimed"
 )
 
-// Payload is an event's kind-specific detail, stored as JSON. Its readers
-// take a value as stored (JSON numbers and lists) or as built in memory.
-type Payload map[string]any
-
-// String is the key's string, "" when absent or not a string.
-func (p Payload) String(key string) string {
-	s, _ := p[key].(string)
-
-	return s
-}
-
-// Strings is the key's list, its strings only.
-func (p Payload) Strings(key string) []string {
-	switch raw := p[key].(type) {
-	case []string:
-		return raw
-	case []any:
-		var out []string
-
-		for _, v := range raw {
-			if s, ok := v.(string); ok {
-				out = append(out, s)
-			}
-		}
-
-		return out
-	}
-
-	return nil
-}
-
-// Int is the key's number: a float64 once stored as JSON, an int as built.
-func (p Payload) Int(key string) (int, bool) {
-	switch n := p[key].(type) {
-	case float64:
-		return int(n), true
-	case int:
-		return n, true
-	}
-
-	return 0, false
-}
-
-// Bool reports whether the key holds true.
-func (p Payload) Bool(key string) bool { return p[key] == true }
-
 type payloadCol = r3.JSONColumn[Payload]
 
 func col(p Payload) payloadCol { return r3.NewJSONColumn(p) }
-
-// NewPayload wraps a payload for an Event.
-func NewPayload(p Payload) r3.JSONColumn[Payload] { return col(p) }
 
 // Event is one row. Every column but the id is immutable, so r3 has no update
 // path for it and an upsert of a known id does nothing: the table only grows.
@@ -111,6 +62,11 @@ type Event struct {
 	Kind         string     `db:"kind,immutable"          json:"kind"`
 	Source       string     `db:"source,immutable"        json:"source"`
 	Payload      payloadCol `db:"payload,immutable"       json:"payload"`
+
+	// generated from the payload (hotkeys.go): filtered on, never written
+	PPath    *string `db:"p_path,readonly"    json:"-"`
+	PRound   *string `db:"p_round,readonly"   json:"-"`
+	PFinding *string `db:"p_finding,readonly" json:"-"`
 }
 
 func (Event) TableName() string { return "events" }
@@ -119,7 +75,8 @@ func (Event) TableName() string { return "events" }
 // first non-flag argument, else the row's task, which the observer takes from
 // the session's run and so names another task when finish ran from elsewhere.
 func (e Event) FinishedTask() string {
-	args := e.Payload.Val.Strings("args")
+	p, _ := Decode[TaskFinishedPayload](e)
+	args := p.Args
 
 	for i := 0; i < len(args); i++ {
 		s := args[i]
@@ -244,12 +201,15 @@ type Filter struct {
 	Task    string
 	Session string
 	Kind    string
+	Path    string // the payload's path: a plan, findings or verdict file
 }
 
 func (f Filter) filters() r3.Filters {
 	var filters r3.Filters
 
-	for column, v := range map[string]string{"project": f.Project, "task": f.Task, "session": f.Session, "kind": f.Kind} {
+	for column, v := range map[string]string{
+		"project": f.Project, "task": f.Task, "session": f.Session, "kind": f.Kind, "p_path": f.Path,
+	} {
 		if v != "" {
 			filters = append(filters, r3.Eq(column, v))
 		}
@@ -336,31 +296,28 @@ func SyncAt(ctx context.Context, path string) error {
 	return l.Close()
 }
 
-// migrate runs goose only when user_version lags the embedded migrations,
-// so an open of a current database costs one pragma read.
+// migrate runs goose only when user_version lags the migrations, so an open
+// of a current database costs one pragma read.
 func (l *Ledger) migrate(ctx context.Context) error {
 	sub, err := fs.Sub(migrations, "migrations")
 	if err != nil {
 		return fmt.Errorf("ledger: %w", err)
 	}
 
-	files, err := fs.Glob(sub, "*.sql")
+	p, err := goose.NewProvider(goose.DialectSQLite3, l.db, sub, goose.WithGoMigrations(hotKeys))
 	if err != nil {
 		return fmt.Errorf("ledger: %w", err)
 	}
+
+	count := len(p.ListSources())
 
 	var version int
 	if err := l.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		return fmt.Errorf("ledger: %w", err)
 	}
 
-	if version == len(files) {
+	if version == count {
 		return nil
-	}
-
-	p, err := goose.NewProvider(goose.DialectSQLite3, l.db, sub)
-	if err != nil {
-		return fmt.Errorf("ledger: %w", err)
 	}
 
 	if _, err := p.Up(ctx); err != nil {
@@ -368,7 +325,7 @@ func (l *Ledger) migrate(ctx context.Context) error {
 	}
 
 	// a pragma takes no bound parameter; the count is ours, not input
-	if _, err := l.db.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", len(files))); err != nil {
+	if _, err := l.db.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", count)); err != nil {
 		return fmt.Errorf("ledger: %w", err)
 	}
 

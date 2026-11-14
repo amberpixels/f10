@@ -67,8 +67,6 @@ func FoldLedger(events []ledger.Event, id string, resolve func(string) string) L
 	var lt LedgerTask
 
 	for _, e := range events {
-		p := e.Payload.Val
-
 		switch {
 		case e.Kind == ledger.TaskFinished:
 			// finish runs from the main checkout, whose session may be on
@@ -83,7 +81,8 @@ func FoldLedger(events []ledger.Event, id string, resolve func(string) string) L
 				lt.Halt = nil
 			}
 		case e.Kind == ledger.PROpened:
-			lt.PR = cmp.Or(p.String("url"), lt.PR)
+			p, _ := ledger.Decode[ledger.PROpenedPayload](e)
+			lt.PR = cmp.Or(p.URL, lt.PR)
 		case e.Kind == ledger.Pushed:
 			lt.Pushed = true
 		case e.Kind == ledger.TaskHalted:

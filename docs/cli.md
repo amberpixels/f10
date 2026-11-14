@@ -80,6 +80,8 @@ f10 standup mark --since <time> [--at <time>]      # record a standup as reporte
 f10 board [<window> | --since <window>] [--state] [--remote] [-C <checkout>]... [--group <name>]... [--all] [--detail] [--by person] [--json | --html] [--out <path>]   # what changed today (else the last working day); --state: where every task stands; one project or several
 f10 atlas [-C <checkout>]... [--group <name>]... [--all] [--json] [--out <path>]   # your public projects: what ~/.f10/atlas.md declares and what their git history says
 f10 stats [--since 30d] [<id>]   # active minutes per task by step group, with size and density; a median row; an id adds its steps
+f10 ledger dump [--json] [--project p] [--task id] [--session s]   # the recorded events, oldest first
+f10 ledger schema        # the JSON Schema of each event kind's payload, by version (docs/ledger.schema.json)
 
 f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --flow <name> | --discuss] [--pace <name>] [--after <id> | --base <branch>] [--agent <profile> | --model <model>] [note...]   # a worktree, a Herdr workspace, a prompted agent
 f10 forward <id>[-suffix] <text...>   # hand a command or a steering note to the agent working on the task
@@ -1223,6 +1225,11 @@ Step boundaries are the `f10-state.sh set ship running <entry>` calls; a skipped
 A value never recorded prints `-`, never `0`, and no wall duration is printed.
 Counting starts with the release that records waits: a session with no wait in the ledger, and a window a wait with no recorded end runs into, count nothing.
 `--since` takes days or weeks (`7d`, `2w`) and keeps the tasks active in that span; a task id shows that task whatever its age.
+
+## Ledger
+
+`f10 ledger dump` prints the rows `~/.f10/f10.db` holds, and `f10 ledger schema` prints the JSON Schema of each kind's payload.
+[docs/ledger.md](ledger.md) is the spec: versions, how old rows read, and the indexed payload columns.
 
 ## Lore
 

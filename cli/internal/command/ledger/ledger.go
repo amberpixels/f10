@@ -36,6 +36,20 @@ func Command() *cli.Command {
 				},
 				Action: runLedgerDump,
 			},
+			{
+				Name:  "schema",
+				Usage: "print the JSON Schema of every event kind's payload, by version",
+				Action: func(_ context.Context, cmd *cli.Command) error {
+					out, err := ledger.Schema()
+					if err != nil {
+						return err
+					}
+
+					_, err = cmd.Writer.Write(out)
+
+					return err
+				},
+			},
 		},
 	}
 }
