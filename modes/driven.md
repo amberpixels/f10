@@ -52,11 +52,13 @@ Five kinds of open question never become an ask:
 - **A stale task's verdict** (`steps/fetch.md` point 1).
   The run ends blocked and names the verdict file.
   The user decides either by sending `anyway`, as `f10 drive --answer <id> anyway` or typed in this pane, or by closing the task.
-- **A bug that is costly to reproduce** (`steps/debug.md` → A bug that is a task).
-  The frontmatter's `debug_costly` decides, as the debug step says, and only `debug_costly: ask` makes it an ask.
+- **A bug that is costly to reproduce, under `debug_costly: skip` or `reproduce`** (`steps/debug.md` → A bug that is a task).
+  The frontmatter's value decides, as the debug step says.
   The drive's report names every task planned without a reproduction, so a skipped one is seen.
 
-A bug that does not reproduce gets one ask, and then its plan is written marked `Reproduction: unconfirmed`, so the drive goes on.
+Two bug questions do become one ask each.
+Under `debug_costly: ask`, a costly bug asks its three options.
+A bug that does not reproduce asks what the user saw, and then its plan is written marked `Reproduction: unconfirmed`, so the drive goes on.
 
 ## A turn ends at its report, never before
 

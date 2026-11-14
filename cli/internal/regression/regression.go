@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -242,48 +243,49 @@ type classified struct {
 }
 
 // classify reads the origin task's rounds and verdicts against the lines.
+// Each round is matched in its own numbering, because the file has usually
+// moved between the review and the bug.
 func (a attribution) classify(ctx context.Context, task string) classified {
 	if a.in.Class == OutOfReach {
 		return classified{class: OutOfReach}
 	}
 
 	rounds := a.rounds(task)
+	blocks, note := a.faulty(ctx)
+	last := lastVerdicts(rounds)
 
-	if c, ok := a.skipped(rounds); ok {
-		return c
-	}
-
-	if len(rounds) == 0 {
-		if a.judgedProceed(task) {
-			return classified{class: JudgedProceed}
-		}
-
-		return classified{class: Unreviewed}
-	}
-
-	faulty := a.faultyText(ctx)
-	unreachable := 0
+	held, unread := false, 0
 
 	for _, r := range rounds {
-		sha, _, _ := strings.Cut(r.Reviewed, " ")
+		sha, rest, _ := strings.Cut(r.Reviewed, " ")
 
-		held, ok := a.holds(ctx, sha, r.PR, faulty)
-		if !ok {
-			unreachable++
-
-			continue
+		found, reachable := a.find(ctx, sha, r.PR, blocks)
+		if c, ok := skippedIn(r, a.rangesIn(found), last); ok {
+			return c
 		}
 
-		if held {
-			return classified{class: Missed}
+		switch {
+		// a dirty round read uncommitted lines no sha holds
+		case !reachable || strings.TrimSpace(rest) == "dirty" || len(blocks) == 0:
+			unread++
+		case len(found) == len(blocks):
+			held = true
 		}
 	}
 
-	if unreachable == len(rounds) {
-		return classified{class: Missed, note: "the reviewed commit is unreachable; classified from the findings alone"}
+	switch {
+	case len(rounds) == 0 && a.judgedProceed(task):
+		return classified{class: JudgedProceed, note: note}
+	case len(rounds) == 0:
+		return classified{class: Unreviewed, note: note}
+	case held:
+		return classified{class: Missed, note: note}
+	case unread == len(rounds):
+		return classified{class: Missed, note: joinNotes(note,
+			"no round's reviewed lines could be read; classified from the findings alone")}
 	}
 
-	return classified{class: Unreviewed}
+	return classified{class: Unreviewed, note: note}
 }
 
 // rounds is every findings file of the task, live and archived, that parses.
@@ -313,7 +315,8 @@ func (a attribution) rounds(task string) []*findings.File {
 	return out
 }
 
-// judgedProceed reports a judge verdict of proceed on the task.
+// judgedProceed reports a proceed from a judge that read the code: a plan
+// or task judge covered no lines.
 func (a attribution) judgedProceed(task string) bool {
 	for _, path := range verdict.Series(storage.Root(a.in.StorageRoot).Verdicts(task)) {
 		raw, err := os.ReadFile(path)
@@ -321,7 +324,12 @@ func (a attribution) judgedProceed(task string) bool {
 			continue
 		}
 
-		if v, err := verdict.Parse(string(raw)); err == nil && v.Verdict == "proceed" {
+		v, err := verdict.Parse(string(raw))
+		if err != nil || v.Verdict != "proceed" {
+			continue
+		}
+
+		if kind, _, _ := strings.Cut(v.Subject, " "); kind != "plan" && kind != "task" && kind != "idea" {
 			return true
 		}
 	}
@@ -329,42 +337,44 @@ func (a attribution) judgedProceed(task string) bool {
 	return false
 }
 
-// skipped is a finding pointing at a faulty range whose last verdict is skip.
-func (a attribution) skipped(rounds []*findings.File) (classified, bool) {
+// lastVerdicts is each finding's verdict under the latest block naming it.
+func lastVerdicts(rounds []*findings.File) map[string]string {
 	last := map[string]string{}
-
-	var pointing []findings.Finding
 
 	for _, r := range rounds {
 		for _, fd := range r.Findings {
 			if fd.Verdict != "" {
 				last[fd.ID] = fd.Verdict
 			}
-
-			if !fd.Prior && a.points(fd) {
-				pointing = append(pointing, fd)
-			}
 		}
 	}
 
-	for _, fd := range pointing {
-		if strings.HasPrefix(last[fd.ID], "skip") {
-			rnd, _, _ := strings.Cut(fd.ID, ".")
+	return last
+}
 
-			return classified{class: Skipped, round: rnd, finding: fd.ID}, true
+// skippedIn is a finding of r pointing at a faulty range whose last verdict
+// is skip.
+func skippedIn(r *findings.File, ranges []Range, last map[string]string) (classified, bool) {
+	for _, fd := range r.Findings {
+		if fd.Prior || !points(fd, ranges) || !strings.HasPrefix(last[fd.ID], "skip") {
+			continue
 		}
+
+		rnd, _, _ := strings.Cut(fd.ID, ".")
+
+		return classified{class: Skipped, round: rnd, finding: fd.ID}, true
 	}
 
 	return classified{}, false
 }
 
-func (a attribution) points(fd findings.Finding) bool {
+func points(fd findings.Finding, ranges []Range) bool {
 	path, line, ok := fd.Location()
 	if !ok {
 		return false
 	}
 
-	for _, r := range a.in.Lines {
+	for _, r := range ranges {
 		if path == r.Path && line >= r.Start-widen && line <= r.End+widen {
 			return true
 		}
@@ -373,27 +383,61 @@ func (a attribution) points(fd findings.Finding) bool {
 	return false
 }
 
-// faultyText is each range's lines as Base has them.
-func (a attribution) faultyText(ctx context.Context) map[string][]string {
-	out := map[string][]string{}
-
-	for _, r := range a.in.Lines {
-		lines := strings.Split(gitx.Out(ctx, a.in.Dir, "show", a.in.Base+":"+r.Path), "\n")
-		if r.End > len(lines) {
-			continue
+// rangesIn is each faulty range as the round numbered it where its block
+// was found there, else as the base numbers it.
+func (a attribution) rangesIn(found map[int]Range) []Range {
+	out := make([]Range, len(a.in.Lines))
+	for i, r := range a.in.Lines {
+		if at, ok := found[i]; ok {
+			r = at
 		}
 
-		out[r.Path] = append(out[r.Path], strings.Join(trimmed(lines[r.Start-1:r.End]), "\n"))
+		out[i] = r
 	}
 
 	return out
 }
 
-// holds reports whether the file at sha carries every faulty block; ok is
-// false when sha is not in the clone even after fetching its PR's head.
-func (a attribution) holds(ctx context.Context, sha string, pr int, faulty map[string][]string) (bool, bool) {
+// block is one faulty range's lines as the base has them, by index into
+// Input.Lines.
+type block struct {
+	index int
+	path  string
+	lines []string
+}
+
+// faulty reads each range at the base; a range that cannot be read is left
+// out and named in the note, since its class would otherwise be a guess.
+func (a attribution) faulty(ctx context.Context) ([]block, string) {
+	var (
+		out    []block
+		missed []string
+	)
+
+	for i, r := range a.in.Lines {
+		lines, err := a.fileAt(ctx, a.in.Base, r.Path)
+		if err != nil || r.End > len(lines) {
+			missed = append(missed, r.String())
+
+			continue
+		}
+
+		out = append(out, block{index: i, path: r.Path, lines: lines[r.Start-1 : r.End]})
+	}
+
+	if len(missed) == 0 {
+		return out, ""
+	}
+
+	return out, "cannot read " + strings.Join(missed, ", ") + " at " + a.in.Base
+}
+
+// find locates each block as a run of whole lines in the file at sha, by its
+// range there; reachable is false when the clone lacks sha even after
+// fetching its PR's head.
+func (a attribution) find(ctx context.Context, sha string, pr int, blocks []block) (map[int]Range, bool) {
 	if sha == "" {
-		return false, false
+		return nil, false
 	}
 
 	if !a.present(ctx, sha) {
@@ -402,25 +446,66 @@ func (a attribution) holds(ctx context.Context, sha string, pr int, faulty map[s
 		}
 
 		if !a.present(ctx, sha) {
-			return false, false
+			return nil, false
 		}
 	}
 
-	if len(faulty) == 0 {
-		return false, true
-	}
+	found := map[int]Range{}
 
-	for path, blocks := range faulty {
-		text := strings.Join(trimmed(strings.Split(gitx.Out(ctx, a.in.Dir, "show", sha+":"+path), "\n")), "\n")
+	for _, b := range blocks {
+		lines, err := a.fileAt(ctx, sha, b.path)
+		if err != nil {
+			continue
+		}
 
-		for _, b := range blocks {
-			if !strings.Contains(text, b) {
-				return false, true
-			}
+		if at := locate(lines, b.lines); at > 0 {
+			found[b.index] = Range{Path: b.path, Start: at, End: at + len(b.lines) - 1}
 		}
 	}
 
-	return true, true
+	return found, true
+}
+
+// fileAt is path at rev, trailing blanks trimmed; a path rev lacks is an
+// error, never an empty file.
+func (a attribution) fileAt(ctx context.Context, rev, path string) ([]string, error) {
+	out, ok, err := gitx.Read(ctx, a.in.Dir, "show", rev+":"+path)
+	if err != nil {
+		return nil, err
+	}
+
+	if !ok {
+		return nil, fmt.Errorf("%s has no %s", rev, path)
+	}
+
+	return trimmed(strings.Split(out, "\n")), nil
+}
+
+// locate is the 1-based line where want starts as whole lines of text, or 0.
+func locate(text, want []string) int {
+	if len(want) == 0 {
+		return 0
+	}
+
+	for i := 0; i+len(want) <= len(text); i++ {
+		if slices.Equal(text[i:i+len(want)], want) {
+			return i + 1
+		}
+	}
+
+	return 0
+}
+
+func joinNotes(notes ...string) string {
+	var out []string
+
+	for _, n := range notes {
+		if n != "" {
+			out = append(out, n)
+		}
+	}
+
+	return strings.Join(out, "; ")
 }
 
 func (a attribution) present(ctx context.Context, sha string) bool {

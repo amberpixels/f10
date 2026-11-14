@@ -79,7 +79,9 @@ A skip names its reason, `skipped (costly)` when triage chose it and `skipped (n
 
 ## Attribute
 
-Once a task id exists and a root cause is named, confirmed or not, attribute the bug to the task that introduced it.
+Once a task id exists and the reproduction's outcome is settled, attribute the bug to the task that introduced it.
+This runs for every outcome, `unconfirmed` included, because the recorded outcome is how a drive names a task planned without a reproduction.
+With no root cause named, skip points 1 and 2 and record the outcome alone (point 3).
 Fetch runs this after the section above, and after a `/f10:debug` run's capture.
 A failure anywhere here is one line in the brief, never a stop, because attribution must not block a fix.
 

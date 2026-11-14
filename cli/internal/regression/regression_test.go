@@ -199,25 +199,105 @@ func TestAttribute(t *testing.T) {
 	}
 }
 
+// Only a judge that read the code covers its lines: a plan judge does not.
 func TestJudgedProceedWithoutAReview(t *testing.T) {
+	t.Parallel()
+
+	for subject, want := range map[string]string{
+		"pr #9":       JudgedProceed,
+		"plan FT-414": Unreviewed,
+	} {
+		f := newFixture(t)
+		f.commit("init", good)
+		sha := f.commit("change Last\n\nTask: FT-414", bad)
+
+		dir := filepath.Join(f.storage, "verdicts", "FT-414")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+
+		verdict := "task: FT-414\nsubject: " + subject + "\nverdict: proceed\nreason: fine\nrun: ship before pr\n"
+		if err := os.WriteFile(filepath.Join(dir, "1.md"), []byte(verdict), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		if got := f.attribute(sha); got.Class != want {
+			t.Errorf("%s: class %q, want %q", subject, got.Class, want)
+		}
+	}
+}
+
+// The file moved between the review and the bug: the skipped finding is
+// matched where the round saw the line, not where the base has it.
+func TestASkipIsMatchedInTheRoundsNumbering(t *testing.T) {
 	t.Parallel()
 
 	f := newFixture(t)
 	f.commit("init", good)
 	sha := f.commit("change Last\n\nTask: FT-414", bad)
+	f.review("FT-414", sha, "### 1.1 Off by one\nwhere: calc.go:3\ncategory: correctness and logic\nverdict: skip\n")
 
-	dir := filepath.Join(f.storage, "verdicts", "FT-414")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
+	padding := strings.Repeat("// pad\n", 20)
+	f.commit("later\n\nTask: FT-500", "package calc\n\n"+padding+"func Last(n int) int { return n }\n")
+
+	got := Attribute(t.Context(), Input{
+		Dir: f.dir, StorageRoot: f.storage, Prefix: "FT", Commit: sha,
+		Lines: []Range{{Path: "calc.go", Start: 23, End: 23}}, FoundBy: "blame", Confidence: "likely", Repro: "full",
+	})
+	if got.Class != Skipped || got.Finding != "1.1" {
+		t.Errorf("got %+v", got)
 	}
+}
 
-	verdict := "task: FT-414\nsubject: plan FT-414\nverdict: proceed\nreason: fine\nrun: ship before pr\n"
-	if err := os.WriteFile(filepath.Join(dir, "1.md"), []byte(verdict), 0o644); err != nil {
-		t.Fatal(err)
+// A dirty round read lines no sha holds, so it cannot say missed.
+func TestADirtyRoundIsClassifiedFromTheFindings(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t)
+	parent := f.commit("init", good)
+	sha := f.commit("change Last\n\nTask: FT-414", bad)
+	f.review("FT-414", parent+" dirty", "")
+
+	got := f.attribute(sha)
+	if got.Class != Missed || got.Confidence != Unclear || got.Note == "" {
+		t.Errorf("got %+v", got)
 	}
+}
 
-	if got := f.attribute(sha); got.Class != JudgedProceed {
-		t.Errorf("class %q, want %q", got.Class, JudgedProceed)
+// A faulty line found only inside a longer one is not held.
+func TestHoldsMatchesWholeLines(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t)
+	reviewed := f.commit("init\n\nTask: FT-414", "package calc\n\nfunc Last(n int) int {\n\treturn n - 1\n}\n")
+	f.review("FT-414", reviewed, "")
+	sha := f.commit("fix\n\nTask: FT-414", "package calc\n\nfunc Last(n int) int {\n\treturn n\n}\n")
+
+	got := Attribute(t.Context(), Input{
+		Dir: f.dir, StorageRoot: f.storage, Prefix: "FT", Commit: sha,
+		Lines: []Range{{Path: "calc.go", Start: 4, End: 4}}, FoundBy: "blame", Confidence: "likely", Repro: "full",
+	})
+	if got.Class != Unreviewed {
+		t.Errorf("class %q, want %q", got.Class, Unreviewed)
+	}
+}
+
+// A range the base cannot read leaves a note and an unclear confidence.
+func TestAnUnreadableRangeIsNoted(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t)
+	f.commit("init", good)
+	sha := f.commit("change Last\n\nTask: FT-414", bad)
+	f.review("FT-414", sha, "")
+
+	got := Attribute(t.Context(), Input{
+		Dir: f.dir, StorageRoot: f.storage, Prefix: "FT", Commit: sha,
+		Lines:   []Range{{Path: "cli/calc.go", Start: 3, End: 3}},
+		FoundBy: "blame", Confidence: "confirmed", Repro: "full",
+	})
+	if got.Confidence != Unclear || !strings.Contains(got.Note, "cli/calc.go") {
+		t.Errorf("got %+v", got)
 	}
 }
 
@@ -268,13 +348,13 @@ func TestNoCommitStillRecordsTheRepro(t *testing.T) {
 func TestAFindingPointsWithinThreeLines(t *testing.T) {
 	t.Parallel()
 
-	a := attribution{in: Input{Lines: []Range{{Path: "calc.go", Start: 10, End: 12}}}}
+	ranges := []Range{{Path: "calc.go", Start: 10, End: 12}}
 
 	for where, want := range map[string]bool{
 		"calc.go:7": true, "calc.go:6": false, "calc.go:15": true, "calc.go:16": false, "other.go:11": false,
 	} {
 		f := findingAt(where)
-		if got := a.points(f); got != want {
+		if got := points(f, ranges); got != want {
 			t.Errorf("%s: %v, want %v", where, got, want)
 		}
 	}
