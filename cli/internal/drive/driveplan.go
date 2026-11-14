@@ -279,7 +279,7 @@ func (in PlanInput) members(ctx context.Context, r ref.Ref, profile string) ([]d
 // lines, then the facts sheet. A label's kind wins over the plan's, and the
 // plan's over the sheet's, as fetch settles it.
 func (in PlanInput) lay(t *driveplan.Task, flowGiven bool, sheet map[string]SheetTask) {
-	planKind, planAreas := planHeader(in.Storage, t.ID)
+	planKind, planAreas, planSmall := planHeader(in.Storage, t.ID)
 	row := sheet[strings.ToUpper(t.ID)]
 
 	t.Kind = cmp.Or(t.Kind, planKind, strings.ToLower(row.Kind))
@@ -293,8 +293,13 @@ func (in PlanInput) lay(t *driveplan.Task, flowGiven bool, sheet map[string]Shee
 		t.Areas = row.Areas
 	}
 
-	if row.Lines > 0 {
+	switch {
+	case row.Lines > 0:
 		t.Lines, t.Estimated = row.Lines, true
+	case planSmall:
+		// a small plan is one change in one area, so without a read of the
+		// code it counts as a quarter of the cap
+		t.Lines, t.Estimated = max(in.MaxLines/smallShare, 1), true
 	}
 
 	if !flowGiven {
@@ -315,21 +320,26 @@ func flowOf(byArea map[string]string, areas []string) string {
 	return "default"
 }
 
-// planHeader reads a saved plan's Kind: and Areas: header lines. No Kind:
-// line comes back empty, so a label or the facts sheet can still settle it.
-func planHeader(root storage.Root, id string) (string, []string) {
+// smallShare is the part of the cap a small plan counts as.
+const smallShare = 4
+
+// planHeader reads a saved plan's Kind:, Areas: and Size: header lines. No
+// Kind: line comes back empty, so a label or the facts sheet can still
+// settle it.
+func planHeader(root storage.Root, id string) (string, []string, bool) {
 	if !root.PlanLive(id) {
-		return "", nil
+		return "", nil, false
 	}
 
 	data, err := os.ReadFile(root.Plan(id))
 	if err != nil {
-		return "", nil
+		return "", nil, false
 	}
 
 	var (
 		kind  string
 		areas []string
+		small bool
 	)
 
 	for line := range strings.SplitSeq(string(data), "\n") {
@@ -341,6 +351,10 @@ func planHeader(root storage.Root, id string) (string, []string) {
 			kind = strings.ToLower(strings.TrimSpace(v))
 		}
 
+		if v, ok := strings.CutPrefix(line, "Size:"); ok {
+			small = strings.HasPrefix(strings.TrimSpace(v), "small")
+		}
+
 		if v, ok := strings.CutPrefix(line, "Areas:"); ok {
 			for area := range strings.SplitSeq(v, ",") {
 				if area = strings.TrimSpace(area); area != "" {
@@ -350,7 +364,7 @@ func planHeader(root storage.Root, id string) (string, []string) {
 		}
 	}
 
-	return kind, areas
+	return kind, areas, small
 }
 
 func labelKind(labels []string) string {

@@ -54,6 +54,7 @@ type Entry struct {
 	Lines   int      `json:"lines,omitempty"`
 	Profile string   `json:"profile,omitempty"`
 	spike   bool
+	named   bool // holds a pair the user bundled, so the rules did not form it
 }
 
 // Token is how the drive command names the entry.
@@ -78,6 +79,13 @@ type Edit struct {
 	Reason string `json:"reason"`
 }
 
+// Formed is a saving the rules found by themselves.
+type Formed struct {
+	Bundles int `json:"bundles"`
+	Bundled int `json:"bundled"`
+	Waits   int `json:"ciWaitsSaved"`
+}
+
 // A Plan is the proposal.
 type Plan struct {
 	Stages   []Stage  `json:"stages"`
@@ -88,6 +96,9 @@ type Plan struct {
 	Finishes int      `json:"finishesSaved"`
 	Bundles  int      `json:"bundles"`
 	Bundled  int      `json:"bundled"` // tasks inside a bundle
+	// Formed counts the bundles the rules formed, the user's own left out, so
+	// a hint never offers what the user already bundled
+	Formed Formed `json:"formed"`
 }
 
 // Propose applies the rules: alone first, then bundles within a class by
@@ -186,6 +197,15 @@ func Propose(in Input) (Plan, error) {
 
 				if !e.spike {
 					p.Waits += len(e.IDs) - 1
+				}
+
+				if !e.named {
+					p.Formed.Bundles++
+					p.Formed.Bundled += len(e.IDs)
+
+					if !e.spike {
+						p.Formed.Waits += len(e.IDs) - 1
+					}
 				}
 			}
 		}
@@ -340,14 +360,12 @@ func bundle(tasks []Task, base, alone []string, byID map[string]int, maxLines in
 }
 
 // split cuts one joined set: a member joins the first bundle it shares its
-// base with (none, or a member already in it) and fits under the cap. A
-// bundle the user named is kept whole.
+// base with (none, or a member already in it) and fits under the cap. Only
+// a pair the user named passes the cap; a task the rules joined never does.
 func split(tasks []Task, base []string, members []int, byID map[string]int, maxLines int) [][]int {
 	if len(members) == 1 {
 		return [][]int{members}
 	}
-
-	forced := slices.ContainsFunc(members, func(i int) bool { return tasks[i].With != "" })
 
 	type part struct {
 		ids   []int
@@ -363,6 +381,11 @@ func split(tasks []Task, base []string, members []int, byID map[string]int, maxL
 		return ok && slices.Contains(p.ids, j)
 	}
 
+	named := func(p part, i int) bool {
+		return tasks[i].With != "" && inPart(p, tasks[i].With) ||
+			slices.ContainsFunc(p.ids, func(j int) bool { return strings.EqualFold(tasks[j].With, tasks[i].ID) })
+	}
+
 	for _, i := range members {
 		placed := false
 
@@ -370,7 +393,7 @@ func split(tasks []Task, base []string, members []int, byID map[string]int, maxL
 			p := &parts[k]
 
 			b := base[i]
-			fits := forced || p.lines+tasks[i].Lines <= maxLines
+			fits := named(*p, i) || p.lines+tasks[i].Lines <= maxLines
 
 			switch {
 			case !fits:
@@ -411,6 +434,7 @@ func entryOf(tasks []Task, base, alone []string, groupLines, g []int, maxLines i
 		e.Lines += tasks[i].Lines
 		estimated = estimated || tasks[i].Estimated
 		e.spike = e.spike || kindOf(tasks[i]) == KindSpike
+		e.named = e.named || tasks[i].With != ""
 	}
 
 	for _, i := range g {
@@ -433,7 +457,7 @@ func entryOf(tasks []Task, base, alone []string, groupLines, g []int, maxLines i
 		return e
 	}
 
-	if slices.ContainsFunc(g, func(i int) bool { return tasks[i].With != "" }) {
+	if e.named {
 		e.Reason = "bundle: you bundled them"
 	} else {
 		e.Reason = "bundle: " + sharedReason(tasks, g)

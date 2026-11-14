@@ -219,3 +219,38 @@ func TestPlanFollowsTheAgreedDrive(t *testing.T) {
 		t.Errorf("Find = %+v, %v", found, err)
 	}
 }
+
+// with no sheet, saved small plans in one area are enough for the hint; a
+// typed bundle alone never is
+func TestPlanHintWithoutASheet(t *testing.T) {
+	t.Parallel()
+
+	in := planFixture(t)
+
+	for _, id := range []string{"GH-11", "GH-12"} {
+		plan := "# " + id + "\n\nRoles: x\nAreas: ui\nSize: small - one place\n\n## Stage 1\n"
+		if err := os.WriteFile(in.Storage.Plan(id), []byte(plan), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	res, err := Plan(context.Background(), in, planArgs(t, "GH-10", "--hint"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if hint := res.Plan.Hint(
+		"GH-10",
+	); hint != "a plan would bundle 2 tasks into 1 bundle and save about 1 CI wait: /f10:drive GH-10 --plan" {
+		t.Errorf("hint %q", hint)
+	}
+
+	typed, err := Plan(context.Background(), in, planArgs(t, "GH-30+GH-14", "--hint"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if hint := typed.Plan.Hint("GH-30+GH-14"); hint != "" {
+		t.Errorf("a typed bundle hinted %q", hint)
+	}
+}

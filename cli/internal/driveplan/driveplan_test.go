@@ -270,3 +270,27 @@ func TestProfileOnTheEntry(t *testing.T) {
 		t.Errorf("args %v", p.Args)
 	}
 }
+
+// a pair the user named passes the cap, but the tasks the rules join to it do not
+func TestNamedPairKeepsTheCapForOthers(t *testing.T) {
+	t.Parallel()
+
+	c := small("FT-3", "docs", 20)
+	c.With = "FT-1"
+
+	p := propose(t, small("FT-1", "ui", 200), small("FT-2", "ui", 200), c)
+	got := entries(p)
+
+	if _, ok := got["FT-1+FT-3"]; !ok {
+		t.Fatalf("want the named pair FT-1+FT-3, got %+v", got)
+	}
+
+	if r := got["FT-2"].Reason; !strings.HasPrefix(r, "split:") {
+		t.Errorf("FT-2 rode in uncapped, reason %q", r)
+	}
+
+	// the user's own bundle is no saving a hint may offer
+	if p.Formed.Waits != 0 || p.Hint("FT-1 FT-2 FT-3") != "" {
+		t.Errorf("formed %+v, hint %q", p.Formed, p.Hint("FT-1 FT-2 FT-3"))
+	}
+}

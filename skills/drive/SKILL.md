@@ -54,7 +54,7 @@ With no draft among them, every candidate runs, because naming the parent alread
 6. **Build the arguments**: each parent replaced in place by its chosen subtasks, in the rows' order, each carrying the parent's `:profile` suffix; other ids and flags as given.
    Nothing left to drive: say so in one line and stop.
 7. **The hint**, without `--plan`: in the same Bash call as point 1, run `f10 drive plan <the arguments as typed> --hint`.
-   It prints one line only when a plan would save a CI wait; print that line under the trees, and drive as asked.
+   It prints one line only when the rules alone would save a CI wait, read from saved plans (a small plan's size, its `Areas:` line), since a plain drive reads no code; print that line under the trees, and drive as asked.
    A hint that errors (a flag `drive plan` does not take) prints nothing here.
 
 **Plan** (`--plan`): `f10 drive plan` proposes the command, and this skill supplies what only a read of the code can tell.
@@ -73,7 +73,11 @@ A parent with a draft candidate goes through **Parents** points 4 and 5 first, a
 5. **Confirm once**, in one `AskUserQuestion`: a question `Drive this command?` `[drive it | change it]`, plus one per proposed `After:` edit, `[add After: <base> to <id> | leave it]`.
    `change it` goes back to point 4.
    Apply each accepted edit with `f10 task update <id> --after <base>` (`none` drops the line), all in one Bash call.
-   An edit declined, or one the tracker refused (exit 3), becomes `after: "none"` for that task in the sheet; then rerun point 3 once, so the command no longer relies on it.
+   A declined or refused (exit 3) edit is taken back in the sheet, so the command never relies on an order the tracker lacks, nor drops one it holds:
+   - an edit the planner proposed (the task has no `After:` of its own, the order came from `buildsOn` or a shared file) sets `after: "none"`;
+   - an edit from the user's own `after` override removes that override, so the body's `After:` stands.
+
+   Then rerun point 3 once.
 6. **Run** `f10 drive <the command's arguments> --planned "<planning arguments>"` as **Run** below, in the background.
    The record keeps the planning arguments, so `/f10:drive <planning arguments> --plan` follows this drive (point 1).
 

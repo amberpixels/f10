@@ -783,7 +783,7 @@ Out of scope: more than one base per task, and ordering tasks by anything but th
 `f10 drive plan <parent | id>...` proposes how to drive the tasks and prints it; it opens nothing, writes no record, takes no lease, starts no daemon and changes no task, so the daemon, a hook or a status line may call it.
 A parent expands into its open subtasks in `f10 task children` order, a `draft` child left out with a line naming it; a closed task is left out the same way; a typed bundle stays bundled.
 
-What it reads for each task, cheapest first: the `After:` line and the labels from the tracker, a saved plan's `Kind:` and `Areas:` header lines, the flow `flow_by_area` maps the first mapped area to (all tasks share the flow `--flow` or `--local` names), its `:profile`, and the facts sheet `--facts` names.
+What it reads for each task, cheapest first: the `After:` line and the labels from the tracker, a saved plan's `Kind:`, `Areas:` and `Size:` header lines (a small plan counts as a quarter of `bundle_max_lines`, marked estimated, because it is one change in one area), the flow `flow_by_area` maps the first mapped area to (all tasks share the flow `--flow` or `--local` names), its `:profile`, and the facts sheet `--facts` names.
 A label's kind wins over a plan's, and a plan's over the sheet's, as fetch settles it; `bug`, `defect` and `regression` read as a bug, `refactor` and `tech-debt` as a refactor, `spike`, `research` and `investigation` as a spike.
 The labels `migration` and `risky` mark a task risky.
 
@@ -799,7 +799,7 @@ The rules, in order, each leaving a one-line reason on every task and bundle:
 
 It prints the stages, the drive command with the drive flags given carried onto it, `saves about N CI waits and M finishes against driving them one by one`, the `After:` edits waiting on a yes (`f10 task update <id> --after <base>` applies one), and, when anything is bundled, once: a bundle is one PR, one revert and one review over a mixed diff, and a later bug is traced to its lead with the riders named.
 `--json` prints the same for the drive skill, the tasks' gathered facts included.
-`--hint` prints one line when the plan saves at least one CI wait, and nothing otherwise; a plain `/f10:drive` prints it under the tree.
+`--hint` prints one line when the rules alone save at least one CI wait, a bundle the user typed or named with `with` not counted, and nothing otherwise; a plain `/f10:drive` prints it under the tree.
 
 **The facts sheet** is a JSON object keyed by task id, written by `/f10:drive --plan` from a short read of each task against the code; an unknown field is refused, so a misspelt one never reads as not sized:
 

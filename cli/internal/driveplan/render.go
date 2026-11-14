@@ -90,13 +90,14 @@ func (p Plan) Write(w io.Writer, notes []string, extra ...string) error {
 	return nil
 }
 
-// Hint is the one line a plain drive prints when a plan would save at
-// least one CI wait, "" otherwise.
+// Hint is the one line a plain drive prints when the rules alone would save
+// at least one CI wait, "" otherwise.
 func (p Plan) Hint(planArgs string) string {
-	if p.Waits < 1 {
+	f := p.Formed
+	if f.Waits < 1 {
 		return ""
 	}
 
 	return fmt.Sprintf("a plan would bundle %s into %s and save about %s: /f10:drive %s --plan",
-		count(p.Bundled, "task"), count(p.Bundles, "bundle"), count(p.Waits, "CI wait"), planArgs)
+		count(f.Bundled, "task"), count(f.Bundles, "bundle"), count(f.Waits, "CI wait"), planArgs)
 }
