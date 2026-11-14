@@ -54,6 +54,7 @@ Any commit this step makes follows `conventions/context.md` → Commits, with `-
      A rider the PR delivers only in part gets `Part of #12`, judged against that rider's criteria in the plan's `## Riders` section.
      A drive's or the watcher's finish follows these lines unasked: a rider under `Closes` closes on merge, and one under `Part of` stays open.
      An interactive `f10 finish` offers the same choice as its default and asks for it with `--close` (exit 7 without it).
+   - **A regression.** When the plan has a `Regression of:` line, the body carries one line saying the same for a reader: the origin task as a link carrying its title, how its review let the fault through, and how sure the attribution is ("Regression of [FT-414: Retry failed uploads](url): missed in review, confirmed").
    - A **marker** is a word the run's pace hands this entry as a `marker <word>` dial (`f10 flow <name>`), such as `fast`.
      The project's `pr` overlay says what it means, for example a title tag that makes CI run a short pipeline, and the draft applies it.
      When no overlay gives the marker a meaning, the PR opens without it, and the report says so in one line.

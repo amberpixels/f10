@@ -155,6 +155,30 @@ type ClaimV1 struct {
 	At       int      `json:"at,omitempty"`
 }
 
+// RegressionFoundV1 is a bug task's root cause traced to the commit and the
+// task that introduced it, with how review let it through. Lines are
+// `path:start-end`; Round and Finding name the skipped finding.
+type RegressionFoundV1 struct {
+	OriginTask string   `json:"origin_task"`
+	Origin     string   `json:"origin"`
+	Commit     string   `json:"commit,omitempty"`
+	Lines      []string `json:"lines,omitempty"`
+	FoundBy    string   `json:"found_by"`
+	Confidence string   `json:"confidence"`
+	Class      string   `json:"class,omitempty"`
+	Round      string   `json:"round,omitempty"`
+	Finding    string   `json:"finding,omitempty"`
+	Repro      string   `json:"repro"`
+	Note       string   `json:"note,omitempty"`
+}
+
+// RegressionClaimedV1 is a task whose own text names the task it is a
+// regression of: the user's word, kept apart from what debug finds.
+type RegressionClaimedV1 struct {
+	OriginTask string `json:"origin_task"`
+	Text       string `json:"text,omitempty"`
+}
+
 type (
 	RunStartedPayload        = RunStartedV1
 	StepEnteredPayload       = StepEnteredV1
@@ -174,6 +198,8 @@ type (
 	TaskHaltedPayload        = TaskHaltedV1
 	TaskSizedPayload         = TaskSizedV1
 	ClaimPayload             = ClaimV1
+	RegressionFoundPayload   = RegressionFoundV1
+	RegressionClaimedPayload = RegressionClaimedV1
 )
 
 func init() {
@@ -194,6 +220,8 @@ func init() {
 	register[JudgeVerdictV1](kinds, JudgeVerdict)
 	register[TaskHaltedV1](kinds, TaskHalted)
 	register[TaskSizedV1](kinds, TaskSized)
+	register[RegressionFoundV1](kinds, RegressionFound)
+	register[RegressionClaimedV1](kinds, RegressionClaimed)
 	register[ClaimV1](
 		kinds,
 		StateSet,

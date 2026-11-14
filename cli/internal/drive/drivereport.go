@@ -1,11 +1,14 @@
 package drive
 
 import (
+	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -78,6 +81,7 @@ func (in *DriveInput) Report(runs []*DriveRun, notes []string) error {
 	in.savePending(nil)
 
 	notes = append(notes, lines...)
+	notes = append(notes, in.reproLines(context.Background(), runs)...)
 
 	if len(rows) > 0 {
 		fmt.Fprintln(in.Out)
@@ -107,4 +111,45 @@ func handoffBlock(id string, lines []string) []string {
 	}
 
 	return block
+}
+
+// reproLines names each task planned without a reproduction, because a
+// drive plans unattended and nobody else would see it. A task's rows are
+// found by its worktree, which the debug pass recorded them from.
+func (in *DriveInput) reproLines(ctx context.Context, runs []*DriveRun) []string {
+	var out []string
+
+	for _, r := range runs {
+		if r.O.Path == "" {
+			continue
+		}
+
+		checkout := r.O.Path
+		if resolved, err := filepath.EvalSymlinks(checkout); err == nil {
+			checkout = resolved
+		}
+
+		id := r.Task.Ref.ID
+
+		events, err := ledger.ReadEvents(ctx, ledger.Path(), ledger.Filter{
+			Task: id, Kind: ledger.RegressionFound, Checkout: checkout,
+		})
+		if err != nil || len(events) == 0 {
+			continue
+		}
+
+		p, err := ledger.Decode[ledger.RegressionFoundPayload](events[len(events)-1])
+		if err != nil {
+			continue
+		}
+
+		switch p.Repro {
+		case "skipped":
+			out = append(out, in.id(id)+": reproduction skipped (costly), planned from a code reading")
+		case "unconfirmed":
+			out = append(out, in.id(id)+": reproduction unconfirmed, planned from what was tried")
+		}
+	}
+
+	return out
 }

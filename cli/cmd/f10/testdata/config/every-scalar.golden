@@ -83,6 +83,8 @@
   "watchCatchup": true,
   "watchCI": true,
   "reportBack": false,
+  "debug": false,
+  "debugCostly": "ask",
   "upkeepPaths": [
     "docs/**"
   ],
@@ -256,6 +258,16 @@
     {
       "key": "watch_ci",
       "value": "on",
+      "origin": "declared (main, frontmatter)"
+    },
+    {
+      "key": "debug",
+      "value": "off",
+      "origin": "declared (main, frontmatter)"
+    },
+    {
+      "key": "debug_costly",
+      "value": "ask",
       "origin": "declared (main, frontmatter)"
     },
     {

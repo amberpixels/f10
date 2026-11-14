@@ -83,6 +83,10 @@ Context: `project.md → Tracker`, for the task **id format**, the **create adap
      Set it with `f10 task update <id> --set <key>=<value>`, and name it in the report if that fails too.
      On an exit 3, the create adapter sets the same properties by its own means.
      A split sets them on the parent and on every subtask.
+   - **A claimed regression.**
+     When the description says the bug is a regression of another task, as in "regression of FT-414" or "a bug in FT-414's retry loop", record that claim once the task exists: `f10 task regression <new-id> --claimed <that id> --text "<the phrase that names it>"`.
+     It is the user's word, kept apart from what the debug step later finds, and the two may disagree.
+     A failing call is one line in the report, never a failed step.
    - **A split** creates the parent first, then links each subtask to it.
      Through `f10 task create`, `--parent` makes the link: a GitHub sub-issue, or the driver's own link.
      Through the create adapter, use the tracker's native parent link, or the **parent** adapter the project declares.

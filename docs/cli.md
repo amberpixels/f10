@@ -45,6 +45,8 @@ f10 task current         # the id a bare skill call stands for: the branch's tas
 f10 task ref <id>... [--md] [--fresh]   # `<id> (<title>)` per task, a markdown link with --md; from what f10 already read
 f10 task report <id>... [--children]  # a report's facts block: one task's rows, else a row per task, a parent's subtasks under it
 f10 task stale [id] [--created YYYY-MM-DD]   # fetch's stale check: fresh, judged <verdict file>, needs judge or undated
+f10 task regression [id] --repro R --confidence C [--commit SHA --lines PATH:A-B ...]   # record a bug task's origin task and how review let it through
+f10 task regression [id] --claimed ORIGIN [--text PHRASE]   # record the origin a task's own text names
 f10 task open [id]       # in the browser, no id the task list (--link writes the url, --print the item or the list's first page, ranked by priority)
 f10 task search <query>  # rows, not a picker
 f10 task children [id] [--json | --plain] [--open]   # the task's open subtasks, in After: order
@@ -1324,6 +1326,40 @@ On GitHub, requests to GitHub's own hosts carry the `gh` token, so a private rep
 `--created <YYYY-MM-DD>` passes the date the task's read showed, which spares a tracker call; without it the date comes from the host's issue, and on any other tracker the answer is `undated`.
 Verdict files are read from the storage root and, from a worktree that keeps its own `.f10`, from main's too.
 A bundle is checked on its lead.
+
+## Regression
+
+`f10 task regression 72` records where the bug task 72 came from, as a `regression_found` row on the ledger, and prints one line for the plan's `Regression of:` header: `<origin> (<class>, <confidence>)`, or `none (<why>)`.
+The debug step calls it once the root cause is known.
+
+The agent passes what only reading the code settles:
+
+| flag | value |
+|---|---|
+| `--commit` | the commit that introduced the fault; left out when none was found, which still records the row |
+| `--lines` | `path:start-end` of the faulty lines, numbered as `--base` (default `HEAD`) has them; repeat for several |
+| `--found-by` | `bisect`, `blame` or `none` |
+| `--confidence` | `confirmed`, `likely` or `unclear` |
+| `--repro` | the debug pass's outcome: `obvious`, `full`, `skipped` or `unconfirmed` |
+| `--class` | `out-of-reach`, when the fault is an interaction no diff review could see |
+
+The command settles the rest.
+The origin task is the commit's `Task:` trailer, else its `Change:` trailer, else the closest unmerged branch holding the commit, else a subject that opens with a task id.
+A commit with none of them is `pre-f10` when it is older than the repo's first `Task:` commit, else `outside-f10`.
+The class reads the origin task's findings, live and archived, and its verdicts, first match winning:
+
+| class | when |
+|---|---|
+| `skipped` | a finding's `where:` falls within 3 lines of a faulty range and its last verdict is `skip`; the row names its round and id |
+| `missed` | a review round's `reviewed:` commit already held the faulty lines |
+| `unreviewed` | rounds exist and none held the lines, or nothing reviewed or judged the task |
+| `judged-proceed` | no round, but a judge verdict of `proceed` |
+
+A reviewed commit the clone lacks is fetched once from the PR's head.
+When no round's commit can be read, the class comes from the findings alone, the confidence drops to `unclear`, and the row's `note` says why.
+Only a bad flag exits non-zero: attribution never stops a run.
+
+`--claimed <origin>` records a `regression_claimed` row instead, the origin the task's own text names, with `--text` the phrase that names it.
 
 ## Children
 

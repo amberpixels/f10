@@ -74,6 +74,7 @@ func TestParse(t *testing.T) {
 			Status:  "explanation accepted",
 			Verdict: "skip +reply",
 			Reason:  "accepted as written",
+			Where:   "steps/resolve.md:62",
 		},
 		{
 			ID:       "2.1",
@@ -81,11 +82,33 @@ func TestParse(t *testing.T) {
 			Category: "correctness and logic",
 			Verdict:  "fix",
 			Reason:   "the Rounds section now declines",
+			Where:    "steps/review.md:128",
 		},
-		{ID: "2.2", Title: "No test for the decline", Category: "tests and docs"},
+		{ID: "2.2", Title: "No test for the decline", Category: "tests and docs", Where: "steps/review.md:130"},
 	}
 	if !reflect.DeepEqual(f.Findings, want) {
 		t.Errorf("findings\n got %+v\nwant %+v", f.Findings, want)
+	}
+}
+
+func TestFindingLocation(t *testing.T) {
+	t.Parallel()
+
+	for where, want := range map[string]struct {
+		path string
+		line int
+		ok   bool
+	}{
+		"cli/x.go:123":   {"cli/x.go", 123, true},
+		"`cli/x.go:7`":   {"cli/x.go", 7, true},
+		"cli/x.go:12-20": {"cli/x.go", 12, true},
+		"cli/x.go":       {"", 0, false},
+		"cli/x.go:none":  {"cli/x.go", 0, false},
+	} {
+		path, line, ok := Finding{Where: where}.Location()
+		if ok != want.ok || (ok && (path != want.path || line != want.line)) {
+			t.Errorf("%q: got %q %d %v, want %+v", where, path, line, ok, want)
+		}
 	}
 }
 

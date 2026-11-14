@@ -265,6 +265,79 @@
       ],
       "type": "object"
     },
+    "RegressionClaimedV1": {
+      "additionalProperties": false,
+      "properties": {
+        "origin_task": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [
+        "origin_task"
+      ],
+      "type": "object"
+    },
+    "RegressionFoundV1": {
+      "additionalProperties": false,
+      "properties": {
+        "class": {
+          "type": "string"
+        },
+        "commit": {
+          "type": "string"
+        },
+        "confidence": {
+          "type": "string"
+        },
+        "finding": {
+          "type": "string"
+        },
+        "found_by": {
+          "type": "string"
+        },
+        "lines": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "note": {
+          "type": "string"
+        },
+        "origin": {
+          "type": "string"
+        },
+        "origin_task": {
+          "type": "string"
+        },
+        "repro": {
+          "type": "string"
+        },
+        "round": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [
+        "origin_task",
+        "origin",
+        "found_by",
+        "confidence",
+        "repro"
+      ],
+      "type": "object"
+    },
     "ReviewRoundOpenedV1": {
       "additionalProperties": false,
       "properties": {
@@ -558,6 +631,20 @@
       "oneOf": [
         {
           "$ref": "#/$defs/PushedV1"
+        }
+      ]
+    },
+    "regression_claimed": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/RegressionClaimedV1"
+        }
+      ]
+    },
+    "regression_found": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/RegressionFoundV1"
         }
       ]
     },

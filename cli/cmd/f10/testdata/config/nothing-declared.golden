@@ -79,6 +79,8 @@
   "watchCatchup": false,
   "watchCI": false,
   "reportBack": true,
+  "debug": true,
+  "debugCostly": "skip",
   "paces": [
     {
       "key": "paces.fast.finish",
@@ -220,6 +222,16 @@
     {
       "key": "watch_ci",
       "value": "off",
+      "origin": "default"
+    },
+    {
+      "key": "debug",
+      "value": "on",
+      "origin": "default"
+    },
+    {
+      "key": "debug_costly",
+      "value": "skip",
       "origin": "default"
     },
     {

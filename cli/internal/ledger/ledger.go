@@ -197,18 +197,19 @@ func (l *Ledger) Append(ctx context.Context, events ...Event) {
 
 // Filter narrows List; an empty field matches every row.
 type Filter struct {
-	Project string
-	Task    string
-	Session string
-	Kind    string
-	Path    string // the payload's path: a plan, findings or verdict file
+	Project  string
+	Task     string
+	Session  string
+	Kind     string
+	Path     string // the payload's path: a plan, findings or verdict file
+	Checkout string
 }
 
 func (f Filter) filters() r3.Filters {
 	var filters r3.Filters
 
 	for column, v := range map[string]string{
-		"project": f.Project, "task": f.Task, "session": f.Session, "kind": f.Kind, "p_path": f.Path,
+		"project": f.Project, "task": f.Task, "session": f.Session, "kind": f.Kind, "p_path": f.Path, "checkout": f.Checkout,
 	} {
 		if v != "" {
 			filters = append(filters, r3.Eq(column, v))

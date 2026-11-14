@@ -23,6 +23,7 @@ argument-hint: "[<task-id | free-text description>]"
     Say in one line which task you took and where from.
   - `f10 task current` exits non-zero: ask for a task in one line and wait.
 - Extra text beside a task id is steering for the run.
+  For a bug, `no repro` skips the reproduction, `with repro` runs it in full, and `as a feature` plans the task as a feature, with no debug pass (`steps/debug.md`).
 
 **Run**
 1. Run `f10-load-project.sh fetch plan` first, on every call of this skill; with a free-text argument, `f10-load-project.sh capture fetch plan`.

@@ -48,6 +48,8 @@ type Declared struct {
 	WatchCatchup   string            `yaml:"watch_catchup,omitempty"` // the watcher also catches an undriven open PR up with its target
 	WatchCI        string            `yaml:"watch_ci,omitempty"`      // the watcher also sends a red undriven PR to its agent to triage
 	ReportBack     string            `yaml:"report_back,omitempty"`
+	Debug          string            `yaml:"debug,omitempty"`        // fetch runs the debug step on a bug task before it is planned
+	DebugCostly    string            `yaml:"debug_costly,omitempty"` // what a driven run does with a bug that is costly to reproduce
 	Review         ReviewDecl        `yaml:"review,omitempty"`
 	Standup        StandupDecl       `yaml:"standup,omitempty"`
 	Verify         []VerifyDecl      `yaml:"verify,omitempty"`  // verify commands, each scoped to the paths it checks
@@ -292,6 +294,19 @@ var scalarKeys = []scalarKey{
 		field: func(d *Declared) *string { return &d.ReportBack },
 		vocab: []string{"on", "off"},
 		def:   "on",
+	},
+	{
+		key:   "debug",
+		field: func(d *Declared) *string { return &d.Debug },
+		vocab: []string{"on", "off"},
+		def:   "on",
+	},
+	// skip unless declared: a driven question about cost would stall the drive
+	{
+		key:   "debug_costly",
+		field: func(d *Declared) *string { return &d.DebugCostly },
+		vocab: []string{"ask", "skip", "reproduce"},
+		def:   "skip",
 	},
 	{key: "pace", field: func(d *Declared) *string { return &d.Pace }, parse: checkPaceName},
 }
