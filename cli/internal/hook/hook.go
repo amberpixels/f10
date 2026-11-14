@@ -166,13 +166,13 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 				// read before the backstop: the ledger keeps where the run stopped,
 				// never the done the backstop infers
 				stop = stopped(r)
-				if stop != nil {
-					usage = turnUsage(env.StateDir, sid, p.Transcript)
-				}
 
 				backstop := r.Backstop()
-				if backstop && stop != nil {
-					stop.Backstop = true
+				if stop != nil {
+					stop.Backstop = backstop
+					// a done run counts this turn, its last; failed or partial
+					// runs go on, since a drive follows them up
+					usage = turnUsage(env.StateDir, sid, p.Transcript, stop.Status == "done" || backstop)
 				}
 
 				return backstop, nil

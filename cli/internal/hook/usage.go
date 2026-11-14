@@ -45,26 +45,28 @@ func withContext(obs []observe.Observation, c observe.RunContext) []observe.Obse
 }
 
 // startUsage marks where a run's usage starts counting: the transcript's
-// end when the run is seeded, unless an earlier run already marked it.
+// end when the run is seeded. A run still counting keeps its position, so a
+// second skill in it loses no turn.
 func startUsage(dir, sid, path string) {
 	if path == "" {
 		return
 	}
 
-	if _, ok := state.LoadUsage(dir, sid); ok {
+	if u, ok := state.LoadUsage(dir, sid); ok && !u.Ended {
 		return
 	}
 
 	if pos, err := transcript.Start(path); err == nil {
-		_ = state.SaveUsage(dir, sid, pos)
+		_ = state.SaveUsage(dir, sid, state.Usage{Position: pos})
 	}
 }
 
 // turnUsage is what the transcript gained since the last turn, saved as
 // the new position; nil when the run has no position yet (one is started
-// instead) or the transcript cannot be read. The caller holds the session's
-// lock, so two Stops never count one turn twice.
-func turnUsage(dir, sid, path string) *transcript.Usage {
+// instead), when its run ended at an earlier turn, or when the transcript
+// cannot be read. ends marks this turn as the run's last counted one. The
+// caller holds the session's lock, so two Stops never count one turn twice.
+func turnUsage(dir, sid, path string, ends bool) *transcript.Usage {
 	if path == "" {
 		return nil
 	}
@@ -76,12 +78,16 @@ func turnUsage(dir, sid, path string) *transcript.Usage {
 		return nil
 	}
 
-	u, next, err := transcript.Read(path, from)
+	if from.Ended {
+		return nil
+	}
+
+	u, next, err := transcript.Read(path, from.Position)
 	if err != nil {
 		return nil
 	}
 
-	_ = state.SaveUsage(dir, sid, next)
+	_ = state.SaveUsage(dir, sid, state.Usage{Position: next, Ended: ends})
 
 	return &u
 }

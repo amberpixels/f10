@@ -7,6 +7,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -84,11 +85,35 @@ func (s *usageSession) event(name string, extra map[string]any) {
 }
 
 // ship starts a ship run, its phase set as the skill's first badge call
-// would.
+// would, mid-pipeline so the Stop backstop leaves it running.
 func (s *usageSession) ship() {
 	s.t.Helper()
 	s.event("UserPromptExpansion", map[string]any{"command_name": "f10:ship", "command_args": "FT-12"})
-	startState(s.t, s.env, &state.Run{Task: "FT-12", Skill: "ship", Capture: "prior", Plan: "prior", Ship: "running"})
+	s.run("running")
+}
+
+func (s *usageSession) run(status string) {
+	s.t.Helper()
+	startState(s.t, s.env, &state.Run{
+		Task: "FT-12", Skill: "ship", Capture: "prior", Plan: "prior", Ship: status, Leaf: "implement", Final: "pr",
+	})
+}
+
+func (s *usageSession) turns() []ledger.TurnUsedPayload {
+	s.t.Helper()
+
+	var out []ledger.TurnUsedPayload
+
+	for _, e := range recorded(s.t, s.db, ledger.Filter{Kind: ledger.TurnUsed}) {
+		p, err := ledger.Decode[ledger.TurnUsedPayload](e)
+		if err != nil || e.Task != "FT-12" {
+			s.t.Errorf("turn row %+v: %v", e, err)
+		}
+
+		out = append(out, p)
+	}
+
+	return out
 }
 
 // Each turn of a run leaves a turn_used row of what it spent, subagents
@@ -98,6 +123,15 @@ func TestEachTurnRecordsItsUsageAndTheRunContext(t *testing.T) {
 	s := newUsageSession(t)
 	_ = os.WriteFile(state.ModelPath(s.env.StateDir, "s1"), []byte("claude-fable-5-2\n"), 0o600)
 
+	// a subagent that ran before the skill is not the run's cost
+	sub := filepath.Join(filepath.Dir(s.path), "s1", "subagents")
+	_ = os.MkdirAll(sub, 0o750)
+	_ = os.WriteFile(
+		filepath.Join(sub, "agent-0.jsonl"),
+		[]byte(assistant("x0", "mx0", "claude-haiku-5-5", 900, true)+"\n"),
+		0o600,
+	)
+
 	s.ship()
 	s.append(
 		assistant("a1", "m1", "claude-sonnet-5-5", 100, false),
@@ -105,8 +139,6 @@ func TestEachTurnRecordsItsUsageAndTheRunContext(t *testing.T) {
 	)
 	s.event("Stop", nil)
 
-	sub := filepath.Join(filepath.Dir(s.path), "s1", "subagents")
-	_ = os.MkdirAll(sub, 0o750)
 	_ = os.WriteFile(
 		filepath.Join(sub, "agent-1.jsonl"),
 		[]byte(assistant("x1", "mx", "claude-haiku-5-5", 40, true)+"\n"),
@@ -134,13 +166,8 @@ func TestEachTurnRecordsItsUsageAndTheRunContext(t *testing.T) {
 		throughs  []string
 	)
 
-	turns := recorded(t, s.db, ledger.Filter{Kind: ledger.TurnUsed})
-	for _, e := range turns {
-		p, err := ledger.Decode[ledger.TurnUsedPayload](e)
-		if err != nil || e.Task != "FT-12" {
-			t.Errorf("turn row %+v: %v", e, err)
-		}
-
+	turns := s.turns()
+	for _, p := range turns {
 		sum.Output += p.Usage.Output
 		sum.Input += p.Usage.Input
 		subs.Output += p.Usage.Subagents.Output
@@ -156,9 +183,8 @@ func TestEachTurnRecordsItsUsageAndTheRunContext(t *testing.T) {
 		t.Errorf("through %v, want %v", throughs, want)
 	}
 
-	// the backstop's done is a change of status, so the second turn has a
-	// row; the third has the same status, and only the switch to opus writes
-	// its row, the one carrying a context
+	// the second turn ran on the same model and status: no stop row; the
+	// switch to opus is one, the only one carrying a context
 	var models []string // status/model
 
 	for _, e := range recorded(t, s.db, ledger.Filter{Kind: ledger.SessionStopped}) {
@@ -166,8 +192,69 @@ func TestEachTurnRecordsItsUsageAndTheRunContext(t *testing.T) {
 		models = append(models, p.Status+"/"+p.Model)
 	}
 
-	if want := []string{"running/", "done/", "done/claude-opus-5-5"}; fmt.Sprint(models) != fmt.Sprint(want) {
+	if want := []string{"running/", "running/claude-opus-5-5"}; fmt.Sprint(models) != fmt.Sprint(want) {
 		t.Errorf("stop rows' models %q, want %q", models, want)
+	}
+}
+
+// The turn that ends a run counts; later turns count for no task until a
+// skill starts the next run, which counts from its own start.
+func TestUsageStopsWhenTheRunIsDone(t *testing.T) {
+	s := newUsageSession(t)
+	s.ship()
+
+	s.append(assistant("a1", "m1", "m", 1, false))
+	s.run("done")
+	s.event("Stop", nil)
+
+	s.append(assistant("a2", "m2", "m", 2, false)) // chat after the run
+	s.event("Stop", nil)
+
+	s.append(assistant("a3", "m3", "m", 4, false)) // still after it, before the next skill
+	s.ship()
+	s.append(assistant("a4", "m4", "m", 8, false))
+	s.event("Stop", nil)
+
+	var outs []int
+	for _, p := range s.turns() {
+		outs = append(outs, p.Usage.Output)
+	}
+
+	if want := []int{1, 8}; fmt.Sprint(outs) != fmt.Sprint(want) {
+		t.Errorf("turn outputs %v, want %v", outs, want)
+	}
+}
+
+// The work a Stop adds for usage and context, on a 20 MB transcript after
+// its first turn, stays under the hook's 50ms budget.
+func TestStopUsageWorkIsFastOnALargeTranscript(t *testing.T) {
+	s := newUsageSession(t)
+
+	f, err := os.OpenFile(s.path, os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pad := strings.Repeat("y", 4000)
+	for i := range 5000 {
+		_, _ = fmt.Fprintf(f, `{"type":"user","uuid":"u%d","message":{"content":%q}}`+"\n", i, pad)
+	}
+
+	_ = f.Close()
+
+	startUsage(s.env.StateDir, "s1", s.path)
+	s.append(assistant("a1", "m1", "m", 1, false))
+
+	start := time.Now()
+	u := turnUsage(s.env.StateDir, "s1", s.path, false)
+	_ = runContext(t.Context(), s.env, "s1", s.work, s.path, "")
+
+	if took := time.Since(start); took > 50*time.Millisecond {
+		t.Errorf("usage work took %v", took)
+	}
+
+	if u == nil || u.Output != 1 {
+		t.Errorf("usage %+v", u)
 	}
 }
 

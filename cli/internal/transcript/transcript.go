@@ -55,16 +55,24 @@ type Position struct {
 	LastIDs map[string]string `json:"last_ids,omitempty"`
 }
 
-// Start is the position at the main file's current end, so a read from it
-// counts only what is written later; subagent files are read whole, since
-// they appear later.
+// Start is the position at the current end of the main file and of every
+// subagent file, so a read from it counts only what is written later.
 func Start(path string) (Position, error) {
 	fi, err := os.Stat(path)
 	if err != nil {
 		return Position{}, fmt.Errorf("transcript: %w", err)
 	}
 
-	return Position{Offsets: map[string]int64{path: fi.Size()}}, nil
+	pos := Position{Offsets: map[string]int64{path: fi.Size()}}
+
+	subs, _ := filepath.Glob(filepath.Join(SubagentDir(path), "*.jsonl"))
+	for _, sub := range subs {
+		if fi, err := os.Stat(sub); err == nil {
+			pos.Offsets[sub] = fi.Size()
+		}
+	}
+
+	return pos, nil
 }
 
 // SubagentDir is where Claude Code writes a session's subagent transcripts.

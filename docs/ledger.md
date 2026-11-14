@@ -48,6 +48,10 @@ A key the hook could not learn is absent, and an interactive session has no `pro
 - `usage.subagents` holds the same four for the subagents the turn ran, from inline sidechain lines and from the session's `subagents/` transcripts.
 - `usage.through` is the uuid of the last transcript entry counted.
 
-Counting starts when an f10 skill first starts in the session, so tokens spent before it are not attributed to the run, and a session with no f10 run writes no `turn_used`.
+Counting starts when a run starts, which is when a capture, plan, ship or debug skill starts in the session, so tokens spent before it are not attributed to the run.
+Another skill in a run that is still counting keeps counting from where it was.
+The turn in which the run reaches done is the last one counted, so later turns count for no task until the next run starts.
+A run that failed or stopped partway keeps counting, because a drive follows it up in the same session with skills such as catchup that start no run.
+A session with no run writes no `turn_used`, so skills that start no run on their own, such as `/f10:review` run by hand, record no usage.
 A turn whose transcript is missing or unreadable writes no `turn_used` row, and its `session_stopped` row is written as usual.
 No prompt or response text reaches the ledger.

@@ -476,25 +476,33 @@ func UsagePath(dir, session string) string {
 	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+usageExt)
 }
 
-// LoadUsage is the transcript position UsagePath holds, false when none is
-// recorded or it does not decode.
-func LoadUsage(dir, session string) (transcript.Position, bool) {
-	raw, err := os.ReadFile(UsagePath(dir, session))
-	if err != nil {
-		return transcript.Position{}, false
-	}
+// Usage is how far the hook has counted a session's transcript, and
+// whether the run it counted for is done: turns after it count for no task.
+type Usage struct {
+	transcript.Position
 
-	var p transcript.Position
-	if json.Unmarshal(raw, &p) != nil || p.Offsets == nil {
-		return transcript.Position{}, false
-	}
-
-	return p, true
+	Ended bool `json:"ended,omitempty"`
 }
 
-// SaveUsage records the session's transcript position.
-func SaveUsage(dir, session string, p transcript.Position) error {
-	raw, err := json.Marshal(p)
+// LoadUsage is the usage UsagePath holds, false when none is recorded or it
+// does not decode.
+func LoadUsage(dir, session string) (Usage, bool) {
+	raw, err := os.ReadFile(UsagePath(dir, session))
+	if err != nil {
+		return Usage{}, false
+	}
+
+	var u Usage
+	if json.Unmarshal(raw, &u) != nil || u.Offsets == nil {
+		return Usage{}, false
+	}
+
+	return u, true
+}
+
+// SaveUsage records the session's usage position.
+func SaveUsage(dir, session string, u Usage) error {
+	raw, err := json.Marshal(u)
 	if err != nil {
 		return fmt.Errorf("usage position: %w", err)
 	}
