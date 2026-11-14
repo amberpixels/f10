@@ -36,3 +36,6 @@
 {"kind":"task_halted","source":"observed","task":"FT-1","payload":{"attempts":["a","b"],"reason":"no progress","skill":"ship"}}
 {"kind":"task_halted","source":"observed","task":"FT-1","payload":{"reason":"stall","skill":"ship"}}
 {"kind":"task_sized","source":"observed","task":"FT-1","payload":{"base":"main","files":7,"lines":400,"md_lines":100}}
+{"kind":"state_wait","source":"claimed","task":"FT-1","payload":{"args":["set","ship","running","implement"],"ask":"1. a? [y | n]","at":2,"capture":"prior","done":"review","final":"pr","labels":["impl","pr"],"leaf":"implement","next":"x","note":"n","pipeline":["implement","pr"],"plan":"done","ship":"running","wait":"FT-0"}}
+{"kind":"state_stop","source":"claimed","task":"FT-1","payload":{"args":["set","ship","running","implement"],"ask":"1. a? [y | n]","at":2,"capture":"prior","done":"review","final":"pr","labels":["impl","pr"],"leaf":"implement","next":"x","note":"n","pipeline":["implement","pr"],"plan":"done","ship":"running","wait":"FT-0"}}
+{"kind":"state_pipeline","source":"claimed","task":"FT-1","payload":{"args":["set","ship","running","implement"],"ask":"1. a? [y | n]","at":2,"capture":"prior","done":"review","final":"pr","labels":["impl","pr"],"leaf":"implement","next":"x","note":"n","pipeline":["implement","pr"],"plan":"done","ship":"running","wait":"FT-0"}}

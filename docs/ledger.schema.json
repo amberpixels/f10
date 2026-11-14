@@ -610,6 +610,13 @@
         }
       ]
     },
+    "state_pipeline": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ClaimV1"
+        }
+      ]
+    },
     "state_set": {
       "oneOf": [
         {
@@ -617,7 +624,21 @@
         }
       ]
     },
+    "state_stop": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ClaimV1"
+        }
+      ]
+    },
     "state_task": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ClaimV1"
+        }
+      ]
+    },
+    "state_wait": {
       "oneOf": [
         {
           "$ref": "#/$defs/ClaimV1"

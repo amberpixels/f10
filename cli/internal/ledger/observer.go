@@ -32,12 +32,15 @@ const (
 	FindingVerdict    = "finding_verdict"
 	JudgeVerdict      = "judge_verdict"
 
-	StateSet   = "state_set"
-	StateTask  = "state_task"
-	StateNote  = "state_note"
-	StateAsk   = "state_ask"
-	StateDone  = "state_done" // a phaseless step's report is out: the drive's end signal
-	StateFinal = "state_final"
+	StateSet      = "state_set"
+	StateTask     = "state_task"
+	StateNote     = "state_note"
+	StateAsk      = "state_ask"
+	StateWait     = "state_wait"
+	StateStop     = "state_stop"
+	StatePipeline = "state_pipeline"
+	StateDone     = "state_done" // a phaseless step's report is out: the drive's end signal
+	StateFinal    = "state_final"
 )
 
 // Observer records a hook's observations to the spool; only one that compares

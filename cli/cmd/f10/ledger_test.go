@@ -20,6 +20,9 @@ func TestStateCallsAreRecordedAsClaimed(t *testing.T) {
 		{"note", "push rejected", "-f was needed"},
 		{"ask", "1. retry? [no | yes]"},
 		{"final", "pr"},
+		{"pipeline", "implement", "pr"},
+		{"wait", "GH-6"},
+		{"stop", "guard"},
 	} {
 		if out, code := runState(t, args...); code != 0 {
 			t.Fatalf("%q: exit %d\n%s", args, code, out)
@@ -53,12 +56,12 @@ func TestStateCallsAreRecordedAsClaimed(t *testing.T) {
 		}
 	}
 
-	want := "state_task state_set state_note state_ask state_final"
+	want := "state_task state_set state_note state_ask state_final state_pipeline state_wait state_stop"
 	if got := strings.Join(kinds, " "); got != want {
 		t.Errorf("kinds %q, want %q", got, want)
 	}
 
-	if out := runApp(t, "ledger", "dump", "--task", "GH-7").must(t); strings.Count(out, "\n") != 5 ||
+	if out := runApp(t, "ledger", "dump", "--task", "GH-7").must(t); strings.Count(out, "\n") != 8 ||
 		!strings.Contains(out, "claimed") {
 		t.Errorf("dump by task:\n%s", out)
 	}

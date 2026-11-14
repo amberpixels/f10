@@ -9,21 +9,26 @@ import (
 
 // Payload is a row's kind-specific detail as stored: the JSON object of its
 // kind's payload struct, plus v. Only this package sees the keys; every
-// other reader goes through Decode, so a key has one definition.
-type Payload struct{ m map[string]any }
+// other reader goes through Decode, so a key has one definition. It keeps
+// the bytes as stored, so a read decodes them once, into the struct.
+type Payload struct{ raw json.RawMessage }
 
 func (p Payload) MarshalJSON() ([]byte, error) {
-	if p.m == nil {
+	if len(p.raw) == 0 {
 		return []byte("{}"), nil
 	}
 
-	return json.Marshal(p.m)
+	return p.raw, nil
 }
 
 func (p *Payload) UnmarshalJSON(raw []byte) error {
-	p.m = nil
+	if !json.Valid(raw) {
+		return errors.New("ledger: payload is not JSON")
+	}
 
-	return json.Unmarshal(raw, &p.m)
+	p.raw = append(json.RawMessage(nil), raw...) // the decoder reuses its buffer
+
+	return nil
 }
 
 // ErrNewerVersion marks a row a newer f10 wrote: Decode returns what the
@@ -101,14 +106,13 @@ func (r registry) event(kind string, payload any) (Event, error) {
 		return Event{}, fmt.Errorf("ledger: %w", err)
 	}
 
-	var p Payload
-	if err := json.Unmarshal(raw, &p); err != nil {
-		return Event{}, fmt.Errorf("ledger: %w", err)
+	// a struct marshals to an object: v goes in as its first key
+	v := fmt.Sprintf(`{%q:%d`, versionKey, len(vs))
+	if string(raw) != "{}" {
+		v += ","
 	}
 
-	p.m[versionKey] = len(vs)
-
-	return Event{Kind: kind, Payload: col(p)}, nil
+	return Event{Kind: kind, Payload: col(Payload{raw: append([]byte(v), raw[1:]...)})}, nil
 }
 
 // Decode reads e's payload as T, its kind's current struct, upcasting an
@@ -137,11 +141,7 @@ func (r registry) decode(e Event, want reflect.Type) (any, error) {
 		return nil, fmt.Errorf("ledger: %s decodes to %s, not %s", e.Kind, cur, want)
 	}
 
-	raw, err := json.Marshal(e.Payload.Val)
-	if err != nil {
-		return nil, fmt.Errorf("ledger: %w", err)
-	}
-
+	raw, _ := e.Payload.Val.MarshalJSON()
 	n := e.Payload.Val.version()
 	if n > len(vs) {
 		ptr := reflect.New(cur)
@@ -152,7 +152,7 @@ func (r registry) decode(e Event, want reflect.Type) (any, error) {
 	}
 
 	ptr := reflect.New(vs[n-1].typ)
-	err = json.Unmarshal(raw, ptr.Interface())
+	err := json.Unmarshal(raw, ptr.Interface())
 
 	v := ptr.Elem().Interface()
 	for _, next := range vs[n:] {
@@ -168,14 +168,11 @@ func (r registry) decode(e Event, want reflect.Type) (any, error) {
 
 // version is the payload's v, 1 when absent or unreadable.
 func (p Payload) version() int {
-	var n int
-
-	switch v := p.m[versionKey].(type) {
-	case float64:
-		n = int(v)
-	case int:
-		n = v
+	var head struct {
+		V int `json:"v"`
 	}
 
-	return max(n, 1)
+	_ = json.Unmarshal(p.raw, &head)
+
+	return max(head.V, 1)
 }

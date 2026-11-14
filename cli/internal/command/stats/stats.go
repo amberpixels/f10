@@ -5,6 +5,7 @@ package stats
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -181,8 +182,9 @@ func StatRows(events []ledger.Event, task string, cutoff time.Time) []statRow {
 			continue
 		}
 
+		// a newer f10's row still reads as far as this one knows it
 		size, err := ledger.Decode[ledger.TaskSizedPayload](e)
-		if err != nil {
+		if err != nil && !errors.Is(err, ledger.ErrNewerVersion) {
 			continue
 		}
 

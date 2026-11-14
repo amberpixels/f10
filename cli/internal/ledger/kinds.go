@@ -194,5 +194,16 @@ func init() {
 	register[JudgeVerdictV1](kinds, JudgeVerdict)
 	register[TaskHaltedV1](kinds, TaskHalted)
 	register[TaskSizedV1](kinds, TaskSized)
-	register[ClaimV1](kinds, StateSet, StateTask, StateNote, StateAsk, StateDone, StateFinal)
+	register[ClaimV1](
+		kinds,
+		StateSet,
+		StateTask,
+		StateNote,
+		StateAsk,
+		StateWait,
+		StateStop,
+		StateDone,
+		StateFinal,
+		StatePipeline,
+	)
 }
