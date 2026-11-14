@@ -211,18 +211,12 @@ func stageOf(f lookaround.TaskFacts, baseDone bool) (string, string) {
 	return stageNotStarted, ""
 }
 
-// readLedger reads the project's events once. A ledger that is missing or
-// will not open has nothing to say: status only reads.
-func readLedger(ctx context.Context, main string) []ledger.Event {
-	events, _ := ledger.ReadEvents(ctx, ledger.Path(), ledger.Filter{Project: ledger.Where(ctx, main).Project})
-
-	return events
-}
-
 // rowSource is what gathering rows reads from, bound once per status call.
 type rowSource struct {
-	Live    []*state.Run
-	Events  []ledger.Event
+	Live   []*state.Run
+	Events []ledger.Event // the rows read when ledger is nil
+	// ledger reads the rows of the sessions that recorded ids
+	ledger  func(ctx context.Context, ids ...string) []ledger.Event
 	main    string       // where the branch records live
 	storage storage.Root // where a live plan says a finished task came back
 	prefix  string       // the task id prefix requests are matched by
@@ -247,6 +241,15 @@ func (src rowSource) RowsFrom(ctx context.Context, kids []stack.ChildRow) []Task
 	facts := make([]lookaround.TaskFacts, len(kids))
 	rows := make([]TaskRow, len(kids))
 	src.Requests = src.readRequests(ctx, kids)
+
+	if src.ledger != nil {
+		ids := make([]string, len(kids))
+		for i, k := range kids {
+			ids[i] = k.ID
+		}
+
+		src.ledger(ctx, ids...) // one read for every child, not one each
+	}
 
 	var wg sync.WaitGroup
 
@@ -302,7 +305,7 @@ func (src rowSource) Gather(ctx context.Context, k stack.ChildRow) (TaskRow, loo
 		}
 	}
 
-	f.AddLedger(lookaround.FoldLedger(src.Events, k.ID, src.idOf), src.storage.PlanLive(k.ID))
+	f.AddLedger(lookaround.FoldLedger(src.eventsOf(ctx, k.ID, branch), k.ID, src.idOf), src.storage.PlanLive(k.ID))
 
 	// another row may share the id's requests, so they are sorted as a copy;
 	// a task with a branch reads that branch's requests only, since an older
@@ -347,6 +350,15 @@ func (src rowSource) Gather(ctx context.Context, k stack.ChildRow) (TaskRow, loo
 	}
 
 	return row, f
+}
+
+// eventsOf is the task's ledger rows, its bundle lead's included.
+func (src rowSource) eventsOf(ctx context.Context, id, branch string) []ledger.Event {
+	if src.ledger == nil {
+		return src.Events
+	}
+
+	return src.ledger(ctx, id, bundleLead(id, branch))
 }
 
 // idOf is token as an id. An empty token, a finish run with no argument

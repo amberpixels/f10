@@ -396,6 +396,50 @@
       ],
       "type": "object"
     },
+    "RunStartedV2": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "args": {
+          "type": "string"
+        },
+        "f10_version": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "profile": {
+          "additionalProperties": false,
+          "properties": {
+            "effort": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            }
+          },
+          "required": [],
+          "type": "object"
+        },
+        "skill": {
+          "type": "string"
+        },
+        "v": {
+          "const": 2
+        }
+      },
+      "required": [
+        "v",
+        "skill"
+      ],
+      "type": "object"
+    },
     "SessionStoppedV1": {
       "additionalProperties": false,
       "properties": {
@@ -419,6 +463,60 @@
         }
       },
       "required": [
+        "phase",
+        "status"
+      ],
+      "type": "object"
+    },
+    "SessionStoppedV2": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "backstop": {
+          "type": "boolean"
+        },
+        "f10_version": {
+          "type": "string"
+        },
+        "leaf": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "phase": {
+          "type": "string"
+        },
+        "profile": {
+          "additionalProperties": false,
+          "properties": {
+            "effort": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string"
+            },
+            "model": {
+              "type": "string"
+            }
+          },
+          "required": [],
+          "type": "object"
+        },
+        "status": {
+          "type": "string"
+        },
+        "task": {
+          "type": "string"
+        },
+        "v": {
+          "const": 2
+        }
+      },
+      "required": [
+        "v",
         "phase",
         "status"
       ],
@@ -545,6 +643,99 @@
       ],
       "type": "object"
     },
+    "TurnUsedV1": {
+      "additionalProperties": false,
+      "properties": {
+        "usage": {
+          "additionalProperties": false,
+          "properties": {
+            "by_model": {
+              "additionalProperties": {
+                "additionalProperties": false,
+                "properties": {
+                  "cache_read": {
+                    "type": "integer"
+                  },
+                  "cache_write": {
+                    "type": "integer"
+                  },
+                  "input": {
+                    "type": "integer"
+                  },
+                  "output": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "input",
+                  "output",
+                  "cache_write",
+                  "cache_read"
+                ],
+                "type": "object"
+              },
+              "type": [
+                "object",
+                "null"
+              ]
+            },
+            "cache_read": {
+              "type": "integer"
+            },
+            "cache_write": {
+              "type": "integer"
+            },
+            "input": {
+              "type": "integer"
+            },
+            "output": {
+              "type": "integer"
+            },
+            "subagents": {
+              "additionalProperties": false,
+              "properties": {
+                "cache_read": {
+                  "type": "integer"
+                },
+                "cache_write": {
+                  "type": "integer"
+                },
+                "input": {
+                  "type": "integer"
+                },
+                "output": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "input",
+                "output",
+                "cache_write",
+                "cache_read"
+              ],
+              "type": "object"
+            },
+            "through": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "input",
+            "output",
+            "cache_write",
+            "cache_read"
+          ],
+          "type": "object"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [
+        "usage"
+      ],
+      "type": "object"
+    },
     "WaitEndedV1": {
       "additionalProperties": false,
       "properties": {
@@ -659,6 +850,9 @@
       "oneOf": [
         {
           "$ref": "#/$defs/RunStartedV1"
+        },
+        {
+          "$ref": "#/$defs/RunStartedV2"
         }
       ]
     },
@@ -666,6 +860,9 @@
       "oneOf": [
         {
           "$ref": "#/$defs/SessionStoppedV1"
+        },
+        {
+          "$ref": "#/$defs/SessionStoppedV2"
         }
       ]
     },
@@ -764,6 +961,13 @@
       "oneOf": [
         {
           "$ref": "#/$defs/TaskSizedV1"
+        }
+      ]
+    },
+    "turn_used": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/TurnUsedV1"
         }
       ]
     },

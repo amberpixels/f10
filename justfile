@@ -32,6 +32,9 @@ fix: cli::fix
 # run tests - the f10-load-project.sh parity suite included
 test: cli::test
 
+# time the ledger reads stats, status and the Stop hook make against their budgets
+bench-ledger: cli::bench-ledger
+
 # race-check the daemon package
 test-race: cli::test-race
 

@@ -7,21 +7,28 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"testing/fstest"
 
 	"github.com/pressly/goose/v3"
 )
 
-// sqlOnly is the provider the release before hot keys ran: its SQL
-// migrations alone.
+// sqlOnly is the provider the release before hot keys ran: its two SQL
+// migrations.
 func sqlOnly(t *testing.T, db *sql.DB) *goose.Provider {
 	t.Helper()
 
-	sub, err := fs.Sub(migrations, "migrations")
-	if err != nil {
-		t.Fatal(err)
+	old := fstest.MapFS{}
+
+	for _, name := range []string{"00001_events.sql", "00002_task_refs.sql"} {
+		data, err := fs.ReadFile(migrations, "migrations/"+name)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		old[name] = &fstest.MapFile{Data: data}
 	}
 
-	p, err := goose.NewProvider(goose.DialectSQLite3, db, sub)
+	p, err := goose.NewProvider(goose.DialectSQLite3, db, old)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,12 +72,13 @@ func TestHotKeysMigrateAnOlderDatabase(t *testing.T) {
 	}
 }
 
-// The verdict dedup's lookup reads the (kind, p_path) index.
+// The verdict dedup's lookup reads a (kind, p_path) index.
 func TestVerdictLookupUsesThePathIndex(t *testing.T) {
 	l := openT(t, tempPath(t))
 
 	rows, err := l.db.QueryContext(context.Background(),
-		`EXPLAIN QUERY PLAN SELECT * FROM events WHERE project = ? AND kind = ? AND p_path = ? ORDER BY id`,
+		`EXPLAIN QUERY PLAN SELECT * FROM events
+			WHERE project = ? AND kind = ? AND p_path = ? ORDER BY id DESC LIMIT 1`,
 		"p", JudgeVerdict, "/v/1.md")
 	if err != nil {
 		t.Fatal(err)
