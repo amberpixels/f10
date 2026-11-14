@@ -52,5 +52,6 @@ func DriveUsage() string {
 	)
 
 	return "<id>[:profile]... | <id> -- <id>  " + flagUsage(run) + "\n" +
-		"   f10 drive --resume N " + flagUsage(drivectl.ResumeTunes()) + " | list [--all] | cancel N"
+		"   f10 drive --resume N " + flagUsage(drivectl.ResumeTunes()) + " | list [--all] | cancel N\n" +
+		"   f10 drive plan <parent | id>... [--facts FILE] [--json] [--hint]"
 }

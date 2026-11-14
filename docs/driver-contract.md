@@ -111,6 +111,7 @@ Print the comment's url if the tracker gives one; f10 prints it back.
 ```
 <driver> update <n> [--status <s>] [--priority <p>] [--label <l>]... [--assignee <a>] [--set <key>=<value>]...
 <driver> update <n> --parent <m>
+<driver> update <n> --after <m>
 ```
 
 - `--status` is the tracker's own word, as for `create`: `project.md` maps the moments f10 reports (`started`, `shipped`) to those words in `tracker.status`.
@@ -120,6 +121,8 @@ Print the comment's url if the tracker gives one; f10 prints it back.
 - `--parent` arrives in an update of its own, after the other flags' update, as a number like `create`'s.
   It links the task under that parent, moving it from a parent it already has, and `--parent ""` takes the task out from under its parent.
   A driver whose tracker has no parent link exits `3` on it, rather than dropping it with a warning, because a dropped link leaves the caller no way to tell it did nothing.
+- `--after` also arrives in an update of its own: rewrite the body's `After:` line to name task `<m>`, or drop it for `--after ""`.
+  A driver that cannot edit the body exits `3`, for the same reason.
 
 Every value is absolute: running the same update twice leaves the task as once.
 A property the tracker has no field for is dropped with a warning on stderr, as for `create`.

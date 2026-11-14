@@ -100,10 +100,10 @@ func runTaskUpdate(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	relink := cmd.IsSet("parent")
-	if p.Empty() && !relink {
+	relink, reorder := cmd.IsSet("parent"), cmd.IsSet("after")
+	if p.Empty() && !relink && !reorder {
 		return errors.New(
-			"task update needs a property to set: --status, --priority, --label, --assignee, --parent or --set",
+			"task update needs a property to set: --status, --priority, --label, --assignee, --parent, --after or --set",
 		)
 	}
 
@@ -119,23 +119,60 @@ func runTaskUpdate(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
+	var base ref.Ref
+	if reorder {
+		if base, err = afterRef(ctx, t, r, cmd.String("after")); err != nil {
+			return err
+		}
+	}
+
 	if !p.Empty() {
 		if err := tasksource.TasksFor(t).Update(ctx, cmd.ErrWriter, r, p); err != nil {
 			return err
 		}
 	}
 
-	if !relink {
+	if relink {
+		// the parent goes alone, so a source declining it has dropped nothing else
+		unwritten := tasksource.UnwrittenNothing
+		if !p.Empty() {
+			unwritten = "the other properties were written, the parent link was not"
+		}
+
+		if err := tasksource.TasksFor(t).Relink(ctx, cmd.ErrWriter, r, parent, unwritten); err != nil {
+			return err
+		}
+	}
+
+	if !reorder {
 		return nil
 	}
 
-	// the parent goes alone, so a source declining it has dropped nothing else
-	unwritten := tasksource.UnwrittenNothing
-	if !p.Empty() {
-		unwritten = "the other properties were written, the parent link was not"
+	err = tasksource.TasksFor(t).SetAfter(ctx, cmd.ErrWriter, r, base)
+	if err != nil && (!p.Empty() || relink) {
+		return fmt.Errorf("%w\nthe other properties were written, the After: line was not", err)
 	}
 
-	return tasksource.TasksFor(t).Relink(ctx, cmd.ErrWriter, r, parent, unwritten)
+	return err
+}
+
+// afterRef resolves --after before anything is written; none, or empty,
+// drops the line.
+func afterRef(ctx context.Context, t *target.Target, r ref.Ref, raw string) (ref.Ref, error) {
+	if raw = strings.TrimSpace(raw); raw == "" || strings.EqualFold(raw, "none") {
+		return ref.Ref{}, nil
+	}
+
+	base, err := t.Reference(ctx, raw)
+	if err != nil {
+		return ref.Ref{}, fmt.Errorf("--after %s: %w", raw, err)
+	}
+
+	if base.Number == r.Number {
+		return ref.Ref{}, fmt.Errorf("--after %s: a task cannot wait for itself; nothing was written", raw)
+	}
+
+	return base, nil
 }
 
 // parentNumber resolves --parent before anything is written; empty means

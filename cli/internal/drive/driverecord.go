@@ -114,6 +114,7 @@ func (in *DriveInput) openRecord(tasks []DriveTask) error {
 			Agent:    in.Args.Agent,
 			Session:  in.Session,
 			Parallel: in.Parallel,
+			Planned:  in.Args.Planned,
 		}
 
 		for i, t := range tasks {

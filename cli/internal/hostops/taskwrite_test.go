@@ -109,3 +109,42 @@ func TestLinkParentGitLab(t *testing.T) {
 		t.Error("glab was called")
 	}
 }
+
+// An After: line is replaced in place, appended when missing, and dropped
+// with an empty id; a body already saying so is not edited.
+func TestWithAfter(t *testing.T) {
+	t.Parallel()
+
+	for _, c := range []struct{ body, id, want string }{
+		{"text\n\nAfter: FT-1\n", "FT-2", "text\n\nAfter: FT-2\n"},
+		{"text\n\nAfter: [FT-1: base](https://x/1)\n", "FT-2", "text\n\nAfter: FT-2\n"},
+		{"text\n", "FT-2", "text\n\nAfter: FT-2\n"},
+		{"text\n\nAfter: FT-1\nmore\n", "", "text\n\nmore\n"},
+		{"text\n", "", "text\n"},
+		{"text\n  After: indented is not the line\n", "FT-3", "text\n  After: indented is not the line\n\nAfter: FT-3\n"},
+	} {
+		if got := hostops.WithAfter(c.body, c.id); got != c.want {
+			t.Errorf("WithAfter(%q, %q) = %q, want %q", c.body, c.id, got, c.want)
+		}
+	}
+}
+
+func TestHostSetAfter(t *testing.T) {
+	f := testkit.NewFakes(t)
+
+	f.Script("gh issue view 7 --json number,title,state,labels,createdAt,url,body,assignees",
+		`{"url":"https://github.com/o/r/issues/7","body":"do it\n"}`)
+	f.Script("gh issue edit 7 --body do it\n\nAfter: FT-4\n", "")
+	f.Script("glab issue view 7 -F json",
+		`{"web_url":"https://gitlab.example.com/g/r/-/issues/7","description":"do it\n\nAfter: FT-4\n"}`)
+
+	if err := hostops.NewHost("gh", "").SetAfter(t.Context(), "7", "FT-4"); err != nil ||
+		!f.Called("gh issue edit 7 --body") {
+		t.Errorf("gh SetAfter: %v", err)
+	}
+
+	if err := hostops.NewHost("glab", "").SetAfter(t.Context(), "7", "FT-4"); err != nil ||
+		f.Called("glab issue update 7") {
+		t.Errorf("glab SetAfter rewrote a body that already says so: %v", err)
+	}
+}

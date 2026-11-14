@@ -38,6 +38,22 @@ func (h Host) Relink(ctx context.Context, parent, child string) error {
 	return h.Unlink(ctx, child)
 }
 
+// SetAfter rewrites the issue body's After: line to name id, "" to drop it.
+// A body that already says so is left alone.
+func (h Host) SetAfter(ctx context.Context, number, id string) error {
+	iss, err := h.Item(ctx, number)
+	if err != nil {
+		return err
+	}
+
+	body := WithAfter(iss.Body, id)
+	if body == iss.Body {
+		return nil
+	}
+
+	return h.EditIssue(ctx, number, forge.IssueEdit{Body: &body})
+}
+
 func (h Host) In(dir string) Host {
 	h.Host = h.At(dir)
 

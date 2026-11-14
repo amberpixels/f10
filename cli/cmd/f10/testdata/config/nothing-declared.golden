@@ -67,6 +67,7 @@
   "lore": "local",
   "loreGate": "warn",
   "driverTimeout": "30s",
+  "bundleMaxLines": 300,
   "flows": {
     "default": [
       "plan",
@@ -194,6 +195,11 @@
     {
       "key": "driver_timeout",
       "value": "30s",
+      "origin": "default"
+    },
+    {
+      "key": "bundle_max_lines",
+      "value": "300",
       "origin": "default"
     },
     {
