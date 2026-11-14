@@ -69,6 +69,7 @@ type Effective struct {
 	LoreGate       string               `json:"loreGate"`              // lore_gate: warn or block, what f10 finish does with a failing lore check before a merge
 	StaleAfter     StaleAfter           `json:"staleAfter,omitzero"`   // stale_after: a task older than this is judged before it is planned; zero is off
 	DriverTimeout  time.Duration        `json:"driverTimeout"`         // driver_timeout: one driver verb's limit
+	BundleMaxLines int                  `json:"bundleMaxLines"`        // bundle_max_lines: the changed lines a proposed bundle may reach
 	Flows          map[string]flow.Flow `json:"flows"`                 // a flow's name to its entries, written as declared
 	FlowByArea     map[string]string    `json:"flowByArea,omitempty"`  // flow_by_area: an area to the flow its tasks run
 	DriveEnv       []string             `json:"driveEnv,omitempty"`    // drive_env: environment keys a drive passes on, beyond the built-in ones

@@ -45,6 +45,7 @@ var Table = []Rule{
 	{Prefix: "internal/agentctl", Rank: -2},
 	{Prefix: "internal/images", Rank: -2},
 	{Prefix: "internal/projects", Rank: -2},
+	{Prefix: "internal/driveplan", Rank: -2}, // the drive proposal's rules, no I/O
 	{Prefix: "internal/ui", Rank: -1},
 	{Prefix: "internal/tasktree", Rank: -1},
 	{Prefix: "internal/trackerdriver", Rank: -1}, // imports shell

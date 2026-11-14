@@ -13,7 +13,7 @@ import (
 func TestDriveFlagTable(t *testing.T) {
 	values := map[string]string{
 		"--flow": "local", "--pace": "fast", "--agent": "opus", "--model": "opus",
-		"--answer": "1. yes", "--every": "5s", "--parallel": "3", "--resume": "2",
+		"--answer": "1. yes", "--every": "5s", "--parallel": "3", "--resume": "2", "--planned": "FT-1",
 	}
 
 	for _, f := range drivectl.DriveFlags {

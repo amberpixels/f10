@@ -720,3 +720,25 @@ func TestScalarKeysCoverDeclared(t *testing.T) {
 		}
 	}
 }
+
+func TestBundleMaxLines(t *testing.T) {
+	t.Parallel()
+
+	none := buildWith(t, "# demo\n", "")
+	if f := factFor(t, none, "bundle_max_lines"); none.BundleMaxLines != DefaultBundleMaxLines ||
+		f.Origin.Kind != OriginDefault || f.Value != "300" {
+		t.Errorf("undeclared = %d, %+v", none.BundleMaxLines, f)
+	}
+
+	if eff := buildWith(t, "---\nbundle_max_lines: 500\n---\n", ""); eff.BundleMaxLines != 500 || eff.Errors() != "" {
+		t.Errorf("500: bundle_max_lines %d, errors %q", eff.BundleMaxLines, eff.Errors())
+	}
+
+	for _, v := range []string{"0", "-5", "lots", "1.5"} {
+		if eff := buildWith(t, "---\nbundle_max_lines: \""+v+"\"\n---\n", ""); !strings.Contains(
+			eff.Errors(), "bundle_max_lines",
+		) {
+			t.Errorf("%s: want a bundle_max_lines error, got %q", v, eff.Errors())
+		}
+	}
+}

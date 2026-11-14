@@ -42,6 +42,8 @@ type taskSource interface {
 	// Relink's unwritten is the refusal's last clause: only the caller knows
 	// whether properties were written before the link.
 	Relink(ctx context.Context, warnTo io.Writer, r ref.Ref, parent, unwritten string) error
+	// SetAfter rewrites the body's After: line to name base, "" to drop it.
+	SetAfter(ctx context.Context, warnTo io.Writer, r, base ref.Ref) error
 	Create(ctx context.Context, warnTo io.Writer, nt NewTask) (ref.Ref, string, error)
 }
 
@@ -199,6 +201,15 @@ func (s FallbackSource) Relink(ctx context.Context, warnTo io.Writer, r ref.Ref,
 	return err
 }
 
+func (s FallbackSource) SetAfter(ctx context.Context, warnTo io.Writer, r, base ref.Ref) error {
+	err := s.first.SetAfter(ctx, warnTo, r, base)
+	if declined(err) {
+		return s.Rest.SetAfter(ctx, warnTo, r, base)
+	}
+
+	return err
+}
+
 func (s FallbackSource) Create(ctx context.Context, warnTo io.Writer, nt NewTask) (ref.Ref, string, error) {
 	r, url, err := s.first.Create(ctx, warnTo, nt)
 	if declined(err) {
@@ -333,6 +344,14 @@ func (s driverSource) Relink(ctx context.Context, warnTo io.Writer, r ref.Ref, p
 	return err
 }
 
+// SetAfter goes in an update of its own, the base as a number like
+// create's, "" to drop it.
+func (s driverSource) SetAfter(ctx context.Context, warnTo io.Writer, r, base ref.Ref) error {
+	_, err := s.write(ctx, warnTo, "", trackerdriver.VerbUpdate, r.Number, "--after", base.Number)
+
+	return err
+}
+
 // Create passes the parent and the body's After: base as numbers, as every
 // driver verb's argument is.
 func (s driverSource) Create(ctx context.Context, warnTo io.Writer, nt NewTask) (ref.Ref, string, error) {
@@ -421,7 +440,12 @@ func (s HostSource) Info(ctx context.Context, r ref.Ref) (TaskInfo, error) {
 		return TaskInfo{}, err
 	}
 
-	return TaskInfo{Body: iss.Body, Closed: strings.EqualFold(iss.State, "closed"), Pull: iss.Pull}, nil
+	return TaskInfo{
+		Body:   iss.Body,
+		Closed: strings.EqualFold(iss.State, "closed"),
+		Pull:   iss.Pull,
+		Labels: iss.Labels,
+	}, nil
 }
 
 // URL goes through the issue, never `issue view --web`, which opens a pull
@@ -489,6 +513,10 @@ func (s HostSource) Relink(ctx context.Context, _ io.Writer, r ref.Ref, parent, 
 	}
 
 	return err
+}
+
+func (s HostSource) SetAfter(ctx context.Context, _ io.Writer, r, base ref.Ref) error {
+	return s.h.SetAfter(ctx, r.Number, base.ID)
 }
 
 func (s HostSource) Create(ctx context.Context, warnTo io.Writer, nt NewTask) (ref.Ref, string, error) {
@@ -563,6 +591,10 @@ func (s RefusedSource) Update(context.Context, io.Writer, ref.Ref, hostops.Props
 
 func (s RefusedSource) Relink(_ context.Context, _ io.Writer, _ ref.Ref, _, unwritten string) error {
 	return s.RefuseWrite(trackerdriver.VerbUpdate+" --parent", unwritten)
+}
+
+func (s RefusedSource) SetAfter(context.Context, io.Writer, ref.Ref, ref.Ref) error {
+	return s.RefuseWrite(trackerdriver.VerbUpdate+" --after", UnwrittenNothing)
 }
 
 func (s RefusedSource) Create(context.Context, io.Writer, NewTask) (ref.Ref, string, error) {

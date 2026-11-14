@@ -1,8 +1,8 @@
 ---
 name: drive
-description: "f10 drive skill - run a list of tasks through the project's flow from this session, each in its own worktree and agent, dependents once their base has a commit, pausing once an agent asks and nothing else can move; a parent task expands into its subtasks, the user picking only when a draft is among them. Use when the user says \"/f10:drive <ids | id -- id> [--flow <name> | --local] [--pace <name>] [--agent <profile> | --model <model>] [--parallel N]\", or asks to run several tasks through plan, ship and finish without switching workspaces."
-allowed-tools: Bash, AskUserQuestion
-argument-hint: "<id>[:profile]... [--flow <name> | --local] [--pace <name>]"
+description: "f10 drive skill - run a list of tasks through the project's flow from this session, each in its own worktree and agent, dependents once their base has a commit, pausing once an agent asks and nothing else can move; a parent task expands into its subtasks, the user picking only when a draft is among them. Use when the user says \"/f10:drive <ids | id -- id> [--flow <name> | --local] [--pace <name>] [--agent <profile> | --model <model>] [--parallel N] [--plan]\", asks to run several tasks through plan, ship and finish without switching workspaces, or asks what to bundle, run in parallel or order before driving a set of tasks."
+allowed-tools: Bash, AskUserQuestion, Read, Grep
+argument-hint: "<id>[:profile]... [--flow <name> | --local] [--pace <name>] [--plan]"
 ---
 
 # f10 · drive
@@ -24,6 +24,8 @@ This skill expands parents, runs the command (`${CLAUDE_PLUGIN_ROOT}/modes/binar
   Tasks past the cap queue in the drive's order and show as `queued`.
   A task frees its slot once it asks, waits for its base's first commit, or waits at finish for its base.
   A rerun or `--resume` keeps the drive's cap unless it passes a new one.
+- `--plan`: propose the drive first (what to bundle, run in parallel and order), settle it with the user, then drive what was agreed (**Plan** below).
+  Without it, this skill never plans unasked.
 - Everything else goes to `f10 drive` verbatim.
 
 **Parents**: a task id whose task has subtasks is never driven itself; its unfinished subtasks run instead.
@@ -51,8 +53,35 @@ With no draft among them, every candidate runs, because naming the parent alread
    A base outside the siblings is not checked here: `f10 drive` refuses an unfinished one itself.
 6. **Build the arguments**: each parent replaced in place by its chosen subtasks, in the rows' order, each carrying the parent's `:profile` suffix; other ids and flags as given.
    Nothing left to drive: say so in one line and stop.
+7. **The hint**, without `--plan`: in the same Bash call as point 1, run `f10 drive plan <the arguments as typed> --hint`.
+   It prints one line only when the rules alone would save a CI wait, read from saved plans (a small plan's size, its `Areas:` line), since a plain drive reads no code; print that line under the trees, and drive as asked.
+   A hint that errors (a flag `drive plan` does not take) prints nothing here.
 
-Run it **in the background** (`run_in_background`): a list can take hours, and the command's exit wakes this session.
+**Plan** (`--plan`): `f10 drive plan` proposes the command, and this skill supplies what only a read of the code can tell.
+Strip `--plan`; the rest is the **planning arguments**, kept verbatim, because a rerun finds the agreed drive by them.
+A parent with a draft candidate goes through **Parents** points 4 and 5 first, and the chosen subtasks replace it in the planning arguments, since the binary leaves drafts out.
+
+1. **Agreed already?** Run `f10 drive plan <planning arguments> --json`.
+   An `agreed` number means this planning call already drove: say `following drive <n>` in one line, then run its `command` as **Run** below, with no new proposal.
+2. **Read each task the binary could not size**, a task in `tasks` with no `lines`: `f10 task read <id>`, then a few targeted `Grep` and `Read` calls against the code, the way a task is investigated before planning, with no plan written.
+   Settle for each: `areas` in the words `project.md` Roles and `flow_by_area` use, the `files` it most likely changes, `lines` (an estimate of changed lines), `buildsOn` (a listed task whose new code it needs, when its body has no `After:` saying so), `risky: migration` for a schema or data migration, and `kind` only when no label settled it.
+   Read in one message per few tasks (`conventions/latency.md` rule 5); a task whose plan exists is read through its plan's stages instead.
+3. **Write the facts sheet** with one Bash heredoc to `<scratchpad>/drive-plan.json`, the shape `docs/cli.md` → Plan gives, keyed by task id, and run `f10 drive plan <planning arguments> --facts <sheet>`.
+4. **Show the proposal** verbatim in a plain fenced block, then take edits in plain words ("keep FT-45 alone", "bundle 46 with 45", "put 47 in stage 2").
+   Turn each into an override in the sheet: `alone: true`; `with: <id>`; `after: <id>` or `after: "none"` (stage 2 means after nothing in stage 2 or later).
+   Rerun the command and show the new proposal; never edit the command or the stages by hand, because the reasons would no longer match.
+5. **Confirm once**, in one `AskUserQuestion`: a question `Drive this command?` `[drive it | change it]`, plus one per proposed `After:` edit, `[add After: <base> to <id> | leave it]`.
+   `change it` goes back to point 4.
+   Apply each accepted edit with `f10 task update <id> --after <base>` (`none` drops the line), all in one Bash call.
+   A declined or refused (exit 3) edit is taken back in the sheet, so the command never relies on an order the tracker lacks, nor drops one it holds:
+   - an edit the planner proposed (the task has no `After:` of its own, the order came from `buildsOn` or a shared file) sets `after: "none"`;
+   - an edit from the user's own `after` override removes that override, so the body's `After:` stands.
+
+   Then rerun point 3 once.
+6. **Run** `f10 drive <the command's arguments> --planned "<planning arguments>"` as **Run** below, in the background.
+   The record keeps the planning arguments, so `/f10:drive <planning arguments> --plan` follows this drive (point 1).
+
+**Run** it in the background (`run_in_background`): a list can take hours, and the command's exit wakes this session.
 The drive itself runs in the per-user f10 daemon, so closing or clearing this session leaves it running; the command only prints its progress and exits with its code.
 Rerunning the same arguments follows the drive already running, and from another session `f10 daemon status` lists running drives and `f10 daemon logs <n> -f` follows one.
 

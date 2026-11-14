@@ -39,6 +39,9 @@ var DriveFlags = []DriveFlag{
 	{Name: "--parallel", Value: "N", Resume: true, Tunes: true},
 	{Name: "--resume", Value: "N", Resume: true, Tunes: true},
 	{Name: "--foreground", Resume: true, Tunes: true},
+	// the planning arguments the agreed command came from, so a rerun of
+	// /f10:drive --plan follows this drive instead of proposing again
+	{Name: "--planned", Value: "ARGS", Tunes: true},
 }
 
 func DriveFlagNamed(name string) (DriveFlag, bool) {
@@ -89,12 +92,23 @@ type DriveArgs struct {
 	Pace     string   // --pace, "" for the branch's or the project's
 	Answers  []string // each --answer as typed: `GH-1=text` for one task, or bare text
 	Every    time.Duration
-	Parallel int  // --parallel: the cap on tasks running a skill at once, 0 for the record's or the default
-	Resume   int  // --resume: the record to pick up
-	Fore     bool // --foreground: run the loop in this process, not the daemon
-	List     bool // `drive list`
-	All      bool // `drive list --all`
-	Cancel   int  // `drive cancel <n>`
+	Parallel int    // --parallel: the cap on tasks running a skill at once, 0 for the record's or the default
+	Resume   int    // --resume: the record to pick up
+	Fore     bool   // --foreground: run the loop in this process, not the daemon
+	List     bool   // `drive list`
+	All      bool   // `drive list --all`
+	Cancel   int    // `drive cancel <n>`
+	Planned  string // --planned: the planning arguments this command was agreed from
+	Plan     *PlanArgs
+}
+
+// PlanArgs is `drive plan`'s own flags; the rest parse as a drive's.
+type PlanArgs struct {
+	Facts string   // --facts: the facts sheet the skill wrote
+	JSON  bool     // --json
+	Hint  bool     // --hint: one line, or nothing
+	Pass  []string // the drive flags to carry onto the proposed command
+	Key   string   // the planning arguments, as --planned records them
 }
 
 func (a *DriveArgs) set(name, value string) error {
@@ -109,6 +123,12 @@ func (a *DriveArgs) set(name, value string) error {
 		}
 
 		a.Flow = runplan.LocalFlow
+
+		return nil
+	case "--planned":
+		if a.Planned = strings.Join(strings.Fields(value), " "); a.Planned == "" {
+			return errors.New("--planned needs the planning arguments")
+		}
 
 		return nil
 	case "--resume":
@@ -205,6 +225,8 @@ func ParseDriveArgs(args []string) (DriveArgs, error) {
 			n, err := DriveNumber(args[1])
 
 			return DriveArgs{Cancel: n}, err
+		case "plan":
+			return parseDrivePlan(args[1:])
 		}
 	}
 
@@ -305,6 +327,77 @@ func parseDriveList(args []string) (DriveArgs, error) {
 
 		a.All = true
 	}
+
+	return a, nil
+}
+
+// parseDrivePlan reads `drive plan`: ids or a parent, the drive flags that
+// shape the proposed command, and the plan's own flags.
+func parseDrivePlan(args []string) (DriveArgs, error) {
+	pa := &PlanArgs{}
+
+	var rest []string
+
+	for i := 0; i < len(args); i++ {
+		tok := strings.TrimSpace(args[i])
+		name, value, inline := strings.Cut(tok, "=")
+
+		switch name {
+		case "--json":
+			pa.JSON = true
+		case "--hint":
+			pa.Hint = true
+		case "--facts":
+			if !inline {
+				if i+1 >= len(args) {
+					return DriveArgs{}, errors.New("--facts needs the facts sheet's path")
+				}
+
+				i++
+				value = args[i]
+			}
+
+			pa.Facts = value
+		default:
+			rest = append(rest, tok)
+		}
+	}
+
+	a, err := ParseDriveArgs(rest)
+	if err != nil {
+		return DriveArgs{}, fmt.Errorf("drive plan: %w", err)
+	}
+
+	switch {
+	case a.Span:
+		return DriveArgs{}, errors.New("drive plan takes ids or a parent, not a range")
+	case a.Resume > 0, len(a.Answers) > 0, a.Fore, a.Planned != "", a.Every != DefaultEvery:
+		return DriveArgs{}, errors.New("drive plan takes ids or a parent, --facts, --json, --hint " +
+			"and the flags that shape a drive: --flow, --local, --pace, --agent, --model and --parallel")
+	}
+
+	for i := 0; i < len(rest); i++ {
+		name, _, inline := strings.Cut(rest[i], "=")
+
+		f, ok := DriveFlagNamed(name)
+		if !ok || name == "--parallel" {
+			if ok && !inline {
+				i++
+			}
+
+			continue
+		}
+
+		pa.Pass = append(pa.Pass, rest[i])
+
+		if f.Value != "" && !inline {
+			i++
+			pa.Pass = append(pa.Pass, rest[i])
+		}
+	}
+
+	pa.Key = strings.Join(rest, " ")
+	a.Plan = pa
 
 	return a, nil
 }

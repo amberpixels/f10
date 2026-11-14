@@ -8,6 +8,7 @@ import (
 	"maps"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -36,9 +37,10 @@ type Declared struct {
 	CatchupStacked string            `yaml:"catchup_stacked,omitempty"` // how a branch catches up with a base that is another task's branch
 	Traces         string            `yaml:"traces,omitempty"`
 	Lore           string            `yaml:"lore,omitempty"`
-	LoreGate       string            `yaml:"lore_gate,omitempty"`      // what finish does with a failing lore check before a merge
-	StaleAfter     string            `yaml:"stale_after,omitempty"`    // a task older than this is judged before it is planned
-	DriverTimeout  string            `yaml:"driver_timeout,omitempty"` // one driver verb's limit, a Go duration
+	LoreGate       string            `yaml:"lore_gate,omitempty"`        // what finish does with a failing lore check before a merge
+	StaleAfter     string            `yaml:"stale_after,omitempty"`      // a task older than this is judged before it is planned
+	DriverTimeout  string            `yaml:"driver_timeout,omitempty"`   // one driver verb's limit, a Go duration
+	BundleMaxLines string            `yaml:"bundle_max_lines,omitempty"` // the changed lines a proposed bundle may reach
 	Flows          map[string]Flow   `yaml:"flows,omitempty"`
 	FlowByArea     map[string]string `yaml:"flow_by_area,omitempty"`  // an area, in Roles' plain words, to the flow its tasks run
 	DriveEnv       []string          `yaml:"drive_env,omitempty"`     // environment keys a drive passes to its commands, beyond the built-in ones
@@ -259,6 +261,12 @@ var scalarKeys = []scalarKey{
 		def:   trackerdriver.DefaultTimeout.String(),
 	},
 	{
+		key:   "bundle_max_lines",
+		field: func(d *Declared) *string { return &d.BundleMaxLines },
+		parse: discard(ParseBundleMaxLines),
+		def:   strconv.Itoa(DefaultBundleMaxLines),
+	},
+	{
 		key:   "watch",
 		field: func(d *Declared) *string { return &d.Watch },
 		vocab: []string{"report", "finish", "off"},
@@ -338,6 +346,21 @@ func ParseDriverTimeout(value string) (time.Duration, error) {
 	}
 
 	return d, nil
+}
+
+// DefaultBundleMaxLines caps a proposed bundle: review quality falls as a
+// diff grows, and a bad rider holds the whole PR.
+const DefaultBundleMaxLines = 300
+
+// ParseBundleMaxLines reads a bundle_max_lines value, a positive count of
+// changed lines.
+func ParseBundleMaxLines(value string) (int, error) {
+	n, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil || n <= 0 {
+		return 0, fmt.Errorf("%q is not a positive number of changed lines, like 300", value)
+	}
+
+	return n, nil
 }
 
 // check reports every value outside its vocabulary and a malformed flow.

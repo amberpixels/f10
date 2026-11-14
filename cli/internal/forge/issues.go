@@ -267,10 +267,11 @@ type IssueEdit struct {
 	// which only adds one, the others in Current come off by name.
 	Assignee string
 	Current  []string
+	Body     *string // the whole body, nil to leave it
 }
 
 func (e IssueEdit) empty() bool {
-	return e.Title == "" && len(e.AddLabels) == 0 && len(e.RemoveLabels) == 0 && e.Assignee == ""
+	return e.Title == "" && len(e.AddLabels) == 0 && len(e.RemoveLabels) == 0 && e.Assignee == "" && e.Body == nil
 }
 
 // EditIssue writes e; an empty edit writes nothing.
@@ -324,6 +325,10 @@ func (h Host) editIssueArgs(number string, e IssueEdit, unassign []string) []str
 			args = append(args, "--assignee", e.Assignee)
 		}
 
+		if e.Body != nil {
+			args = append(args, "--description", *e.Body)
+		}
+
 		return args
 	}
 
@@ -346,6 +351,10 @@ func (h Host) editIssueArgs(number string, e IssueEdit, unassign []string) []str
 
 	for _, a := range unassign {
 		args = append(args, "--remove-assignee", a)
+	}
+
+	if e.Body != nil {
+		args = append(args, "--body", *e.Body)
 	}
 
 	return args

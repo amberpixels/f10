@@ -288,6 +288,11 @@ func (e *Effective) resolveHosting(fm *layered) {
 		e.DriverTimeout = d
 	}
 
+	e.BundleMaxLines = DefaultBundleMaxLines
+	if n, err := ParseBundleMaxLines(e.scalar(fm, "bundle_max_lines")); err == nil {
+		e.BundleMaxLines = n
+	}
+
 	if len(fm.DriveEnv) > 0 {
 		e.Facts = append(e.Facts, Fact{
 			Key:    "drive_env",

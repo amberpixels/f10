@@ -50,7 +50,7 @@ f10 task search <query>  # rows, not a picker
 f10 task children [id] [--json | --plain] [--open]   # the task's open subtasks, in After: order
 f10 task create [--status s] [--priority p] [--label l]... [--parent id] [--set k=v]... < task.md   # through the driver, else as a host issue; prints the new id
 f10 task comment [id] < comment.md   # a comment on the task; prints its url when the tracker gives one
-f10 task update [id] [--status s] [--priority p] [--label l]... [--assignee a] [--parent id] [--set k=v]...   # absolute values
+f10 task update [id] [--status s] [--priority p] [--label l]... [--assignee a] [--parent id] [--after id | none] [--set k=v]...   # absolute values
 f10 task retitle [id | --all] [--dry-run]   # write tracker.title onto the host's issue titles
 f10 plan read [id]       # the plan saved for that task
 f10 plan open [id]       # in your editor (--link writes the path, a file:// link on a terminal)
@@ -83,7 +83,8 @@ f10 stats [--since 30d] [<id>]   # active minutes per task by step group, with s
 
 f10 start <id>[-suffix] | <id>+<id>... [--plan | --local | --flow <name> | --discuss] [--pace <name>] [--after <id> | --base <branch>] [--agent <profile> | --model <model>] [note...]   # a worktree, a Herdr workspace, a prompted agent
 f10 forward <id>[-suffix] <text...>   # hand a command or a steering note to the agent working on the task
-f10 drive <id | id+id>[:profile]... | <id> -- <id> [--flow <name> | --local] [--pace <name>] [--agent <profile> | --model <model>] [--parallel <n>] [--answer [<id>=]<text>] [--every 30s] [--foreground]   # a list through a flow, each task once its base has a commit; runs in the daemon
+f10 drive <id | id+id>[:profile]... | <id> -- <id> [--flow <name> | --local] [--pace <name>] [--agent <profile> | --model <model>] [--parallel <n>] [--answer [<id>=]<text>] [--every 30s] [--foreground] [--planned <args>]   # a list through a flow, each task once its base has a commit; runs in the daemon
+f10 drive plan <parent | id | id+id>[:profile]... [--flow | --local | --pace | --agent | --parallel] [--facts F] [--json | --hint]   # propose what to bundle, run in parallel and order; changes nothing
 f10 daemon status | stop [--now] | logs [<drive>] [-f]   # the per-user process drives run in
 f10 asks [list [--json] | answer <task> [N=VALUE ...]]   # the questions driven agents wait on, across projects; bare walks them in a terminal
 f10 finish [<id>[-suffix]] [--yes] [--ignore-checks] [--close <ids|all|none>] [--keep]   # no id: the branch's task; merge the PR (a branch never pushed: here), pull main, archive the plan, close the workspace, remove the worktree; a spike with no PR closes without a merge; a parent whose subtasks are done closes
@@ -777,6 +778,48 @@ A task halted for another reason stays halted until its run changes: settle it i
 
 Out of scope: more than one base per task, and ordering tasks by anything but their recorded dependencies.
 
+### Plan
+
+`f10 drive plan <parent | id>...` proposes how to drive the tasks and prints it; it opens nothing, writes no record, takes no lease, starts no daemon and changes no task, so the daemon, a hook or a status line may call it.
+A parent expands into its open subtasks in `f10 task children` order, a `draft` child left out with a line naming it; a closed task is left out the same way; a typed bundle stays bundled.
+
+What it reads for each task, cheapest first: the `After:` line and the labels from the tracker, a saved plan's `Kind:`, `Areas:` and `Size:` header lines (a small plan counts as a quarter of `bundle_max_lines`, marked estimated, because it is one change in one area), the flow `flow_by_area` maps the first mapped area to (all tasks share the flow `--flow` or `--local` names), its `:profile`, and the facts sheet `--facts` names.
+A label's kind wins over a plan's, and a plan's over the sheet's, as fetch settles it; `bug`, `defect` and `regression` read as a bug, `refactor` and `tech-debt` as a refactor, `spike`, `research` and `investigation` as a spike.
+The labels `migration` and `risky` mark a task risky.
+
+The rules, in order, each leaving a one-line reason on every task and bundle:
+
+1. **Alone**: a spike (it merges nothing), a risky task, a task with no size (`alone: not sized`), a task over `bundle_max_lines`, and a task the user kept alone.
+2. **Bundle**: tasks of the same flow, the same agent profile and the same kind class share a bundle when they share a file or an area.
+   The kind classes are bugs, and features with refactors, so a regression fix keeps its own PR.
+   A bundle carries at most one `After:` outside itself, so a task joins only a bundle with its base, or with its base inside.
+3. **Cap**: a bundle stops at `bundle_max_lines` changed lines, in the parent's order, and the task left out says `split: N lines with <id>'s group, over the cap of M`.
+4. **Order**: a task the sheet says builds on another, with no `After:` saying so, gets a proposed `After:` edit; so do two entries that share a file but cannot bundle (a bug and a feature), the later after the earlier, since side by side they would conflict.
+5. **Stages** are each entry's depth in the `After:` graph, the way drive releases them; `--parallel` is the widest stage, capped by `--parallel` given, else drive's default.
+
+It prints the stages, the drive command with the drive flags given carried onto it, `saves about N CI waits and M finishes against driving them one by one`, the `After:` edits waiting on a yes (`f10 task update <id> --after <base>` applies one), and, when anything is bundled, once: a bundle is one PR, one revert and one review over a mixed diff, and a later bug is traced to its lead with the riders named.
+`--json` prints the same for the drive skill, the tasks' gathered facts included.
+`--hint` prints one line when the rules alone save at least one CI wait, a bundle the user typed or named with `with` not counted, and nothing otherwise; a plain `/f10:drive` prints it under the tree.
+
+**The facts sheet** is a JSON object keyed by task id, written by `/f10:drive --plan` from a short read of each task against the code; an unknown field is refused, so a misspelt one never reads as not sized:
+
+```json
+{
+  "FT-41": {"areas": ["cli ui"], "files": ["cli/internal/ui/table.go"], "lines": 20},
+  "FT-47": {"areas": ["status"], "lines": 40, "buildsOn": "FT-44"},
+  "FT-50": {"lines": 50, "risky": "migration"},
+  "FT-45": {"alone": true},
+  "FT-46": {"with": "FT-45"},
+  "FT-48": {"after": "none"}
+}
+```
+
+`kind`, `areas`, `files`, `lines` (marked estimated in the reasons), `buildsOn` and `risky` are what a read of the task found; `alone`, `with` (bundle with that task, whatever the rules say) and `after` (an id, or `none` to drop the line) are the user's edits to the proposal.
+
+**The agreed command.**
+`/f10:drive <args> --plan` runs the command it agreed with `--planned "<args>"`, which the record keeps beside the command line and the match ignores.
+`f10 drive plan <args>` then finds that drive, while it is neither cancelled nor done, and prints `agreed in drive <n>: f10 drive …` in place of a fresh proposal (`agreed` in `--json`, nothing with `--hint`), so a rerun follows what was agreed.
+
 ## Daemon
 
 `f10 daemon` is one process per user that runs drives, so a drive outlives the session that typed it, and watches the projects tasks were started in (**Watch** below).
@@ -1333,6 +1376,8 @@ It shows no run stages or gates, which a task just captured cannot have.
 Both exit **3** on a tracker that is not the host's when no driver takes the verb, and a ship run then reports its shipment locally only.
 A failed comment is never retried, and its error says it may have posted.
 On the host's issues with `tracker.title` declared, an update also puts the prefix back on a title renamed by hand.
+`--after <id>` writes the body's `After:` line, replacing the first one or adding one at the end, and `--after none` drops it; `f10 drive plan` proposes these edits.
+It goes to the driver as an update of its own (`update <n> --after <m>`, an empty number to drop it), else the host's issues rewrite the body, and a tracker that edits no body exits **3**.
 `--parent <id>` links the task under that parent, moving it from a parent it already has, and `--parent ""` takes it out from under its parent.
 It goes to the driver as an update of its own, after the other properties, so a tracker without parent links declines only the link.
 On GitHub issues it is a sub-issue link; GitLab nests no issue under an issue, so there, as on a tracker whose driver declines it, update exits **3**.
