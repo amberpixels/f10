@@ -3,11 +3,13 @@ package ledger
 import (
 	"context"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/findings"
 	"github.com/amberpixels/f10/cli/internal/observe"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/transcript"
 	"github.com/amberpixels/f10/cli/internal/verdict"
 )
 
@@ -22,6 +24,7 @@ const (
 	TaskFinished   = "task_finished"
 	TaskHalted     = "task_halted" // drive's, not a hook's: a task it stopped
 	SessionStopped = "session_stopped"
+	TurnUsed       = "turn_used" // the tokens a turn spent
 	WaitStarted    = "wait_started"
 	WaitEnded      = "wait_ended"
 	TaskSized      = "task_sized" // finish's: the branch's diffstat before it lands
@@ -172,17 +175,34 @@ func (ob *Observer) events(ctx context.Context, o observe.Observation, m observe
 
 	switch o := o.(type) {
 	case *observe.SkillStarted:
-		return one(RunStarted, Observed, "", RunStartedPayload{Skill: o.Skill, Args: o.Args})
+		return one(
+			RunStarted,
+			Observed,
+			"",
+			RunStartedPayload{Skill: o.Skill, Args: o.Args, RunContext: contextOf(o.RunContext)},
+		)
 	case *observe.StepStarted:
 		return one(StepEntered, Observed, "", StepEnteredPayload{Steps: o.Steps})
 	case *observe.Finished:
 		return one(TaskFinished, Observed, "", TaskFinishedPayload{Args: o.Args})
 	case *observe.SessionStopped:
-		if ob.sameStop(ctx, m.Session, o) {
+		sameStop, sameContext := ob.sameStop(ctx, m.Session, o)
+		if sameStop && sameContext {
 			return nil
 		}
 
-		return one(SessionStopped, Observed, o.Task, stopPayload(o))
+		p := stopPayload(o)
+		if !sameContext {
+			p.RunContext = contextOf(o.RunContext)
+		}
+
+		return one(SessionStopped, Observed, o.Task, p)
+	case *observe.TurnUsed:
+		if o.Usage.Zero() {
+			return nil
+		}
+
+		return one(TurnUsed, Observed, o.Task, TurnUsedPayload{Usage: usageOf(o.Usage)})
 	case *observe.IssueCreated:
 		if m.Session == "" {
 			return nil
@@ -246,22 +266,87 @@ func artifact(kind, task string, payload any) []Event {
 	return []Event{e}
 }
 
-// sameStop reports whether the session's last stop row says the same: Stop
-// fires at every turn end, and only a change is worth a row.
-func (ob *Observer) sameStop(ctx context.Context, session string, o *observe.SessionStopped) bool {
+// sameStop reports whether the session's last stop row says the same, and
+// whether the run context matches the session's last row that carried one:
+// Stop fires at every turn end, and only a change is worth a row.
+func (ob *Observer) sameStop(ctx context.Context, session string, o *observe.SessionStopped) (bool, bool) {
 	l := ob.open(ctx)
 	if l == nil {
-		return false
+		return false, false
 	}
 
-	prior, err := l.List(ctx, Filter{Session: session, Kind: SessionStopped})
-	if err != nil || len(prior) == 0 {
-		return false
+	stops, err := l.List(ctx, Filter{Session: session, Kind: SessionStopped})
+	if err != nil {
+		return false, false
 	}
 
-	last, _ := Decode[SessionStoppedPayload](prior[len(prior)-1])
+	starts, _ := l.List(ctx, Filter{Session: session, Kind: RunStarted})
 
-	return last.Phase == o.Phase && last.Status == o.Status && last.Leaf == o.Leaf
+	same := false
+	if len(stops) > 0 {
+		last, _ := Decode[SessionStoppedPayload](stops[len(stops)-1])
+		same = last.Phase == o.Phase && last.Status == o.Status && last.Leaf == o.Leaf
+	}
+
+	return same, lastContext(stops, starts) == contextOf(o.RunContext)
+}
+
+// lastContext is the run context of the latest row of either list that
+// carries one, by time and then id.
+func lastContext(stops, starts []Event) RunContext {
+	var (
+		found  RunContext
+		latest *Event
+	)
+
+	for _, e := range slices.Concat(stops, starts) {
+		var c RunContext
+
+		if e.Kind == RunStarted {
+			p, _ := Decode[RunStartedPayload](e)
+			c = p.RunContext
+		} else {
+			p, _ := Decode[SessionStoppedPayload](e)
+			c = p.RunContext
+		}
+
+		if c == (RunContext{}) {
+			continue
+		}
+
+		if latest == nil || e.At.After(latest.At) || e.At.Equal(latest.At) && e.ID > latest.ID {
+			found, latest = c, &e
+		}
+	}
+
+	return found
+}
+
+func contextOf(c observe.RunContext) RunContext {
+	return RunContext{
+		F10Version: c.F10Version,
+		Model:      c.Model,
+		Agent:      c.Agent,
+		Profile:    AgentProfile{Kind: c.ProfileKind, Model: c.ProfileModel, Effort: c.ProfileEffort},
+	}
+}
+
+//nolint:lostfield // the model goes on the stop row's context, not the usage
+func usageOf(u transcript.Usage) Usage {
+	out := Usage{Tokens: tokensOf(u.Tokens), Subagents: tokensOf(u.Subagents), Through: u.Through}
+
+	if len(u.ByModel) > 1 {
+		out.ByModel = make(map[string]Tokens, len(u.ByModel))
+		for m, t := range u.ByModel {
+			out.ByModel[m] = tokensOf(t)
+		}
+	}
+
+	return out
+}
+
+func tokensOf(t transcript.Tokens) Tokens {
+	return Tokens{Input: t.Input, Output: t.Output, CacheWrite: t.CacheWrite, CacheRead: t.CacheRead}
 }
 
 // findings records the round opening once per reviewed sha, then each finding

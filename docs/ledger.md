@@ -33,3 +33,25 @@ Some payload keys are also generated columns, so a query can filter on them with
 
 The columns are virtual: SQLite computes them from `payload`, so old rows have them too.
 A version that renames one of these keys changes its column, in the same release, to a `COALESCE` over the old and the new name, so rows of both versions keep their value.
+
+## What ran a run, and what it cost
+
+`run_started` carries the run context: `f10_version`, `model`, `agent` (the agent kind, `claude` unless a profile names another) and `profile` (the `kind`, `model` and `effort` that `f10 start` or `f10 drive` recorded on the branch).
+A key the hook could not learn is absent, and an interactive session has no `profile`.
+`session_stopped` carries the same keys only when the context changed since the session's last row that carried one, such as after a `/model` switch.
+
+`turn_used` is the tokens one turn spent, read from the session's transcript as a delta since the previous turn, so a task's cost is the sum of its rows:
+
+- `usage.input`, `usage.output`, `usage.cache_write` and `usage.cache_read` are the session's own messages.
+  One API message spans several transcript lines that each repeat its usage, so each message counts once.
+- `usage.by_model` splits the same four by model, only when the turn ran on more than one.
+- `usage.subagents` holds the same four for the subagents the turn ran, from inline sidechain lines and from the session's `subagents/` transcripts.
+- `usage.through` is the uuid of the last transcript entry counted.
+
+Counting starts when a run starts, which is when a capture, plan, ship or debug skill starts in the session, so tokens spent before it are not attributed to the run.
+Another skill in a run that is still counting keeps counting from where it was.
+The turn in which the run reaches done is the last one counted, so later turns count for no task until the next run starts.
+A run that failed or stopped partway keeps counting, because a drive follows it up in the same session with skills such as catchup that start no run.
+A session with no run writes no `turn_used`, so skills that start no run on their own, such as `/f10:review` run by hand, record no usage.
+A turn whose transcript is missing or unreadable writes no `turn_used` row, and its `session_stopped` row is written as usual.
+No prompt or response text reaches the ledger.

@@ -55,30 +55,65 @@ func structSchema(t reflect.Type, n int) (map[string]any, error) {
 		required = append(required, versionKey)
 	}
 
+	if err := addFields(t, props, &required); err != nil {
+		return nil, err
+	}
+
+	return object(props, required), nil
+}
+
+// objectSchema is a nested struct as encoding/json writes it.
+func objectSchema(t reflect.Type) (map[string]any, error) {
+	props := map[string]any{}
+	required := []string{}
+
+	if err := addFields(t, props, &required); err != nil {
+		return nil, err
+	}
+
+	return object(props, required), nil
+}
+
+func object(props map[string]any, required []string) map[string]any {
+	return map[string]any{
+		"type":                 "object",
+		"properties":           props,
+		"required":             required,
+		"additionalProperties": false,
+	}
+}
+
+// addFields adds t's fields: an embedded struct's inline, and each one
+// required unless omitempty or omitzero.
+func addFields(t reflect.Type, props map[string]any, required *[]string) error {
 	for f := range t.Fields() {
-		name, opts, _ := strings.Cut(f.Tag.Get("json"), ",")
+		tag := f.Tag.Get("json")
+		if f.Anonymous && tag == "" && f.Type.Kind() == reflect.Struct {
+			if err := addFields(f.Type, props, required); err != nil {
+				return err
+			}
+
+			continue
+		}
+
+		name, opts, _ := strings.Cut(tag, ",")
 		if name == "" || name == "-" {
 			continue
 		}
 
 		typ, err := typeSchema(f.Type)
 		if err != nil {
-			return nil, fmt.Errorf("%s.%s: %w", t.Name(), f.Name, err)
+			return fmt.Errorf("%s.%s: %w", t.Name(), f.Name, err)
 		}
 
 		props[name] = typ
 
-		if !strings.Contains(opts, "omitempty") {
-			required = append(required, name)
+		if !strings.Contains(opts, "omitempty") && !strings.Contains(opts, "omitzero") {
+			*required = append(*required, name)
 		}
 	}
 
-	return map[string]any{
-		"type":                 "object",
-		"properties":           props,
-		"required":             required,
-		"additionalProperties": false,
-	}, nil
+	return nil
 }
 
 // typeSchema covers the field types payloads use; a nil list or map is
@@ -98,6 +133,8 @@ func typeSchema(t reflect.Type) (map[string]any, error) {
 		}
 
 		return map[string]any{"type": []string{"array", "null"}, "items": items}, nil
+	case reflect.Struct:
+		return objectSchema(t)
 	case reflect.Map:
 		if t.Key().Kind() != reflect.String {
 			return nil, fmt.Errorf("map key %s", t.Key())

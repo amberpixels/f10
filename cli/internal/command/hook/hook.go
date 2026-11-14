@@ -12,11 +12,14 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/asknotify"
+	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hook"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/observe"
+	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/target"
@@ -68,6 +71,7 @@ func runHook(ctx context.Context, cmd *cli.Command) error {
 		TaskID:      hookTaskID,
 		StatusText:  HookStatusText,
 		PromptTyped: asknotify.PaneAnswered,
+		Profile:     hookProfile,
 		Observers:   []observe.Observer{recorder},
 	}
 
@@ -79,6 +83,19 @@ func runHook(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	return err
+}
+
+// hookProfile is the profile the cwd's branch records, zero when it
+// records none or git cannot tell.
+func hookProfile(ctx context.Context, cwd string) agentctl.Profile {
+	branch := gitx.CurrentBranch(ctx, cwd)
+	if branch == "" {
+		return agentctl.Profile{}
+	}
+
+	p, _ := runplan.RecordedProfile(ctx, cwd, branch)
+
+	return p
 }
 
 func hookTaskID(ctx context.Context, cwd, url string) string {

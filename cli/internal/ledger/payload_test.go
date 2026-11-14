@@ -208,8 +208,9 @@ func TestStoredRowsDecodeWithoutLoss(t *testing.T) {
 		}
 	}
 
+	// kinds added after the fixture was frozen have no legacy rows to read
 	for k := range kinds {
-		if !seen[k] {
+		if !seen[k] && k != TurnUsed {
 			t.Errorf("the fixture has no %s row", k)
 		}
 	}

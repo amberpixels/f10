@@ -16,8 +16,10 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/observe"
 	"github.com/amberpixels/f10/cli/internal/state"
+	"github.com/amberpixels/f10/cli/internal/transcript"
 )
 
 // Payload is the part of a hook event's JSON the arms read, decoded once.
@@ -34,6 +36,7 @@ type Payload struct {
 	ToolResponse json.RawMessage `json:"tool_response"`
 	Prompt       string          `json:"prompt"` // UserPromptSubmit
 	Model        string          `json:"model"`  // SessionStart, when the source carries one
+	Transcript   string          `json:"transcript_path"`
 }
 
 // Env is everything a hook reaches outside its payload, so a test can point
@@ -58,6 +61,10 @@ type Env struct {
 	// whether the model must take the turn: a question to relay, or a token
 	// that names no task.
 	StatusText func(ctx context.Context, session, token string) (string, bool)
+
+	// Profile is the agent profile f10 started the cwd's branch with; the
+	// zero profile for a session f10 did not start.
+	Profile func(ctx context.Context, cwd string) agentctl.Profile
 
 	// Observers receive every observation after the badge has applied it.
 	Observers []observe.Observer
@@ -109,8 +116,8 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 			}
 		}
 
-		seed(ctx, env, sid, skillOf(p.CommandName), p.CommandArgs, p.Cwd)
-		notify(ctx, env, sid, p.Cwd, skillStarted(p.CommandName, p.CommandArgs)...)
+		seed(ctx, env, sid, skillOf(p.CommandName), p.CommandArgs, p.Cwd, p.Transcript)
+		notify(ctx, env, sid, p.Cwd, started(ctx, env, sid, p, p.CommandName, p.CommandArgs)...)
 	case "PreToolUse":
 		// the model calling the skill itself, which the expansion never sees
 		if p.ToolName != "Skill" {
@@ -123,8 +130,8 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 		}
 
 		_ = json.Unmarshal(p.ToolInput, &in)
-		seed(ctx, env, sid, skillOf(in.Skill), in.Args, p.Cwd)
-		notify(ctx, env, sid, p.Cwd, skillStarted(in.Skill, in.Args)...)
+		seed(ctx, env, sid, skillOf(in.Skill), in.Args, p.Cwd, p.Transcript)
+		notify(ctx, env, sid, p.Cwd, started(ctx, env, sid, p, in.Skill, in.Args)...)
 	case "PostToolUse":
 		obs := observed(ctx, env, p)
 		b := badge{env: env, session: sid, cwd: p.Cwd}
@@ -140,7 +147,10 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 			return nil
 		}
 
-		var stop *observe.SessionStopped
+		var (
+			stop  *observe.SessionStopped
+			usage *transcript.Usage
+		)
 
 		_ = state.Update(
 			ctx,
@@ -158,8 +168,11 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 				stop = stopped(r)
 
 				backstop := r.Backstop()
-				if backstop && stop != nil {
-					stop.Backstop = true
+				if stop != nil {
+					stop.Backstop = backstop
+					// a done run counts this turn, its last; failed or partial
+					// runs go on, since a drive follows them up
+					usage = turnUsage(env.StateDir, sid, p.Transcript, stop.Status == "done" || backstop)
 				}
 
 				return backstop, nil
@@ -167,6 +180,13 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 		)
 
 		if stop != nil {
+			model := ""
+			if usage != nil {
+				model = usage.Model
+				notify(ctx, env, sid, p.Cwd, &observe.TurnUsed{Task: stop.Task, Usage: *usage})
+			}
+
+			stop.RunContext = runContext(ctx, env, sid, p.Cwd, p.Transcript, model)
 			notify(ctx, env, sid, p.Cwd, stop)
 		}
 	case "SessionStart":
@@ -262,14 +282,26 @@ func stopped(r *state.Run) *observe.SessionStopped {
 // rather than saving over a newer one.
 const hookLockWait = 2 * time.Second
 
-func seed(ctx context.Context, env *Env, sid, skill, args, cwd string) {
+func seed(ctx context.Context, env *Env, sid, skill, args, cwd, transcriptPath string) {
 	if skill == "" || sid == "" {
 		return
 	}
 
 	_ = state.Update(ctx, env.StateDir, sid, hookLockWait, env.now(), func(r *state.Run, _ bool) (bool, error) {
+		startUsage(env.StateDir, sid, transcriptPath)
+
 		return r.Seed(ctx, skill, args, cwd), nil
 	})
+}
+
+// started is a skill start carrying the run context.
+func started(ctx context.Context, env *Env, sid string, p Payload, name, args string) []observe.Observation {
+	obs := skillStarted(name, args)
+	if len(obs) == 0 {
+		return nil
+	}
+
+	return withContext(obs, runContext(ctx, env, sid, p.Cwd, p.Transcript, ""))
 }
 
 // observed turns a PostToolUse payload into observations.
