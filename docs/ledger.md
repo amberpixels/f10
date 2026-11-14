@@ -33,3 +33,21 @@ Some payload keys are also generated columns, so a query can filter on them with
 
 The columns are virtual: SQLite computes them from `payload`, so old rows have them too.
 A version that renames one of these keys changes its column, in the same release, to a `COALESCE` over the old and the new name, so rows of both versions keep their value.
+
+## What ran a run, and what it cost
+
+`run_started` carries the run context: `f10_version`, `model`, `agent` (the agent kind, `claude` unless a profile names another) and `profile` (the `kind`, `model` and `effort` that `f10 start` or `f10 drive` recorded on the branch).
+A key the hook could not learn is absent, and an interactive session has no `profile`.
+`session_stopped` carries the same keys only when the context changed since the session's last row that carried one, such as after a `/model` switch.
+
+`turn_used` is the tokens one turn spent, read from the session's transcript as a delta since the previous turn, so a task's cost is the sum of its rows:
+
+- `usage.input`, `usage.output`, `usage.cache_write` and `usage.cache_read` are the session's own messages.
+  One API message spans several transcript lines that each repeat its usage, so each message counts once.
+- `usage.by_model` splits the same four by model, only when the turn ran on more than one.
+- `usage.subagents` holds the same four for the subagents the turn ran, from inline sidechain lines and from the session's `subagents/` transcripts.
+- `usage.through` is the uuid of the last transcript entry counted.
+
+Counting starts when an f10 skill first starts in the session, so tokens spent before it are not attributed to the run, and a session with no f10 run writes no `turn_used`.
+A turn whose transcript is missing or unreadable writes no `turn_used` row, and its `session_stopped` row is written as usual.
+No prompt or response text reaches the ledger.

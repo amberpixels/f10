@@ -10,6 +10,32 @@ type RunStartedV1 struct {
 	Args  string `json:"args,omitempty"`
 }
 
+// RunStartedV2 adds what ran the skill.
+type RunStartedV2 struct {
+	RunContext
+
+	Skill string `json:"skill"`
+	Args  string `json:"args,omitempty"`
+}
+
+// RunContext is what a run ran on, each key absent when the hook could not
+// tell. Its keys are part of every version that embeds it, so changing one
+// is a new version of each.
+type RunContext struct {
+	F10Version string       `json:"f10_version,omitempty"`
+	Model      string       `json:"model,omitempty"`
+	Agent      string       `json:"agent,omitempty"`
+	Profile    AgentProfile `json:"profile,omitzero"`
+}
+
+// AgentProfile is the profile f10 started the agent with, as the branch
+// records it; an empty segment was left to the agent's default.
+type AgentProfile struct {
+	Kind   string `json:"kind,omitempty"`
+	Model  string `json:"model,omitempty"`
+	Effort string `json:"effort,omitempty"`
+}
+
 // StepEnteredV1 is a step load: the steps it named.
 type StepEnteredV1 struct {
 	Steps []string `json:"steps"`
@@ -29,6 +55,42 @@ type SessionStoppedV1 struct {
 	Status   string `json:"status"`
 	Leaf     string `json:"leaf,omitempty"`
 	Backstop bool   `json:"backstop,omitempty"`
+}
+
+// SessionStoppedV2 adds the run context, set only when it changed since
+// the session's last row that carried one.
+type SessionStoppedV2 struct {
+	RunContext
+
+	Task     string `json:"task,omitempty"`
+	Phase    string `json:"phase"`
+	Status   string `json:"status"`
+	Leaf     string `json:"leaf,omitempty"`
+	Backstop bool   `json:"backstop,omitempty"`
+}
+
+// TurnUsedV1 is the tokens a turn spent: the transcript's usage since the
+// session's previous turn_used row, so a sum over rows is a cost.
+type TurnUsedV1 struct {
+	Usage Usage `json:"usage"`
+}
+
+// Usage is one turn's tokens: the session's own messages, by model when the
+// turn used more than one, its subagents' apart, and the last entry counted.
+type Usage struct {
+	Tokens
+
+	ByModel   map[string]Tokens `json:"by_model,omitempty"`
+	Subagents Tokens            `json:"subagents,omitzero"`
+	Through   string            `json:"through,omitempty"`
+}
+
+// Tokens is the four token counts of an API usage.
+type Tokens struct {
+	Input      int `json:"input"`
+	Output     int `json:"output"`
+	CacheWrite int `json:"cache_write"`
+	CacheRead  int `json:"cache_read"`
 }
 
 // TaskCapturedV1 is a tracker issue created, by the url or id it printed.
@@ -156,10 +218,11 @@ type ClaimV1 struct {
 }
 
 type (
-	RunStartedPayload        = RunStartedV1
+	RunStartedPayload        = RunStartedV2
 	StepEnteredPayload       = StepEnteredV1
 	TaskFinishedPayload      = TaskFinishedV1
-	SessionStoppedPayload    = SessionStoppedV1
+	SessionStoppedPayload    = SessionStoppedV2
+	TurnUsedPayload          = TurnUsedV1
 	TaskCapturedPayload      = TaskCapturedV1
 	PROpenedPayload          = PROpenedV1
 	CommittedPayload         = CommittedV1
@@ -206,4 +269,12 @@ func init() {
 		StateFinal,
 		StatePipeline,
 	)
+	register[TurnUsedV1](kinds, TurnUsed)
+
+	upcast(kinds, RunStarted, func(o RunStartedV1) RunStartedV2 {
+		return RunStartedV2{Skill: o.Skill, Args: o.Args}
+	})
+	upcast(kinds, SessionStopped, func(o SessionStoppedV1) SessionStoppedV2 {
+		return SessionStoppedV2{Task: o.Task, Phase: o.Phase, Status: o.Status, Leaf: o.Leaf, Backstop: o.Backstop}
+	})
 }

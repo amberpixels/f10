@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/flow"
+	"github.com/amberpixels/f10/cli/internal/transcript"
 )
 
 // DefaultTTL is how long a run counts as live with nothing reporting.
@@ -35,6 +36,7 @@ const (
 	modelExt         = ".model"
 	waitExt          = ".wait"
 	backgroundExt    = ".background"
+	usageExt         = ".usage"
 )
 
 // Phases in the order the badge draws them.
@@ -466,4 +468,44 @@ func (r *Run) PhaseText(phase string) string {
 	default:
 		return status
 	}
+}
+
+// UsagePath holds how far the hook has read the session's transcript for
+// its usage.
+func UsagePath(dir, session string) string {
+	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+usageExt)
+}
+
+// LoadUsage is the transcript position UsagePath holds, false when none is
+// recorded or it does not decode.
+func LoadUsage(dir, session string) (transcript.Position, bool) {
+	raw, err := os.ReadFile(UsagePath(dir, session))
+	if err != nil {
+		return transcript.Position{}, false
+	}
+
+	var p transcript.Position
+	if json.Unmarshal(raw, &p) != nil || p.Offsets == nil {
+		return transcript.Position{}, false
+	}
+
+	return p, true
+}
+
+// SaveUsage records the session's transcript position.
+func SaveUsage(dir, session string, p transcript.Position) error {
+	raw, err := json.Marshal(p)
+	if err != nil {
+		return fmt.Errorf("usage position: %w", err)
+	}
+
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return fmt.Errorf("usage position: %w", err)
+	}
+
+	if err := os.WriteFile(UsagePath(dir, session), raw, 0o600); err != nil {
+		return fmt.Errorf("usage position: %w", err)
+	}
+
+	return nil
 }

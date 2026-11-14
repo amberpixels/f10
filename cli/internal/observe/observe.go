@@ -6,6 +6,8 @@ package observe
 import (
 	"context"
 	"time"
+
+	"github.com/amberpixels/f10/cli/internal/transcript"
 )
 
 // Meta is what every observation carries: the session it happened in, the
@@ -135,9 +137,30 @@ func (*VerdictWritten) Kind() string  { return "verdict_written" }
 // or called by the model through the Skill tool.
 type SkillStarted struct {
 	Meta
+	RunContext
 
 	Skill string `json:"skill"`
 	Args  string `json:"args,omitempty"`
+}
+
+// RunContext is what a run ran on: the f10 binary, the model, and the agent
+// kind and profile f10 started it with; empty where the hook could not tell.
+type RunContext struct {
+	F10Version    string `json:"f10_version,omitempty"`
+	Model         string `json:"model,omitempty"`
+	Agent         string `json:"agent,omitempty"`
+	ProfileKind   string `json:"profile_kind,omitempty"`
+	ProfileModel  string `json:"profile_model,omitempty"`
+	ProfileEffort string `json:"profile_effort,omitempty"`
+}
+
+// TurnUsed is the tokens one turn spent in a session with a run, read from
+// its transcript since the previous turn.
+type TurnUsed struct {
+	Meta
+
+	Task  string           `json:"task,omitempty"`
+	Usage transcript.Usage `json:"usage"`
 }
 
 // SessionStopped is a turn ending with a run in the session, at the phase,
@@ -145,6 +168,7 @@ type SkillStarted struct {
 // the backstop then promoted it to done.
 type SessionStopped struct {
 	Meta
+	RunContext
 
 	Task     string `json:"task,omitempty"`
 	Phase    string `json:"phase"`
@@ -166,6 +190,7 @@ type PlanArchived struct {
 func (*SkillStarted) Kind() string   { return "skill_started" }
 func (*SessionStopped) Kind() string { return "session_stopped" }
 func (*PlanArchived) Kind() string   { return "plan_archived" }
+func (*TurnUsed) Kind() string       { return "turn_used" }
 
 // Wait reasons: a turn ended and the user has not answered, an
 // AskUserQuestion open, a permission dialog open.
