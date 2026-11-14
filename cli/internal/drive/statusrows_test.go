@@ -10,8 +10,8 @@ import (
 func TestHaltPayloadReadsBack(t *testing.T) {
 	p := haltPayload(driveResult{Skill: "ship", Reason: "stalled"})
 
-	e := ledger.Event{Kind: ledger.TaskHalted, Payload: ledger.NewPayload(p)}
+	e := ledger.MustEvent(ledger.TaskHalted, p)
 	if e.Skill() != "ship" || e.Reason() != "stalled" {
-		t.Errorf("halt %v", e.Payload.Val)
+		t.Errorf("halt %+v", p)
 	}
 }

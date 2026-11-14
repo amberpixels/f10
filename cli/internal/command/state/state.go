@@ -172,16 +172,12 @@ func recordClaim(ctx context.Context, r *state.Run, kind string, args []string, 
 	cwd, _ := os.Getwd()
 	place := ledger.Where(ctx, cwd)
 
-	ledger.Record(ledger.Event{
-		At:           now,
-		Project:      place.Project,
-		ProjectLocal: place.ProjectLocal,
-		Checkout:     place.Checkout,
-		Branch:       place.Branch,
-		Session:      r.Session,
-		Task:         r.Task,
-		Kind:         kind,
-		Source:       ledger.Claimed,
-		Payload:      ledger.NewPayload(ledger.EncodeClaim(r, args)),
-	})
+	e, err := ledger.NewEvent(kind, ledger.EncodeClaim(r, args))
+	if err != nil {
+		return
+	}
+
+	e.At, e.Session, e.Task, e.Source = now, r.Session, r.Task, ledger.Claimed
+	e.Project, e.ProjectLocal, e.Checkout, e.Branch = place.Project, place.ProjectLocal, place.Checkout, place.Branch
+	ledger.Record(e)
 }

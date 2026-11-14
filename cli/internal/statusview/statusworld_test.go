@@ -78,17 +78,29 @@ func TestStatusParentWorld(t *testing.T) {
 			at(1),
 			"FT-4",
 			ledger.StateSet,
-			ledger.Payload{"capture": "prior", "plan": "done", "ship": "running", "leaf": "pr"},
+			ledger.ClaimPayload{Capture: "prior", Plan: "done", Ship: "running", Leaf: "pr"},
 		),
-		event(at(2), "FT-4", ledger.PROpened, ledger.Payload{"url": "https://github.com/a/b/pull/40"}),
-		event(at(3), "FT-5", ledger.StateAsk, ledger.Payload{
-			"capture": "prior", "plan": "done", "ship": "blocked", "leaf": "judge", "ask": "1. Proceed? [yes | no]",
-		}),
-		event(at(4), "FT-8", ledger.StateSet, ledger.Payload{
-			"capture": "prior", "plan": "done", "ship": "running", "leaf": "implement",
-		}),
-		event(at(5), "FT-8", ledger.TaskHalted, ledger.Payload{"skill": "ship", "reason": "agent idle"}),
-		event(at(6), "FT-10", ledger.StateSet, ledger.Payload{"capture": "prior", "plan": "done", "ship": "upcoming"}),
+		event(at(2), "FT-4", ledger.PROpened, ledger.PROpenedPayload{URL: "https://github.com/a/b/pull/40"}),
+		event(
+			at(3),
+			"FT-5",
+			ledger.StateAsk,
+			ledger.ClaimPayload{
+				Capture: "prior",
+				Plan:    "done",
+				Ship:    "blocked",
+				Leaf:    "judge",
+				Ask:     "1. Proceed? [yes | no]",
+			},
+		),
+		event(
+			at(4),
+			"FT-8",
+			ledger.StateSet,
+			ledger.ClaimPayload{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"},
+		),
+		event(at(5), "FT-8", ledger.TaskHalted, ledger.TaskHaltedPayload{Skill: "ship", Reason: "agent idle"}),
+		event(at(6), "FT-10", ledger.StateSet, ledger.ClaimPayload{Capture: "prior", Plan: "done", Ship: "upcoming"}),
 	)...)
 
 	// a running drive lists FT-6, so it waits on its base

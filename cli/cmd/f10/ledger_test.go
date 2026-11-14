@@ -20,6 +20,9 @@ func TestStateCallsAreRecordedAsClaimed(t *testing.T) {
 		{"note", "push rejected", "-f was needed"},
 		{"ask", "1. retry? [no | yes]"},
 		{"final", "pr"},
+		{"pipeline", "implement", "pr"},
+		{"wait", "GH-6"},
+		{"stop", "guard"},
 	} {
 		if out, code := runState(t, args...); code != 0 {
 			t.Fatalf("%q: exit %d\n%s", args, code, out)
@@ -48,17 +51,17 @@ func TestStateCallsAreRecordedAsClaimed(t *testing.T) {
 		kinds = append(kinds, e.Kind)
 
 		if e.Kind == ledger.StateSet &&
-			(e.Task != "GH-7" || e.Payload.Val["ship"] != "blocked" || e.Payload.Val["leaf"] != "judge") {
+			(e.Task != "GH-7" || ledger.DecodeClaim(e).Run.Ship != "blocked" || ledger.DecodeClaim(e).Run.Leaf != "judge") {
 			t.Errorf("set event %+v", e)
 		}
 	}
 
-	want := "state_task state_set state_note state_ask state_final"
+	want := "state_task state_set state_note state_ask state_final state_pipeline state_wait state_stop"
 	if got := strings.Join(kinds, " "); got != want {
 		t.Errorf("kinds %q, want %q", got, want)
 	}
 
-	if out := runApp(t, "ledger", "dump", "--task", "GH-7").must(t); strings.Count(out, "\n") != 5 ||
+	if out := runApp(t, "ledger", "dump", "--task", "GH-7").must(t); strings.Count(out, "\n") != 8 ||
 		!strings.Contains(out, "claimed") {
 		t.Errorf("dump by task:\n%s", out)
 	}

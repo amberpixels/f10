@@ -365,11 +365,9 @@ func TestReadShipmentFromTheLedger(t *testing.T) {
 	}
 
 	in := taskStatusInput{ID: "GH-1", Branch: "GH-1", Plan: plan, Handoff: filepath.Join(dir, "none.md")}
-	events := []ledger.Event{{
-		Kind:    ledger.PROpened,
-		Task:    "GH-1",
-		Payload: ledger.NewPayload(ledger.Payload{"url": "https://gh/pr/9"}),
-	}}
+	pr := ledger.MustEvent(ledger.PROpened, ledger.PROpenedPayload{URL: "https://gh/pr/9"})
+	pr.Task = "GH-1"
+	events := []ledger.Event{pr}
 
 	known := ledger.TaskRef{ID: "GH-1", Title: "Add a retry", URL: "https://gh/issues/1"}
 	s := readShipment(t.Context(), in, events, known)
@@ -391,7 +389,9 @@ func TestReadShipmentPRByBranch(t *testing.T) {
 
 	h := hostops.NewHost("gh", t.TempDir())
 	in := taskStatusInput{ID: "GH-1", Branch: "GH-1", Host: &h}
-	pushed := []ledger.Event{{Kind: ledger.Pushed, Task: "GH-1", Payload: ledger.NewPayload(ledger.Payload{})}}
+	push := ledger.MustEvent(ledger.Pushed, ledger.PushedPayload{})
+	push.Task = "GH-1"
+	pushed := []ledger.Event{push}
 
 	if s := readShipment(t.Context(), in, nil, ledger.TaskRef{}); s.PR != "" {
 		t.Errorf("an unpushed task has pr %q, want none", s.PR)

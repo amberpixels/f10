@@ -1,0 +1,41 @@
+{"kind":"run_started","source":"observed","payload":{"args":"FT-1 --driven","skill":"ship"}}
+{"kind":"run_started","source":"observed","payload":{"skill":"plan"}}
+{"kind":"step_entered","source":"observed","payload":{"steps":["implement"]}}
+{"kind":"step_entered","source":"observed","payload":{"steps":null}}
+{"kind":"task_finished","source":"observed","payload":{"args":["FT-1","--yes"]}}
+{"kind":"session_stopped","source":"observed","task":"FT-1","payload":{"backstop":true,"leaf":"pr","phase":"ship","status":"done","task":"FT-1"}}
+{"kind":"session_stopped","source":"observed","payload":{"phase":"plan","status":"running"}}
+{"kind":"task_captured","source":"observed","payload":{"host":"gh","id":"","url":"https://github.com/o/r/issues/7"}}
+{"kind":"task_captured","source":"observed","task":"FT-8","payload":{"host":"f10","id":"FT-8"}}
+{"kind":"pr_opened","source":"observed","payload":{"host":"gh","url":"https://github.com/o/r/pull/9"}}
+{"kind":"committed","source":"observed","payload":{"branch":"b","sha":"abc1234","subject":"feat: x"}}
+{"kind":"pushed","source":"observed","payload":{"refs":["b -\u003e b"],"remote":"origin"}}
+{"kind":"pushed","source":"observed","payload":{"refs":["b -\u003e b"]}}
+{"kind":"wait_started","source":"observed","payload":{"reason":"question","tool":"AskUserQuestion"}}
+{"kind":"wait_started","source":"observed","payload":{"reason":"turn"}}
+{"kind":"wait_ended","source":"observed","payload":{"by":"PostToolUse","reason":"question","tool":"AskUserQuestion"}}
+{"kind":"wait_ended","source":"observed","payload":{"by":"UserPromptSubmit","reason":"turn"}}
+{"kind":"plan_saved","source":"artifact","task":"FT-1","payload":{"path":"/p/plans/FT-1.md","task":"FT-1"}}
+{"kind":"plan_superseded","source":"artifact","task":"FT-1","payload":{"from":"/p/plans/FT-1.md","task":"FT-1","to":"/p/plans/archive/FT-1.1.md"}}
+{"kind":"review_round_opened","source":"artifact","task":"FT-1","payload":{"categories":{"correctness":2,"style":0},"path":"/p/reviews/FT-1/2.md","reviewed":"b2","reviewer":"local","round":"2","verdict":"findings"}}
+{"kind":"finding_verdict","source":"artifact","task":"FT-1","payload":{"category":"correctness","finding":"2.1","reason":"not worth it","round":"2","title":"New one","verdict":"skip"}}
+{"kind":"finding_verdict","source":"artifact","task":"FT-1","payload":{"category":"correctness","finding":"2.2","round":"2","title":"Other","verdict":"fix"}}
+{"kind":"review_round_opened","source":"artifact","task":"FT-1","payload":{"parse_error":"findings: no header","path":"/p/reviews/FT-1/bad.md","round":"3"}}
+{"kind":"judge_verdict","source":"artifact","task":"FT-1","payload":{"blind":true,"decision":"folded","key":"FT-1","n":"1","path":"/p/reviews/FT-1/1.md","reason":"why","run":"ship before pr","subject":"plan FT-1","verdict":"proceed with changes"}}
+{"kind":"judge_verdict","source":"artifact","payload":{"idea":true,"key":"a-thing","n":"1","path":"/p/reviews/FT-1/idea.md","reason":"no","run":"standalone","subject":"idea a thing","verdict":"stop"}}
+{"kind":"judge_verdict","source":"artifact","task":"FT-1","payload":{"key":"FT-1","n":"2","parse_error":"verdict: unknown verdict: \"maybe\"","path":"/p/reviews/FT-1/bad-verdict.md"}}
+{"kind":"state_set","source":"claimed","task":"FT-1","payload":{"args":["set","ship","running","implement"],"ask":"1. a? [y | n]","at":2,"capture":"prior","done":"review","final":"pr","labels":["impl","pr"],"leaf":"implement","next":"x","note":"n","pipeline":["implement","pr"],"plan":"done","ship":"running","wait":"FT-0"}}
+{"kind":"state_task","source":"claimed","task":"FT-1","payload":{"args":["set","ship","running","implement"],"ask":"1. a? [y | n]","at":2,"capture":"prior","done":"review","final":"pr","labels":["impl","pr"],"leaf":"implement","next":"x","note":"n","pipeline":["implement","pr"],"plan":"done","ship":"running","wait":"FT-0"}}
+{"kind":"state_note","source":"claimed","task":"FT-1","payload":{"args":["set","ship","running","implement"],"ask":"1. a? [y | n]","at":2,"capture":"prior","done":"review","final":"pr","labels":["impl","pr"],"leaf":"implement","next":"x","note":"n","pipeline":["implement","pr"],"plan":"done","ship":"running","wait":"FT-0"}}
+{"kind":"state_ask","source":"claimed","task":"FT-1","payload":{"args":["set","ship","running","implement"],"ask":"1. a? [y | n]","at":2,"capture":"prior","done":"review","final":"pr","labels":["impl","pr"],"leaf":"implement","next":"x","note":"n","pipeline":["implement","pr"],"plan":"done","ship":"running","wait":"FT-0"}}
+{"kind":"state_done","source":"claimed","task":"FT-1","payload":{"args":["set","ship","running","implement"],"ask":"1. a? [y | n]","at":2,"capture":"prior","done":"review","final":"pr","labels":["impl","pr"],"leaf":"implement","next":"x","note":"n","pipeline":["implement","pr"],"plan":"done","ship":"running","wait":"FT-0"}}
+{"kind":"state_final","source":"claimed","task":"FT-1","payload":{"args":["set","ship","running","implement"],"ask":"1. a? [y | n]","at":2,"capture":"prior","done":"review","final":"pr","labels":["impl","pr"],"leaf":"implement","next":"x","note":"n","pipeline":["implement","pr"],"plan":"done","ship":"running","wait":"FT-0"}}
+{"kind":"state_set","source":"claimed","payload":{"args":null,"capture":"pending","plan":"","ship":""}}
+{"kind":"task_finished","source":"observed","task":"FT-1","payload":{"args":["FT-1"],"by":"drive"}}
+{"kind":"task_finished","source":"observed","task":"FT-1","payload":{"args":["FT-1"]}}
+{"kind":"task_halted","source":"observed","task":"FT-1","payload":{"attempts":["a","b"],"reason":"no progress","skill":"ship"}}
+{"kind":"task_halted","source":"observed","task":"FT-1","payload":{"reason":"stall","skill":"ship"}}
+{"kind":"task_sized","source":"observed","task":"FT-1","payload":{"base":"main","files":7,"lines":400,"md_lines":100}}
+{"kind":"state_wait","source":"claimed","task":"FT-1","payload":{"args":["set","ship","running","implement"],"ask":"1. a? [y | n]","at":2,"capture":"prior","done":"review","final":"pr","labels":["impl","pr"],"leaf":"implement","next":"x","note":"n","pipeline":["implement","pr"],"plan":"done","ship":"running","wait":"FT-0"}}
+{"kind":"state_stop","source":"claimed","task":"FT-1","payload":{"args":["set","ship","running","implement"],"ask":"1. a? [y | n]","at":2,"capture":"prior","done":"review","final":"pr","labels":["impl","pr"],"leaf":"implement","next":"x","note":"n","pipeline":["implement","pr"],"plan":"done","ship":"running","wait":"FT-0"}}
+{"kind":"state_pipeline","source":"claimed","task":"FT-1","payload":{"args":["set","ship","running","implement"],"ask":"1. a? [y | n]","at":2,"capture":"prior","done":"review","final":"pr","labels":["impl","pr"],"leaf":"implement","next":"x","note":"n","pipeline":["implement","pr"],"plan":"done","ship":"running","wait":"FT-0"}}

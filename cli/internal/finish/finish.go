@@ -187,16 +187,8 @@ func ProcessPlace() (string, string, error) {
 // FinishedEvent records a finish that ran in this process, where no hook
 // sees it; by names who ran it, "" for the drive.
 func FinishedEvent(id, by string, at time.Time) ledger.Event {
-	p := ledger.Payload{"args": []any{id}}
-	if by != "" {
-		p["by"] = by
-	}
+	e := ledger.MustEvent(ledger.TaskFinished, ledger.TaskFinishedPayload{Args: []string{id}, By: by})
+	e.At, e.Task, e.Source = at, id, ledger.Observed
 
-	return ledger.Event{
-		At:      at,
-		Task:    id,
-		Kind:    ledger.TaskFinished,
-		Source:  ledger.Observed,
-		Payload: ledger.NewPayload(p),
-	}
+	return e
 }

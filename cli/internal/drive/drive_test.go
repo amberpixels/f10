@@ -1281,7 +1281,7 @@ func TestDriveHaltsACatchupThatStallsWithNothingSettled(t *testing.T) {
 		t.Errorf("output = %s", out)
 	}
 
-	if len(recorded) != 1 || recorded[0].Kind != ledger.TaskHalted || recorded[0].Payload.Val["skill"] != "catchup" {
+	if len(recorded) != 1 || recorded[0].Kind != ledger.TaskHalted || recorded[0].Skill() != "catchup" {
 		t.Errorf("recorded %+v, want one halt at catchup", recorded)
 	}
 
@@ -1406,8 +1406,8 @@ func TestDriveHaltsOnAnAgentThatStoppedWithoutReporting(t *testing.T) {
 	}
 
 	e := recorded[0]
-	if reason, _ := e.Payload.Val["reason"].(string); e.Kind != ledger.TaskHalted || e.Task != "GH-1" ||
-		e.Payload.Val["skill"] != "ship" || !strings.Contains(reason, "stopped without reporting") {
+	if e.Kind != ledger.TaskHalted || e.Task != "GH-1" ||
+		e.Skill() != "ship" || !strings.Contains(e.Reason(), "stopped without reporting") {
 		t.Errorf("halt event %+v", e)
 	}
 

@@ -1,0 +1,702 @@
+{
+  "$defs": {
+    "ClaimV1": {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "ask": {
+          "type": "string"
+        },
+        "at": {
+          "type": "integer"
+        },
+        "capture": {
+          "type": "string"
+        },
+        "done": {
+          "type": "string"
+        },
+        "final": {
+          "type": "string"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "leaf": {
+          "type": "string"
+        },
+        "next": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        },
+        "pipeline": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "plan": {
+          "type": "string"
+        },
+        "ship": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        },
+        "wait": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "args",
+        "capture",
+        "plan",
+        "ship"
+      ],
+      "type": "object"
+    },
+    "CommittedV1": {
+      "additionalProperties": false,
+      "properties": {
+        "branch": {
+          "type": "string"
+        },
+        "sha": {
+          "type": "string"
+        },
+        "subject": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [
+        "branch",
+        "sha",
+        "subject"
+      ],
+      "type": "object"
+    },
+    "FindingVerdictV1": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "type": "string"
+        },
+        "finding": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "round": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        },
+        "verdict": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "round",
+        "finding",
+        "title"
+      ],
+      "type": "object"
+    },
+    "JudgeVerdictV1": {
+      "additionalProperties": false,
+      "properties": {
+        "blind": {
+          "type": "boolean"
+        },
+        "decision": {
+          "type": "string"
+        },
+        "idea": {
+          "type": "boolean"
+        },
+        "key": {
+          "type": "string"
+        },
+        "n": {
+          "type": "string"
+        },
+        "parse_error": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "run": {
+          "type": "string"
+        },
+        "subject": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        },
+        "verdict": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "key",
+        "n"
+      ],
+      "type": "object"
+    },
+    "PROpenedV1": {
+      "additionalProperties": false,
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [
+        "host",
+        "url"
+      ],
+      "type": "object"
+    },
+    "PlanSavedV1": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "task": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [
+        "path",
+        "task"
+      ],
+      "type": "object"
+    },
+    "PlanSupersededV1": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "task": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [
+        "from",
+        "to",
+        "task"
+      ],
+      "type": "object"
+    },
+    "PushedV1": {
+      "additionalProperties": false,
+      "properties": {
+        "refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "remote": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [
+        "refs"
+      ],
+      "type": "object"
+    },
+    "ReviewRoundOpenedV1": {
+      "additionalProperties": false,
+      "properties": {
+        "categories": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "parse_error": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "reviewed": {
+          "type": "string"
+        },
+        "reviewer": {
+          "type": "string"
+        },
+        "round": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        },
+        "verdict": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "round"
+      ],
+      "type": "object"
+    },
+    "RunStartedV1": {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "type": "string"
+        },
+        "skill": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [
+        "skill"
+      ],
+      "type": "object"
+    },
+    "SessionStoppedV1": {
+      "additionalProperties": false,
+      "properties": {
+        "backstop": {
+          "type": "boolean"
+        },
+        "leaf": {
+          "type": "string"
+        },
+        "phase": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "task": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [
+        "phase",
+        "status"
+      ],
+      "type": "object"
+    },
+    "StepEnteredV1": {
+      "additionalProperties": false,
+      "properties": {
+        "steps": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [
+        "steps"
+      ],
+      "type": "object"
+    },
+    "TaskCapturedV1": {
+      "additionalProperties": false,
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [
+        "host"
+      ],
+      "type": "object"
+    },
+    "TaskFinishedV1": {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "by": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [
+        "args"
+      ],
+      "type": "object"
+    },
+    "TaskHaltedV1": {
+      "additionalProperties": false,
+      "properties": {
+        "attempts": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "skill": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [
+        "skill",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "TaskSizedV1": {
+      "additionalProperties": false,
+      "properties": {
+        "base": {
+          "type": "string"
+        },
+        "files": {
+          "type": "integer"
+        },
+        "lines": {
+          "type": "integer"
+        },
+        "md_lines": {
+          "type": "integer"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [
+        "lines",
+        "md_lines",
+        "files",
+        "base"
+      ],
+      "type": "object"
+    },
+    "WaitEndedV1": {
+      "additionalProperties": false,
+      "properties": {
+        "by": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "tool": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [
+        "reason",
+        "by"
+      ],
+      "type": "object"
+    },
+    "WaitStartedV1": {
+      "additionalProperties": false,
+      "properties": {
+        "reason": {
+          "type": "string"
+        },
+        "tool": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [
+        "reason"
+      ],
+      "type": "object"
+    },
+    "committed": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/CommittedV1"
+        }
+      ]
+    },
+    "finding_verdict": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/FindingVerdictV1"
+        }
+      ]
+    },
+    "judge_verdict": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/JudgeVerdictV1"
+        }
+      ]
+    },
+    "plan_saved": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/PlanSavedV1"
+        }
+      ]
+    },
+    "plan_superseded": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/PlanSupersededV1"
+        }
+      ]
+    },
+    "pr_opened": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/PROpenedV1"
+        }
+      ]
+    },
+    "pushed": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/PushedV1"
+        }
+      ]
+    },
+    "review_round_opened": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ReviewRoundOpenedV1"
+        }
+      ]
+    },
+    "run_started": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/RunStartedV1"
+        }
+      ]
+    },
+    "session_stopped": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/SessionStoppedV1"
+        }
+      ]
+    },
+    "state_ask": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ClaimV1"
+        }
+      ]
+    },
+    "state_done": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ClaimV1"
+        }
+      ]
+    },
+    "state_final": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ClaimV1"
+        }
+      ]
+    },
+    "state_note": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ClaimV1"
+        }
+      ]
+    },
+    "state_pipeline": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ClaimV1"
+        }
+      ]
+    },
+    "state_set": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ClaimV1"
+        }
+      ]
+    },
+    "state_stop": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ClaimV1"
+        }
+      ]
+    },
+    "state_task": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ClaimV1"
+        }
+      ]
+    },
+    "state_wait": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ClaimV1"
+        }
+      ]
+    },
+    "step_entered": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/StepEnteredV1"
+        }
+      ]
+    },
+    "task_captured": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/TaskCapturedV1"
+        }
+      ]
+    },
+    "task_finished": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/TaskFinishedV1"
+        }
+      ]
+    },
+    "task_halted": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/TaskHaltedV1"
+        }
+      ]
+    },
+    "task_sized": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/TaskSizedV1"
+        }
+      ]
+    },
+    "wait_ended": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/WaitEndedV1"
+        }
+      ]
+    },
+    "wait_started": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/WaitStartedV1"
+        }
+      ]
+    }
+  },
+  "$id": "https://github.com/amberpixels/f10/docs/ledger.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "The payload of each events row, by kind: $defs/\u003ckind\u003e lists its versions, oldest first. docs/ledger.md is the spec.",
+  "title": "Ledger payloads"
+}

@@ -69,8 +69,8 @@ func fill(dbPath string, events []Event) {
 
 		e.At = e.At.UTC()
 
-		if e.Payload.Val == nil {
-			e.Payload.Val = Payload{}
+		if len(e.Payload.Val.raw) == 0 {
+			e.Payload.Val.raw = json.RawMessage("{}")
 		}
 	}
 }

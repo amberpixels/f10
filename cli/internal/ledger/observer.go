@@ -2,9 +2,7 @@ package ledger
 
 import (
 	"context"
-	"encoding/json"
 	"os"
-	"slices"
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/findings"
@@ -34,12 +32,15 @@ const (
 	FindingVerdict    = "finding_verdict"
 	JudgeVerdict      = "judge_verdict"
 
-	StateSet   = "state_set"
-	StateTask  = "state_task"
-	StateNote  = "state_note"
-	StateAsk   = "state_ask"
-	StateDone  = "state_done" // a phaseless step's report is out: the drive's end signal
-	StateFinal = "state_final"
+	StateSet      = "state_set"
+	StateTask     = "state_task"
+	StateNote     = "state_note"
+	StateAsk      = "state_ask"
+	StateWait     = "state_wait"
+	StateStop     = "state_stop"
+	StatePipeline = "state_pipeline"
+	StateDone     = "state_done" // a phaseless step's report is out: the drive's end signal
+	StateFinal    = "state_final"
 )
 
 // Observer records a hook's observations to the spool; only one that compares
@@ -158,64 +159,67 @@ func (ob *Observer) place(ctx context.Context, cwd string) Place {
 // events maps one observation to its rows; none when the observation is
 // out of scope or already recorded.
 func (ob *Observer) events(ctx context.Context, o observe.Observation, m observe.Meta) []Event {
-	one := func(kind, source, task string) []Event {
-		return []Event{{Kind: kind, Source: source, Task: task, Payload: payloadOf(o)}}
+	one := func(kind, source, task string, payload any) []Event {
+		e, err := NewEvent(kind, payload)
+		if err != nil {
+			return nil
+		}
+
+		e.Source, e.Task = source, task
+
+		return []Event{e}
 	}
 
 	switch o := o.(type) {
 	case *observe.SkillStarted:
-		return one(RunStarted, Observed, "")
+		return one(RunStarted, Observed, "", RunStartedPayload{Skill: o.Skill, Args: o.Args})
 	case *observe.StepStarted:
-		return one(StepEntered, Observed, "")
+		return one(StepEntered, Observed, "", StepEnteredPayload{Steps: o.Steps})
 	case *observe.Finished:
-		return one(TaskFinished, Observed, "")
+		return one(TaskFinished, Observed, "", TaskFinishedPayload{Args: o.Args})
 	case *observe.SessionStopped:
 		if ob.sameStop(ctx, m.Session, o) {
 			return nil
 		}
 
-		return one(SessionStopped, Observed, o.Task)
+		return one(SessionStopped, Observed, o.Task, stopPayload(o))
 	case *observe.IssueCreated:
 		if m.Session == "" {
 			return nil
 		}
 
-		e := one(TaskCaptured, Observed, "")
-		if o.ID != "" {
-			e[0].Task = o.ID
-			e[0].Payload.Val["id"] = o.ID
-		} else if ob.TaskID != nil {
-			e[0].Task = ob.TaskID(ctx, m.Cwd, o.URL)
-			e[0].Payload.Val["id"] = e[0].Task
+		id := o.ID
+		if id == "" && ob.TaskID != nil {
+			id = ob.TaskID(ctx, m.Cwd, o.URL)
 		}
 
-		return e
+		return one(TaskCaptured, Observed, id, TaskCapturedPayload{Host: o.Host, URL: o.URL, ID: id})
 	case *observe.PRCreated:
 		if m.Session == "" {
 			return nil
 		}
 
-		return one(PROpened, Observed, "")
+		return one(PROpened, Observed, "", PROpenedPayload{Host: o.Host, URL: o.URL})
 	case *observe.Committed:
 		if m.Session == "" {
 			return nil
 		}
 
-		return one(Committed, Observed, "")
+		return one(Committed, Observed, "", CommittedPayload{Branch: o.Branch, SHA: o.SHA, Subject: o.Subject})
 	case *observe.Pushed:
 		if m.Session == "" {
 			return nil
 		}
 
-		return one(Pushed, Observed, "")
+		return one(Pushed, Observed, "", PushedPayload{Remote: o.Remote, Refs: o.Refs})
 	case *observe.WaitStarted:
-		return one(WaitStarted, Observed, "")
+		return one(WaitStarted, Observed, "", WaitStartedPayload{Reason: o.Reason, Tool: o.Tool})
 	case *observe.WaitEnded:
-		return one(WaitEnded, Observed, "")
+		return one(WaitEnded, Observed, "", WaitEndedPayload{Reason: o.Reason, Tool: o.Tool, By: o.By})
 	case *observe.PlanWritten:
-		return one(PlanSaved, Artifact, o.Task)
+		return one(PlanSaved, Artifact, o.Task, PlanSavedPayload{Path: o.Path, Task: o.Task})
 	case *observe.PlanArchived:
-		return one(PlanSuperseded, Artifact, o.Task)
+		return one(PlanSuperseded, Artifact, o.Task, PlanSupersededPayload{From: o.From, To: o.To, Task: o.Task})
 	case *observe.FindingsWritten:
 		return ob.findings(ctx, o)
 	case *observe.VerdictWritten:
@@ -223,6 +227,23 @@ func (ob *Observer) events(ctx context.Context, o observe.Observation, m observe
 	}
 
 	return nil
+}
+
+func stopPayload(o *observe.SessionStopped) SessionStoppedPayload {
+	return SessionStoppedPayload{Task: o.Task, Phase: o.Phase, Status: o.Status, Leaf: o.Leaf, Backstop: o.Backstop}
+}
+
+// artifact is a row an artifact file wrote, nil when payload does not match
+// the kind.
+func artifact(kind, task string, payload any) []Event {
+	e, err := NewEvent(kind, payload)
+	if err != nil {
+		return nil
+	}
+
+	e.Source, e.Task = Artifact, task
+
+	return []Event{e}
 }
 
 // sameStop reports whether the session's last stop row says the same: Stop
@@ -238,18 +259,9 @@ func (ob *Observer) sameStop(ctx context.Context, session string, o *observe.Ses
 		return false
 	}
 
-	last := prior[len(prior)-1].Payload.Val
+	last, _ := Decode[SessionStoppedPayload](prior[len(prior)-1])
 
-	return last["phase"] == o.Phase && last["status"] == o.Status && last["leaf"] == nonEmpty(o.Leaf)
-}
-
-// nonEmpty is how an omitempty field reads back from a payload.
-func nonEmpty(s string) any {
-	if s == "" {
-		return nil
-	}
-
-	return s
+	return last.Phase == o.Phase && last.Status == o.Status && last.Leaf == o.Leaf
 }
 
 // findings records the round opening once per reviewed sha, then each finding
@@ -263,9 +275,11 @@ func (ob *Observer) findings(ctx context.Context, o *observe.FindingsWritten) []
 
 	f, err := findings.Parse(string(raw))
 	if err != nil {
-		return []Event{{Kind: ReviewRoundOpened, Source: Artifact, Task: o.Task, Payload: col(Payload{
-			"path": o.Path, "round": o.Round, "parse_error": err.Error(),
-		})}}
+		return artifact(
+			ReviewRoundOpened,
+			o.Task,
+			ReviewRoundOpenedPayload{Path: o.Path, Round: o.Round, ParseError: err.Error()},
+		)
 	}
 
 	var prior []Event
@@ -282,25 +296,20 @@ func (ob *Observer) findings(ctx context.Context, o *observe.FindingsWritten) []
 	for _, e := range prior {
 		switch e.Kind {
 		case ReviewRoundOpened:
-			if e.Payload.Val.String("round") == f.Round && e.Payload.Val.String("reviewed") == f.Reviewed {
+			if p, _ := Decode[ReviewRoundOpenedPayload](e); p.Round == f.Round && p.Reviewed == f.Reviewed {
 				opened = true
 			}
 		case FindingVerdict:
-			p := e.Payload.Val
-			last[p.String("round")+"/"+p.String("finding")] = p.String("verdict") + "|" + p.String("status")
+			p, _ := Decode[FindingVerdictPayload](e)
+			last[p.Round+"/"+p.Finding] = p.Verdict + "|" + p.Status
 		}
 	}
 
 	if !opened {
-		cats := map[string]any{}
-		for c, n := range f.Categories {
-			cats[c] = n
-		}
-
-		events = append(events, Event{Kind: ReviewRoundOpened, Source: Artifact, Task: o.Task, Payload: col(Payload{
-			"path": o.Path, "round": f.Round, "reviewed": f.Reviewed, "reviewer": f.Reviewer,
-			"verdict": f.Verdict, "categories": cats,
-		})})
+		events = append(events, artifact(ReviewRoundOpened, o.Task, ReviewRoundOpenedPayload{
+			Path: o.Path, Round: f.Round, Reviewed: f.Reviewed, Reviewer: f.Reviewer,
+			Verdict: f.Verdict, Categories: f.Categories,
+		})...)
 	}
 
 	// keyed by round: a prior-round block reuses its round-one id, and its
@@ -310,16 +319,10 @@ func (ob *Observer) findings(ctx context.Context, o *observe.FindingsWritten) []
 			continue
 		}
 
-		p := Payload{"round": f.Round, "finding": fd.ID, "title": fd.Title}
-		for key, v := range map[string]string{
-			"verdict": fd.Verdict, "category": fd.Category, "reason": fd.Reason, "status": fd.Status,
-		} {
-			if v != "" {
-				p[key] = v
-			}
-		}
-
-		events = append(events, Event{Kind: FindingVerdict, Source: Artifact, Task: o.Task, Payload: col(p)})
+		events = append(events, artifact(FindingVerdict, o.Task, FindingVerdictPayload{
+			Round: f.Round, Finding: fd.ID, Title: fd.Title,
+			Verdict: fd.Verdict, Category: fd.Category, Reason: fd.Reason, Status: fd.Status,
+		})...)
 	}
 
 	return events
@@ -334,75 +337,48 @@ func (ob *Observer) verdict(ctx context.Context, o *observe.VerdictWritten, m ob
 		return nil
 	}
 
-	p := Payload{"path": o.Path, "key": o.Key, "n": o.N}
+	p := JudgeVerdictPayload{Path: o.Path, Key: o.Key, N: o.N}
 
 	f, err := verdict.Parse(string(raw))
 	if err != nil {
-		p["parse_error"] = err.Error()
+		p.ParseError = err.Error()
 
 		task := ""
 		if f != nil {
-			task = f.Task
-
-			if f.Idea() {
-				p["idea"] = true
-			}
+			task, p.Idea = f.Task, f.Idea()
 		}
 
-		return []Event{{Kind: JudgeVerdict, Source: Artifact, Task: task, Payload: col(p)}}
+		return artifact(JudgeVerdict, task, p)
 	}
 
 	// the database holds every project's rows: scope the lookup to this one
 	if l := ob.open(ctx); l != nil {
-		prior, _ := l.List(ctx, Filter{Project: ob.place(ctx, m.Cwd).Project, Kind: JudgeVerdict})
-		for _, e := range slices.Backward(prior) {
-			if v := e.Payload.Val; v["path"] == o.Path {
-				if e.Session == m.Session && v["verdict"] == f.Verdict && v["decision"] == nonEmpty(f.Decision) {
-					return nil
-				}
-
-				break
+		prior, _ := l.List(ctx, Filter{Project: ob.place(ctx, m.Cwd).Project, Kind: JudgeVerdict, Path: o.Path})
+		if len(prior) > 0 {
+			e := prior[len(prior)-1]
+			if v, _ := Decode[JudgeVerdictPayload](
+				e,
+			); e.Session == m.Session && v.Verdict == f.Verdict &&
+				v.Decision == f.Decision {
+				return nil
 			}
 		}
 	}
 
-	for key, v := range map[string]string{
-		"subject": f.Subject, "verdict": f.Verdict, "reason": f.Reason, "run": f.Run, "decision": f.Decision,
-	} {
-		if v != "" {
-			p[key] = v
-		}
-	}
+	p.Subject, p.Verdict, p.Reason, p.Run, p.Decision = f.Subject, f.Verdict, f.Reason, f.Run, f.Decision
+	p.Blind, p.Idea = f.Blind, f.Idea()
 
-	if f.Blind {
-		p["blind"] = true
-	}
-
-	if f.Idea() {
-		p["idea"] = true
-	}
-
-	return []Event{{Kind: JudgeVerdict, Source: Artifact, Task: f.Task, Payload: col(p)}}
+	return artifact(JudgeVerdict, f.Task, p)
 }
 
 // taskless reports a row that belongs to no task even in a session that has
 // one: a verdict on an idea judged mid-task is not that task's verdict.
 func taskless(e *Event) bool {
-	return e.Kind == JudgeVerdict && e.Payload.Val.Bool("idea")
-}
-
-// payloadOf is an observation's own fields, Meta left out: the row's
-// columns carry it.
-func payloadOf(o observe.Observation) payloadCol {
-	p := Payload{}
-
-	if raw, err := json.Marshal(o); err == nil {
-		_ = json.Unmarshal(raw, &p)
+	if e.Kind != JudgeVerdict {
+		return false
 	}
 
-	delete(p, "session")
-	delete(p, "cwd")
-	delete(p, "at")
+	p, _ := Decode[JudgeVerdictPayload](*e)
 
-	return col(p)
+	return p.Idea
 }

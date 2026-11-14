@@ -64,14 +64,12 @@ func TestAppendReadsBack(t *testing.T) {
 
 	l.Append(
 		context.Background(),
-		Event{
-			At:      at,
-			Session: "s1",
-			Task:    "FT-1",
-			Kind:    StepEntered,
-			Source:  Observed,
-			Payload: col(Payload{"steps": []any{"implement"}}),
-		},
+		func() Event {
+			e := MustEvent(StepEntered, StepEnteredPayload{Steps: []string{"implement"}})
+			e.At, e.Session, e.Task, e.Source = at, "s1", "FT-1", Observed
+
+			return e
+		}(),
 		Event{Session: "s2", Kind: RunStarted, Source: Observed},
 	)
 
@@ -85,8 +83,8 @@ func TestAppendReadsBack(t *testing.T) {
 		t.Errorf("first event %+v", e)
 	}
 
-	if steps, _ := e.Payload.Val["steps"].([]any); len(steps) != 1 || steps[0] != "implement" {
-		t.Errorf("payload %v", e.Payload.Val)
+	if p, err := Decode[StepEnteredPayload](e); err != nil || !slices.Equal(p.Steps, []string{"implement"}) {
+		t.Errorf("payload %+v, err %v", p, err)
 	}
 
 	if s2 := list(t, path, Filter{Session: "s2"}); len(s2) != 1 || s2[0].Kind != RunStarted {
@@ -127,7 +125,7 @@ func TestParallelWritersLoseNothing(t *testing.T) {
 			for i := range each {
 				Record(Event{
 					Session: fmt.Sprintf("w%d", w), Kind: Committed, Source: Observed,
-					Payload: col(Payload{"i": i}),
+					Payload: rawPayload(t, fmt.Sprintf(`{"i":%d}`, i)),
 				})
 			}
 		})
@@ -405,7 +403,7 @@ func migrationCount(t *testing.T) int {
 		t.Fatalf("migrations: %v", err)
 	}
 
-	return len(files)
+	return len(files) + 1 // hotKeys, a Go migration
 }
 
 // A fresh open migrates and stamps user_version; an open of a stamped

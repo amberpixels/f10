@@ -92,20 +92,17 @@ func numstatSize(out, base string) branchSize {
 var recordSize = func(ctx context.Context, dir, branch, task string, s branchSize) {
 	place := ledger.Where(ctx, dir)
 
-	ledger.Record(ledger.Event{
-		At:           time.Now(),
-		Project:      place.Project,
-		ProjectLocal: place.ProjectLocal,
-		Checkout:     place.Checkout,
-		Branch:       branch,
-		Session:      state.Session(),
-		Task:         task,
-		Kind:         ledger.TaskSized,
-		Source:       ledger.Observed,
-		Payload: ledger.NewPayload(ledger.Payload{
-			"lines": s.Lines, "md_lines": s.Md, "files": s.Files, "base": s.Base,
-		}),
-	})
+	e, err := ledger.NewEvent(
+		ledger.TaskSized,
+		ledger.TaskSizedPayload{Lines: s.Lines, MdLines: s.Md, Files: s.Files, Base: s.Base},
+	)
+	if err != nil {
+		return
+	}
+
+	e.At, e.Session, e.Task, e.Source = time.Now(), state.Session(), task, ledger.Observed
+	e.Project, e.ProjectLocal, e.Checkout, e.Branch = place.Project, place.ProjectLocal, place.Checkout, branch
+	ledger.Record(e)
 }
 
 // sizeRecorder measures the branch while it still differs from its base and

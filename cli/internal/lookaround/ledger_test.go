@@ -14,10 +14,11 @@ import (
 func TestFinishedFromTakesFinishsArgument(t *testing.T) {
 	t.Parallel()
 
-	finish := func(task string, args ...any) ledger.Event {
-		p := ledger.NewPayload(ledger.Payload{"args": args})
+	finish := func(task string, args ...string) ledger.Event {
+		e := ledger.MustEvent(ledger.TaskFinished, ledger.TaskFinishedPayload{Args: args})
+		e.Task = task
 
-		return ledger.Event{Kind: ledger.TaskFinished, Task: task, Payload: p}
+		return e
 	}
 
 	events := []ledger.Event{
@@ -62,7 +63,8 @@ func TestClaimRunLeavesWaitAndDoneOff(t *testing.T) {
 	t.Parallel()
 
 	r := &state.Run{Ship: "blocked", Leaf: "implement", Wait: "FT-2", Done: "catchup"}
-	e := ledger.Event{Task: "FT-1", Kind: ledger.StateSet, Payload: ledger.NewPayload(ledger.EncodeClaim(r, nil))}
+	e := ledger.MustEvent(ledger.StateSet, ledger.EncodeClaim(r, nil))
+	e.Task = "FT-1"
 
 	if got := ClaimRun(e); got.Ship != "blocked" || got.Leaf != "implement" || got.Wait != "" || got.Done != "" {
 		t.Errorf("claim %+v", got)

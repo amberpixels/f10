@@ -559,7 +559,8 @@ func (in gateInput) started(skill string, remote bool, since time.Time) *startMa
 				continue
 			}
 
-			args := strings.Fields(e.Payload.Val.String("args"))
+			p, _ := ledger.Decode[ledger.RunStartedPayload](e)
+			args := strings.Fields(p.Args)
 			if slices.Contains(args, "ci") != remote {
 				continue
 			}
@@ -572,7 +573,7 @@ func (in gateInput) started(skill string, remote bool, since time.Time) *startMa
 			mark = &startMark{at: e.At, session: e.Session, via: via}
 		case ledger.StateSet:
 			// blocked is a driven ship waiting to resume, not its end
-			switch e.Payload.Val.String("ship") {
+			switch ledger.DecodeClaim(e).Run.Ship {
 			case "done", "failed", "partial":
 				inShip[e.Session] = false
 			}
