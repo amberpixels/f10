@@ -275,12 +275,21 @@ func (ob *Observer) sameStop(ctx context.Context, session string, o *observe.Ses
 		return false, false
 	}
 
-	stops, err := l.List(ctx, Filter{Session: session, Kind: SessionStopped})
+	// one read of the session's stops and starts: the context may sit on either
+	rows, err := l.List(ctx, Filter{Session: session, Kinds: []string{SessionStopped, RunStarted}})
 	if err != nil {
 		return false, false
 	}
 
-	starts, _ := l.List(ctx, Filter{Session: session, Kind: RunStarted})
+	var stops, starts []Event
+
+	for _, e := range rows {
+		if e.Kind == SessionStopped {
+			stops = append(stops, e)
+		} else {
+			starts = append(starts, e)
+		}
+	}
 
 	same := false
 	if len(stops) > 0 {
@@ -367,27 +376,26 @@ func (ob *Observer) findings(ctx context.Context, o *observe.FindingsWritten) []
 		)
 	}
 
-	var prior []Event
+	var opens, verdicts []Event
 
 	if l := ob.open(ctx); l != nil {
-		prior, _ = l.List(ctx, Filter{Task: o.Task})
+		// every opening of the round, not the last: any one at this sha counts
+		opens, _ = l.List(ctx, Filter{Task: o.Task, Kind: ReviewRoundOpened, Round: f.Round})
+		verdicts, _ = l.latestVerdicts(ctx, o.Task)
 	}
 
 	var events []Event
 
-	opened := false
+	opened := slices.ContainsFunc(opens, func(e Event) bool {
+		p, _ := Decode[ReviewRoundOpenedPayload](e)
+
+		return p.Round == f.Round && p.Reviewed == f.Reviewed
+	})
 	last := map[string]string{} // verdict and status last recorded, by round/finding
 
-	for _, e := range prior {
-		switch e.Kind {
-		case ReviewRoundOpened:
-			if p, _ := Decode[ReviewRoundOpenedPayload](e); p.Round == f.Round && p.Reviewed == f.Reviewed {
-				opened = true
-			}
-		case FindingVerdict:
-			p, _ := Decode[FindingVerdictPayload](e)
-			last[p.Round+"/"+p.Finding] = p.Verdict + "|" + p.Status
-		}
+	for _, e := range verdicts {
+		p, _ := Decode[FindingVerdictPayload](e)
+		last[p.Round+"/"+p.Finding] = p.Verdict + "|" + p.Status
 	}
 
 	if !opened {
@@ -438,15 +446,10 @@ func (ob *Observer) verdict(ctx context.Context, o *observe.VerdictWritten, m ob
 
 	// the database holds every project's rows: scope the lookup to this one
 	if l := ob.open(ctx); l != nil {
-		prior, _ := l.List(ctx, Filter{Project: ob.place(ctx, m.Cwd).Project, Kind: JudgeVerdict, Path: o.Path})
-		if len(prior) > 0 {
-			e := prior[len(prior)-1]
-			if v, _ := Decode[JudgeVerdictPayload](
-				e,
-			); e.Session == m.Session && v.Verdict == f.Verdict &&
-				v.Decision == f.Decision {
-				return nil
-			}
+		e, ok, _ := l.Last(ctx, Filter{Project: ob.place(ctx, m.Cwd).Project, Kind: JudgeVerdict, Path: o.Path})
+		if v, _ := Decode[JudgeVerdictPayload](e); ok && e.Session == m.Session && v.Verdict == f.Verdict &&
+			v.Decision == f.Decision {
+			return nil
 		}
 	}
 

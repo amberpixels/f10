@@ -27,7 +27,7 @@ Some payload keys are also generated columns, so a query can filter on them with
 
 | column      | payload key | index                            |
 |-------------|-------------|----------------------------------|
-| `p_path`    | `path`      | `events_kind_p_path (kind, p_path)` |
+| `p_path`    | `path`      | `events_kind_p_path_id (kind, p_path, id)` |
 | `p_round`   | `round`     | `events_kind_p_round (kind, p_round, p_finding)` |
 | `p_finding` | `finding`   | `events_kind_p_round`            |
 

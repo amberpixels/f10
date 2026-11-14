@@ -49,8 +49,8 @@ type statusReader struct {
 	host    *hostops.Host // nil without a host CLI
 	resolve func(token string) string
 
-	eventsOnce sync.Once
-	events     []ledger.Event
+	ledgerMu   sync.Mutex
+	scoped     *scopedLedger
 	gatesOnce  sync.Once
 	gates      gateSource
 	drivesOnce sync.Once
@@ -134,18 +134,24 @@ func (rd *statusReader) Task(ctx context.Context, v StatusView, token string, gu
 		writeRuns(v, runs, gates, &ship, true, in.agent, rd.now)
 }
 
-// ledger is the project's events. A ledger that is missing or will not
-// open has nothing to say: status only reads.
-func (rd *statusReader) ledger(ctx context.Context) []ledger.Event {
-	rd.eventsOnce.Do(func() { rd.events = readLedger(ctx, rd.main) })
+// ledger is the events of every session that recorded one of ids, read
+// once per id for the call, and the project's finish rows. A ledger that is
+// missing or will not open has nothing to say: status only reads.
+func (rd *statusReader) ledger(ctx context.Context, ids ...string) []ledger.Event {
+	rd.ledgerMu.Lock()
+	defer rd.ledgerMu.Unlock()
 
-	return rd.events
+	if rd.scoped == nil {
+		rd.scoped = newScopedLedger(ledger.Path(), ledger.Where(ctx, rd.main).Project)
+	}
+
+	return rd.scoped.For(ctx, ids...)
 }
 
-func (rd *statusReader) gateSource(ctx context.Context) gateSource {
+func (rd *statusReader) gateSource() gateSource {
 	rd.gatesOnce.Do(func() {
 		rd.gates = gateSource{
-			events: rd.ledger(ctx),
+			events: rd.ledger,
 			Main:   rd.main,
 			Eff:    rd.t.Effective,
 			review: rd.t.Effective.Review,
@@ -178,7 +184,7 @@ func (rd *statusReader) idOf(ctx context.Context) func(string) string {
 // gatesOf is a task's gates, its findings and verdicts read from its
 // checkout's storage root, else the shared one.
 func (rd *statusReader) gatesOf(ctx context.Context, id, branch, root string, run *state.Run) []gate {
-	gs := rd.gateSource(ctx)
+	gs := rd.gateSource()
 
 	return gs.gatesOf(ctx, id, branch, root, gs.StorageFor(ctx, root), run)
 }
@@ -187,7 +193,7 @@ func (rd *statusReader) gatesOf(ctx context.Context, id, branch, root string, ru
 func (rd *statusReader) rows(ctx context.Context) rowSource {
 	return rowSource{
 		Live:    rd.live,
-		Events:  rd.ledger(ctx),
+		ledger:  rd.ledger,
 		main:    rd.main,
 		storage: rd.t.Layout.StorageRoot,
 		prefix:  rd.t.Effective.IDPrefix,
@@ -219,7 +225,7 @@ func (rd *statusReader) rows(ctx context.Context) rowSource {
 //nolint:lostfield // a read: readShipment fills the fields
 func (rd *statusReader) shipment(ctx context.Context, in taskStatusInput, runs []*state.Run) Shipment {
 	known := ledger.LookupRefs(ctx, rd.t.RefProject(ctx), []string{in.ID})[in.ID]
-	s := readShipment(ctx, in, rd.ledger(ctx), known)
+	s := readShipment(ctx, in, rd.ledger(ctx, in.ID, bundleLead(in.ID, in.Branch)), known)
 
 	if len(runs) == 0 {
 		s.AskPR(ctx, in)
@@ -280,7 +286,7 @@ func (rd *statusReader) finishedRow(ctx context.Context, r ref.Ref) *TaskRow {
 	tr := stack.TrackerFor(rd.t)
 	info, _ := tr.Info(ctx, r) // an unreachable tracker leaves the ledger and the archive
 
-	lt := lookaround.FoldLedger(rd.ledger(ctx), r.ID, rd.idOf(ctx))
+	lt := lookaround.FoldLedger(rd.ledger(ctx, r.ID), r.ID, rd.idOf(ctx))
 
 	if !stack.FinishedTask(info, tr.Storage, r.ID, false) &&
 		!lookaround.LedgerFinishStands(lt.Finished, tr.Storage.PlanLive(r.ID)) {
