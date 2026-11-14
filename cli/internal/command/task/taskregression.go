@@ -113,6 +113,11 @@ func regressionInput(cmd *cli.Command) (regression.Input, error) {
 		Class:      cmd.String("class"),
 	}
 
+	// with no commit there is nothing to be sure of, so the outcome alone records
+	if in.Commit == "" && in.Confidence == "" {
+		in.Confidence = regression.Unclear
+	}
+
 	for flag, ok := range map[string]bool{
 		"--found-by":   slices.Contains(regression.FoundBy, in.FoundBy),
 		"--confidence": slices.Contains(regression.Confidences, in.Confidence),

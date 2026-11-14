@@ -130,8 +130,8 @@ func Attribute(ctx context.Context, in Input) ledger.RegressionFoundPayload {
 	c := a.classify(ctx, p.OriginTask)
 	p.Class, p.Round, p.Finding = c.class, c.round, c.finding
 
-	if c.note != "" {
-		p.Note = c.note
+	p.Note = c.note
+	if c.unsure {
 		p.Confidence = Unclear
 	}
 
@@ -238,8 +238,11 @@ func (a attribution) untracked(ctx context.Context) string {
 	return OutsideF10
 }
 
+// classified is a class with its finding and a note; unsure drops the
+// row's confidence, since the class was read without the evidence it needs.
 type classified struct {
 	class, round, finding, note string
+	unsure                      bool
 }
 
 // classify reads the origin task's rounds and verdicts against the lines.
@@ -250,46 +253,72 @@ func (a attribution) classify(ctx context.Context, task string) classified {
 		return classified{class: OutOfReach}
 	}
 
-	rounds := a.rounds(task)
+	series := a.rounds(task)
 	blocks, note := a.faulty(ctx)
-	last := lastVerdicts(rounds)
+	unsure := note != ""
 
-	held, unread := false, 0
+	held, unread, total := false, 0, 0
 
-	for _, r := range rounds {
-		sha, rest, _ := strings.Cut(r.Reviewed, " ")
+	for _, sr := range series {
+		// ids restart at 1.1 in each PR's series, so a verdict is read in its own
+		last := lastVerdicts(sr.files)
 
-		found, reachable := a.find(ctx, sha, r.PR, blocks)
-		if c, ok := skippedIn(r, a.rangesIn(found), last); ok {
-			return c
-		}
+		for _, r := range sr.files {
+			total++
 
-		switch {
-		// a dirty round read uncommitted lines no sha holds
-		case !reachable || strings.TrimSpace(rest) == "dirty" || len(blocks) == 0:
-			unread++
-		case len(found) == len(blocks):
-			held = true
+			sha, rest, _ := strings.Cut(r.Reviewed, " ")
+			dirty := strings.TrimSpace(rest) == "dirty"
+
+			// a dirty round numbered the working tree that became the next commit
+			at := sha
+			if dirty {
+				at = a.committedAfter(ctx, sha)
+			}
+
+			found, reachable, ambiguous := a.find(ctx, at, r.PR, blocks)
+			if c, ok := skippedIn(r, a.rangesIn(found), last); ok {
+				c.note, c.unsure = note, unsure
+				if sr.archived != "" {
+					c.note = joinNotes(note, "the finding is in the archived series "+sr.archived)
+				}
+
+				return c
+			}
+
+			switch {
+			case dirty || !reachable || len(blocks) == 0 || ambiguous:
+				unread++
+			case len(found) == len(blocks):
+				held = true
+			}
 		}
 	}
 
 	switch {
-	case len(rounds) == 0 && a.judgedProceed(task):
-		return classified{class: JudgedProceed, note: note}
-	case len(rounds) == 0:
-		return classified{class: Unreviewed, note: note}
+	case total == 0 && a.judgedProceed(task):
+		return classified{class: JudgedProceed, note: note, unsure: unsure}
+	case total == 0:
+		return classified{class: Unreviewed, note: note, unsure: unsure}
 	case held:
-		return classified{class: Missed, note: note}
-	case unread == len(rounds):
-		return classified{class: Missed, note: joinNotes(note,
-			"no round's reviewed lines could be read; classified from the findings alone")}
+		return classified{class: Missed, note: note, unsure: unsure}
+	case unread == total:
+		return classified{class: Missed, unsure: true, note: joinNotes(note,
+			"no round's reviewed lines could be read without doubt; classified from the findings alone")}
 	}
 
-	return classified{class: Unreviewed, note: note}
+	return classified{class: Unreviewed, note: note, unsure: unsure}
 }
 
-// rounds is every findings file of the task, live and archived, that parses.
-func (a attribution) rounds(task string) []*findings.File {
+// reviewSeries is one PR's rounds, oldest first; archived names its
+// archive directory, empty for the live one.
+type reviewSeries struct {
+	archived string
+	files    []*findings.File
+}
+
+// rounds is every series of the task, live and archived, of the files that
+// parse.
+func (a attribution) rounds(task string) []reviewSeries {
 	live := storage.Root(a.in.StorageRoot).Reviews(task)
 	dirs := []string{live}
 
@@ -297,9 +326,14 @@ func (a attribution) rounds(task string) []*findings.File {
 	archived, _ := filepath.Glob(filepath.Join(storage.ArchiveOf(filepath.Dir(live)), task+".*"))
 	dirs = append(dirs, archived...)
 
-	var out []*findings.File
+	var out []reviewSeries
 
 	for _, dir := range dirs {
+		sr := reviewSeries{}
+		if dir != live {
+			sr.archived = filepath.Base(dir)
+		}
+
 		for _, path := range findings.Series(dir) {
 			raw, err := os.ReadFile(path)
 			if err != nil {
@@ -307,12 +341,27 @@ func (a attribution) rounds(task string) []*findings.File {
 			}
 
 			if f, err := findings.Parse(string(raw)); err == nil {
-				out = append(out, f)
+				sr.files = append(sr.files, f)
 			}
+		}
+
+		if len(sr.files) > 0 {
+			out = append(out, sr)
 		}
 	}
 
 	return out
+}
+
+// committedAfter is the commit after sha on the way to the introducing
+// commit: what a review of sha's dirty tree became.
+func (a attribution) committedAfter(ctx context.Context, sha string) string {
+	out, _, _ := gitx.Read(ctx, a.in.Dir, "rev-list", "--ancestry-path", "--reverse", sha+".."+a.in.Commit)
+	if next, _, _ := strings.Cut(out, "\n"); next != "" {
+		return next
+	}
+
+	return a.in.Commit
 }
 
 // judgedProceed reports a proceed from a judge that read the code: a plan
@@ -401,9 +450,10 @@ func (a attribution) rangesIn(found map[int]Range) []Range {
 // block is one faulty range's lines as the base has them, by index into
 // Input.Lines.
 type block struct {
-	index int
-	path  string
-	lines []string
+	index    int
+	path     string
+	lines    []string
+	repeated bool // the base has these lines elsewhere too, so content cannot place them
 }
 
 // faulty reads each range at the base; a range that cannot be read is left
@@ -422,7 +472,9 @@ func (a attribution) faulty(ctx context.Context) ([]block, string) {
 			continue
 		}
 
-		out = append(out, block{index: i, path: r.Path, lines: lines[r.Start-1 : r.End]})
+		b := block{index: i, path: r.Path, lines: lines[r.Start-1 : r.End]}
+		b.repeated = len(locate(lines, b.lines)) > 1
+		out = append(out, b)
 	}
 
 	if len(missed) == 0 {
@@ -434,10 +486,13 @@ func (a attribution) faulty(ctx context.Context) ([]block, string) {
 
 // find locates each block as a run of whole lines in the file at sha, by its
 // range there; reachable is false when the clone lacks sha even after
-// fetching its PR's head.
-func (a attribution) find(ctx context.Context, sha string, pr int, blocks []block) (map[int]Range, bool) {
+// fetching its PR's head. A block that occurs more than once there is placed
+// at the occurrence nearest its base position, and ambiguous is true, as it
+// is for a block the base repeats, since the copy the review saw may not be
+// the faulty one.
+func (a attribution) find(ctx context.Context, sha string, pr int, blocks []block) (map[int]Range, bool, bool) {
 	if sha == "" {
-		return nil, false
+		return nil, false, false
 	}
 
 	if !a.present(ctx, sha) {
@@ -446,11 +501,11 @@ func (a attribution) find(ctx context.Context, sha string, pr int, blocks []bloc
 		}
 
 		if !a.present(ctx, sha) {
-			return nil, false
+			return nil, false, false
 		}
 	}
 
-	found := map[int]Range{}
+	found, ambiguous := map[int]Range{}, false
 
 	for _, b := range blocks {
 		lines, err := a.fileAt(ctx, sha, b.path)
@@ -458,12 +513,20 @@ func (a attribution) find(ctx context.Context, sha string, pr int, blocks []bloc
 			continue
 		}
 
-		if at := locate(lines, b.lines); at > 0 {
-			found[b.index] = Range{Path: b.path, Start: at, End: at + len(b.lines) - 1}
+		starts := locate(lines, b.lines)
+		if len(starts) == 0 {
+			continue
 		}
+
+		if len(starts) > 1 || b.repeated {
+			ambiguous = true
+		}
+
+		at := nearest(starts, a.in.Lines[b.index].Start)
+		found[b.index] = Range{Path: b.path, Start: at, End: at + len(b.lines) - 1}
 	}
 
-	return found, true
+	return found, true, ambiguous
 }
 
 // fileAt is path at rev, trailing blanks trimmed; a path rev lacks is an
@@ -481,19 +544,41 @@ func (a attribution) fileAt(ctx context.Context, rev, path string) ([]string, er
 	return trimmed(strings.Split(out, "\n")), nil
 }
 
-// locate is the 1-based line where want starts as whole lines of text, or 0.
-func locate(text, want []string) int {
+// locate is every 1-based line where want starts as whole lines of text.
+func locate(text, want []string) []int {
 	if len(want) == 0 {
-		return 0
+		return nil
 	}
+
+	var out []int
 
 	for i := 0; i+len(want) <= len(text); i++ {
 		if slices.Equal(text[i:i+len(want)], want) {
-			return i + 1
+			out = append(out, i+1)
 		}
 	}
 
-	return 0
+	return out
+}
+
+// nearest is the start closest to line.
+func nearest(starts []int, line int) int {
+	best := starts[0]
+	for _, s := range starts[1:] {
+		if abs(s-line) < abs(best-line) {
+			best = s
+		}
+	}
+
+	return best
+}
+
+func abs(n int) int {
+	if n < 0 {
+		return -n
+	}
+
+	return n
 }
 
 func joinNotes(notes ...string) string {

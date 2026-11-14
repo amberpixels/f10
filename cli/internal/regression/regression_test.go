@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -381,3 +382,77 @@ func TestParseRange(t *testing.T) {
 }
 
 func findingAt(where string) findings.Finding { return findings.Finding{ID: "1.1", Where: where} }
+
+// Ids restart in each PR's series: an archived series' skip of 1.1 does not
+// decide the live series' 1.1.
+func TestVerdictsStayInTheirSeries(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t)
+	f.commit("init", good)
+	sha := f.commit("change Last\n\nTask: FT-414", bad)
+	f.review(filepath.Join("archive", "FT-414.1"), sha,
+		"### 1.1 Naming\nwhere: calc.go:40\ncategory: correctness and logic\nverdict: skip\n")
+	f.review("FT-414", sha, "### 1.1 Off by one\nwhere: calc.go:3\ncategory: correctness and logic\nverdict: fix\n")
+
+	if got := f.attribute(sha); got.Class != Missed {
+		t.Errorf("class %q, want %q", got.Class, Missed)
+	}
+}
+
+// A dirty round numbered the working tree that became the next commit, so
+// its skip is matched there.
+func TestADirtyRoundsSkipIsMatchedInTheNextCommit(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t)
+	parent := f.commit("init", good)
+	sha := f.commit("change Last\n\nTask: FT-414", bad)
+	f.review("FT-414", parent+" dirty",
+		"### 1.1 Off by one\nwhere: calc.go:3\ncategory: correctness and logic\nverdict: skip\n")
+
+	padding := strings.Repeat("// pad\n", 20)
+	f.commit("later\n\nTask: FT-500", "package calc\n\n"+padding+"func Last(n int) int { return n }\n")
+
+	got := Attribute(t.Context(), Input{
+		Dir: f.dir, StorageRoot: f.storage, Prefix: "FT", Commit: sha,
+		Lines: []Range{{Path: "calc.go", Start: 23, End: 23}}, FoundBy: "blame", Confidence: "likely", Repro: "full",
+	})
+	if got.Class != Skipped {
+		t.Errorf("got %+v", got)
+	}
+}
+
+// A line the reviewed file already had elsewhere is no proof the review saw
+// the faulty copy.
+func TestARepeatedLineIsNotHeld(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t)
+	reviewed := f.commit("init\n\nTask: FT-414",
+		"package calc\n\nfunc A() error {\n\treturn err\n}\n\nfunc B() error {\n\treturn nil\n}\n")
+	f.review("FT-414", reviewed, "")
+	sha := f.commit("fix\n\nTask: FT-414",
+		"package calc\n\nfunc A() error {\n\treturn err\n}\n\nfunc B() error {\n\treturn err\n}\n")
+
+	got := Attribute(t.Context(), Input{
+		Dir: f.dir, StorageRoot: f.storage, Prefix: "FT", Commit: sha,
+		Lines: []Range{{Path: "calc.go", Start: 8, End: 8}}, FoundBy: "blame", Confidence: "likely", Repro: "full",
+	})
+	if got.Class == Missed && got.Confidence != Unclear {
+		t.Errorf("a repeated line read as a confident miss: %+v", got)
+	}
+}
+
+func TestNearestOccurrence(t *testing.T) {
+	t.Parallel()
+
+	text := []string{"a", "x", "b", "x", "c", "x"}
+	if got := locate(text, []string{"x"}); !slices.Equal(got, []int{2, 4, 6}) {
+		t.Errorf("locate %v", got)
+	}
+
+	if got := nearest([]int{2, 4, 6}, 5); got != 4 {
+		t.Errorf("nearest %d", got)
+	}
+}

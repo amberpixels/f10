@@ -34,6 +34,11 @@ func TestTaskRegressionCommand(t *testing.T) {
 
 	runApp(t, "task", "regression", "--claimed", "DM-4", "--text", "regression of DM-4").must(t)
 
+	// a bug with no cause records its outcome alone, with no confidence to give
+	if got := runApp(t, "task", "regression", "--repro", "unconfirmed").must(t); !strings.HasPrefix(got, "none (") {
+		t.Errorf("outcome alone printed %q", got)
+	}
+
 	if r := runApp(t, "task", "regression", "--repro", "maybe", "--confidence", "likely"); r.err == nil {
 		t.Error("an unknown --repro was accepted")
 	}
@@ -52,7 +57,7 @@ func TestTaskRegressionCommand(t *testing.T) {
 
 		kinds = append(kinds, e.Kind)
 
-		if e.Kind == ledger.RegressionFound {
+		if e.Kind == ledger.RegressionFound && len(kinds) == 1 {
 			p, err := ledger.Decode[ledger.RegressionFoundPayload](e)
 			if err != nil || p.OriginTask != "DM-4" || p.Repro != "obvious" || p.Lines[0] != "calc.go:3-3" {
 				t.Errorf("found %+v %v", p, err)
@@ -60,7 +65,7 @@ func TestTaskRegressionCommand(t *testing.T) {
 		}
 	}
 
-	if got := strings.Join(kinds, " "); got != "regression_found regression_claimed" {
+	if got := strings.Join(kinds, " "); got != "regression_found regression_claimed regression_found" {
 		t.Errorf("kinds %q", got)
 	}
 }
