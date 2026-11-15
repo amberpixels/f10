@@ -37,6 +37,8 @@ const (
 	// a decision ended the run, such as a judge verdict or an ask
 	PhaseStatus_PHASE_STATUS_BLOCKED PhaseStatus = 6
 	PhaseStatus_PHASE_STATUS_SKIPPED PhaseStatus = 7
+	// not reached yet: where every phase starts
+	PhaseStatus_PHASE_STATUS_UPCOMING PhaseStatus = 8
 )
 
 // Enum value maps for PhaseStatus.
@@ -50,6 +52,7 @@ var (
 		5: "PHASE_STATUS_PRIOR",
 		6: "PHASE_STATUS_BLOCKED",
 		7: "PHASE_STATUS_SKIPPED",
+		8: "PHASE_STATUS_UPCOMING",
 	}
 	PhaseStatus_value = map[string]int32{
 		"PHASE_STATUS_UNSPECIFIED": 0,
@@ -60,6 +63,7 @@ var (
 		"PHASE_STATUS_PRIOR":       5,
 		"PHASE_STATUS_BLOCKED":     6,
 		"PHASE_STATUS_SKIPPED":     7,
+		"PHASE_STATUS_UPCOMING":    8,
 	}
 )
 
@@ -1991,7 +1995,7 @@ const file_f10_v1_runs_proto_rawDesc = "" +
 	"\x06commit\x18\x03 \x01(\tR\x06commit\x12)\n" +
 	"\x10removed_worktree\x18\x04 \x01(\bR\x0fremovedWorktree\x12%\n" +
 	"\x0eremoved_branch\x18\x05 \x01(\bR\rremovedBranch\x12)\n" +
-	"\x10closed_workspace\x18\x06 \x01(\bR\x0fclosedWorkspace*\xdb\x01\n" +
+	"\x10closed_workspace\x18\x06 \x01(\bR\x0fclosedWorkspace*\xf6\x01\n" +
 	"\vPhaseStatus\x12\x1c\n" +
 	"\x18PHASE_STATUS_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14PHASE_STATUS_RUNNING\x10\x01\x12\x15\n" +
@@ -2000,7 +2004,8 @@ const file_f10_v1_runs_proto_rawDesc = "" +
 	"\x14PHASE_STATUS_PARTIAL\x10\x04\x12\x16\n" +
 	"\x12PHASE_STATUS_PRIOR\x10\x05\x12\x18\n" +
 	"\x14PHASE_STATUS_BLOCKED\x10\x06\x12\x18\n" +
-	"\x14PHASE_STATUS_SKIPPED\x10\a*i\n" +
+	"\x14PHASE_STATUS_SKIPPED\x10\a\x12\x19\n" +
+	"\x15PHASE_STATUS_UPCOMING\x10\b*i\n" +
 	"\tStartMode\x12\x1a\n" +
 	"\x16START_MODE_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fSTART_MODE_SHIP\x10\x01\x12\x13\n" +

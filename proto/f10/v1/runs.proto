@@ -28,6 +28,8 @@ enum PhaseStatus {
   // a decision ended the run, such as a judge verdict or an ask
   PHASE_STATUS_BLOCKED = 6;
   PHASE_STATUS_SKIPPED = 7;
+  // not reached yet: where every phase starts
+  PHASE_STATUS_UPCOMING = 8;
 }
 
 // A Run is one session's run: its three phases and the ship pipeline.

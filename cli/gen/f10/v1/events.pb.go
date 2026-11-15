@@ -28,8 +28,8 @@ const (
 
 type WatchEventsRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// after is the id of the last event the client holds; empty starts at the
-	// first.
+	// after is the cursor of the last event the client holds; empty starts at
+	// the first. It is opaque: clients store it and send it back.
 	After string `protobuf:"bytes,1,opt,name=after,proto3" json:"after,omitempty"`
 	// project and task narrow the stream; empty means every one.
 	Project       string `protobuf:"bytes,2,opt,name=project,proto3" json:"project,omitempty"`
@@ -90,8 +90,10 @@ func (x *WatchEventsRequest) GetTask() string {
 }
 
 type WatchEventsResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Event         *Event                 `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Event *Event                 `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
+	// cursor is this event's place in insertion order, for the next after.
+	Cursor        string `protobuf:"bytes,2,opt,name=cursor,proto3" json:"cursor,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -133,11 +135,18 @@ func (x *WatchEventsResponse) GetEvent() *Event {
 	return nil
 }
 
+func (x *WatchEventsResponse) GetCursor() string {
+	if x != nil {
+		return x.Cursor
+	}
+	return ""
+}
+
 // An Event is one ledger row. A kind this server does not know arrives with
 // kind set and no payload case.
 type Event struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// id is the row's ULID, and the cursor WatchEvents resumes after.
+	// id is the row's ULID: its identity, never a resume point.
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	// kind is the ledger kind; the state_* kinds share the claim case, so only
 	// kind tells them apart.
@@ -145,6 +154,11 @@ type Event struct {
 	Project string                 `protobuf:"bytes,3,opt,name=project,proto3" json:"project,omitempty"`
 	Task    string                 `protobuf:"bytes,4,opt,name=task,proto3" json:"task,omitempty"`
 	At      *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=at,proto3" json:"at,omitempty"`
+	// session, checkout and branch are the row's own, so a client can apply a
+	// claim or a stop to the Run with that session.
+	Session  string `protobuf:"bytes,6,opt,name=session,proto3" json:"session,omitempty"`
+	Checkout string `protobuf:"bytes,7,opt,name=checkout,proto3" json:"checkout,omitempty"`
+	Branch   string `protobuf:"bytes,8,opt,name=branch,proto3" json:"branch,omitempty"`
 	// Each case is named after the ledger kind it carries.
 	//
 	// Types that are valid to be assigned to Payload:
@@ -241,6 +255,27 @@ func (x *Event) GetAt() *timestamppb.Timestamp {
 		return x.At
 	}
 	return nil
+}
+
+func (x *Event) GetSession() string {
+	if x != nil {
+		return x.Session
+	}
+	return ""
+}
+
+func (x *Event) GetCheckout() string {
+	if x != nil {
+		return x.Checkout
+	}
+	return ""
+}
+
+func (x *Event) GetBranch() string {
+	if x != nil {
+		return x.Branch
+	}
+	return ""
 }
 
 func (x *Event) GetPayload() isEvent_Payload {
@@ -2472,15 +2507,19 @@ const file_f10_v1_events_proto_rawDesc = "" +
 	"\x12WatchEventsRequest\x12\x14\n" +
 	"\x05after\x18\x01 \x01(\tR\x05after\x12\x18\n" +
 	"\aproject\x18\x02 \x01(\tR\aproject\x12\x12\n" +
-	"\x04task\x18\x03 \x01(\tR\x04task\":\n" +
+	"\x04task\x18\x03 \x01(\tR\x04task\"R\n" +
 	"\x13WatchEventsResponse\x12#\n" +
-	"\x05event\x18\x01 \x01(\v2\r.f10.v1.EventR\x05event\"\xfe\v\n" +
+	"\x05event\x18\x01 \x01(\v2\r.f10.v1.EventR\x05event\x12\x16\n" +
+	"\x06cursor\x18\x02 \x01(\tR\x06cursor\"\xcc\f\n" +
 	"\x05Event\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x18\n" +
 	"\aproject\x18\x03 \x01(\tR\aproject\x12\x12\n" +
 	"\x04task\x18\x04 \x01(\tR\x04task\x12*\n" +
-	"\x02at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x02at\x125\n" +
+	"\x02at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x02at\x12\x18\n" +
+	"\asession\x18\x06 \x01(\tR\asession\x12\x1a\n" +
+	"\bcheckout\x18\a \x01(\tR\bcheckout\x12\x16\n" +
+	"\x06branch\x18\b \x01(\tR\x06branch\x125\n" +
 	"\vrun_started\x18\n" +
 	" \x01(\v2\x12.f10.v1.RunStartedH\x00R\n" +
 	"runStarted\x128\n" +

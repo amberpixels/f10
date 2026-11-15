@@ -7,10 +7,19 @@ base := "refs/remotes/origin/main"
 
 default: gen
 
-# install the pinned buf, Go plugins and protoc-gen-es
+# install the pinned buf, Go plugins and protoc-gen-es, only where a pin
+# moved since the last install, so lint stays offline once they are in
 tools:
-    GOBIN="$PWD/.bin" go -C tools install tool
-    npm ci --no-audit --no-fund --silent
+    #!/usr/bin/env bash
+    set -euo pipefail
+    stamp=.bin/.installed
+    if [ ! -f "$stamp" ] || [ tools/go.mod -nt "$stamp" ] || [ tools/go.sum -nt "$stamp" ]; then
+      GOBIN="$PWD/.bin" go -C tools install tool
+      touch "$stamp"
+    fi
+    if [ ! -f node_modules/.package-lock.json ] || [ package-lock.json -nt node_modules/.package-lock.json ]; then
+      npm ci --no-audit --no-fund --silent
+    fi
 
 # regenerate the Go and TypeScript code from the proto tree
 gen: tools

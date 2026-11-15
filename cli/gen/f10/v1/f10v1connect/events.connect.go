@@ -43,7 +43,9 @@ const (
 // EventServiceClient is a client for the f10.v1.EventService service.
 type EventServiceClient interface {
 	// WatchEvents sends every event after the cursor, then each new one as it
-	// lands, so a client that reconnects with its last id misses nothing.
+	// lands, so a client that reconnects with its last cursor misses nothing.
+	// The cursor follows insertion order, not ids: a row can land after rows
+	// with later ids, as a spooled row does, or one from another machine.
 	WatchEvents(context.Context, *connect.Request[v1.WatchEventsRequest]) (*connect.ServerStreamForClient[v1.WatchEventsResponse], error)
 }
 
@@ -80,7 +82,9 @@ func (c *eventServiceClient) WatchEvents(ctx context.Context, req *connect.Reque
 // EventServiceHandler is an implementation of the f10.v1.EventService service.
 type EventServiceHandler interface {
 	// WatchEvents sends every event after the cursor, then each new one as it
-	// lands, so a client that reconnects with its last id misses nothing.
+	// lands, so a client that reconnects with its last cursor misses nothing.
+	// The cursor follows insertion order, not ids: a row can land after rows
+	// with later ids, as a spooled row does, or one from another machine.
 	WatchEvents(context.Context, *connect.Request[v1.WatchEventsRequest], *connect.ServerStream[v1.WatchEventsResponse]) error
 }
 

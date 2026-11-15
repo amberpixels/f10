@@ -10,13 +10,15 @@ import "google/protobuf/timestamp.proto";
 // EventService streams the ledger, the log every f10 event lands in.
 service EventService {
   // WatchEvents sends every event after the cursor, then each new one as it
-  // lands, so a client that reconnects with its last id misses nothing.
+  // lands, so a client that reconnects with its last cursor misses nothing.
+  // The cursor follows insertion order, not ids: a row can land after rows
+  // with later ids, as a spooled row does, or one from another machine.
   rpc WatchEvents(WatchEventsRequest) returns (stream WatchEventsResponse);
 }
 
 message WatchEventsRequest {
-  // after is the id of the last event the client holds; empty starts at the
-  // first.
+  // after is the cursor of the last event the client holds; empty starts at
+  // the first. It is opaque: clients store it and send it back.
   string after = 1;
   // project and task narrow the stream; empty means every one.
   string project = 2;
@@ -25,12 +27,14 @@ message WatchEventsRequest {
 
 message WatchEventsResponse {
   Event event = 1;
+  // cursor is this event's place in insertion order, for the next after.
+  string cursor = 2;
 }
 
 // An Event is one ledger row. A kind this server does not know arrives with
 // kind set and no payload case.
 message Event {
-  // id is the row's ULID, and the cursor WatchEvents resumes after.
+  // id is the row's ULID: its identity, never a resume point.
   string id = 1;
   // kind is the ledger kind; the state_* kinds share the claim case, so only
   // kind tells them apart.
@@ -38,6 +42,11 @@ message Event {
   string project = 3;
   string task = 4;
   google.protobuf.Timestamp at = 5;
+  // session, checkout and branch are the row's own, so a client can apply a
+  // claim or a stop to the Run with that session.
+  string session = 6;
+  string checkout = 7;
+  string branch = 8;
 
   // Each case is named after the ledger kind it carries.
   oneof payload {

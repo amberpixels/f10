@@ -44,7 +44,8 @@ Clients built against `v1` keep working only if `v1` changes only by adding, so:
 - **Within `v1`, a field is only added.** It is never renumbered, renamed or removed, and neither is a message, an enum value, a service or a method.
   `buf breaking` refuses each of these.
 - **A field that must go is deprecated**, with `[deprecated = true]`, and stays.
-  If it must be deleted, its number and name are `reserved`, so neither is reused.
+  The `FILE` breaking rules refuse a deleted field even when its number and name are `reserved`, so removal waits for a new message or a `v2` package.
+  There, `reserved` keeps a dropped field's number and name from being reused.
 - **A new enum value is fine**, because clients must handle values they do not know.
   The zero value is always `*_UNSPECIFIED`.
 - **A real break becomes a new message**, added beside the old one, or a `v2` package once enough breaks pile up.
@@ -53,7 +54,8 @@ Clients built against `v1` keep working only if `v1` changes only by adding, so:
 ## Event payloads
 
 `f10.v1.Event` is one ledger row, with a `oneof payload` case named after each ledger kind.
-The nine `state_*` kinds share the `claim` case, so a client tells them apart by `Event.kind`.
+The nine `state_*` kinds share the `claim` case, so a client tells them apart by `Event.kind`, and applies them to the `Run` whose session `Event.session` names.
+`WatchEvents` resumes from the `cursor` each response carries, never from `Event.id`, because rows land in the ledger out of id order: a spooled row is inserted after its id is minted, and other machines mint ids on their own clocks.
 `ask_raised` and `ask_answered` belong to the asks inbox, which the ledger does not record yet.
 
 The payload messages are meant to become the ledger's own stored payloads, so they follow the JSON the ledger already stores, not API taste:
