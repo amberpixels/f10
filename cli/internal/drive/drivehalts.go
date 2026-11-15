@@ -100,8 +100,8 @@ func (in *DriveInput) recordHalt(ctx context.Context, r *DriveRun, res driveResu
 }
 
 // haltPayload is a halt's ledger payload: the attempts it counted, if any.
-func haltPayload(res driveResult) ledger.TaskHaltedPayload {
-	p := ledger.TaskHaltedPayload{Skill: res.Skill, Reason: res.Reason}
+func haltPayload(res driveResult) *ledger.TaskHaltedPayload {
+	p := &ledger.TaskHaltedPayload{Skill: res.Skill, Reason: res.Reason}
 
 	for _, a := range res.Attempts {
 		p.Attempts = append(p.Attempts, a.Reason)

@@ -24,14 +24,14 @@ func TestScopedLedgerReadsOnlyTheShownTasks(t *testing.T) {
 
 		return e
 	}
-	claim := ledger.ClaimPayload{Ship: "running", Leaf: "implement"}
+	claim := &ledger.ClaimPayload{Ship: "running", Leaf: "implement"}
 
 	events := []ledger.Event{
-		row(1, "s1", "", "FT-1/x", ledger.RunStarted, ledger.RunStartedPayload{Skill: "ship"}),
+		row(1, "s1", "", "FT-1/x", ledger.RunStarted, &ledger.RunStartedPayload{Skill: "ship"}),
 		row(2, "s1", "FT-1", "FT-1/x", ledger.StateSet, claim),
 		row(3, "s2", "FT-5", "FT-5+FT-6/y", ledger.StateSet, claim),
 		row(4, "s3", "FT-9", "FT-9/z", ledger.StateSet, claim),
-		row(5, "s9", "FT-9", "", ledger.TaskFinished, ledger.TaskFinishedPayload{Args: []string{"FT-7"}}),
+		row(5, "s9", "FT-9", "", ledger.TaskFinished, &ledger.TaskFinishedPayload{Args: []string{"FT-7"}}),
 	}
 
 	l, err := ledger.Open(ctx, path, ledger.BusyAsync, false)

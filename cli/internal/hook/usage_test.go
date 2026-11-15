@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -99,13 +101,13 @@ func (s *usageSession) run(status string) {
 	})
 }
 
-func (s *usageSession) turns() []ledger.TurnUsedPayload {
+func (s *usageSession) turns() []*ledger.TurnUsedPayload {
 	s.t.Helper()
 
-	var out []ledger.TurnUsedPayload
+	var out []*ledger.TurnUsedPayload
 
 	for _, e := range recorded(s.t, s.db, ledger.Filter{Kind: ledger.TurnUsed}) {
-		p, err := ledger.Decode[ledger.TurnUsedPayload](e)
+		p, err := ledger.Decode[*ledger.TurnUsedPayload](e)
 		if err != nil || e.Task != "FT-12" {
 			s.t.Errorf("turn row %+v: %v", e, err)
 		}
@@ -155,26 +157,26 @@ func TestEachTurnRecordsItsUsageAndTheRunContext(t *testing.T) {
 		t.Fatalf("%d run_started rows", len(starts))
 	}
 
-	rs, _ := ledger.Decode[ledger.RunStartedPayload](starts[0])
-	if rs.Model != "claude-sonnet-5-5" || rs.Agent != "claude" || rs.F10Version == "" ||
-		rs.Profile != (ledger.AgentProfile{Kind: "claude", Model: "opus", Effort: "high"}) {
-		t.Errorf("run_started context %+v", rs.RunContext)
+	rs, _ := ledger.Decode[*ledger.RunStartedPayload](starts[0])
+	if rs.GetModel() != "claude-sonnet-5-5" || rs.GetAgent() != "claude" || rs.GetF10Version() == "" ||
+		!proto.Equal(rs.GetProfile(), &ledger.AgentProfile{Kind: "claude", Model: "opus", Effort: "high"}) {
+		t.Errorf("run_started context %v", rs)
 	}
 
 	var (
-		sum, subs ledger.Tokens
+		sum, subs = &ledger.Tokens{}, &ledger.Tokens{}
 		throughs  []string
 	)
 
 	turns := s.turns()
 	for _, p := range turns {
-		sum.Output += p.Usage.Output
-		sum.Input += p.Usage.Input
-		subs.Output += p.Usage.Subagents.Output
-		throughs = append(throughs, p.Usage.Through)
+		sum.Output += p.GetUsage().GetOutput()
+		sum.Input += p.GetUsage().GetInput()
+		subs.Output += p.GetUsage().GetSubagents().GetOutput()
+		throughs = append(throughs, p.GetUsage().GetThrough())
 	}
 
-	if len(turns) != 3 || sum.Output != 123 || sum.Input != 3 || subs.Output != 47 {
+	if len(turns) != 3 || sum.GetOutput() != 123 || sum.GetInput() != 3 || subs.GetOutput() != 47 {
 		t.Errorf("%d turn rows summing %+v, subagents %+v", len(turns), sum, subs)
 	}
 
@@ -188,8 +190,8 @@ func TestEachTurnRecordsItsUsageAndTheRunContext(t *testing.T) {
 	var models []string // status/model
 
 	for _, e := range recorded(t, s.db, ledger.Filter{Kind: ledger.SessionStopped}) {
-		p, _ := ledger.Decode[ledger.SessionStoppedPayload](e)
-		models = append(models, p.Status+"/"+p.Model)
+		p, _ := ledger.Decode[*ledger.SessionStoppedPayload](e)
+		models = append(models, p.GetStatus()+"/"+p.GetModel())
 	}
 
 	if want := []string{"running/", "running/claude-opus-5-5"}; fmt.Sprint(models) != fmt.Sprint(want) {
@@ -215,12 +217,12 @@ func TestUsageStopsWhenTheRunIsDone(t *testing.T) {
 	s.append(assistant("a4", "m4", "m", 8, false))
 	s.event("Stop", nil)
 
-	var outs []int
+	var outs []int32
 	for _, p := range s.turns() {
-		outs = append(outs, p.Usage.Output)
+		outs = append(outs, p.GetUsage().GetOutput())
 	}
 
-	if want := []int{1, 8}; fmt.Sprint(outs) != fmt.Sprint(want) {
+	if want := []int32{1, 8}; fmt.Sprint(outs) != fmt.Sprint(want) {
 		t.Errorf("turn outputs %v, want %v", outs, want)
 	}
 }
@@ -267,9 +269,9 @@ func TestRunStartedFallsBackToTheSessionStartModel(t *testing.T) {
 
 	s.ship()
 
-	rs, _ := ledger.Decode[ledger.RunStartedPayload](recorded(t, s.db, ledger.Filter{Kind: ledger.RunStarted})[0])
-	if rs.Model != "claude-fable-5-2" {
-		t.Errorf("model %q", rs.Model)
+	rs, _ := ledger.Decode[*ledger.RunStartedPayload](recorded(t, s.db, ledger.Filter{Kind: ledger.RunStarted})[0])
+	if rs.GetModel() != "claude-fable-5-2" {
+		t.Errorf("model %q", rs.GetModel())
 	}
 }
 

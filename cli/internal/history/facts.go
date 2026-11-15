@@ -44,7 +44,7 @@ func (s Series) Of(round string) string { return round + "\x00" + s[round] }
 
 // Found is a bug's newest attribution.
 type Found struct {
-	ledger.RegressionFoundPayload
+	*ledger.RegressionFoundPayload
 
 	Bug string
 }
@@ -58,10 +58,10 @@ func TaskFacts(events []ledger.Event, tasks []string, since time.Time) map[strin
 		facts[strings.ToUpper(id)] = &Facts{Categories: map[string]Count{}}
 	}
 
-	rounds := map[string]map[string]map[string]int{}      // task, review pass: the latest opening's categories
-	series := map[string]Series{}                         // task: its review series
-	findings := map[string]ledger.FindingVerdictPayload{} // task, round, series, finding
-	judged := map[string]string{}                         // task, verdict file
+	rounds := map[string]map[string]map[string]int{}       // task, review pass: the latest opening's categories
+	series := map[string]Series{}                          // task: its review series
+	findings := map[string]*ledger.FindingVerdictPayload{} // task, round, series, finding
+	judged := map[string]string{}                          // task, verdict file
 
 	var judgedOrder []string
 
@@ -75,11 +75,12 @@ func TaskFacts(events []ledger.Event, tasks []string, since time.Time) map[strin
 
 		switch e.Kind {
 		case ledger.TaskSized:
-			if p, ok := decode[ledger.TaskSizedPayload](e); ok {
-				f.Lines = &p.Lines
+			if p, ok := decode[*ledger.TaskSizedPayload](e); ok {
+				lines := int(p.GetLines())
+				f.Lines = &lines
 			}
 		case ledger.ReviewRoundOpened:
-			if p, ok := decode[ledger.ReviewRoundOpenedPayload](e); ok && p.Round != "" {
+			if p, ok := decode[*ledger.ReviewRoundOpenedPayload](e); ok && p.GetRound() != "" {
 				if rounds[key] == nil {
 					rounds[key] = map[string]map[string]int{}
 				}
@@ -88,11 +89,16 @@ func TaskFacts(events []ledger.Event, tasks []string, since time.Time) map[strin
 					series[key] = Series{}
 				}
 
-				rounds[key][series[key].Opened(p.Round, p.Reviewed)] = p.Categories
+				cats := map[string]int{}
+				for cat, n := range p.GetCategories() {
+					cats[cat] = int(n)
+				}
+
+				rounds[key][series[key].Opened(p.GetRound(), p.GetReviewed())] = cats
 			}
 		case ledger.FindingVerdict:
-			if p, ok := decode[ledger.FindingVerdictPayload](e); ok {
-				findings[key+"\x00"+series[key].Of(p.Round)+"\x00"+p.Finding] = p
+			if p, ok := decode[*ledger.FindingVerdictPayload](e); ok {
+				findings[key+"\x00"+series[key].Of(p.GetRound())+"\x00"+p.GetFinding()] = p
 			}
 		case ledger.PlanSuperseded:
 			f.Superseded++
@@ -100,13 +106,13 @@ func TaskFacts(events []ledger.Event, tasks []string, since time.Time) map[strin
 			f.Halts++
 			f.HaltReasons = append(f.HaltReasons, firstLine(e.Reason())) // "" for none, one per halt
 		case ledger.JudgeVerdict:
-			if p, ok := decode[ledger.JudgeVerdictPayload](e); ok && p.Verdict != "" {
-				k := key + "\x00" + p.Path
+			if p, ok := decode[*ledger.JudgeVerdictPayload](e); ok && p.GetVerdict() != "" {
+				k := key + "\x00" + p.GetPath()
 				if _, seen := judged[k]; !seen {
 					judgedOrder = append(judgedOrder, k)
 				}
 
-				judged[k] = p.Verdict
+				judged[k] = p.GetVerdict()
 			}
 		}
 	}
@@ -130,13 +136,13 @@ func TaskFacts(events []ledger.Event, tasks []string, since time.Time) map[strin
 		key, _, _ := strings.Cut(k, "\x00")
 		f := facts[key]
 
-		if p.Category == "" {
+		if p.GetCategory() == "" {
 			continue
 		}
 
-		c := f.Categories[p.Category]
+		c := f.Categories[p.GetCategory()]
 
-		switch word, _, _ := strings.Cut(strings.ToLower(p.Verdict), " "); word {
+		switch word, _, _ := strings.Cut(strings.ToLower(p.GetVerdict()), " "); word {
 		case "fix":
 			c.Fixed++
 		case "skip":
@@ -145,7 +151,7 @@ func TaskFacts(events []ledger.Event, tasks []string, since time.Time) map[strin
 			continue
 		}
 
-		f.Categories[p.Category] = c
+		f.Categories[p.GetCategory()] = c
 	}
 
 	for _, k := range judgedOrder {
@@ -168,7 +174,7 @@ func TaskFacts(events []ledger.Event, tasks []string, since time.Time) map[strin
 // latestRegressions is each bug's newest attribution found since, in the
 // order the bugs were first found.
 func latestRegressions(events []ledger.Event, since time.Time) []Found {
-	latest := map[string]ledger.RegressionFoundPayload{}
+	latest := map[string]*ledger.RegressionFoundPayload{}
 
 	var order []string
 
@@ -177,7 +183,7 @@ func latestRegressions(events []ledger.Event, since time.Time) []Found {
 			continue
 		}
 
-		p, ok := decode[ledger.RegressionFoundPayload](e)
+		p, ok := decode[*ledger.RegressionFoundPayload](e)
 		if !ok {
 			continue
 		}

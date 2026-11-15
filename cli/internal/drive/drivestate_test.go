@@ -190,7 +190,7 @@ func TestDriveHaltsOnlyOnRepeatedFailureWithNoProgress(t *testing.T) {
 				t.Fatalf("halts recorded: %+v", halts)
 			}
 
-			if p, _ := ledger.Decode[ledger.TaskHaltedPayload](halts[0]); len(p.Attempts) != 3 {
+			if p, _ := ledger.Decode[*ledger.TaskHaltedPayload](halts[0]); len(p.GetAttempts()) != 3 {
 				t.Errorf("halts recorded: %+v", halts)
 			}
 		})

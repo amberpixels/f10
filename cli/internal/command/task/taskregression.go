@@ -72,7 +72,7 @@ func runTaskRegression(ctx context.Context, cmd *cli.Command) error {
 
 	if origin := cmd.String("claimed"); origin != "" {
 		e, err := ledger.NewEvent(ledger.RegressionClaimed,
-			ledger.RegressionClaimedPayload{OriginTask: origin, Text: cmd.String("text")})
+			&ledger.RegressionClaimedPayload{OriginTask: origin, Text: cmd.String("text")})
 		if err != nil {
 			return err
 		}

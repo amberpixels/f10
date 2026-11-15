@@ -75,8 +75,8 @@ func (Event) TableName() string { return "events" }
 // first non-flag argument, else the row's task, which the observer takes from
 // the session's run and so names another task when finish ran from elsewhere.
 func (e Event) FinishedTask() string {
-	p, _ := Decode[TaskFinishedPayload](e)
-	args := p.Args
+	p, _ := Decode[*TaskFinishedPayload](e)
+	args := p.GetArgs()
 
 	for i := 0; i < len(args); i++ {
 		s := args[i]

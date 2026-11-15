@@ -18,7 +18,7 @@ func row(h int, task, kind string, p any) ledger.Event {
 	return e
 }
 
-func claim(h int, task, kind string, p ledger.ClaimPayload) ledger.Event {
+func claim(h int, task, kind string, p *ledger.ClaimPayload) ledger.Event {
 	return row(h, task, kind, p)
 }
 
@@ -40,11 +40,11 @@ func kinds(as []Activity) []string {
 // A task that only got a plan and a debug session appears, with both.
 func TestLedgerOnlyTaskAppears(t *testing.T) {
 	in := withLedger(input(nil, nil),
-		claim(2, "FT-7", ledger.StateSet, ledger.ClaimPayload{Plan: "running", Leaf: "debug"}),
-		row(3, "FT-7", ledger.RegressionFound, ledger.RegressionFoundPayload{OriginTask: "FT-2", Repro: "full"}),
-		row(4, "FT-7", ledger.PlanSaved, ledger.PlanSavedPayload{Task: "FT-7"}),
-		row(4, "FT-7", ledger.PlanSaved, ledger.PlanSavedPayload{Task: "FT-7"}),
-		claim(5, "FT-7", ledger.StateSet, ledger.ClaimPayload{Plan: "done"}),
+		claim(2, "FT-7", ledger.StateSet, &ledger.ClaimPayload{Plan: "running", Leaf: "debug"}),
+		row(3, "FT-7", ledger.RegressionFound, &ledger.RegressionFoundPayload{OriginTask: "FT-2", Repro: "full"}),
+		row(4, "FT-7", ledger.PlanSaved, &ledger.PlanSavedPayload{Task: "FT-7"}),
+		row(4, "FT-7", ledger.PlanSaved, &ledger.PlanSavedPayload{Task: "FT-7"}),
+		claim(5, "FT-7", ledger.StateSet, &ledger.ClaimPayload{Plan: "done"}),
 	)
 
 	task := taskByID(t, Group(in), "FT-7")
@@ -64,13 +64,13 @@ func TestOpenAskBlocksUntilAnswered(t *testing.T) {
 		3,
 		"FT-8",
 		ledger.StateAsk,
-		ledger.ClaimPayload{Ship: "blocked", Leaf: "judge", Ask: "1. Refactor? [yes | no]"},
+		&ledger.ClaimPayload{Ship: "blocked", Leaf: "judge", Ask: "1. Refactor? [yes | no]"},
 	)
 	carried := claim(
 		4,
 		"FT-8",
 		ledger.StateNote,
-		ledger.ClaimPayload{Ship: "blocked", Leaf: "judge", Ask: "1. Refactor? [yes | no]"},
+		&ledger.ClaimPayload{Ship: "blocked", Leaf: "judge", Ask: "1. Refactor? [yes | no]"},
 	)
 
 	task := taskByID(t, Group(withLedger(input(nil, nil), ask, carried)), "FT-8")
@@ -78,7 +78,7 @@ func TestOpenAskBlocksUntilAnswered(t *testing.T) {
 		t.Fatalf("blocked = %+v, want the ask since its row", task.Blocked)
 	}
 
-	answered := claim(6, "FT-8", ledger.StateSet, ledger.ClaimPayload{Ship: "running", Leaf: "judge"})
+	answered := claim(6, "FT-8", ledger.StateSet, &ledger.ClaimPayload{Ship: "running", Leaf: "judge"})
 	if task := taskByID(t, Group(withLedger(input(nil, nil), ask, carried, answered)), "FT-8"); task.Blocked != nil {
 		t.Errorf("blocked after the answer: %+v", task.Blocked)
 	}
@@ -86,8 +86,8 @@ func TestOpenAskBlocksUntilAnswered(t *testing.T) {
 
 func TestHaltShowsItsReason(t *testing.T) {
 	in := withLedger(input(nil, nil),
-		claim(2, "FT-9", ledger.StateSet, ledger.ClaimPayload{Ship: "running", Leaf: "pr"}),
-		row(3, "FT-9", ledger.TaskHalted, ledger.TaskHaltedPayload{Skill: "ship", Reason: "no progress at pr"}),
+		claim(2, "FT-9", ledger.StateSet, &ledger.ClaimPayload{Ship: "running", Leaf: "pr"}),
+		row(3, "FT-9", ledger.TaskHalted, &ledger.TaskHaltedPayload{Skill: "ship", Reason: "no progress at pr"}),
 	)
 
 	task := taskByID(t, Group(in), "FT-9")
@@ -97,12 +97,18 @@ func TestHaltShowsItsReason(t *testing.T) {
 }
 
 func TestSecondReviewRound(t *testing.T) {
-	in := withLedger(input([]Commit{commit("a1", "FT-10/x", "work", 1)}, nil),
-		row(2, "FT-10", ledger.ReviewRoundOpened, ledger.ReviewRoundOpenedPayload{Round: "1"}),
-		row(2, "FT-10", ledger.FindingVerdict, ledger.FindingVerdictPayload{Round: "1", Finding: "1", Verdict: "fix"}),
-		row(2, "FT-10", ledger.FindingVerdict, ledger.FindingVerdictPayload{Round: "1", Finding: "2", Verdict: "skip"}),
-		row(3, "FT-10", ledger.ReviewRoundOpened, ledger.ReviewRoundOpenedPayload{Round: "2"}),
-		claim(3, "FT-10", ledger.StateSet, ledger.ClaimPayload{Ship: "running", Leaf: "review"}),
+	in := withLedger(
+		input([]Commit{commit("a1", "FT-10/x", "work", 1)}, nil),
+		row(2, "FT-10", ledger.ReviewRoundOpened, &ledger.ReviewRoundOpenedPayload{Round: "1"}),
+		row(2, "FT-10", ledger.FindingVerdict, &ledger.FindingVerdictPayload{Round: "1", Finding: "1", Verdict: "fix"}),
+		row(
+			2,
+			"FT-10",
+			ledger.FindingVerdict,
+			&ledger.FindingVerdictPayload{Round: "1", Finding: "2", Verdict: "skip"},
+		),
+		row(3, "FT-10", ledger.ReviewRoundOpened, &ledger.ReviewRoundOpenedPayload{Round: "2"}),
+		claim(3, "FT-10", ledger.StateSet, &ledger.ClaimPayload{Ship: "running", Leaf: "review"}),
 	)
 
 	task := taskByID(t, Group(in), "FT-10")
@@ -118,10 +124,10 @@ func TestSecondReviewRound(t *testing.T) {
 // A row from another clone of the project is someone else's; one from the
 // worktree f10 start made, removed since, is still the person's.
 func TestWhoseWork(t *testing.T) {
-	theirs := row(2, "FT-11", ledger.PlanSaved, ledger.PlanSavedPayload{Task: "FT-11"})
+	theirs := row(2, "FT-11", ledger.PlanSaved, &ledger.PlanSavedPayload{Task: "FT-11"})
 	theirs.Checkout = "/home/other/repo"
 
-	gone := row(2, "FT-12", ledger.PlanSaved, ledger.PlanSavedPayload{Task: "FT-12"})
+	gone := row(2, "FT-12", ledger.PlanSaved, &ledger.PlanSavedPayload{Task: "FT-12"})
 	gone.Checkout = "/repo.FT-12-work"
 
 	in := withLedger(input(nil, nil), theirs, gone)
@@ -134,7 +140,7 @@ func TestWhoseWork(t *testing.T) {
 }
 
 func TestActiveMinutesAndDrive(t *testing.T) {
-	started := row(2, "", ledger.RunStarted, ledger.RunStartedPayload{Skill: "ship"})
+	started := row(2, "", ledger.RunStarted, &ledger.RunStartedPayload{Skill: "ship"})
 	started.Session = "s-FT-13"
 	in := withLedger(
 		input(nil, nil),
@@ -143,10 +149,10 @@ func TestActiveMinutesAndDrive(t *testing.T) {
 			2,
 			"FT-13",
 			ledger.StateSet,
-			ledger.ClaimPayload{Ship: "running", Leaf: "implement", Args: []string{"ship", "running", "implement"}},
+			&ledger.ClaimPayload{Ship: "running", Leaf: "implement", Args: []string{"ship", "running", "implement"}},
 		),
-		claim(3, "FT-13", ledger.StateSet, ledger.ClaimPayload{Ship: "done", Args: []string{"ship", "done"}}),
-		row(3, "FT-13", ledger.WaitStarted, ledger.WaitStartedPayload{Reason: "turn"}),
+		claim(3, "FT-13", ledger.StateSet, &ledger.ClaimPayload{Ship: "done", Args: []string{"ship", "done"}}),
+		row(3, "FT-13", ledger.WaitStarted, &ledger.WaitStartedPayload{Reason: "turn"}),
 	)
 	in.Ledger.Drives = []*drivestore.Record{{
 		Number: 12, Created: at(1),
@@ -190,7 +196,7 @@ func TestOldDrivesCountByActivity(t *testing.T) {
 		{ID: "FT-21", Phase: drivestore.PhaseEnded, Outcome: &drivestore.Outcome{Code: 0}},
 	}}
 
-	in := withLedger(input(nil, nil), row(2, "FT-21", ledger.PlanSaved, ledger.PlanSavedPayload{Task: "FT-21"}))
+	in := withLedger(input(nil, nil), row(2, "FT-21", ledger.PlanSaved, &ledger.PlanSavedPayload{Task: "FT-21"}))
 	in.Ledger.Drives = []*drivestore.Record{stale, overnight}
 
 	r := Group(in)
@@ -205,7 +211,7 @@ func TestOldDrivesCountByActivity(t *testing.T) {
 
 // Another clone's rows stay out even on a task the person's git names.
 func TestAnotherCloneOnTheSameTask(t *testing.T) {
-	theirs := row(2, "FT-22", ledger.ReviewRoundOpened, ledger.ReviewRoundOpenedPayload{Round: "1"})
+	theirs := row(2, "FT-22", ledger.ReviewRoundOpened, &ledger.ReviewRoundOpenedPayload{Round: "1"})
 	theirs.Checkout = "/home/other/repo"
 
 	task := taskByID(t, Group(withLedger(input([]Commit{commit("a1", "FT-22/x", "work", 1)}, nil), theirs)), "FT-22")
@@ -217,14 +223,14 @@ func TestAnotherCloneOnTheSameTask(t *testing.T) {
 // A follow-up PR's round 1 is a round of its own, not the first PR's.
 func TestFollowUpRoundIsItsOwn(t *testing.T) {
 	opened := func(h int, sha string) ledger.Event {
-		return row(h, "FT-23", ledger.ReviewRoundOpened, ledger.ReviewRoundOpenedPayload{Round: "1", Reviewed: sha})
+		return row(h, "FT-23", ledger.ReviewRoundOpened, &ledger.ReviewRoundOpenedPayload{Round: "1", Reviewed: sha})
 	}
 	verdict := func(h int, finding, word string) ledger.Event {
 		return row(
 			h,
 			"FT-23",
 			ledger.FindingVerdict,
-			ledger.FindingVerdictPayload{Round: "1", Finding: finding, Verdict: word},
+			&ledger.FindingVerdictPayload{Round: "1", Finding: finding, Verdict: word},
 		)
 	}
 
@@ -242,7 +248,7 @@ func TestFollowUpRoundIsItsOwn(t *testing.T) {
 // A round opened before the period and resolved in it is dated in the
 // period, so the task gets that day.
 func TestRoundOpenedBeforeThePeriod(t *testing.T) {
-	opening := row(0, "FT-24", ledger.ReviewRoundOpened, ledger.ReviewRoundOpenedPayload{Round: "1", Reviewed: "aaa"})
+	opening := row(0, "FT-24", ledger.ReviewRoundOpened, &ledger.ReviewRoundOpenedPayload{Round: "1", Reviewed: "aaa"})
 	opening.At = since.Add(-72 * time.Hour)
 
 	in := withLedger(
@@ -252,7 +258,7 @@ func TestRoundOpenedBeforeThePeriod(t *testing.T) {
 			3,
 			"FT-24",
 			ledger.FindingVerdict,
-			ledger.FindingVerdictPayload{Round: "1", Finding: "1.1", Verdict: "skip"},
+			&ledger.FindingVerdictPayload{Round: "1", Finding: "1.1", Verdict: "skip"},
 		),
 	)
 

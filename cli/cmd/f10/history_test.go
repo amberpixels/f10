@@ -41,7 +41,7 @@ func TestHistoryNamesARecurringFinding(t *testing.T) {
 
 	for i, task := range []string{"DM-1", "DM-2", "DM-3"} {
 		e := testkit.StatEvent(at, "s-"+task, task, ledger.ReviewRoundOpened,
-			ledger.ReviewRoundOpenedPayload{Round: "1", Categories: map[string]int{"tests and docs": 1}})
+			&ledger.ReviewRoundOpenedPayload{Round: "1", Categories: map[string]int32{"tests and docs": 1}})
 		e.ID, e.Project = fmt.Sprintf("e%d", i), project
 		events = append(events, e)
 	}

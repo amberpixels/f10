@@ -116,7 +116,7 @@ func TestHistoryAndReviewsSeedTheRun(t *testing.T) {
 		ctx,
 		dir,
 		path,
-		[]SeedReview{{Task: "EV-11", Rounds: 2, Categories: map[string]int{"tests and docs": 1}}},
+		[]SeedReview{{Task: "EV-11", Rounds: 2, Categories: map[string]int32{"tests and docs": 1}}},
 	); err != nil {
 		t.Fatal(err)
 	}

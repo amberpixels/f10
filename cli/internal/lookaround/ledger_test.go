@@ -15,7 +15,7 @@ func TestFinishedFromTakesFinishsArgument(t *testing.T) {
 	t.Parallel()
 
 	finish := func(task string, args ...string) ledger.Event {
-		e := ledger.MustEvent(ledger.TaskFinished, ledger.TaskFinishedPayload{Args: args})
+		e := ledger.MustEvent(ledger.TaskFinished, &ledger.TaskFinishedPayload{Args: args})
 		e.Task = task
 
 		return e

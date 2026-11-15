@@ -19,7 +19,7 @@ func TestFinishedTask(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			e := MustEvent(TaskFinished, TaskFinishedPayload{Args: c.args})
+			e := MustEvent(TaskFinished, &TaskFinishedPayload{Args: c.args})
 			e.Task = c.task
 
 			if got := e.FinishedTask(); got != c.want {

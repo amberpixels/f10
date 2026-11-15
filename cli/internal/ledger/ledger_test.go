@@ -65,7 +65,7 @@ func TestAppendReadsBack(t *testing.T) {
 	l.Append(
 		context.Background(),
 		func() Event {
-			e := MustEvent(StepEntered, StepEnteredPayload{Steps: []string{"implement"}})
+			e := MustEvent(StepEntered, &StepEnteredPayload{Steps: []string{"implement"}})
 			e.At, e.Session, e.Task, e.Source = at, "s1", "FT-1", Observed
 
 			return e
@@ -83,7 +83,7 @@ func TestAppendReadsBack(t *testing.T) {
 		t.Errorf("first event %+v", e)
 	}
 
-	if p, err := Decode[StepEnteredPayload](e); err != nil || !slices.Equal(p.Steps, []string{"implement"}) {
+	if p, err := Decode[*StepEnteredPayload](e); err != nil || !slices.Equal(p.GetSteps(), []string{"implement"}) {
 		t.Errorf("payload %+v, err %v", p, err)
 	}
 

@@ -156,37 +156,37 @@ func TestRowsFromTheLedger(t *testing.T) {
 			at(1),
 			"FT-1",
 			ledger.StateSet,
-			ledger.ClaimPayload{Capture: "prior", Plan: "done", Ship: "running", Leaf: "pr"},
+			&ledger.ClaimPayload{Capture: "prior", Plan: "done", Ship: "running", Leaf: "pr"},
 		),
-		event(at(2), "FT-1", ledger.PROpened, ledger.PROpenedPayload{URL: "https://github.com/a/b/pull/128"}),
-		event(at(3), "FT-9", ledger.TaskFinished, ledger.TaskFinishedPayload{Args: []string{"FT-1", "--yes"}}),
+		event(at(2), "FT-1", ledger.PROpened, &ledger.PROpenedPayload{Url: "https://github.com/a/b/pull/128"}),
+		event(at(3), "FT-9", ledger.TaskFinished, &ledger.TaskFinishedPayload{Args: []string{"FT-1", "--yes"}}),
 		// finish typed with the bare number, resolved to its id
-		event(at(3), "", ledger.TaskFinished, ledger.TaskFinishedPayload{Args: []string{"--yes", "8"}}),
+		event(at(3), "", ledger.TaskFinished, &ledger.TaskFinishedPayload{Args: []string{"--yes", "8"}}),
 		// a finish that named no task finishes none
-		event(at(3), "", ledger.TaskFinished, ledger.TaskFinishedPayload{Args: []string{"--yes"}}),
+		event(at(3), "", ledger.TaskFinished, &ledger.TaskFinishedPayload{Args: []string{"--yes"}}),
 
 		event(
 			at(1),
 			"FT-2",
 			ledger.StateSet,
-			ledger.ClaimPayload{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"},
+			&ledger.ClaimPayload{Capture: "prior", Plan: "done", Ship: "running", Leaf: "implement"},
 		),
-		event(at(4), "FT-2", ledger.TaskHalted, ledger.TaskHaltedPayload{Skill: "ship", Reason: "agent idle"}),
+		event(at(4), "FT-2", ledger.TaskHalted, &ledger.TaskHaltedPayload{Skill: "ship", Reason: "agent idle"}),
 
 		// a halt the run then moved past is no halt
-		event(at(1), "FT-3", ledger.TaskHalted, ledger.TaskHaltedPayload{Skill: "ship", Reason: "old"}),
+		event(at(1), "FT-3", ledger.TaskHalted, &ledger.TaskHaltedPayload{Skill: "ship", Reason: "old"}),
 		event(
 			at(2),
 			"FT-3",
 			ledger.StateSet,
-			ledger.ClaimPayload{Capture: "prior", Plan: "done", Ship: "running", Leaf: "review"},
+			&ledger.ClaimPayload{Capture: "prior", Plan: "done", Ship: "running", Leaf: "review"},
 		),
 
 		event(
 			at(1),
 			"FT-4",
 			ledger.StateAsk,
-			ledger.ClaimPayload{
+			&ledger.ClaimPayload{
 				Capture: "prior",
 				Plan:    "done",
 				Ship:    "blocked",
@@ -198,7 +198,7 @@ func TestRowsFromTheLedger(t *testing.T) {
 			at(1),
 			"FT-5",
 			ledger.StateSet,
-			ledger.ClaimPayload{
+			&ledger.ClaimPayload{
 				Capture: "prior",
 				Plan:    "done",
 				Ship:    "failed",

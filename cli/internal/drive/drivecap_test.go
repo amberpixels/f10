@@ -338,7 +338,7 @@ func TestReportNamesASkippedReproduction(t *testing.T) {
 		r := in.Runs[i]
 		r.O.Path = t.TempDir()
 
-		e := ledger.MustEvent(ledger.RegressionFound, ledger.RegressionFoundPayload{
+		e := ledger.MustEvent(ledger.RegressionFound, &ledger.RegressionFoundPayload{
 			FoundBy: "none", Confidence: "unclear", Repro: repro,
 		})
 		// git reports a checkout with its symlinks resolved
@@ -352,7 +352,7 @@ func TestReportNamesASkippedReproduction(t *testing.T) {
 	}
 
 	// the same task id from another checkout is another project's
-	other := ledger.MustEvent(ledger.RegressionFound, ledger.RegressionFoundPayload{Repro: "skipped"})
+	other := ledger.MustEvent(ledger.RegressionFound, &ledger.RegressionFoundPayload{Repro: "skipped"})
 	other.Task, other.At, other.Checkout = "GH-2", time.Now(), t.TempDir()
 	ledger.Record(other)
 

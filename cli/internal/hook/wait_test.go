@@ -49,8 +49,8 @@ func waitRows(t *testing.T, db string) []string {
 		}
 
 		row := e.Kind + " " + e.Reason()
-		if p, _ := ledger.Decode[ledger.WaitEndedPayload](e); e.Kind == ledger.WaitEnded && p.By != "" {
-			row += " by " + p.By
+		if p, _ := ledger.Decode[*ledger.WaitEndedPayload](e); e.Kind == ledger.WaitEnded && p.GetBy() != "" {
+			row += " by " + p.GetBy()
 		}
 
 		if e.Task != "FT-12" {

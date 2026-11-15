@@ -1,12 +1,116 @@
 {
   "$defs": {
-    "AskAnsweredV1": {
+    "agents.v1.Ask": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "answer": {
+          "type": "string"
+        },
+        "answered_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "answered_by": {
+          "enum": [
+            "",
+            "ANSWER_SOURCE_UNSPECIFIED",
+            "ANSWER_SOURCE_PANE",
+            "ANSWER_SOURCE_ASKS",
+            "ANSWER_SOURCE_SKILL",
+            "ANSWER_SOURCE_DRIVE",
+            "ANSWER_SOURCE_CANCELLED",
+            "ANSWER_SOURCE_API"
+          ],
+          "type": "string"
+        },
+        "asked_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "delivered_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "labels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "questions": {
+          "items": {
+            "$ref": "#/$defs/agents.v1.Question"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "text": {
+          "type": "string"
+        },
+        "workspace_id": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "agents.v1.Question": {
+      "additionalProperties": false,
+      "properties": {
+        "n": {
+          "type": "integer"
+        },
+        "options": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "ask_answered": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ask_answered.v1"
+        }
+      ]
+    },
+    "ask_answered.v1": {
       "additionalProperties": false,
       "properties": {
         "answer": {
           "type": "string"
         },
         "answered_by": {
+          "enum": [
+            "",
+            "ANSWER_SOURCE_UNSPECIFIED",
+            "ANSWER_SOURCE_PANE",
+            "ANSWER_SOURCE_ASKS",
+            "ANSWER_SOURCE_SKILL",
+            "ANSWER_SOURCE_DRIVE",
+            "ANSWER_SOURCE_CANCELLED",
+            "ANSWER_SOURCE_API"
+          ],
           "type": "string"
         },
         "delivered": {
@@ -19,121 +123,621 @@
           "const": 1
         }
       },
-      "required": [
-        "id",
-        "answer",
-        "answered_by",
-        "delivered"
-      ],
+      "required": [],
       "type": "object"
     },
-    "AskRaisedV1": {
+    "ask_raised": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ask_raised.v1"
+        }
+      ]
+    },
+    "ask_raised.v1": {
       "additionalProperties": false,
       "properties": {
         "ask": {
-          "additionalProperties": false,
-          "properties": {
-            "agent": {
-              "type": "string"
-            },
-            "answer": {
-              "type": "string"
-            },
-            "answered_at": {
-              "additionalProperties": false,
-              "properties": {},
-              "required": [],
-              "type": "object"
-            },
-            "answered_by": {
-              "type": "string"
-            },
-            "asked_at": {
-              "additionalProperties": false,
-              "properties": {},
-              "required": [],
-              "type": "object"
-            },
-            "delivered_at": {
-              "additionalProperties": false,
-              "properties": {},
-              "required": [],
-              "type": "object"
-            },
-            "id": {
-              "type": "string"
-            },
-            "labels": {
-              "additionalProperties": {
-                "type": "string"
-              },
-              "type": [
-                "object",
-                "null"
-              ]
-            },
-            "questions": {
-              "items": {
-                "additionalProperties": false,
-                "properties": {
-                  "n": {
-                    "type": "integer"
-                  },
-                  "options": {
-                    "items": {
-                      "type": "string"
-                    },
-                    "type": [
-                      "array",
-                      "null"
-                    ]
-                  },
-                  "text": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "n",
-                  "text",
-                  "options"
-                ],
-                "type": "object"
-              },
-              "type": [
-                "array",
-                "null"
-              ]
-            },
-            "text": {
-              "type": "string"
-            },
-            "workspace_id": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "id",
-            "agent",
-            "workspace_id",
-            "text",
-            "questions",
-            "asked_at",
-            "answer",
-            "answered_by",
-            "labels"
-          ],
-          "type": "object"
+          "$ref": "#/$defs/agents.v1.Ask"
         },
         "v": {
           "const": 1
         }
       },
+      "required": [],
+      "type": "object"
+    },
+    "committed": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/committed.v1"
+        }
+      ]
+    },
+    "committed.v1": {
+      "additionalProperties": false,
+      "properties": {
+        "branch": {
+          "type": "string"
+        },
+        "sha": {
+          "type": "string"
+        },
+        "subject": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "f10.v1.AgentProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "effort": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "f10.v1.Tokens": {
+      "additionalProperties": false,
+      "properties": {
+        "cache_read": {
+          "type": "integer"
+        },
+        "cache_write": {
+          "type": "integer"
+        },
+        "input": {
+          "type": "integer"
+        },
+        "output": {
+          "type": "integer"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "f10.v1.Usage": {
+      "additionalProperties": false,
+      "properties": {
+        "by_model": {
+          "additionalProperties": {
+            "$ref": "#/$defs/f10.v1.Tokens"
+          },
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "cache_read": {
+          "type": "integer"
+        },
+        "cache_write": {
+          "type": "integer"
+        },
+        "input": {
+          "type": "integer"
+        },
+        "output": {
+          "type": "integer"
+        },
+        "subagents": {
+          "$ref": "#/$defs/f10.v1.Tokens"
+        },
+        "through": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "finding_verdict": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/finding_verdict.v1"
+        }
+      ]
+    },
+    "finding_verdict.v1": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "type": "string"
+        },
+        "finding": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "round": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        },
+        "verdict": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "judge_verdict": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/judge_verdict.v1"
+        }
+      ]
+    },
+    "judge_verdict.v1": {
+      "additionalProperties": false,
+      "properties": {
+        "blind": {
+          "type": "boolean"
+        },
+        "decision": {
+          "type": "string"
+        },
+        "idea": {
+          "type": "boolean"
+        },
+        "key": {
+          "type": "string"
+        },
+        "n": {
+          "type": "string"
+        },
+        "parse_error": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "run": {
+          "type": "string"
+        },
+        "subject": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        },
+        "verdict": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "plan_saved": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/plan_saved.v1"
+        }
+      ]
+    },
+    "plan_saved.v1": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "task": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "plan_superseded": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/plan_superseded.v1"
+        }
+      ]
+    },
+    "plan_superseded.v1": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "task": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "pr_opened": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/pr_opened.v1"
+        }
+      ]
+    },
+    "pr_opened.v1": {
+      "additionalProperties": false,
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "pushed": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/pushed.v1"
+        }
+      ]
+    },
+    "pushed.v1": {
+      "additionalProperties": false,
+      "properties": {
+        "refs": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "remote": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "regression_claimed": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/regression_claimed.v1"
+        }
+      ]
+    },
+    "regression_claimed.v1": {
+      "additionalProperties": false,
+      "properties": {
+        "origin_task": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "regression_found": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/regression_found.v1"
+        }
+      ]
+    },
+    "regression_found.v1": {
+      "additionalProperties": false,
+      "properties": {
+        "class": {
+          "type": "string"
+        },
+        "commit": {
+          "type": "string"
+        },
+        "confidence": {
+          "type": "string"
+        },
+        "finding": {
+          "type": "string"
+        },
+        "found_by": {
+          "type": "string"
+        },
+        "lines": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "note": {
+          "type": "string"
+        },
+        "origin": {
+          "type": "string"
+        },
+        "origin_task": {
+          "type": "string"
+        },
+        "repro": {
+          "type": "string"
+        },
+        "round": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "review_round_opened": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/review_round_opened.v1"
+        }
+      ]
+    },
+    "review_round_opened.v1": {
+      "additionalProperties": false,
+      "properties": {
+        "categories": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "parse_error": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "reviewed": {
+          "type": "string"
+        },
+        "reviewer": {
+          "type": "string"
+        },
+        "round": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        },
+        "verdict": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "run_started": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/run_started.v1"
+        },
+        {
+          "$ref": "#/$defs/run_started.v2"
+        }
+      ]
+    },
+    "run_started.v1": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "args": {
+          "type": "string"
+        },
+        "f10_version": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "profile": {
+          "$ref": "#/$defs/f10.v1.AgentProfile"
+        },
+        "skill": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "run_started.v2": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "args": {
+          "type": "string"
+        },
+        "f10_version": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "profile": {
+          "$ref": "#/$defs/f10.v1.AgentProfile"
+        },
+        "skill": {
+          "type": "string"
+        },
+        "v": {
+          "const": 2
+        }
+      },
       "required": [
-        "ask"
+        "v"
       ],
       "type": "object"
     },
-    "ClaimV1": {
+    "session_stopped": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/session_stopped.v1"
+        },
+        {
+          "$ref": "#/$defs/session_stopped.v2"
+        }
+      ]
+    },
+    "session_stopped.v1": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "backstop": {
+          "type": "boolean"
+        },
+        "f10_version": {
+          "type": "string"
+        },
+        "leaf": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "phase": {
+          "type": "string"
+        },
+        "profile": {
+          "$ref": "#/$defs/f10.v1.AgentProfile"
+        },
+        "status": {
+          "type": "string"
+        },
+        "task": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "session_stopped.v2": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "backstop": {
+          "type": "boolean"
+        },
+        "f10_version": {
+          "type": "string"
+        },
+        "leaf": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "phase": {
+          "type": "string"
+        },
+        "profile": {
+          "$ref": "#/$defs/f10.v1.AgentProfile"
+        },
+        "status": {
+          "type": "string"
+        },
+        "task": {
+          "type": "string"
+        },
+        "v": {
+          "const": 2
+        }
+      },
+      "required": [
+        "v"
+      ],
+      "type": "object"
+    },
+    "spike_saved": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/spike_saved.v1"
+        }
+      ]
+    },
+    "spike_saved.v1": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "task": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "state_ask": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/state_ask.v1"
+        }
+      ]
+    },
+    "state_ask.v1": {
       "additionalProperties": false,
       "properties": {
         "args": {
@@ -200,184 +804,20 @@
           "type": "string"
         }
       },
-      "required": [
-        "args",
-        "capture",
-        "plan",
-        "ship"
-      ],
+      "required": [],
       "type": "object"
     },
-    "CommittedV1": {
-      "additionalProperties": false,
-      "properties": {
-        "branch": {
-          "type": "string"
-        },
-        "sha": {
-          "type": "string"
-        },
-        "subject": {
-          "type": "string"
-        },
-        "v": {
-          "const": 1
+    "state_done": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/state_done.v1"
         }
-      },
-      "required": [
-        "branch",
-        "sha",
-        "subject"
-      ],
-      "type": "object"
+      ]
     },
-    "FindingVerdictV1": {
+    "state_done.v1": {
       "additionalProperties": false,
       "properties": {
-        "category": {
-          "type": "string"
-        },
-        "finding": {
-          "type": "string"
-        },
-        "reason": {
-          "type": "string"
-        },
-        "round": {
-          "type": "string"
-        },
-        "status": {
-          "type": "string"
-        },
-        "title": {
-          "type": "string"
-        },
-        "v": {
-          "const": 1
-        },
-        "verdict": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "round",
-        "finding",
-        "title"
-      ],
-      "type": "object"
-    },
-    "JudgeVerdictV1": {
-      "additionalProperties": false,
-      "properties": {
-        "blind": {
-          "type": "boolean"
-        },
-        "decision": {
-          "type": "string"
-        },
-        "idea": {
-          "type": "boolean"
-        },
-        "key": {
-          "type": "string"
-        },
-        "n": {
-          "type": "string"
-        },
-        "parse_error": {
-          "type": "string"
-        },
-        "path": {
-          "type": "string"
-        },
-        "reason": {
-          "type": "string"
-        },
-        "run": {
-          "type": "string"
-        },
-        "subject": {
-          "type": "string"
-        },
-        "v": {
-          "const": 1
-        },
-        "verdict": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "path",
-        "key",
-        "n"
-      ],
-      "type": "object"
-    },
-    "PROpenedV1": {
-      "additionalProperties": false,
-      "properties": {
-        "host": {
-          "type": "string"
-        },
-        "url": {
-          "type": "string"
-        },
-        "v": {
-          "const": 1
-        }
-      },
-      "required": [
-        "host",
-        "url"
-      ],
-      "type": "object"
-    },
-    "PlanSavedV1": {
-      "additionalProperties": false,
-      "properties": {
-        "path": {
-          "type": "string"
-        },
-        "task": {
-          "type": "string"
-        },
-        "v": {
-          "const": 1
-        }
-      },
-      "required": [
-        "path",
-        "task"
-      ],
-      "type": "object"
-    },
-    "PlanSupersededV1": {
-      "additionalProperties": false,
-      "properties": {
-        "from": {
-          "type": "string"
-        },
-        "task": {
-          "type": "string"
-        },
-        "to": {
-          "type": "string"
-        },
-        "v": {
-          "const": 1
-        }
-      },
-      "required": [
-        "from",
-        "to",
-        "task"
-      ],
-      "type": "object"
-    },
-    "PushedV1": {
-      "additionalProperties": false,
-      "properties": {
-        "refs": {
+        "args": {
           "items": {
             "type": "string"
           },
@@ -386,55 +826,22 @@
             "null"
           ]
         },
-        "remote": {
+        "ask": {
           "type": "string"
         },
-        "v": {
-          "const": 1
-        }
-      },
-      "required": [
-        "refs"
-      ],
-      "type": "object"
-    },
-    "RegressionClaimedV1": {
-      "additionalProperties": false,
-      "properties": {
-        "origin_task": {
+        "at": {
+          "type": "integer"
+        },
+        "capture": {
           "type": "string"
         },
-        "text": {
+        "done": {
           "type": "string"
         },
-        "v": {
-          "const": 1
-        }
-      },
-      "required": [
-        "origin_task"
-      ],
-      "type": "object"
-    },
-    "RegressionFoundV1": {
-      "additionalProperties": false,
-      "properties": {
-        "class": {
+        "final": {
           "type": "string"
         },
-        "commit": {
-          "type": "string"
-        },
-        "confidence": {
-          "type": "string"
-        },
-        "finding": {
-          "type": "string"
-        },
-        "found_by": {
-          "type": "string"
-        },
-        "lines": {
+        "labels": {
           "items": {
             "type": "string"
           },
@@ -442,239 +849,588 @@
             "array",
             "null"
           ]
+        },
+        "leaf": {
+          "type": "string"
+        },
+        "next": {
+          "type": "string"
         },
         "note": {
           "type": "string"
         },
-        "origin": {
-          "type": "string"
-        },
-        "origin_task": {
-          "type": "string"
-        },
-        "repro": {
-          "type": "string"
-        },
-        "round": {
-          "type": "string"
-        },
-        "v": {
-          "const": 1
-        }
-      },
-      "required": [
-        "origin_task",
-        "origin",
-        "found_by",
-        "confidence",
-        "repro"
-      ],
-      "type": "object"
-    },
-    "ReviewRoundOpenedV1": {
-      "additionalProperties": false,
-      "properties": {
-        "categories": {
-          "additionalProperties": {
-            "type": "integer"
+        "pipeline": {
+          "items": {
+            "type": "string"
           },
           "type": [
-            "object",
+            "array",
             "null"
           ]
         },
-        "parse_error": {
+        "plan": {
           "type": "string"
         },
-        "path": {
-          "type": "string"
-        },
-        "reviewed": {
-          "type": "string"
-        },
-        "reviewer": {
-          "type": "string"
-        },
-        "round": {
+        "ship": {
           "type": "string"
         },
         "v": {
           "const": 1
         },
-        "verdict": {
+        "wait": {
           "type": "string"
         }
       },
-      "required": [
-        "path",
-        "round"
-      ],
+      "required": [],
       "type": "object"
     },
-    "RunStartedV1": {
-      "additionalProperties": false,
-      "properties": {
-        "args": {
-          "type": "string"
-        },
-        "skill": {
-          "type": "string"
-        },
-        "v": {
-          "const": 1
+    "state_final": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/state_final.v1"
         }
-      },
-      "required": [
-        "skill"
-      ],
-      "type": "object"
+      ]
     },
-    "RunStartedV2": {
+    "state_final.v1": {
       "additionalProperties": false,
       "properties": {
-        "agent": {
-          "type": "string"
-        },
         "args": {
-          "type": "string"
-        },
-        "f10_version": {
-          "type": "string"
-        },
-        "model": {
-          "type": "string"
-        },
-        "profile": {
-          "additionalProperties": false,
-          "properties": {
-            "effort": {
-              "type": "string"
-            },
-            "kind": {
-              "type": "string"
-            },
-            "model": {
-              "type": "string"
-            }
+          "items": {
+            "type": "string"
           },
-          "required": [],
-          "type": "object"
+          "type": [
+            "array",
+            "null"
+          ]
         },
-        "skill": {
+        "ask": {
           "type": "string"
         },
-        "v": {
-          "const": 2
-        }
-      },
-      "required": [
-        "v",
-        "skill"
-      ],
-      "type": "object"
-    },
-    "SessionStoppedV1": {
-      "additionalProperties": false,
-      "properties": {
-        "backstop": {
-          "type": "boolean"
+        "at": {
+          "type": "integer"
+        },
+        "capture": {
+          "type": "string"
+        },
+        "done": {
+          "type": "string"
+        },
+        "final": {
+          "type": "string"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
         },
         "leaf": {
           "type": "string"
         },
-        "phase": {
+        "next": {
           "type": "string"
         },
-        "status": {
+        "note": {
           "type": "string"
         },
-        "task": {
+        "pipeline": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "plan": {
+          "type": "string"
+        },
+        "ship": {
           "type": "string"
         },
         "v": {
           "const": 1
+        },
+        "wait": {
+          "type": "string"
         }
       },
-      "required": [
-        "phase",
-        "status"
-      ],
+      "required": [],
       "type": "object"
     },
-    "SessionStoppedV2": {
+    "state_note": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/state_note.v1"
+        }
+      ]
+    },
+    "state_note.v1": {
       "additionalProperties": false,
       "properties": {
-        "agent": {
+        "args": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "ask": {
           "type": "string"
         },
-        "backstop": {
-          "type": "boolean"
+        "at": {
+          "type": "integer"
         },
-        "f10_version": {
+        "capture": {
           "type": "string"
+        },
+        "done": {
+          "type": "string"
+        },
+        "final": {
+          "type": "string"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
         },
         "leaf": {
           "type": "string"
         },
-        "model": {
+        "next": {
           "type": "string"
         },
-        "phase": {
+        "note": {
           "type": "string"
         },
-        "profile": {
-          "additionalProperties": false,
-          "properties": {
-            "effort": {
-              "type": "string"
-            },
-            "kind": {
-              "type": "string"
-            },
-            "model": {
-              "type": "string"
-            }
+        "pipeline": {
+          "items": {
+            "type": "string"
           },
-          "required": [],
-          "type": "object"
+          "type": [
+            "array",
+            "null"
+          ]
         },
-        "status": {
+        "plan": {
           "type": "string"
         },
-        "task": {
-          "type": "string"
-        },
-        "v": {
-          "const": 2
-        }
-      },
-      "required": [
-        "v",
-        "phase",
-        "status"
-      ],
-      "type": "object"
-    },
-    "SpikeSavedV1": {
-      "additionalProperties": false,
-      "properties": {
-        "path": {
-          "type": "string"
-        },
-        "task": {
+        "ship": {
           "type": "string"
         },
         "v": {
           "const": 1
+        },
+        "wait": {
+          "type": "string"
         }
       },
-      "required": [
-        "path",
-        "task"
-      ],
+      "required": [],
       "type": "object"
     },
-    "StepEnteredV1": {
+    "state_pipeline": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/state_pipeline.v1"
+        }
+      ]
+    },
+    "state_pipeline.v1": {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "ask": {
+          "type": "string"
+        },
+        "at": {
+          "type": "integer"
+        },
+        "capture": {
+          "type": "string"
+        },
+        "done": {
+          "type": "string"
+        },
+        "final": {
+          "type": "string"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "leaf": {
+          "type": "string"
+        },
+        "next": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        },
+        "pipeline": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "plan": {
+          "type": "string"
+        },
+        "ship": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        },
+        "wait": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "state_set": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/state_set.v1"
+        }
+      ]
+    },
+    "state_set.v1": {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "ask": {
+          "type": "string"
+        },
+        "at": {
+          "type": "integer"
+        },
+        "capture": {
+          "type": "string"
+        },
+        "done": {
+          "type": "string"
+        },
+        "final": {
+          "type": "string"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "leaf": {
+          "type": "string"
+        },
+        "next": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        },
+        "pipeline": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "plan": {
+          "type": "string"
+        },
+        "ship": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        },
+        "wait": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "state_stop": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/state_stop.v1"
+        }
+      ]
+    },
+    "state_stop.v1": {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "ask": {
+          "type": "string"
+        },
+        "at": {
+          "type": "integer"
+        },
+        "capture": {
+          "type": "string"
+        },
+        "done": {
+          "type": "string"
+        },
+        "final": {
+          "type": "string"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "leaf": {
+          "type": "string"
+        },
+        "next": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        },
+        "pipeline": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "plan": {
+          "type": "string"
+        },
+        "ship": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        },
+        "wait": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "state_task": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/state_task.v1"
+        }
+      ]
+    },
+    "state_task.v1": {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "ask": {
+          "type": "string"
+        },
+        "at": {
+          "type": "integer"
+        },
+        "capture": {
+          "type": "string"
+        },
+        "done": {
+          "type": "string"
+        },
+        "final": {
+          "type": "string"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "leaf": {
+          "type": "string"
+        },
+        "next": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        },
+        "pipeline": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "plan": {
+          "type": "string"
+        },
+        "ship": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        },
+        "wait": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "state_wait": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/state_wait.v1"
+        }
+      ]
+    },
+    "state_wait.v1": {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "ask": {
+          "type": "string"
+        },
+        "at": {
+          "type": "integer"
+        },
+        "capture": {
+          "type": "string"
+        },
+        "done": {
+          "type": "string"
+        },
+        "final": {
+          "type": "string"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "leaf": {
+          "type": "string"
+        },
+        "next": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        },
+        "pipeline": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "plan": {
+          "type": "string"
+        },
+        "ship": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        },
+        "wait": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "step_entered": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/step_entered.v1"
+        }
+      ]
+    },
+    "step_entered.v1": {
       "additionalProperties": false,
       "properties": {
         "steps": {
@@ -690,12 +1446,17 @@
           "const": 1
         }
       },
-      "required": [
-        "steps"
-      ],
+      "required": [],
       "type": "object"
     },
-    "TaskCapturedV1": {
+    "task_captured": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/task_captured.v1"
+        }
+      ]
+    },
+    "task_captured.v1": {
       "additionalProperties": false,
       "properties": {
         "host": {
@@ -711,12 +1472,17 @@
           "const": 1
         }
       },
-      "required": [
-        "host"
-      ],
+      "required": [],
       "type": "object"
     },
-    "TaskFinishedV1": {
+    "task_finished": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/task_finished.v1"
+        }
+      ]
+    },
+    "task_finished.v1": {
       "additionalProperties": false,
       "properties": {
         "args": {
@@ -735,12 +1501,17 @@
           "const": 1
         }
       },
-      "required": [
-        "args"
-      ],
+      "required": [],
       "type": "object"
     },
-    "TaskHaltedV1": {
+    "task_halted": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/task_halted.v1"
+        }
+      ]
+    },
+    "task_halted.v1": {
       "additionalProperties": false,
       "properties": {
         "attempts": {
@@ -762,13 +1533,17 @@
           "const": 1
         }
       },
-      "required": [
-        "skill",
-        "reason"
-      ],
+      "required": [],
       "type": "object"
     },
-    "TaskSizedV1": {
+    "task_sized": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/task_sized.v1"
+        }
+      ]
+    },
+    "task_sized.v1": {
       "additionalProperties": false,
       "properties": {
         "base": {
@@ -787,108 +1562,37 @@
           "const": 1
         }
       },
-      "required": [
-        "lines",
-        "md_lines",
-        "files",
-        "base"
-      ],
+      "required": [],
       "type": "object"
     },
-    "TurnUsedV1": {
+    "turn_used": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/turn_used.v1"
+        }
+      ]
+    },
+    "turn_used.v1": {
       "additionalProperties": false,
       "properties": {
         "usage": {
-          "additionalProperties": false,
-          "properties": {
-            "by_model": {
-              "additionalProperties": {
-                "additionalProperties": false,
-                "properties": {
-                  "cache_read": {
-                    "type": "integer"
-                  },
-                  "cache_write": {
-                    "type": "integer"
-                  },
-                  "input": {
-                    "type": "integer"
-                  },
-                  "output": {
-                    "type": "integer"
-                  }
-                },
-                "required": [
-                  "input",
-                  "output",
-                  "cache_write",
-                  "cache_read"
-                ],
-                "type": "object"
-              },
-              "type": [
-                "object",
-                "null"
-              ]
-            },
-            "cache_read": {
-              "type": "integer"
-            },
-            "cache_write": {
-              "type": "integer"
-            },
-            "input": {
-              "type": "integer"
-            },
-            "output": {
-              "type": "integer"
-            },
-            "subagents": {
-              "additionalProperties": false,
-              "properties": {
-                "cache_read": {
-                  "type": "integer"
-                },
-                "cache_write": {
-                  "type": "integer"
-                },
-                "input": {
-                  "type": "integer"
-                },
-                "output": {
-                  "type": "integer"
-                }
-              },
-              "required": [
-                "input",
-                "output",
-                "cache_write",
-                "cache_read"
-              ],
-              "type": "object"
-            },
-            "through": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "input",
-            "output",
-            "cache_write",
-            "cache_read"
-          ],
-          "type": "object"
+          "$ref": "#/$defs/f10.v1.Usage"
         },
         "v": {
           "const": 1
         }
       },
-      "required": [
-        "usage"
-      ],
+      "required": [],
       "type": "object"
     },
-    "WaitEndedV1": {
+    "wait_ended": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/wait_ended.v1"
+        }
+      ]
+    },
+    "wait_ended.v1": {
       "additionalProperties": false,
       "properties": {
         "by": {
@@ -904,13 +1608,17 @@
           "const": 1
         }
       },
-      "required": [
-        "reason",
-        "by"
-      ],
+      "required": [],
       "type": "object"
     },
-    "WaitStartedV1": {
+    "wait_started": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/wait_started.v1"
+        }
+      ]
+    },
+    "wait_started.v1": {
       "additionalProperties": false,
       "properties": {
         "reason": {
@@ -923,244 +1631,12 @@
           "const": 1
         }
       },
-      "required": [
-        "reason"
-      ],
+      "required": [],
       "type": "object"
-    },
-    "ask_answered": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/AskAnsweredV1"
-        }
-      ]
-    },
-    "ask_raised": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/AskRaisedV1"
-        }
-      ]
-    },
-    "committed": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/CommittedV1"
-        }
-      ]
-    },
-    "finding_verdict": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/FindingVerdictV1"
-        }
-      ]
-    },
-    "judge_verdict": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/JudgeVerdictV1"
-        }
-      ]
-    },
-    "plan_saved": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/PlanSavedV1"
-        }
-      ]
-    },
-    "plan_superseded": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/PlanSupersededV1"
-        }
-      ]
-    },
-    "pr_opened": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/PROpenedV1"
-        }
-      ]
-    },
-    "pushed": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/PushedV1"
-        }
-      ]
-    },
-    "regression_claimed": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/RegressionClaimedV1"
-        }
-      ]
-    },
-    "regression_found": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/RegressionFoundV1"
-        }
-      ]
-    },
-    "review_round_opened": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/ReviewRoundOpenedV1"
-        }
-      ]
-    },
-    "run_started": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/RunStartedV1"
-        },
-        {
-          "$ref": "#/$defs/RunStartedV2"
-        }
-      ]
-    },
-    "session_stopped": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/SessionStoppedV1"
-        },
-        {
-          "$ref": "#/$defs/SessionStoppedV2"
-        }
-      ]
-    },
-    "spike_saved": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/SpikeSavedV1"
-        }
-      ]
-    },
-    "state_ask": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/ClaimV1"
-        }
-      ]
-    },
-    "state_done": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/ClaimV1"
-        }
-      ]
-    },
-    "state_final": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/ClaimV1"
-        }
-      ]
-    },
-    "state_note": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/ClaimV1"
-        }
-      ]
-    },
-    "state_pipeline": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/ClaimV1"
-        }
-      ]
-    },
-    "state_set": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/ClaimV1"
-        }
-      ]
-    },
-    "state_stop": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/ClaimV1"
-        }
-      ]
-    },
-    "state_task": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/ClaimV1"
-        }
-      ]
-    },
-    "state_wait": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/ClaimV1"
-        }
-      ]
-    },
-    "step_entered": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/StepEnteredV1"
-        }
-      ]
-    },
-    "task_captured": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/TaskCapturedV1"
-        }
-      ]
-    },
-    "task_finished": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/TaskFinishedV1"
-        }
-      ]
-    },
-    "task_halted": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/TaskHaltedV1"
-        }
-      ]
-    },
-    "task_sized": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/TaskSizedV1"
-        }
-      ]
-    },
-    "turn_used": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/TurnUsedV1"
-        }
-      ]
-    },
-    "wait_ended": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/WaitEndedV1"
-        }
-      ]
-    },
-    "wait_started": {
-      "oneOf": [
-        {
-          "$ref": "#/$defs/WaitStartedV1"
-        }
-      ]
     }
   },
   "$id": "https://github.com/amberpixels/f10/docs/ledger.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "description": "The payload of each events row, by kind: $defs/\u003ckind\u003e lists its versions, oldest first. docs/ledger.md is the spec.",
+  "description": "The payload of each events row, by kind: $defs/\u003ckind\u003e lists its versions, oldest first, and $defs/\u003ckind\u003e.v\u003cn\u003e is version n. docs/ledger.md is the spec.",
   "title": "Ledger payloads"
 }

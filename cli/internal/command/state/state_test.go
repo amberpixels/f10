@@ -18,7 +18,7 @@ func TestEveryVerbsKindIsRegistered(t *testing.T) {
 
 		verbs++
 
-		if _, err := ledger.NewEvent("state_"+c.Name, ledger.ClaimPayload{}); err != nil {
+		if _, err := ledger.NewEvent("state_"+c.Name, &ledger.ClaimPayload{}); err != nil {
 			t.Errorf("verb %s: %v", c.Name, err)
 		}
 	}

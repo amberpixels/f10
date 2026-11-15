@@ -313,8 +313,8 @@ func onTasks(e ledger.Event, tasks []Task) bool {
 	id := e.Task
 
 	if e.Kind == ledger.RegressionFound {
-		p, _ := ledger.Decode[ledger.RegressionFoundPayload](e)
-		id = p.OriginTask
+		p, _ := ledger.Decode[*ledger.RegressionFoundPayload](e)
+		id = p.GetOriginTask()
 	}
 
 	return slices.ContainsFunc(tasks, func(t Task) bool { return strings.EqualFold(t.ID, id) })

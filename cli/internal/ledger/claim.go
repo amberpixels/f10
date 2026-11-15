@@ -10,38 +10,38 @@ type Claim struct {
 }
 
 // EncodeClaim is the payload of a claim row.
-func EncodeClaim(r *state.Run, args []string) ClaimPayload {
-	return ClaimPayload{
+func EncodeClaim(r *state.Run, args []string) *ClaimPayload {
+	return &ClaimPayload{
 		Args: args, Capture: r.Capture, Plan: r.Plan, Ship: r.Ship,
 		Leaf: r.Leaf, Final: r.Final, Note: r.Note, Next: r.Next, Ask: r.Ask, Wait: r.Wait, Done: r.Done,
-		Pipeline: r.Pipeline, Labels: r.Labels, At: r.At,
+		Pipeline: r.Pipeline, Labels: r.Labels, At: int32(r.At), //nolint:gosec // a pipeline index
 	}
 }
 
 // DecodeClaim reads a claim row back; the row itself gives the session,
 // task, checkout and time.
 func DecodeClaim(e Event) Claim {
-	p, _ := Decode[ClaimPayload](e)
+	p, _ := Decode[*ClaimPayload](e)
 
 	return Claim{
-		Args: p.Args,
+		Args: p.GetArgs(),
 		Run: state.Run{
 			Session:  e.Session,
 			Task:     e.Task,
 			Root:     e.Checkout,
-			Capture:  state.LegacyStatus(p.Capture),
-			Plan:     state.LegacyStatus(p.Plan),
-			Ship:     state.LegacyStatus(p.Ship),
-			Leaf:     p.Leaf,
-			Final:    p.Final,
-			Pipeline: p.Pipeline,
-			Labels:   p.Labels,
-			At:       p.At,
-			Note:     p.Note,
-			Next:     p.Next,
-			Ask:      p.Ask,
-			Wait:     p.Wait,
-			Done:     p.Done,
+			Capture:  state.LegacyStatus(p.GetCapture()),
+			Plan:     state.LegacyStatus(p.GetPlan()),
+			Ship:     state.LegacyStatus(p.GetShip()),
+			Leaf:     p.GetLeaf(),
+			Final:    p.GetFinal(),
+			Pipeline: p.GetPipeline(),
+			Labels:   p.GetLabels(),
+			At:       int(p.GetAt()),
+			Note:     p.GetNote(),
+			Next:     p.GetNext(),
+			Ask:      p.GetAsk(),
+			Wait:     p.GetWait(),
+			Done:     p.GetDone(),
 			Updated:  e.At,
 		},
 	}

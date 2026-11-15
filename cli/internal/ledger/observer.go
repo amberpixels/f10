@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"context"
+	"math"
 	"os"
 	"slices"
 	"time"
@@ -186,12 +187,12 @@ func (ob *Observer) events(ctx context.Context, o observe.Observation, m observe
 			RunStarted,
 			Observed,
 			"",
-			RunStartedPayload{Skill: o.Skill, Args: o.Args, RunContext: contextOf(o.RunContext)},
+			contextOf(o.RunContext).onStart(&RunStartedPayload{Skill: o.Skill, Args: o.Args}),
 		)
 	case *observe.StepStarted:
-		return one(StepEntered, Observed, "", StepEnteredPayload{Steps: o.Steps})
+		return one(StepEntered, Observed, "", &StepEnteredPayload{Steps: o.Steps})
 	case *observe.Finished:
-		return one(TaskFinished, Observed, "", TaskFinishedPayload{Args: o.Args})
+		return one(TaskFinished, Observed, "", &TaskFinishedPayload{Args: o.Args})
 	case *observe.SessionStopped:
 		sameStop, sameContext := ob.sameStop(ctx, m.Session, o)
 		if sameStop && sameContext {
@@ -200,7 +201,7 @@ func (ob *Observer) events(ctx context.Context, o observe.Observation, m observe
 
 		p := stopPayload(o)
 		if !sameContext {
-			p.RunContext = contextOf(o.RunContext)
+			contextOf(o.RunContext).onStop(p)
 		}
 
 		return one(SessionStopped, Observed, o.Task, p)
@@ -209,7 +210,7 @@ func (ob *Observer) events(ctx context.Context, o observe.Observation, m observe
 			return nil
 		}
 
-		return one(TurnUsed, Observed, o.Task, TurnUsedPayload{Usage: usageOf(o.Usage)})
+		return one(TurnUsed, Observed, o.Task, &TurnUsedPayload{Usage: usageOf(o.Usage)})
 	case *observe.IssueCreated:
 		if m.Session == "" {
 			return nil
@@ -220,35 +221,35 @@ func (ob *Observer) events(ctx context.Context, o observe.Observation, m observe
 			id = ob.TaskID(ctx, m.Cwd, o.URL)
 		}
 
-		return one(TaskCaptured, Observed, id, TaskCapturedPayload{Host: o.Host, URL: o.URL, ID: id})
+		return one(TaskCaptured, Observed, id, &TaskCapturedPayload{Host: o.Host, Url: o.URL, Id: id})
 	case *observe.PRCreated:
 		if m.Session == "" {
 			return nil
 		}
 
-		return one(PROpened, Observed, "", PROpenedPayload{Host: o.Host, URL: o.URL})
+		return one(PROpened, Observed, "", &PROpenedPayload{Host: o.Host, Url: o.URL})
 	case *observe.Committed:
 		if m.Session == "" {
 			return nil
 		}
 
-		return one(Committed, Observed, "", CommittedPayload{Branch: o.Branch, SHA: o.SHA, Subject: o.Subject})
+		return one(Committed, Observed, "", &CommittedPayload{Branch: o.Branch, Sha: o.SHA, Subject: o.Subject})
 	case *observe.Pushed:
 		if m.Session == "" {
 			return nil
 		}
 
-		return one(Pushed, Observed, "", PushedPayload{Remote: o.Remote, Refs: o.Refs})
+		return one(Pushed, Observed, "", &PushedPayload{Remote: o.Remote, Refs: o.Refs})
 	case *observe.WaitStarted:
-		return one(WaitStarted, Observed, "", WaitStartedPayload{Reason: o.Reason, Tool: o.Tool})
+		return one(WaitStarted, Observed, "", &WaitStartedPayload{Reason: o.Reason, Tool: o.Tool})
 	case *observe.WaitEnded:
-		return one(WaitEnded, Observed, "", WaitEndedPayload{Reason: o.Reason, Tool: o.Tool, By: o.By})
+		return one(WaitEnded, Observed, "", &WaitEndedPayload{Reason: o.Reason, Tool: o.Tool, By: o.By})
 	case *observe.PlanWritten:
-		return one(PlanSaved, Artifact, o.Task, PlanSavedPayload{Path: o.Path, Task: o.Task})
+		return one(PlanSaved, Artifact, o.Task, &PlanSavedPayload{Path: o.Path, Task: o.Task})
 	case *observe.SpikeWritten:
-		return one(SpikeSaved, Artifact, o.Task, SpikeSavedPayload{Path: o.Path, Task: o.Task})
+		return one(SpikeSaved, Artifact, o.Task, &SpikeSavedPayload{Path: o.Path, Task: o.Task})
 	case *observe.PlanArchived:
-		return one(PlanSuperseded, Artifact, o.Task, PlanSupersededPayload{From: o.From, To: o.To, Task: o.Task})
+		return one(PlanSuperseded, Artifact, o.Task, &PlanSupersededPayload{From: o.From, To: o.To, Task: o.Task})
 	case *observe.FindingsWritten:
 		return ob.findings(ctx, o)
 	case *observe.VerdictWritten:
@@ -258,8 +259,8 @@ func (ob *Observer) events(ctx context.Context, o observe.Observation, m observe
 	return nil
 }
 
-func stopPayload(o *observe.SessionStopped) SessionStoppedPayload {
-	return SessionStoppedPayload{Task: o.Task, Phase: o.Phase, Status: o.Status, Leaf: o.Leaf, Backstop: o.Backstop}
+func stopPayload(o *observe.SessionStopped) *SessionStoppedPayload {
+	return &SessionStoppedPayload{Task: o.Task, Phase: o.Phase, Status: o.Status, Leaf: o.Leaf, Backstop: o.Backstop}
 }
 
 // artifact is a row an artifact file wrote, nil when payload does not match
@@ -302,8 +303,8 @@ func (ob *Observer) sameStop(ctx context.Context, session string, o *observe.Ses
 
 	same := false
 	if len(stops) > 0 {
-		last, _ := Decode[SessionStoppedPayload](stops[len(stops)-1])
-		same = last.Phase == o.Phase && last.Status == o.Status && last.Leaf == o.Leaf
+		last, _ := Decode[*SessionStoppedPayload](stops[len(stops)-1])
+		same = last.GetPhase() == o.Phase && last.GetStatus() == o.Status && last.GetLeaf() == o.Leaf
 	}
 
 	return same, lastContext(stops, starts) == contextOf(o.RunContext)
@@ -311,24 +312,24 @@ func (ob *Observer) sameStop(ctx context.Context, session string, o *observe.Ses
 
 // lastContext is the run context of the latest row of either list that
 // carries one, by time and then id.
-func lastContext(stops, starts []Event) RunContext {
+func lastContext(stops, starts []Event) runContext {
 	var (
-		found  RunContext
+		found  runContext
 		latest *Event
 	)
 
 	for _, e := range slices.Concat(stops, starts) {
-		var c RunContext
+		var c runContext
 
 		if e.Kind == RunStarted {
-			p, _ := Decode[RunStartedPayload](e)
-			c = p.RunContext
+			p, _ := Decode[*RunStartedPayload](e)
+			c = runContext{p.GetF10Version(), p.GetModel(), p.GetAgent(), profileOf(p.GetProfile())}
 		} else {
-			p, _ := Decode[SessionStoppedPayload](e)
-			c = p.RunContext
+			p, _ := Decode[*SessionStoppedPayload](e)
+			c = runContext{p.GetF10Version(), p.GetModel(), p.GetAgent(), profileOf(p.GetProfile())}
 		}
 
-		if c == (RunContext{}) {
+		if c == (runContext{}) {
 			continue
 		}
 
@@ -340,21 +341,59 @@ func lastContext(stops, starts []Event) RunContext {
 	return found
 }
 
-func contextOf(c observe.RunContext) RunContext {
-	return RunContext{
-		F10Version: c.F10Version,
-		Model:      c.Model,
-		Agent:      c.Agent,
-		Profile:    AgentProfile{Kind: c.ProfileKind, Model: c.ProfileModel, Effort: c.ProfileEffort},
-	}
+// runContext is what a run ran on, as run_started and session_stopped
+// carry it, in a comparable shape; each part is empty when the hook could
+// not tell.
+type runContext struct {
+	f10Version, model, agent string
+	profile                  profile
 }
 
-//nolint:lostfield // the model goes on the stop row's context, not the usage
-func usageOf(u transcript.Usage) Usage {
-	out := Usage{Tokens: tokensOf(u.Tokens), Subagents: tokensOf(u.Subagents), Through: u.Through}
+type profile struct{ kind, model, effort string }
+
+func contextOf(c observe.RunContext) runContext {
+	return runContext{c.F10Version, c.Model, c.Agent, profile{c.ProfileKind, c.ProfileModel, c.ProfileEffort}}
+}
+
+func profileOf(p *AgentProfile) profile {
+	return profile{p.GetKind(), p.GetModel(), p.GetEffort()}
+}
+
+// agentProfile is nil for an empty profile, which the row then leaves out.
+func (c runContext) agentProfile() *AgentProfile {
+	if c.profile == (profile{}) {
+		return nil
+	}
+
+	return &AgentProfile{Kind: c.profile.kind, Model: c.profile.model, Effort: c.profile.effort}
+}
+
+func (c runContext) onStart(p *RunStartedPayload) *RunStartedPayload {
+	p.F10Version, p.Model, p.Agent, p.Profile = c.f10Version, c.model, c.agent, c.agentProfile()
+
+	return p
+}
+
+func (c runContext) onStop(p *SessionStoppedPayload) {
+	p.F10Version, p.Model, p.Agent, p.Profile = c.f10Version, c.model, c.agent, c.agentProfile()
+}
+
+func usageOf(u transcript.Usage) *Usage {
+	t := tokensOf(u.Tokens)
+	out := &Usage{
+		Input:      t.GetInput(),
+		Output:     t.GetOutput(),
+		CacheWrite: t.GetCacheWrite(),
+		CacheRead:  t.GetCacheRead(),
+		Through:    u.Through,
+	}
+
+	if !u.Subagents.Zero() {
+		out.Subagents = tokensOf(u.Subagents)
+	}
 
 	if len(u.ByModel) > 1 {
-		out.ByModel = make(map[string]Tokens, len(u.ByModel))
+		out.ByModel = make(map[string]*Tokens, len(u.ByModel))
 		for m, t := range u.ByModel {
 			out.ByModel[m] = tokensOf(t)
 		}
@@ -363,9 +402,20 @@ func usageOf(u transcript.Usage) Usage {
 	return out
 }
 
-func tokensOf(t transcript.Tokens) Tokens {
-	return Tokens{Input: t.Input, Output: t.Output, CacheWrite: t.CacheWrite, CacheRead: t.CacheRead}
+func tokensOf(t transcript.Tokens) *Tokens {
+	return &Tokens{
+		Input: count32(
+			t.Input,
+		),
+		Output:     count32(t.Output),
+		CacheWrite: count32(t.CacheWrite),
+		CacheRead:  count32(t.CacheRead),
+	}
 }
+
+// count32 is n as a payload count stores it: an int32, since protojson writes
+// an int64 as a string; a count past its range saturates instead of wrapping.
+func count32(n int) int32 { return int32(min(max(n, math.MinInt32), math.MaxInt32)) }
 
 // findings records the round opening once per reviewed sha, then each finding
 // whose verdict differs from the last recorded. Review writes the file and
@@ -381,7 +431,7 @@ func (ob *Observer) findings(ctx context.Context, o *observe.FindingsWritten) []
 		return artifact(
 			ReviewRoundOpened,
 			o.Task,
-			ReviewRoundOpenedPayload{Path: o.Path, Round: o.Round, ParseError: err.Error()},
+			&ReviewRoundOpenedPayload{Path: o.Path, Round: o.Round, ParseError: err.Error()},
 		)
 	}
 
@@ -396,21 +446,21 @@ func (ob *Observer) findings(ctx context.Context, o *observe.FindingsWritten) []
 	var events []Event
 
 	opened := slices.ContainsFunc(opens, func(e Event) bool {
-		p, _ := Decode[ReviewRoundOpenedPayload](e)
+		p, _ := Decode[*ReviewRoundOpenedPayload](e)
 
-		return p.Round == f.Round && p.Reviewed == f.Reviewed
+		return p.GetRound() == f.Round && p.GetReviewed() == f.Reviewed
 	})
 	last := map[string]string{} // verdict and status last recorded, by round/finding
 
 	for _, e := range verdicts {
-		p, _ := Decode[FindingVerdictPayload](e)
-		last[p.Round+"/"+p.Finding] = p.Verdict + "|" + p.Status
+		p, _ := Decode[*FindingVerdictPayload](e)
+		last[p.GetRound()+"/"+p.GetFinding()] = p.GetVerdict() + "|" + p.GetStatus()
 	}
 
 	if !opened {
-		events = append(events, artifact(ReviewRoundOpened, o.Task, ReviewRoundOpenedPayload{
+		events = append(events, artifact(ReviewRoundOpened, o.Task, &ReviewRoundOpenedPayload{
 			Path: o.Path, Round: f.Round, Reviewed: f.Reviewed, Reviewer: f.Reviewer,
-			Verdict: f.Verdict, Categories: f.Categories,
+			Verdict: f.Verdict, Categories: counts(f.Categories),
 		})...)
 	}
 
@@ -421,7 +471,7 @@ func (ob *Observer) findings(ctx context.Context, o *observe.FindingsWritten) []
 			continue
 		}
 
-		events = append(events, artifact(FindingVerdict, o.Task, FindingVerdictPayload{
+		events = append(events, artifact(FindingVerdict, o.Task, &FindingVerdictPayload{
 			Round: f.Round, Finding: fd.ID, Title: fd.Title,
 			Verdict: fd.Verdict, Category: fd.Category, Reason: fd.Reason, Status: fd.Status,
 		})...)
@@ -439,7 +489,7 @@ func (ob *Observer) verdict(ctx context.Context, o *observe.VerdictWritten, m ob
 		return nil
 	}
 
-	p := JudgeVerdictPayload{Path: o.Path, Key: o.Key, N: o.N}
+	p := &JudgeVerdictPayload{Path: o.Path, Key: o.Key, N: o.N}
 
 	f, err := verdict.Parse(string(raw))
 	if err != nil {
@@ -456,8 +506,8 @@ func (ob *Observer) verdict(ctx context.Context, o *observe.VerdictWritten, m ob
 	// the database holds every project's rows: scope the lookup to this one
 	if l := ob.open(ctx); l != nil {
 		e, ok, _ := l.Last(ctx, Filter{Project: ob.place(ctx, m.Cwd).Project, Kind: JudgeVerdict, Path: o.Path})
-		if v, _ := Decode[JudgeVerdictPayload](e); ok && e.Session == m.Session && v.Verdict == f.Verdict &&
-			v.Decision == f.Decision {
+		if v, _ := Decode[*JudgeVerdictPayload](e); ok && e.Session == m.Session && v.GetVerdict() == f.Verdict &&
+			v.GetDecision() == f.Decision {
 			return nil
 		}
 	}
@@ -475,7 +525,21 @@ func taskless(e *Event) bool {
 		return false
 	}
 
-	p, _ := Decode[JudgeVerdictPayload](*e)
+	p, _ := Decode[*JudgeVerdictPayload](*e)
 
-	return p.Idea
+	return p.GetIdea()
+}
+
+// counts is a category tally as the payload stores it.
+func counts(m map[string]int) map[string]int32 {
+	if m == nil {
+		return nil
+	}
+
+	out := make(map[string]int32, len(m))
+	for k, n := range m {
+		out[k] = count32(n)
+	}
+
+	return out
 }

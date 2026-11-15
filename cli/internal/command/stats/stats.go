@@ -190,13 +190,14 @@ func StatRows(events []ledger.Event, task string, cutoff time.Time) []statRow {
 		}
 
 		// a newer f10's row still reads as far as this one knows it
-		size, err := ledger.Decode[ledger.TaskSizedPayload](e)
+		size, err := ledger.Decode[*ledger.TaskSizedPayload](e)
 		if err != nil && !errors.Is(err, ledger.ErrNewerVersion) {
 			continue
 		}
 
 		r := row(e.Task, e.At)
-		r.lines, r.md = &size.Lines, size.MdLines
+		lines := int(size.GetLines())
+		r.lines, r.md = &lines, int(size.GetMdLines())
 	}
 
 	var out []statRow

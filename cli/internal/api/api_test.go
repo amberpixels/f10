@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http/httptest"
 	"path/filepath"
 	"slices"
@@ -199,10 +200,10 @@ func TestWatchEventsResumesAfterTheCursor(t *testing.T) {
 	late := ulid.Make().String()
 
 	// Record fills ids on its own copies, so the test names them
-	first := ledger.MustEvent(ledger.WaitStarted, ledger.WaitStartedPayload{})
+	first := ledger.MustEvent(ledger.WaitStarted, &ledger.WaitStartedPayload{})
 	first.ID, first.Task, first.Session = ulid.Make().String(), "FT-1", "s1"
-	second := ledger.MustEvent(ledger.AskAnswered, ledger.AskAnsweredPayload{
-		ID: "k", Answer: "yes", AnsweredBy: "ANSWER_SOURCE_PANE",
+	second := ledger.MustEvent(ledger.AskAnswered, &ledger.AskAnsweredPayload{
+		Id: "k", Answer: "yes", AnsweredBy: agentsv1.AnswerSource_ANSWER_SOURCE_PANE,
 	})
 	second.ID, second.Task = ulid.Make().String(), "FT-1"
 	ledger.Record(first, second)
@@ -241,7 +242,7 @@ func TestWatchEventsResumesAfterTheCursor(t *testing.T) {
 		t.Fatalf("event after the cursor = %v, want the second row", ev)
 	}
 
-	third := ledger.MustEvent(ledger.WaitEnded, ledger.WaitEndedPayload{})
+	third := ledger.MustEvent(ledger.WaitEnded, &ledger.WaitEndedPayload{})
 	third.ID, third.Task = late, "FT-1"
 	ledger.Record(third)
 
@@ -310,15 +311,37 @@ func TestProjectDirRefusesAnAmbiguousName(t *testing.T) {
 	}
 }
 
+// An ask row written before payloads were messages stores an unanswered
+// ask's answered_by as ""; it still streams with its payload.
+func TestEventOfReadsALegacyAskRow(t *testing.T) {
+	var e ledger.Event
+	if err := json.Unmarshal([]byte(`{"id":"01","kind":"ask_raised","payload":{"v":1,"ask":{`+
+		`"id":"f10:FT-1","agent":"a","workspace_id":"","text":"1. a?","questions":null,`+
+		`"asked_at":"2026-11-14T10:30:15+02:00","answer":"","answered_by":"","labels":{"task":"FT-1"}}}}`), &e); err != nil {
+		t.Fatal(err)
+	}
+
+	ev, err := EventOf(e)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ask := ev.GetAskRaised().GetAsk()
+	if ask.GetId() != "f10:FT-1" || ask.GetAnsweredBy() != agentsv1.AnswerSource_ANSWER_SOURCE_UNSPECIFIED ||
+		!ask.GetAskedAt().AsTime().Equal(time.Date(2026, 11, 14, 8, 30, 15, 0, time.UTC)) {
+		t.Errorf("ask %v", ask)
+	}
+}
+
 // A tail stream skips the backlog and sends only what lands after it opened.
 func TestWatchEventsFromTheTail(t *testing.T) {
 	seam.Swap(t, &EventPoll, 20*time.Millisecond)
 
-	old := ledger.MustEvent(ledger.WaitStarted, ledger.WaitStartedPayload{})
+	old := ledger.MustEvent(ledger.WaitStarted, &ledger.WaitStartedPayload{})
 	old.ID, old.Task = ulid.Make().String(), "FT-2"
 	ledger.Record(old)
 
-	next := ledger.MustEvent(ledger.WaitEnded, ledger.WaitEndedPayload{})
+	next := ledger.MustEvent(ledger.WaitEnded, &ledger.WaitEndedPayload{})
 	next.ID, next.Task = ulid.Make().String(), "FT-2"
 
 	// the call returns with the first event's headers, so the new row lands

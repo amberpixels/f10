@@ -94,7 +94,8 @@ var recordSize = func(ctx context.Context, dir, branch, task string, s branchSiz
 
 	e, err := ledger.NewEvent(
 		ledger.TaskSized,
-		ledger.TaskSizedPayload{Lines: s.Lines, MdLines: s.Md, Files: s.Files, Base: s.Base},
+
+		&ledger.TaskSizedPayload{Lines: int32(s.Lines), MdLines: int32(s.Md), Files: int32(s.Files), Base: s.Base},
 	)
 	if err != nil {
 		return

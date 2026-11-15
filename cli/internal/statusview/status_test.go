@@ -365,7 +365,7 @@ func TestReadShipmentFromTheLedger(t *testing.T) {
 	}
 
 	in := taskStatusInput{ID: "GH-1", Branch: "GH-1", Plan: plan, Handoff: filepath.Join(dir, "none.md")}
-	pr := ledger.MustEvent(ledger.PROpened, ledger.PROpenedPayload{URL: "https://gh/pr/9"})
+	pr := ledger.MustEvent(ledger.PROpened, &ledger.PROpenedPayload{Url: "https://gh/pr/9"})
 	pr.Task = "GH-1"
 	events := []ledger.Event{pr}
 
@@ -389,7 +389,7 @@ func TestReadShipmentPRByBranch(t *testing.T) {
 
 	h := hostops.NewHost("gh", t.TempDir())
 	in := taskStatusInput{ID: "GH-1", Branch: "GH-1", Host: &h}
-	push := ledger.MustEvent(ledger.Pushed, ledger.PushedPayload{})
+	push := ledger.MustEvent(ledger.Pushed, &ledger.PushedPayload{})
 	push.Task = "GH-1"
 	pushed := []ledger.Event{push}
 

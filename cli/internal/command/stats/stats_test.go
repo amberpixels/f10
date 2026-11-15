@@ -94,18 +94,18 @@ func TestStatsStepsByLabel(t *testing.T) {
 	labels := []string{"", "", "", "pr-polish"}
 	set := func(n int, leaf string, place int) ledger.Event {
 		return testkit.StatEvent(at(n), "s1", "FT-1", ledger.StateSet,
-			ledger.ClaimPayload{Args: []string{"ship", "running", leaf}, Labels: labels, At: place})
+			&ledger.ClaimPayload{Args: []string{"ship", "running", leaf}, Labels: labels, At: int32(place)})
 	}
 
 	events := []ledger.Event{
-		testkit.StatEvent(at(0), "s1", "", ledger.RunStarted, ledger.RunStartedPayload{Skill: "ship"}),
+		testkit.StatEvent(at(0), "s1", "", ledger.RunStarted, &ledger.RunStartedPayload{Skill: "ship"}),
 		set(0, "implement", 1),
-		testkit.StatEvent(at(1), "s1", "FT-1", ledger.WaitStarted, ledger.WaitStartedPayload{Reason: "question"}),
-		testkit.StatEvent(at(2), "s1", "FT-1", ledger.WaitEnded, ledger.WaitEndedPayload{Reason: "question"}),
+		testkit.StatEvent(at(1), "s1", "FT-1", ledger.WaitStarted, &ledger.WaitStartedPayload{Reason: "question"}),
+		testkit.StatEvent(at(2), "s1", "FT-1", ledger.WaitEnded, &ledger.WaitEndedPayload{Reason: "question"}),
 		set(10, "pr", 2),
 		set(13, "review:local", 3),
 		set(15, "pr[pr-polish]", 4),
-		testkit.StatEvent(at(20), "s1", "FT-1", ledger.StateSet, ledger.ClaimPayload{Args: []string{"ship", "done"}}),
+		testkit.StatEvent(at(20), "s1", "FT-1", ledger.StateSet, &ledger.ClaimPayload{Args: []string{"ship", "done"}}),
 	}
 
 	rows := statscmd.StatRows(events, "FT-1", day)

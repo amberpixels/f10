@@ -2,13 +2,12 @@ package api
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"connectrpc.com/connect"
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -74,54 +73,45 @@ func (eventService) WatchEvents(
 	}
 }
 
-// EventOf is a ledger row as f10.v1 carries it. The payload goes through its
-// stored JSON into the kind's message, whose fields are the stored keys; a
-// kind with no message arrives with kind set and no payload.
+// EventOf is a ledger row as f10.v1 carries it, its payload the kind's
+// message as the ledger decodes it. A kind with no payload case, or a row
+// that does not decode, arrives with kind set and no payload; a row a newer
+// f10 wrote arrives with what this one read of it.
 //
 //nolint:lostfield // the row's machine, source and hot keys stay off the API
 func EventOf(e ledger.Event) (*f10v1.Event, error) {
-	obj := map[string]any{
-		"id": e.ID, "kind": e.Kind, "project": e.Project, "task": e.Task,
-		"session": e.Session, "checkout": e.Checkout, "branch": e.Branch,
+	ev := &f10v1.Event{
+		Id: e.ID, Kind: e.Kind, Project: e.Project, Task: e.Task,
+		Session: e.Session, Checkout: e.Checkout, Branch: e.Branch,
 	}
 	if !e.At.IsZero() {
-		obj["at"] = e.At.UTC().Format(time.RFC3339Nano)
+		ev.At = timestamppb.New(e.At)
 	}
 
-	if field := payloadField(e.Kind); field != "" {
-		raw, err := json.Marshal(e.Payload.Val)
-		if err != nil {
-			return nil, fmt.Errorf("event %s: %w", e.ID, err)
-		}
-
-		obj[field] = json.RawMessage(raw)
-	}
-
-	raw, err := json.Marshal(obj)
-	if err != nil {
-		return nil, err
-	}
-
-	if ev, ok := decodeEvent(raw); ok {
+	fd := payloadField(e.Kind)
+	if fd == nil {
 		return ev, nil
 	}
 
-	// a stored row this message cannot read still arrives, without its payload
-	return &f10v1.Event{
-		Id: e.ID, Kind: e.Kind, Project: e.Project, Task: e.Task, At: timestamppb.New(e.At),
-		Session: e.Session, Checkout: e.Checkout, Branch: e.Branch,
-	}, nil
+	m, err := ledger.DecodeMessage(e)
+	if err != nil && !errors.Is(err, ledger.ErrNewerVersion) {
+		return ev, nil
+	}
+
+	// a case whose message is not the kind's means the two drifted apart
+	if m.ProtoReflect().Descriptor() != fd.Message() {
+		return nil, fmt.Errorf("event %s: %s decodes to %s, not the %s case's %s",
+			e.ID, e.Kind, m.ProtoReflect().Descriptor().FullName(), fd.Name(), fd.Message().FullName())
+	}
+
+	ev.ProtoReflect().Set(fd, protoreflect.ValueOfMessage(m.ProtoReflect()))
+
+	return ev, nil
 }
 
-func decodeEvent(raw []byte) (*f10v1.Event, bool) {
-	var ev f10v1.Event
-
-	return &ev, (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(raw, &ev) == nil
-}
-
-// payloadField is the Event oneof case that carries kind, "" for none: the
+// payloadField is the Event oneof case that carries kind, nil for none: the
 // state_* kinds share claim, and every other case is named after its kind.
-func payloadField(kind string) string {
+func payloadField(kind string) protoreflect.FieldDescriptor {
 	name := kind
 	if strings.HasPrefix(kind, "state_") {
 		name = "claim"
@@ -129,8 +119,8 @@ func payloadField(kind string) string {
 
 	fd := (&f10v1.Event{}).ProtoReflect().Descriptor().Fields().ByName(protoreflect.Name(name))
 	if fd == nil || fd.ContainingOneof() == nil {
-		return ""
+		return nil
 	}
 
-	return name
+	return fd
 }
