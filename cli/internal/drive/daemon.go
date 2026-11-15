@@ -1,6 +1,7 @@
 package drive
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -28,7 +29,7 @@ func WriteDaemonStatus(ctx context.Context, w io.Writer, links *render.TaskLinks
 
 	switch r := rep.Remote; {
 	case r.Addr != "":
-		fmt.Fprintf(w, "remote   %s\n", r.Addr)
+		fmt.Fprintf(w, "remote   %s\n", remoteLine(r.URL, r.Addr, r.HTTPSReason))
 	case r.Enabled:
 		fmt.Fprintf(w, "remote   not listening: %s\n", r.Reason)
 	}
@@ -295,4 +296,14 @@ func runningDrive(dir, logPath string) int {
 	}
 
 	return 0
+}
+
+// remoteLine is the web client's address, and why it is plain HTTP when it is.
+func remoteLine(url, addr, httpsWhy string) string {
+	line := cmp.Or(url, addr)
+	if httpsWhy != "" {
+		line += " (no HTTPS: " + httpsWhy + ")"
+	}
+
+	return line
 }

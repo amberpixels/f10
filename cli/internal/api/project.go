@@ -9,13 +9,15 @@ import (
 
 	"connectrpc.com/connect"
 
+	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/projects"
 	"github.com/amberpixels/f10/cli/internal/target"
 )
 
 // projectDir is the checkout a request's project names: a path as given,
 // else a project id or name matched against the projects the daemon
-// watches, else against F10_ROOTS.
+// watches or runs a drive in, which ListProjects offers, else against
+// F10_ROOTS.
 func projectDir(ctx context.Context, sup Supervisor, project string) (string, error) {
 	project = strings.TrimSpace(project)
 
@@ -27,18 +29,17 @@ func projectDir(ctx context.Context, sup Supervisor, project string) (string, er
 	}
 
 	base := filepath.Base(project)
-	watches := sup.Status().Watches
 
 	// an exact project id wins over a directory name two repos may share
 	var named []string
 
-	for _, w := range watches {
-		if target.ProjectOf(ctx, w.Dir) == project {
-			return w.Dir, nil
+	for _, dir := range knownDirs(sup.Status()) {
+		if target.ProjectOf(ctx, dir) == project {
+			return dir, nil
 		}
 
-		if filepath.Base(w.Dir) == base {
-			named = append(named, w.Dir)
+		if filepath.Base(dir) == base {
+			named = append(named, dir)
 		}
 	}
 
@@ -80,4 +81,30 @@ func projectTarget(ctx context.Context, sup Supervisor, project, verb string) (*
 	}
 
 	return t, nil
+}
+
+// knownDirs is every checkout the daemon watches or runs a drive in, once
+// each, watched ones first.
+func knownDirs(st daemon.Status) []string {
+	var dirs []string
+
+	for _, w := range st.Watches {
+		dirs = append(dirs, w.Dir)
+	}
+
+	for _, r := range st.Runs {
+		dirs = append(dirs, r.Dir)
+	}
+
+	seen := map[string]bool{}
+	out := dirs[:0]
+
+	for _, d := range dirs {
+		if d != "" && !seen[d] {
+			seen[d] = true
+			out = append(out, d)
+		}
+	}
+
+	return out
 }

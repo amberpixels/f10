@@ -14,6 +14,8 @@ service RunService {
   rpc Drive(DriveRequest) returns (DriveResponse);
   // Finish merges a task's PR and removes its worktree, branch and workspace.
   rpc Finish(FinishRequest) returns (FinishResponse);
+  // Forward hands text to the agent working on a task, as f10 forward does.
+  rpc Forward(ForwardRequest) returns (ForwardResponse);
 }
 
 // PhaseStatus is where one phase of a run stands.
@@ -286,4 +288,21 @@ message FinishResponse {
   bool removed_worktree = 4;
   bool removed_branch = 5;
   bool closed_workspace = 6;
+}
+
+message ForwardRequest {
+  string project = 1;
+  // task is the task id, with a -suffix for one of its parallel worktrees.
+  string task = 2;
+  // text is what the agent is told, such as a command or a note.
+  string text = 3;
+}
+
+message ForwardResponse {
+  // workspace is the workspace the text went to.
+  string workspace = 1;
+  // sent is the text as typed into the agent's pane.
+  string sent = 2;
+  // note says what the delivery check saw, empty when all went well.
+  string note = 3;
 }

@@ -32,6 +32,7 @@ func remoteState(ctx context.Context, home string) *doctor.RemoteState {
 	ds, err := daemon.GetStatus(ctx, daemon.RunDir(), buildinfo.Version())
 	if err == nil {
 		st.DaemonRunning, st.Bound, st.Reason = true, ds.Remote.Addr, ds.Remote.Reason
+		st.URL, st.HTTPSReason = ds.Remote.URL, ds.Remote.HTTPSReason
 	} else if !errors.Is(err, daemon.ErrNotRunning) {
 		st.DaemonRunning, st.Reason = true, err.Error()
 	}

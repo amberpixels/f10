@@ -37,12 +37,16 @@ var procedures = map[string]Scope{
 	f10v1connect.RunServiceGetRunStatusProcedure:        ScopeRead,
 	f10v1connect.BoardServiceGetBoardProcedure:          ScopeRead,
 	f10v1connect.EventServiceWatchEventsProcedure:       ScopeRead,
+	f10v1connect.ArtifactServiceListArtifactsProcedure:  ScopeRead,
+	f10v1connect.ArtifactServiceGetArtifactProcedure:    ScopeRead,
+	f10v1connect.ProjectServiceListProjectsProcedure:    ScopeRead,
 	agentsv1connect.AskServiceListAsksProcedure:         ScopeRead,
 	agentsv1connect.AgentServiceListWorkspacesProcedure: ScopeRead,
 	agentsv1connect.AgentServiceListAgentsProcedure:     ScopeRead,
 	agentsv1connect.AgentServiceGetAgentStatusProcedure: ScopeRead,
 	agentsv1connect.AskServiceAnswerAskProcedure:        ScopeAnswer,
 	agentsv1connect.AgentServiceSendTextProcedure:       ScopeSteer,
+	f10v1connect.RunServiceForwardProcedure:             ScopeSteer,
 	f10v1connect.RunServiceStartProcedure:               ScopeStart,
 	f10v1connect.RunServiceDriveProcedure:               ScopeStart,
 	f10v1connect.TaskServiceCreateTaskProcedure:         ScopeStart,
@@ -54,6 +58,22 @@ var procedures = map[string]Scope{
 var socketOnly = map[string]bool{
 	f10v1connect.DaemonServiceStopDaemonProcedure:   true,
 	f10v1connect.DaemonServiceWatchProjectProcedure: true,
+}
+
+// Procedures is every procedure tok may call on the tailnet, sorted, so a
+// client hides what it cannot call without a scope table of its own.
+func Procedures(tok Token) []string {
+	var out []string
+
+	for proc, scope := range procedures {
+		if scope == anyToken || tok.Has(scope) {
+			out = append(out, proc)
+		}
+	}
+
+	slices.Sort(out)
+
+	return out
 }
 
 // ParseScopes reads `--scope` values, each one name or a comma list.

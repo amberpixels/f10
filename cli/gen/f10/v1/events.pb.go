@@ -32,8 +32,11 @@ type WatchEventsRequest struct {
 	// the first. It is opaque: clients store it and send it back.
 	After string `protobuf:"bytes,1,opt,name=after,proto3" json:"after,omitempty"`
 	// project and task narrow the stream; empty means every one.
-	Project       string `protobuf:"bytes,2,opt,name=project,proto3" json:"project,omitempty"`
-	Task          string `protobuf:"bytes,3,opt,name=task,proto3" json:"task,omitempty"`
+	Project string `protobuf:"bytes,2,opt,name=project,proto3" json:"project,omitempty"`
+	Task    string `protobuf:"bytes,3,opt,name=task,proto3" json:"task,omitempty"`
+	// tail starts an empty after at the newest row instead of the first, so a
+	// client that reads current state elsewhere skips the backlog.
+	Tail          bool `protobuf:"varint,4,opt,name=tail,proto3" json:"tail,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -87,6 +90,13 @@ func (x *WatchEventsRequest) GetTask() string {
 		return x.Task
 	}
 	return ""
+}
+
+func (x *WatchEventsRequest) GetTail() bool {
+	if x != nil {
+		return x.Tail
+	}
+	return false
 }
 
 type WatchEventsResponse struct {
@@ -2503,11 +2513,12 @@ var File_f10_v1_events_proto protoreflect.FileDescriptor
 
 const file_f10_v1_events_proto_rawDesc = "" +
 	"\n" +
-	"\x13f10/v1/events.proto\x12\x06f10.v1\x1a\x14agents/v1/asks.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"X\n" +
+	"\x13f10/v1/events.proto\x12\x06f10.v1\x1a\x14agents/v1/asks.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"l\n" +
 	"\x12WatchEventsRequest\x12\x14\n" +
 	"\x05after\x18\x01 \x01(\tR\x05after\x12\x18\n" +
 	"\aproject\x18\x02 \x01(\tR\aproject\x12\x12\n" +
-	"\x04task\x18\x03 \x01(\tR\x04task\"R\n" +
+	"\x04task\x18\x03 \x01(\tR\x04task\x12\x12\n" +
+	"\x04tail\x18\x04 \x01(\bR\x04tail\"R\n" +
 	"\x13WatchEventsResponse\x12#\n" +
 	"\x05event\x18\x01 \x01(\v2\r.f10.v1.EventR\x05event\x12\x16\n" +
 	"\x06cursor\x18\x02 \x01(\tR\x06cursor\"\xcc\f\n" +

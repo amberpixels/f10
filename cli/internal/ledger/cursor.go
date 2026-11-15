@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -46,6 +47,34 @@ func ReadAfter(ctx context.Context, path, cursor, project, task string) ([]Place
 	defer l.Close()
 
 	return l.after(ctx, after, project, task)
+}
+
+// LastCursor is the cursor of the newest row in the database at path, ""
+// when it holds none, so a reader can start after everything already there.
+func LastCursor(ctx context.Context, path string) (string, error) {
+	_ = SyncAt(ctx, path) // a failed replay still reads what the database holds
+
+	l, err := OpenRead(ctx, path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", nil
+	}
+
+	if err != nil {
+		return "", err
+	}
+
+	defer l.Close()
+
+	var last sql.NullInt64
+	if err := l.db.QueryRowContext(ctx, `SELECT max(rowid) FROM events`).Scan(&last); err != nil {
+		return "", fmt.Errorf("ledger: %w", err)
+	}
+
+	if !last.Valid {
+		return "", nil
+	}
+
+	return strconv.FormatInt(last.Int64, 10), nil
 }
 
 // rowsAfter reads rowids, which SQLite assigns in insertion order; an empty

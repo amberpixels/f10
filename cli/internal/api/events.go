@@ -32,6 +32,15 @@ func (eventService) WatchEvents(
 	m := req.Msg
 	after := m.GetAfter()
 
+	if after == "" && m.GetTail() {
+		last, err := ledger.LastCursor(ctx, ledger.Path())
+		if err != nil {
+			return connect.NewError(connect.CodeUnavailable, err)
+		}
+
+		after = last
+	}
+
 	for {
 		placed, err := ledger.ReadAfter(ctx, ledger.Path(), after, m.GetProject(), m.GetTask())
 		if err != nil {

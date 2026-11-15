@@ -35,13 +35,17 @@ jobs:
 
       - uses: extractions/setup-just@v3
 
-      # protoc-gen-es, the TypeScript generator, is an npm package pinned in
-      # proto/package-lock.json; proto::lint regenerates to catch stale code.
+      # protoc-gen-es, the TypeScript generator, is pinned in
+      # proto/package-lock.json, and the web client's packages in
+      # ts/package-lock.json; proto::lint and web::lint rebuild to catch stale
+      # checked-in output.
       - uses: actions/setup-node@v7
         with:
           node-version: lts/*
           cache: npm
-          cache-dependency-path: proto/package-lock.json
+          cache-dependency-path: |
+            proto/package-lock.json
+            ts/package-lock.json
 
       # The same recipe developers run locally, so `just ci` and CI cannot
       # drift apart. ci is lint + test + test-race + the proto breaking checks -

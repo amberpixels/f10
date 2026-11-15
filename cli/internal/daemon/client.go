@@ -152,7 +152,10 @@ func GetStatus(ctx context.Context, dir, version string) (Status, error) {
 	}
 
 	if r := res.Msg.GetRemote(); r != nil {
-		st.Remote = RemoteState{Enabled: r.GetEnabled(), Addr: r.GetAddr(), Reason: r.GetReason()}
+		st.Remote = RemoteState{
+			Enabled: r.GetEnabled(), Addr: r.GetAddr(), Reason: r.GetReason(),
+			URL: r.GetUrl(), HTTPS: r.GetHttps(), HTTPSReason: r.GetHttpsReason(),
+		}
 	}
 
 	return st, nil
