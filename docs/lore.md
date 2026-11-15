@@ -2,10 +2,11 @@
 
 Code loses its "why".
 The reasons behind a change live in PR threads, plan files and agent sessions that are gone by the time someone, human or agent, is about to edit the line.
-Lore keeps that knowledge as plain markdown entries next to the code, linked to commits by a trailer, and answers two questions:
+Lore keeps that knowledge as plain markdown entries next to the code, linked to commits by a trailer, and answers three questions:
 
 - **why is this line the way it is** (`f10 lore why <path:line>`)
 - **what must I know before editing this file** (`f10 lore lessons <path>`)
+- **which findings on this file were already argued and settled without a fix** (`f10 lore findings <path>...`)
 
 This file is the spec.
 `cli/internal/lore` is the implementation and `f10 lore` its CLI.
@@ -105,6 +106,9 @@ Decisions and lessons come from a ship run: a change that reaches `f10 finish` a
 
 - The **implement** step reads `lessons` once per file before its first edit and follows them, or records an override as a `decision`.
 - The **review** step reads `lessons` over every file in the diff and `why` at the base for a line it doubts; a hunk that breaks a lesson is a finding naming the lesson's id.
+  It also reads `findings` over every file in the diff, and does not raise a repeat of a settled finding unless the earlier reason no longer holds.
+  A repeat it does raise opens with the settled finding's id and reason.
+- The **resolve** step reads `findings` over the files its findings name; a verdict on a repeat cites the settled finding, and one that goes the other way says why.
 - The **plan** step reads lessons and decisions through `f10 history` over the files its stages name, and says in its `## History` section what it did with each; a plan that departs from one writes a `decision` naming its id.
 - The **judge** step reads the same brief over a plan's files or a diff's, and weighs a decision's rejected options against the subject.
 - `f10 finish` runs `check` right before a merge, under `project.md`'s `lore_gate`: `warn` notes the reasons, `block` refuses.
@@ -118,6 +122,7 @@ f10 lore change [<task-id>]
 f10 lore show <change> [--json]
 f10 lore why <path:line[@rev]> [--json]
 f10 lore lessons <path> [--json]
+f10 lore findings <path>... [--json]
 f10 lore check <change>
 f10 lore validate [<change>]
 ```
@@ -142,6 +147,13 @@ Every verb takes `--root <dir>`.
   `path:line@<rev>` reads the line as that revision has it, the base sha for a reviewer asking about a line a diff rewrote, so the answer is the earlier change; a path absent at the revision is `no record`.
 - **`lessons`** prints the effective, non-retired lessons anchored to the path, across every change.
   An agent reads it before editing a file.
+- **`findings`** prints the effective findings with status `wontfix` or `duplicate` anchored to the paths, across every change, newest first, each once, under the first path it is anchored to.
+  A `fixed` finding is left out, because the code it pointed at has changed.
+  Each anchor on the paths is followed from its commit to `HEAD` through `git diff --unified=0`, and printed as a `now:` line: its lines at `HEAD`, and how many of them changed since.
+  An anchor whose lines all changed, or whose file is gone at `HEAD`, is dropped, and a finding with no anchor left is not listed.
+  An anchor whose commit this clone lacks (a branch commit squashed away and pruned), or whose commit does not hold the file (an anchor written before its file was committed), is kept as written, its `now:` line giving the recorded lines and saying they were not checked.
+  A path whose findings all printed under an earlier path still counts them in its headline, as `shown above`.
+  Renames are not followed, so a finding on a moved file stops showing, as a lesson does.
 - **`check`** exits 1, naming each reason, when the intent is missing, no verdict exists, the latest verdict is `rethink` or `stop`, or a `blocker` or `major` finding is still effectively `open`.
   It exits 0 otherwise.
   `f10 finish` runs it right before a merge, under `project.md`'s `lore_gate` (`docs/project-setup.md`): `warn`, the default, notes the reasons and merges; `block` refuses, which suits a flow with a `judge` entry, the one writer of verdicts.

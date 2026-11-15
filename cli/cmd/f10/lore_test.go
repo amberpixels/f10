@@ -135,6 +135,30 @@ func TestLoreVerbs(t *testing.T) {
 		t.Errorf("lessons --json for a file with none = %q", out)
 	}
 
+	skipped := must("add", "finding", "--change", "FT-1", "--anchor", "limit.go:4",
+		"--severity", "minor", "--status", "open", "-m", "Looks racy")
+	must("add", "finding", "--change", "FT-1", "--anchor", "limit.go:4", "--supersedes", skipped,
+		"--status", "wontfix", "--resolution", "one goroutine owns the map", "-m", "Not racy")
+
+	if out := must("findings", "limit.go", "../README.md"); !strings.Contains(out, "api/limit.go  1 settled finding") ||
+		!strings.Contains(
+			out,
+			"one goroutine owns the map",
+		) || !strings.Contains(out, "now: api/limit.go:4 (unchanged)") ||
+		strings.Contains(out, "Pruned") || !strings.Contains(out, "README.md  no settled findings") {
+		t.Errorf("findings:\n%s", out)
+	}
+
+	var settled []lore.Settled
+	if err := json.Unmarshal([]byte(must("findings", "--json", "limit.go")), &settled); err != nil ||
+		len(settled) != 1 || settled[0].Finding.Status != "wontfix" || len(settled[0].Tracked) != 1 {
+		t.Errorf("findings --json: %v %+v", err, settled)
+	}
+
+	if _, err := runLore(t, "findings"); err == nil {
+		t.Error("findings ran with no path")
+	}
+
 	if out := must("validate"); out != "1 change valid" {
 		t.Errorf("validate = %q", out)
 	}

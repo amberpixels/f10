@@ -101,6 +101,7 @@ f10 lore change [<task-id>]         # the change the task's current PR writes to
 f10 lore show <change> [--json]     # the change's effective entries, the intent first; a task id lists each PR's change
 f10 lore why <path:line> [--json]   # the change behind a line: intent, latest verdict, entries on the line
 f10 lore lessons <path> [--json]    # the lessons to read before editing a file
+f10 lore findings <path>... [--json]   # findings settled without a fix on these files, with their reasons and lines at HEAD
 f10 lore check <change>             # exit 1 naming why the change does not pass its gate
 f10 lore validate [<change>]        # lint entries against the schema
 ```

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -32,6 +33,25 @@ type Git interface {
 	// IsAncestor reports whether ancestor is reachable from commit; a sha
 	// this clone does not have is false, not an error.
 	IsAncestor(ctx context.Context, ancestor, commit string) (bool, error)
+	// Hunks is what changed in path from commit to HEAD; ErrNoRecord when
+	// HEAD has no such path, ErrNoCommit when this clone lacks the commit,
+	// ErrNotAtCommit when the commit lacks the path.
+	Hunks(ctx context.Context, commit, path string) ([]Hunk, error)
+}
+
+// ErrNoCommit is an anchor's commit this clone does not have, as a branch
+// commit squashed away and then pruned.
+var ErrNoCommit = errors.New("lore: commit not in this clone")
+
+// ErrNotAtCommit is an anchor written before its file was committed: its
+// lines are the working tree's, so no diff from the commit can map them.
+var ErrNotAtCommit = errors.New("lore: path not in the anchor's commit")
+
+// Hunk is one `@@ -old,count +new,count @@` header of a zero-context diff.
+// A count of 0 on the old side is an insertion after OldLine.
+type Hunk struct {
+	OldLine, OldCount int
+	NewLine, NewCount int
 }
 
 // CLIGit answers through the git binary, run in Dir, the repository root.
@@ -177,6 +197,64 @@ func (g CLIGit) IsAncestor(ctx context.Context, ancestor, commit string) (bool, 
 	}
 
 	return false, err
+}
+
+var (
+	shaRe      = regexp.MustCompile(`^[0-9a-fA-F]{4,64}$`)
+	hunkHeader = regexp.MustCompile(`^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@`)
+)
+
+// Hunks reads `git diff -U0 <commit> HEAD`; the commit comes from an entry
+// file, so only a sha reaches git's argument list.
+func (g CLIGit) Hunks(ctx context.Context, commit, path string) ([]Hunk, error) {
+	if !shaRe.MatchString(commit) {
+		return nil, ErrNoCommit
+	}
+
+	out, err := g.run(ctx, "diff", "--unified=0", "--no-color", "--no-ext-diff", "--no-renames",
+		commit, "HEAD", "--", path)
+	if err != nil {
+		if _, catErr := g.run(ctx, "cat-file", "-e", commit+"^{commit}"); catErr != nil {
+			return nil, ErrNoCommit
+		}
+
+		return nil, err
+	}
+
+	var hunks []Hunk
+
+	for line := range strings.SplitSeq(out, "\n") {
+		if strings.HasPrefix(line, "deleted file mode") {
+			return nil, ErrNoRecord
+		}
+
+		if strings.HasPrefix(line, "new file mode") {
+			return nil, ErrNotAtCommit
+		}
+
+		m := hunkHeader.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+
+		h := Hunk{OldCount: hunkCount(m[2]), NewCount: hunkCount(m[4])}
+		h.OldLine, _ = strconv.Atoi(m[1])
+		h.NewLine, _ = strconv.Atoi(m[3])
+		hunks = append(hunks, h)
+	}
+
+	return hunks, nil
+}
+
+// hunkCount reads a hunk header's count, which git leaves out when it is 1.
+func hunkCount(s string) int {
+	if s == "" {
+		return 1
+	}
+
+	n, _ := strconv.Atoi(s)
+
+	return n
 }
 
 func (g CLIGit) run(ctx context.Context, args ...string) (string, error) {

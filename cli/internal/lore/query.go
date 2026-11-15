@@ -276,6 +276,145 @@ func (s *Store) OnPaths(paths []string, kinds ...Kind) ([]Entry, error) {
 	return out, nil
 }
 
+// Settled is a finding settled without a fix, with its anchors on the asked
+// paths that still have code at HEAD.
+type Settled struct {
+	Finding Entry     `json:"finding"`
+	Tracked []Tracked `json:"tracked"`
+}
+
+// Tracked is one anchor followed from its commit to HEAD. Now is nil when
+// the check could not run, and Unchecked then says why.
+type Tracked struct {
+	Anchor    Anchor  `json:"anchor"`
+	Now       *Anchor `json:"now,omitempty"`
+	Changed   int     `json:"changed"` // anchored lines changed or deleted since
+	Checked   bool    `json:"checked"`
+	Unchecked string  `json:"unchecked,omitempty"`
+}
+
+// SettledFindings is the effective wontfix and duplicate findings anchored
+// on paths, newest first. A fixed one is left out, as is one whose anchored
+// lines all changed or whose file is gone: the code it judged is not there.
+func (s *Store) SettledFindings(ctx context.Context, paths []string) ([]Settled, error) {
+	entries, err := s.OnPaths(paths, KindFinding)
+	if err != nil {
+		return nil, err
+	}
+
+	on := make(map[string]bool, len(paths))
+	for _, p := range paths {
+		on[p] = true
+	}
+
+	type diffKey struct{ commit, path string }
+
+	type diff struct {
+		hunks []Hunk
+		err   error
+	}
+
+	diffs := map[diffKey]diff{}
+
+	var out []Settled
+
+	for _, e := range entries {
+		if e.Status != "wontfix" && e.Status != "duplicate" {
+			continue
+		}
+
+		var kept []Tracked
+
+		for _, a := range e.Anchors {
+			if !on[a.Path] {
+				continue
+			}
+
+			k := diffKey{a.Commit, a.Path}
+
+			d, ok := diffs[k]
+			if !ok {
+				d.hunks, d.err = s.Git.Hunks(ctx, a.Commit, a.Path)
+				diffs[k] = d
+			}
+
+			switch {
+			case errors.Is(d.err, ErrNoCommit):
+				kept = append(kept, Tracked{Anchor: a, Unchecked: short(a.Commit) + " is not in this clone"})
+			case errors.Is(d.err, ErrNotAtCommit):
+				kept = append(kept, Tracked{Anchor: a, Unchecked: short(a.Commit) + " does not hold the file"})
+			case errors.Is(d.err, ErrNoRecord):
+			case d.err != nil:
+				return nil, d.err
+			default:
+				if t := track(a, d.hunks); t.Now != nil {
+					kept = append(kept, t)
+				}
+			}
+		}
+
+		if len(kept) > 0 {
+			out = append(out, Settled{Finding: e, Tracked: kept})
+		}
+	}
+
+	slices.Reverse(out)
+
+	return out, nil
+}
+
+// track maps the anchor's lines through the hunks: a line inside a hunk's
+// old side changed, a line after it moved by the hunk's growth.
+func track(a Anchor, hunks []Hunk) Tracked {
+	t := Tracked{Anchor: a, Checked: true}
+	first, last := 0, 0
+
+	for line := a.Line; line <= max(a.EndLine, a.Line); line++ {
+		at, changed := line, false
+
+		for _, h := range hunks {
+			end := h.OldLine // an insertion lands after OldLine
+			if h.OldCount > 0 {
+				end = h.OldLine + h.OldCount - 1
+				if line >= h.OldLine && line <= end {
+					changed = true
+
+					break
+				}
+			}
+
+			if line > end {
+				at += h.NewCount - h.OldCount
+			}
+		}
+
+		if changed {
+			t.Changed++
+
+			continue
+		}
+
+		if first == 0 {
+			first = at
+		}
+
+		last = at
+	}
+
+	if first != 0 {
+		now := a
+		now.Line, now.EndLine, now.Commit = first, 0, ""
+
+		if last > first {
+			now.EndLine = last
+		}
+
+		t.Now = &now
+	}
+
+	return t
+}
+
 // CheckResult is the gate's answer: it passes with no reasons.
 type CheckResult struct {
 	Change  string   `json:"change"`
