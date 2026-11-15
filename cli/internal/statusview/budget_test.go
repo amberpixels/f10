@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/history"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 )
@@ -61,6 +62,14 @@ func TestReadBudgets(t *testing.T) {
 			events, err := ledger.ReadScope(ctx, path, ledger.TaskScope("p7", "FT-10"))
 			if err == nil && len(events) != testkit.SeedSessionRows*testkit.SeedTaskSession {
 				err = fmt.Errorf("read %d rows", len(events))
+			}
+
+			return err
+		}},
+		"history <paths>": {100 * time.Millisecond, func() error {
+			events, err := history.ReadLedger(ctx, path, "p7", board)
+			if err == nil && len(events) == 0 {
+				err = errors.New("read no rows")
 			}
 
 			return err

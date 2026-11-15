@@ -54,6 +54,12 @@ A review scenario adds three fields to `scenario.json`:
 
 `fixture` names another scenario whose `repo/` to run in, so two scenarios review one fixture with different prompts.
 
+A history scenario gives the run a past to plan against:
+
+- `history`: commits made on `main` after the initial one, each `{message, file, append}`, the message carrying the `Task:` trailer of the task it stands for.
+- `reviews`: review rounds seeded into the run's ledger, each `{task, rounds, categories}`, under the project the run records itself as; each round is round `1`, then `2`, at a reviewed sha of its own.
+- `history_cites`: the ids the plan's `## History` section must name.
+
 The checks (`cli/cmd/f10eval/checks.go`):
 
 | check | passes when |
@@ -66,6 +72,7 @@ The checks (`cli/cmd/f10eval/checks.go`):
 | `findings` | every `where:` in `.f10/reviews/<task>/*.md` names a file that exists and a line it has |
 | `verdict` | each `.f10/verdicts/<task>/*.md` carries one of the four verdicts |
 | `lore` | `f10 lore validate <task>` passes |
+| `history` | the plan has a `## History` section naming every id in `history_cites` |
 | `planted` | every planted defect has a finding whose `where:` falls in its lines, and at most `max_extra` findings fall outside them; the detail gives both counts on a pass too |
 
 `feature-small` is the first scenario: it adds a flag to a one-file CLI through `/f10:plan EV-1 && /f10:ship EV-1 --driven` on a `plan implement commit` flow.
@@ -73,5 +80,6 @@ It runs once at `opus:high` and once at `opus:medium`, so the two reports compar
 `review-planted` reviews a branch that plants four defects in a small HTTP server: an off-by-one page, a file never closed, a path traversal and an unbounded body read. It runs `/f10:review EV-2 --driven`, the blind reviewer.
 Three of its four defects fall in security and performance, which keeps three findings, so a miss there can mean the reviewer ranked another real finding above a planted one: read the findings file before blaming the reviewer.
 `review-planted-host` runs the same fixture and change through `/f10:review EV-2 host --driven`, the host engine, so the two reports compare the reviewers finding for finding on the `planted` check.
+`plan-history` plans `feature-small`'s task after three earlier tasks touched `main.go`, each with two review rounds raising a tests-and-docs finding, through `/f10:plan EV-1 --driven`. Its `history` check passes when the plan's `## History` names all three, which `f10 history` printed as a recurring finding and a median of 2 rounds.
 A bug scenario (a failing test to fix) and a spike scenario are the next ones to add. The runner needs no change for them.
 `go test ./cmd/f10eval` covers the checks against a canned result, with no model call.

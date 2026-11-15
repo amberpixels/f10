@@ -51,6 +51,32 @@ Badge: `f10-state.sh set plan running` on entry, unless `fetch` already opened t
    Each stage names the critical files it touches, any data or migration work, and the tests to add or adjust.
    The stages also weigh the main tradeoffs and the alternatives.
 
+   Then comes **`## History`**, because the files a plan touches often have a record that should change the approach.
+   Write the plan in two passes.
+   First draft the stages, which names the files.
+   Then run one `f10 history --task <id> <path>...` call over every file the stages name, and revise the draft against what it prints.
+   `--task` leaves this task's own commits out, which the branch alone would not do when the plan runs from another checkout.
+   The command lists the tasks whose commits touched those files lately, their review rounds and recurring findings, the regressions they shipped, and the lessons and decisions anchored there.
+   It drops a task whose lines were mostly rewritten since, so the record it prints still applies to the code.
+   It prints a median or a rate only over three reviewed tasks or more, because two tasks are an anecdote, and work from before the ledger has no review to count.
+   - **Each bullet says what the plan did with one fact**, `kept as is, because ...` included, and cites the ids the line printed.
+     A plan that ignores a recurring finding, or contradicts a decision, says why in that bullet.
+   - **The history is evidence for the design, not a rule over it.**
+     The history may change only one header line, the size: a `small` plan in files whose tasks needed a median of 2 review rounds or more, meaning most of them needed a second round, is raised to `normal`, or its bullet says why this one differs.
+   - **A plan that departs from a lesson or a decision records it as a decision of its own**, so whoever reads the file's lore later sees the override and its reason.
+     The entry's anchor is one of the `anchors` that `f10 history --json` lists for it.
+     Once the file is on disk, write `f10 lore add decision --change <change> --anchor <the entry's anchor> --chosen <the plan's approach> --rejected '<what the entry holds>: <why it no longer holds>' -m "<why, naming the entry's id>"`.
+   - **With nothing found**, the section is the one line `No history for these files.`, which the command prints.
+     The section is never left out, so a reader can tell "checked, nothing" from "not checked".
+   - **A replan runs `f10 history` again**, because its stages may name other files.
+
+   ```
+   ## History
+   - drive/drivetick.go: median 2 review rounds over FT-388, FT-402, FT-410. Size raised to normal; stage 3 adds a resume-path test.
+   - recurring finding: tests and docs in 4 of 5 (FT-371, FT-390, FT-395, FT-401). Stage 2 covers it.
+   - decision 01M705ARP6 (FT-301) rejected an in-memory title cache, because hooks are separate processes. This plan reads task_refs instead.
+   ```
+
    Then comes **`## Consequences`**, a few lines of prose in the sense of an architecture decision record (ADR).
    It says what the chosen design makes easier, what it makes harder, the constraint the design now depends on, and what to revisit under which condition.
    For a bug, it also names the related failures this fix leaves uncovered, if there are any.
@@ -61,6 +87,7 @@ Badge: `f10-state.sh set plan running` on entry, unless `fetch` already opened t
 
    Each of these sections holds something different.
    The stage tradeoffs weigh the alternatives.
+   History records what the files' past changed in the plan.
    Consequences records what the chosen alternative costs.
    Gaps holds what is still undecided.
    Rollout and monitoring stay out of the plan (**Altitude**, below).
@@ -80,7 +107,7 @@ Badge: `f10-state.sh set plan running` on entry, unless `fetch` already opened t
    A spike is never small, because its `## Question` has to spell out the decision and the evidence.
    Neither is a refactor without test coverage, because writing the characterization tests is a stage of its own.
 
-   A small plan keeps the header lines and cuts the rest down to the brief in a few lines, one stage that names the change, its files and its test, then `## Consequences - none` and `## Gaps - none`.
+   A small plan keeps the header lines and cuts the rest down to the brief in a few lines, one stage that names the change, its files and its test, then `## History`, `## Consequences - none` and `## Gaps - none`.
    For a bug, the `## Reproduction` section shrinks to the root cause at `file:line`, the expected behavior against the actual one, and the failing test.
    A refactor's `## Invariant` stays as written.
 

@@ -15,10 +15,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
@@ -36,6 +38,12 @@ type Scenario struct {
 	Change      string    `json:"change"`  // a patch, relative to the scenario's dir, committed on <task>/change for a review to read
 	Planted     []Planted `json:"planted"`
 	MaxExtra    *int      `json:"max_extra"` // findings allowed outside every planted defect; none is defaultMaxExtra
+	// History is commits made on main after the initial one, Reviews the
+	// review rounds the run's ledger holds for their tasks, and HistoryCites
+	// the ids the plan's ## History section must name.
+	History      []HistoryCommit `json:"history"`
+	Reviews      []SeedReview    `json:"reviews"`
+	HistoryCites []string        `json:"history_cites"`
 
 	env []string // the run's environment, so a check that runs f10 reads the run's state
 	f10 string   // this checkout's bin/f10, the binary the run itself used
@@ -55,6 +63,21 @@ type Planted struct {
 	From int    `json:"from"`
 	To   int    `json:"to"`
 	What string `json:"what"`
+}
+
+// A HistoryCommit appends to File and commits it with Message, whose
+// trailers name the task the commit belongs to.
+type HistoryCommit struct {
+	Message string `json:"message"`
+	File    string `json:"file"`
+	Append  string `json:"append"`
+}
+
+// A SeedReview is a task's review rounds, each raising Categories.
+type SeedReview struct {
+	Task       string         `json:"task"`
+	Rounds     int            `json:"rounds"`
+	Categories map[string]int `json:"categories"`
 }
 
 // A Report is one scenario's run, as written under evals/reports.
@@ -229,6 +252,18 @@ func runScenario(ctx context.Context, root string, s Scenario, o options, p agen
 		return rep
 	}
 
+	if err := applyHistory(ctx, dir, s.History); err != nil {
+		rep.Error = err.Error()
+
+		return rep
+	}
+
+	if err := seedReviews(ctx, dir, filepath.Join(tmp, "f10.db"), s.Reviews); err != nil {
+		rep.Error = err.Error()
+
+		return rep
+	}
+
 	if s.Change != "" {
 		if err := applyChange(ctx, dir, s.Task, filepath.Join(scenarios, s.Name, s.Change)); err != nil {
 			rep.Error = err.Error()
@@ -330,6 +365,75 @@ func applyChange(ctx context.Context, dir, task, patch string) error {
 			return fmt.Errorf("git %s: %w: %s", args[0], err, out)
 		}
 	}
+
+	return nil
+}
+
+// applyHistory makes each commit on the checked-out branch, so the run
+// finds tasks that touched the files before it.
+func applyHistory(ctx context.Context, dir string, commits []HistoryCommit) error {
+	for _, c := range commits {
+		f, err := os.OpenFile(filepath.Join(dir, c.File), os.O_APPEND|os.O_WRONLY, 0)
+		if err != nil {
+			return err
+		}
+
+		_, err = f.WriteString(c.Append)
+		if cerr := f.Close(); err == nil {
+			err = cerr
+		}
+
+		if err != nil {
+			return err
+		}
+
+		for _, args := range [][]string{{"add", "--", c.File}, {"commit", "-qm", c.Message}} {
+			if out, err := git(ctx, dir, args...).CombinedOutput(); err != nil {
+				return fmt.Errorf("git %s: %w: %s", args[0], err, out)
+			}
+		}
+	}
+
+	return nil
+}
+
+// seedReviews writes the review rounds into the run's ledger at path, under
+// the project the run will record itself as.
+func seedReviews(ctx context.Context, dir, path string, reviews []SeedReview) error {
+	if len(reviews) == 0 {
+		return nil
+	}
+
+	project := ledger.Where(ctx, dir).Project
+	at := time.Now().Add(-24 * time.Hour).UTC()
+
+	var events []ledger.Event
+
+	for _, r := range reviews {
+		for n := 1; n <= r.Rounds; n++ {
+			e, err := ledger.NewEvent(ledger.ReviewRoundOpened,
+				// review writes rounds 1 and 2 only; a later pass is a follow-up PR's series
+				ledger.ReviewRoundOpenedPayload{
+					Round: strconv.Itoa(min(n, 2)), Reviewed: fmt.Sprintf("seed%03d", n), Categories: r.Categories,
+				})
+			if err != nil {
+				return err
+			}
+
+			e.ID = fmt.Sprintf("seed-%s-%02d", r.Task, n)
+			e.At, e.Project, e.Session, e.Task = at, project, "seed-"+r.Task, r.Task
+			events = append(events, e)
+		}
+	}
+
+	l, err := ledger.Open(ctx, path, time.Second, false)
+	if err != nil {
+		return err
+	}
+
+	defer l.Close()
+
+	l.Append(ctx, events...)
 
 	return nil
 }

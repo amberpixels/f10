@@ -475,3 +475,35 @@ func TestWhyAtARevision(t *testing.T) {
 		t.Errorf("why for a path absent at the revision = %v, want ErrNoRecord", err)
 	}
 }
+
+func TestDecisionsKeepTheEffectiveOneOnThePath(t *testing.T) {
+	s := testStore(t, t.TempDir(), nil)
+
+	d := Entry{
+		Kind: KindDecision, Change: "FT-1", Human: "dev@example.com", At: at("2026-10-20T09:00:00Z"),
+		Anchors: []Anchor{anchorAt("a.go", 1, 5, "abcdef1", "")},
+		Chosen:  "a cache", Rejected: []Rejected{{Option: "no cache", Reason: "slow"}}, Body: "first",
+	}
+	id := s.mustAdd(t, d)
+
+	d.Supersedes, d.Chosen, d.At, d.Body = id, "no cache", at("2026-10-20T10:00:00Z"), "corrected"
+	d.Rejected = []Rejected{{Option: "a cache", Reason: "hooks are separate processes"}}
+	s.mustAdd(t, d)
+
+	other := d
+	other.Supersedes, other.Anchors, other.At = "", []Anchor{
+		anchorAt("b.go", 1, 0, "abcdef1", ""),
+	}, at(
+		"2026-10-20T11:00:00Z",
+	)
+	s.mustAdd(t, other)
+
+	got, err := s.Decisions("a.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(got) != 1 || got[0].Chosen != "no cache" {
+		t.Fatalf("Decisions(a.go) = %+v, want the superseding decision alone", got)
+	}
+}

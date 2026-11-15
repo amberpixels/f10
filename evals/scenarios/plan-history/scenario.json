@@ -1,0 +1,22 @@
+{
+  "description": "a plan over a file three earlier tasks touched, each needing two review rounds for a tests-and-docs finding: the plan's ## History must name them",
+  "task": "EV-1",
+  "prompt": "/f10:plan EV-1 --driven",
+  "fixture": "feature-small",
+  "history": [
+    {"message": "Log the greeting\n\nTask: EV-11", "file": "main.go", "append": "\n// The greeting goes to stdout only.\n"},
+    {"message": "Trim the name\n\nTask: EV-12", "file": "main.go", "append": "// A blank name greets the world.\n"},
+    {"message": "Default the name\n\nTask: EV-13", "file": "main.go", "append": "// The default name is World.\n"}
+  ],
+  "reviews": [
+    {"task": "EV-11", "rounds": 2, "categories": {"tests and docs": 1}},
+    {"task": "EV-12", "rounds": 2, "categories": {"tests and docs": 1}},
+    {"task": "EV-13", "rounds": 2, "categories": {"tests and docs": 1}}
+  ],
+  "history_cites": ["EV-11", "EV-12", "EV-13"],
+  "checks": [
+    "plan",
+    "intent",
+    "history"
+  ]
+}

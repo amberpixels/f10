@@ -120,7 +120,7 @@ func Attribute(ctx context.Context, in Input) ledger.RegressionFoundPayload {
 		return p
 	}
 
-	a := attribution{in: in, git: lore.CLIGit{Dir: in.Dir}}
+	a := attribution{in: in}
 
 	p.OriginTask, p.Origin, p.Note = a.origin(ctx)
 	if p.OriginTask == "" {
@@ -152,56 +152,72 @@ func Line(p ledger.RegressionFoundPayload) string {
 }
 
 type attribution struct {
-	in  Input
-	git lore.CLIGit
+	in Input
 }
 
-// origin is the task the commit belongs to: its Task: trailer, its Change:
-// trailer, an unmerged branch holding it, or a subject that opens with an id.
+// origin is the task the commit belongs to (CommitTask), else whether it
+// predates the project's trailers or was made outside the pipeline.
 func (a attribution) origin(ctx context.Context) (string, string, string) {
-	match := ref.Matcher(a.in.Prefix)
-
-	trailers, err := a.git.Trailers(ctx, a.in.Commit)
+	id, err := CommitTask(ctx, a.in.Dir, a.in.Prefix, a.in.Commit)
 	if err != nil {
 		return "", "", "reading the commit: " + firstLine(err.Error())
 	}
 
-	if ids := trailers[lore.TrailerTask]; len(ids) > 0 {
-		return ids[0], OriginTask, ""
-	}
-
-	if ids := trailers[lore.TrailerChange]; len(ids) > 0 {
-		id, _, _ := strings.Cut(ids[0], ".")
-
+	if id != "" {
 		return id, OriginTask, ""
-	}
-
-	if id := a.branchTask(ctx, match); id != "" {
-		return id, OriginTask, ""
-	}
-
-	subject := gitx.Out(ctx, a.in.Dir, "show", "-s", "--format=%s", a.in.Commit, "--")
-	if word, _, _ := strings.Cut(subject, " "); match(word) != "" {
-		return match(word), OriginTask, ""
 	}
 
 	return "", a.untracked(ctx), ""
 }
 
+// CommitTask is the task sha belongs to: its Task: trailer, its Change:
+// trailer, an unmerged branch holding it, or a subject that opens with an
+// id; "" when none names one. Attribution and history share it, so they
+// never disagree on which task owns a commit.
+func CommitTask(ctx context.Context, dir, prefix, sha string) (string, error) {
+	match := ref.Matcher(prefix)
+
+	trailers, err := lore.CLIGit{Dir: dir}.Trailers(ctx, sha)
+	if err != nil {
+		return "", err
+	}
+
+	if ids := trailers[lore.TrailerTask]; len(ids) > 0 {
+		return ids[0], nil
+	}
+
+	if ids := trailers[lore.TrailerChange]; len(ids) > 0 {
+		id, _, _ := strings.Cut(ids[0], ".")
+
+		return id, nil
+	}
+
+	if id := branchTask(ctx, dir, sha, match); id != "" {
+		return id, nil
+	}
+
+	subject := gitx.Out(ctx, dir, "show", "-s", "--format=%s", sha, "--")
+	if word, _, _ := strings.Cut(subject, " "); match(word) != "" {
+		return match(word), nil
+	}
+
+	return "", nil
+}
+
 // branchTask is the task of the closest branch holding the commit, looked
 // at only while the default branch does not hold it: once merged, every
 // later branch holds it too and names nothing.
-func (a attribution) branchTask(ctx context.Context, match func(string) string) string {
-	def := gitx.Out(ctx, a.in.Dir, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
+func branchTask(ctx context.Context, dir, sha string, match func(string) string) string {
+	def := gitx.Out(ctx, dir, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
 	if def == "" {
 		def = "HEAD"
 	}
 
-	if on, _ := gitx.IsAncestor(ctx, a.in.Dir, a.in.Commit, def); on {
+	if on, _ := gitx.IsAncestor(ctx, dir, sha, def); on {
 		return ""
 	}
 
-	out := gitx.Out(ctx, a.in.Dir, "for-each-ref", "--contains", a.in.Commit,
+	out := gitx.Out(ctx, dir, "for-each-ref", "--contains", sha,
 		"--format=%(refname:short)", "refs/heads", "refs/remotes")
 
 	best, fewest := "", -1
@@ -212,7 +228,7 @@ func (a attribution) branchTask(ctx context.Context, match func(string) string) 
 			continue
 		}
 
-		n, err := strconv.Atoi(gitx.Out(ctx, a.in.Dir, "rev-list", "--count", a.in.Commit+".."+name))
+		n, err := strconv.Atoi(gitx.Out(ctx, dir, "rev-list", "--count", sha+".."+name))
 		if err == nil && (fewest < 0 || n < fewest) {
 			best, fewest = id, n
 		}
