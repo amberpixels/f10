@@ -38,6 +38,9 @@ type Service struct {
 	Log     string   // where its output goes
 	// Run runs launchctl or systemctl.
 	Run func(ctx context.Context, name string, args ...string) error
+	// Drain hands the running daemon's drives to the next one before the
+	// service restarts, so reinstalling never drops them; nil skips it.
+	Drain func(ctx context.Context) error
 }
 
 // Path is the service file.
@@ -102,6 +105,14 @@ func (s *Service) Install(ctx context.Context) error {
 		return err
 	}
 
+	// a plain SIGTERM from the restart below would stop each drive for good;
+	// an upgrade drain lets the restarted daemon resume them
+	if s.Drain != nil {
+		if err := s.Drain(ctx); err != nil {
+			return err
+		}
+	}
+
 	if s.GOOS == "darwin" {
 		// bootout fails when nothing is loaded, which is the usual case
 		_ = s.Run(ctx, "launchctl", "bootout", s.domain(), path)
@@ -109,11 +120,13 @@ func (s *Service) Install(ctx context.Context) error {
 		return s.Run(ctx, "launchctl", "bootstrap", s.domain(), path)
 	}
 
-	if err := s.Run(ctx, "systemctl", "--user", "daemon-reload"); err != nil {
-		return err
+	for _, args := range [][]string{{"daemon-reload"}, {"enable", ServiceUnit}, {"restart", ServiceUnit}} {
+		if err := s.Run(ctx, "systemctl", append([]string{"--user"}, args...)...); err != nil {
+			return err
+		}
 	}
 
-	return s.Run(ctx, "systemctl", "--user", "enable", "--now", ServiceUnit)
+	return nil
 }
 
 // Uninstall unloads the service and removes its file; false when none was

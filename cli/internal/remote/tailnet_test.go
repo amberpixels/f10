@@ -32,7 +32,10 @@ func TestTailnetAddrPicksTheTailscaleAddress(t *testing.T) {
 		return []Iface{
 			{Name: "lo0", Addrs: []net.Addr{cidr(t, "127.0.0.1/8")}},
 			{Name: "en0", Addrs: []net.Addr{cidr(t, "100.80.1.5/10")}},
-			{Name: "utun4", Addrs: []net.Addr{cidr(t, "fe80::1/64"), cidr(t, "100.101.102.103/32")}},
+			{Name: "utun2", Addrs: []net.Addr{cidr(t, "100.96.0.2/10")}}, // another VPN's utun
+			{Name: "utun4", Addrs: []net.Addr{
+				cidr(t, "fe80::1/64"), cidr(t, "100.101.102.103/32"), cidr(t, "fd7a:115c:a1e0::1/128"),
+			}},
 		}, nil
 	}
 
@@ -103,7 +106,9 @@ func TestListenerAddrFollowsTheSetting(t *testing.T) {
 
 	dir := t.TempDir()
 	ts := func() ([]Iface, error) {
-		return []Iface{{Name: "utun3", Addrs: []net.Addr{cidr(t, "100.64.0.7/32")}}}, nil
+		addrs := []net.Addr{cidr(t, "100.64.0.7/32"), cidr(t, "fd7a:115c:a1e0::7/128")}
+
+		return []Iface{{Name: "utun3", Addrs: addrs}}, nil
 	}
 	l := &Listener{Dir: dir, Ifaces: ts}
 

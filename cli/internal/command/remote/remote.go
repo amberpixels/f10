@@ -312,6 +312,7 @@ func service() *remote.Service {
 		Env:     env,
 		Log:     daemon.LogPath(daemon.RunDir()),
 		Run:     runQuiet,
+		Drain:   drainForRestart,
 	}
 }
 
@@ -328,6 +329,17 @@ func program() string {
 	exe, _ := os.Executable()
 
 	return exe
+}
+
+// drainForRestart stops the running daemon as an upgrade does, so the
+// daemon the service restarts resumes its drives.
+func drainForRestart(ctx context.Context) error {
+	err := daemon.Stop(ctx, daemon.RunDir(), true, true)
+	if errors.Is(err, daemon.ErrNotRunning) {
+		return nil
+	}
+
+	return err
 }
 
 func runQuiet(ctx context.Context, name string, args ...string) error {

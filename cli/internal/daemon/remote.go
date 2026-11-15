@@ -80,7 +80,13 @@ func (s *Server) listenRemote(addr string) (*remoteServer, error) {
 		return nil, fmt.Errorf("listening on %s: %w", addr, err)
 	}
 
-	srv := &http.Server{Handler: s.Remote.Handler(s.api), ReadHeaderTimeout: callTimeout}
+	// an idle peer's connection is closed, so refused keep-alives cannot
+	// pile up and use the daemon's files
+	srv := &http.Server{
+		Handler:           s.Remote.Handler(s.api),
+		ReadHeaderTimeout: callTimeout,
+		IdleTimeout:       time.Minute,
+	}
 
 	go func() { _ = srv.Serve(s.Remote.Listen(ln)) }()
 

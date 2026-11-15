@@ -43,11 +43,32 @@ func Interfaces() ([]Iface, error) {
 	return out, nil
 }
 
-// tunnel reports an interface Tailscale runs on: tailscale0 on Linux, a
-// utun on macOS. 100.64.0.0/10 is also carrier-grade NAT space, which a
-// Wi-Fi or cellular interface can hold, so the range alone is not enough.
-func tunnel(name string) bool {
-	return strings.HasPrefix(name, "tailscale") || strings.HasPrefix(name, "utun")
+// tailnetV6 is the block Tailscale assigns its IPv6 addresses from, which
+// no other VPN uses.
+var tailnetV6 = netip.MustParsePrefix("fd7a:115c:a1e0::/48")
+
+// tunnel reports an interface Tailscale runs on: tailscale0 on Linux, or on
+// macOS a utun that also holds a Tailscale IPv6 address. 100.64.0.0/10 is
+// also carrier-grade NAT space, which a Wi-Fi interface or another VPN's
+// utun can hold, so the range alone is not enough.
+func tunnel(ifc Iface) bool {
+	if strings.HasPrefix(ifc.Name, "tailscale") {
+		return true
+	}
+
+	if !strings.HasPrefix(ifc.Name, "utun") {
+		return false
+	}
+
+	for _, a := range ifc.Addrs {
+		if n, ok := a.(*net.IPNet); ok {
+			if ip, ok := netip.AddrFromSlice(n.IP); ok && tailnetV6.Contains(ip) {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // TailnetAddr is this machine's Tailscale IPv4 address, read from its
@@ -59,7 +80,7 @@ func TailnetAddr(ifaces func() ([]Iface, error)) (netip.Addr, bool) {
 	}
 
 	for _, ifc := range list {
-		if !tunnel(ifc.Name) {
+		if !tunnel(ifc) {
 			continue
 		}
 

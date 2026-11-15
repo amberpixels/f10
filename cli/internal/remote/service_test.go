@@ -85,16 +85,31 @@ func TestServiceInstallAndUninstallCommands(t *testing.T) {
 		},
 		"linux": {
 			"systemctl --user daemon-reload",
-			"systemctl --user enable --now f10-daemon.service",
+			"systemctl --user enable f10-daemon.service",
+			"systemctl --user restart f10-daemon.service",
 			"systemctl --user disable --now f10-daemon.service",
 			"systemctl --user daemon-reload",
 		},
 	} {
 		s, ran := testService(t, goos)
 
+		// a reinstall restarts the daemon, so its drives are drained for
+		// the restarted one first
+		s.Drain = func(context.Context) error {
+			*ran = append(*ran, "drain")
+
+			return nil
+		}
+
 		if err := s.Install(t.Context()); err != nil {
 			t.Fatal(err)
 		}
+
+		if (*ran)[0] != "drain" {
+			t.Errorf("%s: install ran %q before draining the daemon", goos, (*ran)[0])
+		}
+
+		*ran = (*ran)[1:]
 
 		ok, err := s.Uninstall(t.Context())
 		if !ok || err != nil {
