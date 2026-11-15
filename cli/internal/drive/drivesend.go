@@ -7,13 +7,13 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/agents"
 	"github.com/amberpixels/f10/cli/internal/drivectl"
 	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/state"
-	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // send runs one element in the task's agent; the poll reads how it ends.
@@ -173,7 +173,7 @@ func (in *DriveInput) retryEnter(ctx context.Context, r *DriveRun) {
 
 	r.enterRetried = true
 
-	if note := launch.RetryEnter(ctx, worktree.Agents(r.O.Path), r.typedTo, r.Typed); note != "" {
+	if note := launch.RetryEnter(ctx, agents.Agents(r.O.Path), r.typedTo, r.Typed); note != "" {
 		fmt.Fprintf(in.Out, "%s %s: %s\n", in.id(r.Task.Ref.ID), r.Skill, note)
 	}
 }

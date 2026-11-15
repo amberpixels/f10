@@ -287,6 +287,42 @@ func Panes(ctx context.Context, dir, workspace string) ([]Pane, error) {
 	return list, nil
 }
 
+// A Running is one agent `agent list` reports: its name when f10 or the
+// user named it, else "", and the pane it runs in.
+type Running struct {
+	Name      string
+	Kind      string
+	Status    string
+	Pane      string
+	Workspace string
+}
+
+// Agents lists every agent the session runs.
+func Agents(ctx context.Context, dir string) ([]Running, error) {
+	res, err := call(ctx, dir, "agent", "list")
+	if err != nil {
+		return nil, err
+	}
+
+	raw, _ := res["agents"].([]any)
+
+	list := make([]Running, 0, len(raw))
+
+	for _, item := range raw {
+		if obj, ok := item.(map[string]any); ok {
+			list = append(list, Running{
+				Name:      field(obj, "name"),
+				Kind:      field(obj, "agent"),
+				Status:    field(obj, "agent_status"),
+				Pane:      field(obj, "pane_id"),
+				Workspace: field(obj, "workspace_id"),
+			})
+		}
+	}
+
+	return list, nil
+}
+
 // FocusWorkspace brings the workspace to the front.
 func FocusWorkspace(ctx context.Context, dir, id string) error {
 	_, err := call(ctx, dir, "workspace", "focus", id)

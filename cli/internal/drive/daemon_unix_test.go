@@ -3,6 +3,7 @@ package drive
 import (
 	"bytes"
 	"context"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -10,6 +11,10 @@ import (
 	"testing"
 	"time"
 
+	"connectrpc.com/connect"
+
+	f10v1 "github.com/amberpixels/f10/cli/gen/f10/v1"
+	"github.com/amberpixels/f10/cli/gen/f10/v1/f10v1connect"
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -63,9 +68,45 @@ func (s *syncBuffer) String() string {
 	return s.b.String()
 }
 
+// testRuns serves RunService.Drive over the server with the drive's
+// script as its attach key and one project, since the real handler resolves
+// a project from a checkout these tests do not have.
+type testRuns struct {
+	f10v1connect.UnimplementedRunServiceHandler
+
+	s *daemon.Server
+}
+
+func (r testRuns) Drive(
+	_ context.Context,
+	req *connect.Request[f10v1.DriveRequest],
+) (*connect.Response[f10v1.DriveResponse], error) {
+	m := req.Msg
+
+	st, err := r.s.RunDrive(daemon.DriveSpec{
+		Argv: m.GetArgs(), Dir: m.GetDir(), Root: "/r", Env: m.GetEnv(), Resume: int(m.GetResume()),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return connect.NewResponse(&f10v1.DriveResponse{Log: st.Log, Attached: st.Attach}), nil
+}
+
 func serving(ctx context.Context, dir, version string) func(context.Context) error {
 	return func(context.Context) error {
-		go func() { _ = (&daemon.Server{Dir: dir, Version: version, Child: scriptChild}).Serve(ctx) }()
+		s := &daemon.Server{
+			Dir:     dir,
+			Version: version,
+			Child:   scriptChild,
+			Key:     func(argv []string) string { return argv[0] },
+			Handler: func(s *daemon.Server) http.Handler {
+				_, h := f10v1connect.NewRunServiceHandler(testRuns{s: s})
+
+				return h
+			},
+		}
+		go func() { _ = s.Serve(ctx) }()
 
 		return nil
 	}
@@ -75,7 +116,7 @@ func awaitDrive(t *testing.T, dir string, n int) {
 	t.Helper()
 
 	for deadline := time.Now().Add(5 * time.Second); ; {
-		st, _ := daemon.Call(t.Context(), dir, daemon.Request{Op: daemon.OpStatus}, 0)
+		st, _ := daemon.GetStatus(t.Context(), dir, "test")
 		if len(st.Runs) == 1 && st.Runs[0].Drive == n {
 			return
 		}
@@ -88,8 +129,8 @@ func awaitDrive(t *testing.T, dir string, n int) {
 	}
 }
 
-func runReq(script string) daemon.Request {
-	return daemon.Request{Op: daemon.OpRun, Argv: []string{script}, Dir: "/", Root: "/r", Key: script}
+func runReq(script string) daemon.DriveCall {
+	return daemon.DriveCall{Args: []string{script}, Dir: "/"}
 }
 
 func TestFollowDriveEndsWithItsCode(t *testing.T) {
@@ -132,7 +173,7 @@ func TestFollowDriveStopsWithAStop(t *testing.T) {
 
 	awaitDrive(t, dir, 5)
 
-	if _, err := daemon.Call(t.Context(), dir, daemon.Request{Op: daemon.OpStop, Drain: true}, 0); err != nil {
+	if err := daemon.Stop(t.Context(), dir, true, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -196,7 +237,7 @@ func TestFollowDriveFollowsAnUpgrade(t *testing.T) {
 		t.Errorf("the older follower started %d daemons, want only the first", n)
 	}
 
-	st, err := daemon.Call(t.Context(), dir, daemon.Request{Op: daemon.OpHello}, 0)
+	st, err := daemon.Hello(t.Context(), dir, "test")
 	if err != nil || st.Version != "0.2.0" {
 		t.Errorf("daemon left running = %+v, %v", st, err)
 	}

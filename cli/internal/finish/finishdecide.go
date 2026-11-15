@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/agents"
 	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
@@ -117,7 +118,7 @@ func decideFinish(ctx context.Context, in FinishInput) (finishDecision, error) {
 		}
 	}
 
-	wss, err := worktree.Agents(in.Main).Workspaces(ctx)
+	wss, err := agents.Agents(in.Main).Workspaces(ctx)
 	if err != nil {
 		return d, err
 	}

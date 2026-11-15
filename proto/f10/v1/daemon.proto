@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+package f10.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// DaemonService is the per-user daemon's own lifecycle: the version
+// handshake, what it supervises, stopping it, and the projects it watches.
+service DaemonService {
+  // Hello is the first call a client makes, to learn which daemon answers
+  // and whether this client may keep it or must replace it.
+  rpc Hello(HelloRequest) returns (HelloResponse);
+  rpc GetDaemonStatus(GetDaemonStatusRequest) returns (GetDaemonStatusResponse);
+  // StopDaemon stops the daemon; a second call without drain cuts a drain
+  // short.
+  rpc StopDaemon(StopDaemonRequest) returns (StopDaemonResponse);
+  // WatchProject adds or refreshes a project the daemon runs watch passes
+  // for, and starts a pass now.
+  rpc WatchProject(WatchProjectRequest) returns (WatchProjectResponse);
+}
+
+message HelloRequest {
+  // version is the client's release version, such as 0.62.0.
+  string version = 1;
+  // api_version is the API version the client was built against.
+  int32 api_version = 2;
+}
+
+message HelloResponse {
+  string version = 1;
+  int32 api_version = 2;
+  int32 pid = 3;
+  google.protobuf.Timestamp started_at = 4;
+  // stopping is true while a stop drains the daemon.
+  bool stopping = 5;
+}
+
+// A SupervisedDrive is one drive process the daemon runs.
+message SupervisedDrive {
+  // root is the project's storage root, which tells projects apart.
+  string root = 1;
+  // dir is where the drive was typed.
+  string dir = 2;
+  // drive is the drive's number, 0 until the drive reported it.
+  int32 drive = 3;
+  int32 pid = 4;
+  google.protobuf.Timestamp since = 5;
+  // log is the drive's log file.
+  string log = 6;
+}
+
+// A WatchedProject is one project the daemon runs watch passes for.
+message WatchedProject {
+  string root = 1;
+  // dir is the project's main checkout.
+  string dir = 2;
+  // last_pass_at is when the last pass ended, unset before the first.
+  google.protobuf.Timestamp last_pass_at = 3;
+  // exit is the last pass's exit code.
+  int32 exit = 4;
+  string log = 5;
+}
+
+message GetDaemonStatusRequest {}
+
+message GetDaemonStatusResponse {
+  repeated SupervisedDrive drives = 1;
+  repeated WatchedProject watches = 2;
+}
+
+message StopDaemonRequest {
+  // drain lets each drive reach its next tick before it stops.
+  bool drain = 1;
+  // upgrade says a newer daemon follows and resumes the drained drives.
+  bool upgrade = 2;
+}
+
+message StopDaemonResponse {}
+
+message WatchProjectRequest {
+  // root is the project's storage root; dir its main checkout.
+  string root = 1;
+  string dir = 2;
+  // env is the allowlisted environment each pass runs with. Honored only on
+  // the unix socket, because a remote client has no local session to pass.
+  repeated string env = 3;
+}
+
+message WatchProjectResponse {
+  // log is the project's pass log.
+  string log = 1;
+}

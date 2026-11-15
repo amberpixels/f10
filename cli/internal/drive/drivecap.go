@@ -8,6 +8,7 @@ import (
 	"slices"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/agents"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/ui"
 	"github.com/amberpixels/f10/cli/internal/worktree"
@@ -161,7 +162,7 @@ func (in *DriveInput) openGate(ctx context.Context, runs []*DriveRun, wss []agen
 
 	if wss == nil {
 		var err error
-		if wss, err = worktree.Agents(in.Main).Workspaces(ctx); err != nil {
+		if wss, err = agents.Agents(in.Main).Workspaces(ctx); err != nil {
 			return nil, err
 		}
 

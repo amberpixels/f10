@@ -55,6 +55,8 @@ func Way(by string) string {
 		return "with f10 drive --answer"
 	case ByCancelled:
 		return "by cancelling its drive"
+	case ByAPI:
+		return "through the f10 API"
 	}
 
 	return "by " + by
@@ -163,6 +165,8 @@ func Raise(dir string, a Ask, now time.Time) (Ask, bool, error) {
 	if err := write(openPath(dir, key), &a); err != nil {
 		return Ask{}, false, err
 	}
+
+	recordRaised(a)
 
 	return a, true, nil
 }
@@ -284,6 +288,8 @@ func Claim(dir, key, by, answer string, delivered bool, now time.Time) (Ask, err
 	}
 
 	_ = os.Remove(held)
+
+	recordAnswered(*a)
 
 	return *a, nil
 }

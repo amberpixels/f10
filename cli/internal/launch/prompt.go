@@ -7,16 +7,16 @@ import (
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/agents"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/runplan"
-	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // PromptAgentAs prompts the task's agent in the worktree at path, falling
 // back to the bare name an agent started before the path hash still answers
 // to, and names the agent that took the text.
 func PromptAgentAs(ctx context.Context, path, id, suffix, text string) (string, error) {
-	agent := worktree.Agents(path)
+	agent := agents.Agents(path)
 	name := agentctl.AgentName(id, suffix, path)
 
 	err := agent.Prompt(ctx, name, text)

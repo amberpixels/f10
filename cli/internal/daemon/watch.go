@@ -52,27 +52,31 @@ func watchLog(dir, root string) string {
 	return filepath.Join(logsDir(dir), "watch-"+hex.EncodeToString(sum[:6])+".log")
 }
 
-// watch adds or refreshes a project, newest env winning, and starts a
+// WatchProject adds or refreshes a project, newest env winning, and starts a
 // pass for it now, so a task just started is seen without waiting a tick.
-func (s *Server) watch(req Request) Reply {
-	if req.Root == "" || req.Dir == "" {
-		return Reply{Error: "watch needs the storage root and the main checkout"}
+func (s *Server) WatchProject(root, dir string, env []string) (string, error) {
+	if root == "" || dir == "" {
+		return "", errors.New("watch needs the storage root and the main checkout")
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	i := slices.IndexFunc(s.watches, func(w *watcher) bool { return w.Root == req.Root })
+	if len(env) > 0 {
+		s.remember(env)
+	}
+
+	i := slices.IndexFunc(s.watches, func(w *watcher) bool { return w.Root == root })
 	if i < 0 {
 		w := &watcher{}
-		w.Root, w.Log = req.Root, watchLog(s.Dir, req.Root)
+		w.Root, w.Log = root, watchLog(s.Dir, root)
 		s.watches = append(s.watches, w)
 		i = len(s.watches) - 1
-		s.Log.Printf("watching %s", req.Dir)
+		s.Log.Printf("watching %s", dir)
 	}
 
 	w := s.watches[i]
-	w.Dir, w.env, w.fails = req.Dir, req.Env, 0
+	w.Dir, w.env, w.fails = dir, env, 0
 	w.rerun = w.cmd != nil
 
 	s.saveWatches()
@@ -81,7 +85,7 @@ func (s *Server) watch(req Request) Reply {
 		s.startPass(w)
 	}
 
-	return Reply{Log: w.Log}
+	return w.Log, nil
 }
 
 func (s *Server) passDue(now time.Time) {

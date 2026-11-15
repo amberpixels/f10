@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasksource"
+	"github.com/amberpixels/f10/cli/internal/taskwrite"
 	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -207,7 +208,7 @@ func writeTarget(ctx context.Context, cmd *cli.Command, verb string) (*target.Ta
 		return nil, ref.Ref{}, err
 	}
 
-	if rs, ok := refusedUpFrontFor(t); ok {
+	if rs, ok := taskwrite.RefusedUpFront(t); ok {
 		return nil, ref.Ref{}, rs.RefuseWrite(verb, tasksource.UnwrittenNothing)
 	}
 

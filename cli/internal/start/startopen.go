@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/agents"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
@@ -59,10 +60,52 @@ type StartInput struct {
 // A workspace Herdr already showed keeps its agent, and nothing is
 // prompted twice; one left with no agent gets its agent and its prompt.
 func Start(ctx context.Context, w io.Writer, in StartInput) error {
-	o, err := OpenTask(ctx, in)
+	l, err := Launch(ctx, in)
 	if err != nil {
 		return err
 	}
+
+	rows := []render.Fact{render.TaskFact(ctx, w, in.Main, l.Task.Label())}
+	if in.Pick != nil {
+		rows = append(rows, render.Fact{Label: "pr", Value: in.Pick.URL, URL: true})
+	}
+
+	rows = append(rows, render.Fact{Label: "branch", Value: l.Branch})
+	if l.Dep != nil {
+		rows = append(rows, render.Fact{Label: "after", Value: l.Dep.Task})
+	}
+
+	if l.Plan != "" {
+		rows = append(rows, render.Fact{Label: "plan", Value: l.Plan, Path: true})
+	}
+
+	if l.Fresh && !l.Profile.IsDefault() {
+		rows = append(rows, render.Fact{Label: "agent", Value: l.Profile.Short()})
+	}
+
+	return render.WriteReport(
+		w,
+		append(rows, render.Fact{Label: "path", Value: l.Path}, render.Fact{Label: "workspace", Value: l.Ws.ID}),
+		l.Notes,
+	)
+}
+
+// Launched is a started task: what OpenTask opened, and the agent that
+// works on it.
+type Launched struct {
+	OpenedTask
+
+	Agent string
+}
+
+// Launch opens the task and prompts its agent when the open was fresh.
+func Launch(ctx context.Context, in StartInput) (Launched, error) {
+	o, err := OpenTask(ctx, in)
+	if err != nil {
+		return Launched{}, err
+	}
+
+	l := Launched{OpenedTask: o, Agent: agentctl.AgentName(in.Task.ID, in.Suffix, o.Path)}
 
 	if o.Fresh {
 		text := launch.Prompt(in.Mode, in.Flow, o.Task.Label(), o.Dep, o.Plan, in.Pick, in.Note)
@@ -71,42 +114,24 @@ func Start(ctx context.Context, w io.Writer, in StartInput) error {
 
 		name, typed, err := o.Deliver(ctx, in.Task.ID, in.Suffix, text)
 		if err != nil {
-			return err
+			return Launched{}, err
+		}
+
+		if name != "" {
+			l.Agent = name
 		}
 
 		if typed {
-			o.Notes = textx.AppendNote(
-				o.Notes,
-				launch.WatchEnter(ctx, worktree.Agents(o.Path), o.Path, name, text, sent),
+			l.Notes = textx.AppendNote(
+				l.Notes,
+				launch.WatchEnter(ctx, agents.Agents(o.Path), o.Path, name, text, sent),
 			)
 		}
 
-		o.Notes = append(o.Notes, MarkStarted(ctx, in.Started, o.Task)...)
+		l.Notes = append(l.Notes, MarkStarted(ctx, in.Started, o.Task)...)
 	}
 
-	rows := []render.Fact{render.TaskFact(ctx, w, in.Main, o.Task.Label())}
-	if in.Pick != nil {
-		rows = append(rows, render.Fact{Label: "pr", Value: in.Pick.URL, URL: true})
-	}
-
-	rows = append(rows, render.Fact{Label: "branch", Value: o.Branch})
-	if o.Dep != nil {
-		rows = append(rows, render.Fact{Label: "after", Value: o.Dep.Task})
-	}
-
-	if o.Plan != "" {
-		rows = append(rows, render.Fact{Label: "plan", Value: o.Plan, Path: true})
-	}
-
-	if o.Fresh && !o.Profile.IsDefault() {
-		rows = append(rows, render.Fact{Label: "agent", Value: o.Profile.Short()})
-	}
-
-	return render.WriteReport(
-		w,
-		append(rows, render.Fact{Label: "path", Value: o.Path}, render.Fact{Label: "workspace", Value: o.Ws.ID}),
-		o.Notes,
-	)
+	return l, nil
 }
 
 // StartedMove moves a task to tracker.status's started word, or is nil when
@@ -175,7 +200,7 @@ func (o *OpenedTask) Deliver(ctx context.Context, id, suffix, text string) (stri
 	first, argv := l.profile.PromptArgs(text)
 
 	args := slices.Concat(first, l.args)
-	if err := worktree.Agents(o.Path).StartAgent(ctx, o.Ws, l.agent, l.profile.Kind, args, l.waiting); err != nil {
+	if err := agents.Agents(o.Path).StartAgent(ctx, o.Ws, l.agent, l.profile.Kind, args, l.waiting); err != nil {
 		return "", false, err
 	}
 
@@ -185,7 +210,7 @@ func (o *OpenedTask) Deliver(ctx context.Context, id, suffix, text string) (stri
 		return l.agent, false, nil
 	}
 
-	return l.agent, true, worktree.Agents(o.Path).Prompt(ctx, l.agent, text)
+	return l.agent, true, agents.Agents(o.Path).Prompt(ctx, l.agent, text)
 }
 
 // A pendingLaunch is an agent OpenTask decided to start.
@@ -239,7 +264,7 @@ func OpenTask(ctx context.Context, in StartInput) (OpenedTask, error) {
 		return OpenedTask{}, err
 	}
 
-	ws, wsNotes, err := worktree.Agents(in.Main).Open(ctx, path, name)
+	ws, wsNotes, err := agents.Agents(in.Main).Open(ctx, path, name)
 	if err != nil {
 		return OpenedTask{}, err
 	}
@@ -558,7 +583,7 @@ func needsAgent(ctx context.Context, dir string, ws agentctl.Opened) (bool, stri
 		return true, "", nil
 	}
 
-	occ, err := worktree.Agents(dir).Occupancy(ctx, ws)
+	occ, err := agents.Agents(dir).Occupancy(ctx, ws)
 	if err != nil {
 		return false, "", err
 	}

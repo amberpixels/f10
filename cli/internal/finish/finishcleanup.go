@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/amberpixels/f10/cli/internal/agents"
 	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/textx"
-	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // cleanup archives the task's files, prints the report, then removes what
@@ -98,7 +98,7 @@ func cleanup(ctx context.Context, w io.Writer, in FinishInput, d finishDecision,
 		} else {
 			notes = append(
 				notes,
-				"no "+worktree.Agents(in.Main).Name()+" workspace shows the worktree, so nothing to close",
+				"no "+agents.Agents(in.Main).Name()+" workspace shows the worktree, so nothing to close",
 			)
 		}
 
@@ -107,6 +107,10 @@ func cleanup(ctx context.Context, w io.Writer, in FinishInput, d finishDecision,
 
 	if d.self {
 		notes = append(notes, "this workspace closes after this report")
+	}
+
+	if in.Outcome != nil {
+		*in.Outcome = outcomeOf(in.Task.ID, rows, errs.removed, d.place == inWorktree)
 	}
 
 	if err := render.WriteReport(w, rows, notes); err != nil {
@@ -201,18 +205,36 @@ func removeWorktree(ctx context.Context, w io.Writer, in FinishInput, d finishDe
 	}
 
 	if d.self && d.mainWS != nil {
-		err := worktree.Agents(in.Main).Focus(ctx, d.mainWS.ID)
+		err := agents.Agents(in.Main).Focus(ctx, d.mainWS.ID)
 		if err := errs.check("focusing the main workspace", err); err != nil {
 			return err
 		}
 	}
 
 	if d.ws != nil {
-		err := worktree.Agents(in.Main).Close(ctx, d.ws.ID)
+		err := agents.Agents(in.Main).Close(ctx, d.ws.ID)
 		if err := errs.check("closing workspace "+d.ws.ID, err); err != nil {
 			return err
 		}
 	}
 
 	return errs.done(in.Task.ID, l.ended)
+}
+
+// outcomeOf reads what a finish did from its report's rows.
+func outcomeOf(task string, rows []render.Fact, removed, worktree bool) Finished {
+	out := Finished{Task: task, RemovedBranch: removed, RemovedWorktree: worktree}
+
+	for _, r := range rows {
+		switch r.Label {
+		case "pr":
+			out.PR = r.Value
+		case "merge":
+			out.Commit = r.Value
+		case "workspace":
+			out.ClosedWorkspace = true
+		}
+	}
+
+	return out
 }

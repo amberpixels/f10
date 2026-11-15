@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package f10.v1;
 
+import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 
 // RunService starts, drives and finishes tasks, and reports where each run is.
@@ -226,11 +227,33 @@ message DriveRequest {
   int32 parallel = 8;
   // plan_first plans every task before any ships.
   bool plan_first = 9;
+  // args are the drive's arguments as `f10 drive` takes them. When set they
+  // win over the fields above, so a rerun of a typed command line keys to
+  // the record it opened.
+  repeated string args = 10;
+  // dir is the checkout the drive runs from.
+  string dir = 11;
+  // env is the allowlisted environment the drive runs with. Honored only on
+  // the unix socket, because a remote client has no local session to pass.
+  repeated string env = 12;
+  // resume picks up the drive record with this number.
+  int32 resume = 13;
+  // answers are the answers to the drive's open asks, `ID=text` for one
+  // task or bare text.
+  repeated string answers = 14;
+  // every is how often the drive polls its tasks; unset keeps the default.
+  google.protobuf.Duration every = 15;
 }
 
 message DriveResponse {
-  // drive is the drive's number in the project.
+  // drive is the drive's number in the project, 0 until the drive opened
+  // its record.
   int32 drive = 1;
+  // log is the drive's log file, which grows until the drive exits.
+  string log = 2;
+  // attached is true when the daemon already ran this drive and the call
+  // joined it instead of starting another.
+  bool attached = 3;
 }
 
 // MergeMode is how Finish lands a task.

@@ -1,0 +1,42 @@
+// Package api serves f10's control plane as Connect services: the f10.v1
+// handlers over the core packages, and the agents.v1 ones from the agents
+// core, on one mux the daemon mounts on its socket.
+package api
+
+import (
+	"net/http"
+
+	"github.com/amberpixels/f10/cli/gen/f10/v1/f10v1connect"
+	"github.com/amberpixels/f10/cli/internal/agents"
+	"github.com/amberpixels/f10/cli/internal/agents/agentsrpc"
+	"github.com/amberpixels/f10/cli/internal/daemon"
+)
+
+// Supervisor is what the handlers need of the daemon: who it is, the drives
+// and watches it runs, and the session environment Herdr calls run under.
+type Supervisor interface {
+	Status() daemon.Status
+	WatchProject(root, dir string, env []string) (string, error)
+	RunDrive(spec daemon.DriveSpec) (daemon.Started, error)
+	ResumeDrive(root, dir string, env []string, n int) (daemon.Started, error)
+	SessionEnv() []string
+}
+
+// Handler is every service on one mux, over sup.
+func Handler(sup Supervisor) http.Handler {
+	// a handler's Herdr calls run under the newest local session, since the
+	// daemon outlives the client that spawned it
+	agents.SessionEnv = sup.SessionEnv
+
+	mux := http.NewServeMux()
+	opts := errorOptions()
+
+	mux.Handle(f10v1connect.NewRunServiceHandler(&runService{sup: sup}, opts...))
+	mux.Handle(f10v1connect.NewTaskServiceHandler(&taskService{sup: sup}, opts...))
+	mux.Handle(f10v1connect.NewBoardServiceHandler(&boardService{sup: sup}, opts...))
+	mux.Handle(f10v1connect.NewEventServiceHandler(&eventService{}, opts...))
+
+	agentsrpc.Mount(mux, agentsrpc.Options{Deliverer: deliverer(sup)}, opts...)
+
+	return mux
+}

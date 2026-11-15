@@ -28,10 +28,10 @@ var WatchProject = func(ctx context.Context, w io.Writer, t *target.Target) {
 
 	dir := daemon.RunDir()
 
-	rep, err := daemon.Call(ctx, dir, daemon.Request{Op: daemon.OpHello}, 0)
+	info, err := daemon.Hello(ctx, dir, buildinfo.Version())
 
 	switch {
-	case err == nil && rep.Stopping:
+	case err == nil && info.Stopping:
 		fmt.Fprintln(w, "watch: the f10 daemon is stopping: the next f10 start or f10 drive hands this project over")
 
 		return
@@ -45,14 +45,21 @@ var WatchProject = func(ctx context.Context, w io.Writer, t *target.Target) {
 		fmt.Fprintf(w, "watch: warning: %v\n", err)
 
 		return
+	case info.Legacy || daemon.APIError(info, buildinfo.Version()) != nil:
+		// an older daemon is replaced by the next f10 drive, which can say so
+		fmt.Fprintf(w, "watch: the f10 daemon runs %s: the next f10 drive replaces it and hands this project over\n",
+			info.Version)
+
+		return
 	}
 
-	_, err = daemon.Call(ctx, dir, daemon.Request{
-		Op:   daemon.OpWatch,
-		Root: t.Layout.StorageRoot.Path(),
-		Dir:  cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot),
-		Env:  daemon.DriveEnv(os.Environ(), t.Effective.DriveEnv),
-	}, 0)
+	_, err = daemon.WatchProject(
+		ctx,
+		dir,
+		t.Layout.StorageRoot.Path(),
+		cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot),
+		daemon.DriveEnv(os.Environ(), t.Effective.DriveEnv),
+	)
 	if err != nil {
 		fmt.Fprintf(w, "watch: warning: %v\n", err)
 	}

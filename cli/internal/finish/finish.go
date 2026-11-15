@@ -110,6 +110,9 @@ type FinishInput struct {
 	// Sweep runs the janitor before the workspace closes, since a self-close
 	// ends the process; nil for none
 	Sweep func(context.Context)
+	// Outcome, when set, takes what the finish did, for a caller that does
+	// not read the report
+	Outcome *Finished
 	// Progress names each action as it starts, for drive's record; nil for none
 	Progress func(string)
 	// Handoff takes the lines a merge prints under its report, for drive's report; nil for none
@@ -182,6 +185,17 @@ func ProcessPlace() (string, string, error) {
 	}
 
 	return cwd, os.Getenv("HERDR_WORKSPACE_ID"), nil
+}
+
+// Finished is what a finish did: the task, the PR it merged or left, the
+// merge commit, and what it removed.
+type Finished struct {
+	Task            string
+	PR              string
+	Commit          string
+	RemovedWorktree bool
+	RemovedBranch   bool
+	ClosedWorkspace bool
 }
 
 // FinishedEvent records a finish that ran in this process, where no hook

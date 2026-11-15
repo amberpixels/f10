@@ -1,4 +1,7 @@
-package worktree
+// Package agents is the generic agents core: the backend that hosts task
+// agents, and the asks they wait on. It is the only package that talks to
+// Herdr, so the rest of f10 stays separable from it.
+package agents
 
 import (
 	"errors"
@@ -7,9 +10,21 @@ import (
 	"github.com/amberpixels/f10/cli/internal/herdr"
 )
 
+// SessionEnv is the environment Herdr calls run under, nil for this
+// process's own. The daemon sets it to the newest local session's, because
+// it outlives the client that spawned it.
+var SessionEnv func() []string
+
 // Agents is the backend hosting task agents, answering from dir: Herdr,
 // the only one. A variable so a test can host agents without it.
-var Agents = func(dir string) agentctl.Backend { return herdr.New(dir) }
+var Agents = func(dir string) agentctl.Backend {
+	b := herdr.New(dir)
+	if SessionEnv != nil {
+		b.Env = SessionEnv()
+	}
+
+	return b
+}
 
 // ReachableAgents is the backend answering from dir, or nil when this
 // process cannot reach it.
@@ -33,6 +48,9 @@ func RequireAgents() error {
 
 	return err
 }
+
+// IsOutside reports err as the refusal of a process outside Herdr.
+func IsOutside(err error) bool { return errors.Is(err, herdr.ErrNotInside) }
 
 // outsideHerdrError words herdr's refusal for the commands that need it, and
 // still unwraps to herdr.ErrNotInside.

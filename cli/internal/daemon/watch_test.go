@@ -49,8 +49,8 @@ func TestWatchRunsPassesUntilNothingIsLeft(t *testing.T) {
 	}
 	done := serve(t, s)
 
-	rep, err := Call(t.Context(), s.Dir, Request{
-		Op: OpWatch, Root: "/r", Dir: project, Env: []string{"PATH=" + os.Getenv("PATH"), "MARK=a"},
+	rep, err := call(t.Context(), s.Dir, request{
+		Op: opWatch, Root: "/r", Dir: project, Env: []string{"PATH=" + os.Getenv("PATH"), "MARK=a"},
 	}, 0)
 	if err != nil || rep.Log == "" {
 		t.Fatalf("watch: %+v, %v", rep, err)
@@ -62,7 +62,7 @@ func TestWatchRunsPassesUntilNothingIsLeft(t *testing.T) {
 		t.Errorf("the pass ran with %q, want the client's env", got)
 	}
 
-	status, err := Call(t.Context(), s.Dir, Request{Op: OpStatus}, 0)
+	status, err := call(t.Context(), s.Dir, request{Op: opStatus}, 0)
 	if err != nil || len(status.Watches) != 1 || status.Watches[0].Dir != project {
 		t.Errorf("status = %+v, %v", status.Watches, err)
 	}
@@ -99,15 +99,15 @@ func TestWatchListSurvivesARestart(t *testing.T) {
 	first := &Server{Dir: dir, Version: "v1", Child: shell, Pass: passScript, WatchEvery: time.Hour}
 	firstDone := serve(t, first)
 
-	if _, err := Call(t.Context(), dir, Request{
-		Op: OpWatch, Root: "/r", Dir: project, Env: []string{"PATH=" + os.Getenv("PATH"), "MARK=b"},
+	if _, err := call(t.Context(), dir, request{
+		Op: opWatch, Root: "/r", Dir: project, Env: []string{"PATH=" + os.Getenv("PATH"), "MARK=b"},
 	}, 0); err != nil {
 		t.Fatal(err)
 	}
 
 	waitFor(t, "the first pass", func() bool { return len(passes(t, project)) == 1 })
 
-	if _, err := Call(t.Context(), dir, Request{Op: OpStop}, 0); err != nil {
+	if _, err := call(t.Context(), dir, request{Op: opStop}, 0); err != nil {
 		t.Fatal(err)
 	}
 
@@ -162,10 +162,10 @@ func TestWatchRegisteredDuringAPassGetsAnother(t *testing.T) {
 	}
 	serve(t, s)
 
-	req := Request{Op: OpWatch, Root: "/r", Dir: project, Env: []string{"PATH=" + os.Getenv("PATH")}}
+	req := request{Op: opWatch, Root: "/r", Dir: project, Env: []string{"PATH=" + os.Getenv("PATH")}}
 
 	for range 2 {
-		if _, err := Call(t.Context(), s.Dir, req, 0); err != nil {
+		if _, err := call(t.Context(), s.Dir, req, 0); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -177,7 +177,7 @@ func TestWatchRegisteredDuringAPassGetsAnother(t *testing.T) {
 	}
 
 	waitFor(t, "the project dropped after a second pass", func() bool {
-		rep, err := Call(t.Context(), s.Dir, Request{Op: OpStatus}, 0)
+		rep, err := call(t.Context(), s.Dir, request{Op: opStatus}, 0)
 
 		return err == nil && len(rep.Watches) == 0
 	})
@@ -195,11 +195,11 @@ func TestWatchDropsAGoneCheckout(t *testing.T) {
 	serve(t, s)
 
 	gone := filepath.Join(t.TempDir(), "moved")
-	if _, err := Call(t.Context(), s.Dir, Request{Op: OpWatch, Root: "/r", Dir: gone}, 0); err != nil {
+	if _, err := call(t.Context(), s.Dir, request{Op: opWatch, Root: "/r", Dir: gone}, 0); err != nil {
 		t.Fatal(err)
 	}
 
-	rep, err := Call(t.Context(), s.Dir, Request{Op: OpStatus}, 0)
+	rep, err := call(t.Context(), s.Dir, request{Op: opStatus}, 0)
 	if err != nil || len(rep.Watches) != 0 {
 		t.Errorf("watches = %+v, %v, want none", rep.Watches, err)
 	}

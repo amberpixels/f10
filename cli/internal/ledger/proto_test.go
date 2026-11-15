@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/protobuf/reflect/protoreflect"
 
@@ -44,10 +45,9 @@ func TestProtoPayloadParity(t *testing.T) {
 		checkParity(t, kind, vs[len(vs)-1].typ, fd.Message())
 	}
 
-	// the ask events are the asks inbox's, which the ledger does not record yet
 	for i := range payload.Fields().Len() {
 		name := payload.Fields().Get(i).Name()
-		if !covered[name] && name != "ask_raised" && name != "ask_answered" {
+		if !covered[name] {
 			t.Errorf("payload case %q names no ledger kind", name)
 		}
 	}
@@ -108,6 +108,19 @@ func checkField(t *testing.T, at string, ft reflect.Type, fd protoreflect.FieldD
 // int32, since protojson writes int64 as a string the ledger never stored.
 func checkScalar(t *testing.T, at string, ft reflect.Type, fd protoreflect.FieldDescriptor) {
 	t.Helper()
+
+	// protojson reads an enum from its name and a Timestamp from RFC 3339,
+	// which a string and a time.Time store
+	switch {
+	case fd.Kind() == protoreflect.EnumKind && ft.Kind() == reflect.String:
+		return
+	case fd.Kind() == protoreflect.MessageKind && fd.Message().FullName() == "google.protobuf.Timestamp":
+		if ft != reflect.TypeFor[time.Time]() {
+			t.Errorf("%s: a Timestamp in proto, %s in Go", at, ft)
+		}
+
+		return
+	}
 
 	want := map[reflect.Kind]protoreflect.Kind{
 		reflect.String: protoreflect.StringKind,

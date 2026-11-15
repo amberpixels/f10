@@ -51,7 +51,6 @@ var Table = []Rule{
 	{Prefix: "internal/ui", Rank: -1},
 	{Prefix: "internal/tasktree", Rank: -1},
 	{Prefix: "internal/trackerdriver", Rank: -1}, // imports shell
-	{Prefix: "internal/asks", Rank: -1},          // imports fsx
 
 	// the domain packages, which Go's own cycle check keeps acyclic
 	{Prefix: "internal", Rank: 0, Peers: true},
@@ -69,6 +68,8 @@ var Table = []Rule{
 	{Prefix: "internal/launch", Rank: 2, Peers: true},
 	{Prefix: "internal/drivectl", Rank: 2, Peers: true},
 	{Prefix: "internal/asknotify", Rank: 2, Peers: true},
+	// the agents core and its agents.v1 handlers: the only door to Herdr
+	{Prefix: "internal/agents", Rank: 2, Peers: true},
 	{Prefix: "internal/statusview", Rank: 2, Peers: true},
 	{Prefix: "internal/testkit", Rank: 2, Peers: true}, // the fakes, which swap seams in the services above
 	{Prefix: "internal/command", Rank: 2, Peers: true, Exact: true},
@@ -94,6 +95,11 @@ var Table = []Rule{
 	{Prefix: "internal/command/board", Rank: 4},
 	{Prefix: "internal/command/status", Rank: 4},
 
+	// a project's board and its task writes, which the board and task
+	// commands and the API share
+	{Prefix: "internal/board", Rank: 3},
+	{Prefix: "internal/taskwrite", Rank: 3},
+
 	// finish, start (which sweeps finished tasks), then the drive over both;
 	// each command sits just above the core it parses flags for
 	{Prefix: "internal/finish", Rank: 5},
@@ -101,6 +107,7 @@ var Table = []Rule{
 	{Prefix: "internal/command/finish", Rank: 6},
 	{Prefix: "internal/start", Rank: 7},
 	{Prefix: "internal/command/start", Rank: 8},
+	{Prefix: "internal/api", Rank: 8}, // the f10.v1 handlers, over start, finish and the board
 	{Prefix: "internal/drive", Rank: 9},
 	{Prefix: "internal/command/drive", Rank: 10},
 	{Prefix: "internal/command/daemon", Rank: 10},

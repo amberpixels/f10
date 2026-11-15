@@ -16,6 +16,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/agents"
 	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drivectl"
@@ -1038,7 +1039,7 @@ func WatcherFinish(ctx context.Context, w io.Writer, t *target.Target, main, roo
 	}
 	defer lease.Release()
 
-	if err := recheckFinish(ctx, worktree.ReachableAgents(main), main, task); err != nil {
+	if err := recheckFinish(ctx, agents.ReachableAgents(main), main, task); err != nil {
 		return err
 	}
 

@@ -15,6 +15,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/board"
+	"github.com/amberpixels/f10/cli/internal/calendar"
+	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
 	"github.com/amberpixels/f10/cli/internal/scope"
 	"github.com/amberpixels/f10/cli/internal/target"
@@ -68,7 +71,22 @@ func Command() *cli.Command {
 	}
 }
 
-const BoardPage = 100
+const BoardPage = board.Page
+
+// BoardStateWindow is board.StateWindow.
+const BoardStateWindow = board.StateWindow
+
+// ResolveBoardSpan is board.ResolveSpan.
+func ResolveBoardSpan(
+	arg string, state bool, now time.Time, workdays func() (calendar.Workdays, error),
+) (board.Span, error) {
+	return board.ResolveSpan(arg, state, now, workdays)
+}
+
+// BoardTasks is board.Tasks.
+func BoardTasks(rows []hostops.Row, prefix string) []lookaround.Task {
+	return board.Tasks(rows, prefix)
+}
 
 // The board's output formats; the empty one is the terminal.
 const (
@@ -96,7 +114,7 @@ func runBoard(ctx context.Context, cmd *cli.Command) error {
 		arg = cmd.String("since")
 	}
 
-	span, err := ResolveBoardSpan(arg, stateView, now, scope.ReadWorkdays)
+	span, err := board.ResolveSpan(arg, stateView, now, scope.ReadWorkdays)
 	if err != nil {
 		return err
 	}
@@ -111,7 +129,7 @@ func runBoard(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	people := boardPeople(cfg.People)
+	people := board.People(cfg.People)
 	remote := cmd.Bool("remote")
 
 	// one pipeline whatever the scope: this checkout is a scope of one
@@ -135,7 +153,7 @@ func runBoard(ctx context.Context, cmd *cli.Command) error {
 		entries = []scope.ScopeEntry{{Dir: t.Dir, Target: t}}
 	}
 
-	boards := collectBoards(ctx, entries, cmd.ErrWriter, now, span, stateView, remote, people)
+	boards := board.Collect(ctx, entries, cmd.ErrWriter, now, span, stateView, remote, people)
 
 	// several projects (--all, --group, more than one -C) are a JSON array
 	// and a line each unless --detail; the page draws one project
