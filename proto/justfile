@@ -1,0 +1,66 @@
+# The proto half of f10: the root justfile loads this as the `proto` module.
+# Every recipe runs the pinned tools from .bin and node_modules, which `tools`
+# installs, so a contributor needs Go and Node but no global buf.
+
+# the default branch buf breaking compares against
+base := "refs/remotes/origin/main"
+
+default: gen
+
+# install the pinned buf, Go plugins and protoc-gen-es
+tools:
+    GOBIN="$PWD/.bin" go -C tools install tool
+    npm ci --no-audit --no-fund --silent
+
+# regenerate the Go and TypeScript code from the proto tree
+gen: tools
+    rm -rf ../cli/gen ../ts/gen
+    .bin/buf generate
+
+# lint the proto tree, and fail when the checked-in generated code is stale
+lint: tools
+    #!/usr/bin/env bash
+    set -euo pipefail
+    .bin/buf lint
+    tmp="$(mktemp -d)"
+    trap 'rm -rf "$tmp"' EXIT
+    mkdir -p "$tmp/proto"
+    .bin/buf generate --output "$tmp/proto"
+    for dir in cli/gen ts/gen; do
+      if ! diff -r "../$dir" "$tmp/$dir" >/dev/null; then
+        echo "proto: $dir is stale; run \`just proto::gen\` and commit the result" >&2
+        exit 1
+      fi
+    done
+
+# fail on a breaking change against the default branch's proto tree
+breaking: tools
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if ! git cat-file -e "{{base}}:proto/buf.yaml" 2>/dev/null; then
+      echo "proto: {{base}} has no proto tree yet, nothing to compare"
+      exit 0
+    fi
+    tmp="$(mktemp -d)"
+    trap 'rm -rf "$tmp"' EXIT
+    git -C .. archive "{{base}}" proto | tar -x -C "$tmp"
+    .bin/buf breaking --against "$tmp/proto"
+
+# prove the breaking check works: a copy with one field removed must fail it
+breaking-selftest: tools
+    #!/usr/bin/env bash
+    set -euo pipefail
+    tmp="$(mktemp -d)"
+    trap 'rm -rf "$tmp"' EXIT
+    cp -R agents f10 buf.yaml "$tmp/"
+    sed -i.orig '/^  string base = 4;$/d' "$tmp/f10/v1/events.proto"
+    if cmp -s "$tmp/f10/v1/events.proto" "$tmp/f10/v1/events.proto.orig"; then
+      echo "proto: the self-test found no TaskSized.base field to remove" >&2
+      exit 1
+    fi
+    rm "$tmp/f10/v1/events.proto.orig"
+    if .bin/buf breaking "$tmp" --against . >/dev/null; then
+      echo "proto: buf breaking accepted a removed field" >&2
+      exit 1
+    fi
+    echo "proto: buf breaking refused a removed field, as it should"

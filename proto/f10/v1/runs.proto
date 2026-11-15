@@ -1,0 +1,264 @@
+syntax = "proto3";
+
+package f10.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// RunService starts, drives and finishes tasks, and reports where each run is.
+service RunService {
+  rpc GetRunStatus(GetRunStatusRequest) returns (GetRunStatusResponse);
+  // Start opens a task's worktree, workspace and agent, already prompted.
+  rpc Start(StartRequest) returns (StartResponse);
+  // Drive runs a list of tasks through a flow, each once its base has a commit.
+  rpc Drive(DriveRequest) returns (DriveResponse);
+  // Finish merges a task's PR and removes its worktree, branch and workspace.
+  rpc Finish(FinishRequest) returns (FinishResponse);
+}
+
+// PhaseStatus is where one phase of a run stands.
+enum PhaseStatus {
+  PHASE_STATUS_UNSPECIFIED = 0;
+  PHASE_STATUS_RUNNING = 1;
+  PHASE_STATUS_DONE = 2;
+  PHASE_STATUS_FAILED = 3;
+  // stopped after producing something durable
+  PHASE_STATUS_PARTIAL = 4;
+  // the work exists from an earlier run
+  PHASE_STATUS_PRIOR = 5;
+  // a decision ended the run, such as a judge verdict or an ask
+  PHASE_STATUS_BLOCKED = 6;
+  PHASE_STATUS_SKIPPED = 7;
+}
+
+// A Run is one session's run: its three phases and the ship pipeline.
+message Run {
+  string session = 1;
+  string task = 2;
+  string url = 3;
+  // root is the checkout the run is about.
+  string root = 4;
+  string skill = 5;
+  PhaseStatus capture = 6;
+  PhaseStatus plan = 7;
+  PhaseStatus ship = 8;
+  // leaf is the pipeline step running, or stopped on.
+  string leaf = 9;
+  // at is leaf's place in pipeline, counted from 1; 0 is unknown.
+  int32 at = 10;
+  string final = 11;
+  repeated string pipeline = 12;
+  // labels is each pipeline entry's display name by index, empty for none.
+  repeated string labels = 13;
+  // note is why the run stopped, next what unblocks it.
+  string note = 14;
+  string next = 15;
+  // ask is the question a driven run stopped on, options included.
+  string ask = 16;
+  // wait is the base task a driven ship stopped for.
+  string wait = 17;
+  string stop = 18;
+  string done = 19;
+  google.protobuf.Timestamp done_at = 20;
+  google.protobuf.Timestamp updated = 21;
+}
+
+// A JudgeOutcome is what a judge decided and what the run did with it.
+message JudgeOutcome {
+  string verdict = 1;
+  string reason = 2;
+  string decision = 3;
+  int32 changes = 4;
+}
+
+// A ReviewRound is one review round's findings and how they were settled.
+message ReviewRound {
+  string round = 1;
+  int32 found = 2;
+  int32 fixed = 3;
+  int32 skipped = 4;
+  int32 ask = 5;
+}
+
+// A ReviewHalf is the local or the remote review of a review gate.
+message ReviewHalf {
+  string state = 1;
+  string via = 2;
+  string action = 3;
+  string detail = 4;
+  repeated ReviewRound rounds = 5;
+}
+
+// A Gate is one entry of the task's flow and where it stands.
+message Gate {
+  string step = 1;
+  string label = 2;
+  string state = 3;
+  string via = 4;
+  string action = 5;
+  // judged is a judge's subject: task, plan or change.
+  string judged = 6;
+  JudgeOutcome outcome = 7;
+  ReviewHalf local = 8;
+  ReviewHalf remote = 9;
+}
+
+// A Check is one CI check run, status or pipeline job.
+message Check {
+  string name = 1;
+  string url = 2;
+  string run = 3;
+  bool cancelled = 4;
+}
+
+// HeadChecks is the CI state of a PR's head commit.
+message HeadChecks {
+  // state is green, red, pending, or empty with no checks.
+  string state = 1;
+  string sha = 2;
+  bool required = 3;
+  repeated Check failed = 4;
+  repeated Check running = 5;
+}
+
+// A FileRef is one of the task's local files, such as a verdict or a findings
+// file, by what it covers.
+message FileRef {
+  // name is a verdict's subject or a findings file's round.
+  string name = 1;
+  string path = 2;
+}
+
+// A Shipment is what a task's run left: its branch, PR, commit and files.
+message Shipment {
+  string task = 1;
+  string title = 2;
+  string url = 3;
+  string branch = 4;
+  string pr = 5;
+  string pr_state = 6;
+  HeadChecks checks = 7;
+  string commit = 8;
+  string plan = 9;
+  string handoff = 10;
+  string demo = 11;
+  repeated FileRef verdicts = 12;
+  repeated FileRef reviews = 13;
+}
+
+// A RunStatus is a run with its task's gates and shipment.
+message RunStatus {
+  Run run = 1;
+  // agent is the profile the task's branch records, empty for the default.
+  string agent = 2;
+  repeated Gate gates = 3;
+  Shipment shipment = 4;
+}
+
+message GetRunStatusRequest {
+  // project is a project id or the path of its main checkout.
+  string project = 1;
+  // task narrows the reply to one task's run; empty lists every live run in
+  // the project.
+  string task = 2;
+  // all lists every live run on the machine, whatever the project.
+  bool all = 3;
+}
+
+message GetRunStatusResponse {
+  repeated RunStatus runs = 1;
+}
+
+// StartMode is what the started agent is prompted to do.
+enum StartMode {
+  START_MODE_UNSPECIFIED = 0;
+  // ship the task through its flow
+  START_MODE_SHIP = 1;
+  // plan the task and stop
+  START_MODE_PLAN = 2;
+  // read the task and wait to discuss it
+  START_MODE_DISCUSS = 3;
+}
+
+message StartRequest {
+  string project = 1;
+  // task is the task id; pr picks up an existing PR instead, by url or number.
+  string task = 2;
+  string pr = 3;
+  StartMode mode = 4;
+  // flow names a declared flow; empty lets the project's rules pick it.
+  string flow = 5;
+  string pace = 6;
+  // after is the task this one builds on; base is a branch to start from.
+  string after = 7;
+  string base = 8;
+  // agent is a profile name; model overrides only the model.
+  string agent = 9;
+  string model = 10;
+  // note is extra text the agent's prompt carries.
+  string note = 11;
+}
+
+message StartResponse {
+  string task = 1;
+  string branch = 2;
+  string worktree = 3;
+  string workspace_id = 4;
+  string agent = 5;
+}
+
+// A DriveTask is one task of a drive, with its own agent profile.
+message DriveTask {
+  string id = 1;
+  string agent = 2;
+}
+
+message DriveRequest {
+  string project = 1;
+  repeated DriveTask tasks = 2;
+  // chain runs the tasks one after another, each based on the one before.
+  bool chain = 3;
+  string flow = 4;
+  string pace = 5;
+  string agent = 6;
+  string model = 7;
+  int32 parallel = 8;
+  // plan_first plans every task before any ships.
+  bool plan_first = 9;
+}
+
+message DriveResponse {
+  // drive is the drive's number in the project.
+  int32 drive = 1;
+}
+
+// MergeMode is how Finish lands a task.
+enum MergeMode {
+  MERGE_MODE_UNSPECIFIED = 0;
+  // merge the task's own PR
+  MERGE_MODE_PR = 1;
+  // merge the PR even when someone else opened it
+  MERGE_MODE_FORCE = 2;
+  // merge a branch never pushed into the local default branch
+  MERGE_MODE_LOCAL = 3;
+  // close without merging
+  MERGE_MODE_CLOSE = 4;
+}
+
+message FinishRequest {
+  string project = 1;
+  string task = 2;
+  MergeMode merge = 3;
+  bool ignore_checks = 4;
+  // keep keeps a spike's experiment, committed on a branch.
+  bool keep = 5;
+}
+
+message FinishResponse {
+  string task = 1;
+  string pr = 2;
+  // commit is the merge commit, empty when nothing merged.
+  string commit = 3;
+  bool removed_worktree = 4;
+  bool removed_branch = 5;
+  bool closed_workspace = 6;
+}

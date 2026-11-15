@@ -1,0 +1,175 @@
+syntax = "proto3";
+
+package f10.v1;
+
+import "google/protobuf/timestamp.proto";
+import "f10/v1/tasks.proto";
+
+// BoardService reports what changed in a project, or where every task stands.
+service BoardService {
+  rpc GetBoard(GetBoardRequest) returns (GetBoardResponse);
+}
+
+// BoardView picks what the board shows.
+enum BoardView {
+  BOARD_VIEW_UNSPECIFIED = 0;
+  // what changed in the window
+  BOARD_VIEW_CHANGES = 1;
+  // where every task stands and who owes the next move
+  BOARD_VIEW_STATE = 2;
+}
+
+message GetBoardRequest {
+  string project = 1;
+  BoardView view = 2;
+  // since starts the window; unset means today, else the last working day.
+  google.protobuf.Timestamp since = 3;
+  // remote asks the host and tracker even where local facts would do.
+  bool remote = 4;
+}
+
+message GetBoardResponse {
+  Board board = 1;
+}
+
+// A Board is one project's board.
+message Board {
+  google.protobuf.Timestamp generated_at = 1;
+  BoardView view = 2;
+  Project project = 3;
+  Window window = 4;
+  repeated Source sources = 5;
+  repeated Row rows = 6;
+  Feed feed = 7;
+}
+
+message Project {
+  string id = 1;
+  string name = 2;
+  string host = 3;
+  string checkout = 4;
+  bool remote = 5;
+  bool local_only = 6;
+}
+
+// A Window is the time span a changes board covers.
+message Window {
+  google.protobuf.Timestamp since = 1;
+  google.protobuf.Timestamp end = 2;
+  string chosen = 3;
+  bool fallback = 4;
+}
+
+// A Source is one place the board read from, and how that went.
+message Source {
+  string name = 1;
+  bool ok = 2;
+  bool skipped = 3;
+  string error = 4;
+  repeated string notes = 5;
+  int32 took_ms = 6;
+}
+
+// A BoardTask is a task as the board shows it.
+message BoardTask {
+  TaskRef ref = 1;
+  string status = 2;
+  string priority = 3;
+  string assignee = 4;
+  string after = 5;
+  google.protobuf.Timestamp created = 6;
+}
+
+message Who {
+  string agent = 1;
+  string agent_status = 2;
+  string model = 3;
+  string author = 4;
+  repeated string assignees = 5;
+  repeated string reviewers = 6;
+  repeated string committers = 7;
+  string person = 8;
+}
+
+message PrRef {
+  int32 number = 1;
+  string title = 2;
+  string url = 3;
+  string state = 4;
+  bool draft = 5;
+  string head = 6;
+  string base = 7;
+  string mergeable = 8;
+  string checks = 9;
+}
+
+message Where {
+  PrRef pr = 1;
+  string branch = 2;
+  string worktree = 3;
+  string workspace = 4;
+  bool branch_left = 5;
+}
+
+message ReviewFacts {
+  string step = 1;
+  int32 round = 2;
+  int32 open = 3;
+  int32 asks = 4;
+  int32 approvals = 5;
+  int32 changes_requested = 6;
+  bool remote_open = 7;
+}
+
+// A Next is the next move on a row: a command to run and what it does.
+message Next {
+  string command = 1;
+  string text = 2;
+}
+
+// A Row is one task on a state board.
+message Row {
+  string key = 1;
+  BoardTask task = 2;
+  string stage = 3;
+  string stage_from = 4;
+  Who who = 5;
+  Where where = 6;
+  ReviewFacts review = 7;
+  repeated string blocked_by = 8;
+  google.protobuf.Timestamp last_activity = 9;
+  Next next = 10;
+}
+
+message RelatedPr {
+  int32 number = 1;
+  string url = 2;
+  string state = 3;
+  string relation = 4;
+}
+
+// A FeedRow is one change on a changes board.
+message FeedRow {
+  string group = 1;
+  string key = 2;
+  BoardTask task = 3;
+  PrRef pr = 4;
+  string from = 5;
+  Who who = 6;
+  string owes = 7;
+  bool abandoned = 8;
+  repeated RelatedPr related = 9;
+  string summary = 10;
+  google.protobuf.Timestamp at = 11;
+}
+
+// Quiet counts the tasks with no change in the window.
+message Quiet {
+  int32 count = 1;
+  google.protobuf.Timestamp oldest = 2;
+}
+
+message Feed {
+  repeated FeedRow rows = 1;
+  Quiet quiet = 2;
+}

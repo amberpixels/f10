@@ -1,0 +1,19 @@
+# Plugins run locally: pinned in tools/go.mod and package-lock.json, built
+# into .bin and node_modules by `just proto::tools`, so generation needs no
+# network once they are installed.
+version: v2
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: github.com/amberpixels/f10/cli/gen
+plugins:
+  - local: .bin/protoc-gen-go
+    out: ../cli/gen
+    opt: paths=source_relative
+  - local: .bin/protoc-gen-connect-go
+    out: ../cli/gen
+    opt: paths=source_relative
+  - local: node_modules/.bin/protoc-gen-es
+    out: ../ts/gen
+    opt: target=ts

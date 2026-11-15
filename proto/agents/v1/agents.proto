@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+// agents.v1 is the generic agent core: workspaces, the agents in them, text
+// sent to an agent, and the questions agents wait on. It knows nothing about
+// tasks, so it can leave f10 as a project of its own.
+package agents.v1;
+
+// AgentService reads the workspaces and agents of the multiplexer and types
+// into an agent's pane.
+service AgentService {
+  rpc ListWorkspaces(ListWorkspacesRequest) returns (ListWorkspacesResponse);
+  rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
+  rpc GetAgentStatus(GetAgentStatusRequest) returns (GetAgentStatusResponse);
+  // SendText types text into an agent's pane, as a prompt when submit is set.
+  rpc SendText(SendTextRequest) returns (SendTextResponse);
+}
+
+// AgentStatus is what the multiplexer reports an agent doing.
+enum AgentStatus {
+  AGENT_STATUS_UNSPECIFIED = 0;
+  AGENT_STATUS_IDLE = 1;
+  AGENT_STATUS_WORKING = 2;
+  AGENT_STATUS_DONE = 3;
+  AGENT_STATUS_UNKNOWN = 4;
+}
+
+// A Workspace is one workspace the multiplexer shows.
+message Workspace {
+  string id = 1;
+  string label = 2;
+  // path is the checkout the workspace shows, empty when it has none.
+  string path = 3;
+  bool focused = 4;
+  AgentStatus agent_status = 5;
+}
+
+// An Agent is one agent running in a workspace's pane.
+message Agent {
+  // name addresses the agent in every other call.
+  string name = 1;
+  string workspace_id = 2;
+  string pane_id = 3;
+  // kind is the agent program, such as claude.
+  string kind = 4;
+  AgentStatus status = 5;
+}
+
+message ListWorkspacesRequest {}
+
+message ListWorkspacesResponse {
+  repeated Workspace workspaces = 1;
+}
+
+message ListAgentsRequest {
+  // workspace_id narrows the list to one workspace; empty lists every one.
+  string workspace_id = 1;
+}
+
+message ListAgentsResponse {
+  repeated Agent agents = 1;
+}
+
+message GetAgentStatusRequest {
+  string name = 1;
+}
+
+message GetAgentStatusResponse {
+  Agent agent = 1;
+}
+
+message SendTextRequest {
+  string name = 1;
+  string text = 2;
+  // submit sends Enter after the text, so the agent takes it as a prompt.
+  bool submit = 3;
+}
+
+message SendTextResponse {}

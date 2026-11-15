@@ -1,0 +1,300 @@
+syntax = "proto3";
+
+// f10.v1 is the task flow: tasks, runs, drives, the board and the event log.
+// It reaches agents only through agents.v1.
+package f10.v1;
+
+import "agents/v1/asks.proto";
+import "google/protobuf/timestamp.proto";
+
+// EventService streams the ledger, the log every f10 event lands in.
+service EventService {
+  // WatchEvents sends every event after the cursor, then each new one as it
+  // lands, so a client that reconnects with its last id misses nothing.
+  rpc WatchEvents(WatchEventsRequest) returns (stream WatchEventsResponse);
+}
+
+message WatchEventsRequest {
+  // after is the id of the last event the client holds; empty starts at the
+  // first.
+  string after = 1;
+  // project and task narrow the stream; empty means every one.
+  string project = 2;
+  string task = 3;
+}
+
+message WatchEventsResponse {
+  Event event = 1;
+}
+
+// An Event is one ledger row. A kind this server does not know arrives with
+// kind set and no payload case.
+message Event {
+  // id is the row's ULID, and the cursor WatchEvents resumes after.
+  string id = 1;
+  // kind is the ledger kind; the state_* kinds share the claim case, so only
+  // kind tells them apart.
+  string kind = 2;
+  string project = 3;
+  string task = 4;
+  google.protobuf.Timestamp at = 5;
+
+  // Each case is named after the ledger kind it carries.
+  oneof payload {
+    RunStarted run_started = 10;
+    StepEntered step_entered = 11;
+    TaskFinished task_finished = 12;
+    SessionStopped session_stopped = 13;
+    TurnUsed turn_used = 14;
+    TaskCaptured task_captured = 15;
+    PrOpened pr_opened = 16;
+    Committed committed = 17;
+    Pushed pushed = 18;
+    WaitStarted wait_started = 19;
+    WaitEnded wait_ended = 20;
+    PlanSaved plan_saved = 21;
+    PlanSuperseded plan_superseded = 22;
+    SpikeSaved spike_saved = 23;
+    ReviewRoundOpened review_round_opened = 24;
+    FindingVerdict finding_verdict = 25;
+    JudgeVerdict judge_verdict = 26;
+    TaskHalted task_halted = 27;
+    TaskSized task_sized = 28;
+    RegressionFound regression_found = 29;
+    RegressionClaimed regression_claimed = 30;
+    // every state_* kind
+    Claim claim = 31;
+    agents.v1.AskRaised ask_raised = 32;
+    agents.v1.AskAnswered ask_answered = 33;
+  }
+}
+
+// The payload messages below are the ledger's stored payloads: field names
+// are the stored JSON keys, embedded structs are flattened, and counts are
+// int32 because protojson writes int64 as a string. See README.md.
+
+// AgentProfile is the profile f10 started the agent with; an empty segment
+// was left to the agent's default.
+message AgentProfile {
+  string kind = 1;
+  string model = 2;
+  string effort = 3;
+}
+
+// Tokens is the four token counts of an API usage.
+message Tokens {
+  int32 input = 1;
+  int32 output = 2;
+  int32 cache_write = 3;
+  int32 cache_read = 4;
+}
+
+// Usage is one turn's tokens: the session's own, by model when the turn used
+// more than one, its subagents' apart, and the last entry counted.
+message Usage {
+  int32 input = 1;
+  int32 output = 2;
+  int32 cache_write = 3;
+  int32 cache_read = 4;
+  map<string, Tokens> by_model = 5;
+  Tokens subagents = 6;
+  string through = 7;
+}
+
+// RunStarted is ledger kind run_started: an f10 skill starting.
+message RunStarted {
+  string skill = 1;
+  string args = 2;
+  string f10_version = 3;
+  string model = 4;
+  string agent = 5;
+  AgentProfile profile = 6;
+}
+
+// StepEntered is ledger kind step_entered: a step load and the steps it named.
+message StepEntered {
+  repeated string steps = 1;
+}
+
+// TaskFinished is ledger kind task_finished: a finish call's arguments, and
+// who ran it when it ran in-process (drive, watch).
+message TaskFinished {
+  repeated string args = 1;
+  string by = 2;
+}
+
+// SessionStopped is ledger kind session_stopped: a turn ending.
+message SessionStopped {
+  string task = 1;
+  string phase = 2;
+  string status = 3;
+  string leaf = 4;
+  bool backstop = 5;
+  string f10_version = 6;
+  string model = 7;
+  string agent = 8;
+  AgentProfile profile = 9;
+}
+
+// TurnUsed is ledger kind turn_used: the tokens a turn spent.
+message TurnUsed {
+  Usage usage = 1;
+}
+
+// TaskCaptured is ledger kind task_captured: a tracker issue created.
+message TaskCaptured {
+  string host = 1;
+  string url = 2;
+  string id = 3;
+}
+
+// PrOpened is ledger kind pr_opened: a PR or MR opened.
+message PrOpened {
+  string host = 1;
+  string url = 2;
+}
+
+// Committed is ledger kind committed: a commit made.
+message Committed {
+  string branch = 1;
+  string sha = 2;
+  string subject = 3;
+}
+
+// Pushed is ledger kind pushed: a push that moved refs.
+message Pushed {
+  string remote = 1;
+  repeated string refs = 2;
+}
+
+// WaitStarted is ledger kind wait_started: a run starting to wait on the user.
+message WaitStarted {
+  string reason = 1;
+  string tool = 2;
+}
+
+// WaitEnded is ledger kind wait_ended: that wait over, by the hook event
+// that ended it.
+message WaitEnded {
+  string reason = 1;
+  string tool = 2;
+  string by = 3;
+}
+
+// PlanSaved is ledger kind plan_saved: a plan file written.
+message PlanSaved {
+  string path = 1;
+  string task = 2;
+}
+
+// PlanSuperseded is ledger kind plan_superseded: a plan moved into the archive.
+message PlanSuperseded {
+  string from = 1;
+  string to = 2;
+  string task = 3;
+}
+
+// SpikeSaved is ledger kind spike_saved: a spike report written.
+message SpikeSaved {
+  string path = 1;
+  string task = 2;
+}
+
+// ReviewRoundOpened is ledger kind review_round_opened: a findings file's
+// round, once per reviewed sha.
+message ReviewRoundOpened {
+  string path = 1;
+  string round = 2;
+  string reviewed = 3;
+  string reviewer = 4;
+  string verdict = 5;
+  map<string, int32> categories = 6;
+  string parse_error = 7;
+}
+
+// FindingVerdict is ledger kind finding_verdict: a finding whose verdict or
+// status changed.
+message FindingVerdict {
+  string round = 1;
+  string finding = 2;
+  string title = 3;
+  string verdict = 4;
+  string category = 5;
+  string reason = 6;
+  string status = 7;
+}
+
+// JudgeVerdict is ledger kind judge_verdict: a verdict file's verdict and
+// decision.
+message JudgeVerdict {
+  string path = 1;
+  string key = 2;
+  string n = 3;
+  string subject = 4;
+  string verdict = 5;
+  string reason = 6;
+  string run = 7;
+  string decision = 8;
+  bool blind = 9;
+  bool idea = 10;
+  string parse_error = 11;
+}
+
+// TaskHalted is ledger kind task_halted: a task a drive stopped, with the
+// attempts it counted.
+message TaskHalted {
+  string skill = 1;
+  string reason = 2;
+  repeated string attempts = 3;
+}
+
+// TaskSized is ledger kind task_sized: a branch's diffstat against its base.
+message TaskSized {
+  int32 lines = 1;
+  int32 md_lines = 2;
+  int32 files = 3;
+  string base = 4;
+}
+
+// RegressionFound is ledger kind regression_found: a bug task's root cause
+// traced to the commit and task that introduced it. lines are path:start-end.
+message RegressionFound {
+  string origin_task = 1;
+  string origin = 2;
+  string commit = 3;
+  repeated string lines = 4;
+  string found_by = 5;
+  string confidence = 6;
+  string class = 7;
+  string round = 8;
+  string finding = 9;
+  string repro = 10;
+  string note = 11;
+}
+
+// RegressionClaimed is ledger kind regression_claimed: a task whose own text
+// names the task it is a regression of.
+message RegressionClaimed {
+  string origin_task = 1;
+  string text = 2;
+}
+
+// Claim is every state_* ledger kind: a recorded state call, its arguments
+// and the run it left.
+message Claim {
+  repeated string args = 1;
+  string capture = 2;
+  string plan = 3;
+  string ship = 4;
+  string leaf = 5;
+  string final = 6;
+  string note = 7;
+  string next = 8;
+  string ask = 9;
+  string wait = 10;
+  string done = 11;
+  repeated string pipeline = 12;
+  repeated string labels = 13;
+  // at is leaf's place in pipeline, counted from 1.
+  int32 at = 14;
+}
