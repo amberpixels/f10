@@ -90,30 +90,32 @@ type sniffListener struct {
 
 	legacy func(net.Conn, *bufio.Reader)
 	conns  chan net.Conn
-	errs   chan error
+	done   chan struct{} // closed once the listener fails, never conns: a sort may still send
+	err    error         // why, set before done closes
 }
 
 func newSniffListener(ln net.Listener, legacy func(net.Conn, *bufio.Reader)) *sniffListener {
-	l := &sniffListener{Listener: ln, legacy: legacy, conns: make(chan net.Conn), errs: make(chan error, 1)}
+	l := &sniffListener{Listener: ln, legacy: legacy, conns: make(chan net.Conn), done: make(chan struct{})}
 	go l.run()
 
 	return l
 }
 
 func (l *sniffListener) Accept() (net.Conn, error) {
-	if c, ok := <-l.conns; ok {
+	select {
+	case c := <-l.conns:
 		return c, nil
+	case <-l.done:
+		return nil, l.err
 	}
-
-	return nil, <-l.errs
 }
 
 func (l *sniffListener) run() {
 	for {
 		conn, err := l.Listener.Accept()
 		if err != nil {
-			l.errs <- err
-			close(l.conns)
+			l.err = err
+			close(l.done)
 
 			return
 		}
@@ -142,7 +144,11 @@ func (l *sniffListener) sort(conn net.Conn) {
 		return
 	}
 
-	l.conns <- &peekedConn{Conn: conn, r: br}
+	select {
+	case l.conns <- &peekedConn{Conn: conn, r: br}:
+	case <-l.done:
+		_ = conn.Close()
+	}
 }
 
 // peekedConn reads the bytes the sniff peeked before the rest.

@@ -70,6 +70,7 @@ type Server struct {
 	ln       net.Listener
 	http     *http.Server
 	session  []string        // the newest local session's environment
+	calls    int             // calls in flight, an event stream among them
 	ctx      context.Context //nolint:containedctx // the serve call's, for the drives it starts
 	stop     chan stopMode
 	escalate chan struct{} // closed by a stop --now during a drain
@@ -259,7 +260,7 @@ func (s *Server) idle() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	return len(s.runs) == 0 && len(s.watches) == 0 && time.Since(s.last) >= s.Idle
+	return len(s.runs) == 0 && len(s.watches) == 0 && s.calls == 0 && time.Since(s.last) >= s.Idle
 }
 
 // closeHTTP lets the calls in flight, the stop that ended the daemon among
@@ -286,12 +287,19 @@ func (s *Server) handler() http.Handler {
 	return mux
 }
 
-// stamp marks every call as activity, so a daemon in use never idles out.
+// stamp marks every call as activity, and counts it while it runs, so a
+// daemon serving a long call, such as an event stream, never idles out.
 func (s *Server) stamp(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
-		s.last = time.Now()
+		s.last, s.calls = time.Now(), s.calls+1
 		s.mu.Unlock()
+
+		defer func() {
+			s.mu.Lock()
+			s.last, s.calls = time.Now(), s.calls-1
+			s.mu.Unlock()
+		}()
 
 		h.ServeHTTP(w, r)
 	})

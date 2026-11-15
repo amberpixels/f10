@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"net"
+	"net/http"
 	"os"
 	"slices"
 	"strings"
@@ -176,5 +177,77 @@ func TestAPIErrorNamesBothVersions(t *testing.T) {
 	older := APIError(Info{Version: "0.62.0", API: APIVersion - 1}, "0.70.0")
 	if older == nil || !strings.Contains(older.Error(), "f10 daemon stop") {
 		t.Errorf("a daemon on an older API: %v", older)
+	}
+}
+
+// A connection sorted while the listener closes is dropped, never sent on a
+// closed channel, which would panic the daemon as it stops.
+func TestSniffListenerClosesWithAConnectionBeingSorted(t *testing.T) {
+	t.Parallel()
+
+	dir := runDir(t)
+
+	ln, err := (&net.ListenConfig{}).Listen(t.Context(), "unix", SocketPath(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sl := newSniffListener(ln, func(c net.Conn, _ *bufio.Reader) { _ = c.Close() })
+
+	conn, err := (&net.Dialer{}).DialContext(t.Context(), "unix", SocketPath(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	_, _ = conn.Write([]byte("P"))
+	time.Sleep(50 * time.Millisecond) // the sort peeks and waits to hand the connection over
+
+	_ = ln.Close()
+
+	if _, err := sl.Accept(); err == nil {
+		t.Fatal("Accept after the listener closed returned a connection")
+	}
+
+	time.Sleep(50 * time.Millisecond) // a sort that sent on a closed channel would have panicked by now
+}
+
+// A call in flight, such as an event stream, keeps an otherwise idle
+// daemon serving.
+func TestACallInFlightKeepsTheDaemonUp(t *testing.T) {
+	t.Parallel()
+
+	release := make(chan struct{})
+
+	s := &Server{
+		Dir: runDir(t), Version: "v1", Child: shell, Idle: 50 * time.Millisecond, Tick: 10 * time.Millisecond,
+		Handler: func(*Server) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				<-release
+				w.WriteHeader(http.StatusOK)
+			})
+		},
+	}
+	done := serve(t, s)
+
+	go func() {
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, socketURL+"/stream", http.NoBody)
+		if res, err := SocketHTTP(s.Dir).Do(req); err == nil {
+			_ = res.Body.Close()
+		}
+	}()
+
+	select {
+	case err := <-done:
+		t.Fatalf("the daemon idled out with a call in flight: %v", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+
+	close(release)
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the daemon did not idle out once the call ended")
 	}
 }

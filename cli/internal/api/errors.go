@@ -10,11 +10,6 @@ import (
 	"github.com/amberpixels/f10/cli/internal/daemon"
 )
 
-// errNoSession is a Herdr call with no local session registered: the
-// daemon has no environment that reaches Herdr.
-var errNoSession = errors.New(
-	"no Herdr session has registered with the daemon: run an f10 command inside Herdr")
-
 // errorOptions maps every handler's errors onto Connect codes in one place.
 func errorOptions() []connect.HandlerOption {
 	return []connect.HandlerOption{connect.WithInterceptors(connect.UnaryInterceptorFunc(
@@ -39,7 +34,7 @@ func codeOf(err error) error {
 	case errors.Is(err, daemon.ErrStopping):
 		return connect.NewError(connect.CodeUnavailable, err)
 	case agents.IsOutside(err):
-		return connect.NewError(connect.CodeFailedPrecondition, errNoSession)
+		return connect.NewError(connect.CodeFailedPrecondition, agents.ErrNoSession)
 	}
 
 	return connect.NewError(connect.CodeUnknown, err)

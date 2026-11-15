@@ -295,4 +295,15 @@ func TestProjectDirRefusesAnAmbiguousName(t *testing.T) {
 	if _, err := projectDir(t.Context(), &watchSup{}, "widgets"); connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Errorf("a name two watched checkouts share = %v, want InvalidArgument", err)
 	}
+
+	// a full id no watch holds is never another project's checkout of the same name
+	if dir, err := projectDir(
+		t.Context(),
+		&watchSup{},
+		"github.com/c/widgets",
+	); connect.CodeOf(
+		err,
+	) != connect.CodeNotFound {
+		t.Errorf("an unwatched full id = %q, %v; want NotFound", dir, err)
+	}
 }

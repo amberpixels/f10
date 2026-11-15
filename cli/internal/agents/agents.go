@@ -4,7 +4,9 @@
 package agents
 
 import (
+	"context"
 	"errors"
+	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/herdr"
@@ -20,11 +22,68 @@ var SessionEnv func() []string
 // the only one. A variable so a test can host agents without it.
 var Agents = func(dir string) agentctl.Backend {
 	b := herdr.New(dir)
-	if SessionEnv != nil {
-		b.Env = append([]string{}, SessionEnv()...)
+	if SessionEnv == nil {
+		return b
+	}
+
+	if b.Env = SessionEnv(); len(b.Env) == 0 {
+		return unreachable{b}
 	}
 
 	return b
+}
+
+// ErrNoSession is the daemon's refusal of every agent call while no local
+// client has registered the Herdr session it runs in.
+var ErrNoSession = errors.New(
+	"no Herdr session has registered with the daemon: run an f10 command inside Herdr")
+
+// unreachable is a backend with no session: every call refuses, so none
+// runs herdr with an environment that cannot reach it.
+type unreachable struct{ herdr.Backend }
+
+func (unreachable) Available() error { return noSessionError{} }
+
+func (unreachable) Workspaces(context.Context) ([]agentctl.Workspace, error) {
+	return nil, noSessionError{}
+}
+
+func (unreachable) Open(context.Context, string, string) (agentctl.Opened, []string, error) {
+	return agentctl.Opened{}, nil, noSessionError{}
+}
+
+func (unreachable) Occupancy(context.Context, agentctl.Opened) (agentctl.Occupancy, error) {
+	return agentctl.Busy, noSessionError{}
+}
+
+func (unreachable) StartAgent(
+	context.Context, agentctl.Opened, string, string, []string, func(waited, limit time.Duration),
+) error {
+	return noSessionError{}
+}
+
+func (unreachable) Prompt(context.Context, string, string) error { return noSessionError{} }
+
+func (unreachable) Screen(context.Context, string) (string, error) { return "", noSessionError{} }
+
+func (unreachable) SendEnter(context.Context, string) error { return noSessionError{} }
+
+func (unreachable) Focus(context.Context, string) error { return noSessionError{} }
+
+func (unreachable) Close(context.Context, string) error { return noSessionError{} }
+
+func (unreachable) Agents(context.Context) ([]agentctl.AgentInfo, error) {
+	return nil, noSessionError{}
+}
+
+// noSessionError words ErrNoSession and still matches herdr's own refusal, so
+// every check for a process outside Herdr reads it.
+type noSessionError struct{}
+
+func (noSessionError) Error() string { return ErrNoSession.Error() }
+
+func (noSessionError) Is(target error) bool {
+	return target == ErrNoSession || target == herdr.ErrNotInside
 }
 
 // ReachableAgents is the backend answering from dir, or nil when this

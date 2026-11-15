@@ -244,6 +244,14 @@ func (s askService) AnswerAsk(
 		return nil, connect.NewError(connect.CodeNotFound, err)
 	}
 
+	// an ask no drive takes is delivered to its agent, so refuse before the
+	// claim closes it when no agent can be reached
+	if a.Drive == 0 {
+		if err := agents.Agents(a.Worktree).Available(); err != nil {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, err)
+		}
+	}
+
 	values := make([]string, 0, len(req.Msg.GetAnswers()))
 	for _, ans := range req.Msg.GetAnswers() {
 		values = append(values, strconv.Itoa(int(ans.GetN()))+"="+ans.GetValue())

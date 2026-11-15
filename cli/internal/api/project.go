@@ -42,16 +42,23 @@ func projectDir(ctx context.Context, sup Supervisor, project string) (string, er
 		}
 	}
 
-	switch len(named) {
-	case 1:
+	// a full id names one project, so a checkout that merely shares its last
+	// segment is another project's
+	full := strings.Contains(project, "/")
+
+	switch {
+	case len(named) == 1 && !full:
 		return named[0], nil
-	case 0:
-	default:
+	case len(named) > 1 && !full:
 		return "", invalid(fmt.Sprintf("project %s names %d watched checkouts (%s): pass its path or its full id",
 			project, len(named), strings.Join(named, ", ")))
 	}
 
 	dir, err := projects.Find(base)
+	if err == nil && full && target.ProjectOf(ctx, dir) != project {
+		err = fmt.Errorf("the checkout named %s under F10_ROOTS is %s", base, target.ProjectOf(ctx, dir))
+	}
+
 	if err != nil {
 		return "", connect.NewError(connect.CodeNotFound, fmt.Errorf("project %s: %w", project, err))
 	}
