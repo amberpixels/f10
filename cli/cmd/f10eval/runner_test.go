@@ -1,11 +1,13 @@
 package main
 
 import (
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/ledger"
 )
 
 func TestProfilesFor(t *testing.T) {
@@ -80,5 +82,47 @@ func TestRunEnv(t *testing.T) {
 		if !slices.Contains(env, want) {
 			t.Errorf("env lacks %q: %q", want, env)
 		}
+	}
+}
+
+// The seeded history and review rounds are what f10 history reads back.
+func TestHistoryAndReviewsSeedTheRun(t *testing.T) {
+	ctx := t.Context()
+	dir := filepath.Join(t.TempDir(), "repo")
+
+	if err := prepare(
+		ctx,
+		filepath.Join("..", "..", "..", "evals", "scenarios", "feature-small", "repo"),
+		dir,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	commits := []HistoryCommit{
+		{Message: "one\n\nTask: EV-11", File: "main.go", Append: "// one\n"},
+		{Message: "two\n\nTask: EV-12", File: "main.go", Append: "// two\n"},
+	}
+	if err := applyHistory(ctx, dir, commits); err != nil {
+		t.Fatal(err)
+	}
+
+	if log := gitOut(ctx, dir, "log", "--format=%(trailers:key=Task,valueonly)"); !strings.Contains(log, "EV-11") ||
+		!strings.Contains(log, "EV-12") {
+		t.Errorf("log carries no seeded tasks:\n%s", log)
+	}
+
+	path := filepath.Join(t.TempDir(), "f10.db")
+	if err := seedReviews(
+		ctx,
+		dir,
+		path,
+		[]SeedReview{{Task: "EV-11", Rounds: 2, Categories: map[string]int{"tests and docs": 1}}},
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	events, err := ledger.ReadEvents(ctx, path, ledger.Filter{Task: "EV-11", Kind: ledger.ReviewRoundOpened})
+	if err != nil || len(events) != 2 || events[0].Project != ledger.Where(ctx, dir).Project {
+		t.Fatalf("seeded %d rows (%v), want two under the run's project", len(events), err)
 	}
 }

@@ -227,6 +227,18 @@ func sameCommit(a, b string) bool {
 // Lessons is every effective, non-retired lesson anchored to path, across
 // every change, oldest first.
 func (s *Store) Lessons(path string) ([]Entry, error) {
+	return s.anchoredOn(path, KindLesson)
+}
+
+// Decisions is every effective decision anchored to path, across every
+// change, oldest first: what a plan touching the file must not undo blind.
+func (s *Store) Decisions(path string) ([]Entry, error) {
+	return s.anchoredOn(path, KindDecision)
+}
+
+// anchoredOn is the effective entries of kind with an anchor on path,
+// retired lessons left out.
+func (s *Store) anchoredOn(path string, kind Kind) ([]Entry, error) {
 	changes, err := s.Changes()
 	if err != nil {
 		return nil, err
@@ -241,7 +253,7 @@ func (s *Store) Lessons(path string) ([]Entry, error) {
 		}
 
 		for _, e := range entries {
-			if e.Kind != KindLesson || e.Retired {
+			if e.Kind != kind || e.Retired {
 				continue
 			}
 

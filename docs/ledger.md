@@ -16,6 +16,7 @@ Two kinds record where a bug came from, both on the bug task's row and both writ
 `regression_found` is what the debug step established: the origin task, the commit, the faulty lines, how review let the fault through, and the reproduction outcome.
 `regression_claimed` is the origin the task's own text named when it was captured.
 The two can disagree, and both stand.
+`f10 history` ([cli.md](cli.md#history)) reads `regression_found` to count the bugs traced to the files it is asked about, or to the tasks that touched them.
 
 ## Versions
 

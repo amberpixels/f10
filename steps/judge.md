@@ -35,6 +35,9 @@ However, never agree because agreeing is cheaper.
    Resizing it to normal is then a change the verdict names, whatever its color.
 2. **Restate the problem, then find it in the code**, with a few targeted `Read` and `Grep` calls sent in one message.
    If the stated problem and the real one differ, build the judgment on the real one.
+   On a plan or a change, send `f10 history <path>...` in the same message, over the files the plan's stages name or the ones `f10 pr diff --name-only` lists.
+   It prints what the tasks that touched those files went through: review rounds, recurring findings, regressions, and the lessons and decisions anchored there.
+   An idea or a bare task names no files yet, so it runs none.
 3. **Symptom or cause.**
    If the subject treats a symptom, name where the cause lives and what fixing it takes.
    A bug's plan names its root cause under `## Reproduction`.
@@ -43,6 +46,10 @@ However, never agree because agreeing is cheaper.
 5. **The longer-lived shape**: if there is a design you would build instead, name that one design, grounded in what you read.
    Weigh its cost now against the cost of reaching it later.
    A quick hack counts as a hack only if a better shape is reachable now.
+   Weigh the history from point 2 under the same rules, as evidence about these files rather than a rule of its own:
+   - A regression hotspot, two or more regressions on these files in the window, is a cost the subject must address, or the verdict names it.
+   - A subject that takes an option a decision rejected, with no reason given, is at best **proceed with changes**.
+   - A plan's `## History` section says what the plan did with each fact, so judge the reasons it gives, not only whether the section exists.
 6. **For code: keep, reshape or discard**, and say which parts.
 7. **Verdict.** Choose one of four, each with its color:
    - **proceed** (green) - the problem is real and the shape is right.
@@ -118,6 +125,7 @@ However, never agree because agreeing is cheaper.
    `## Changes`, on a yellow verdict, has one line per change, numbered as in the reply, each line opening `<n>. ` at its start, because `f10 status` counts those lines as the changes a `built` decision built.
    In a ship run it lists only the changes the run takes, so a change the user declined at the gaps question is left out.
    `## Argument` holds the reply under the banner, and nothing parses it.
+   It cites the history from point 2, by the ids its lines printed, only when the history changed the verdict.
 
    Write the file once the verdict is final for this run.
    A standalone run writes it after the reply, and a ship run writes it once the route is chosen.

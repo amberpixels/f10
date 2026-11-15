@@ -105,6 +105,8 @@ Decisions and lessons come from a ship run: a change that reaches `f10 finish` a
 
 - The **implement** step reads `lessons` once per file before its first edit and follows them, or records an override as a `decision`.
 - The **review** step reads `lessons` over every file in the diff and `why` at the base for a line it doubts; a hunk that breaks a lesson is a finding naming the lesson's id.
+- The **plan** step reads lessons and decisions through `f10 history` over the files its stages name, and says in its `## History` section what it did with each; a plan that departs from one writes a `decision` naming its id.
+- The **judge** step reads the same brief over a plan's files or a diff's, and weighs a decision's rejected options against the subject.
 - `f10 finish` runs `check` right before a merge, under `project.md`'s `lore_gate`: `warn` notes the reasons, `block` refuses.
 - `f10 status` reads lore first and the review and verdict files for runs from before lore; lore is the one meant to last.
 

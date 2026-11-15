@@ -34,6 +34,7 @@ var checks = map[string]func(ctx context.Context, dir string, s Scenario) Check{
 	"planted":  checkPlanted,
 	"verdict":  checkVerdict,
 	"lore":     checkLore,
+	"history":  checkHistory,
 }
 
 func result(name string, problems []string) Check {
@@ -62,6 +63,32 @@ func checkPlan(_ context.Context, dir string, s Scenario) Check {
 	}
 
 	return result("plan", problems)
+}
+
+// checkHistory passes when the plan has a ## History section naming every
+// id the scenario's seeded history should have surfaced.
+func checkHistory(_ context.Context, dir string, s Scenario) Check {
+	body, err := os.ReadFile(storage.InRepo(dir).Plan(s.Task))
+	if err != nil {
+		return result("history", []string{err.Error()})
+	}
+
+	_, section, found := strings.Cut("\n"+string(body), "\n## History\n")
+	if !found {
+		return result("history", []string{"no ## History section"})
+	}
+
+	section, _, _ = strings.Cut(section, "\n## ")
+
+	var problems []string
+
+	for _, id := range s.HistoryCites {
+		if !strings.Contains(section, id) {
+			problems = append(problems, "## History does not cite "+id)
+		}
+	}
+
+	return result("history", problems)
 }
 
 func checkVerify(ctx context.Context, dir string, s Scenario) Check {

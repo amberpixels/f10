@@ -82,6 +82,7 @@ f10 standup mark --since <time> [--at <time>]      # record a standup as reporte
 f10 board [<window> | --since <window>] [--state] [--remote] [-C <checkout>]... [--group <name>]... [--all] [--detail] [--by person] [--json | --html] [--out <path>]   # what changed today (else the last working day); --state: where every task stands; one project or several
 f10 atlas [-C <checkout>]... [--group <name>]... [--all] [--json] [--out <path>]   # your public projects: what ~/.f10/atlas.md declares and what their git history says
 f10 stats [--since 30d] [<id>]   # active minutes per task by step group, with size and density; a median row; an id adds its steps
+f10 history <path>... [--since 180d] [--task <id>] [--json]   # what the tasks that touched these files went through, in at most 15 lines
 f10 ledger dump [--json] [--project p] [--task id] [--session s]   # the recorded events, oldest first
 f10 ledger schema        # the JSON Schema of each event kind's payload, by version (docs/ledger.schema.json)
 
@@ -1270,6 +1271,42 @@ Step boundaries are the `f10-state.sh set ship running <entry>` calls; a skipped
 A value never recorded prints `-`, never `0`, and no wall duration is printed.
 Counting starts with the release that records waits: a session with no wait in the ledger, and a window a wait with no recorded end runs into, count nothing.
 `--since` takes days or weeks (`7d`, `2w`) and keeps the tasks active in that span; a task id shows that task whatever its age.
+
+## History
+
+`f10 history <path>...` is the brief the plan and judge steps read before choosing or ruling on an approach: what the tasks that touched these files went through.
+It is a lookup over git, the ledger and lore, so the same history prints the same brief.
+
+1. **Neighbors** are the tasks whose commits touched the paths since `--since` (default `180d`), read in one `git log` at `HEAD`.
+   A commit's task is its `Task:` trailer (a bundle counts once, under its lead), else its `Change:` trailer, else what `f10 task regression` would attribute it to (the closest unmerged branch, then a subject opening with an id).
+   `--task`, else the branch's task, is left out, because a task is not its own history.
+2. **Stale** neighbors are dropped and counted: one whose added lines in these paths stand under 30% at `HEAD`, by `git blame`, was mostly rewritten since, so its record no longer applies.
+   A neighbor that only deleted lines has nothing to measure and stays.
+3. **Per neighbor**, from the ledger: its kind (the `Kind:` line of its live or newest archived plan), size, implement minutes (as `f10 stats` counts them), review rounds, finding categories raised and the fixed and skipped counts resolve recorded, plans superseded, halts, judge verdicts, and the bugs later traced to it.
+4. **Regressions**: the `regression_found` rows in the window whose lines are on these paths or whose origin is a neighbor.
+5. **Lore**: the effective lessons and decisions anchored to the paths, a decision with its rejected options.
+6. **Statistics** print only over 3 live neighbors or more: the median review rounds (over those with a round recorded, again only from 3), and each category raised in at least half the neighbors.
+   Under 3, the neighbors are listed and no statistic is printed.
+
+Counts and outcomes come from the ledger and reasons from lore, so a finding written to both (`finding_verdict` and a lore `finding`) counts once.
+The ledger reads are the scoped ones: the sessions of the neighbors and the project's `regression_found` rows, both indexed.
+
+The text is at most 15 lines, each citing task or lore ids, most decision-relevant first: the neighbors by id with the stale count, regressions, recurring findings, the median, decisions, lessons, then a line per neighbor; lines past 15 drop from the bottom.
+A long line is cut at 160 characters.
+Nothing found prints `No history for these files.`
+
+`--json` prints the whole brief, uncapped:
+
+| key | holds |
+|---|---|
+| `paths`, `since` | the repo-relative paths and the window's start |
+| `neighbors` | per live task: `task`, `commits`, `added`, `standing`, `kind`, `lines`, `implement_minutes`, `rounds`, `categories` (`raised`, `fixed`, `skipped` per category), `plans_superseded`, `halts`, `judge_verdicts`, `regressions` (the bug tasks traced to it) |
+| `stale` | the dropped tasks: `task`, `commits`, `added`, `standing` |
+| `regressions` | `bug`, `origin` (a task, `pre-f10` or `outside-f10`), `class` |
+| `aggregates` | `null` under 3 neighbors, else `n`, `median_rounds` (`null` under 3 reviewed), `recurring` (`category`, `tasks`), `regressions` |
+| `decisions`, `lessons` | `id`, `change`, `path`, `text`, and for a decision `chosen` and `rejected` |
+
+A value never recorded is absent, never `0`.
 
 ## Ledger
 

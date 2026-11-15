@@ -23,6 +23,7 @@ import (
 	daemoncmd "github.com/amberpixels/f10/cli/internal/command/daemon"
 	drivecmd "github.com/amberpixels/f10/cli/internal/command/drive"
 	finishcmd "github.com/amberpixels/f10/cli/internal/command/finish"
+	historycmd "github.com/amberpixels/f10/cli/internal/command/history"
 	hookcmd "github.com/amberpixels/f10/cli/internal/command/hook"
 	ledgercmd "github.com/amberpixels/f10/cli/internal/command/ledger"
 	lorecmd "github.com/amberpixels/f10/cli/internal/command/lore"
@@ -90,6 +91,7 @@ func newApp() *cli.Command {
 			statecmd.Command(),
 			ledgercmd.Command(),
 			statscmd.Command(),
+			historycmd.Command(),
 			lorecmd.Command(),
 			helpCommand(),
 		},

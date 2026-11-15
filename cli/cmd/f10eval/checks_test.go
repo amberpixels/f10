@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // canned is testdata/result as a run would leave it: its f10/ copied to
@@ -221,6 +223,39 @@ func TestAcceptCheck(t *testing.T) {
 	} {
 		if got := checkAccept(t.Context(), dir, Scenario{Accept: c.accept}); got.Pass != c.pass {
 			t.Errorf("accept %+v = %+v, want pass %v", c.accept, got, c.pass)
+		}
+	}
+}
+
+func TestCheckHistory(t *testing.T) {
+	t.Parallel()
+
+	s := Scenario{Task: "T-1", HistoryCites: []string{"EV-11", "EV-12"}}
+
+	for name, c := range map[string]struct {
+		plan   string
+		detail string
+	}{
+		"cites both":   {"## History\n- tests and docs in EV-11, EV-12. Stage 2 covers it.\n\n## Consequences - none\n", ""},
+		"misses one":   {"## History\n- EV-11 only.\n\n## Gaps - none\n", "does not cite EV-12"},
+		"cited later":  {"## History\n- nothing\n\n## Gaps\nEV-11 EV-12\n", "does not cite EV-11"},
+		"no section":   {"## Consequences - none\n", "no ## History section"},
+		"section last": {"## History\nEV-11, EV-12", ""},
+	} {
+		dir := t.TempDir()
+		path := storage.InRepo(dir).Plan(s.Task)
+
+		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := os.WriteFile(path, []byte(c.plan), 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		got := checkHistory(t.Context(), dir, s)
+		if got.Pass != (c.detail == "") || !strings.Contains(got.Detail, c.detail) {
+			t.Errorf("%s: %+v, want detail %q", name, got, c.detail)
 		}
 	}
 }
