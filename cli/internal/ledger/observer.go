@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"context"
+	"math"
 	"os"
 	"slices"
 	"time"
@@ -401,12 +402,20 @@ func usageOf(u transcript.Usage) *Usage {
 	return out
 }
 
-//nolint:gosec // a turn's tokens fit in 32 bits
 func tokensOf(t transcript.Tokens) *Tokens {
 	return &Tokens{
-		Input: int32(t.Input), Output: int32(t.Output), CacheWrite: int32(t.CacheWrite), CacheRead: int32(t.CacheRead),
+		Input: count32(
+			t.Input,
+		),
+		Output:     count32(t.Output),
+		CacheWrite: count32(t.CacheWrite),
+		CacheRead:  count32(t.CacheRead),
 	}
 }
+
+// count32 is n as a payload count stores it: an int32, since protojson writes
+// an int64 as a string; a count past its range saturates instead of wrapping.
+func count32(n int) int32 { return int32(min(max(n, math.MinInt32), math.MaxInt32)) }
 
 // findings records the round opening once per reviewed sha, then each finding
 // whose verdict differs from the last recorded. Review writes the file and
@@ -529,7 +538,7 @@ func counts(m map[string]int) map[string]int32 {
 
 	out := make(map[string]int32, len(m))
 	for k, n := range m {
-		out[k] = int32(n) //nolint:gosec // a round's findings fit in 32 bits
+		out[k] = count32(n)
 	}
 
 	return out

@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"google.golang.org/protobuf/types/known/timestamppb"
 
 	agentsv1 "github.com/amberpixels/f10/cli/gen/agents/v1"
 	"github.com/amberpixels/f10/cli/gen/agents/v1/agentsv1connect"
@@ -212,7 +211,7 @@ func (s askService) ListAsks(
 
 	out := &agentsv1.ListAsksResponse{}
 	for _, a := range open {
-		out.Open = append(out.Open, AskOf(a))
+		out.Open = append(out.Open, asks.Message(a))
 	}
 
 	if since := req.Msg.GetAnsweredSince(); since != nil {
@@ -222,7 +221,7 @@ func (s askService) ListAsks(
 		}
 
 		for _, a := range answered {
-			out.Answered = append(out.Answered, AskOf(a))
+			out.Answered = append(out.Answered, asks.Message(a))
 		}
 	}
 
@@ -267,59 +266,5 @@ func (s askService) AnswerAsk(
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
-	return connect.NewResponse(&agentsv1.AnswerAskResponse{Ask: AskOf(claimed), Delivered: sent}), nil
-}
-
-// AskOf is an inbox ask as agents.v1 carries it: what f10 adds (the task,
-// its project and drive) goes in the labels, so the core grows no task field.
-//
-//nolint:lostfield // f10's fields go in Labels; TakenAt is drive bookkeeping, and the inbox records no workspace
-func AskOf(a asks.Ask) *agentsv1.Ask {
-	out := &agentsv1.Ask{
-		Id:         a.Key(),
-		Agent:      agentctl.AgentName(a.Task, a.Suffix, a.Worktree),
-		Text:       a.Text,
-		AskedAt:    timestamppb.New(a.AskedAt),
-		Answer:     a.Answer,
-		AnsweredBy: SourceOf(a.By),
-		Labels:     asks.Labels(a),
-	}
-
-	for _, q := range a.Questions {
-		out.Questions = append(out.Questions, &agentsv1.Question{
-			N:       int32(q.N), //nolint:gosec // a question number
-			Text:    q.Text,
-			Options: q.Options,
-		})
-	}
-
-	if !a.AnsweredAt.IsZero() {
-		out.AnsweredAt = timestamppb.New(a.AnsweredAt)
-	}
-
-	if !a.DeliveredAt.IsZero() {
-		out.DeliveredAt = timestamppb.New(a.DeliveredAt)
-	}
-
-	return out
-}
-
-// SourceOf is the way in an answer came by, as agents.v1 names it.
-func SourceOf(by string) agentsv1.AnswerSource {
-	switch by {
-	case asks.ByPane:
-		return agentsv1.AnswerSource_ANSWER_SOURCE_PANE
-	case asks.ByAsks:
-		return agentsv1.AnswerSource_ANSWER_SOURCE_ASKS
-	case asks.BySkill:
-		return agentsv1.AnswerSource_ANSWER_SOURCE_SKILL
-	case asks.ByDrive:
-		return agentsv1.AnswerSource_ANSWER_SOURCE_DRIVE
-	case asks.ByCancelled:
-		return agentsv1.AnswerSource_ANSWER_SOURCE_CANCELLED
-	case asks.ByAPI:
-		return agentsv1.AnswerSource_ANSWER_SOURCE_API
-	}
-
-	return agentsv1.AnswerSource_ANSWER_SOURCE_UNSPECIFIED
+	return connect.NewResponse(&agentsv1.AnswerAskResponse{Ask: asks.Message(claimed), Delivered: sent}), nil
 }

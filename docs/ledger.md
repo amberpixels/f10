@@ -62,13 +62,15 @@ A version that renames one of these keys changes its column, in the same release
 
 `run_started` carries the run context: `f10_version`, `model`, `agent` (the agent kind, `claude` unless a profile names another) and `profile` (the `kind`, `model` and `effort` that `f10 start` or `f10 drive` recorded on the branch).
 A key the hook could not learn is empty, and an interactive session has no `profile`.
-`session_stopped` carries the same keys only when the context changed since the session's last row that carried one, such as after a `/model` switch.
+`session_stopped` fills the same keys only when the context changed since the session's last row that carried one, such as after a `/model` switch.
+On every other stop row they are present and empty, so a reader finds the context in force by taking the latest row with a non-empty `model`, never by testing whether the key exists.
+A stop row cannot tell "unchanged" apart from "changed to unknown".
 
 `turn_used` is the tokens one turn spent, read from the session's transcript as a delta since the previous turn, so a task's cost is the sum of its rows:
 
 - `usage.input`, `usage.output`, `usage.cache_write` and `usage.cache_read` are the session's own messages.
   One API message spans several transcript lines that each repeat its usage, so each message counts once.
-- `usage.by_model` splits the same four by model, only when the turn ran on more than one.
+- `usage.by_model` splits the same four by model when the turn ran on more than one, and is empty (`{}`) otherwise.
 - `usage.subagents` holds the same four for the subagents the turn ran, from inline sidechain lines and from the session's `subagents/` transcripts.
 - `usage.through` is the uuid of the last transcript entry counted.
 

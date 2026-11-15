@@ -228,77 +228,13 @@ func (r registry) decode(e Event, want protoreflect.MessageType) (proto.Message,
 	return m, err
 }
 
-// unmarshal reads raw as a typ message. A row it refuses gets one retry
-// with its empty enum values dropped: rows from before payloads were
-// messages store an unset enum as "".
+// unmarshal reads raw as a typ message. DiscardUnknown also reads an enum
+// name this f10 does not know as unspecified: a newer f10's value, and the
+// "" rows from before payloads were messages store for an unset enum.
 func unmarshal(raw []byte, typ protoreflect.MessageType) (proto.Message, error) {
 	m := typ.New().Interface()
 
-	err := readJSON.Unmarshal(raw, m)
-	if err == nil {
-		return m, nil
-	}
-
-	fixed, ok := withoutEmptyEnums(raw, typ.Descriptor())
-	if !ok {
-		return m, err
-	}
-
-	m = typ.New().Interface()
-
-	return m, readJSON.Unmarshal(fixed, m)
-}
-
-func withoutEmptyEnums(raw []byte, md protoreflect.MessageDescriptor) ([]byte, bool) {
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	dec.UseNumber()
-
-	var obj map[string]any
-	if dec.Decode(&obj) != nil {
-		return nil, false
-	}
-
-	dropEmptyEnums(obj, md)
-
-	out, err := json.Marshal(obj)
-
-	return out, err == nil
-}
-
-func dropEmptyEnums(obj map[string]any, md protoreflect.MessageDescriptor) {
-	for key, v := range obj {
-		fd := md.Fields().ByName(protoreflect.Name(key))
-		if fd == nil {
-			fd = md.Fields().ByJSONName(key)
-		}
-
-		switch {
-		case fd == nil:
-		case fd.Kind() == protoreflect.EnumKind && !fd.IsList() && !fd.IsMap():
-			if v == "" {
-				delete(obj, key)
-			}
-		case fd.IsMap():
-			if vals, ok := v.(map[string]any); ok && fd.MapValue().Kind() == protoreflect.MessageKind {
-				for _, x := range vals {
-					if o, ok := x.(map[string]any); ok {
-						dropEmptyEnums(o, fd.MapValue().Message())
-					}
-				}
-			}
-		case fd.Kind() == protoreflect.MessageKind:
-			items, ok := v.([]any)
-			if !ok {
-				items = []any{v}
-			}
-
-			for _, x := range items {
-				if o, ok := x.(map[string]any); ok {
-					dropEmptyEnums(o, fd.Message())
-				}
-			}
-		}
-	}
+	return m, readJSON.Unmarshal(raw, m)
 }
 
 // validUTF8 is a copy of m with each invalid UTF-8 sequence in its strings,

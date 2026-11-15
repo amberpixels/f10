@@ -2,8 +2,6 @@ package asks
 
 import (
 	"strconv"
-	"strings"
-	"time"
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -15,42 +13,51 @@ import (
 // recordRaised and recordAnswered put the inbox's changes in the ledger,
 // which the API streams as events. A failed record never fails the ask.
 func recordRaised(a Ask) {
-	qs := make([]*ledger.AskQuestion, 0, len(a.Questions))
-	for _, q := range a.Questions {
-		n := int32(q.N) //nolint:gosec // a question's number in a short list
-		qs = append(qs, &ledger.AskQuestion{N: n, Text: q.Text, Options: q.Options})
-	}
-
-	record(a, ledger.AskRaised, &ledger.AskRaisedPayload{Ask: &ledger.Ask{
-		Id:          a.Key(),
-		Agent:       agentctl.AgentName(a.Task, a.Suffix, a.Worktree),
-		Text:        a.Text,
-		Questions:   qs,
-		AskedAt:     timestamp(a.AskedAt),
-		Answer:      a.Answer,
-		AnsweredBy:  source(a.By),
-		AnsweredAt:  timestamp(a.AnsweredAt),
-		DeliveredAt: timestamp(a.DeliveredAt),
-		Labels:      Labels(a),
-	}})
+	record(a, ledger.AskRaised, &ledger.AskRaisedPayload{Ask: Message(a)})
 }
 
 func recordAnswered(a Ask) {
 	record(a, ledger.AskAnswered, &ledger.AskAnsweredPayload{
 		Id:         a.Key(),
 		Answer:     a.Answer,
-		AnsweredBy: source(a.By),
+		AnsweredBy: Source(a.By),
 		Delivered:  !a.DeliveredAt.IsZero(),
 	})
 }
 
-// timestamp is t as the payload stores it, nil for a time not reached yet.
-func timestamp(t time.Time) *timestamppb.Timestamp {
-	if t.IsZero() {
-		return nil
+// Message is an inbox ask as agents.v1 carries it, for the API and the
+// ledger alike: what f10 adds (the task, its project and drive) goes in the
+// labels, so the core grows no task field.
+//
+//nolint:lostfield // f10's fields go in Labels; TakenAt is drive bookkeeping, and the inbox records no workspace
+func Message(a Ask) *agentsv1.Ask {
+	out := &agentsv1.Ask{
+		Id:         a.Key(),
+		Agent:      agentctl.AgentName(a.Task, a.Suffix, a.Worktree),
+		Text:       a.Text,
+		AskedAt:    timestamppb.New(a.AskedAt),
+		Answer:     a.Answer,
+		AnsweredBy: Source(a.By),
+		Labels:     Labels(a),
 	}
 
-	return timestamppb.New(t)
+	for _, q := range a.Questions {
+		out.Questions = append(out.Questions, &agentsv1.Question{
+			N:       int32(q.N), //nolint:gosec // a question number
+			Text:    q.Text,
+			Options: q.Options,
+		})
+	}
+
+	if !a.AnsweredAt.IsZero() {
+		out.AnsweredAt = timestamppb.New(a.AnsweredAt)
+	}
+
+	if !a.DeliveredAt.IsZero() {
+		out.DeliveredAt = timestamppb.New(a.DeliveredAt)
+	}
+
+	return out
 }
 
 func record(a Ask, kind string, payload any) {
@@ -66,14 +73,24 @@ func record(a Ask, kind string, payload any) {
 	ledger.Record(e)
 }
 
-// source is a way in as the agents.v1 AnswerSource enum names it,
-// unspecified while the ask waits.
-func source(by string) agentsv1.AnswerSource {
-	if by == "" {
-		return agentsv1.AnswerSource_ANSWER_SOURCE_UNSPECIFIED
+// Source is the way in an answer came by, as agents.v1 names it.
+func Source(by string) agentsv1.AnswerSource {
+	switch by {
+	case ByPane:
+		return agentsv1.AnswerSource_ANSWER_SOURCE_PANE
+	case ByAsks:
+		return agentsv1.AnswerSource_ANSWER_SOURCE_ASKS
+	case BySkill:
+		return agentsv1.AnswerSource_ANSWER_SOURCE_SKILL
+	case ByDrive:
+		return agentsv1.AnswerSource_ANSWER_SOURCE_DRIVE
+	case ByCancelled:
+		return agentsv1.AnswerSource_ANSWER_SOURCE_CANCELLED
+	case ByAPI:
+		return agentsv1.AnswerSource_ANSWER_SOURCE_API
 	}
 
-	return agentsv1.AnswerSource(agentsv1.AnswerSource_value["ANSWER_SOURCE_"+strings.ToUpper(by)])
+	return agentsv1.AnswerSource_ANSWER_SOURCE_UNSPECIFIED
 }
 
 // Labels are what f10 adds to an ask, kept out of the generic ask's fields.
