@@ -154,7 +154,9 @@ func cleanup(ctx context.Context, w io.Writer, in FinishInput, d finishDecision,
 	case noWorktree:
 		in.step("deleting " + d.name)
 
-		_ = errs.check("deleting branch "+d.name, gitx.DeleteBranch(ctx, in.Main, d.name))
+		err := gitx.DeleteBranch(ctx, in.Main, d.name)
+		_ = errs.check("deleting branch "+d.name, err)
+		errs.deleted = err == nil
 
 		finishRecords(w, in, d.name)
 		in.sweepNow(ctx)
