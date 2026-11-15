@@ -1072,7 +1072,7 @@ Your own PR is also reported when its only activity in the period is a force-pus
 The ledger (`~/.f10/f10.db`, [ledger.md](ledger.md)) adds the work that leaves no commit, and what each task waits on.
 It is read once per repository: the project's sessions active in the period, by the scoped read.
 
-- **Whose work**: a row counts when it was recorded in one of the repository's checkouts (the main checkout or a worktree of it), in the worktree `f10 start` makes for the row's branch (still matched after `f10 finish` removed it), or on a task your commits or PRs already name.
+- **Whose work**: a row counts when it was recorded in one of the repository's checkouts (the main checkout or a worktree of it), or in the worktree `f10 start` makes for the row's branch (still matched after `f10 finish` removed it). A row no checkout recorded counts when its task is one your commits or PRs already name.
   A drive counts, because its agents run in your worktrees; a teammate's clone elsewhere on the machine does not.
 - **Period**: a row counts by its time, in the same period as commits, so `--since`, `--week` and the stored standup apply unchanged.
   A task with ledger rows in the period but no commit or PR is reported too, its state `started`.
@@ -1169,7 +1169,7 @@ A breaking change bumps `schema`.
 | `tasks[].stage` | where the run left the task, in words: `planned, not started`, `planning`, `review round 2`, `waiting on CI`, `waiting on <base>`, `shipping: <step>`; absent when the run has nothing `state` lacks, as after a finished ship. `state` keeps its values, because the carry-over and the classes read them |
 | `tasks[].driven` | the newest drive that lists the task and ran in the period; absent when none |
 | `tasks[].active_minutes` | the task's active minutes in the period, counted as `f10 stats` counts them, waits on you left out; always present. The `/f10:standup` skill renders it only when your `standup.md` asks for it |
-| `drives` | each drive active in the period (created in it, or not through yet), with its task count, the tasks shipped and the tasks that ended needing you |
+| `drives` | each drive that ran in the period (created in it, or with a task your ledger rows show active in it), with its task count, the tasks shipped and the tasks that ended needing you |
 | `ledger` | present when a ledger exists: `scope` is always `this machine only`, and `contributed` says whether the ledger added anything to the report |
 
 ## Board

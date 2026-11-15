@@ -18,7 +18,7 @@ type Facts struct {
 	Categories       map[string]Count `json:"categories,omitempty"`
 	Superseded       int              `json:"plans_superseded"`
 	Halts            int              `json:"halts"`
-	HaltReasons      []string         `json:"halt_reasons,omitempty"`
+	HaltReasons      []string         `json:"halt_reasons,omitempty"` // one per halt, "" where none was given
 	Verdicts         []string         `json:"judge_verdicts,omitempty"`
 	// Regressions are the bug tasks traced to this one, Classes their
 	// review-miss classes in the same order
@@ -84,9 +84,7 @@ func TaskFacts(events []ledger.Event, tasks []string, since time.Time) map[strin
 			f.Superseded++
 		case ledger.TaskHalted:
 			f.Halts++
-			if r := firstLine(e.Reason()); r != "" {
-				f.HaltReasons = append(f.HaltReasons, r)
-			}
+			f.HaltReasons = append(f.HaltReasons, firstLine(e.Reason())) // "" for none, one per halt
 		case ledger.JudgeVerdict:
 			if p, ok := decode[ledger.JudgeVerdictPayload](e); ok && p.Verdict != "" {
 				k := key + "\x00" + p.Path

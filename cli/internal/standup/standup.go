@@ -340,10 +340,10 @@ func Group(in Input) Report {
 		byUpper[strings.ToUpper(id)] = t
 	}
 
-	addLedger(in.Ledger, byUpper, since, task)
+	active := addLedger(in.Ledger, byUpper, since, task)
 
 	if in.Ledger != nil {
-		rep.Drives = DriveSummaries(in.Repo, in.Ledger.Drives, since)
+		rep.Drives = DriveSummaries(in.Repo, in.Ledger.Drives, since, in.Ledger.Until, active)
 	}
 
 	for _, t := range tasks {

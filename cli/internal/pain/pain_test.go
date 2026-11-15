@@ -127,3 +127,14 @@ func TestNoLedgerNoPain(t *testing.T) {
 		t.Errorf("lines = %q", got)
 	}
 }
+
+// A halt with no reason keeps its place, so later reasons stay on their halts.
+func TestHaltWithoutReasonKeepsItsPlace(t *testing.T) {
+	in := fixture()
+	in.Events = append(in.Events, halt("FT-3", ""), halt("FT-3", "red verify"))
+
+	line := Build(in).Areas[0].Line
+	if !strings.Contains(line, "FT-3: no reason recorded; FT-3: red verify") {
+		t.Errorf("halts out of order: %q", line)
+	}
+}

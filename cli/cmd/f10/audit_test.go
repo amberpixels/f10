@@ -117,16 +117,37 @@ func TestAuditMapListsTheCostlyArea(t *testing.T) {
 	}
 }
 
+// A project's old regression row is not ledger history for this range.
 func TestAuditMapWithNoLedger(t *testing.T) {
 	repo := testkit.TracedRepo(t, "main", "")
 	t.Setenv(ledger.PathEnv, filepath.Join(t.TempDir(), "f10.db"))
+
+	ctx := t.Context()
+	e := testkit.StatEvent(time.Now().Add(-time.Hour), "s-old", "XX-1", ledger.RegressionFound,
+		ledger.RegressionFoundPayload{OriginTask: "XX-0", Repro: "full"})
+	e.ID, e.Project = "e1", ledger.Where(ctx, repo).Project
+
+	l, err := ledger.Open(ctx, ledger.Path(), time.Second, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	l.Append(ctx, e)
+	_ = l.Close()
+
+	if err := os.WriteFile(filepath.Join(repo, "a.go"), []byte("x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	testkit.Git(t, repo, "add", "a.go")
+	testkit.Git(t, repo, "commit", "-q", "-m", "work\n\nTask: XX-5")
 
 	out, err := runApp(t, "-C", repo, "audit", "map", "all").outErr()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if !strings.Contains(out, "pain map\n  No ledger history for this range.") {
+	if !strings.Contains(out, "XX-5") || !strings.Contains(out, "pain map\n  No ledger history for this range.") {
 		t.Errorf("no ledger:\n%s", out)
 	}
 }

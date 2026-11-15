@@ -88,7 +88,8 @@ type LedgerNote struct {
 
 // owned is the person's rows: from one of their checkouts, from the
 // worktree f10 start made for the row's branch (gone once the task
-// finished, its rows still naming it), or on a task their git names.
+// finished, its rows still naming it), or, for a row no checkout recorded,
+// on a task their git names. Another clone's rows never count.
 func (l *Ledger) owned(tasks map[string]*Task) []ledger.Event {
 	var out []ledger.Event
 
@@ -97,7 +98,7 @@ func (l *Ledger) owned(tasks map[string]*Task) []ledger.Event {
 		case e.Checkout != "" && slices.Contains(l.Checkouts, e.Checkout):
 		case e.Checkout != "" && e.Branch != "" && l.WorktreeOf != nil &&
 			filepath.Clean(e.Checkout) == filepath.Clean(l.WorktreeOf(e.Branch)):
-		case e.Task != "" && tasks[strings.ToUpper(e.Task)] != nil:
+		case e.Checkout == "" && e.Task != "" && tasks[strings.ToUpper(e.Task)] != nil:
 		default:
 			continue
 		}
@@ -122,9 +123,9 @@ func marksTask(kind string) bool {
 
 // addLedger folds the person's rows into the tasks, adding the tasks the
 // ledger alone saw in the period. git's tasks come in keyed by upper-cased id.
-func addLedger(l *Ledger, tasks map[string]*Task, since time.Time, task func(string) *Task) {
+func addLedger(l *Ledger, tasks map[string]*Task, since time.Time, task func(string) *Task) map[string]bool {
 	if l == nil {
-		return
+		return nil
 	}
 
 	events := l.owned(tasks)
@@ -146,6 +147,13 @@ func addLedger(l *Ledger, tasks map[string]*Task, since time.Time, task func(str
 	}
 
 	minutes := activeMinutes(events, since, l.Until)
+	active := map[string]bool{} // the tasks with a row of the person's in the period
+
+	for key, evs := range byTask {
+		if slices.ContainsFunc(evs, func(e ledger.Event) bool { return inWindow(e.At, since, l.Until) }) {
+			active[key] = true
+		}
+	}
 
 	for _, key := range order {
 		evs := byTask[key]
@@ -166,12 +174,14 @@ func addLedger(l *Ledger, tasks map[string]*Task, since time.Time, task func(str
 		t.Blocked = blocked(evs, l.Until)
 		t.Activity = activity(evs, since, l.Until)
 		t.Stage = stage(evs, l.Until)
-		t.Driven = driven(l.Drives, t.ID, since)
+		t.Driven = driven(l.Drives, t.ID, since, l.Until, active)
 	}
 
 	for key, t := range tasks {
 		t.ActiveMinutes = int(math.Round(minutes[key]))
 	}
+
+	return active
 }
 
 // lastClaim is the task's newest state row before until.
@@ -268,13 +278,46 @@ func activity(evs []ledger.Event, since, until time.Time) []Activity {
 	}
 
 	type round struct {
+		name     string
 		at       time.Time
+		inPeriod bool
 		verdicts map[string]string // finding: newest verdict
 	}
 
+	// a follow-up PR's series restarts at round 1, so a round is its number
+	// with the reviewed sha of its latest opening, as history.TaskFacts keys it
 	rounds := map[string]*round{}
+	opened := map[string]string{} // round: the reviewed sha of its latest opening
 
 	var roundOrder []string
+
+	roundOf := func(name, series string, at time.Time) *round {
+		key := name + "\x00" + series
+		if rounds[key] == nil {
+			rounds[key] = &round{name: name, at: at, verdicts: map[string]string{}}
+			roundOrder = append(roundOrder, key)
+		}
+
+		r := rounds[key]
+		r.inPeriod = r.inPeriod || inWindow(at, since, until)
+
+		return r
+	}
+
+	for _, e := range evs {
+		switch e.Kind {
+		case ledger.ReviewRoundOpened:
+			if p, err := ledger.Decode[ledger.ReviewRoundOpenedPayload](e); err == nil && p.Round != "" {
+				opened[p.Round] = p.Reviewed
+				roundOf(p.Round, p.Reviewed, e.At)
+			}
+		case ledger.FindingVerdict:
+			if p, err := ledger.Decode[ledger.FindingVerdictPayload](e); err == nil {
+				word, _, _ := strings.Cut(strings.ToLower(p.Verdict), " ")
+				roundOf(p.Round, opened[p.Round], e.At).verdicts[p.Finding] = word
+			}
+		}
+	}
 
 	debugAt := time.Time{}
 	outcome := ""
@@ -291,25 +334,6 @@ func activity(evs []ledger.Event, since, until time.Time) []Activity {
 			add(e.At, ActivityPlan, "plan superseded")
 		case ledger.SpikeSaved:
 			add(e.At, ActivitySpike, "spike report saved")
-		case ledger.ReviewRoundOpened:
-			if p, err := ledger.Decode[ledger.ReviewRoundOpenedPayload](e); err == nil && p.Round != "" {
-				if rounds[p.Round] == nil {
-					rounds[p.Round] = &round{at: e.At, verdicts: map[string]string{}}
-					roundOrder = append(roundOrder, p.Round)
-				}
-			}
-		case ledger.FindingVerdict:
-			if p, err := ledger.Decode[ledger.FindingVerdictPayload](e); err == nil {
-				r := rounds[p.Round]
-				if r == nil {
-					r = &round{at: e.At, verdicts: map[string]string{}}
-					rounds[p.Round] = r
-					roundOrder = append(roundOrder, p.Round)
-				}
-
-				word, _, _ := strings.Cut(strings.ToLower(p.Verdict), " ")
-				r.verdicts[p.Finding] = word
-			}
 		case ledger.JudgeVerdict:
 			if p, err := ledger.Decode[ledger.JudgeVerdictPayload](e); err == nil && p.Verdict != "" {
 				add(e.At, ActivityJudge, strings.TrimSpace("judge: "+p.Verdict+" on "+p.Subject))
@@ -338,8 +362,11 @@ func activity(evs []ledger.Event, since, until time.Time) []Activity {
 		add(debugAt, ActivityDebug, "debug: "+cmp.Or(outcome, "run"))
 	}
 
-	for _, name := range roundOrder {
-		r := rounds[name]
+	for _, key := range roundOrder {
+		r := rounds[key]
+		if !r.inPeriod {
+			continue
+		}
 
 		var fixed, skipped int
 
@@ -352,9 +379,9 @@ func activity(evs []ledger.Event, since, until time.Time) []Activity {
 			}
 		}
 
-		text := "round " + name + " opened"
+		text := "round " + r.name + " opened"
 		if fixed+skipped > 0 {
-			text = fmt.Sprintf("round %s: %d fixed, %d skipped", name, fixed, skipped)
+			text = fmt.Sprintf("round %s: %d fixed, %d skipped", r.name, fixed, skipped)
 		}
 
 		add(r.at, ActivityReview, text)
@@ -402,7 +429,7 @@ func reviewRounds(evs []ledger.Event) int {
 	for _, e := range evs {
 		if e.Kind == ledger.ReviewRoundOpened {
 			if p, err := ledger.Decode[ledger.ReviewRoundOpenedPayload](e); err == nil && p.Round != "" {
-				rounds[p.Round] = true
+				rounds[p.Round+"\x00"+p.Reviewed] = true // a follow-up PR's round 1 is a round of its own
 			}
 		}
 	}
@@ -410,35 +437,37 @@ func reviewRounds(evs []ledger.Event) int {
 	return len(rounds)
 }
 
-// driven is the newest drive that lists the task and ran in the period: one
-// created in it, or one still holding the task.
-func driven(drives []*drivestore.Record, id string, since time.Time) int {
+// driven is the newest drive that lists the task and ran in the period.
+func driven(drives []*drivestore.Record, id string, since, until time.Time, active map[string]bool) int {
 	n := 0
 
 	for _, r := range drives {
-		t := r.Task(id)
-		if t == nil {
-			continue
+		if r.Task(id) != nil && r.Number > n && ranIn(r, since, until, active) {
+			n = r.Number
 		}
-
-		if (r.Created.Before(since) && t.Phase == drivestore.PhaseEnded) || r.Number < n {
-			continue
-		}
-
-		n = r.Number
 	}
 
 	return n
 }
 
-// DriveSummaries is each drive active in the period: created in it, or not
-// yet through and not cancelled before it.
-func DriveSummaries(repo string, drives []*drivestore.Record, since time.Time) []Drive {
+// ranIn reports a drive created in the period, or one with a task the
+// ledger saw active in it. The record keeps no time a task ended, so its
+// final shape alone cannot tell an overnight finish from a drive left for
+// weeks with a task that needs the person.
+func ranIn(r *drivestore.Record, since, until time.Time, active map[string]bool) bool {
+	if inWindow(r.Created, since, until) {
+		return true
+	}
+
+	return slices.ContainsFunc(r.Tasks, func(t drivestore.Task) bool { return active[strings.ToUpper(t.ID)] })
+}
+
+// DriveSummaries is each drive that ran in the period, by its outcome so far.
+func DriveSummaries(repo string, drives []*drivestore.Record, since, until time.Time, active map[string]bool) []Drive {
 	out := []Drive{}
 
 	for _, r := range drives {
-		live := !r.Done() && (r.Cancelled == nil || !r.Cancelled.Before(since))
-		if r.Created.Before(since) && !live {
+		if !ranIn(r, since, until, active) {
 			continue
 		}
 

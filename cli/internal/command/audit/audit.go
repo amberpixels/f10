@@ -109,7 +109,7 @@ func runMap(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
-	m.Ledger = len(events) > 0
+	m.Ledger = slices.ContainsFunc(events, func(e ledger.Event) bool { return onTasks(e, m.Tasks) })
 	m.Pain = pain.Build(pain.Input{Areas: areaTasks(m.Tasks), Events: events, Since: oldest(commits)})
 
 	if cmd.Bool("json") {
@@ -144,7 +144,8 @@ const (
 func Commits(ctx context.Context, dir, prefix, rng string) ([]Commit, error) {
 	args := []string{
 		"log", "--no-renames", "--no-merges", "--numstat",
-		"--format=" + recordSep + "%H" + fieldSep + "%aI" + fieldSep + "%(trailers:only,unfold)" + fieldSep,
+		"--format=" + recordSep + "%H" + fieldSep + "%aI" + fieldSep + "%s" + fieldSep +
+			"%(trailers:only,unfold)" + fieldSep,
 	}
 
 	if rng == "all" {
@@ -158,18 +159,31 @@ func Commits(ctx context.Context, dir, prefix, rng string) ([]Commit, error) {
 		return nil, fmt.Errorf("audit map: %w", err)
 	}
 
+	// one rev-list tells which commits the default branch holds: those need
+	// only their subject, the branch lookup being CommitTask's for the rest
+	onDefault := map[string]bool{}
+	if shas, err := gitx.Exec(ctx, dir, "rev-list", regression.DefaultRef(ctx, dir), "--"); err == nil {
+		for sha := range strings.FieldsSeq(shas) {
+			onDefault[sha] = true
+		}
+	}
+
 	var commits []Commit
 
 	for rec := range strings.SplitSeq(out, recordSep) {
-		fields := strings.SplitN(rec, fieldSep, 4)
-		if len(fields) < 4 {
+		fields := strings.SplitN(rec, fieldSep, 5)
+		if len(fields) < 5 {
 			continue
 		}
 
-		c := Commit{SHA: strings.TrimSpace(fields[0]), Task: history.TrailerTask(fields[2]), Files: numstat(fields[3])}
+		c := Commit{SHA: strings.TrimSpace(fields[0]), Task: history.TrailerTask(fields[3]), Files: numstat(fields[4])}
 		c.At, _ = time.Parse(time.RFC3339, strings.TrimSpace(fields[1]))
 
-		if c.Task == "" {
+		switch {
+		case c.Task != "":
+		case onDefault[c.SHA]:
+			c.Task = regression.SubjectTask(prefix, fields[2])
+		default:
 			if c.Task, err = regression.CommitTask(ctx, dir, prefix, c.SHA); err != nil {
 				return nil, err
 			}
@@ -287,6 +301,19 @@ func areaTasks(tasks []Task) []pain.AreaTasks {
 	}
 
 	return out
+}
+
+// onTasks reports a row of one of the range's tasks; a regression_found row
+// is the bug's, so it counts only through its origin.
+func onTasks(e ledger.Event, tasks []Task) bool {
+	id := e.Task
+
+	if e.Kind == ledger.RegressionFound {
+		p, _ := ledger.Decode[ledger.RegressionFoundPayload](e)
+		id = p.OriginTask
+	}
+
+	return slices.ContainsFunc(tasks, func(t Task) bool { return strings.EqualFold(t.ID, id) })
 }
 
 // oldest is the range's first commit time: regressions found since count.

@@ -154,7 +154,7 @@ func area(a AreaTasks, facts map[string]*history.Facts, p Figures) (Area, bool) 
 
 		for i := range f.Halts {
 			reason := "no reason recorded"
-			if i < len(f.HaltReasons) {
+			if i < len(f.HaltReasons) && f.HaltReasons[i] != "" {
 				reason = f.HaltReasons[i]
 			}
 

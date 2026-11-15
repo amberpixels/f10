@@ -3,6 +3,7 @@ package standup
 import (
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/ledger"
@@ -175,5 +176,65 @@ func TestNoLedgerContributesNothing(t *testing.T) {
 	r := Group(input([]Commit{commit("a1", "FT-1/x", "work", 1)}, nil))
 	if Contributed(Merge(since, "", []Report{r})) || r.Tasks[0].ActiveMinutes != 0 {
 		t.Errorf("no ledger contributed: %+v", r.Tasks[0])
+	}
+}
+
+// A drive from before the period counts only through a task active in it:
+// a needs-you task left for weeks drops out, an overnight finish stays.
+func TestOldDrivesCountByActivity(t *testing.T) {
+	old := since.Add(-30 * 24 * time.Hour)
+	stale := &drivestore.Record{Number: 3, Created: old, Tasks: []drivestore.Task{
+		{ID: "FT-20", Phase: drivestore.PhaseEnded, Outcome: &drivestore.Outcome{Code: 4}},
+	}}
+	overnight := &drivestore.Record{Number: 4, Created: old, Tasks: []drivestore.Task{
+		{ID: "FT-21", Phase: drivestore.PhaseEnded, Outcome: &drivestore.Outcome{Code: 0}},
+	}}
+
+	in := withLedger(input(nil, nil), row(2, "FT-21", ledger.PlanSaved, ledger.PlanSavedPayload{Task: "FT-21"}))
+	in.Ledger.Drives = []*drivestore.Record{stale, overnight}
+
+	r := Group(in)
+	if want := []Drive{{Number: 4, Tasks: 1, Shipped: 1}}; !slices.Equal(r.Drives, want) {
+		t.Errorf("drives = %+v, want drive 4 alone", r.Drives)
+	}
+
+	if task := taskByID(t, r, "FT-21"); task.Driven != 4 {
+		t.Errorf("driven = %d, want 4", task.Driven)
+	}
+}
+
+// Another clone's rows stay out even on a task the person's git names.
+func TestAnotherCloneOnTheSameTask(t *testing.T) {
+	theirs := row(2, "FT-22", ledger.ReviewRoundOpened, ledger.ReviewRoundOpenedPayload{Round: "1"})
+	theirs.Checkout = "/home/other/repo"
+
+	task := taskByID(t, Group(withLedger(input([]Commit{commit("a1", "FT-22/x", "work", 1)}, nil), theirs)), "FT-22")
+	if len(task.Activity) != 0 {
+		t.Errorf("activity = %+v, want none from another clone", task.Activity)
+	}
+}
+
+// A follow-up PR's round 1 is a round of its own, not the first PR's.
+func TestFollowUpRoundIsItsOwn(t *testing.T) {
+	opened := func(h int, sha string) ledger.Event {
+		return row(h, "FT-23", ledger.ReviewRoundOpened, ledger.ReviewRoundOpenedPayload{Round: "1", Reviewed: sha})
+	}
+	verdict := func(h int, finding, word string) ledger.Event {
+		return row(
+			h,
+			"FT-23",
+			ledger.FindingVerdict,
+			ledger.FindingVerdictPayload{Round: "1", Finding: finding, Verdict: word},
+		)
+	}
+
+	in := withLedger(input(nil, nil),
+		opened(2, "aaa"), verdict(2, "1.1", "fix"), verdict(2, "1.2", "fix"),
+		opened(5, "bbb"), verdict(5, "1.1", "skip"),
+	)
+
+	want := []string{"review: round 1: 2 fixed, 0 skipped", "review: round 1: 0 fixed, 1 skipped"}
+	if got := kinds(taskByID(t, Group(in), "FT-23").Activity); !slices.Equal(got, want) {
+		t.Errorf("activity = %q, want %q", got, want)
 	}
 }
