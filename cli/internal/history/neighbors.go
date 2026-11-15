@@ -130,7 +130,7 @@ func commitsSince(ctx context.Context, dir string, paths []string, since time.Ti
 		added, files := addedLines(numstat)
 		commits = append(
 			commits,
-			commit{sha: strings.TrimSpace(sha), task: trailerTask(trailers), added: added, files: files},
+			commit{sha: strings.TrimSpace(sha), task: TrailerTask(trailers), added: added, files: files},
 		)
 	}
 
@@ -139,8 +139,8 @@ func commitsSince(ctx context.Context, dir string, paths []string, since time.Ti
 
 var changeRe = regexp.MustCompile(`(?im)^change:\s*(\S+)`)
 
-// trailerTask is a bundle's lead from Task:, else the id a Change: names.
-func trailerTask(trailers string) string {
+// TrailerTask is a bundle's lead from Task:, else the id a Change: names.
+func TrailerTask(trailers string) string {
 	if tasks := trace.Parse(trailers).Tasks; len(tasks) > 0 {
 		return tasks[0]
 	}

@@ -196,24 +196,31 @@ func CommitTask(ctx context.Context, dir, prefix, sha string) (string, error) {
 		return id, nil
 	}
 
-	subject := gitx.Out(ctx, dir, "show", "-s", "--format=%s", sha, "--")
-	if word, _, _ := strings.Cut(subject, " "); match(word) != "" {
-		return match(word), nil
+	return SubjectTask(prefix, gitx.Out(ctx, dir, "show", "-s", "--format=%s", sha, "--")), nil
+}
+
+// SubjectTask is the id a commit subject opens with, "" for none: the last
+// rule CommitTask tries, for a caller that already holds the subject.
+func SubjectTask(prefix, subject string) string {
+	word, _, _ := strings.Cut(subject, " ")
+
+	return ref.Matcher(prefix)(word)
+}
+
+// DefaultRef is the ref branchTask reads the default branch as.
+func DefaultRef(ctx context.Context, dir string) string {
+	if def := gitx.Out(ctx, dir, "symbolic-ref", "--short", "refs/remotes/origin/HEAD"); def != "" {
+		return def
 	}
 
-	return "", nil
+	return "HEAD"
 }
 
 // branchTask is the task of the closest branch holding the commit, looked
 // at only while the default branch does not hold it: once merged, every
 // later branch holds it too and names nothing.
 func branchTask(ctx context.Context, dir, sha string, match func(string) string) string {
-	def := gitx.Out(ctx, dir, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
-	if def == "" {
-		def = "HEAD"
-	}
-
-	if on, _ := gitx.IsAncestor(ctx, dir, sha, def); on {
+	if on, _ := gitx.IsAncestor(ctx, dir, sha, DefaultRef(ctx, dir)); on {
 		return ""
 	}
 

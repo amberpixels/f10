@@ -27,6 +27,7 @@ var machineRead = map[string]string{
 	"internal/command/review/reviewround.go": `"  %s %s - %s\n"`,              // a declined round, read by the review step
 	"internal/command/review/review.go":      `"%s  %s  %s\n"`,                // review pick, parsed
 	"internal/command/pr/pr.go":              `"task: %s\n"`,                  // pr view, parsed
+	"internal/command/audit/audit.go":        `"  %s  %s  %s\n"`,              // audit map's task rows, read by the audit step
 	"internal/statusview/refs.go":            `"%s: %v"`,                      // a warning on stderr
 	"internal/command/task/taskreport.go":    `"%s: %v: no subtasks to list"`, // a warning on stderr
 }

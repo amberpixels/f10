@@ -39,6 +39,7 @@ func TestObservedPayloadsMatchTheirObservations(t *testing.T) {
 		reflect.TypeFor[observe.WaitEnded]():      WaitEnded,
 		reflect.TypeFor[observe.PlanWritten]():    PlanSaved,
 		reflect.TypeFor[observe.PlanArchived]():   PlanSuperseded,
+		reflect.TypeFor[observe.SpikeWritten]():   SpikeSaved,
 	} {
 		vs := kinds[kind]
 		payload := jsonTags(vs[len(vs)-1].typ)

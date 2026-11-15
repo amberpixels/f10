@@ -16,6 +16,7 @@
 {"kind":"wait_ended","source":"observed","payload":{"by":"PostToolUse","reason":"question","tool":"AskUserQuestion"}}
 {"kind":"wait_ended","source":"observed","payload":{"by":"UserPromptSubmit","reason":"turn"}}
 {"kind":"plan_saved","source":"artifact","task":"FT-1","payload":{"path":"/p/plans/FT-1.md","task":"FT-1"}}
+{"kind":"spike_saved","source":"artifact","task":"FT-1","payload":{"path":"/p/spikes/FT-1.md","task":"FT-1"}}
 {"kind":"plan_superseded","source":"artifact","task":"FT-1","payload":{"from":"/p/plans/FT-1.md","task":"FT-1","to":"/p/plans/archive/FT-1.1.md"}}
 {"kind":"review_round_opened","source":"artifact","task":"FT-1","payload":{"categories":{"correctness":2,"style":0},"path":"/p/reviews/FT-1/2.md","reviewed":"b2","reviewer":"local","round":"2","verdict":"findings"}}
 {"kind":"finding_verdict","source":"artifact","task":"FT-1","payload":{"category":"correctness","finding":"2.1","reason":"not worth it","round":"2","title":"New one","verdict":"skip"}}

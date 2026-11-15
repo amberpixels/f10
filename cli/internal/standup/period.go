@@ -138,6 +138,10 @@ func taskTimes(t Task, since time.Time) []time.Time {
 		add(c.At)
 	}
 
+	for _, a := range t.Activity {
+		add(a.At)
+	}
+
 	return out
 }
 

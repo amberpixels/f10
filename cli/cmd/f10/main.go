@@ -18,6 +18,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/buildinfo"
 	askscmd "github.com/amberpixels/f10/cli/internal/command/asks"
 	atlascmd "github.com/amberpixels/f10/cli/internal/command/atlas"
+	auditcmd "github.com/amberpixels/f10/cli/internal/command/audit"
 	boardcmd "github.com/amberpixels/f10/cli/internal/command/board"
 	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
 	daemoncmd "github.com/amberpixels/f10/cli/internal/command/daemon"
@@ -92,6 +93,7 @@ func newApp() *cli.Command {
 			ledgercmd.Command(),
 			statscmd.Command(),
 			historycmd.Command(),
+			auditcmd.Command(),
 			lorecmd.Command(),
 			helpCommand(),
 		},

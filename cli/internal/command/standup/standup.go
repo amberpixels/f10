@@ -13,6 +13,8 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/calendar"
 	"github.com/amberpixels/f10/cli/internal/command"
+	"github.com/amberpixels/f10/cli/internal/fsx"
+	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/scope"
 	"github.com/amberpixels/f10/cli/internal/standup"
@@ -131,6 +133,10 @@ func runStandup(ctx context.Context, cmd *cli.Command) error {
 
 	rep := standup.Merge(start, period, reports)
 	standup.SetDays(&rep, time.Local)
+
+	if fsx.Exists(ledger.Path()) {
+		rep.Ledger = &standup.LedgerNote{Scope: standup.LedgerScope, Contributed: standup.Contributed(rep)}
+	}
 
 	if cmd.Bool("json") {
 		return ui.JSON(cmd.Writer, rep)

@@ -103,6 +103,14 @@ type PlanWritten struct {
 	Task string `json:"task"`
 }
 
+// SpikeWritten is a spike report saved under the storage root's spikes/.
+type SpikeWritten struct {
+	Meta
+
+	Path string `json:"path"`
+	Task string `json:"task"`
+}
+
 // FindingsWritten is a review's findings file saved under the storage root's
 // reviews/<task>/.
 type FindingsWritten struct {
@@ -130,6 +138,7 @@ func (*Pushed) Kind() string          { return "pushed" }
 func (*StepStarted) Kind() string     { return "step_started" }
 func (*Finished) Kind() string        { return "finished" }
 func (*PlanWritten) Kind() string     { return "plan_written" }
+func (*SpikeWritten) Kind() string    { return "spike_written" }
 func (*FindingsWritten) Kind() string { return "findings_written" }
 func (*VerdictWritten) Kind() string  { return "verdict_written" }
 
