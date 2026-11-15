@@ -61,6 +61,16 @@ func TestTrackAnchorToHead(t *testing.T) {
 		}
 	}
 
+	if _, err := git.Hunks(t.Context(), base, "later.go"); err != nil {
+		t.Errorf("a path neither side holds: %v", err)
+	}
+
+	r.commit("add", map[string]string{"later.go": numbered(10)})
+
+	if _, err := git.Hunks(t.Context(), base, "later.go"); !errors.Is(err, ErrNotAtCommit) {
+		t.Errorf("a file the anchor's commit lacks: %v, want ErrNotAtCommit", err)
+	}
+
 	if _, err := git.Hunks(t.Context(), base, "gone.go"); !errors.Is(err, ErrNoRecord) {
 		t.Errorf("a file deleted at HEAD: %v, want ErrNoRecord", err)
 	}

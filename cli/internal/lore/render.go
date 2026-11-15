@@ -108,32 +108,40 @@ func RenderLessons(w io.Writer, path string, lessons []Entry) error {
 }
 
 // RenderFindings writes the settled findings per path, each entry once,
-// under the first path it is anchored on, with where its lines are now.
+// under the first path it is anchored on, with where its lines are now. A
+// later path's count still includes it, so no headline denies a finding.
 func RenderFindings(w io.Writer, paths []string, settled []Settled) error {
 	shown := map[string]bool{}
 
 	for _, path := range paths {
 		var mine []Settled
 
+		all := 0
+
 		for _, s := range settled {
-			if !shown[s.Finding.ID] &&
-				slices.ContainsFunc(s.Tracked, func(t Tracked) bool { return t.Anchor.Path == path }) {
+			if !slices.ContainsFunc(s.Tracked, func(t Tracked) bool { return t.Anchor.Path == path }) {
+				continue
+			}
+
+			all++
+
+			if !shown[s.Finding.ID] {
 				shown[s.Finding.ID] = true
 
 				mine = append(mine, s)
 			}
 		}
 
-		if len(mine) == 0 {
-			if _, err := fmt.Fprintf(w, "%s  no settled findings\n", path); err != nil {
-				return err
-			}
+		head := fmt.Sprintf("%s  %d settled %s", path, all, plural(all, "finding", "findings"))
 
-			continue
+		switch {
+		case all == 0:
+			head = path + "  no settled findings"
+		case len(mine) < all:
+			head += fmt.Sprintf(", %d shown above", all-len(mine))
 		}
 
-		if _, err := fmt.Fprintf(w, "%s  %d settled %s\n", path, len(mine),
-			plural(len(mine), "finding", "findings")); err != nil {
+		if _, err := fmt.Fprintln(w, head); err != nil {
 			return err
 		}
 
@@ -155,7 +163,10 @@ func RenderFindings(w io.Writer, paths []string, settled []Settled) error {
 // nowText is where a tracked anchor's lines are at HEAD.
 func nowText(t Tracked) string {
 	if !t.Checked {
-		return "not checked, " + short(t.Anchor.Commit) + " is not in this clone"
+		at := t.Anchor
+		at.Commit = ""
+
+		return at.String() + " (not checked, " + t.Unchecked + ")"
 	}
 
 	n := max(t.Anchor.EndLine, t.Anchor.Line) - t.Anchor.Line + 1

@@ -151,7 +151,8 @@ Every verb takes `--root <dir>`.
   A `fixed` finding is left out, because the code it pointed at has changed.
   Each anchor on the paths is followed from its commit to `HEAD` through `git diff --unified=0`, and printed as a `now:` line: its lines at `HEAD`, and how many of them changed since.
   An anchor whose lines all changed, or whose file is gone at `HEAD`, is dropped, and a finding with no anchor left is not listed.
-  An anchor whose commit this clone lacks (a branch commit squashed away and pruned) is kept as written, its `now:` line saying it was not checked.
+  An anchor whose commit this clone lacks (a branch commit squashed away and pruned), or whose commit does not hold the file (an anchor written before its file was committed), is kept as written, its `now:` line giving the recorded lines and saying they were not checked.
+  A path whose findings all printed under an earlier path still counts them in its headline, as `shown above`.
   Renames are not followed, so a finding on a moved file stops showing, as a lesson does.
 - **`check`** exits 1, naming each reason, when the intent is missing, no verdict exists, the latest verdict is `rethink` or `stop`, or a `blocker` or `major` finding is still effectively `open`.
   It exits 0 otherwise.

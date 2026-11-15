@@ -34,13 +34,18 @@ type Git interface {
 	// this clone does not have is false, not an error.
 	IsAncestor(ctx context.Context, ancestor, commit string) (bool, error)
 	// Hunks is what changed in path from commit to HEAD; ErrNoRecord when
-	// HEAD has no such path, ErrNoCommit when this clone lacks the commit.
+	// HEAD has no such path, ErrNoCommit when this clone lacks the commit,
+	// ErrNotAtCommit when the commit lacks the path.
 	Hunks(ctx context.Context, commit, path string) ([]Hunk, error)
 }
 
 // ErrNoCommit is an anchor's commit this clone does not have, as a branch
 // commit squashed away and then pruned.
 var ErrNoCommit = errors.New("lore: commit not in this clone")
+
+// ErrNotAtCommit is an anchor written before its file was committed: its
+// lines are the working tree's, so no diff from the commit can map them.
+var ErrNotAtCommit = errors.New("lore: path not in the anchor's commit")
 
 // Hunk is one `@@ -old,count +new,count @@` header of a zero-context diff.
 // A count of 0 on the old side is an insertion after OldLine.
@@ -221,6 +226,10 @@ func (g CLIGit) Hunks(ctx context.Context, commit, path string) ([]Hunk, error) 
 	for line := range strings.SplitSeq(out, "\n") {
 		if strings.HasPrefix(line, "deleted file mode") {
 			return nil, ErrNoRecord
+		}
+
+		if strings.HasPrefix(line, "new file mode") {
+			return nil, ErrNotAtCommit
 		}
 
 		m := hunkHeader.FindStringSubmatch(line)

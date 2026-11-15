@@ -284,12 +284,13 @@ type Settled struct {
 }
 
 // Tracked is one anchor followed from its commit to HEAD. Now is nil when
-// the check could not run, because this clone lacks the commit.
+// the check could not run, and Unchecked then says why.
 type Tracked struct {
-	Anchor  Anchor  `json:"anchor"`
-	Now     *Anchor `json:"now,omitempty"`
-	Changed int     `json:"changed"` // anchored lines changed or deleted since
-	Checked bool    `json:"checked"`
+	Anchor    Anchor  `json:"anchor"`
+	Now       *Anchor `json:"now,omitempty"`
+	Changed   int     `json:"changed"` // anchored lines changed or deleted since
+	Checked   bool    `json:"checked"`
+	Unchecked string  `json:"unchecked,omitempty"`
 }
 
 // SettledFindings is the effective wontfix and duplicate findings anchored
@@ -339,7 +340,9 @@ func (s *Store) SettledFindings(ctx context.Context, paths []string) ([]Settled,
 
 			switch {
 			case errors.Is(d.err, ErrNoCommit):
-				kept = append(kept, Tracked{Anchor: a})
+				kept = append(kept, Tracked{Anchor: a, Unchecked: short(a.Commit) + " is not in this clone"})
+			case errors.Is(d.err, ErrNotAtCommit):
+				kept = append(kept, Tracked{Anchor: a, Unchecked: short(a.Commit) + " does not hold the file"})
 			case errors.Is(d.err, ErrNoRecord):
 			case d.err != nil:
 				return nil, d.err

@@ -539,6 +539,13 @@ func TestSettledFindings(t *testing.T) {
 	dup := settle("FT-5", "2026-10-21T09:00:00Z", "duplicate", anchorAt("a.go", 4, 8, base, ""))
 	pruned := settle("FT-6", "2026-10-22T09:00:00Z", "wontfix", anchorAt("a.go", 1, 0, "1234567", ""))
 	settle("FT-7", "2026-10-23T09:00:00Z", "wontfix", anchorAt("b.go", 1, 0, base, ""))
+	both := settle(
+		"FT-8",
+		"2026-10-19T09:00:00Z",
+		"wontfix",
+		anchorAt("a.go", 19, 0, base, ""),
+		anchorAt("b.go", 2, 0, base, ""),
+	)
 
 	got, err := s.SettledFindings(t.Context(), []string{"a.go"})
 	if err != nil {
@@ -554,11 +561,12 @@ func TestSettledFindings(t *testing.T) {
 		}
 	}
 
-	wantIDs := []string{pruned, dup, wontfix} // newest first
+	wantIDs := []string{pruned, dup, wontfix, both} // newest first
 	wantNow := []string{
-		"not checked, 1234567 is not in this clone",
+		"a.go:1 (not checked, 1234567 is not in this clone)",
 		"a.go:4-6 (2 of 5 lines changed since)",
 		"a.go:8-12 (unchanged)",
+		"a.go:17 (unchanged)",
 	}
 
 	if strings.Join(ids, " ") != strings.Join(wantIDs, " ") || strings.Join(now, "|") != strings.Join(wantNow, "|") {
@@ -566,11 +574,19 @@ func TestSettledFindings(t *testing.T) {
 	}
 
 	var b bytes.Buffer
-	if err := RenderFindings(&b, []string{"a.go", "c.go"}, got); err != nil {
+	both2, err := s.SettledFindings(t.Context(), []string{"a.go", "b.go"})
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	for _, want := range []string{"a.go  3 settled findings", "change: FT-1", "resolution: a false positive on FT-1", "c.go  no settled findings"} {
+	if err := RenderFindings(&b, []string{"a.go", "b.go", "c.go"}, both2); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, want := range []string{
+		"a.go  4 settled findings", "change: FT-1", "resolution: a false positive on FT-1",
+		"b.go  2 settled findings, 1 shown above", "c.go  no settled findings",
+	} {
 		if !strings.Contains(b.String(), want) {
 			t.Errorf("render lacks %q:\n%s", want, b.String())
 		}
