@@ -80,6 +80,7 @@ A parent with a draft candidate goes through **Parents** points 4 and 5 first, a
    - an edit from the user's own `after` override removes that override, so the body's `After:` stands.
 
    Then rerun point 3 once.
+   If the rerun's command or stages differ from the previewed proposal, ask `Drive this command?` again with the new proposal as its preview, because a taken-back edit can regroup or reorder the stages the user confirmed.
 6. **Run** `f10 drive <the command's arguments> --planned "<planning arguments>"` as **Run** below, in the background.
    The record keeps the planning arguments, so `/f10:drive <planning arguments> --plan` follows this drive (point 1).
 

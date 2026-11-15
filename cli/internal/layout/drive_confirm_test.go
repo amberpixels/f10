@@ -22,7 +22,7 @@ func TestDriveConfirmCarriesProposal(t *testing.T) {
 		}
 	}
 
-	if !strings.Contains(point5, "preview") {
+	if !strings.Contains(point5, "each option carrying the proposal as its `preview`") {
 		t.Errorf("Plan point 5 asks `Drive this command?` without the proposal as its preview:\n%s", point5)
 	}
 }
