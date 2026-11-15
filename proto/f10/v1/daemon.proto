@@ -63,9 +63,21 @@ message WatchedProject {
 
 message GetDaemonStatusRequest {}
 
+// A RemoteListener is the daemon's listener on the tailnet.
+message RemoteListener {
+  // enabled is the user's setting: f10 remote on.
+  bool enabled = 1;
+  // addr is the address bound, such as 100.101.102.103:7410; empty when
+  // none is.
+  string addr = 2;
+  // reason says why none is bound, when the setting is on or unreadable.
+  string reason = 3;
+}
+
 message GetDaemonStatusResponse {
   repeated SupervisedDrive drives = 1;
   repeated WatchedProject watches = 2;
+  RemoteListener remote = 3;
 }
 
 message StopDaemonRequest {

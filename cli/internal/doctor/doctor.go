@@ -48,6 +48,8 @@ type Env struct {
 	Driver      *trackerdriver.Driver // the project's tracker driver; nil when it has none
 	NeedsDriver bool                  // the tracker reads only through a driver, as Notion or Jira does
 
+	Remote *RemoteState // the tailnet listener and the service; nil reads as both off
+
 	Getenv   func(string) string
 	LookPath func(string) (string, error)
 	Run      func(ctx context.Context, dir, name string, args ...string) (shell.Result, error)
@@ -65,6 +67,7 @@ func Run(ctx context.Context, env *Env) []Result {
 		checkHooks(env, p, in, reason, set),
 		checkStatusline(env, set),
 		checkHerdr(env),
+		checkRemote(env),
 		checkHost(ctx, env),
 	}
 

@@ -21,6 +21,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/drive"
 	"github.com/amberpixels/f10/cli/internal/drivectl"
+	"github.com/amberpixels/f10/cli/internal/remote"
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/target"
 )
@@ -30,8 +31,15 @@ func Command() *cli.Command {
 		Name:  "daemon",
 		Usage: "the per-user process that runs drives and watches started tasks; f10 drive and f10 start start it when needed",
 		Description: "Bare, it serves in the foreground: what f10 drive starts, detached. " +
-			"It exits after ten minutes with no drive, no watched project and no call. A client of a newer release " +
-			"replaces it: each drive stops at its next tick and the new daemon resumes it.",
+			"It exits after ten minutes with no drive, no watched project and no call, unless f10 remote on " +
+			"turned the tailnet listener on or it runs as the service f10 remote install set up. A client of a " +
+			"newer release replaces it: each drive stops at its next tick and the new daemon resumes it.",
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:  "service",
+				Usage: "run as the launchd or systemd service: never idle out, and stand by while another daemon runs",
+			},
+		},
 		Action: runDaemon,
 		Commands: []*cli.Command{
 			{
@@ -62,12 +70,21 @@ func runDaemon(ctx context.Context, cmd *cli.Command) error {
 	ctx, stop := signal.NotifyContext(ctx, syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
+	logger := log.New(cmd.ErrWriter, "", log.LstdFlags)
+
 	s := &daemon.Server{
 		Dir:     daemon.RunDir(),
 		Version: buildinfo.Version(),
-		Log:     log.New(cmd.ErrWriter, "", log.LstdFlags),
+		Log:     logger,
 		Handler: func(s *daemon.Server) http.Handler { return api.Handler(s) },
 		Key:     drive.RecordKey,
+		Service: cmd.Bool("service"),
+	}
+
+	if dir, err := remote.Dir(); err == nil {
+		s.Remote = &remote.Listener{Dir: dir}
+	} else {
+		logger.Printf("no tailnet listener: %v", err)
 	}
 
 	// the handlers' Herdr calls run under the newest local session, since the

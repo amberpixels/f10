@@ -30,6 +30,8 @@ type Server struct {
 	Log                   *log.Logger
 	Handler               func(s *Server) http.Handler
 	Key                   func(argv []string) string
+	Remote                RemoteListener
+	Service               bool
 }
 
 // Serve refuses: there is no daemon on this platform.

@@ -24,6 +24,7 @@ const (
 	CheckHooks      = "hooks"
 	CheckStatusline = "statusline"
 	CheckHerdr      = "herdr"
+	CheckRemote     = "remote"
 	CheckHost       = "host"
 	CheckDriver     = "driver"
 	CheckProject    = "project"
