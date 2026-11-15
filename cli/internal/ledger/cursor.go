@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"slices"
 	"strconv"
-	"strings"
 )
 
 // A Placed event is a row with its cursor: its place in insertion order,
@@ -126,45 +126,33 @@ func (t *Tail) ledger(ctx context.Context) (*Ledger, error) {
 	return l, nil
 }
 
-// afterQuery reads rowids, which SQLite assigns in insertion order and the
-// ledger never deletes, so a cursor stays valid.
-func afterQuery(n Narrow) (string, []any) {
-	var (
-		q    strings.Builder
-		args = []any{}
-	)
+// rowsAfter reads the rowid range alone, on the rowid key, so an idle poll
+// costs only the rows inserted since; Narrow is applied in Go, because the
+// project and kind indexes would make SQLite scan every matching row ever
+// written. Rowids follow insertion order and the ledger never deletes, so a
+// cursor stays valid.
+const rowsAfter = `SELECT rowid, id, project, task, kind FROM events WHERE rowid > ? ORDER BY rowid LIMIT ?`
 
-	q.WriteString("SELECT rowid, id, project FROM events WHERE rowid > ?")
-
-	if n.Project != "" {
-		q.WriteString(" AND (project = ? OR project = '')")
-		args = append(args, n.Project)
+// takes reports whether a row's columns pass n, and whether it is an orphan:
+// a row with no project under a project filter, which Orphan decides.
+func (n Narrow) takes(project, task, kind string) (bool, bool) {
+	if n.Task != "" && task != n.Task {
+		return false, false
 	}
 
-	if n.Task != "" {
-		q.WriteString(" AND task = ?")
-		args = append(args, n.Task)
+	if len(n.Kinds) > 0 && !slices.Contains(n.Kinds, kind) {
+		return false, false
 	}
 
-	if len(n.Kinds) > 0 {
-		q.WriteString(" AND kind IN (?")
-		q.WriteString(strings.Repeat(", ?", len(n.Kinds)-1))
-		q.WriteString(")")
-
-		for _, k := range n.Kinds {
-			args = append(args, k)
-		}
+	if n.Project == "" || project == n.Project {
+		return true, false
 	}
 
-	q.WriteString(" ORDER BY rowid LIMIT ?")
-
-	return q.String(), append(args, AfterPage)
+	return project == "" && n.Orphan != nil, project == ""
 }
 
 func (l *Ledger) after(ctx context.Context, after int64, n Narrow, page Page) (Page, error) {
-	q, args := afterQuery(n)
-
-	rows, err := l.db.QueryContext(ctx, q, append([]any{after}, args...)...)
+	rows, err := l.db.QueryContext(ctx, rowsAfter, after, AfterPage)
 	if err != nil {
 		return page, fmt.Errorf("ledger: %w", err)
 	}
@@ -179,21 +167,24 @@ func (l *Ledger) after(ctx context.Context, after int64, n Narrow, page Page) (P
 
 	for rows.Next() {
 		var (
-			rowid       int64
-			id, project string
+			rowid                   int64
+			id, project, task, kind string
 		)
 
-		if err := rows.Scan(&rowid, &id, &project); err != nil {
+		if err := rows.Scan(&rowid, &id, &project, &task, &kind); err != nil {
 			return page, fmt.Errorf("ledger: %w", err)
 		}
 
 		rowCount++
 		page.Next = strconv.FormatInt(rowid, 10)
-		ids, cursors[id] = append(ids, id), page.Next
 
-		if n.Project != "" && project == "" {
-			orphans[id] = true
+		take, orphan := n.takes(project, task, kind)
+		if !take {
+			continue
 		}
+
+		ids, cursors[id] = append(ids, id), page.Next
+		orphans[id] = orphan
 	}
 
 	if err := rows.Err(); err != nil {
@@ -218,7 +209,7 @@ func (l *Ledger) after(ctx context.Context, after int64, n Narrow, page Page) (P
 
 	for _, id := range ids {
 		e := byID[id]
-		if orphans[id] && (n.Orphan == nil || !n.Orphan(e)) {
+		if orphans[id] && !n.Orphan(e) {
 			continue
 		}
 
