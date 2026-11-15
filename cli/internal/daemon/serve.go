@@ -76,6 +76,7 @@ type Server struct {
 	http     *http.Server
 	api      http.Handler  // what both listeners serve
 	remote   *remoteServer // the tailnet listener, nil while none is bound
+	rmu      sync.Mutex    // one reconcile at a time, so a tick never undoes an off
 	remoteAt RemoteState
 	session  []string        // the newest local session's environment
 	calls    int             // calls in flight, an event stream among them

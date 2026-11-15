@@ -10,10 +10,10 @@ import (
 // A Listener is what the daemon asks of the tailnet listener: where to bind,
 // which peers to accept, and the check in front of the API.
 type Listener struct {
-	Dir   string                     // the setting's and the tokens' dir
-	Addrs func() ([]net.Addr, error) // the machine's addresses; net.InterfaceAddrs by default
-	Peer  func(netip.Addr) bool      // the peers accepted; InTailnet by default
-	store *Store
+	Dir    string                  // the setting's and the tokens' dir
+	Ifaces func() ([]Iface, error) // the machine's interfaces; Interfaces by default
+	Peer   func(netip.Addr) bool   // the peers accepted; InTailnet by default
+	store  *Store
 }
 
 // Addr is the address to bind and whether the setting is on; with no
@@ -28,12 +28,12 @@ func (l *Listener) Addr() (string, bool, string) {
 		return "", false, "off: f10 remote on"
 	}
 
-	addrs := l.Addrs
-	if addrs == nil {
-		addrs = net.InterfaceAddrs
+	ifaces := l.Ifaces
+	if ifaces == nil {
+		ifaces = Interfaces
 	}
 
-	ip, ok := TailnetAddr(addrs)
+	ip, ok := TailnetAddr(ifaces)
 	if !ok {
 		return "", true, "no Tailscale address on this machine: is Tailscale up?"
 	}

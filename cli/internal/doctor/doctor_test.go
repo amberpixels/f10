@@ -258,6 +258,14 @@ func TestChecks(t *testing.T) {
 			f.e.Remote = remoteWell()
 			f.e.Remote.ProgramMissing = true
 		}, StatusProblem, "f10 remote install"},
+		{CheckRemote, "service pinned to an older release", func(f *fixture) {
+			f.e.Remote = remoteWell()
+			f.e.Remote.ServiceProgram = "/home/me/.claude/plugins/cache/amberpixels/f10/0.30.0/bin/f10"
+		}, StatusProblem, "f10 remote install"},
+		{CheckRemote, "service pinned to this release", func(f *fixture) {
+			f.e.Remote = remoteWell()
+			f.e.Remote.ServiceProgram = "/home/me/.claude/plugins/cache/amberpixels/f10/" + f.e.Version + "/bin/f10"
+		}, StatusOK, ""},
 		{CheckRemote, "setting unreadable", func(f *fixture) {
 			f.e.Remote = &RemoteState{ConfigErr: "config.json does not read"}
 		}, StatusProblem, "f10 remote on"},

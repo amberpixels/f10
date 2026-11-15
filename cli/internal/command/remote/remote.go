@@ -127,14 +127,19 @@ func runOff(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	// a running daemon closes the listener as it answers
-	_, err = daemon.GetStatus(ctx, daemon.RunDir(), buildinfo.Version())
-	if err != nil && !errors.Is(err, daemon.ErrNotRunning) {
-		fmt.Fprintf(cmd.Writer, "the listener is off; the daemon closes it within a minute (%v)\n", err)
+	st, err := daemon.GetStatus(ctx, daemon.RunDir(), buildinfo.Version())
 
-		return nil
+	switch {
+	case errors.Is(err, daemon.ErrNotRunning):
+		fmt.Fprintln(cmd.Writer, "tailnet listener off")
+	case err != nil:
+		fmt.Fprintf(cmd.Writer,
+			"tailnet listener off; the daemon did not answer, and closes it within a minute: %v\n", err)
+	case st.Remote.Addr != "":
+		return fmt.Errorf("the setting is off, but the daemon still listens on %s: f10 daemon logs", st.Remote.Addr)
+	default:
+		fmt.Fprintln(cmd.Writer, "tailnet listener off")
 	}
-
-	fmt.Fprintln(cmd.Writer, "tailnet listener off")
 
 	return nil
 }
@@ -271,7 +276,8 @@ func runUninstall(ctx context.Context, cmd *cli.Command) error {
 		return nil
 	}
 
-	fmt.Fprintln(cmd.Writer, "service removed; the daemon running now exits once idle")
+	fmt.Fprintln(cmd.Writer,
+		"service removed: the daemon stopped each drive at its next tick; f10 drive --resume <n> goes on with one")
 
 	return nil
 }
@@ -309,8 +315,9 @@ func service() *remote.Service {
 	}
 }
 
-// program is the f10 on PATH, the plugin's shim in a session, so the service
-// follows upgrades; else this binary.
+// program is the f10 on PATH, the plugin's shim in a session, else this
+// binary. A shim under a versioned plugin directory stays on that release
+// after an upgrade, which doctor flags.
 func program() string {
 	if p, err := exec.LookPath("f10"); err == nil {
 		if abs, err := filepath.Abs(p); err == nil {

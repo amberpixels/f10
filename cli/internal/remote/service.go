@@ -234,6 +234,8 @@ var plistTmpl = template.Must(template.New("plist").Funcs(template.FuncMap{"x": 
 	<true/>
 	<key>KeepAlive</key>
 	<true/>
+	<key>ExitTimeOut</key>
+	<integer>660</integer>
 	<key>StandardOutPath</key>
 	<string>{{x .Log}}</string>
 	<key>StandardErrorPath</key>
@@ -253,6 +255,8 @@ Environment="{{q .Key}}={{q .Value}}"
 {{- end}}
 Restart=always
 RestartSec=5
+KillMode=mixed
+TimeoutStopSec=11min
 StandardOutput=append:{{.Log}}
 StandardError=append:{{.Log}}
 

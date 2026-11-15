@@ -39,12 +39,15 @@ func TestServiceFiles(t *testing.T) {
 			"<string>/Users/me/Plugins &amp; Co/bin/f10</string>",
 			"<string>--service</string>",
 			"<key>KeepAlive</key>\n\t<true/>",
+			"<key>ExitTimeOut</key>\n\t<integer>660</integer>",
 			"<key>F10_RUN_DIR</key>\n\t\t<string>/tmp/run 100%</string>",
 		},
 		"linux": {
 			`ExecStart="/Users/me/Plugins & Co/bin/f10" daemon --service`,
 			`Environment="F10_RUN_DIR=/tmp/run 100%%"`,
 			"Restart=always",
+			"KillMode=mixed",
+			"TimeoutStopSec=11min",
 			"WantedBy=default.target",
 		},
 	} {

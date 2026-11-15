@@ -2,6 +2,7 @@ package doctor
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -22,6 +23,21 @@ type RemoteState struct {
 	ServiceInstalled bool
 	ServiceProgram   string
 	ProgramMissing   bool // the program the service runs is gone
+}
+
+// releaseDir is a path segment naming a release, as a marketplace plugin's
+// versioned install directory does.
+var releaseDir = regexp.MustCompile(`/v?(\d+\.\d+\.\d+)/`)
+
+// pinnedRelease is the release a program's path pins, "" for a path that
+// names none and so follows upgrades.
+func pinnedRelease(program string) string {
+	m := releaseDir.FindAllStringSubmatch(program, -1)
+	if m == nil {
+		return ""
+	}
+
+	return m[len(m)-1][1]
 }
 
 // remoteScope is what a remote problem affects: only remote calls.
@@ -49,6 +65,9 @@ func checkRemote(env *Env) Result {
 		return problem(st.ConfigErr, "fix the file, or delete it and run f10 remote on")
 	case st.ServiceInstalled && st.ProgramMissing:
 		return problem("the service runs "+st.ServiceProgram+", which is gone", "f10 remote install")
+	case st.ServiceInstalled && older(pinnedRelease(st.ServiceProgram), env.Version):
+		return problem(fmt.Sprintf("the service runs %s, the %s release, and this f10 is %s",
+			st.ServiceProgram, pinnedRelease(st.ServiceProgram), env.Version), "f10 remote install")
 	case st.Enabled && st.Tailnet == "":
 		return problem("the listener is on, but this machine has no Tailscale address", "start Tailscale: tailscale up")
 	case st.Enabled && st.DaemonRunning && st.Bound == "":

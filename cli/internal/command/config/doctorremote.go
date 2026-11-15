@@ -3,7 +3,6 @@ package config
 import (
 	"context"
 	"errors"
-	"net"
 	"os"
 	"runtime"
 
@@ -26,7 +25,7 @@ func remoteState(ctx context.Context, home string) *doctor.RemoteState {
 		st.Enabled, st.Port = c.Enabled, c.ListenPort()
 	}
 
-	if ip, ok := remote.TailnetAddr(net.InterfaceAddrs); ok {
+	if ip, ok := remote.TailnetAddr(remote.Interfaces); ok {
 		st.Tailnet = ip.String()
 	}
 

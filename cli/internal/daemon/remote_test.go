@@ -6,6 +6,8 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"net/http/httptest"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -252,6 +254,70 @@ func TestServiceOlderThanTheUpgradeStandsBy(t *testing.T) {
 		t.Errorf("a standby ended by its context = %v, want nil", err)
 	}
 
-	same := &Server{Dir: dir, Version: "0.3.0", Child: shell, Service: true, Tick: 10 * time.Millisecond}
-	serve(t, same)
+	// past the hold, an old service serves again, so one left on an old
+	// release after a reboot still brings the listener back
+	old2 := time.Now().Add(-2 * newestHold)
+	if err := os.Chtimes(newestPath(dir), old2, old2); err != nil {
+		t.Fatal(err)
+	}
+
+	stale := &Server{Dir: dir, Version: "0.2.0", Child: shell, Service: true, Tick: 10 * time.Millisecond}
+	serve(t, stale)
+}
+
+// Only the socket passes its environment: a call over TCP, which is how
+// the tailnet reaches the daemon, gets none, so a token cannot hand a drive
+// variables such as GIT_SSH_COMMAND.
+func TestLocalEnvOnlyFromTheSocket(t *testing.T) {
+	t.Parallel()
+
+	echo := &envEcho{}
+	mux := http.NewServeMux()
+	mux.Handle(f10v1connect.NewDaemonServiceHandler(echo))
+
+	call := func(hc *http.Client, base string) string {
+		res, err := f10v1connect.NewDaemonServiceClient(hc, base).WatchProject(t.Context(),
+			connect.NewRequest(&f10v1.WatchProjectRequest{Env: []string{"GIT_SSH_COMMAND=evil"}}))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return res.Msg.GetLog()
+	}
+
+	tcp := httptest.NewServer(mux)
+	t.Cleanup(tcp.Close)
+
+	if got := call(http.DefaultClient, tcp.URL); got != "" {
+		t.Errorf("env over TCP = %q, want none", got)
+	}
+
+	dir := runDir(t)
+
+	ln, err := (&net.ListenConfig{}).Listen(t.Context(), "unix", SocketPath(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	srv := &http.Server{Handler: mux, ReadHeaderTimeout: time.Second}
+	go func() { _ = srv.Serve(ln) }()
+	t.Cleanup(func() { _ = srv.Close() })
+
+	if got := call(SocketHTTP(dir), socketURL); got != "GIT_SSH_COMMAND=evil" {
+		t.Errorf("env over the socket = %q, want it kept", got)
+	}
+}
+
+// envEcho answers WatchProject with the environment LocalEnv let through.
+type envEcho struct {
+	f10v1connect.UnimplementedDaemonServiceHandler
+}
+
+func (*envEcho) WatchProject(
+	_ context.Context,
+	req *connect.Request[f10v1.WatchProjectRequest],
+) (*connect.Response[f10v1.WatchProjectResponse], error) {
+	return connect.NewResponse(&f10v1.WatchProjectResponse{
+		Log: strings.Join(LocalEnv(req, req.Msg.GetEnv()), ","),
+	}), nil
 }

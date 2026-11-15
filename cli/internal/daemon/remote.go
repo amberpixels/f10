@@ -30,6 +30,11 @@ func (s *Server) reconcileRemote() {
 		return
 	}
 
+	// held across reading the setting and applying it: a tick that read
+	// "on" must not bind after a status call applied a newer "off"
+	s.rmu.Lock()
+	defer s.rmu.Unlock()
+
 	addr, on, why := s.Remote.Addr()
 
 	s.mu.Lock()
@@ -131,29 +136,39 @@ func (s *Server) yields() string {
 		return ""
 	}
 
-	if newest := readNewest(s.Dir); Newer(newest, s.Version) {
+	newest, at := readNewest(s.Dir)
+	if Newer(newest, s.Version) && time.Since(at) < newestHold {
 		return fmt.Sprintf("f10 %s asked for an upgrade and this is %s", newest, s.Version)
 	}
 
 	return ""
 }
 
+// newestHold is how long an upgrade keeps an older service standing by:
+// long enough for the upgrading client to start its own daemon, short
+// enough that a service left on an old release still serves after a reboot.
+const newestHold = 2 * time.Minute
+
 func newestPath(dir string) string { return filepath.Join(dir, "newest") }
 
 // writeNewest records the version of a client that drains an older daemon.
 func writeNewest(dir, version string) error {
-	if Newer(readNewest(dir), version) {
-		return nil
-	}
-
 	return os.WriteFile(newestPath(dir), []byte(version+"\n"), 0o600)
 }
 
-func readNewest(dir string) string {
-	raw, err := os.ReadFile(newestPath(dir))
+// readNewest is the version an upgrade recorded and when.
+func readNewest(dir string) (string, time.Time) {
+	path := newestPath(dir)
+
+	raw, err := os.ReadFile(path)
 	if err != nil {
-		return ""
+		return "", time.Time{}
 	}
 
-	return strings.TrimSpace(string(raw))
+	fi, err := os.Stat(path)
+	if err != nil {
+		return "", time.Time{}
+	}
+
+	return strings.TrimSpace(string(raw)), fi.ModTime()
 }

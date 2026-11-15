@@ -27,20 +27,34 @@ func cidr(t *testing.T, s string) net.Addr {
 func TestTailnetAddrPicksTheTailscaleAddress(t *testing.T) {
 	t.Parallel()
 
-	addrs := func() ([]net.Addr, error) {
-		return []net.Addr{cidr(t, "127.0.0.1/8"), cidr(t, "192.168.1.5/24"), cidr(t, "100.101.102.103/32")}, nil
+	// a carrier-grade NAT address on Wi-Fi shares Tailscale's range
+	ifaces := func() ([]Iface, error) {
+		return []Iface{
+			{Name: "lo0", Addrs: []net.Addr{cidr(t, "127.0.0.1/8")}},
+			{Name: "en0", Addrs: []net.Addr{cidr(t, "100.80.1.5/10")}},
+			{Name: "utun4", Addrs: []net.Addr{cidr(t, "fe80::1/64"), cidr(t, "100.101.102.103/32")}},
+		}, nil
 	}
 
-	if got, ok := TailnetAddr(addrs); !ok || got.String() != "100.101.102.103" {
+	if got, ok := TailnetAddr(ifaces); !ok || got.String() != "100.101.102.103" {
 		t.Errorf("TailnetAddr = %v, %v; want 100.101.102.103", got, ok)
 	}
 
-	lan := func() ([]net.Addr, error) { return []net.Addr{cidr(t, "192.168.1.5/24")}, nil }
-	if got, ok := TailnetAddr(lan); ok {
-		t.Errorf("TailnetAddr with no Tailscale = %v, want none", got)
+	cgnat := func() ([]Iface, error) {
+		return []Iface{{Name: "en0", Addrs: []net.Addr{cidr(t, "100.80.1.5/10")}}}, nil
+	}
+	if got, ok := TailnetAddr(cgnat); ok {
+		t.Errorf("TailnetAddr with only a CGNAT Wi-Fi address = %v, want none", got)
 	}
 
-	broken := func() ([]net.Addr, error) { return nil, errors.New("no") }
+	linux := func() ([]Iface, error) {
+		return []Iface{{Name: "tailscale0", Addrs: []net.Addr{cidr(t, "100.64.0.9/32")}}}, nil
+	}
+	if got, ok := TailnetAddr(linux); !ok || got.String() != "100.64.0.9" {
+		t.Errorf("TailnetAddr on tailscale0 = %v, %v; want 100.64.0.9", got, ok)
+	}
+
+	broken := func() ([]Iface, error) { return nil, errors.New("no") }
 	if _, ok := TailnetAddr(broken); ok {
 		t.Error("TailnetAddr found an address when the interfaces did not read")
 	}
@@ -88,8 +102,10 @@ func TestListenerAddrFollowsTheSetting(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
-	ts := func() ([]net.Addr, error) { return []net.Addr{cidr(t, "100.64.0.7/32")}, nil }
-	l := &Listener{Dir: dir, Addrs: ts}
+	ts := func() ([]Iface, error) {
+		return []Iface{{Name: "utun3", Addrs: []net.Addr{cidr(t, "100.64.0.7/32")}}}, nil
+	}
+	l := &Listener{Dir: dir, Ifaces: ts}
 
 	if addr, on, _ := l.Addr(); addr != "" || on {
 		t.Errorf("no setting: Addr = %q, %v; want off", addr, on)
@@ -103,7 +119,7 @@ func TestListenerAddrFollowsTheSetting(t *testing.T) {
 		t.Errorf("on: Addr = %q, %v; want 100.64.0.7:9000", addr, on)
 	}
 
-	l.Addrs = func() ([]net.Addr, error) { return nil, nil }
+	l.Ifaces = func() ([]Iface, error) { return nil, nil }
 	if addr, on, why := l.Addr(); addr != "" || !on || why == "" {
 		t.Errorf("on with Tailscale down: Addr = %q, %v, %q; want none, with a reason", addr, on, why)
 	}
