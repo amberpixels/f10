@@ -2,6 +2,8 @@ package task_test
 
 import (
 	"context"
+	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -32,6 +34,9 @@ func TestRefLine(t *testing.T) {
 		{"12", "FT-12", ledger.TaskRef{Title: "No url"}, true, "FT-12"},
 		{"12", "FT-12", ledger.TaskRef{}, false, "FT-12"},
 		{"A+B", "", k, true, "A+B"},
+		{"12", "FT-12", ledger.TaskRef{Title: "Done", URL: "https://x/12", Closed: true}, false, "FT-12 (Done) [closed]"},
+		{"12", "FT-12", ledger.TaskRef{Title: "Done", URL: "https://x/12", Closed: true}, true, "[FT-12: Done](https://x/12) [closed]"},
+		{"12", "FT-12", ledger.TaskRef{Closed: true}, false, "FT-12"},
 	} {
 		if got := taskcmd.RefLine(tc.token, tc.id, tc.k, tc.md); got != tc.want {
 			t.Errorf("refLine(%q, md=%v) = %q, want %q", tc.id, tc.md, got, tc.want)
@@ -128,5 +133,108 @@ func TestTaskRefsLedgerThenTracker(t *testing.T) {
 
 	if k := ledger.LookupRefs(t.Context(), "github.com/o/r", []string{"FT-109"})["FT-109"]; k.Title != "Renamed" {
 		t.Errorf("fresh did not rewrite the row: %+v", k)
+	}
+}
+
+// finishedRefTarget is a target whose ledger holds FT-109's title and a
+// finish typed as `109`, the way `f10 finish 109` records it.
+func finishedRefTarget(t *testing.T) (*testkit.Fakes, *target.Target) {
+	t.Helper()
+
+	f := testkit.NewFakes(t)
+	tg := testkit.ChildTarget(t, "gh")
+	t.Setenv(ledger.PathEnv, filepath.Join(t.TempDir(), "f10.db"))
+	seam.Swap(t, &target.ProjectOf, func(context.Context, string) string { return "github.com/o/r" })
+
+	ledger.RememberRefs(t.Context(), "github.com/o/r",
+		ledger.TaskRef{ID: "FT-109", Title: "Base task", URL: "https://github.com/o/r/issues/109"})
+
+	e := ledger.MustEvent(ledger.TaskFinished, ledger.TaskFinishedPayload{Args: []string{"109"}})
+	e.Project = "github.com/o/r"
+	ledger.Record(e)
+
+	return f, tg
+}
+
+// A finish this machine recorded marks the task closed from the ledger
+// alone; a task the tracker reads as closed is marked from that read.
+func TestTaskRefsMarkClosed(t *testing.T) {
+	f, tg := finishedRefTarget(t)
+
+	got := statusview.TaskRefsFor(tg, t.Context(), []ref.Ref{{ID: "FT-109", Number: "109"}}, true, false, nil)
+	if !got["FT-109"].Closed || len(f.Calls) != 0 {
+		t.Errorf("finished FT-109 = %+v, tracker calls %v", got["FT-109"], f.Calls)
+	}
+
+	f.Script(
+		"gh issue view 7 --json number,title,state,labels,createdAt,url,body,assignees",
+		`{"title":"Gone","state":"CLOSED","url":"https://github.com/o/r/issues/7"}`,
+	)
+	f.Script(
+		"gh issue view 8 --json number,title,state,labels,createdAt,url,body,assignees",
+		`{"title":"Live","state":"OPEN","url":"https://github.com/o/r/issues/8"}`,
+	)
+
+	refs := []ref.Ref{{ID: "FT-7", Number: "7"}, {ID: "FT-8", Number: "8"}}
+
+	got = statusview.TaskRefsFor(tg, t.Context(), refs, true, false, nil)
+	if !got["FT-7"].Closed || got["FT-8"].Closed {
+		t.Errorf("tracker states: FT-7 %+v, FT-8 %+v", got["FT-7"], got["FT-8"])
+	}
+
+	if k := ledger.LookupRefs(t.Context(), "github.com/o/r", []string{"FT-7"})["FT-7"]; k.Title != "Gone" || k.Closed {
+		t.Errorf("stored ref = %+v, want the title without a state", k)
+	}
+}
+
+// A re-planned task is pending work again, whatever its finish says.
+func TestTaskRefsReplannedIsOpen(t *testing.T) {
+	_, tg := finishedRefTarget(t)
+
+	plans := filepath.Dir(tg.Layout.StorageRoot.Plan("FT-109"))
+	if err := os.MkdirAll(plans, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(filepath.Join(plans, "FT-109.md"), []byte("# plan\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	got := statusview.TaskRefsFor(tg, t.Context(), []ref.Ref{{ID: "FT-109", Number: "109"}}, true, false, nil)
+	if got["FT-109"].Closed {
+		t.Errorf("re-planned FT-109 = %+v, want open", got["FT-109"])
+	}
+}
+
+// A comment on a finished task is refused before anything is posted, unless
+// the caller says it is meant for a closed task.
+func TestRefuseClosedComment(t *testing.T) {
+	f, tg := finishedRefTarget(t)
+	r := ref.Ref{ID: "FT-109", Number: "109"}
+
+	err := taskcmd.RefuseClosed(t.Context(), tg, r, io.Discard)
+	if err == nil || !strings.Contains(err.Error(), "FT-109 is closed") || !strings.Contains(err.Error(), "--closed") {
+		t.Errorf("refuse finished = %v", err)
+	}
+
+	if len(f.Calls) != 0 {
+		t.Errorf("a ledger finish read the tracker: %v", f.Calls)
+	}
+
+	f.Script(
+		"gh issue view 7 --json number,title,state,labels,createdAt,url,body,assignees",
+		`{"number":7,"title":"Gone","state":"CLOSED","url":"https://github.com/o/r/issues/7"}`,
+	)
+	f.Script(
+		"gh issue view 8 --json number,title,state,labels,createdAt,url,body,assignees",
+		`{"number":8,"title":"Live","state":"OPEN","url":"https://github.com/o/r/issues/8"}`,
+	)
+
+	if err := taskcmd.RefuseClosed(t.Context(), tg, ref.Ref{ID: "FT-7", Number: "7"}, io.Discard); err == nil {
+		t.Error("a task the tracker reads as closed was not refused")
+	}
+
+	if err := taskcmd.RefuseClosed(t.Context(), tg, ref.Ref{ID: "FT-8", Number: "8"}, io.Discard); err != nil {
+		t.Errorf("open FT-8 refused: %v", err)
 	}
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/taskwrite"
@@ -78,6 +79,12 @@ func runTaskComment(ctx context.Context, cmd *cli.Command) error {
 	body := strings.TrimSpace(string(in))
 	if body == "" {
 		return errors.New("task comment reads the comment as markdown on stdin, and it was empty")
+	}
+
+	if !cmd.Bool("closed") {
+		if err := RefuseClosed(ctx, t, r, cmd.ErrWriter); err != nil {
+			return err
+		}
 	}
 
 	url, err := tasksource.TasksFor(t).Comment(ctx, cmd.ErrWriter, r, body)
@@ -277,6 +284,29 @@ func runTaskRetitle(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	ui.Warnf(cmd.ErrWriter, "%s %d issue(s)", verb, len(changes))
+
+	return nil
+}
+
+// RefuseClosed stops a comment on a closed task, which is usually meant for
+// open work. The ledger answers first because it is free; a tracker that
+// gives no state, or fails to answer, lets the comment through.
+func RefuseClosed(ctx context.Context, t *target.Target, r ref.Ref, warn io.Writer) error {
+	closed := statusview.FinishedIn(ctx, t, []string{r.ID})[r.ID]
+	if !closed {
+		info, err := tasksource.TasksFor(t).Info(ctx, r)
+		if err != nil {
+			ui.Warnf(warn, "%s: state not read, commenting anyway: %v", r.ID, err)
+
+			return nil
+		}
+
+		closed = info.Closed
+	}
+
+	if closed {
+		return fmt.Errorf("%s is closed; pass --closed to comment on it anyway", r.ID)
+	}
 
 	return nil
 }

@@ -426,9 +426,10 @@ func (s HostSource) Ref(ctx context.Context, r ref.Ref) (ledger.TaskRef, error) 
 	}
 
 	return ledger.TaskRef{
-		ID:    r.ID,
-		Title: tasktitle.Clean(s.h.StripTitle(iss.Title, r.Number), r.ID),
-		URL:   iss.URL,
+		ID:     r.ID,
+		Title:  tasktitle.Clean(s.h.StripTitle(iss.Title, r.Number), r.ID),
+		URL:    iss.URL,
+		Closed: strings.EqualFold(iss.State, "closed"),
 	}, nil
 }
 

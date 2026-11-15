@@ -37,6 +37,9 @@ To show what a shape would look like, put a few lines inline in chat, no more.
    - the shape you agreed on
    - whether it is one task or several
 
+   Before stating it, run `f10 task ref` on every task the shape builds on or asks to change, because a task read early in the conversation may have finished since.
+   Name a task it marks `[closed]` as shipped work, and say so in the statement.
+
    If the user calls `/f10:capture` next, it reads this statement.
    Offer that handoff in one line, and leave the call to the user.
 

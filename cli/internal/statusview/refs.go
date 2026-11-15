@@ -4,8 +4,10 @@ import (
 	"context"
 	"io"
 	"maps"
+	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/ledger"
+	"github.com/amberpixels/f10/cli/internal/lookaround"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasksource"
@@ -59,7 +61,46 @@ func TaskRefsFor(t *target.Target,
 		ledger.RememberRefs(ctx, project, read...)
 	}
 
+	for id := range FinishedIn(ctx, t, ids) {
+		if k, ok := known[id]; ok {
+			k.Closed = true
+			known[id] = k
+		}
+	}
+
 	return known
+}
+
+// FinishedIn is which of ids the ledger records a standing finish for: a
+// local read, so a closed task is marked with no tracker call. A ledger that
+// cannot be read finishes nothing.
+func FinishedIn(ctx context.Context, t *target.Target, ids []string) map[string]bool {
+	project := t.RefProject(ctx)
+	if project == "" || len(ids) == 0 {
+		return nil
+	}
+
+	events, err := ledger.ReadEvents(ctx, ledger.Path(), ledger.Filter{Project: project, Kind: ledger.TaskFinished})
+	if err != nil || len(events) == 0 {
+		return nil
+	}
+
+	want := map[string]string{}
+	for _, id := range ids {
+		want[strings.ToUpper(id)] = id
+	}
+
+	resolve := t.IDOf(ctx)
+	out := map[string]bool{}
+
+	for _, e := range events {
+		id, ok := want[strings.ToUpper(resolve(e.FinishedTask()))]
+		if ok && lookaround.LedgerFinishStands(true, t.Layout.StorageRoot.PlanLive(id)) {
+			out[id] = true
+		}
+	}
+
+	return out
 }
 
 //nolint:lostfield // a lookup through the target, not a conversion of it

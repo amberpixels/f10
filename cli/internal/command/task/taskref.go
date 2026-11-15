@@ -58,15 +58,28 @@ func runTaskRef(ctx context.Context, cmd *cli.Command) error {
 	return nil
 }
 
+// RefLine marks a closed task so the agent reading it never names it as
+// open work; the marker is a note to that agent, never part of the link.
 func RefLine(token, id string, k ledger.TaskRef, md bool) string {
+	var line string
+
 	switch {
 	case id == "":
 		return token
 	case k.Title == "", md && k.URL == "":
 		return id
 	case md:
-		return MdLink(id, k.Title, k.URL)
+		line = MdLink(id, k.Title, k.URL)
+	default:
+		line = id + " (" + k.Title + ")"
 	}
 
-	return id + " (" + k.Title + ")"
+	if k.Closed {
+		line += " " + ClosedMark
+	}
+
+	return line
 }
+
+// ClosedMark follows a closed task's ref line.
+const ClosedMark = "[closed]"

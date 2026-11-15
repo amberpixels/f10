@@ -38,6 +38,9 @@ Context: `project.md → Tracker`, for the task **id format**, the **create adap
    - **A dependency on another task is the body's last line.**
      Write it only when the order is known: the user names a task this one builds on, or capture creates tasks meant to run in sequence.
      With no known order, there is no line.
+     The task it names must still be open, so run `f10 task ref` on it now, not from what the conversation read earlier, because that task may have finished since.
+     A task `f10 task ref` marks `[closed]` gets no `After:` line.
+     The body names it in prose as shipped work this task builds on, and anything it was expected to change becomes this task's own scope.
      The line is `After: <id>`: one id in the project's format, alone on its line, in the shape `conventions/context.md` → Task references fixes.
      `f10 task create` rewrites the id as a link itself.
      A task that the create adapter creates instead depends on the tracker's renderer.
@@ -47,6 +50,8 @@ Context: `project.md → Tracker`, for the task **id format**, the **create adap
      Create tasks meant to run in sequence in that order, so that each `After:` line names an id that already exists.
    - **Other tasks named in the body**, such as a base task mentioned in prose, a parent or a subtask, carry their titles.
      Get every title from one `f10 task ref` call, and write each in the renderer's form (`conventions/context.md` → Task references).
+     The `[closed]` marker `f10 task ref` prints after a closed task is a note to you, so it never goes into the body.
+     A closed task the description asks to change is not asked in its own body or comments: the change becomes a new follow-up task.
    - **Markup follows the tracker's renderer**, because markdown is not a safe default.
      `f10 task create` takes markdown (point 3).
      On GitHub and GitLab issues, its draft follows the **GitHub / GitLab** rule below.
