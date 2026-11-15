@@ -25,6 +25,8 @@ type Rule struct {
 
 // Table ranks the module, inner to outer; the longest matching prefix wins.
 var Table = []Rule{
+	// the API's generated messages and stubs, which import only each other
+	{Prefix: "gen", Rank: -4, Peers: true},
 	// leaves: text, files, git, the shell and the terminal, which read no
 	// project state, so nothing of the domain may reach into them
 	{Prefix: "internal/textx", Rank: -2},

@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package f10.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// TaskService creates and reads tracker tasks through the project's tracker.
+service TaskService {
+  rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);
+  rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
+}
+
+// A TaskRef names a task: its id, its title as the tracker holds it, and
+// where it opens.
+message TaskRef {
+  string id = 1;
+  string title = 2;
+  string url = 3;
+}
+
+// A Task is one tracker task as f10 reads it.
+message Task {
+  TaskRef ref = 1;
+  // state is the tracker's own word, such as OPEN or CLOSED.
+  string state = 2;
+  google.protobuf.Timestamp created = 3;
+  // markdown is the task's text, comments included, as f10 renders it.
+  string markdown = 4;
+  // after is the task this one builds on, empty for none.
+  string after = 5;
+  repeated string labels = 6;
+}
+
+message CreateTaskRequest {
+  // project is a project id, such as github.com/acme/widgets, or the path of
+  // its main checkout.
+  string project = 1;
+  string title = 2;
+  // body is the task's text in markdown.
+  string body = 3;
+  string status = 4;
+  string priority = 5;
+  repeated string labels = 6;
+  // parent is the id of the task this one is a subtask of.
+  string parent = 7;
+  // properties sets the tracker's named properties.
+  map<string, string> properties = 8;
+}
+
+message CreateTaskResponse {
+  TaskRef task = 1;
+}
+
+message GetTaskRequest {
+  string project = 1;
+  string id = 2;
+  // skip_images leaves the images the task links unread.
+  bool skip_images = 3;
+}
+
+message GetTaskResponse {
+  Task task = 1;
+}

@@ -1,0 +1,8 @@
+{
+  "name": "f10-proto-tools",
+  "private": true,
+  "description": "Pins protoc-gen-es, the TypeScript generator buf.gen.yaml runs.",
+  "devDependencies": {
+    "@bufbuild/protoc-gen-es": "2.17.0"
+  }
+}

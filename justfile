@@ -8,6 +8,7 @@
 # never touches unfenced recipes.
 
 mod cli
+mod proto
 
 # machine-local recipes, untracked; absent is fine
 import? 'justfile.local'
@@ -19,8 +20,8 @@ default: fmt
 fmt: cli::fmt
     shfmt -w -i 2 -ci .
 
-# lint shell + Go - reports findings, changes nothing
-lint: cli::lint
+# lint shell + Go + proto - reports findings, changes nothing
+lint: cli::lint proto::lint
     shfmt -f . | xargs -r shellcheck
     shfmt -d -i 2 -ci .
 
@@ -38,6 +39,9 @@ bench-ledger: cli::bench-ledger
 # race-check the daemon package
 test-race: cli::test-race
 
+# regenerate the API's Go and TypeScript code from proto/
+gen: proto::gen
+
 # build the f10 binary
 build: cli::build
 
@@ -49,4 +53,4 @@ eval *args:
     just cli::eval {{args}}
 
 # run all checks - read-only, safe for CI
-ci: lint test test-race
+ci: lint test test-race proto::breaking proto::breaking-selftest

@@ -3,6 +3,7 @@ package layers
 import (
 	"bufio"
 	"bytes"
+	"go/ast"
 	"go/parser"
 	"go/token"
 	"io/fs"
@@ -224,6 +225,12 @@ func commentProblems(t *testing.T, root string) []string {
 		f, err := parser.ParseFile(token.NewFileSet(), file, nil, parser.PackageClauseOnly|parser.ParseComments)
 		if err != nil {
 			return err
+		}
+
+		// a generator writes its own package comments, and regenerating
+		// would drop a doc.go written beside them
+		if ast.IsGenerated(f) {
+			return nil
 		}
 
 		dir, _ := filepath.Rel(root, filepath.Dir(file))

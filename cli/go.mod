@@ -3,6 +3,7 @@ module github.com/amberpixels/f10/cli
 go 1.27
 
 require (
+	connectrpc.com/connect v1.21.1
 	github.com/amberpixels/r3 v0.8.0
 	github.com/amberpixels/years v0.7.0
 	github.com/charmbracelet/lipgloss v1.1.0
@@ -13,6 +14,7 @@ require (
 	go.yaml.in/yaml/v3 v3.0.6
 	golang.org/x/mod v0.43.0
 	golang.org/x/term v0.48.0
+	google.golang.org/protobuf v1.36.12
 	modernc.org/sqlite v1.62.0
 )
 

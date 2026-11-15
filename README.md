@@ -774,6 +774,8 @@ The optional shellcheck checks that are turned on are listed in `.shellcheckrc`.
 
 Go is checked with [standardgo](https://github.com/amberpixels/standardgo), pinned in `cli/justfile`, and the repo has no lint config file.
 
+`proto/` holds the control-plane API, loaded as the `proto` module: `just gen` regenerates its checked-in Go and TypeScript code, and `just lint` fails when that code is stale ([proto/README.md](proto/README.md)).
+
 The justfile started from [justx](https://github.com/amberpixels/just-x), but every recipe is maintained by hand now.
 
 ## Status
@@ -790,6 +792,7 @@ The second is shared **profiles**: named configs that a repo's `project.md` refe
 - [The driver contract](docs/driver-contract.md): a tracker without a CLI.
 - [f10-drivers](https://github.com/amberpixels/f10-drivers): ready drivers for that contract, Notion first.
 - [Lore](docs/lore.md): why a line is the way it is, kept as entries per change next to the code.
+- [The control-plane API](proto/README.md): the proto contract, its generated code and the rules for changing it.
 
 ## Feedback
 

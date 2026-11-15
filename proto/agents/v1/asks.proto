@@ -1,0 +1,98 @@
+syntax = "proto3";
+
+package agents.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// AskService is the inbox of questions agents stop on. The first answer from
+// any way in closes an ask.
+service AskService {
+  rpc ListAsks(ListAsksRequest) returns (ListAsksResponse);
+  rpc AnswerAsk(AnswerAskRequest) returns (AnswerAskResponse);
+}
+
+// AnswerSource is the way in an ask was answered by.
+enum AnswerSource {
+  ANSWER_SOURCE_UNSPECIFIED = 0;
+  // typed in the agent's own pane
+  ANSWER_SOURCE_PANE = 1;
+  // the asks command, or its walk
+  ANSWER_SOURCE_ASKS = 2;
+  // the asks skill in an agent session
+  ANSWER_SOURCE_SKILL = 3;
+  // a drive's own answer flag
+  ANSWER_SOURCE_DRIVE = 4;
+  // the asking drive was cancelled
+  ANSWER_SOURCE_CANCELLED = 5;
+  // a client of this API
+  ANSWER_SOURCE_API = 6;
+}
+
+// A Question is one numbered question of an ask.
+message Question {
+  int32 n = 1;
+  string text = 2;
+  // options lists the choices, the default first; empty for free text.
+  repeated string options = 3;
+}
+
+// An Ask is one set of questions an agent stopped on.
+message Ask {
+  string id = 1;
+  // agent is the asking agent's name, as AgentService addresses it.
+  string agent = 2;
+  string workspace_id = 3;
+  // text is the ask as the agent wrote it, one line.
+  string text = 4;
+  repeated Question questions = 5;
+  google.protobuf.Timestamp asked_at = 6;
+  string answer = 7;
+  AnswerSource answered_by = 8;
+  google.protobuf.Timestamp answered_at = 9;
+  // delivered_at is when the answer reached the agent.
+  google.protobuf.Timestamp delivered_at = 10;
+  // labels is the owner's own context, such as the task, project and drive
+  // f10 records, so this package never grows owner-specific fields.
+  map<string, string> labels = 11;
+}
+
+// An Answer is the value given to one question, by its number.
+message Answer {
+  int32 n = 1;
+  string value = 2;
+}
+
+message ListAsksRequest {
+  // answered_since adds the asks answered after it; unset lists open asks only.
+  google.protobuf.Timestamp answered_since = 1;
+}
+
+message ListAsksResponse {
+  repeated Ask open = 1;
+  repeated Ask answered = 2;
+}
+
+message AnswerAskRequest {
+  string id = 1;
+  // answers names questions by number; a question not named takes its default.
+  repeated Answer answers = 2;
+}
+
+message AnswerAskResponse {
+  Ask ask = 1;
+  // delivered is true when the answer reached the agent at once.
+  bool delivered = 2;
+}
+
+// AskRaised is the event of an agent stopping on an ask.
+message AskRaised {
+  Ask ask = 1;
+}
+
+// AskAnswered is the event of an ask closed by its first answer.
+message AskAnswered {
+  string id = 1;
+  string answer = 2;
+  AnswerSource answered_by = 3;
+  bool delivered = 4;
+}

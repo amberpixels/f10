@@ -1,0 +1,13 @@
+# The control-plane API. README.md holds the evolution rules buf breaking enforces.
+version: v2
+modules:
+  - path: .
+    excludes:
+      - node_modules
+      - tools
+lint:
+  use:
+    - STANDARD
+breaking:
+  use:
+    - FILE
