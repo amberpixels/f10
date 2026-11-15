@@ -10,6 +10,7 @@ import (
 	"go/parser"
 	"go/token"
 	"maps"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -374,8 +375,8 @@ func TestInvalidUTF8IsReplaced(t *testing.T) {
 	}
 }
 
-// An ask row the structs wrote stores an unset enum as "", which protojson
-// refuses on its own; it reads as unspecified, nested or not.
+// An ask row from before payloads were messages stores an unset enum as "";
+// it reads as unspecified, nested or not.
 func TestEmptyEnumReadsAsUnspecified(t *testing.T) {
 	answered := Event{
 		Kind:    AskAnswered,
@@ -454,5 +455,17 @@ func TestSchemaMatchesTheCheckedInFile(t *testing.T) {
 		t.Error(
 			"docs/ledger.schema.json drifted from the payload messages: run `go run ./cmd/f10 ledger schema > ../docs/ledger.schema.json` in cli/",
 		)
+	}
+}
+
+// A count past int32 saturates rather than storing a negative number that
+// every cost sum would carry.
+func TestCountsSaturate(t *testing.T) {
+	if got := count32(3_000_000_000); got != math.MaxInt32 {
+		t.Errorf("3e9 stored as %d", got)
+	}
+
+	if got := count32(42); got != 42 {
+		t.Errorf("42 stored as %d", got)
 	}
 }
