@@ -3,6 +3,7 @@ package lore
 import (
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 )
 
@@ -106,7 +107,67 @@ func RenderLessons(w io.Writer, path string, lessons []Entry) error {
 	return nil
 }
 
-func renderEntry(w io.Writer, e Entry) error {
+// RenderFindings writes the settled findings per path, each entry once,
+// under the first path it is anchored on, with where its lines are now.
+func RenderFindings(w io.Writer, paths []string, settled []Settled) error {
+	shown := map[string]bool{}
+
+	for _, path := range paths {
+		var mine []Settled
+
+		for _, s := range settled {
+			if !shown[s.Finding.ID] &&
+				slices.ContainsFunc(s.Tracked, func(t Tracked) bool { return t.Anchor.Path == path }) {
+				shown[s.Finding.ID] = true
+
+				mine = append(mine, s)
+			}
+		}
+
+		if len(mine) == 0 {
+			if _, err := fmt.Fprintf(w, "%s  no settled findings\n", path); err != nil {
+				return err
+			}
+
+			continue
+		}
+
+		if _, err := fmt.Fprintf(w, "%s  %d settled %s\n", path, len(mine),
+			plural(len(mine), "finding", "findings")); err != nil {
+			return err
+		}
+
+		for _, s := range mine {
+			extra := [][2]string{{"change", s.Finding.Change}}
+			for _, t := range s.Tracked {
+				extra = append(extra, [2]string{"now", nowText(t)})
+			}
+
+			if err := renderEntry(w, s.Finding, extra...); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// nowText is where a tracked anchor's lines are at HEAD.
+func nowText(t Tracked) string {
+	if !t.Checked {
+		return "not checked, " + short(t.Anchor.Commit) + " is not in this clone"
+	}
+
+	n := max(t.Anchor.EndLine, t.Anchor.Line) - t.Anchor.Line + 1
+	if t.Changed == 0 {
+		return t.Now.String() + " (unchanged)"
+	}
+
+	return fmt.Sprintf("%s (%d of %d %s changed since)", t.Now.String(), t.Changed, n, plural(n, "line", "lines"))
+}
+
+// renderEntry writes one entry; extra fields, key then value, follow its own.
+func renderEntry(w io.Writer, e Entry, extra ...[2]string) error {
 	var b strings.Builder
 
 	fmt.Fprintf(&b, "\n%s  %s  %s  %s", e.Kind, e.ID, e.At.UTC().Format("2006-01-02 15:04Z"), e.Human)
@@ -145,6 +206,10 @@ func renderEntry(w io.Writer, e Entry) error {
 
 	if e.Retired {
 		field("retired", "yes")
+	}
+
+	for _, f := range extra {
+		field(f[0], f[1])
 	}
 
 	b.WriteString("\n")

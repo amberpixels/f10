@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func lines(n int) string {
@@ -505,5 +506,73 @@ func TestDecisionsKeepTheEffectiveOneOnThePath(t *testing.T) {
 
 	if len(got) != 1 || got[0].Chosen != "no cache" {
 		t.Fatalf("Decisions(a.go) = %+v, want the superseding decision alone", got)
+	}
+}
+
+func TestSettledFindings(t *testing.T) {
+	r := newRepo(t)
+	base := r.commit("base", map[string]string{"a.go": numbered(20), "b.go": numbered(5)})
+	head := strings.Replace(numbered(20), "l03\nl04\nl05\n", "x\n", 1) // 3-5 rewritten, the rest up 2
+	r.commit("edit", map[string]string{"a.go": head})
+
+	s := testStore(t, filepath.Join(r.dir, ".lore"), CLIGit{Dir: r.dir})
+	settle := func(change, when, status string, anchors ...Anchor) string {
+		t.Helper()
+
+		e := finding(change, when, "minor", "open", anchors...)
+		id := s.mustAdd(t, e)
+
+		if status == "open" {
+			return id
+		}
+
+		e = finding(change, when, "minor", status, anchors...)
+		e.Supersedes, e.At, e.Resolution = id, e.At.Add(time.Minute), "a false positive on "+change
+
+		return s.mustAdd(t, e)
+	}
+
+	wontfix := settle("FT-1", "2026-10-20T09:00:00Z", "wontfix", anchorAt("a.go", 10, 14, base, ""))
+	settle("FT-2", "2026-10-20T09:00:00Z", "fixed", anchorAt("a.go", 10, 14, base, ""))
+	settle("FT-3", "2026-10-20T09:00:00Z", "wontfix", anchorAt("a.go", 3, 5, base, ""))
+	settle("FT-4", "2026-10-20T09:00:00Z", "open", anchorAt("a.go", 10, 0, base, ""))
+	dup := settle("FT-5", "2026-10-21T09:00:00Z", "duplicate", anchorAt("a.go", 4, 8, base, ""))
+	pruned := settle("FT-6", "2026-10-22T09:00:00Z", "wontfix", anchorAt("a.go", 1, 0, "1234567", ""))
+	settle("FT-7", "2026-10-23T09:00:00Z", "wontfix", anchorAt("b.go", 1, 0, base, ""))
+
+	got, err := s.SettledFindings(t.Context(), []string{"a.go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var ids, now []string
+	for _, f := range got {
+		ids = append(ids, f.Finding.ID)
+
+		for _, tr := range f.Tracked {
+			now = append(now, nowText(tr))
+		}
+	}
+
+	wantIDs := []string{pruned, dup, wontfix} // newest first
+	wantNow := []string{
+		"not checked, 1234567 is not in this clone",
+		"a.go:4-6 (2 of 5 lines changed since)",
+		"a.go:8-12 (unchanged)",
+	}
+
+	if strings.Join(ids, " ") != strings.Join(wantIDs, " ") || strings.Join(now, "|") != strings.Join(wantNow, "|") {
+		t.Errorf("ids %v, want %v\nnow %q\nwant %q", ids, wantIDs, now, wantNow)
+	}
+
+	var b bytes.Buffer
+	if err := RenderFindings(&b, []string{"a.go", "c.go"}, got); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, want := range []string{"a.go  3 settled findings", "change: FT-1", "resolution: a false positive on FT-1", "c.go  no settled findings"} {
+		if !strings.Contains(b.String(), want) {
+			t.Errorf("render lacks %q:\n%s", want, b.String())
+		}
 	}
 }

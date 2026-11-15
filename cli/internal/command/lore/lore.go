@@ -117,6 +117,13 @@ func Command() *cli.Command {
 				Action:    runLoreLessons,
 			},
 			{
+				Name:      "findings",
+				Usage:     "the findings settled without a fix on these files, wontfix and duplicate, with their reasons",
+				ArgsUsage: "<path>...",
+				Flags:     []cli.Flag{ui.JSONFlag("emit JSON")},
+				Action:    runLoreFindings,
+			},
+			{
 				Name:      "check",
 				Hidden:    true,
 				Category:  command.Plumbing,
@@ -487,6 +494,43 @@ func runLoreLessons(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	return lore.RenderLessons(cmd.Writer, path, lessons)
+}
+
+func runLoreFindings(ctx context.Context, cmd *cli.Command) error {
+	if cmd.Args().Len() == 0 {
+		return errors.New("lore findings takes one or more paths")
+	}
+
+	l, err := loreFor(ctx, cmd)
+	if err != nil {
+		return err
+	}
+
+	paths := make([]string, 0, cmd.Args().Len())
+
+	for _, arg := range cmd.Args().Slice() {
+		path, err := l.repoPath(arg)
+		if err != nil {
+			return err
+		}
+
+		paths = append(paths, path)
+	}
+
+	settled, err := l.store.SettledFindings(ctx, paths)
+	if err != nil {
+		return err
+	}
+
+	if cmd.Bool("json") {
+		if settled == nil {
+			settled = []lore.Settled{}
+		}
+
+		return ui.JSON(cmd.Writer, settled)
+	}
+
+	return lore.RenderFindings(cmd.Writer, paths, settled)
 }
 
 func runLoreCheck(ctx context.Context, cmd *cli.Command) error {
