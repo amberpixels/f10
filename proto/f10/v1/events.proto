@@ -23,6 +23,9 @@ message WatchEventsRequest {
   // project and task narrow the stream; empty means every one.
   string project = 2;
   string task = 3;
+  // tail starts an empty after at the newest row instead of the first, so a
+  // client that reads current state elsewhere skips the backlog.
+  bool tail = 4;
 }
 
 message WatchEventsResponse {

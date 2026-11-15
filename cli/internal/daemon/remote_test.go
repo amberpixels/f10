@@ -4,6 +4,13 @@ package daemon
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"math/big"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -320,4 +327,134 @@ func (*envEcho) WatchProject(
 	return connect.NewResponse(&f10v1.WatchProjectResponse{
 		Log: strings.Join(LocalEnv(req, req.Msg.GetEnv()), ","),
 	}), nil
+}
+
+// tlsRemote is a fakeRemote that holds a certificate once given one.
+type tlsRemote struct {
+	fakeRemote
+
+	cfg *tls.Config
+}
+
+func (f *tlsRemote) TLS() (*tls.Config, string, string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.cfg == nil {
+		return nil, "", "no certificate yet"
+	}
+
+	return f.cfg, "box.tail.ts.net", ""
+}
+
+// The listener serves plain HTTP until a certificate arrives, then rebinds
+// to HTTPS on the next tick and names the certificate's host in its URL.
+func TestRemoteListenerSwitchesToTLS(t *testing.T) {
+	t.Parallel()
+
+	addr := freeAddr(t)
+	fr := &tlsRemote{addr: addr, on: true}
+
+	s := &Server{Dir: runDir(t), Version: "v1", Child: shell, Remote: fr, Tick: 10 * time.Millisecond}
+	serve(t, s)
+
+	if st := s.Status(); st.Remote.HTTPS || st.Remote.URL != "http://"+addr+"/" ||
+		st.Remote.HTTPSReason != "no certificate yet" {
+		t.Fatalf("remote before a certificate = %+v, want plain HTTP with the reason", st.Remote)
+	}
+
+	pool, cert := testCert(t)
+
+	fr.mu.Lock()
+	fr.cfg = &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{cert}}
+	fr.mu.Unlock()
+
+	_, port, _ := net.SplitHostPort(addr)
+	eventually(t, "the listener never switched to HTTPS", func() bool {
+		return s.Status().Remote.URL == "https://box.tail.ts.net:"+port+"/"
+	})
+
+	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
+		RootCAs: pool, ServerName: "box.tail.ts.net", MinVersion: tls.VersionTLS12,
+	}}}
+
+	req := connect.NewRequest(&f10v1.HelloRequest{Version: "test", ApiVersion: APIVersion})
+	req.Header().Set("Authorization", "Bearer ok")
+
+	if _, err := f10v1connect.NewDaemonServiceClient(client, "https://"+addr).Hello(t.Context(), req); err != nil {
+		t.Fatalf("hello over HTTPS = %v", err)
+	}
+}
+
+// testCert is a self-signed certificate for box.tail.ts.net and the pool
+// that trusts it.
+func testCert(t *testing.T) (*x509.CertPool, tls.Certificate) {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "box.tail.ts.net"},
+		DNSNames:     []string{"box.tail.ts.net"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaf, err := x509.ParseCertificate(der)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pool := x509.NewCertPool()
+	pool.AddCert(leaf)
+
+	return pool, tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key, Leaf: leaf}
+}
+
+// Hello says who calls: the socket is local, and a caller the tailnet's
+// check put in the context comes back with its token and procedures.
+func TestHelloNamesTheCaller(t *testing.T) {
+	t.Parallel()
+
+	addr := freeAddr(t)
+	s := &Server{Dir: runDir(t), Version: "v1", Child: shell, Remote: &callerRemote{fakeRemote{addr: addr, on: true}}}
+	serve(t, s)
+
+	hello, err := Dial(s.Dir).Daemon.Hello(t.Context(), connect.NewRequest(&f10v1.HelloRequest{}))
+	if err != nil || !hello.Msg.GetCaller().GetLocal() {
+		t.Fatalf("socket caller = %v, %v; want local", hello, err)
+	}
+
+	req := connect.NewRequest(&f10v1.HelloRequest{Version: "test", ApiVersion: APIVersion})
+	req.Header().Set("Authorization", "Bearer ok")
+
+	res, err := f10v1connect.NewDaemonServiceClient(http.DefaultClient, "http://"+addr).Hello(t.Context(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c := res.Msg.GetCaller()
+	if c.GetLocal() || c.GetToken() != "phone" || len(c.GetProcedures()) != 1 {
+		t.Errorf("tailnet caller = %v, want the phone token and its procedure", c)
+	}
+}
+
+// callerRemote marks each call as the phone token's, as remote.Auth does.
+type callerRemote struct{ fakeRemote }
+
+func (f *callerRemote) Handler(h http.Handler) http.Handler {
+	return f.fakeRemote.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h.ServeHTTP(w, r.WithContext(WithCaller(r.Context(), Caller{
+			Token: "phone", Scopes: []string{"read"}, Procedures: []string{"/f10.v1.DaemonService/Hello"},
+		})))
+	}))
 }

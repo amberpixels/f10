@@ -4,6 +4,7 @@ package daemon
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -19,6 +20,7 @@ import (
 // remoteServer is the tailnet listener while one is bound.
 type remoteServer struct {
 	addr string
+	tls  bool
 	srv  *http.Server
 }
 
@@ -37,11 +39,21 @@ func (s *Server) reconcileRemote() {
 
 	addr, on, why := s.Remote.Addr()
 
+	// outside mu: a certificate may be fetched first
+	var (
+		cfg          *tls.Config
+		host, tlsWhy string
+	)
+
+	if t, ok := s.Remote.(RemoteTLS); ok && addr != "" {
+		cfg, host, tlsWhy = t.TLS()
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.remote != nil && s.remote.addr == addr {
-		s.remoteAt = RemoteState{Enabled: on, Addr: addr}
+	if s.remote != nil && s.remote.addr == addr && s.remote.tls == (cfg != nil) {
+		s.remoteAt = boundState(on, addr, cfg, host, tlsWhy)
 
 		return
 	}
@@ -53,10 +65,10 @@ func (s *Server) reconcileRemote() {
 	}
 
 	if addr != "" {
-		r, err := s.listenRemote(addr)
+		r, err := s.listenRemote(addr, cfg)
 		if err == nil {
-			s.remote, s.remoteAt = r, RemoteState{Enabled: on, Addr: addr}
-			s.Log.Printf("tailnet listener on %s", addr)
+			s.remote, s.remoteAt = r, boundState(on, addr, cfg, host, tlsWhy)
+			s.Log.Printf("tailnet listener on %s", s.remoteAt.URL)
 
 			return
 		}
@@ -73,11 +85,17 @@ func (s *Server) reconcileRemote() {
 }
 
 // listenRemote serves the API on addr, behind Remote's peer filter and
-// token check; the caller holds mu.
-func (s *Server) listenRemote(addr string) (*remoteServer, error) {
+// token check, over TLS when cfg is set; the caller holds mu.
+func (s *Server) listenRemote(addr string, cfg *tls.Config) (*remoteServer, error) {
 	ln, err := (&net.ListenConfig{}).Listen(s.ctx, "tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("listening on %s: %w", addr, err)
+	}
+
+	// the peer filter sees the raw connection, before any handshake
+	ln = s.Remote.Listen(ln)
+	if cfg != nil {
+		ln = tls.NewListener(ln, cfg)
 	}
 
 	// an idle peer's connection is closed, so refused keep-alives cannot
@@ -88,9 +106,22 @@ func (s *Server) listenRemote(addr string) (*remoteServer, error) {
 		IdleTimeout:       time.Minute,
 	}
 
-	go func() { _ = srv.Serve(s.Remote.Listen(ln)) }()
+	go func() { _ = srv.Serve(ln) }()
 
-	return &remoteServer{addr: addr, srv: srv}, nil
+	return &remoteServer{addr: addr, tls: cfg != nil, srv: srv}, nil
+}
+
+// boundState is the listener bound on addr: its URL names the
+// certificate's host over HTTPS, else the address itself.
+func boundState(on bool, addr string, cfg *tls.Config, host, tlsWhy string) RemoteState {
+	st := RemoteState{Enabled: on, Addr: addr, URL: "http://" + addr + "/", HTTPSReason: tlsWhy}
+
+	if cfg != nil {
+		_, port, _ := net.SplitHostPort(addr)
+		st.URL, st.HTTPS, st.HTTPSReason = "https://"+net.JoinHostPort(host, port)+"/", true, ""
+	}
+
+	return st
 }
 
 // lease takes the daemon's lease. A plain daemon finding it held is

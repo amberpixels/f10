@@ -1,0 +1,37 @@
+# The TypeScript half of f10: the web client in web/, built on the code
+# `just proto::gen` writes to gen/. The root justfile loads this as the `web`
+# module. The build lands in cli/internal/webui/dist, checked in, so a Go
+# build needs no Node.
+
+dist := "../cli/internal/webui/dist"
+
+default: build
+
+# install the pinned packages, only when the lock file moved since the last install
+tools:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -f node_modules/.package-lock.json ] || [ package-lock.json -nt node_modules/.package-lock.json ]; then
+      npm ci --no-audit --no-fund --silent
+    fi
+
+# build the web client into the Go tree
+build: tools
+    npx vite build --config web/vite.config.ts --logLevel warn
+
+# typecheck, and fail when the checked-in build is stale
+lint: tools
+    #!/usr/bin/env bash
+    set -euo pipefail
+    npx tsc --noEmit -p .
+    tmp="$(mktemp -d)"
+    trap 'rm -rf "$tmp"' EXIT
+    npx vite build --config web/vite.config.ts --logLevel warn --outDir "$tmp/dist" --emptyOutDir
+    if ! diff -r {{dist}} "$tmp/dist" >/dev/null; then
+      echo "web: {{dist}} is stale; run \`just web::build\` and commit the result" >&2
+      exit 1
+    fi
+
+# run the web client's tests
+test: tools
+    npx vitest run --config web/vite.config.ts
