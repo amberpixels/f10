@@ -179,13 +179,21 @@ func (s *runService) Drive(
 		}
 	}
 
-	if _, err := drivectl.ParseDriveArgs(argv); err != nil {
+	parsed, err := drivectl.ParseDriveArgs(argv)
+	if err != nil {
 		return nil, invalid(err.Error())
 	}
 
-	t, err := target.At(ctx, dir, false, "drive")
-	if err != nil {
-		return nil, invalid(err.Error())
+	// a drive given answers starts its own process, so the answers reach it
+	// instead of a running drive that would never read them
+	resume := int(m.GetResume())
+	if len(parsed.Answers) > 0 {
+		resume = 0
+	}
+
+	t, terr := target.At(ctx, dir, false, "drive")
+	if terr != nil {
+		return nil, invalid(terr.Error())
 	}
 
 	env := daemon.LocalEnv(req, m.GetEnv())
@@ -198,7 +206,7 @@ func (s *runService) Drive(
 		Dir:    dir,
 		Root:   t.Layout.StorageRoot.Path(),
 		Env:    env,
-		Resume: int(m.GetResume()),
+		Resume: resume,
 	})
 	if err != nil {
 		return nil, err

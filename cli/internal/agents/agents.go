@@ -12,7 +12,8 @@ import (
 
 // SessionEnv is the environment Herdr calls run under, nil for this
 // process's own. The daemon sets it to the newest local session's, because
-// it outlives the client that spawned it.
+// it outlives the client that spawned it; with none registered, Herdr is
+// unreachable rather than reached through a session that may be gone.
 var SessionEnv func() []string
 
 // Agents is the backend hosting task agents, answering from dir: Herdr,
@@ -20,7 +21,7 @@ var SessionEnv func() []string
 var Agents = func(dir string) agentctl.Backend {
 	b := herdr.New(dir)
 	if SessionEnv != nil {
-		b.Env = SessionEnv()
+		b.Env = append([]string{}, SessionEnv()...)
 	}
 
 	return b

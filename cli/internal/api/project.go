@@ -27,11 +27,28 @@ func projectDir(ctx context.Context, sup Supervisor, project string) (string, er
 	}
 
 	base := filepath.Base(project)
+	watches := sup.Status().Watches
 
-	for _, w := range sup.Status().Watches {
-		if target.ProjectOf(ctx, w.Dir) == project || filepath.Base(w.Dir) == base {
+	// an exact project id wins over a directory name two repos may share
+	var named []string
+
+	for _, w := range watches {
+		if target.ProjectOf(ctx, w.Dir) == project {
 			return w.Dir, nil
 		}
+
+		if filepath.Base(w.Dir) == base {
+			named = append(named, w.Dir)
+		}
+	}
+
+	switch len(named) {
+	case 1:
+		return named[0], nil
+	case 0:
+	default:
+		return "", invalid(fmt.Sprintf("project %s names %d watched checkouts (%s): pass its path or its full id",
+			project, len(named), strings.Join(named, ", ")))
 	}
 
 	dir, err := projects.Find(base)

@@ -1,7 +1,9 @@
 package api
 
 import (
+	"context"
 	"net/http/httptest"
+	"path/filepath"
 	"slices"
 	"testing"
 	"time"
@@ -17,6 +19,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
 	"github.com/amberpixels/f10/cli/internal/seam"
+	"github.com/amberpixels/f10/cli/internal/target"
 )
 
 // fakeSup is a daemon that records the drives it is asked to run.
@@ -246,5 +249,50 @@ func TestWatchEventsResumesAfterTheCursor(t *testing.T) {
 
 	if ev, err := EventOf(ledger.Event{ID: "x", Kind: "made_up"}); err != nil || ev.GetPayload() != nil {
 		t.Errorf("an unknown kind = %v, %v; want no payload", ev, err)
+	}
+}
+
+// A drive given answers starts its own process even when the request names
+// the record to resume, so the answers reach a process that reads them.
+func TestDriveWithAnswersNeverAttaches(t *testing.T) {
+	t.Parallel()
+
+	sup := &fakeSup{}
+	srv := httptest.NewServer(Handler(sup))
+	t.Cleanup(srv.Close)
+
+	c := f10v1connect.NewRunServiceClient(srv.Client(), srv.URL)
+
+	if _, err := c.Drive(t.Context(), connect.NewRequest(&f10v1.DriveRequest{
+		Args:   []string{"--resume", "4", "--answer", "FT-1=yes"},
+		Dir:    t.TempDir(),
+		Resume: 4,
+	})); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(sup.drives) != 1 || sup.drives[0].Resume != 0 {
+		t.Errorf("ran %+v, want no resume number so the daemon starts a process", sup.drives)
+	}
+}
+
+// watchSup watches two checkouts that share a directory name.
+type watchSup struct{ fakeSup }
+
+func (*watchSup) Status() daemon.Status {
+	return daemon.Status{Watches: []daemon.Watch{{Dir: "/a/widgets"}, {Dir: "/b/widgets"}}}
+}
+
+func TestProjectDirRefusesAnAmbiguousName(t *testing.T) {
+	seam.Swap(t, &target.ProjectOf, func(_ context.Context, dir string) string {
+		return "github.com/" + filepath.Base(filepath.Dir(dir)) + "/widgets"
+	})
+
+	if dir, err := projectDir(t.Context(), &watchSup{}, "github.com/b/widgets"); err != nil || dir != "/b/widgets" {
+		t.Errorf("an exact id = %q, %v; want /b/widgets", dir, err)
+	}
+
+	if _, err := projectDir(t.Context(), &watchSup{}, "widgets"); connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Errorf("a name two watched checkouts share = %v, want InvalidArgument", err)
 	}
 }

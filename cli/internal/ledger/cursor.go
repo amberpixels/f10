@@ -17,9 +17,9 @@ type Placed struct {
 	Cursor string
 }
 
-// ReadAfter is the rows inserted after cursor ("" for the first) in the
-// database at path, narrowed by project and task when set, in insertion
-// order, what writers spooled included. A missing database has none.
+// ReadAfter is up to AfterPage rows inserted after cursor ("" for the first)
+// in the database at path, narrowed by project and task when set, in
+// insertion order, what writers spooled included. A missing database has none.
 func ReadAfter(ctx context.Context, path, cursor, project, task string) ([]Placed, error) {
 	after := int64(0)
 
@@ -52,10 +52,14 @@ func ReadAfter(ctx context.Context, path, cursor, project, task string) ([]Place
 // project or task matches every row.
 const rowsAfter = `SELECT rowid, id FROM events
 WHERE rowid > ? AND (? = '' OR project = ?) AND (? = '' OR task = ?)
-ORDER BY rowid`
+ORDER BY rowid LIMIT ?`
+
+// AfterPage bounds one ReadAfter, so a stream from the first row reads a
+// long ledger a page at a time instead of whole.
+const AfterPage = 500
 
 func (l *Ledger) after(ctx context.Context, after int64, project, task string) ([]Placed, error) {
-	rows, err := l.db.QueryContext(ctx, rowsAfter, after, project, project, task, task)
+	rows, err := l.db.QueryContext(ctx, rowsAfter, after, project, project, task, task, AfterPage)
 	if err != nil {
 		return nil, fmt.Errorf("ledger: %w", err)
 	}

@@ -52,6 +52,11 @@ func (eventService) WatchEvents(
 			after = p.Cursor
 		}
 
+		// a full page means more rows wait: read on before polling
+		if len(placed) == ledger.AfterPage {
+			continue
+		}
+
 		select {
 		case <-ctx.Done():
 			return nil

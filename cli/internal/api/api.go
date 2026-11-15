@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	"github.com/amberpixels/f10/cli/gen/f10/v1/f10v1connect"
-	"github.com/amberpixels/f10/cli/internal/agents"
 	"github.com/amberpixels/f10/cli/internal/agents/agentsrpc"
 	"github.com/amberpixels/f10/cli/internal/daemon"
 )
@@ -24,10 +23,6 @@ type Supervisor interface {
 
 // Handler is every service on one mux, over sup.
 func Handler(sup Supervisor) http.Handler {
-	// a handler's Herdr calls run under the newest local session, since the
-	// daemon outlives the client that spawned it
-	agents.SessionEnv = sup.SessionEnv
-
 	mux := http.NewServeMux()
 	opts := errorOptions()
 

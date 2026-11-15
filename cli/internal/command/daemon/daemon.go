@@ -15,6 +15,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/agents"
 	"github.com/amberpixels/f10/cli/internal/api"
 	"github.com/amberpixels/f10/cli/internal/buildinfo"
 	"github.com/amberpixels/f10/cli/internal/daemon"
@@ -68,6 +69,10 @@ func runDaemon(ctx context.Context, cmd *cli.Command) error {
 		Handler: func(s *daemon.Server) http.Handler { return api.Handler(s) },
 		Key:     drive.RecordKey,
 	}
+
+	// the handlers' Herdr calls run under the newest local session, since the
+	// daemon outlives the client that spawned it
+	agents.SessionEnv = s.SessionEnv
 
 	err := s.Serve(ctx)
 	if errors.Is(err, daemon.ErrRunning) {

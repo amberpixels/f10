@@ -5,6 +5,7 @@ package agentsrpc
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -249,7 +250,12 @@ func (s askService) AnswerAsk(
 	}
 
 	claimed, sent, err := agents.Answer(ctx, io.Discard, dir, a, values, asks.ByAPI, s.o.Deliverer)
-	if err != nil {
+
+	switch {
+	case err != nil && claimed.Task != "":
+		// the answer is recorded and closes the ask; only moving it on failed
+		return nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("answer recorded, not delivered: %w", err))
+	case err != nil:
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
