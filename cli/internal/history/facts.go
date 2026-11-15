@@ -26,6 +26,22 @@ type Facts struct {
 	Classes     []string `json:"-"`
 }
 
+// Series ties a task's review rows to the PR they reviewed: a follow-up
+// PR's rounds restart at 1, so a round is its number with the reviewed sha
+// of its latest opening, and a verdict belongs to that latest opening.
+// Every reader of review rows keys them through it, so none merges two PRs.
+type Series map[string]string // round: the reviewed sha of its latest opening
+
+// Opened records a round's opening and returns the round's key.
+func (s Series) Opened(round, reviewed string) string {
+	s[round] = reviewed
+
+	return round + "\x00" + reviewed
+}
+
+// Of is the key of the round a verdict on round belongs to.
+func (s Series) Of(round string) string { return round + "\x00" + s[round] }
+
 // Found is a bug's newest attribution.
 type Found struct {
 	ledger.RegressionFoundPayload
@@ -43,7 +59,7 @@ func TaskFacts(events []ledger.Event, tasks []string, since time.Time) map[strin
 	}
 
 	rounds := map[string]map[string]map[string]int{}      // task, review pass: the latest opening's categories
-	opened := map[string]string{}                         // task, round: the reviewed sha of its latest opening
+	series := map[string]Series{}                         // task: its review series
 	findings := map[string]ledger.FindingVerdictPayload{} // task, round, series, finding
 	judged := map[string]string{}                         // task, verdict file
 
@@ -68,17 +84,15 @@ func TaskFacts(events []ledger.Event, tasks []string, since time.Time) map[strin
 					rounds[key] = map[string]map[string]int{}
 				}
 
-				// a follow-up PR's series restarts at round 1, so the reviewed sha
-				// keeps its rounds apart from the first PR's
-				rounds[key][p.Round+"\x00"+p.Reviewed] = p.Categories
-				opened[key+"\x00"+p.Round] = p.Reviewed
+				if series[key] == nil {
+					series[key] = Series{}
+				}
+
+				rounds[key][series[key].Opened(p.Round, p.Reviewed)] = p.Categories
 			}
 		case ledger.FindingVerdict:
-			// a verdict belongs to the series of its round's latest opening, so
-			// a follow-up PR's 1.1 never overwrites the first PR's
 			if p, ok := decode[ledger.FindingVerdictPayload](e); ok {
-				series := opened[key+"\x00"+p.Round]
-				findings[key+"\x00"+p.Round+"\x00"+series+"\x00"+p.Finding] = p
+				findings[key+"\x00"+series[key].Of(p.Round)+"\x00"+p.Finding] = p
 			}
 		case ledger.PlanSuperseded:
 			f.Superseded++

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/drivestore"
+	"github.com/amberpixels/f10/cli/internal/history"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/timing"
@@ -284,15 +285,12 @@ func activity(evs []ledger.Event, since, until time.Time) []Activity {
 		verdicts map[string]string // finding: newest verdict
 	}
 
-	// a follow-up PR's series restarts at round 1, so a round is its number
-	// with the reviewed sha of its latest opening, as history.TaskFacts keys it
 	rounds := map[string]*round{}
-	opened := map[string]string{} // round: the reviewed sha of its latest opening
+	series := history.Series{}
 
 	var roundOrder []string
 
-	roundOf := func(name, series string, at time.Time) *round {
-		key := name + "\x00" + series
+	roundOf := func(name, key string, at time.Time) *round {
 		if rounds[key] == nil {
 			rounds[key] = &round{name: name, verdicts: map[string]string{}}
 			roundOrder = append(roundOrder, key)
@@ -312,13 +310,12 @@ func activity(evs []ledger.Event, since, until time.Time) []Activity {
 		switch e.Kind {
 		case ledger.ReviewRoundOpened:
 			if p, err := ledger.Decode[ledger.ReviewRoundOpenedPayload](e); err == nil && p.Round != "" {
-				opened[p.Round] = p.Reviewed
-				roundOf(p.Round, p.Reviewed, e.At)
+				roundOf(p.Round, series.Opened(p.Round, p.Reviewed), e.At)
 			}
 		case ledger.FindingVerdict:
 			if p, err := ledger.Decode[ledger.FindingVerdictPayload](e); err == nil {
 				word, _, _ := strings.Cut(strings.ToLower(p.Verdict), " ")
-				roundOf(p.Round, opened[p.Round], e.At).verdicts[p.Finding] = word
+				roundOf(p.Round, series.Of(p.Round), e.At).verdicts[p.Finding] = word
 			}
 		}
 	}
@@ -429,11 +426,12 @@ func stage(evs []ledger.Event, until time.Time) string {
 
 func reviewRounds(evs []ledger.Event) int {
 	rounds := map[string]bool{}
+	series := history.Series{}
 
 	for _, e := range evs {
 		if e.Kind == ledger.ReviewRoundOpened {
 			if p, err := ledger.Decode[ledger.ReviewRoundOpenedPayload](e); err == nil && p.Round != "" {
-				rounds[p.Round+"\x00"+p.Reviewed] = true // a follow-up PR's round 1 is a round of its own
+				rounds[series.Opened(p.Round, p.Reviewed)] = true
 			}
 		}
 	}
