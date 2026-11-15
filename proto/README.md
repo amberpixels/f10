@@ -11,6 +11,9 @@ The daemon serves it on its unix socket (`docs/cli.md`, **Daemon**).
 - **`f10.v1`** is the task flow: tasks, runs, start, drive, finish, the board, and the event stream, plus `DaemonService`, the daemon's own hello, status, stop and project watch.
   It imports `agents.v1`, and `agents.v1` never imports it.
 
+`f10.v1` also carries `ArtifactService`, which reads a task's files from the storage root by kind and name, and `ProjectService`, which lists the projects the daemon knows.
+The web client in `ts/web` is built on the TypeScript code; `ts/` is the TypeScript root, so `ts/gen` resolves its imports from `ts/node_modules`.
+
 Each package lives in the directory its name gives (`agents/v1/`, `f10/v1/`), because buf's lint requires it.
 
 ## Generated code
@@ -21,7 +24,7 @@ Generated code is checked in, so a build needs no generator.
 |---|---|---|
 | Go messages | `cli/gen/<package path>/` | `github.com/amberpixels/f10/cli/gen/f10/v1` |
 | Go Connect stubs | `cli/gen/<package path>/<pkg>connect/` | `github.com/amberpixels/f10/cli/gen/f10/v1/f10v1connect` |
-| TypeScript (protobuf-es) | `ts/gen/<package path>/` | needs `@bufbuild/protobuf` at runtime |
+| TypeScript (protobuf-es) | `ts/gen/<package path>/` | needs `@bufbuild/protobuf` at runtime, which `ts/package.json` pins |
 
 The generators are pinned: buf and the Go plugins in `tools/go.mod`, `protoc-gen-es` in `package-lock.json`.
 `just proto::tools` installs them into `.bin/` and `node_modules/`, so you need Go and Node, but no global buf.

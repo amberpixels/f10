@@ -1,0 +1,27 @@
+{
+  "name": "f10-web",
+  "private": true,
+  "description": "The f10 web client, built on the TypeScript code generated from proto/ into gen/.",
+  "type": "module",
+  "scripts": {
+    "build": "vite build --config web/vite.config.ts",
+    "dev": "vite --config web/vite.config.ts",
+    "typecheck": "tsc --noEmit -p .",
+    "test": "vitest run --config web/vite.config.ts"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "2.17.0",
+    "@connectrpc/connect": "2.3.0",
+    "@connectrpc/connect-web": "2.3.0",
+    "@preact/signals": "2.11.4",
+    "markdown-it": "15.0.3",
+    "preact": "11.2.0"
+  },
+  "devDependencies": {
+    "@types/markdown-it": "14.2.0",
+    "happy-dom": "21.0.4",
+    "typescript": "7.0.2",
+    "vite": "8.3.8",
+    "vitest": "5.1.0"
+  }
+}

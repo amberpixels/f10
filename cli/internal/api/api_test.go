@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"slices"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -305,5 +307,93 @@ func TestProjectDirRefusesAnAmbiguousName(t *testing.T) {
 		err,
 	) != connect.CodeNotFound {
 		t.Errorf("an unwatched full id = %q, %v; want NotFound", dir, err)
+	}
+}
+
+// A tail stream skips the backlog and sends only what lands after it opened.
+func TestWatchEventsFromTheTail(t *testing.T) {
+	seam.Swap(t, &EventPoll, 20*time.Millisecond)
+
+	old := ledger.MustEvent(ledger.WaitStarted, ledger.WaitStartedPayload{})
+	old.ID, old.Task = ulid.Make().String(), "FT-2"
+	ledger.Record(old)
+
+	next := ledger.MustEvent(ledger.WaitEnded, ledger.WaitEndedPayload{})
+	next.ID, next.Task = ulid.Make().String(), "FT-2"
+
+	// the call returns with the first event's headers, so the new row lands
+	// while it waits; the delay lets the stream read its tail first
+	go func() {
+		time.Sleep(200 * time.Millisecond)
+		ledger.Record(next)
+	}()
+
+	srv := httptest.NewServer(Handler(&fakeSup{}))
+	t.Cleanup(srv.Close)
+
+	stream, err := f10v1connect.NewEventServiceClient(srv.Client(), srv.URL).WatchEvents(
+		t.Context(), connect.NewRequest(&f10v1.WatchEventsRequest{Task: "FT-2", Tail: true}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() { _ = stream.Close() })
+
+	if !stream.Receive() || stream.Msg().GetEvent().GetId() != next.ID {
+		t.Fatalf("first event from the tail = %v, %v; want only the new row", stream.Msg(), stream.Err())
+	}
+}
+
+// projSup runs a drive in a worktree of a watched project.
+type projSup struct{ fakeSup }
+
+func (*projSup) Status() daemon.Status {
+	return daemon.Status{
+		Watches: []daemon.Watch{{Dir: "/code/widgets"}},
+		Runs:    []daemon.Run{{Dir: "/code/widgets.FT-1"}, {Dir: "/code/gadgets"}},
+	}
+}
+
+func TestListProjectsOncePerID(t *testing.T) {
+	seam.Swap(t, &target.ProjectOf, func(_ context.Context, dir string) string {
+		return "github.com/acme/" + strings.Split(filepath.Base(dir), ".")[0]
+	})
+
+	srv := httptest.NewServer(Handler(&projSup{}))
+	t.Cleanup(srv.Close)
+
+	res, err := f10v1connect.NewProjectServiceClient(srv.Client(), srv.URL).
+		ListProjects(t.Context(), connect.NewRequest(&f10v1.ListProjectsRequest{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var got []string
+	for _, p := range res.Msg.GetProjects() {
+		got = append(got, p.GetId()+"="+strconv.FormatBool(p.GetWatched()))
+	}
+
+	if strings.Join(got, " ") != "github.com/acme/gadgets=false github.com/acme/widgets=true" {
+		t.Errorf("projects = %v", got)
+	}
+
+	// every listed id resolves, a drive-only project included
+	for _, p := range res.Msg.GetProjects() {
+		if _, err := projectDir(t.Context(), &projSup{}, p.GetId()); err != nil {
+			t.Errorf("listed %s does not resolve: %v", p.GetId(), err)
+		}
+	}
+}
+
+func TestForwardNeedsText(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(Handler(&fakeSup{}))
+	t.Cleanup(srv.Close)
+
+	_, err := f10v1connect.NewRunServiceClient(srv.Client(), srv.URL).
+		Forward(t.Context(), connect.NewRequest(&f10v1.ForwardRequest{Project: "/x", Task: "FT-1", Text: "  "}))
+	if connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Errorf("empty text = %v, want InvalidArgument", err)
 	}
 }

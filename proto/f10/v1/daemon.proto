@@ -33,6 +33,21 @@ message HelloResponse {
   google.protobuf.Timestamp started_at = 4;
   // stopping is true while a stop drains the daemon.
   bool stopping = 5;
+  // caller is who made this call and what it may call.
+  Caller caller = 6;
+}
+
+// A Caller is who makes a call: the local user on the unix socket, or a
+// device token on the tailnet.
+message Caller {
+  // local is true on the unix socket, where every procedure is allowed.
+  bool local = 1;
+  // token is the device token's name.
+  string token = 2;
+  repeated string scopes = 3;
+  // procedures lists the procedures the token's scopes allow, such as
+  // /agents.v1.AskService/AnswerAsk, so a client hides what it cannot call.
+  repeated string procedures = 4;
 }
 
 // A SupervisedDrive is one drive process the daemon runs.
@@ -72,6 +87,11 @@ message RemoteListener {
   string addr = 2;
   // reason says why none is bound, when the setting is on or unreadable.
   string reason = 3;
+  // url is the web client's address, empty while none is bound.
+  string url = 4;
+  // https is true when the listener serves TLS; https_reason says why not.
+  bool https = 5;
+  string https_reason = 6;
 }
 
 message GetDaemonStatusResponse {

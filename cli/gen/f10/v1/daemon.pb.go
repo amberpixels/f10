@@ -83,7 +83,9 @@ type HelloResponse struct {
 	Pid        int32                  `protobuf:"varint,3,opt,name=pid,proto3" json:"pid,omitempty"`
 	StartedAt  *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
 	// stopping is true while a stop drains the daemon.
-	Stopping      bool `protobuf:"varint,5,opt,name=stopping,proto3" json:"stopping,omitempty"`
+	Stopping bool `protobuf:"varint,5,opt,name=stopping,proto3" json:"stopping,omitempty"`
+	// caller is who made this call and what it may call.
+	Caller        *Caller `protobuf:"bytes,6,opt,name=caller,proto3" json:"caller,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -153,6 +155,87 @@ func (x *HelloResponse) GetStopping() bool {
 	return false
 }
 
+func (x *HelloResponse) GetCaller() *Caller {
+	if x != nil {
+		return x.Caller
+	}
+	return nil
+}
+
+// A Caller is who makes a call: the local user on the unix socket, or a
+// device token on the tailnet.
+type Caller struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// local is true on the unix socket, where every procedure is allowed.
+	Local bool `protobuf:"varint,1,opt,name=local,proto3" json:"local,omitempty"`
+	// token is the device token's name.
+	Token  string   `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`
+	Scopes []string `protobuf:"bytes,3,rep,name=scopes,proto3" json:"scopes,omitempty"`
+	// procedures lists the procedures the token's scopes allow, such as
+	// /agents.v1.AskService/AnswerAsk, so a client hides what it cannot call.
+	Procedures    []string `protobuf:"bytes,4,rep,name=procedures,proto3" json:"procedures,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Caller) Reset() {
+	*x = Caller{}
+	mi := &file_f10_v1_daemon_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Caller) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Caller) ProtoMessage() {}
+
+func (x *Caller) ProtoReflect() protoreflect.Message {
+	mi := &file_f10_v1_daemon_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Caller.ProtoReflect.Descriptor instead.
+func (*Caller) Descriptor() ([]byte, []int) {
+	return file_f10_v1_daemon_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *Caller) GetLocal() bool {
+	if x != nil {
+		return x.Local
+	}
+	return false
+}
+
+func (x *Caller) GetToken() string {
+	if x != nil {
+		return x.Token
+	}
+	return ""
+}
+
+func (x *Caller) GetScopes() []string {
+	if x != nil {
+		return x.Scopes
+	}
+	return nil
+}
+
+func (x *Caller) GetProcedures() []string {
+	if x != nil {
+		return x.Procedures
+	}
+	return nil
+}
+
 // A SupervisedDrive is one drive process the daemon runs.
 type SupervisedDrive struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -172,7 +255,7 @@ type SupervisedDrive struct {
 
 func (x *SupervisedDrive) Reset() {
 	*x = SupervisedDrive{}
-	mi := &file_f10_v1_daemon_proto_msgTypes[2]
+	mi := &file_f10_v1_daemon_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -184,7 +267,7 @@ func (x *SupervisedDrive) String() string {
 func (*SupervisedDrive) ProtoMessage() {}
 
 func (x *SupervisedDrive) ProtoReflect() protoreflect.Message {
-	mi := &file_f10_v1_daemon_proto_msgTypes[2]
+	mi := &file_f10_v1_daemon_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -197,7 +280,7 @@ func (x *SupervisedDrive) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SupervisedDrive.ProtoReflect.Descriptor instead.
 func (*SupervisedDrive) Descriptor() ([]byte, []int) {
-	return file_f10_v1_daemon_proto_rawDescGZIP(), []int{2}
+	return file_f10_v1_daemon_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *SupervisedDrive) GetRoot() string {
@@ -259,7 +342,7 @@ type WatchedProject struct {
 
 func (x *WatchedProject) Reset() {
 	*x = WatchedProject{}
-	mi := &file_f10_v1_daemon_proto_msgTypes[3]
+	mi := &file_f10_v1_daemon_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -271,7 +354,7 @@ func (x *WatchedProject) String() string {
 func (*WatchedProject) ProtoMessage() {}
 
 func (x *WatchedProject) ProtoReflect() protoreflect.Message {
-	mi := &file_f10_v1_daemon_proto_msgTypes[3]
+	mi := &file_f10_v1_daemon_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -284,7 +367,7 @@ func (x *WatchedProject) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WatchedProject.ProtoReflect.Descriptor instead.
 func (*WatchedProject) Descriptor() ([]byte, []int) {
-	return file_f10_v1_daemon_proto_rawDescGZIP(), []int{3}
+	return file_f10_v1_daemon_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *WatchedProject) GetRoot() string {
@@ -330,7 +413,7 @@ type GetDaemonStatusRequest struct {
 
 func (x *GetDaemonStatusRequest) Reset() {
 	*x = GetDaemonStatusRequest{}
-	mi := &file_f10_v1_daemon_proto_msgTypes[4]
+	mi := &file_f10_v1_daemon_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -342,7 +425,7 @@ func (x *GetDaemonStatusRequest) String() string {
 func (*GetDaemonStatusRequest) ProtoMessage() {}
 
 func (x *GetDaemonStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_f10_v1_daemon_proto_msgTypes[4]
+	mi := &file_f10_v1_daemon_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -355,7 +438,7 @@ func (x *GetDaemonStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDaemonStatusRequest.ProtoReflect.Descriptor instead.
 func (*GetDaemonStatusRequest) Descriptor() ([]byte, []int) {
-	return file_f10_v1_daemon_proto_rawDescGZIP(), []int{4}
+	return file_f10_v1_daemon_proto_rawDescGZIP(), []int{5}
 }
 
 // A RemoteListener is the daemon's listener on the tailnet.
@@ -367,14 +450,19 @@ type RemoteListener struct {
 	// none is.
 	Addr string `protobuf:"bytes,2,opt,name=addr,proto3" json:"addr,omitempty"`
 	// reason says why none is bound, when the setting is on or unreadable.
-	Reason        string `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	Reason string `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	// url is the web client's address, empty while none is bound.
+	Url string `protobuf:"bytes,4,opt,name=url,proto3" json:"url,omitempty"`
+	// https is true when the listener serves TLS; https_reason says why not.
+	Https         bool   `protobuf:"varint,5,opt,name=https,proto3" json:"https,omitempty"`
+	HttpsReason   string `protobuf:"bytes,6,opt,name=https_reason,json=httpsReason,proto3" json:"https_reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RemoteListener) Reset() {
 	*x = RemoteListener{}
-	mi := &file_f10_v1_daemon_proto_msgTypes[5]
+	mi := &file_f10_v1_daemon_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -386,7 +474,7 @@ func (x *RemoteListener) String() string {
 func (*RemoteListener) ProtoMessage() {}
 
 func (x *RemoteListener) ProtoReflect() protoreflect.Message {
-	mi := &file_f10_v1_daemon_proto_msgTypes[5]
+	mi := &file_f10_v1_daemon_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -399,7 +487,7 @@ func (x *RemoteListener) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoteListener.ProtoReflect.Descriptor instead.
 func (*RemoteListener) Descriptor() ([]byte, []int) {
-	return file_f10_v1_daemon_proto_rawDescGZIP(), []int{5}
+	return file_f10_v1_daemon_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *RemoteListener) GetEnabled() bool {
@@ -423,6 +511,27 @@ func (x *RemoteListener) GetReason() string {
 	return ""
 }
 
+func (x *RemoteListener) GetUrl() string {
+	if x != nil {
+		return x.Url
+	}
+	return ""
+}
+
+func (x *RemoteListener) GetHttps() bool {
+	if x != nil {
+		return x.Https
+	}
+	return false
+}
+
+func (x *RemoteListener) GetHttpsReason() string {
+	if x != nil {
+		return x.HttpsReason
+	}
+	return ""
+}
+
 type GetDaemonStatusResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Drives        []*SupervisedDrive     `protobuf:"bytes,1,rep,name=drives,proto3" json:"drives,omitempty"`
@@ -434,7 +543,7 @@ type GetDaemonStatusResponse struct {
 
 func (x *GetDaemonStatusResponse) Reset() {
 	*x = GetDaemonStatusResponse{}
-	mi := &file_f10_v1_daemon_proto_msgTypes[6]
+	mi := &file_f10_v1_daemon_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -446,7 +555,7 @@ func (x *GetDaemonStatusResponse) String() string {
 func (*GetDaemonStatusResponse) ProtoMessage() {}
 
 func (x *GetDaemonStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_f10_v1_daemon_proto_msgTypes[6]
+	mi := &file_f10_v1_daemon_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -459,7 +568,7 @@ func (x *GetDaemonStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDaemonStatusResponse.ProtoReflect.Descriptor instead.
 func (*GetDaemonStatusResponse) Descriptor() ([]byte, []int) {
-	return file_f10_v1_daemon_proto_rawDescGZIP(), []int{6}
+	return file_f10_v1_daemon_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *GetDaemonStatusResponse) GetDrives() []*SupervisedDrive {
@@ -495,7 +604,7 @@ type StopDaemonRequest struct {
 
 func (x *StopDaemonRequest) Reset() {
 	*x = StopDaemonRequest{}
-	mi := &file_f10_v1_daemon_proto_msgTypes[7]
+	mi := &file_f10_v1_daemon_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -507,7 +616,7 @@ func (x *StopDaemonRequest) String() string {
 func (*StopDaemonRequest) ProtoMessage() {}
 
 func (x *StopDaemonRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_f10_v1_daemon_proto_msgTypes[7]
+	mi := &file_f10_v1_daemon_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -520,7 +629,7 @@ func (x *StopDaemonRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopDaemonRequest.ProtoReflect.Descriptor instead.
 func (*StopDaemonRequest) Descriptor() ([]byte, []int) {
-	return file_f10_v1_daemon_proto_rawDescGZIP(), []int{7}
+	return file_f10_v1_daemon_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *StopDaemonRequest) GetDrain() bool {
@@ -545,7 +654,7 @@ type StopDaemonResponse struct {
 
 func (x *StopDaemonResponse) Reset() {
 	*x = StopDaemonResponse{}
-	mi := &file_f10_v1_daemon_proto_msgTypes[8]
+	mi := &file_f10_v1_daemon_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -557,7 +666,7 @@ func (x *StopDaemonResponse) String() string {
 func (*StopDaemonResponse) ProtoMessage() {}
 
 func (x *StopDaemonResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_f10_v1_daemon_proto_msgTypes[8]
+	mi := &file_f10_v1_daemon_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -570,7 +679,7 @@ func (x *StopDaemonResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StopDaemonResponse.ProtoReflect.Descriptor instead.
 func (*StopDaemonResponse) Descriptor() ([]byte, []int) {
-	return file_f10_v1_daemon_proto_rawDescGZIP(), []int{8}
+	return file_f10_v1_daemon_proto_rawDescGZIP(), []int{9}
 }
 
 type WatchProjectRequest struct {
@@ -587,7 +696,7 @@ type WatchProjectRequest struct {
 
 func (x *WatchProjectRequest) Reset() {
 	*x = WatchProjectRequest{}
-	mi := &file_f10_v1_daemon_proto_msgTypes[9]
+	mi := &file_f10_v1_daemon_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -599,7 +708,7 @@ func (x *WatchProjectRequest) String() string {
 func (*WatchProjectRequest) ProtoMessage() {}
 
 func (x *WatchProjectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_f10_v1_daemon_proto_msgTypes[9]
+	mi := &file_f10_v1_daemon_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -612,7 +721,7 @@ func (x *WatchProjectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WatchProjectRequest.ProtoReflect.Descriptor instead.
 func (*WatchProjectRequest) Descriptor() ([]byte, []int) {
-	return file_f10_v1_daemon_proto_rawDescGZIP(), []int{9}
+	return file_f10_v1_daemon_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *WatchProjectRequest) GetRoot() string {
@@ -646,7 +755,7 @@ type WatchProjectResponse struct {
 
 func (x *WatchProjectResponse) Reset() {
 	*x = WatchProjectResponse{}
-	mi := &file_f10_v1_daemon_proto_msgTypes[10]
+	mi := &file_f10_v1_daemon_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -658,7 +767,7 @@ func (x *WatchProjectResponse) String() string {
 func (*WatchProjectResponse) ProtoMessage() {}
 
 func (x *WatchProjectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_f10_v1_daemon_proto_msgTypes[10]
+	mi := &file_f10_v1_daemon_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -671,7 +780,7 @@ func (x *WatchProjectResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WatchProjectResponse.ProtoReflect.Descriptor instead.
 func (*WatchProjectResponse) Descriptor() ([]byte, []int) {
-	return file_f10_v1_daemon_proto_rawDescGZIP(), []int{10}
+	return file_f10_v1_daemon_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *WatchProjectResponse) GetLog() string {
@@ -689,7 +798,7 @@ const file_f10_v1_daemon_proto_rawDesc = "" +
 	"\fHelloRequest\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x1f\n" +
 	"\vapi_version\x18\x02 \x01(\x05R\n" +
-	"apiVersion\"\xb3\x01\n" +
+	"apiVersion\"\xdb\x01\n" +
 	"\rHelloResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12\x1f\n" +
 	"\vapi_version\x18\x02 \x01(\x05R\n" +
@@ -697,7 +806,15 @@ const file_f10_v1_daemon_proto_rawDesc = "" +
 	"\x03pid\x18\x03 \x01(\x05R\x03pid\x129\n" +
 	"\n" +
 	"started_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12\x1a\n" +
-	"\bstopping\x18\x05 \x01(\bR\bstopping\"\xa3\x01\n" +
+	"\bstopping\x18\x05 \x01(\bR\bstopping\x12&\n" +
+	"\x06caller\x18\x06 \x01(\v2\x0e.f10.v1.CallerR\x06caller\"l\n" +
+	"\x06Caller\x12\x14\n" +
+	"\x05local\x18\x01 \x01(\bR\x05local\x12\x14\n" +
+	"\x05token\x18\x02 \x01(\tR\x05token\x12\x16\n" +
+	"\x06scopes\x18\x03 \x03(\tR\x06scopes\x12\x1e\n" +
+	"\n" +
+	"procedures\x18\x04 \x03(\tR\n" +
+	"procedures\"\xa3\x01\n" +
 	"\x0fSupervisedDrive\x12\x12\n" +
 	"\x04root\x18\x01 \x01(\tR\x04root\x12\x10\n" +
 	"\x03dir\x18\x02 \x01(\tR\x03dir\x12\x14\n" +
@@ -712,11 +829,14 @@ const file_f10_v1_daemon_proto_rawDesc = "" +
 	"lastPassAt\x12\x12\n" +
 	"\x04exit\x18\x04 \x01(\x05R\x04exit\x12\x10\n" +
 	"\x03log\x18\x05 \x01(\tR\x03log\"\x18\n" +
-	"\x16GetDaemonStatusRequest\"V\n" +
+	"\x16GetDaemonStatusRequest\"\xa1\x01\n" +
 	"\x0eRemoteListener\x12\x18\n" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x12\n" +
 	"\x04addr\x18\x02 \x01(\tR\x04addr\x12\x16\n" +
-	"\x06reason\x18\x03 \x01(\tR\x06reason\"\xac\x01\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\x12\x10\n" +
+	"\x03url\x18\x04 \x01(\tR\x03url\x12\x14\n" +
+	"\x05https\x18\x05 \x01(\bR\x05https\x12!\n" +
+	"\fhttps_reason\x18\x06 \x01(\tR\vhttpsReason\"\xac\x01\n" +
 	"\x17GetDaemonStatusResponse\x12/\n" +
 	"\x06drives\x18\x01 \x03(\v2\x17.f10.v1.SupervisedDriveR\x06drives\x120\n" +
 	"\awatches\x18\x02 \x03(\v2\x16.f10.v1.WatchedProjectR\awatches\x12.\n" +
@@ -752,41 +872,43 @@ func file_f10_v1_daemon_proto_rawDescGZIP() []byte {
 	return file_f10_v1_daemon_proto_rawDescData
 }
 
-var file_f10_v1_daemon_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_f10_v1_daemon_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_f10_v1_daemon_proto_goTypes = []any{
 	(*HelloRequest)(nil),            // 0: f10.v1.HelloRequest
 	(*HelloResponse)(nil),           // 1: f10.v1.HelloResponse
-	(*SupervisedDrive)(nil),         // 2: f10.v1.SupervisedDrive
-	(*WatchedProject)(nil),          // 3: f10.v1.WatchedProject
-	(*GetDaemonStatusRequest)(nil),  // 4: f10.v1.GetDaemonStatusRequest
-	(*RemoteListener)(nil),          // 5: f10.v1.RemoteListener
-	(*GetDaemonStatusResponse)(nil), // 6: f10.v1.GetDaemonStatusResponse
-	(*StopDaemonRequest)(nil),       // 7: f10.v1.StopDaemonRequest
-	(*StopDaemonResponse)(nil),      // 8: f10.v1.StopDaemonResponse
-	(*WatchProjectRequest)(nil),     // 9: f10.v1.WatchProjectRequest
-	(*WatchProjectResponse)(nil),    // 10: f10.v1.WatchProjectResponse
-	(*timestamppb.Timestamp)(nil),   // 11: google.protobuf.Timestamp
+	(*Caller)(nil),                  // 2: f10.v1.Caller
+	(*SupervisedDrive)(nil),         // 3: f10.v1.SupervisedDrive
+	(*WatchedProject)(nil),          // 4: f10.v1.WatchedProject
+	(*GetDaemonStatusRequest)(nil),  // 5: f10.v1.GetDaemonStatusRequest
+	(*RemoteListener)(nil),          // 6: f10.v1.RemoteListener
+	(*GetDaemonStatusResponse)(nil), // 7: f10.v1.GetDaemonStatusResponse
+	(*StopDaemonRequest)(nil),       // 8: f10.v1.StopDaemonRequest
+	(*StopDaemonResponse)(nil),      // 9: f10.v1.StopDaemonResponse
+	(*WatchProjectRequest)(nil),     // 10: f10.v1.WatchProjectRequest
+	(*WatchProjectResponse)(nil),    // 11: f10.v1.WatchProjectResponse
+	(*timestamppb.Timestamp)(nil),   // 12: google.protobuf.Timestamp
 }
 var file_f10_v1_daemon_proto_depIdxs = []int32{
-	11, // 0: f10.v1.HelloResponse.started_at:type_name -> google.protobuf.Timestamp
-	11, // 1: f10.v1.SupervisedDrive.since:type_name -> google.protobuf.Timestamp
-	11, // 2: f10.v1.WatchedProject.last_pass_at:type_name -> google.protobuf.Timestamp
-	2,  // 3: f10.v1.GetDaemonStatusResponse.drives:type_name -> f10.v1.SupervisedDrive
-	3,  // 4: f10.v1.GetDaemonStatusResponse.watches:type_name -> f10.v1.WatchedProject
-	5,  // 5: f10.v1.GetDaemonStatusResponse.remote:type_name -> f10.v1.RemoteListener
-	0,  // 6: f10.v1.DaemonService.Hello:input_type -> f10.v1.HelloRequest
-	4,  // 7: f10.v1.DaemonService.GetDaemonStatus:input_type -> f10.v1.GetDaemonStatusRequest
-	7,  // 8: f10.v1.DaemonService.StopDaemon:input_type -> f10.v1.StopDaemonRequest
-	9,  // 9: f10.v1.DaemonService.WatchProject:input_type -> f10.v1.WatchProjectRequest
-	1,  // 10: f10.v1.DaemonService.Hello:output_type -> f10.v1.HelloResponse
-	6,  // 11: f10.v1.DaemonService.GetDaemonStatus:output_type -> f10.v1.GetDaemonStatusResponse
-	8,  // 12: f10.v1.DaemonService.StopDaemon:output_type -> f10.v1.StopDaemonResponse
-	10, // 13: f10.v1.DaemonService.WatchProject:output_type -> f10.v1.WatchProjectResponse
-	10, // [10:14] is the sub-list for method output_type
-	6,  // [6:10] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	12, // 0: f10.v1.HelloResponse.started_at:type_name -> google.protobuf.Timestamp
+	2,  // 1: f10.v1.HelloResponse.caller:type_name -> f10.v1.Caller
+	12, // 2: f10.v1.SupervisedDrive.since:type_name -> google.protobuf.Timestamp
+	12, // 3: f10.v1.WatchedProject.last_pass_at:type_name -> google.protobuf.Timestamp
+	3,  // 4: f10.v1.GetDaemonStatusResponse.drives:type_name -> f10.v1.SupervisedDrive
+	4,  // 5: f10.v1.GetDaemonStatusResponse.watches:type_name -> f10.v1.WatchedProject
+	6,  // 6: f10.v1.GetDaemonStatusResponse.remote:type_name -> f10.v1.RemoteListener
+	0,  // 7: f10.v1.DaemonService.Hello:input_type -> f10.v1.HelloRequest
+	5,  // 8: f10.v1.DaemonService.GetDaemonStatus:input_type -> f10.v1.GetDaemonStatusRequest
+	8,  // 9: f10.v1.DaemonService.StopDaemon:input_type -> f10.v1.StopDaemonRequest
+	10, // 10: f10.v1.DaemonService.WatchProject:input_type -> f10.v1.WatchProjectRequest
+	1,  // 11: f10.v1.DaemonService.Hello:output_type -> f10.v1.HelloResponse
+	7,  // 12: f10.v1.DaemonService.GetDaemonStatus:output_type -> f10.v1.GetDaemonStatusResponse
+	9,  // 13: f10.v1.DaemonService.StopDaemon:output_type -> f10.v1.StopDaemonResponse
+	11, // 14: f10.v1.DaemonService.WatchProject:output_type -> f10.v1.WatchProjectResponse
+	11, // [11:15] is the sub-list for method output_type
+	7,  // [7:11] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_f10_v1_daemon_proto_init() }
@@ -800,7 +922,7 @@ func file_f10_v1_daemon_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_f10_v1_daemon_proto_rawDesc), len(file_f10_v1_daemon_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

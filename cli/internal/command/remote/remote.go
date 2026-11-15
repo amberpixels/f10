@@ -4,6 +4,7 @@
 package remote
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -153,6 +154,11 @@ func writeListener(ctx context.Context, w io.Writer, run string, c remote.Config
 		fmt.Fprintf(w, "tailnet listener on, port %d; the daemon did not report it: %v\n", c.ListenPort(), err)
 	case st.Remote.Addr != "":
 		fmt.Fprintf(w, "tailnet listener on %s\n", st.Remote.Addr)
+		fmt.Fprintf(w, "web client at %s\n", cmp.Or(st.Remote.URL, "http://"+st.Remote.Addr+"/"))
+
+		if st.Remote.HTTPSReason != "" {
+			fmt.Fprintf(w, "no HTTPS, so the page does not install or notify: %s\n", st.Remote.HTTPSReason)
+		}
 	default:
 		fmt.Fprintf(w, "tailnet listener on, port %d, not listening yet: %s\n", c.ListenPort(), st.Remote.Reason)
 		fmt.Fprintln(w, "the daemon binds it within a minute of the cause clearing")

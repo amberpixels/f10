@@ -1930,6 +1930,131 @@ func (x *FinishResponse) GetClosedWorkspace() bool {
 	return false
 }
 
+type ForwardRequest struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Project string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
+	// task is the task id, with a -suffix for one of its parallel worktrees.
+	Task string `protobuf:"bytes,2,opt,name=task,proto3" json:"task,omitempty"`
+	// text is what the agent is told, such as a command or a note.
+	Text          string `protobuf:"bytes,3,opt,name=text,proto3" json:"text,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ForwardRequest) Reset() {
+	*x = ForwardRequest{}
+	mi := &file_f10_v1_runs_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ForwardRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ForwardRequest) ProtoMessage() {}
+
+func (x *ForwardRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_f10_v1_runs_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ForwardRequest.ProtoReflect.Descriptor instead.
+func (*ForwardRequest) Descriptor() ([]byte, []int) {
+	return file_f10_v1_runs_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *ForwardRequest) GetProject() string {
+	if x != nil {
+		return x.Project
+	}
+	return ""
+}
+
+func (x *ForwardRequest) GetTask() string {
+	if x != nil {
+		return x.Task
+	}
+	return ""
+}
+
+func (x *ForwardRequest) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+type ForwardResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// workspace is the workspace the text went to.
+	Workspace string `protobuf:"bytes,1,opt,name=workspace,proto3" json:"workspace,omitempty"`
+	// sent is the text as typed into the agent's pane.
+	Sent string `protobuf:"bytes,2,opt,name=sent,proto3" json:"sent,omitempty"`
+	// note says what the delivery check saw, empty when all went well.
+	Note          string `protobuf:"bytes,3,opt,name=note,proto3" json:"note,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ForwardResponse) Reset() {
+	*x = ForwardResponse{}
+	mi := &file_f10_v1_runs_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ForwardResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ForwardResponse) ProtoMessage() {}
+
+func (x *ForwardResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_f10_v1_runs_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ForwardResponse.ProtoReflect.Descriptor instead.
+func (*ForwardResponse) Descriptor() ([]byte, []int) {
+	return file_f10_v1_runs_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *ForwardResponse) GetWorkspace() string {
+	if x != nil {
+		return x.Workspace
+	}
+	return ""
+}
+
+func (x *ForwardResponse) GetSent() string {
+	if x != nil {
+		return x.Sent
+	}
+	return ""
+}
+
+func (x *ForwardResponse) GetNote() string {
+	if x != nil {
+		return x.Note
+	}
+	return ""
+}
+
 var File_f10_v1_runs_proto protoreflect.FileDescriptor
 
 const file_f10_v1_runs_proto_rawDesc = "" +
@@ -2083,7 +2208,15 @@ const file_f10_v1_runs_proto_rawDesc = "" +
 	"\x06commit\x18\x03 \x01(\tR\x06commit\x12)\n" +
 	"\x10removed_worktree\x18\x04 \x01(\bR\x0fremovedWorktree\x12%\n" +
 	"\x0eremoved_branch\x18\x05 \x01(\bR\rremovedBranch\x12)\n" +
-	"\x10closed_workspace\x18\x06 \x01(\bR\x0fclosedWorkspace*\xf6\x01\n" +
+	"\x10closed_workspace\x18\x06 \x01(\bR\x0fclosedWorkspace\"R\n" +
+	"\x0eForwardRequest\x12\x18\n" +
+	"\aproject\x18\x01 \x01(\tR\aproject\x12\x12\n" +
+	"\x04task\x18\x02 \x01(\tR\x04task\x12\x12\n" +
+	"\x04text\x18\x03 \x01(\tR\x04text\"W\n" +
+	"\x0fForwardResponse\x12\x1c\n" +
+	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x12\n" +
+	"\x04sent\x18\x02 \x01(\tR\x04sent\x12\x12\n" +
+	"\x04note\x18\x03 \x01(\tR\x04note*\xf6\x01\n" +
 	"\vPhaseStatus\x12\x1c\n" +
 	"\x18PHASE_STATUS_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14PHASE_STATUS_RUNNING\x10\x01\x12\x15\n" +
@@ -2104,13 +2237,14 @@ const file_f10_v1_runs_proto_rawDesc = "" +
 	"\rMERGE_MODE_PR\x10\x01\x12\x14\n" +
 	"\x10MERGE_MODE_FORCE\x10\x02\x12\x14\n" +
 	"\x10MERGE_MODE_LOCAL\x10\x03\x12\x14\n" +
-	"\x10MERGE_MODE_CLOSE\x10\x042\xfc\x01\n" +
+	"\x10MERGE_MODE_CLOSE\x10\x042\xb8\x02\n" +
 	"\n" +
 	"RunService\x12I\n" +
 	"\fGetRunStatus\x12\x1b.f10.v1.GetRunStatusRequest\x1a\x1c.f10.v1.GetRunStatusResponse\x124\n" +
 	"\x05Start\x12\x14.f10.v1.StartRequest\x1a\x15.f10.v1.StartResponse\x124\n" +
 	"\x05Drive\x12\x14.f10.v1.DriveRequest\x1a\x15.f10.v1.DriveResponse\x127\n" +
-	"\x06Finish\x12\x15.f10.v1.FinishRequest\x1a\x16.f10.v1.FinishResponseB\x81\x01\n" +
+	"\x06Finish\x12\x15.f10.v1.FinishRequest\x1a\x16.f10.v1.FinishResponse\x12:\n" +
+	"\aForward\x12\x16.f10.v1.ForwardRequest\x1a\x17.f10.v1.ForwardResponseB\x81\x01\n" +
 	"\n" +
 	"com.f10.v1B\tRunsProtoP\x01Z/github.com/amberpixels/f10/cli/gen/f10/v1;f10v1\xa2\x02\x03FXX\xaa\x02\x06F10.V1\xca\x02\x06F10\\V1\xe2\x02\x12F10\\V1\\GPBMetadata\xea\x02\aF10::V1b\x06proto3"
 
@@ -2127,7 +2261,7 @@ func file_f10_v1_runs_proto_rawDescGZIP() []byte {
 }
 
 var file_f10_v1_runs_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_f10_v1_runs_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_f10_v1_runs_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
 var file_f10_v1_runs_proto_goTypes = []any{
 	(PhaseStatus)(0),              // 0: f10.v1.PhaseStatus
 	(StartMode)(0),                // 1: f10.v1.StartMode
@@ -2151,15 +2285,17 @@ var file_f10_v1_runs_proto_goTypes = []any{
 	(*DriveResponse)(nil),         // 19: f10.v1.DriveResponse
 	(*FinishRequest)(nil),         // 20: f10.v1.FinishRequest
 	(*FinishResponse)(nil),        // 21: f10.v1.FinishResponse
-	(*timestamppb.Timestamp)(nil), // 22: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),   // 23: google.protobuf.Duration
+	(*ForwardRequest)(nil),        // 22: f10.v1.ForwardRequest
+	(*ForwardResponse)(nil),       // 23: f10.v1.ForwardResponse
+	(*timestamppb.Timestamp)(nil), // 24: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),   // 25: google.protobuf.Duration
 }
 var file_f10_v1_runs_proto_depIdxs = []int32{
 	0,  // 0: f10.v1.Run.capture:type_name -> f10.v1.PhaseStatus
 	0,  // 1: f10.v1.Run.plan:type_name -> f10.v1.PhaseStatus
 	0,  // 2: f10.v1.Run.ship:type_name -> f10.v1.PhaseStatus
-	22, // 3: f10.v1.Run.done_at:type_name -> google.protobuf.Timestamp
-	22, // 4: f10.v1.Run.updated:type_name -> google.protobuf.Timestamp
+	24, // 3: f10.v1.Run.done_at:type_name -> google.protobuf.Timestamp
+	24, // 4: f10.v1.Run.updated:type_name -> google.protobuf.Timestamp
 	5,  // 5: f10.v1.ReviewHalf.rounds:type_name -> f10.v1.ReviewRound
 	4,  // 6: f10.v1.Gate.outcome:type_name -> f10.v1.JudgeOutcome
 	6,  // 7: f10.v1.Gate.local:type_name -> f10.v1.ReviewHalf
@@ -2175,18 +2311,20 @@ var file_f10_v1_runs_proto_depIdxs = []int32{
 	12, // 17: f10.v1.GetRunStatusResponse.runs:type_name -> f10.v1.RunStatus
 	1,  // 18: f10.v1.StartRequest.mode:type_name -> f10.v1.StartMode
 	17, // 19: f10.v1.DriveRequest.tasks:type_name -> f10.v1.DriveTask
-	23, // 20: f10.v1.DriveRequest.every:type_name -> google.protobuf.Duration
+	25, // 20: f10.v1.DriveRequest.every:type_name -> google.protobuf.Duration
 	2,  // 21: f10.v1.FinishRequest.merge:type_name -> f10.v1.MergeMode
 	13, // 22: f10.v1.RunService.GetRunStatus:input_type -> f10.v1.GetRunStatusRequest
 	15, // 23: f10.v1.RunService.Start:input_type -> f10.v1.StartRequest
 	18, // 24: f10.v1.RunService.Drive:input_type -> f10.v1.DriveRequest
 	20, // 25: f10.v1.RunService.Finish:input_type -> f10.v1.FinishRequest
-	14, // 26: f10.v1.RunService.GetRunStatus:output_type -> f10.v1.GetRunStatusResponse
-	16, // 27: f10.v1.RunService.Start:output_type -> f10.v1.StartResponse
-	19, // 28: f10.v1.RunService.Drive:output_type -> f10.v1.DriveResponse
-	21, // 29: f10.v1.RunService.Finish:output_type -> f10.v1.FinishResponse
-	26, // [26:30] is the sub-list for method output_type
-	22, // [22:26] is the sub-list for method input_type
+	22, // 26: f10.v1.RunService.Forward:input_type -> f10.v1.ForwardRequest
+	14, // 27: f10.v1.RunService.GetRunStatus:output_type -> f10.v1.GetRunStatusResponse
+	16, // 28: f10.v1.RunService.Start:output_type -> f10.v1.StartResponse
+	19, // 29: f10.v1.RunService.Drive:output_type -> f10.v1.DriveResponse
+	21, // 30: f10.v1.RunService.Finish:output_type -> f10.v1.FinishResponse
+	23, // 31: f10.v1.RunService.Forward:output_type -> f10.v1.ForwardResponse
+	27, // [27:32] is the sub-list for method output_type
+	22, // [22:27] is the sub-list for method input_type
 	22, // [22:22] is the sub-list for extension type_name
 	22, // [22:22] is the sub-list for extension extendee
 	0,  // [0:22] is the sub-list for field type_name
@@ -2203,7 +2341,7 @@ func file_f10_v1_runs_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_f10_v1_runs_proto_rawDesc), len(file_f10_v1_runs_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   19,
+			NumMessages:   21,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

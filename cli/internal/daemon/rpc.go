@@ -16,7 +16,7 @@ import (
 type daemonService struct{ sup *Server }
 
 func (d *daemonService) Hello(
-	_ context.Context,
+	ctx context.Context,
 	_ *connect.Request[f10v1.HelloRequest],
 ) (*connect.Response[f10v1.HelloResponse], error) {
 	info := d.sup.Info()
@@ -27,6 +27,7 @@ func (d *daemonService) Hello(
 		Pid:        int32(info.PID), //nolint:gosec // a process id
 		StartedAt:  timestamppb.New(info.Started),
 		Stopping:   info.Stopping,
+		Caller:     callerOf(ctx),
 	}), nil
 }
 
@@ -67,7 +68,10 @@ func (d *daemonService) GetDaemonStatus(
 	}
 
 	if r := st.Remote; r != (RemoteState{}) {
-		out.Remote = &f10v1.RemoteListener{Enabled: r.Enabled, Addr: r.Addr, Reason: r.Reason}
+		out.Remote = &f10v1.RemoteListener{
+			Enabled: r.Enabled, Addr: r.Addr, Reason: r.Reason,
+			Url: r.URL, Https: r.HTTPS, HttpsReason: r.HTTPSReason,
+		}
 	}
 
 	return connect.NewResponse(out), nil
@@ -94,4 +98,13 @@ func (d *daemonService) WatchProject(
 	}
 
 	return connect.NewResponse(&f10v1.WatchProjectResponse{Log: log}), nil
+}
+
+func callerOf(ctx context.Context) *f10v1.Caller {
+	c, ok := CallerOf(ctx)
+	if !ok {
+		return &f10v1.Caller{Local: true}
+	}
+
+	return &f10v1.Caller{Token: c.Token, Scopes: c.Scopes, Procedures: c.Procedures}
 }

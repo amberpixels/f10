@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package f10.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// ArtifactService reads the files f10 keeps for a task under the project's
+// storage root: its plan, spike report, handoff, demo report, verdicts and
+// review findings. A file is named by kind and name, never by path, so a
+// client reads only what the listing offers.
+service ArtifactService {
+  rpc ListArtifacts(ListArtifactsRequest) returns (ListArtifactsResponse);
+  rpc GetArtifact(GetArtifactRequest) returns (GetArtifactResponse);
+}
+
+// ArtifactKind is what an artifact is to its task.
+enum ArtifactKind {
+  ARTIFACT_KIND_UNSPECIFIED = 0;
+  ARTIFACT_KIND_PLAN = 1;
+  ARTIFACT_KIND_SPIKE = 2;
+  ARTIFACT_KIND_HANDOFF = 3;
+  // the demo report and the files it references, such as screenshots
+  ARTIFACT_KIND_DEMO = 4;
+  ARTIFACT_KIND_VERDICT = 5;
+  // a review round's findings
+  ARTIFACT_KIND_FINDINGS = 6;
+}
+
+// An Artifact is one file of a task.
+message Artifact {
+  ArtifactKind kind = 1;
+  // name tells files of one kind apart: a verdict's number, a review
+  // round, or a demo file's path inside the demo directory. The plan, spike
+  // report and handoff have one file each, named by the task id.
+  string name = 2;
+  // title is a line to list it by, such as a verdict's subject.
+  string title = 3;
+  int32 size = 4;
+  google.protobuf.Timestamp modified = 5;
+  string content_type = 6;
+}
+
+message ListArtifactsRequest {
+  // project is a project id or the path of its checkout.
+  string project = 1;
+  string task = 2;
+}
+
+message ListArtifactsResponse {
+  repeated Artifact artifacts = 1;
+}
+
+message GetArtifactRequest {
+  string project = 1;
+  string task = 2;
+  ArtifactKind kind = 3;
+  string name = 4;
+}
+
+message GetArtifactResponse {
+  Artifact artifact = 1;
+  bytes content = 2;
+}
