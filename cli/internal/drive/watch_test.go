@@ -140,10 +140,10 @@ func (c *collected) Report(r watchReport) { *c = append(*c, r) }
 
 // The same fact is told once; a new one, and a task gone, change the store.
 func TestReconcileReportsOnce(t *testing.T) {
-	var out collected
+	var out, recorded collected
 
 	now := watchNow
-	in := WatchInput{Mode: "report", Now: func() time.Time { return now }, Out: &out}
+	in := WatchInput{Mode: "report", Now: func() time.Time { return now }, Out: &out, Record: recorded.Report}
 	store := map[string]watchReport{"FT-9": {Kind: watchStalled, Key: "x", At: now}}
 
 	blocked := &state.Run{Ship: "blocked", Updated: now}
@@ -165,6 +165,10 @@ func TestReconcileReportsOnce(t *testing.T) {
 
 	if len(out) != 2 {
 		t.Errorf("a newer stop was not reported: %+v", out)
+	}
+
+	if len(recorded) != len(out) || recorded[0].Task != "FT-1" {
+		t.Errorf("recorded %+v, want each told report once: %+v", recorded, out)
 	}
 }
 
@@ -372,9 +376,9 @@ func TestRecheckFinish(t *testing.T) {
 // A host that does not answer is said every pass, names the tasks it left
 // out, and leaves the store once the host answers again.
 func TestHostTrouble(t *testing.T) {
-	var out collected
+	var out, recorded collected
 
-	in := WatchInput{Mode: "report", Now: func() time.Time { return watchNow }, Out: &out}
+	in := WatchInput{Mode: "report", Now: func() time.Time { return watchNow }, Out: &out, Record: recorded.Report}
 	store := map[string]watchReport{}
 	tasks := []WatchedTask{{ID: "FT-1", HostErr: errors.New("gh: HTTP 401")}, {ID: "FT-2"}}
 
@@ -387,6 +391,10 @@ func TestHostTrouble(t *testing.T) {
 
 	if _, ok := store[watchHostKey]; !ok {
 		t.Error("f10 watch would not show the host trouble")
+	}
+
+	if len(recorded) != 1 {
+		t.Errorf("recorded %d host reports over two passes, want 1", len(recorded))
 	}
 
 	in.hostTrouble(tasks[1:], store)

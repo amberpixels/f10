@@ -36,6 +36,8 @@ const (
 	AskRaised   = "ask_raised"   // an agent stopped on a question, from the asks inbox
 	AskAnswered = "ask_answered" // the first answer closed it
 
+	WatchReported = "watch_reported" // a fact the watcher told, once
+
 	PlanSaved         = "plan_saved"
 	PlanSuperseded    = "plan_superseded"
 	SpikeSaved        = "spike_saved"

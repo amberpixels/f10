@@ -119,6 +119,15 @@
         "id": {
           "type": "string"
         },
+        "labels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": [
+            "object",
+            "null"
+          ]
+        },
         "v": {
           "const": 1
         }
@@ -1625,6 +1634,35 @@
           "type": "string"
         },
         "tool": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "watch_reported": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/watch_reported.v1"
+        }
+      ]
+    },
+    "watch_reported.v1": {
+      "additionalProperties": false,
+      "properties": {
+        "ask": {
+          "type": "string"
+        },
+        "next": {
+          "type": "string"
+        },
+        "report": {
+          "type": "string"
+        },
+        "text": {
           "type": "string"
         },
         "v": {

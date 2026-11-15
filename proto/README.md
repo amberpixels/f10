@@ -59,7 +59,13 @@ Clients built against `v1` keep working only if `v1` changes only by adding, so:
 `f10.v1.Event` is one ledger row, with a `oneof payload` case named after each ledger kind.
 The nine `state_*` kinds share the `claim` case, so a client tells them apart by `Event.kind`, and applies them to the `Run` whose session `Event.session` names.
 `WatchEvents` resumes from the `cursor` each response carries, never from `Event.id`, because rows land in the ledger out of id order: a spooled row is inserted after its id is minted, and other machines mint ids on their own clocks.
+A stream opened with `tail` and no cursor starts at the newest row, and its first response has no event, only the cursor of that row; without `tail` an empty cursor starts at the first row.
+A client that drops before any event resumes from that cursor, and takes the state before it from the read methods (`ListAsks`, `GetBoard`, `GetRunStatus`), not from the stream.
+`kinds` narrows the stream to the ledger kinds named, each `state_*` kind by its own name, and an unknown kind is refused, because a misspelt one would otherwise stream nothing.
 `ask_raised` and `ask_answered` are the asks inbox's, which records them in the ledger as asks are raised and answered.
+Their rows carry no project, because asks are raised from hooks that must not run git, so a stream narrowed to a project matches them by the project of the ask's `main` label.
+`ask_answered` rows written before `AskAnswered.labels` existed match only a stream with no project.
+`watch_reported` is a report the watcher told, once, with its kind in `report` and its text as the watch log shows it.
 
 The payload messages are the ledger's stored payloads: the ledger registers each kind against its message and stores it as protojson (`docs/ledger.md`).
 So they follow the JSON the ledger stored before they existed, not API taste:

@@ -333,23 +333,14 @@ func TestEventOfReadsALegacyAskRow(t *testing.T) {
 	}
 }
 
-// A tail stream skips the backlog and sends only what lands after it opened.
+// A tail stream skips the backlog: its first response only places the
+// tail, and then it sends only what lands after it opened.
 func TestWatchEventsFromTheTail(t *testing.T) {
 	seam.Swap(t, &EventPoll, 20*time.Millisecond)
 
 	old := ledger.MustEvent(ledger.WaitStarted, &ledger.WaitStartedPayload{})
 	old.ID, old.Task = ulid.Make().String(), "FT-2"
 	ledger.Record(old)
-
-	next := ledger.MustEvent(ledger.WaitEnded, &ledger.WaitEndedPayload{})
-	next.ID, next.Task = ulid.Make().String(), "FT-2"
-
-	// the call returns with the first event's headers, so the new row lands
-	// while it waits; the delay lets the stream read its tail first
-	go func() {
-		time.Sleep(200 * time.Millisecond)
-		ledger.Record(next)
-	}()
 
 	srv := httptest.NewServer(Handler(&fakeSup{}))
 	t.Cleanup(srv.Close)
@@ -361,6 +352,15 @@ func TestWatchEventsFromTheTail(t *testing.T) {
 	}
 
 	t.Cleanup(func() { _ = stream.Close() })
+
+	if !stream.Receive() || stream.Msg().GetEvent() != nil || stream.Msg().GetCursor() == "" {
+		t.Fatalf("first response from the tail = %v, %v; want a start marker", stream.Msg(), stream.Err())
+	}
+
+	// recorded once the marker placed the tail, so it always lands after it
+	next := ledger.MustEvent(ledger.WaitEnded, &ledger.WaitEndedPayload{})
+	next.ID, next.Task = ulid.Make().String(), "FT-2"
+	ledger.Record(next)
 
 	if !stream.Receive() || stream.Msg().GetEvent().GetId() != next.ID {
 		t.Fatalf("first event from the tail = %v, %v; want only the new row", stream.Msg(), stream.Err())

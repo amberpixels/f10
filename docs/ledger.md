@@ -25,6 +25,7 @@ The two can disagree, and both stand.
 
 - `f10 history` and `f10 audit map` read, per task, `task_sized`, `review_round_opened`, `finding_verdict`, `plan_superseded`, `task_halted`, `judge_verdict`, `regression_found` and the step windows, through one shared count, so a round or a fix counts the same in both.
 - `f10 standup` reads the project's sessions active in the period: the `state_*` claims (asks, stops, the step a run is on), `task_halted`, `plan_saved`, `plan_superseded`, `spike_saved`, `review_round_opened`, `finding_verdict`, `judge_verdict`, `regression_found` and the step windows ([cli.md](cli.md#standup)).
+- The API's `WatchEvents` streams every row in insertion order. Ask rows (`ask_raised`, `ask_answered`) have no project column, so the stream matches them to a project by their `main` label; `watch_reported` rows carry the project the watcher ran in, and no task for a report about the whole project.
 - `spike_saved` is a spike report written under the storage root's `spikes/`, recorded as `plan_saved` is for a plan.
 
 ## Versions

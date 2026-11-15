@@ -34,6 +34,7 @@ type (
 	ClaimPayload             = f10v1.Claim
 	RegressionFoundPayload   = f10v1.RegressionFound
 	RegressionClaimedPayload = f10v1.RegressionClaimed
+	WatchReportedPayload     = f10v1.WatchReported
 
 	// AgentProfile and the four below are the messages payloads nest.
 	AgentProfile = f10v1.AgentProfile
@@ -79,6 +80,7 @@ func init() {
 	register[*TurnUsedPayload](kinds, TurnUsed)
 	register[*AskRaisedPayload](kinds, AskRaised)
 	register[*AskAnsweredPayload](kinds, AskAnswered)
+	register[*WatchReportedPayload](kinds, WatchReported)
 
 	// v2 of each added the run context's keys
 	additive(kinds, RunStarted, 2)

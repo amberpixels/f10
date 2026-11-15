@@ -2,10 +2,10 @@ package ledger
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"io/fs"
+	"slices"
 	"strconv"
 )
 
@@ -18,24 +18,101 @@ type Placed struct {
 	Cursor string
 }
 
-// ReadAfter is up to AfterPage rows inserted after cursor ("" for the first)
-// in the database at path, narrowed by project and task when set, in
-// insertion order, what writers spooled included. A missing database has none.
-func ReadAfter(ctx context.Context, path, cursor, project, task string) ([]Placed, error) {
+// A Tail reads one database's rows in insertion order for a stream, keeping
+// its read handle between reads, so a stream polling often opens it once.
+type Tail struct {
+	path string
+	l    *Ledger
+}
+
+// Narrow picks the rows a tail sends; an empty field matches every row.
+// With a project set, a row with no project (an ask's) goes to Orphan, and
+// is dropped when Orphan is nil.
+type Narrow struct {
+	Project string
+	Task    string
+	Kinds   []string
+	Orphan  func(Event) bool
+}
+
+// A Page is one After read: the rows that matched, the cursor of the last
+// row read whether it matched or not, and whether more rows may wait.
+type Page struct {
+	Rows []Placed
+	Next string
+	Full bool
+}
+
+// AfterPage bounds one After, so a stream far behind reads a long ledger a
+// page at a time instead of whole.
+const AfterPage = 500
+
+// OpenTail is a tail of the database at path; nothing opens until a read,
+// and a database that does not exist yet reads as empty.
+func OpenTail(path string) *Tail { return &Tail{path: path} }
+
+// Close releases the read handle.
+func (t *Tail) Close() error {
+	if t.l == nil {
+		return nil
+	}
+
+	err := t.l.Close()
+	t.l = nil
+
+	return err
+}
+
+// End is the cursor of the last row inserted, what writers spooled
+// included; "0" for an empty or missing database.
+func (t *Tail) End(ctx context.Context) (string, error) {
+	l, err := t.ledger(ctx)
+	if err != nil || l == nil {
+		return "0", err
+	}
+
+	var last int64
+	if err := l.db.QueryRowContext(ctx, "SELECT COALESCE(MAX(rowid), 0) FROM events").Scan(&last); err != nil {
+		return "", fmt.Errorf("ledger: %w", err)
+	}
+
+	return strconv.FormatInt(last, 10), nil
+}
+
+// After reads up to AfterPage rows inserted after cursor ("" for the
+// first), in insertion order, narrowed by n.
+func (t *Tail) After(ctx context.Context, cursor string, n Narrow) (Page, error) {
+	page := Page{Next: cursor}
+
 	after := int64(0)
 
 	if cursor != "" {
-		n, err := strconv.ParseInt(cursor, 10, 64)
-		if err != nil || n < 0 {
-			return nil, fmt.Errorf("ledger: cursor %q is not one this ledger gave", cursor)
+		v, err := strconv.ParseInt(cursor, 10, 64)
+		if err != nil || v < 0 {
+			return page, fmt.Errorf("ledger: cursor %q is not one this ledger gave", cursor)
 		}
 
-		after = n
+		after = v
 	}
 
-	_ = SyncAt(ctx, path) // a failed replay still reads what the database holds
+	l, err := t.ledger(ctx)
+	if err != nil || l == nil {
+		return page, err
+	}
 
-	l, err := OpenRead(ctx, path)
+	return l.after(ctx, after, n, page)
+}
+
+// ledger replays the spool, then opens the database once it exists; nil,
+// nil while it does not.
+func (t *Tail) ledger(ctx context.Context) (*Ledger, error) {
+	_ = SyncAt(ctx, t.path) // a failed replay still reads what the database holds
+
+	if t.l != nil {
+		return t.l, nil
+	}
+
+	l, err := OpenRead(ctx, t.path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}
@@ -44,85 +121,85 @@ func ReadAfter(ctx context.Context, path, cursor, project, task string) ([]Place
 		return nil, err
 	}
 
-	defer l.Close()
+	t.l = l
 
-	return l.after(ctx, after, project, task)
+	return l, nil
 }
 
-// LastCursor is the cursor of the newest row in the database at path, ""
-// when it holds none, so a reader can start after everything already there.
-func LastCursor(ctx context.Context, path string) (string, error) {
-	_ = SyncAt(ctx, path) // a failed replay still reads what the database holds
+// rowsAfter reads the rowid range alone, on the rowid key, so an idle poll
+// costs only the rows inserted since; Narrow is applied in Go, because the
+// project and kind indexes would make SQLite scan every matching row ever
+// written. Rowids follow insertion order and the ledger never deletes, so a
+// cursor stays valid.
+const rowsAfter = `SELECT rowid, id, project, task, kind FROM events WHERE rowid > ? ORDER BY rowid LIMIT ?`
 
-	l, err := OpenRead(ctx, path)
-	if errors.Is(err, fs.ErrNotExist) {
-		return "", nil
+// takes reports whether a row's columns pass n, and whether it is an orphan:
+// a row with no project under a project filter, which Orphan decides.
+func (n Narrow) takes(project, task, kind string) (bool, bool) {
+	if n.Task != "" && task != n.Task {
+		return false, false
 	}
 
-	if err != nil {
-		return "", err
+	if len(n.Kinds) > 0 && !slices.Contains(n.Kinds, kind) {
+		return false, false
 	}
 
-	defer l.Close()
-
-	var last sql.NullInt64
-	if err := l.db.QueryRowContext(ctx, `SELECT max(rowid) FROM events`).Scan(&last); err != nil {
-		return "", fmt.Errorf("ledger: %w", err)
+	if n.Project == "" || project == n.Project {
+		return true, false
 	}
 
-	if !last.Valid {
-		return "", nil
-	}
-
-	return strconv.FormatInt(last.Int64, 10), nil
+	return project == "" && n.Orphan != nil, project == ""
 }
 
-// rowsAfter reads rowids, which SQLite assigns in insertion order; an empty
-// project or task matches every row.
-const rowsAfter = `SELECT rowid, id FROM events
-WHERE rowid > ? AND (? = '' OR project = ?) AND (? = '' OR task = ?)
-ORDER BY rowid LIMIT ?`
-
-// AfterPage bounds one ReadAfter, so a stream from the first row reads a
-// long ledger a page at a time instead of whole.
-const AfterPage = 500
-
-func (l *Ledger) after(ctx context.Context, after int64, project, task string) ([]Placed, error) {
-	rows, err := l.db.QueryContext(ctx, rowsAfter, after, project, project, task, task, AfterPage)
+func (l *Ledger) after(ctx context.Context, after int64, n Narrow, page Page) (Page, error) {
+	rows, err := l.db.QueryContext(ctx, rowsAfter, after, AfterPage)
 	if err != nil {
-		return nil, fmt.Errorf("ledger: %w", err)
+		return page, fmt.Errorf("ledger: %w", err)
 	}
 	defer rows.Close()
 
 	var (
-		ids     []string
-		cursors = map[string]string{}
+		ids      []string
+		cursors  = map[string]string{}
+		orphans  = map[string]bool{}
+		rowCount int
 	)
 
 	for rows.Next() {
 		var (
-			rowid int64
-			id    string
+			rowid                   int64
+			id, project, task, kind string
 		)
 
-		if err := rows.Scan(&rowid, &id); err != nil {
-			return nil, fmt.Errorf("ledger: %w", err)
+		if err := rows.Scan(&rowid, &id, &project, &task, &kind); err != nil {
+			return page, fmt.Errorf("ledger: %w", err)
 		}
 
-		ids, cursors[id] = append(ids, id), strconv.FormatInt(rowid, 10)
+		rowCount++
+		page.Next = strconv.FormatInt(rowid, 10)
+
+		take, orphan := n.takes(project, task, kind)
+		if !take {
+			continue
+		}
+
+		ids, cursors[id] = append(ids, id), page.Next
+		orphans[id] = orphan
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("ledger: %w", err)
+		return page, fmt.Errorf("ledger: %w", err)
 	}
 
+	page.Full = rowCount == AfterPage
+
 	if len(ids) == 0 {
-		return nil, nil
+		return page, nil
 	}
 
 	events, err := l.List(ctx, Filter{IDs: ids})
 	if err != nil {
-		return nil, err
+		return page, err
 	}
 
 	byID := make(map[string]Event, len(events))
@@ -130,10 +207,14 @@ func (l *Ledger) after(ctx context.Context, after int64, project, task string) (
 		byID[e.ID] = e
 	}
 
-	out := make([]Placed, 0, len(ids))
 	for _, id := range ids {
-		out = append(out, Placed{Event: byID[id], Cursor: cursors[id]})
+		e := byID[id]
+		if orphans[id] && !n.Orphan(e) {
+			continue
+		}
+
+		page.Rows = append(page.Rows, Placed{Event: e, Cursor: cursors[id]})
 	}
 
-	return out, nil
+	return page, nil
 }

@@ -88,6 +88,8 @@ type WatchInput struct {
 	// Finish finishes a merged task under its lease; nil in report mode
 	Finish func(context.Context, WatchedTask) error
 	Out    reporter
+	// Record puts a report in the ledger once it is told; nil records none
+	Record func(watchReport)
 	Warn   func(string) // a line for the pass's output that is no report; nil drops it
 	// Catchup is watch_catchup: on; prompt is nil with no backend to reach
 	// an agent
@@ -127,6 +129,7 @@ func (in WatchInput) retryPull(ctx context.Context, store map[string]watchReport
 
 	rep := watchReport{Task: watchPullKey, Kind: watchUnpulled, Text: line, Key: line, At: in.Now()}
 	in.Out.Report(rep)
+	in.record(rep)
 	store[watchPullKey] = rep
 
 	return true
@@ -161,7 +164,13 @@ func (in WatchInput) hostTrouble(tasks []WatchedTask, store map[string]watchRepo
 		At:   in.Now(),
 	}
 
+	// told every pass, but recorded once while the host stays down
 	in.Out.Report(rep)
+
+	if _, told := store[watchHostKey]; !told {
+		in.record(rep)
+	}
+
 	store[watchHostKey] = rep
 }
 
@@ -211,6 +220,7 @@ func (in WatchInput) tell(store map[string]watchReport, id string, now time.Time
 	}
 
 	in.Out.Report(*rep)
+	in.record(*rep)
 
 	rep.Told = append(slices.Clone(prev.Told), rep.Key)
 	if len(rep.Told) > watchToldMax {
@@ -219,6 +229,12 @@ func (in WatchInput) tell(store map[string]watchReport, id string, now time.Time
 
 	rep.Catchup, rep.CI = prev.Catchup, prev.CI
 	store[id] = *rep
+}
+
+func (in WatchInput) record(r watchReport) {
+	if in.Record != nil {
+		in.Record(r)
+	}
 }
 
 // readTargets fetches origin once, for every task that could be caught up
