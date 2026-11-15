@@ -117,6 +117,13 @@ func upcast[Old, New proto.Message](r registry, kind string, f func(Old) New) {
 // current message; the caller fills the other columns.
 func NewEvent(kind string, payload any) (Event, error) { return kinds.event(kind, payload) }
 
+// Known reports whether kind is one this f10 registers.
+func Known(kind string) bool {
+	_, ok := kinds[kind]
+
+	return ok
+}
+
 // MustEvent is NewEvent for a payload known to match, as in a test.
 func MustEvent(kind string, payload any) Event {
 	e, err := NewEvent(kind, payload)

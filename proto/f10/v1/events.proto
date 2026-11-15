@@ -18,14 +18,20 @@ service EventService {
 
 message WatchEventsRequest {
   // after is the cursor of the last event the client holds; empty starts at
-  // the first. It is opaque: clients store it and send it back.
+  // the current end. It is opaque: clients store it and send it back.
   string after = 1;
-  // project and task narrow the stream; empty means every one.
+  // project and task narrow the stream; empty means every one. Ask rows
+  // carry no project, so they match by their main label's project.
   string project = 2;
   string task = 3;
+  // kinds are the ledger kinds to send, each state_* kind by its own name;
+  // empty sends every kind.
+  repeated string kinds = 4;
 }
 
 message WatchEventsResponse {
+  // event is unset on the first response of a stream opened without a
+  // cursor: that response only says where the stream starts.
   Event event = 1;
   // cursor is this event's place in insertion order, for the next after.
   string cursor = 2;
@@ -75,6 +81,7 @@ message Event {
     Claim claim = 31;
     agents.v1.AskRaised ask_raised = 32;
     agents.v1.AskAnswered ask_answered = 33;
+    WatchReported watch_reported = 34;
   }
 }
 
@@ -286,6 +293,20 @@ message RegressionFound {
 message RegressionClaimed {
   string origin_task = 1;
   string text = 2;
+}
+
+// WatchReported is ledger kind watch_reported: a fact the watcher told about
+// a task, or about the project when the row names no task.
+message WatchReported {
+  // report is the watcher's kind of report, such as merged, stalled, stopped
+  // or red; a string, because the watcher adds kinds older clients skip.
+  string report = 1;
+  // text is written for a person, as the watch log shows it.
+  string text = 2;
+  // next is what to do about it, empty when nothing is owed.
+  string next = 3;
+  // ask is a stopped run's question, its options included.
+  string ask = 4;
 }
 
 // Claim is every state_* ledger kind: a recorded state call, its arguments

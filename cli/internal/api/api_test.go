@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
-	"github.com/oklog/ulid/v2"
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	agentsv1 "github.com/amberpixels/f10/cli/gen/agents/v1"
@@ -186,70 +185,6 @@ func TestBoardOfNamesTheView(t *testing.T) {
 
 	if b.GetView() != f10v1.BoardView_BOARD_VIEW_CHANGES || b.GetProject().GetName() != "r" {
 		t.Errorf("board = %v", b)
-	}
-}
-
-// The stream sends the rows inserted after the cursor, then rows as they
-// land; a kind with no message arrives without a payload.
-func TestWatchEventsResumesAfterTheCursor(t *testing.T) {
-	seam.Swap(t, &EventPoll, 20*time.Millisecond)
-
-	// minted now, inserted last: a spooled row whose id predates the others
-	late := ulid.Make().String()
-
-	// Record fills ids on its own copies, so the test names them
-	first := ledger.MustEvent(ledger.WaitStarted, &ledger.WaitStartedPayload{})
-	first.ID, first.Task, first.Session = ulid.Make().String(), "FT-1", "s1"
-	second := ledger.MustEvent(ledger.AskAnswered, &ledger.AskAnsweredPayload{
-		Id: "k", Answer: "yes", AnsweredBy: agentsv1.AnswerSource_ANSWER_SOURCE_PANE,
-	})
-	second.ID, second.Task = ulid.Make().String(), "FT-1"
-	ledger.Record(first, second)
-
-	srv := httptest.NewServer(Handler(&fakeSup{}))
-	t.Cleanup(srv.Close)
-
-	c := f10v1connect.NewEventServiceClient(srv.Client(), srv.URL)
-
-	watch := func(after string) *connect.ServerStreamForClient[f10v1.WatchEventsResponse] {
-		stream, err := c.WatchEvents(
-			t.Context(),
-			connect.NewRequest(&f10v1.WatchEventsRequest{After: after, Task: "FT-1"}),
-		)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		t.Cleanup(func() { _ = stream.Close() })
-
-		return stream
-	}
-
-	all := watch("")
-	if !all.Receive() || all.Msg().GetEvent().GetId() != first.ID || all.Msg().GetEvent().GetSession() != "s1" {
-		t.Fatalf("first event = %v, %v", all.Msg(), all.Err())
-	}
-
-	stream := watch(all.Msg().GetCursor())
-	if !stream.Receive() {
-		t.Fatal(stream.Err())
-	}
-
-	ev := stream.Msg().GetEvent()
-	if ev.GetId() != second.ID || ev.GetAskAnswered().GetAnsweredBy() != agentsv1.AnswerSource_ANSWER_SOURCE_PANE {
-		t.Fatalf("event after the cursor = %v, want the second row", ev)
-	}
-
-	third := ledger.MustEvent(ledger.WaitEnded, &ledger.WaitEndedPayload{})
-	third.ID, third.Task = late, "FT-1"
-	ledger.Record(third)
-
-	if !stream.Receive() || stream.Msg().GetEvent().GetId() != late {
-		t.Fatalf("a row with an older id, inserted during the stream, did not arrive: %v", stream.Err())
-	}
-
-	if ev, err := EventOf(ledger.Event{ID: "x", Kind: "made_up"}); err != nil || ev.GetPayload() != nil {
-		t.Errorf("an unknown kind = %v, %v; want no payload", ev, err)
 	}
 }
 

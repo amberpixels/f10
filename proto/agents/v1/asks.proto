@@ -95,4 +95,6 @@ message AskAnswered {
   string answer = 2;
   AnswerSource answered_by = 3;
   bool delivered = 4;
+  // labels are the answered ask's, as AskRaised carries them.
+  map<string, string> labels = 5;
 }

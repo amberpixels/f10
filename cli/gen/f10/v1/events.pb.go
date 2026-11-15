@@ -29,11 +29,15 @@ const (
 type WatchEventsRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// after is the cursor of the last event the client holds; empty starts at
-	// the first. It is opaque: clients store it and send it back.
+	// the current end. It is opaque: clients store it and send it back.
 	After string `protobuf:"bytes,1,opt,name=after,proto3" json:"after,omitempty"`
-	// project and task narrow the stream; empty means every one.
-	Project       string `protobuf:"bytes,2,opt,name=project,proto3" json:"project,omitempty"`
-	Task          string `protobuf:"bytes,3,opt,name=task,proto3" json:"task,omitempty"`
+	// project and task narrow the stream; empty means every one. Ask rows
+	// carry no project, so they match by their main label's project.
+	Project string `protobuf:"bytes,2,opt,name=project,proto3" json:"project,omitempty"`
+	Task    string `protobuf:"bytes,3,opt,name=task,proto3" json:"task,omitempty"`
+	// kinds are the ledger kinds to send, each state_* kind by its own name;
+	// empty sends every kind.
+	Kinds         []string `protobuf:"bytes,4,rep,name=kinds,proto3" json:"kinds,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -89,9 +93,18 @@ func (x *WatchEventsRequest) GetTask() string {
 	return ""
 }
 
+func (x *WatchEventsRequest) GetKinds() []string {
+	if x != nil {
+		return x.Kinds
+	}
+	return nil
+}
+
 type WatchEventsResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	Event *Event                 `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
+	// event is unset on the first response of a stream opened without a
+	// cursor: that response only says where the stream starts.
+	Event *Event `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
 	// cursor is this event's place in insertion order, for the next after.
 	Cursor        string `protobuf:"bytes,2,opt,name=cursor,proto3" json:"cursor,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -187,6 +200,7 @@ type Event struct {
 	//	*Event_Claim
 	//	*Event_AskRaised
 	//	*Event_AskAnswered
+	//	*Event_WatchReported
 	Payload       isEvent_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -501,6 +515,15 @@ func (x *Event) GetAskAnswered() *v1.AskAnswered {
 	return nil
 }
 
+func (x *Event) GetWatchReported() *WatchReported {
+	if x != nil {
+		if x, ok := x.Payload.(*Event_WatchReported); ok {
+			return x.WatchReported
+		}
+	}
+	return nil
+}
+
 type isEvent_Payload interface {
 	isEvent_Payload()
 }
@@ -602,6 +625,10 @@ type Event_AskAnswered struct {
 	AskAnswered *v1.AskAnswered `protobuf:"bytes,33,opt,name=ask_answered,json=askAnswered,proto3,oneof"`
 }
 
+type Event_WatchReported struct {
+	WatchReported *WatchReported `protobuf:"bytes,34,opt,name=watch_reported,json=watchReported,proto3,oneof"`
+}
+
 func (*Event_RunStarted) isEvent_Payload() {}
 
 func (*Event_StepEntered) isEvent_Payload() {}
@@ -649,6 +676,8 @@ func (*Event_Claim) isEvent_Payload() {}
 func (*Event_AskRaised) isEvent_Payload() {}
 
 func (*Event_AskAnswered) isEvent_Payload() {}
+
+func (*Event_WatchReported) isEvent_Payload() {}
 
 // AgentProfile is the profile f10 started the agent with; an empty segment
 // was left to the agent's default.
@@ -2348,6 +2377,81 @@ func (x *RegressionClaimed) GetText() string {
 	return ""
 }
 
+// WatchReported is ledger kind watch_reported: a fact the watcher told about
+// a task, or about the project when the row names no task.
+type WatchReported struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// report is the watcher's kind of report, such as merged, stalled, stopped
+	// or red; a string, because the watcher adds kinds older clients skip.
+	Report string `protobuf:"bytes,1,opt,name=report,proto3" json:"report,omitempty"`
+	// text is written for a person, as the watch log shows it.
+	Text string `protobuf:"bytes,2,opt,name=text,proto3" json:"text,omitempty"`
+	// next is what to do about it, empty when nothing is owed.
+	Next string `protobuf:"bytes,3,opt,name=next,proto3" json:"next,omitempty"`
+	// ask is a stopped run's question, its options included.
+	Ask           string `protobuf:"bytes,4,opt,name=ask,proto3" json:"ask,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WatchReported) Reset() {
+	*x = WatchReported{}
+	mi := &file_f10_v1_events_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WatchReported) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WatchReported) ProtoMessage() {}
+
+func (x *WatchReported) ProtoReflect() protoreflect.Message {
+	mi := &file_f10_v1_events_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WatchReported.ProtoReflect.Descriptor instead.
+func (*WatchReported) Descriptor() ([]byte, []int) {
+	return file_f10_v1_events_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *WatchReported) GetReport() string {
+	if x != nil {
+		return x.Report
+	}
+	return ""
+}
+
+func (x *WatchReported) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *WatchReported) GetNext() string {
+	if x != nil {
+		return x.Next
+	}
+	return ""
+}
+
+func (x *WatchReported) GetAsk() string {
+	if x != nil {
+		return x.Ask
+	}
+	return ""
+}
+
 // Claim is every state_* ledger kind: a recorded state call, its arguments
 // and the run it left.
 type Claim struct {
@@ -2373,7 +2477,7 @@ type Claim struct {
 
 func (x *Claim) Reset() {
 	*x = Claim{}
-	mi := &file_f10_v1_events_proto_msgTypes[27]
+	mi := &file_f10_v1_events_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2385,7 +2489,7 @@ func (x *Claim) String() string {
 func (*Claim) ProtoMessage() {}
 
 func (x *Claim) ProtoReflect() protoreflect.Message {
-	mi := &file_f10_v1_events_proto_msgTypes[27]
+	mi := &file_f10_v1_events_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2398,7 +2502,7 @@ func (x *Claim) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Claim.ProtoReflect.Descriptor instead.
 func (*Claim) Descriptor() ([]byte, []int) {
-	return file_f10_v1_events_proto_rawDescGZIP(), []int{27}
+	return file_f10_v1_events_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *Claim) GetArgs() []string {
@@ -2503,14 +2607,15 @@ var File_f10_v1_events_proto protoreflect.FileDescriptor
 
 const file_f10_v1_events_proto_rawDesc = "" +
 	"\n" +
-	"\x13f10/v1/events.proto\x12\x06f10.v1\x1a\x14agents/v1/asks.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"X\n" +
+	"\x13f10/v1/events.proto\x12\x06f10.v1\x1a\x14agents/v1/asks.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"n\n" +
 	"\x12WatchEventsRequest\x12\x14\n" +
 	"\x05after\x18\x01 \x01(\tR\x05after\x12\x18\n" +
 	"\aproject\x18\x02 \x01(\tR\aproject\x12\x12\n" +
-	"\x04task\x18\x03 \x01(\tR\x04task\"R\n" +
+	"\x04task\x18\x03 \x01(\tR\x04task\x12\x14\n" +
+	"\x05kinds\x18\x04 \x03(\tR\x05kinds\"R\n" +
 	"\x13WatchEventsResponse\x12#\n" +
 	"\x05event\x18\x01 \x01(\v2\r.f10.v1.EventR\x05event\x12\x16\n" +
-	"\x06cursor\x18\x02 \x01(\tR\x06cursor\"\xcc\f\n" +
+	"\x06cursor\x18\x02 \x01(\tR\x06cursor\"\x8c\r\n" +
 	"\x05Event\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x18\n" +
@@ -2551,7 +2656,8 @@ const file_f10_v1_events_proto_rawDesc = "" +
 	"\x05claim\x18\x1f \x01(\v2\r.f10.v1.ClaimH\x00R\x05claim\x125\n" +
 	"\n" +
 	"ask_raised\x18  \x01(\v2\x14.agents.v1.AskRaisedH\x00R\taskRaised\x12;\n" +
-	"\fask_answered\x18! \x01(\v2\x16.agents.v1.AskAnsweredH\x00R\vaskAnsweredB\t\n" +
+	"\fask_answered\x18! \x01(\v2\x16.agents.v1.AskAnsweredH\x00R\vaskAnswered\x12>\n" +
+	"\x0ewatch_reported\x18\" \x01(\v2\x15.f10.v1.WatchReportedH\x00R\rwatchReportedB\t\n" +
 	"\apayload\"P\n" +
 	"\fAgentProfile\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x14\n" +
@@ -2701,7 +2807,12 @@ const file_f10_v1_events_proto_rawDesc = "" +
 	"\x11RegressionClaimed\x12\x1f\n" +
 	"\vorigin_task\x18\x01 \x01(\tR\n" +
 	"originTask\x12\x12\n" +
-	"\x04text\x18\x02 \x01(\tR\x04text\"\xad\x02\n" +
+	"\x04text\x18\x02 \x01(\tR\x04text\"a\n" +
+	"\rWatchReported\x12\x16\n" +
+	"\x06report\x18\x01 \x01(\tR\x06report\x12\x12\n" +
+	"\x04text\x18\x02 \x01(\tR\x04text\x12\x12\n" +
+	"\x04next\x18\x03 \x01(\tR\x04next\x12\x10\n" +
+	"\x03ask\x18\x04 \x01(\tR\x03ask\"\xad\x02\n" +
 	"\x05Claim\x12\x12\n" +
 	"\x04args\x18\x01 \x03(\tR\x04args\x12\x18\n" +
 	"\acapture\x18\x02 \x01(\tR\acapture\x12\x12\n" +
@@ -2735,7 +2846,7 @@ func file_f10_v1_events_proto_rawDescGZIP() []byte {
 	return file_f10_v1_events_proto_rawDescData
 }
 
-var file_f10_v1_events_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
+var file_f10_v1_events_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_f10_v1_events_proto_goTypes = []any{
 	(*WatchEventsRequest)(nil),    // 0: f10.v1.WatchEventsRequest
 	(*WatchEventsResponse)(nil),   // 1: f10.v1.WatchEventsResponse
@@ -2764,16 +2875,17 @@ var file_f10_v1_events_proto_goTypes = []any{
 	(*TaskSized)(nil),             // 24: f10.v1.TaskSized
 	(*RegressionFound)(nil),       // 25: f10.v1.RegressionFound
 	(*RegressionClaimed)(nil),     // 26: f10.v1.RegressionClaimed
-	(*Claim)(nil),                 // 27: f10.v1.Claim
-	nil,                           // 28: f10.v1.Usage.ByModelEntry
-	nil,                           // 29: f10.v1.ReviewRoundOpened.CategoriesEntry
-	(*timestamppb.Timestamp)(nil), // 30: google.protobuf.Timestamp
-	(*v1.AskRaised)(nil),          // 31: agents.v1.AskRaised
-	(*v1.AskAnswered)(nil),        // 32: agents.v1.AskAnswered
+	(*WatchReported)(nil),         // 27: f10.v1.WatchReported
+	(*Claim)(nil),                 // 28: f10.v1.Claim
+	nil,                           // 29: f10.v1.Usage.ByModelEntry
+	nil,                           // 30: f10.v1.ReviewRoundOpened.CategoriesEntry
+	(*timestamppb.Timestamp)(nil), // 31: google.protobuf.Timestamp
+	(*v1.AskRaised)(nil),          // 32: agents.v1.AskRaised
+	(*v1.AskAnswered)(nil),        // 33: agents.v1.AskAnswered
 }
 var file_f10_v1_events_proto_depIdxs = []int32{
 	2,  // 0: f10.v1.WatchEventsResponse.event:type_name -> f10.v1.Event
-	30, // 1: f10.v1.Event.at:type_name -> google.protobuf.Timestamp
+	31, // 1: f10.v1.Event.at:type_name -> google.protobuf.Timestamp
 	6,  // 2: f10.v1.Event.run_started:type_name -> f10.v1.RunStarted
 	7,  // 3: f10.v1.Event.step_entered:type_name -> f10.v1.StepEntered
 	8,  // 4: f10.v1.Event.task_finished:type_name -> f10.v1.TaskFinished
@@ -2795,23 +2907,24 @@ var file_f10_v1_events_proto_depIdxs = []int32{
 	24, // 20: f10.v1.Event.task_sized:type_name -> f10.v1.TaskSized
 	25, // 21: f10.v1.Event.regression_found:type_name -> f10.v1.RegressionFound
 	26, // 22: f10.v1.Event.regression_claimed:type_name -> f10.v1.RegressionClaimed
-	27, // 23: f10.v1.Event.claim:type_name -> f10.v1.Claim
-	31, // 24: f10.v1.Event.ask_raised:type_name -> agents.v1.AskRaised
-	32, // 25: f10.v1.Event.ask_answered:type_name -> agents.v1.AskAnswered
-	28, // 26: f10.v1.Usage.by_model:type_name -> f10.v1.Usage.ByModelEntry
-	4,  // 27: f10.v1.Usage.subagents:type_name -> f10.v1.Tokens
-	3,  // 28: f10.v1.RunStarted.profile:type_name -> f10.v1.AgentProfile
-	3,  // 29: f10.v1.SessionStopped.profile:type_name -> f10.v1.AgentProfile
-	5,  // 30: f10.v1.TurnUsed.usage:type_name -> f10.v1.Usage
-	29, // 31: f10.v1.ReviewRoundOpened.categories:type_name -> f10.v1.ReviewRoundOpened.CategoriesEntry
-	4,  // 32: f10.v1.Usage.ByModelEntry.value:type_name -> f10.v1.Tokens
-	0,  // 33: f10.v1.EventService.WatchEvents:input_type -> f10.v1.WatchEventsRequest
-	1,  // 34: f10.v1.EventService.WatchEvents:output_type -> f10.v1.WatchEventsResponse
-	34, // [34:35] is the sub-list for method output_type
-	33, // [33:34] is the sub-list for method input_type
-	33, // [33:33] is the sub-list for extension type_name
-	33, // [33:33] is the sub-list for extension extendee
-	0,  // [0:33] is the sub-list for field type_name
+	28, // 23: f10.v1.Event.claim:type_name -> f10.v1.Claim
+	32, // 24: f10.v1.Event.ask_raised:type_name -> agents.v1.AskRaised
+	33, // 25: f10.v1.Event.ask_answered:type_name -> agents.v1.AskAnswered
+	27, // 26: f10.v1.Event.watch_reported:type_name -> f10.v1.WatchReported
+	29, // 27: f10.v1.Usage.by_model:type_name -> f10.v1.Usage.ByModelEntry
+	4,  // 28: f10.v1.Usage.subagents:type_name -> f10.v1.Tokens
+	3,  // 29: f10.v1.RunStarted.profile:type_name -> f10.v1.AgentProfile
+	3,  // 30: f10.v1.SessionStopped.profile:type_name -> f10.v1.AgentProfile
+	5,  // 31: f10.v1.TurnUsed.usage:type_name -> f10.v1.Usage
+	30, // 32: f10.v1.ReviewRoundOpened.categories:type_name -> f10.v1.ReviewRoundOpened.CategoriesEntry
+	4,  // 33: f10.v1.Usage.ByModelEntry.value:type_name -> f10.v1.Tokens
+	0,  // 34: f10.v1.EventService.WatchEvents:input_type -> f10.v1.WatchEventsRequest
+	1,  // 35: f10.v1.EventService.WatchEvents:output_type -> f10.v1.WatchEventsResponse
+	35, // [35:36] is the sub-list for method output_type
+	34, // [34:35] is the sub-list for method input_type
+	34, // [34:34] is the sub-list for extension type_name
+	34, // [34:34] is the sub-list for extension extendee
+	0,  // [0:34] is the sub-list for field type_name
 }
 
 func init() { file_f10_v1_events_proto_init() }
@@ -2844,6 +2957,7 @@ func file_f10_v1_events_proto_init() {
 		(*Event_Claim)(nil),
 		(*Event_AskRaised)(nil),
 		(*Event_AskAnswered)(nil),
+		(*Event_WatchReported)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -2851,7 +2965,7 @@ func file_f10_v1_events_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_f10_v1_events_proto_rawDesc), len(file_f10_v1_events_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   30,
+			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -41,6 +41,7 @@ func recordAnswered(a Ask) {
 		Answer:     a.Answer,
 		AnsweredBy: source(a.By),
 		Delivered:  !a.DeliveredAt.IsZero(),
+		Labels:     Labels(a),
 	})
 }
 

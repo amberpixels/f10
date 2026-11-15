@@ -485,6 +485,7 @@ func runWatchPass(ctx context.Context, cmd *cli.Command, t *target.Target) error
 		TTL:      state.TTL(),
 		Now:      time.Now,
 		Out:      drive.LineReporter{Out: cmd.Writer},
+		Record:   drive.LedgerReports(ctx, main),
 		Warn:     func(line string) { fmt.Fprintln(cmd.Writer, line) },
 		Catchup:  t.Effective.WatchCatchup,
 		CI:       t.Effective.WatchCI,

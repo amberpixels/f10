@@ -585,11 +585,13 @@ func (x *AskRaised) GetAsk() *Ask {
 
 // AskAnswered is the event of an ask closed by its first answer.
 type AskAnswered struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Answer        string                 `protobuf:"bytes,2,opt,name=answer,proto3" json:"answer,omitempty"`
-	AnsweredBy    AnswerSource           `protobuf:"varint,3,opt,name=answered_by,json=answeredBy,proto3,enum=agents.v1.AnswerSource" json:"answered_by,omitempty"`
-	Delivered     bool                   `protobuf:"varint,4,opt,name=delivered,proto3" json:"delivered,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Id         string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Answer     string                 `protobuf:"bytes,2,opt,name=answer,proto3" json:"answer,omitempty"`
+	AnsweredBy AnswerSource           `protobuf:"varint,3,opt,name=answered_by,json=answeredBy,proto3,enum=agents.v1.AnswerSource" json:"answered_by,omitempty"`
+	Delivered  bool                   `protobuf:"varint,4,opt,name=delivered,proto3" json:"delivered,omitempty"`
+	// labels are the answered ask's, as AskRaised carries them.
+	Labels        map[string]string `protobuf:"bytes,5,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -652,6 +654,13 @@ func (x *AskAnswered) GetDelivered() bool {
 	return false
 }
 
+func (x *AskAnswered) GetLabels() map[string]string {
+	if x != nil {
+		return x.Labels
+	}
+	return nil
+}
+
 var File_agents_v1_asks_proto protoreflect.FileDescriptor
 
 const file_agents_v1_asks_proto_rawDesc = "" +
@@ -694,13 +703,17 @@ const file_agents_v1_asks_proto_rawDesc = "" +
 	"\x03ask\x18\x01 \x01(\v2\x0e.agents.v1.AskR\x03ask\x12\x1c\n" +
 	"\tdelivered\x18\x02 \x01(\bR\tdelivered\"-\n" +
 	"\tAskRaised\x12 \n" +
-	"\x03ask\x18\x01 \x01(\v2\x0e.agents.v1.AskR\x03ask\"\x8d\x01\n" +
+	"\x03ask\x18\x01 \x01(\v2\x0e.agents.v1.AskR\x03ask\"\x84\x02\n" +
 	"\vAskAnswered\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06answer\x18\x02 \x01(\tR\x06answer\x128\n" +
 	"\vanswered_by\x18\x03 \x01(\x0e2\x17.agents.v1.AnswerSourceR\n" +
 	"answeredBy\x12\x1c\n" +
-	"\tdelivered\x18\x04 \x01(\bR\tdelivered*\xc3\x01\n" +
+	"\tdelivered\x18\x04 \x01(\bR\tdelivered\x12:\n" +
+	"\x06labels\x18\x05 \x03(\v2\".agents.v1.AskAnswered.LabelsEntryR\x06labels\x1a9\n" +
+	"\vLabelsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*\xc3\x01\n" +
 	"\fAnswerSource\x12\x1d\n" +
 	"\x19ANSWER_SOURCE_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12ANSWER_SOURCE_PANE\x10\x01\x12\x16\n" +
@@ -729,7 +742,7 @@ func file_agents_v1_asks_proto_rawDescGZIP() []byte {
 }
 
 var file_agents_v1_asks_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_agents_v1_asks_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_agents_v1_asks_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_agents_v1_asks_proto_goTypes = []any{
 	(AnswerSource)(0),             // 0: agents.v1.AnswerSource
 	(*Question)(nil),              // 1: agents.v1.Question
@@ -742,31 +755,33 @@ var file_agents_v1_asks_proto_goTypes = []any{
 	(*AskRaised)(nil),             // 8: agents.v1.AskRaised
 	(*AskAnswered)(nil),           // 9: agents.v1.AskAnswered
 	nil,                           // 10: agents.v1.Ask.LabelsEntry
-	(*timestamppb.Timestamp)(nil), // 11: google.protobuf.Timestamp
+	nil,                           // 11: agents.v1.AskAnswered.LabelsEntry
+	(*timestamppb.Timestamp)(nil), // 12: google.protobuf.Timestamp
 }
 var file_agents_v1_asks_proto_depIdxs = []int32{
 	1,  // 0: agents.v1.Ask.questions:type_name -> agents.v1.Question
-	11, // 1: agents.v1.Ask.asked_at:type_name -> google.protobuf.Timestamp
+	12, // 1: agents.v1.Ask.asked_at:type_name -> google.protobuf.Timestamp
 	0,  // 2: agents.v1.Ask.answered_by:type_name -> agents.v1.AnswerSource
-	11, // 3: agents.v1.Ask.answered_at:type_name -> google.protobuf.Timestamp
-	11, // 4: agents.v1.Ask.delivered_at:type_name -> google.protobuf.Timestamp
+	12, // 3: agents.v1.Ask.answered_at:type_name -> google.protobuf.Timestamp
+	12, // 4: agents.v1.Ask.delivered_at:type_name -> google.protobuf.Timestamp
 	10, // 5: agents.v1.Ask.labels:type_name -> agents.v1.Ask.LabelsEntry
-	11, // 6: agents.v1.ListAsksRequest.answered_since:type_name -> google.protobuf.Timestamp
+	12, // 6: agents.v1.ListAsksRequest.answered_since:type_name -> google.protobuf.Timestamp
 	2,  // 7: agents.v1.ListAsksResponse.open:type_name -> agents.v1.Ask
 	2,  // 8: agents.v1.ListAsksResponse.answered:type_name -> agents.v1.Ask
 	3,  // 9: agents.v1.AnswerAskRequest.answers:type_name -> agents.v1.Answer
 	2,  // 10: agents.v1.AnswerAskResponse.ask:type_name -> agents.v1.Ask
 	2,  // 11: agents.v1.AskRaised.ask:type_name -> agents.v1.Ask
 	0,  // 12: agents.v1.AskAnswered.answered_by:type_name -> agents.v1.AnswerSource
-	4,  // 13: agents.v1.AskService.ListAsks:input_type -> agents.v1.ListAsksRequest
-	6,  // 14: agents.v1.AskService.AnswerAsk:input_type -> agents.v1.AnswerAskRequest
-	5,  // 15: agents.v1.AskService.ListAsks:output_type -> agents.v1.ListAsksResponse
-	7,  // 16: agents.v1.AskService.AnswerAsk:output_type -> agents.v1.AnswerAskResponse
-	15, // [15:17] is the sub-list for method output_type
-	13, // [13:15] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	11, // 13: agents.v1.AskAnswered.labels:type_name -> agents.v1.AskAnswered.LabelsEntry
+	4,  // 14: agents.v1.AskService.ListAsks:input_type -> agents.v1.ListAsksRequest
+	6,  // 15: agents.v1.AskService.AnswerAsk:input_type -> agents.v1.AnswerAskRequest
+	5,  // 16: agents.v1.AskService.ListAsks:output_type -> agents.v1.ListAsksResponse
+	7,  // 17: agents.v1.AskService.AnswerAsk:output_type -> agents.v1.AnswerAskResponse
+	16, // [16:18] is the sub-list for method output_type
+	14, // [14:16] is the sub-list for method input_type
+	14, // [14:14] is the sub-list for extension type_name
+	14, // [14:14] is the sub-list for extension extendee
+	0,  // [0:14] is the sub-list for field type_name
 }
 
 func init() { file_agents_v1_asks_proto_init() }
@@ -780,7 +795,7 @@ func file_agents_v1_asks_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agents_v1_asks_proto_rawDesc), len(file_agents_v1_asks_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   10,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -186,20 +186,20 @@ func TestStoredRowsDecodeWithoutLoss(t *testing.T) {
 
 	// kinds added after the fixture was frozen have no legacy rows to read
 	for k := range kinds {
-		if !seen[k] && !bornTyped[k] {
+		if !seen[k] && !bornTyped[k] && !bornProto[k] {
 			t.Errorf("the fixture has no %s row", k)
 		}
 	}
 }
 
 // Rows the last release before proto payloads wrote, through the structs
-// that were then the payloads, decode with nothing lost. Every kind existed
-// by then, so each one has rows here.
+// that were then the payloads, decode with nothing lost. Every kind but the
+// ones born as proto messages existed by then, so each has rows here.
 func TestTypedRowsDecodeWithoutLoss(t *testing.T) {
 	seen := checkFixture(t, "typed-rows.jsonl")
 
 	for k := range kinds {
-		if !seen[k] {
+		if !seen[k] && !bornProto[k] {
 			t.Errorf("the fixture has no %s row", k)
 		}
 	}
@@ -280,6 +280,10 @@ func checkFixture(t *testing.T, name string) map[string]bool {
 var bornTyped = map[string]bool{
 	TurnUsed: true, RegressionFound: true, RegressionClaimed: true, AskRaised: true, AskAnswered: true,
 }
+
+// bornProto is the kinds added after proto payloads, which no earlier
+// release wrote.
+var bornProto = map[string]bool{WatchReported: true}
 
 // A kind bumped to a new message reads its v1 rows through the upcaster; a
 // v3 row from a newer f10 decodes as far as it can, flagged. Two unrelated
