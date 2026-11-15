@@ -58,13 +58,14 @@ The nine `state_*` kinds share the `claim` case, so a client tells them apart by
 `WatchEvents` resumes from the `cursor` each response carries, never from `Event.id`, because rows land in the ledger out of id order: a spooled row is inserted after its id is minted, and other machines mint ids on their own clocks.
 `ask_raised` and `ask_answered` are the asks inbox's, which records them in the ledger as asks are raised and answered.
 
-The payload messages are meant to become the ledger's own stored payloads, so they follow the JSON the ledger already stores, not API taste:
+The payload messages are the ledger's stored payloads: the ledger registers each kind against its message and stores it as protojson (`docs/ledger.md`).
+So they follow the JSON the ledger stored before they existed, not API taste:
 
-- **Field names are the stored keys** (`origin_task`, `cache_write`), so protojson with `UseProtoNames` writes the same keys.
+- **Field names are the stored keys** (`origin_task`, `cache_write`), and the ledger writes them with `UseProtoNames`.
 - **Embedded structs are flattened**: `RunStarted` and `SessionStopped` carry the run context's fields directly, and `Usage` carries the four token counts itself.
 - **Counts are `int32`**, because protojson writes `int64` as a JSON string, which `json_extract` would not sum.
-- **Zero values must be written**: protojson leaves them out by default, while the ledger stores keys like `"input": 0` and `"capture": ""`.
-  Storing these messages takes `EmitDefaultValues` along with `UseProtoNames`.
+- **Zero values are written**: the ledger stores with `EmitDefaultValues`, so `"input": 0` and `"capture": ""` stay in the row as they always were.
 
-`TestProtoPayloadParity` in `cli/internal/ledger` fails when a ledger kind has no payload case, or when a kind's current Go struct and its message differ in a key or a value's type.
+The evolution rules above therefore bind the ledger too: a payload field is only added, and a real break is a new message the ledger upcasts from the old one.
+`TestEveryKindIsAnEventCase` in `cli/internal/ledger` fails when a ledger kind has no payload case, or when its stored message is not the case's message.
 A new ledger kind therefore needs its message here in the same change.

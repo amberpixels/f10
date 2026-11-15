@@ -75,9 +75,9 @@ type HistoryCommit struct {
 
 // A SeedReview is a task's review rounds, each raising Categories.
 type SeedReview struct {
-	Task       string         `json:"task"`
-	Rounds     int            `json:"rounds"`
-	Categories map[string]int `json:"categories"`
+	Task       string           `json:"task"`
+	Rounds     int              `json:"rounds"`
+	Categories map[string]int32 `json:"categories"`
 }
 
 // A Report is one scenario's run, as written under evals/reports.
@@ -413,7 +413,7 @@ func seedReviews(ctx context.Context, dir, path string, reviews []SeedReview) er
 		for n := 1; n <= r.Rounds; n++ {
 			e, err := ledger.NewEvent(ledger.ReviewRoundOpened,
 				// review writes rounds 1 and 2 only; a later pass is a follow-up PR's series
-				ledger.ReviewRoundOpenedPayload{
+				&ledger.ReviewRoundOpenedPayload{
 					Round: strconv.Itoa(min(n, 2)), Reviewed: fmt.Sprintf("seed%03d", n), Categories: r.Categories,
 				})
 			if err != nil {

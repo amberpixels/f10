@@ -171,7 +171,7 @@ func TestScopes(t *testing.T) {
 		{5, "", "FT-1"},
 		{5, "q", "FT-1"}, // another project
 	} {
-		e := MustEvent(Pushed, PushedPayload{})
+		e := MustEvent(Pushed, &PushedPayload{})
 		e.ID, e.At, e.Project, e.Session, e.Task = fmt.Sprintf("01J%023d", i), t0.AddDate(0, 0, r.day), "p",
 			r.session, r.task
 		if r.session == "q" {
@@ -219,10 +219,10 @@ func TestScopes(t *testing.T) {
 func mustPayload(kind string) any {
 	switch kind {
 	case SessionStopped:
-		return SessionStoppedPayload{}
+		return &SessionStoppedPayload{}
 	case StateSet:
-		return ClaimPayload{}
+		return &ClaimPayload{}
 	}
 
-	return PushedPayload{}
+	return &PushedPayload{}
 }

@@ -559,8 +559,8 @@ func (in gateInput) started(skill string, remote bool, since time.Time) *startMa
 				continue
 			}
 
-			p, _ := ledger.Decode[ledger.RunStartedPayload](e)
-			args := strings.Fields(p.Args)
+			p, _ := ledger.Decode[*ledger.RunStartedPayload](e)
+			args := strings.Fields(p.GetArgs())
 			if slices.Contains(args, "ci") != remote {
 				continue
 			}

@@ -80,7 +80,7 @@ func (f fixture) review(dir, sha, body string) {
 	}
 }
 
-func (f fixture) attribute(commit string) ledger.RegressionFoundPayload {
+func (f fixture) attribute(commit string) *ledger.RegressionFoundPayload {
 	return Attribute(f.t.Context(), Input{
 		Dir: f.dir, StorageRoot: f.storage, Prefix: "FT",
 		Commit: commit, Lines: []Range{{Path: "calc.go", Start: 3, End: 3}},
@@ -102,7 +102,7 @@ func TestAttribute(t *testing.T) {
 
 	for name, tc := range map[string]struct {
 		build func(f fixture) string // returns the guilty commit
-		want  ledger.RegressionFoundPayload
+		want  *ledger.RegressionFoundPayload
 	}{
 		"missed: the round saw the line and no finding touched it": {
 			build: func(f fixture) string {
@@ -112,7 +112,7 @@ func TestAttribute(t *testing.T) {
 
 				return sha
 			},
-			want: ledger.RegressionFoundPayload{OriginTask: "FT-414", Origin: OriginTask, Class: Missed},
+			want: &ledger.RegressionFoundPayload{OriginTask: "FT-414", Origin: OriginTask, Class: Missed},
 		},
 		"skipped: a skipped finding pointed at the line": {
 			build: func(f fixture) string {
@@ -122,7 +122,7 @@ func TestAttribute(t *testing.T) {
 
 				return sha
 			},
-			want: ledger.RegressionFoundPayload{
+			want: &ledger.RegressionFoundPayload{
 				OriginTask: "FT-414", Origin: OriginTask, Class: Skipped, Round: "1", Finding: "1.1",
 			},
 		},
@@ -134,7 +134,7 @@ func TestAttribute(t *testing.T) {
 
 				return f.commit("resolve fix\n\nTask: FT-414", bad+"// note\n")
 			},
-			want: ledger.RegressionFoundPayload{OriginTask: "FT-414", Origin: OriginTask, Class: Unreviewed},
+			want: &ledger.RegressionFoundPayload{OriginTask: "FT-414", Origin: OriginTask, Class: Unreviewed},
 		},
 		"archived rounds count too": {
 			build: func(f fixture) string {
@@ -144,7 +144,7 @@ func TestAttribute(t *testing.T) {
 
 				return sha
 			},
-			want: ledger.RegressionFoundPayload{
+			want: &ledger.RegressionFoundPayload{
 				OriginTask: "FT-414", Origin: OriginTask, Class: Skipped, Round: "1", Finding: "1.1",
 			},
 		},
@@ -154,7 +154,7 @@ func TestAttribute(t *testing.T) {
 
 				return f.commit("change Last\n\nChange: FT-414.2", bad)
 			},
-			want: ledger.RegressionFoundPayload{OriginTask: "FT-414", Origin: OriginTask, Class: Unreviewed},
+			want: &ledger.RegressionFoundPayload{OriginTask: "FT-414", Origin: OriginTask, Class: Unreviewed},
 		},
 		"a squash subject names the task": {
 			build: func(f fixture) string {
@@ -162,7 +162,7 @@ func TestAttribute(t *testing.T) {
 
 				return f.commit("FT-414: change Last (#9)", bad)
 			},
-			want: ledger.RegressionFoundPayload{OriginTask: "FT-414", Origin: OriginTask, Class: Unreviewed},
+			want: &ledger.RegressionFoundPayload{OriginTask: "FT-414", Origin: OriginTask, Class: Unreviewed},
 		},
 		"pre-f10: older than the first Task: commit": {
 			build: func(f fixture) string {
@@ -171,13 +171,13 @@ func TestAttribute(t *testing.T) {
 
 				return sha
 			},
-			want: ledger.RegressionFoundPayload{Origin: PreF10},
+			want: &ledger.RegressionFoundPayload{Origin: PreF10},
 		},
 		"outside-f10: no commit carries a task": {
 			build: func(f fixture) string {
 				return f.commit("init", bad)
 			},
-			want: ledger.RegressionFoundPayload{Origin: OutsideF10},
+			want: &ledger.RegressionFoundPayload{Origin: OutsideF10},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -187,13 +187,17 @@ func TestAttribute(t *testing.T) {
 			sha := tc.build(f)
 			got := f.attribute(sha)
 
-			if got.OriginTask != tc.want.OriginTask || got.Origin != tc.want.Origin || got.Class != tc.want.Class ||
-				got.Round != tc.want.Round || got.Finding != tc.want.Finding {
+			if got.GetOriginTask() != tc.want.GetOriginTask() || got.GetOrigin() != tc.want.GetOrigin() ||
+				got.GetClass() != tc.want.GetClass() ||
+				got.GetRound() != tc.want.GetRound() ||
+				got.GetFinding() != tc.want.GetFinding() {
 				t.Errorf("got %+v\nwant %+v", got, tc.want)
 			}
 
-			if got.Commit != sha || got.Repro != "full" || got.Confidence != "confirmed" || got.FoundBy != "bisect" ||
-				len(got.Lines) != 1 || got.Lines[0] != "calc.go:3-3" {
+			if got.GetCommit() != sha || got.GetRepro() != "full" || got.GetConfidence() != "confirmed" ||
+				got.GetFoundBy() != "bisect" ||
+				len(got.GetLines()) != 1 ||
+				got.GetLines()[0] != "calc.go:3-3" {
 				t.Errorf("the agent's fields changed: %+v", got)
 			}
 		})
@@ -222,8 +226,8 @@ func TestJudgedProceedWithoutAReview(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if got := f.attribute(sha); got.Class != want {
-			t.Errorf("%s: class %q, want %q", subject, got.Class, want)
+		if got := f.attribute(sha); got.GetClass() != want {
+			t.Errorf("%s: class %q, want %q", subject, got.GetClass(), want)
 		}
 	}
 }
@@ -245,7 +249,7 @@ func TestASkipIsMatchedInTheRoundsNumbering(t *testing.T) {
 		Dir: f.dir, StorageRoot: f.storage, Prefix: "FT", Commit: sha,
 		Lines: []Range{{Path: "calc.go", Start: 23, End: 23}}, FoundBy: "blame", Confidence: "likely", Repro: "full",
 	})
-	if got.Class != Skipped || got.Finding != "1.1" {
+	if got.GetClass() != Skipped || got.GetFinding() != "1.1" {
 		t.Errorf("got %+v", got)
 	}
 }
@@ -260,7 +264,7 @@ func TestADirtyRoundIsClassifiedFromTheFindings(t *testing.T) {
 	f.review("FT-414", parent+" dirty", "")
 
 	got := f.attribute(sha)
-	if got.Class != Missed || got.Confidence != Unclear || got.Note == "" {
+	if got.GetClass() != Missed || got.GetConfidence() != Unclear || got.GetNote() == "" {
 		t.Errorf("got %+v", got)
 	}
 }
@@ -278,8 +282,8 @@ func TestHoldsMatchesWholeLines(t *testing.T) {
 		Dir: f.dir, StorageRoot: f.storage, Prefix: "FT", Commit: sha,
 		Lines: []Range{{Path: "calc.go", Start: 4, End: 4}}, FoundBy: "blame", Confidence: "likely", Repro: "full",
 	})
-	if got.Class != Unreviewed {
-		t.Errorf("class %q, want %q", got.Class, Unreviewed)
+	if got.GetClass() != Unreviewed {
+		t.Errorf("class %q, want %q", got.GetClass(), Unreviewed)
 	}
 }
 
@@ -297,7 +301,7 @@ func TestAnUnreadableRangeIsNoted(t *testing.T) {
 		Lines:   []Range{{Path: "cli/calc.go", Start: 3, End: 3}},
 		FoundBy: "blame", Confidence: "confirmed", Repro: "full",
 	})
-	if got.Confidence != Unclear || !strings.Contains(got.Note, "cli/calc.go") {
+	if got.GetConfidence() != Unclear || !strings.Contains(got.GetNote(), "cli/calc.go") {
 		t.Errorf("got %+v", got)
 	}
 }
@@ -314,7 +318,7 @@ func TestOutOfReachIsTheAgentsCall(t *testing.T) {
 		Dir: f.dir, StorageRoot: f.storage, Prefix: "FT", Commit: sha, Class: OutOfReach,
 		Lines: []Range{{Path: "calc.go", Start: 3, End: 3}}, FoundBy: "blame", Confidence: "likely", Repro: "full",
 	})
-	if got.Class != OutOfReach || got.OriginTask != "FT-414" {
+	if got.GetClass() != OutOfReach || got.GetOriginTask() != "FT-414" {
 		t.Errorf("got %+v", got)
 	}
 }
@@ -328,7 +332,7 @@ func TestAnUnreachableReviewedCommitFallsBackToTheFindings(t *testing.T) {
 	f.review("FT-414", "0123456789abcdef0123456789abcdef01234567", "")
 
 	got := f.attribute(sha)
-	if got.Class != Missed || got.Confidence != Unclear || got.Note == "" {
+	if got.GetClass() != Missed || got.GetConfidence() != Unclear || got.GetNote() == "" {
 		t.Errorf("got %+v", got)
 	}
 }
@@ -337,7 +341,8 @@ func TestNoCommitStillRecordsTheRepro(t *testing.T) {
 	t.Parallel()
 
 	got := Attribute(t.Context(), Input{Dir: t.TempDir(), Repro: "unconfirmed", FoundBy: "blame", Confidence: "likely"})
-	if got.FoundBy != "none" || got.Confidence != Unclear || got.Repro != "unconfirmed" || got.OriginTask != "" {
+	if got.GetFoundBy() != "none" || got.GetConfidence() != Unclear || got.GetRepro() != "unconfirmed" ||
+		got.GetOriginTask() != "" {
 		t.Errorf("got %+v", got)
 	}
 
@@ -395,8 +400,8 @@ func TestVerdictsStayInTheirSeries(t *testing.T) {
 		"### 1.1 Naming\nwhere: calc.go:40\ncategory: correctness and logic\nverdict: skip\n")
 	f.review("FT-414", sha, "### 1.1 Off by one\nwhere: calc.go:3\ncategory: correctness and logic\nverdict: fix\n")
 
-	if got := f.attribute(sha); got.Class != Missed {
-		t.Errorf("class %q, want %q", got.Class, Missed)
+	if got := f.attribute(sha); got.GetClass() != Missed {
+		t.Errorf("class %q, want %q", got.GetClass(), Missed)
 	}
 }
 
@@ -418,7 +423,7 @@ func TestADirtyRoundsSkipIsMatchedInTheNextCommit(t *testing.T) {
 		Dir: f.dir, StorageRoot: f.storage, Prefix: "FT", Commit: sha,
 		Lines: []Range{{Path: "calc.go", Start: 23, End: 23}}, FoundBy: "blame", Confidence: "likely", Repro: "full",
 	})
-	if got.Class != Skipped {
+	if got.GetClass() != Skipped {
 		t.Errorf("got %+v", got)
 	}
 }
@@ -439,7 +444,7 @@ func TestARepeatedLineIsNotHeld(t *testing.T) {
 		Dir: f.dir, StorageRoot: f.storage, Prefix: "FT", Commit: sha,
 		Lines: []Range{{Path: "calc.go", Start: 8, End: 8}}, FoundBy: "blame", Confidence: "likely", Repro: "full",
 	})
-	if got.Class == Missed && got.Confidence != Unclear {
+	if got.GetClass() == Missed && got.GetConfidence() != Unclear {
 		t.Errorf("a repeated line read as a confident miss: %+v", got)
 	}
 }

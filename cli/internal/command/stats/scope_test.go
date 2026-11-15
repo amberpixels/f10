@@ -27,16 +27,16 @@ func scopeFixture(t *testing.T, day time.Time) (string, time.Time) {
 		return testkit.StatEvent(at(n), session, task, kind, payload)
 	}
 	set := func(n int, session, task string, args ...string) ledger.Event {
-		return ev(n, session, task, ledger.StateSet, ledger.ClaimPayload{Args: args})
+		return ev(n, session, task, ledger.StateSet, &ledger.ClaimPayload{Args: args})
 	}
 	ship := func(n int, session string) ledger.Event {
-		return ev(n, session, "", ledger.RunStarted, ledger.RunStartedPayload{Skill: "ship"})
+		return ev(n, session, "", ledger.RunStarted, &ledger.RunStartedPayload{Skill: "ship"})
 	}
 	wait := func(n int, session, task string) ledger.Event {
-		return ev(n, session, task, ledger.WaitStarted, ledger.WaitStartedPayload{Reason: "turn"})
+		return ev(n, session, task, ledger.WaitStarted, &ledger.WaitStartedPayload{Reason: "turn"})
 	}
 	waited := func(n int, session, task string) ledger.Event {
-		return ev(n, session, task, ledger.WaitEnded, ledger.WaitEndedPayload{Reason: "turn"})
+		return ev(n, session, task, ledger.WaitEnded, &ledger.WaitEndedPayload{Reason: "turn"})
 	}
 	const d = 1440
 
@@ -51,7 +51,7 @@ func scopeFixture(t *testing.T, day time.Time) (string, time.Time) {
 		waited(30*d+10, "s3", "FT-3"),
 		set(30*d+30, "s3", "FT-3", "ship", "done"),
 		wait(30*d+31, "s3", "FT-3"),
-		ev(30*d+32, "s2", "FT-3", ledger.TaskSized, ledger.TaskSizedPayload{Lines: 50}),
+		ev(30*d+32, "s2", "FT-3", ledger.TaskSized, &ledger.TaskSizedPayload{Lines: 50}),
 
 		// FT-4: an old session, then a recent one
 		ship(10*d, "s4"),
@@ -62,14 +62,14 @@ func scopeFixture(t *testing.T, day time.Time) (string, time.Time) {
 		set(31*d, "s5", "FT-4", "ship", "running", "pr"),
 		set(31*d+5, "s5", "FT-4", "ship", "done"),
 		wait(31*d+5, "s5", "FT-4"),
-		ev(31*d+6, "", "FT-4", ledger.TaskSized, ledger.TaskSizedPayload{Lines: 80}),
+		ev(31*d+6, "", "FT-4", ledger.TaskSized, &ledger.TaskSizedPayload{Lines: 80}),
 
 		// FT-5: worked before the cutoff, sized after it by a finish with no session
 		ship(12*d, "s6"),
 		set(12*d, "s6", "FT-5", "ship", "running", "implement"),
 		set(12*d+15, "s6", "FT-5", "ship", "done"),
 		wait(12*d+15, "s6", "FT-5"),
-		ev(30*d+40, "", "FT-5", ledger.TaskSized, ledger.TaskSizedPayload{Lines: 20}),
+		ev(30*d+40, "", "FT-5", ledger.TaskSized, &ledger.TaskSizedPayload{Lines: 20}),
 
 		// FT-9: unrelated, old
 		ship(5*d, "s9"),
@@ -82,7 +82,7 @@ func scopeFixture(t *testing.T, day time.Time) (string, time.Time) {
 		events[i].Project = "p"
 	}
 
-	other := ev(31*d, "s3", "FT-3", ledger.StateSet, ledger.ClaimPayload{Args: []string{"ship", "running", "pr"}})
+	other := ev(31*d, "s3", "FT-3", ledger.StateSet, &ledger.ClaimPayload{Args: []string{"ship", "running", "pr"}})
 	other.Project = "q"
 	events = append(events, other)
 

@@ -172,27 +172,27 @@ func TestARunLeavesEveryKindInTheLedger(t *testing.T) {
 	for _, e := range events {
 		switch e.Kind {
 		case ledger.SessionStopped:
-			p, _ := ledger.Decode[ledger.SessionStoppedPayload](e)
-			stops = append(stops, p.Phase+" "+p.Status)
+			p, _ := ledger.Decode[*ledger.SessionStoppedPayload](e)
+			stops = append(stops, p.GetPhase()+" "+p.GetStatus())
 		case ledger.TaskCaptured:
-			if p, _ := ledger.Decode[ledger.TaskCapturedPayload](
+			if p, _ := ledger.Decode[*ledger.TaskCapturedPayload](
 				e,
 			); e.Task != "FT-12" ||
-				p.URL != "https://github.com/acme/app/issues/12" {
+				p.GetUrl() != "https://github.com/acme/app/issues/12" {
 				t.Errorf("captured %+v", e)
 			}
 		case ledger.ReviewRoundOpened:
-			if p, _ := ledger.Decode[ledger.ReviewRoundOpenedPayload](
+			if p, _ := ledger.Decode[*ledger.ReviewRoundOpenedPayload](
 				e,
-			); p.Reviewed != "b48b585" ||
-				p.Categories["correctness and logic"] != 1 {
+			); p.GetReviewed() != "b48b585" ||
+				p.GetCategories()["correctness and logic"] != 1 {
 				t.Errorf("round %+v", p)
 			}
 		case ledger.FindingVerdict:
-			if p, _ := ledger.Decode[ledger.FindingVerdictPayload](
+			if p, _ := ledger.Decode[*ledger.FindingVerdictPayload](
 				e,
-			); p.Finding != "1.1" || p.Verdict != "fix" ||
-				p.Reason != "capped at 3" {
+			); p.GetFinding() != "1.1" || p.GetVerdict() != "fix" ||
+				p.GetReason() != "capped at 3" {
 				t.Errorf("verdict %+v", p)
 			}
 		case ledger.RunStarted:
@@ -254,8 +254,8 @@ func TestSessionStoppedRecordsTheStateBeforeTheBackstop(t *testing.T) {
 		t.Fatalf("got %d rows", len(got))
 	}
 
-	p, _ := ledger.Decode[ledger.SessionStoppedPayload](got[0])
-	if p.Phase != "ship" || p.Status != "running" || p.Leaf != "review" || !p.Backstop ||
+	p, _ := ledger.Decode[*ledger.SessionStoppedPayload](got[0])
+	if p.GetPhase() != "ship" || p.GetStatus() != "running" || p.GetLeaf() != "review" || !p.GetBackstop() ||
 		got[0].Task != "FT-12" {
 		t.Errorf("stop row %+v", p)
 	}
@@ -338,8 +338,8 @@ where: client.go:20
 	var got []string
 
 	for _, e := range recorded(t, db, ledger.Filter{Kind: ledger.FindingVerdict}) {
-		p, _ := ledger.Decode[ledger.FindingVerdictPayload](e)
-		got = append(got, strings.Join([]string{p.Round, p.Finding, p.Verdict, p.Status}, " "))
+		p, _ := ledger.Decode[*ledger.FindingVerdictPayload](e)
+		got = append(got, strings.Join([]string{p.GetRound(), p.GetFinding(), p.GetVerdict(), p.GetStatus()}, " "))
 	}
 
 	want := []string{"1 1.1 skip +reply ", "1 1.2 fix ", "2 1.1 skip +reply explanation accepted", "2 1.2  fixed"}
@@ -411,8 +411,8 @@ The server should not cache.
 	var got []string
 
 	for _, e := range recorded(t, db, ledger.Filter{Kind: ledger.JudgeVerdict}) {
-		p, _ := ledger.Decode[ledger.JudgeVerdictPayload](e)
-		got = append(got, strings.Join([]string{e.Task, p.Key, p.Verdict, p.Decision}, " "))
+		p, _ := ledger.Decode[*ledger.JudgeVerdictPayload](e)
+		got = append(got, strings.Join([]string{e.Task, p.GetKey(), p.GetVerdict(), p.GetDecision()}, " "))
 
 		if e.Source != ledger.Artifact {
 			t.Errorf("source %q", e.Source)
@@ -433,7 +433,7 @@ The server should not cache.
 
 	rows := recorded(t, db, ledger.Filter{Kind: ledger.JudgeVerdict})
 	for _, i := range []int{3, 4} {
-		if p, _ := ledger.Decode[ledger.JudgeVerdictPayload](rows[i]); p.ParseError == "" {
+		if p, _ := ledger.Decode[*ledger.JudgeVerdictPayload](rows[i]); p.GetParseError() == "" {
 			t.Errorf("an unknown verdict recorded no parse error: %+v", p)
 		}
 	}

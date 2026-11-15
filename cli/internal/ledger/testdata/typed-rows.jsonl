@@ -1,0 +1,44 @@
+{"kind":"run_started","payload":{"v":2,"f10_version":"0.61.0","model":"claude-opus-5-5","agent":"claude","profile":{"kind":"claude","model":"opus","effort":"high"},"skill":"ship","args":"FT-1 --driven"},"source":"observed","task":"FT-1"}
+{"kind":"run_started","payload":{"v":2,"skill":"plan"},"source":"observed"}
+{"kind":"step_entered","payload":{"v":1,"steps":["fetch","plan"]},"source":"observed"}
+{"kind":"step_entered","payload":{"v":1,"steps":null},"source":"observed"}
+{"kind":"task_finished","payload":{"v":1,"args":["FT-1","--yes"],"by":"drive"},"source":"observed","task":"FT-1"}
+{"kind":"session_stopped","payload":{"v":2,"f10_version":"0.61.0","model":"m","agent":"claude","profile":{"kind":"claude"},"task":"FT-1","phase":"ship","status":"done","leaf":"pr","backstop":true},"source":"observed","task":"FT-1"}
+{"kind":"session_stopped","payload":{"v":2,"phase":"plan","status":"running"},"source":"observed"}
+{"kind":"turn_used","payload":{"v":1,"usage":{"input":10,"output":20,"cache_write":30,"cache_read":40,"by_model":{"haiku":{"input":4,"output":8,"cache_write":30,"cache_read":40},"opus":{"input":6,"output":12,"cache_write":0,"cache_read":0}},"subagents":{"input":1,"output":2,"cache_write":0,"cache_read":0},"through":"msg_01"}},"source":"observed","task":"FT-1"}
+{"kind":"turn_used","payload":{"v":1,"usage":{"input":0,"output":0,"cache_write":0,"cache_read":0}},"source":"observed"}
+{"kind":"task_captured","payload":{"v":1,"host":"gh","url":"https://github.com/o/r/issues/7"},"source":"observed"}
+{"kind":"task_captured","payload":{"v":1,"host":"f10","id":"FT-8"},"source":"observed","task":"FT-8"}
+{"kind":"pr_opened","payload":{"v":1,"host":"gh","url":"https://github.com/o/r/pull/9"},"source":"observed","task":"FT-1"}
+{"kind":"committed","payload":{"v":1,"branch":"b","sha":"abc1234","subject":"feat: \u003cx\u003e \u0026 \"y\""},"source":"observed","task":"FT-1"}
+{"kind":"pushed","payload":{"v":1,"remote":"origin","refs":["b -\u003e b"]},"source":"observed","task":"FT-1"}
+{"kind":"pushed","payload":{"v":1,"refs":null},"source":"observed"}
+{"kind":"wait_started","payload":{"v":1,"reason":"question","tool":"AskUserQuestion"},"source":"observed"}
+{"kind":"wait_ended","payload":{"v":1,"reason":"turn","by":"UserPromptSubmit"},"source":"observed"}
+{"kind":"plan_saved","payload":{"v":1,"path":"/p/plans/FT-1.md","task":"FT-1"},"source":"artifact","task":"FT-1"}
+{"kind":"plan_superseded","payload":{"v":1,"from":"/p/plans/FT-1.md","to":"/p/plans/archive/FT-1.1.md","task":"FT-1"},"source":"artifact","task":"FT-1"}
+{"kind":"spike_saved","payload":{"v":1,"path":"/p/spikes/FT-1.md","task":"FT-1"},"source":"artifact","task":"FT-1"}
+{"kind":"review_round_opened","payload":{"v":1,"path":"/p/reviews/FT-1/1.md","round":"1","reviewed":"abc","reviewer":"local","verdict":"findings","categories":{"correctness and logic":2,"tests and docs":0}},"source":"artifact","task":"FT-1"}
+{"kind":"review_round_opened","payload":{"v":1,"path":"/p/reviews/FT-1/bad.md","round":"2","parse_error":"findings: no header"},"source":"artifact","task":"FT-1"}
+{"kind":"finding_verdict","payload":{"v":1,"round":"1","finding":"1.1","title":"t","verdict":"skip","category":"c","reason":"r","status":"wontfix"},"source":"artifact","task":"FT-1"}
+{"kind":"judge_verdict","payload":{"v":1,"path":"/p/verdicts/FT-1/1.md","key":"FT-1","n":"1","subject":"plan FT-1","verdict":"proceed","reason":"ok","run":"ship before pr","decision":"continue","blind":true},"source":"artifact","task":"FT-1"}
+{"kind":"judge_verdict","payload":{"v":1,"path":"/p/verdicts/idea/1.md","key":"idea","n":"1","idea":true,"parse_error":"bad"},"source":"artifact"}
+{"kind":"task_halted","payload":{"v":1,"skill":"ship","reason":"no progress","attempts":["a","b"]},"source":"observed","task":"FT-1"}
+{"kind":"task_sized","payload":{"v":1,"lines":400,"md_lines":100,"files":7,"base":"main"},"source":"observed","task":"FT-1"}
+{"kind":"regression_found","payload":{"v":1,"origin_task":"FT-1","origin":"missed","commit":"abc","lines":["a.go:1-4"],"found_by":"debug","confidence":"confirmed","class":"missed","round":"1","finding":"1.2","repro":"full","note":"n"},"source":"artifact","task":"FT-9"}
+{"kind":"regression_found","payload":{"v":1,"origin_task":"FT-1","origin":"unreviewed","found_by":"debug","confidence":"likely","repro":"obvious"},"source":"artifact","task":"FT-9"}
+{"kind":"regression_claimed","payload":{"v":1,"origin_task":"FT-1","text":"regression of FT-1"},"source":"artifact","task":"FT-9"}
+{"kind":"ask_raised","payload":{"v":1,"ask":{"id":"f10:FT-1","agent":"ft-1-abc","workspace_id":"","text":"1. a? [y | n]","questions":[{"n":1,"text":"a?","options":["y","n"]}],"asked_at":"2026-11-14T10:30:15.123456789+02:00","answer":"","answered_by":"","labels":{"task":"FT-1"}}},"source":"observed","task":"FT-1"}
+{"kind":"ask_raised","payload":{"v":1,"ask":{"id":"f10:FT-1","agent":"ft-1-abc","workspace_id":"","text":"1. a?","questions":[{"n":1,"text":"a?","options":null}],"asked_at":"2026-11-14T10:30:15.123456789+02:00","answer":"1=y","answered_by":"ANSWER_SOURCE_DRIVE","answered_at":"2026-11-14T10:31:15.123456789+02:00","delivered_at":"2026-11-14T10:32:15.123456789+02:00","labels":{"drive":"3","task":"FT-1"}}},"source":"observed","task":"FT-1"}
+{"kind":"ask_answered","payload":{"v":1,"id":"f10:FT-1","answer":"1=y","answered_by":"ANSWER_SOURCE_ASKS","delivered":true},"source":"observed","task":"FT-1"}
+{"kind":"ask_answered","payload":{"v":1,"id":"f10:FT-1","answer":"","answered_by":"","delivered":false},"source":"observed","task":"FT-1"}
+{"kind":"state_set","payload":{"v":1,"args":["set","ship","running","implement"],"capture":"prior","plan":"done","ship":"running","leaf":"implement","final":"pr","note":"n","next":"x","ask":"1. a? [y | n]","wait":"FT-2","done":"review","pipeline":["implement","pr"],"labels":["impl","pr"],"at":1},"source":"claimed","task":"FT-1"}
+{"kind":"state_task","payload":{"v":1,"args":["set","ship","running","implement"],"capture":"prior","plan":"done","ship":"running","leaf":"implement","final":"pr","note":"n","next":"x","ask":"1. a? [y | n]","wait":"FT-2","done":"review","pipeline":["implement","pr"],"labels":["impl","pr"],"at":1},"source":"claimed","task":"FT-1"}
+{"kind":"state_note","payload":{"v":1,"args":["set","ship","running","implement"],"capture":"prior","plan":"done","ship":"running","leaf":"implement","final":"pr","note":"n","next":"x","ask":"1. a? [y | n]","wait":"FT-2","done":"review","pipeline":["implement","pr"],"labels":["impl","pr"],"at":1},"source":"claimed","task":"FT-1"}
+{"kind":"state_ask","payload":{"v":1,"args":["set","ship","running","implement"],"capture":"prior","plan":"done","ship":"running","leaf":"implement","final":"pr","note":"n","next":"x","ask":"1. a? [y | n]","wait":"FT-2","done":"review","pipeline":["implement","pr"],"labels":["impl","pr"],"at":1},"source":"claimed","task":"FT-1"}
+{"kind":"state_wait","payload":{"v":1,"args":["set","ship","running","implement"],"capture":"prior","plan":"done","ship":"running","leaf":"implement","final":"pr","note":"n","next":"x","ask":"1. a? [y | n]","wait":"FT-2","done":"review","pipeline":["implement","pr"],"labels":["impl","pr"],"at":1},"source":"claimed","task":"FT-1"}
+{"kind":"state_stop","payload":{"v":1,"args":["set","ship","running","implement"],"capture":"prior","plan":"done","ship":"running","leaf":"implement","final":"pr","note":"n","next":"x","ask":"1. a? [y | n]","wait":"FT-2","done":"review","pipeline":["implement","pr"],"labels":["impl","pr"],"at":1},"source":"claimed","task":"FT-1"}
+{"kind":"state_done","payload":{"v":1,"args":["set","ship","running","implement"],"capture":"prior","plan":"done","ship":"running","leaf":"implement","final":"pr","note":"n","next":"x","ask":"1. a? [y | n]","wait":"FT-2","done":"review","pipeline":["implement","pr"],"labels":["impl","pr"],"at":1},"source":"claimed","task":"FT-1"}
+{"kind":"state_final","payload":{"v":1,"args":["set","ship","running","implement"],"capture":"prior","plan":"done","ship":"running","leaf":"implement","final":"pr","note":"n","next":"x","ask":"1. a? [y | n]","wait":"FT-2","done":"review","pipeline":["implement","pr"],"labels":["impl","pr"],"at":1},"source":"claimed","task":"FT-1"}
+{"kind":"state_pipeline","payload":{"v":1,"args":["set","ship","running","implement"],"capture":"prior","plan":"done","ship":"running","leaf":"implement","final":"pr","note":"n","next":"x","ask":"1. a? [y | n]","wait":"FT-2","done":"review","pipeline":["implement","pr"],"labels":["impl","pr"],"at":1},"source":"claimed","task":"FT-1"}
+{"kind":"state_set","payload":{"v":1,"args":null,"capture":"pending","plan":"","ship":""},"source":"claimed"}

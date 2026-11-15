@@ -22,7 +22,7 @@ func ev(task, kind string, p any) ledger.Event {
 func rounds(task string, n int) []ledger.Event {
 	var out []ledger.Event
 	for r := 1; r <= n; r++ {
-		out = append(out, ev(task, ledger.ReviewRoundOpened, ledger.ReviewRoundOpenedPayload{Round: strconv.Itoa(r)}))
+		out = append(out, ev(task, ledger.ReviewRoundOpened, &ledger.ReviewRoundOpenedPayload{Round: strconv.Itoa(r)}))
 	}
 
 	return out
@@ -30,11 +30,11 @@ func rounds(task string, n int) []ledger.Event {
 
 func verdict(task, finding, cat, word string) ledger.Event {
 	return ev(task, ledger.FindingVerdict,
-		ledger.FindingVerdictPayload{Round: "1", Finding: finding, Category: cat, Verdict: word})
+		&ledger.FindingVerdictPayload{Round: "1", Finding: finding, Category: cat, Verdict: word})
 }
 
 func halt(task, reason string) ledger.Event {
-	return ev(task, ledger.TaskHalted, ledger.TaskHaltedPayload{Skill: "ship", Reason: reason})
+	return ev(task, ledger.TaskHalted, &ledger.TaskHaltedPayload{Skill: "ship", Reason: reason})
 }
 
 // fixture is the task's: a/ had three tasks of 3+ rounds and two halts,
@@ -101,7 +101,7 @@ func TestSmallAreaGetsNoMedian(t *testing.T) {
 func TestRegressionLineage(t *testing.T) {
 	in := fixture()
 	in.Events = append(in.Events, ev("FT-30", ledger.RegressionFound,
-		ledger.RegressionFoundPayload{OriginTask: "FT-4", Class: "missed", Lines: []string{"b/x.go:1-2"}}))
+		&ledger.RegressionFoundPayload{OriginTask: "FT-4", Class: "missed", Lines: []string{"b/x.go:1-2"}}))
 
 	m := Build(in)
 

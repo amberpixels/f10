@@ -3,12 +3,13 @@ package ledger
 import (
 	"encoding/json"
 	"fmt"
-	"reflect"
-	"strings"
+
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 // Schema is the JSON Schema of every kind's payload, every version, generated
-// from the registered structs: docs/ledger.schema.json is its output.
+// from the payload messages' descriptors: docs/ledger.schema.json is its
+// output.
 func Schema() ([]byte, error) { return kinds.schema() }
 
 func (r registry) schema() ([]byte, error) {
@@ -18,13 +19,9 @@ func (r registry) schema() ([]byte, error) {
 		refs := make([]any, 0, len(vs))
 
 		for i, v := range vs {
-			def, err := structSchema(v.typ, i+1)
-			if err != nil {
-				return nil, fmt.Errorf("ledger: %s: %w", kind, err)
-			}
-
-			defs[v.typ.Name()] = def
-			refs = append(refs, map[string]any{"$ref": "#/$defs/" + v.typ.Name()})
+			name := fmt.Sprintf("%s.v%d", kind, i+1)
+			defs[name] = versionSchema(v.typ.Descriptor(), i+1, defs)
+			refs = append(refs, defRef(name))
 		}
 
 		defs[kind] = map[string]any{"oneOf": refs}
@@ -34,8 +31,8 @@ func (r registry) schema() ([]byte, error) {
 		"$schema": "https://json-schema.org/draft/2020-12/schema",
 		"$id":     "https://github.com/amberpixels/f10/docs/ledger.schema.json",
 		"title":   "Ledger payloads",
-		"description": "The payload of each events row, by kind: $defs/<kind> lists its versions, oldest first. " +
-			"docs/ledger.md is the spec.",
+		"description": "The payload of each events row, by kind: $defs/<kind> lists its versions, oldest first, " +
+			"and $defs/<kind>.v<n> is version n. docs/ledger.md is the spec.",
 		"$defs": defs,
 	}, "", "  ")
 	if err != nil {
@@ -45,33 +42,20 @@ func (r registry) schema() ([]byte, error) {
 	return append(out, '\n'), nil
 }
 
-// structSchema is one version's object: its fields, and v, absent on rows
-// written before versions existed, so required only from version 2.
-func structSchema(t reflect.Type, n int) (map[string]any, error) {
-	props := map[string]any{versionKey: map[string]any{"const": n}}
-	required := []string{}
+// versionSchema is one version's object: its message's fields, and v, absent
+// on rows written before versions existed, so required only from version 2.
+// No other key is required, because rows written before payloads were
+// messages leave empty keys out.
+func versionSchema(md protoreflect.MessageDescriptor, n int, defs map[string]any) map[string]any {
+	props := fieldSchemas(md, defs)
+	props[versionKey] = map[string]any{"const": n}
 
+	required := []string{}
 	if n > 1 {
 		required = append(required, versionKey)
 	}
 
-	if err := addFields(t, props, &required); err != nil {
-		return nil, err
-	}
-
-	return object(props, required), nil
-}
-
-// objectSchema is a nested struct as encoding/json writes it.
-func objectSchema(t reflect.Type) (map[string]any, error) {
-	props := map[string]any{}
-	required := []string{}
-
-	if err := addFields(t, props, &required); err != nil {
-		return nil, err
-	}
-
-	return object(props, required), nil
+	return object(props, required)
 }
 
 func object(props map[string]any, required []string) map[string]any {
@@ -83,70 +67,63 @@ func object(props map[string]any, required []string) map[string]any {
 	}
 }
 
-// addFields adds t's fields: an embedded struct's inline, and each one
-// required unless omitempty or omitzero.
-func addFields(t reflect.Type, props map[string]any, required *[]string) error {
-	for f := range t.Fields() {
-		tag := f.Tag.Get("json")
-		if f.Anonymous && tag == "" && f.Type.Kind() == reflect.Struct {
-			if err := addFields(f.Type, props, required); err != nil {
-				return err
+// fieldSchemas is md's fields under their stored names, the proto names.
+func fieldSchemas(md protoreflect.MessageDescriptor, defs map[string]any) map[string]any {
+	props := map[string]any{}
+
+	for i := range md.Fields().Len() {
+		fd := md.Fields().Get(i)
+
+		switch {
+		case fd.IsMap():
+			props[string(fd.Name())] = map[string]any{
+				"type":                 []string{"object", "null"},
+				"additionalProperties": valueSchema(fd.MapValue(), defs),
 			}
-
-			continue
-		}
-
-		name, opts, _ := strings.Cut(tag, ",")
-		if name == "" || name == "-" {
-			continue
-		}
-
-		typ, err := typeSchema(f.Type)
-		if err != nil {
-			return fmt.Errorf("%s.%s: %w", t.Name(), f.Name, err)
-		}
-
-		props[name] = typ
-
-		if !strings.Contains(opts, "omitempty") && !strings.Contains(opts, "omitzero") {
-			*required = append(*required, name)
+		case fd.IsList():
+			props[string(fd.Name())] = map[string]any{"type": []string{"array", "null"}, "items": valueSchema(fd, defs)}
+		default:
+			props[string(fd.Name())] = valueSchema(fd, defs)
 		}
 	}
 
-	return nil
+	return props
 }
 
-// typeSchema covers the field types payloads use; a nil list or map is
-// stored as null.
-func typeSchema(t reflect.Type) (map[string]any, error) {
-	switch t.Kind() {
-	case reflect.String:
-		return map[string]any{"type": "string"}, nil
-	case reflect.Int, reflect.Int64:
-		return map[string]any{"type": "integer"}, nil
-	case reflect.Bool:
-		return map[string]any{"type": "boolean"}, nil
-	case reflect.Slice:
-		items, err := typeSchema(t.Elem())
-		if err != nil {
-			return nil, err
+// valueSchema is one value of fd; a nested message is a shared $defs entry
+// under its full name.
+func valueSchema(fd protoreflect.FieldDescriptor, defs map[string]any) map[string]any {
+	switch fd.Kind() {
+	case protoreflect.StringKind, protoreflect.BytesKind:
+		return map[string]any{"type": "string"}
+	case protoreflect.BoolKind:
+		return map[string]any{"type": "boolean"}
+	case protoreflect.EnumKind:
+		// rows written before payloads were messages store an unset enum as ""
+		names := []string{""}
+		for i := range fd.Enum().Values().Len() {
+			names = append(names, string(fd.Enum().Values().Get(i).Name()))
 		}
 
-		return map[string]any{"type": []string{"array", "null"}, "items": items}, nil
-	case reflect.Struct:
-		return objectSchema(t)
-	case reflect.Map:
-		if t.Key().Kind() != reflect.String {
-			return nil, fmt.Errorf("map key %s", t.Key())
+		return map[string]any{"type": "string", "enum": names}
+	case protoreflect.MessageKind, protoreflect.GroupKind:
+		md := fd.Message()
+		if md.FullName() == "google.protobuf.Timestamp" {
+			return map[string]any{"type": "string", "format": "date-time"}
 		}
 
-		values, err := typeSchema(t.Elem())
-		if err != nil {
-			return nil, err
+		name := string(md.FullName())
+		if _, ok := defs[name]; !ok {
+			defs[name] = nil // a recursive message refers to itself
+			defs[name] = object(fieldSchemas(md, defs), []string{})
 		}
 
-		return map[string]any{"type": []string{"object", "null"}, "additionalProperties": values}, nil
+		return defRef(name)
+	case protoreflect.FloatKind, protoreflect.DoubleKind:
+		return map[string]any{"type": "number"}
 	default:
-		return nil, fmt.Errorf("no schema for %s", t)
+		return map[string]any{"type": "integer"}
 	}
 }
+
+func defRef(name string) map[string]any { return map[string]any{"$ref": "#/$defs/" + name} }

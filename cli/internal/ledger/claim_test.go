@@ -29,7 +29,10 @@ func TestEncodeClaimKeys(t *testing.T) {
 		{"full", fullRun(), []string{
 			"args", "ask", "at", "capture", "done", "final", "labels", "leaf", "next", "note", "pipeline", "plan", "ship", "v", "wait",
 		}},
-		{"minimal", &state.Run{}, []string{"args", "capture", "plan", "ship", "v"}},
+		// every key is written, empty or not, so an empty run stores them all
+		{"minimal", &state.Run{}, []string{
+			"args", "ask", "at", "capture", "done", "final", "labels", "leaf", "next", "note", "pipeline", "plan", "ship", "v", "wait",
+		}},
 	} {
 		got := slices.Sorted(maps.Keys(storedKeys(t, MustEvent(StateSet, EncodeClaim(tc.run, nil)))))
 		if !slices.Equal(got, tc.want) {

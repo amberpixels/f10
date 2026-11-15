@@ -97,8 +97,8 @@ type Input struct {
 }
 
 // Attribute is the regression_found payload for in.
-func Attribute(ctx context.Context, in Input) ledger.RegressionFoundPayload {
-	p := ledger.RegressionFoundPayload{
+func Attribute(ctx context.Context, in Input) *ledger.RegressionFoundPayload {
+	p := &ledger.RegressionFoundPayload{
 		Commit:     in.Commit,
 		FoundBy:    in.FoundBy,
 		Confidence: in.Confidence,
@@ -123,11 +123,11 @@ func Attribute(ctx context.Context, in Input) ledger.RegressionFoundPayload {
 	a := attribution{in: in}
 
 	p.OriginTask, p.Origin, p.Note = a.origin(ctx)
-	if p.OriginTask == "" {
+	if p.GetOriginTask() == "" {
 		return p
 	}
 
-	c := a.classify(ctx, p.OriginTask)
+	c := a.classify(ctx, p.GetOriginTask())
 	p.Class, p.Round, p.Finding = c.class, c.round, c.finding
 
 	p.Note = c.note
@@ -139,16 +139,16 @@ func Attribute(ctx context.Context, in Input) ledger.RegressionFoundPayload {
 }
 
 // Line is what the plan's `Regression of:` header and the command print.
-func Line(p ledger.RegressionFoundPayload) string {
-	if p.OriginTask == "" {
-		if p.Origin == "" {
-			return "none (" + p.Note + ")"
+func Line(p *ledger.RegressionFoundPayload) string {
+	if p.GetOriginTask() == "" {
+		if p.GetOrigin() == "" {
+			return "none (" + p.GetNote() + ")"
 		}
 
-		return "none (" + p.Origin + ")"
+		return "none (" + p.GetOrigin() + ")"
 	}
 
-	return fmt.Sprintf("%s (%s, %s)", p.OriginTask, p.Class, p.Confidence)
+	return fmt.Sprintf("%s (%s, %s)", p.GetOriginTask(), p.GetClass(), p.GetConfidence())
 }
 
 type attribution struct {

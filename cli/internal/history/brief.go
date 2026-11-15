@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/protobuf/proto"
+
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lore"
 )
@@ -247,7 +249,7 @@ func notes(entries []lore.Entry, paths []string) []Note {
 }
 
 // decode reads a row a newer f10 wrote as far as this one knows it.
-func decode[T any](e ledger.Event) (T, bool) {
+func decode[T proto.Message](e ledger.Event) (T, bool) {
 	p, err := ledger.Decode[T](e)
 
 	return p, err == nil || errors.Is(err, ledger.ErrNewerVersion)

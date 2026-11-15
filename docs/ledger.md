@@ -8,7 +8,9 @@ Its `events` table records what runs did, one row per event, and rows are never 
 
 The columns hold what every event has: `id`, `machine`, `at`, `project`, `project_local`, `checkout`, `branch`, `session`, `task`, `kind` and `source`.
 `payload` holds the rest, a JSON object whose shape depends on `kind`.
-In the schema, `$defs/<kind>` lists the kind's payload versions, oldest first.
+Each kind's payload is a message in [`proto/f10/v1/events.proto`](../proto/f10/v1/events.proto) (the asks' in `proto/agents/v1/asks.proto`), the same message the API streams in `f10.v1.Event`.
+It is stored as protojson under the proto field names, with every scalar, list and map key written even when empty, so `json_extract` reads a count as a number and an empty value as `""`.
+In the schema, which is generated from those messages, `$defs/<kind>` lists the kind's payload versions, oldest first, and `$defs/<kind>.v<n>` is version `n`.
 
 ## Regressions
 
@@ -30,8 +32,15 @@ The two can disagree, and both stand.
 Every payload carries `v`, its version, which f10 sets when it writes the row.
 A payload with no `v` is version 1, because rows written before versions existed have none.
 
-A payload changes shape only through a new version: renaming or retyping a key adds a version and a function that turns the previous version into it.
+Within a version, a payload message only gains fields, because a reader of an older row simply finds the new keys unset.
+`buf breaking` refuses a renumbered, renamed or removed field (`proto/README.md`), so a key never changes meaning in place.
+A real break, such as renaming or retyping a key, is a new message for the kind and a new version, with a function that turns the previous version's message into it.
 f10 reads an old row through those functions, so a reader always sees the current shape, and the stored row stays as it was written.
+
+`run_started` and `session_stopped` are at version 2 although one message reads both versions: their second version only added keys, before payloads were messages, and f10 keeps writing `v: 2` because older f10s sharing the database read that number.
+
+Rows written before payloads were messages left empty keys out and stored an unset enum, such as an unanswered ask's `answered_by`, as `""`.
+Both still read: a missing key is an empty field, and an empty enum reads as `*_UNSPECIFIED`.
 
 A row whose `v` is above the newest version this f10 knows comes from a newer f10 sharing the database.
 It reads as far as the current shape allows, and the reader is told the row is partial, so the row is never dropped.
@@ -52,7 +61,7 @@ A version that renames one of these keys changes its column, in the same release
 ## What ran a run, and what it cost
 
 `run_started` carries the run context: `f10_version`, `model`, `agent` (the agent kind, `claude` unless a profile names another) and `profile` (the `kind`, `model` and `effort` that `f10 start` or `f10 drive` recorded on the branch).
-A key the hook could not learn is absent, and an interactive session has no `profile`.
+A key the hook could not learn is empty, and an interactive session has no `profile`.
 `session_stopped` carries the same keys only when the context changed since the session's last row that carried one, such as after a `/model` switch.
 
 `turn_used` is the tokens one turn spent, read from the session's transcript as a delta since the previous turn, so a task's cost is the sum of its rows:

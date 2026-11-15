@@ -3,7 +3,11 @@ package asks
 import (
 	"strconv"
 	"strings"
+	"time"
 
+	"google.golang.org/protobuf/types/known/timestamppb"
+
+	agentsv1 "github.com/amberpixels/f10/cli/gen/agents/v1"
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 )
@@ -11,32 +15,42 @@ import (
 // recordRaised and recordAnswered put the inbox's changes in the ledger,
 // which the API streams as events. A failed record never fails the ask.
 func recordRaised(a Ask) {
-	qs := make([]ledger.AskQuestionV1, 0, len(a.Questions))
+	qs := make([]*ledger.AskQuestion, 0, len(a.Questions))
 	for _, q := range a.Questions {
-		qs = append(qs, ledger.AskQuestionV1{N: q.N, Text: q.Text, Options: q.Options})
+		n := int32(q.N) //nolint:gosec // a question's number in a short list
+		qs = append(qs, &ledger.AskQuestion{N: n, Text: q.Text, Options: q.Options})
 	}
 
-	record(a, ledger.AskRaised, ledger.AskRaisedPayload{Ask: ledger.AskV1{
-		ID:          a.Key(),
+	record(a, ledger.AskRaised, &ledger.AskRaisedPayload{Ask: &ledger.Ask{
+		Id:          a.Key(),
 		Agent:       agentctl.AgentName(a.Task, a.Suffix, a.Worktree),
 		Text:        a.Text,
 		Questions:   qs,
-		AskedAt:     a.AskedAt,
+		AskedAt:     timestamp(a.AskedAt),
 		Answer:      a.Answer,
 		AnsweredBy:  source(a.By),
-		AnsweredAt:  a.AnsweredAt,
-		DeliveredAt: a.DeliveredAt,
+		AnsweredAt:  timestamp(a.AnsweredAt),
+		DeliveredAt: timestamp(a.DeliveredAt),
 		Labels:      Labels(a),
 	}})
 }
 
 func recordAnswered(a Ask) {
-	record(a, ledger.AskAnswered, ledger.AskAnsweredPayload{
-		ID:         a.Key(),
+	record(a, ledger.AskAnswered, &ledger.AskAnsweredPayload{
+		Id:         a.Key(),
 		Answer:     a.Answer,
 		AnsweredBy: source(a.By),
 		Delivered:  !a.DeliveredAt.IsZero(),
 	})
+}
+
+// timestamp is t as the payload stores it, nil for a time not reached yet.
+func timestamp(t time.Time) *timestamppb.Timestamp {
+	if t.IsZero() {
+		return nil
+	}
+
+	return timestamppb.New(t)
 }
 
 func record(a Ask, kind string, payload any) {
@@ -52,13 +66,14 @@ func record(a Ask, kind string, payload any) {
 	ledger.Record(e)
 }
 
-// source is a way in as the agents.v1 AnswerSource enum names it.
-func source(by string) string {
+// source is a way in as the agents.v1 AnswerSource enum names it,
+// unspecified while the ask waits.
+func source(by string) agentsv1.AnswerSource {
 	if by == "" {
-		return ""
+		return agentsv1.AnswerSource_ANSWER_SOURCE_UNSPECIFIED
 	}
 
-	return "ANSWER_SOURCE_" + strings.ToUpper(by)
+	return agentsv1.AnswerSource(agentsv1.AnswerSource_value["ANSWER_SOURCE_"+strings.ToUpper(by)])
 }
 
 // Labels are what f10 adds to an ask, kept out of the generic ask's fields.

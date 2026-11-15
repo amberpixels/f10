@@ -7,13 +7,13 @@ package ledger
 func (e Event) Skill() string {
 	switch e.Kind {
 	case RunStarted:
-		p, _ := Decode[RunStartedPayload](e)
+		p, _ := Decode[*RunStartedPayload](e)
 
-		return p.Skill
+		return p.GetSkill()
 	case TaskHalted:
-		p, _ := Decode[TaskHaltedPayload](e)
+		p, _ := Decode[*TaskHaltedPayload](e)
 
-		return p.Skill
+		return p.GetSkill()
 	}
 
 	return ""
@@ -23,17 +23,17 @@ func (e Event) Skill() string {
 func (e Event) Reason() string {
 	switch e.Kind {
 	case WaitStarted:
-		p, _ := Decode[WaitStartedPayload](e)
+		p, _ := Decode[*WaitStartedPayload](e)
 
-		return p.Reason
+		return p.GetReason()
 	case WaitEnded:
-		p, _ := Decode[WaitEndedPayload](e)
+		p, _ := Decode[*WaitEndedPayload](e)
 
-		return p.Reason
+		return p.GetReason()
 	case TaskHalted:
-		p, _ := Decode[TaskHaltedPayload](e)
+		p, _ := Decode[*TaskHaltedPayload](e)
 
-		return p.Reason
+		return p.GetReason()
 	}
 
 	return ""
@@ -45,7 +45,7 @@ func (e Event) Backstop() bool {
 		return false
 	}
 
-	p, _ := Decode[SessionStoppedPayload](e)
+	p, _ := Decode[*SessionStoppedPayload](e)
 
-	return p.Backstop
+	return p.GetBackstop()
 }

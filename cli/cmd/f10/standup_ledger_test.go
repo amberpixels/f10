@@ -24,7 +24,7 @@ func TestStandupReadsTheLedger(t *testing.T) {
 		"s1",
 		"XY-5",
 		ledger.PlanSaved,
-		ledger.PlanSavedPayload{Task: "XY-5"},
+		&ledger.PlanSavedPayload{Task: "XY-5"},
 	)
 	e.ID, e.Project, e.Checkout, e.Branch = "e1", place.Project, place.Checkout, "XY-5/plan"
 

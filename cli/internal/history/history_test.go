@@ -114,17 +114,17 @@ func ev(at time.Time, task, kind string, p any) ledger.Event {
 
 // reviewed is a task's round opening with the categories it raised and the
 // verdicts resolve recorded for them.
-func reviewed(at time.Time, task string, rounds int, cats map[string]int, verdicts ...string) []ledger.Event {
+func reviewed(at time.Time, task string, rounds int, cats map[string]int32, verdicts ...string) []ledger.Event {
 	var out []ledger.Event
 	for r := 1; r <= rounds; r++ {
 		out = append(out, ev(at, task, ledger.ReviewRoundOpened,
-			ledger.ReviewRoundOpenedPayload{Round: strconv.Itoa(r), Categories: cats}))
+			&ledger.ReviewRoundOpenedPayload{Round: strconv.Itoa(r), Categories: cats}))
 	}
 
 	for i, v := range verdicts {
 		cat, word, _ := strings.Cut(v, "=")
 		out = append(out, ev(at, task, ledger.FindingVerdict,
-			ledger.FindingVerdictPayload{Round: "1", Finding: strconv.Itoa(i + 1), Category: cat, Verdict: word}))
+			&ledger.FindingVerdictPayload{Round: "1", Finding: strconv.Itoa(i + 1), Category: cat, Verdict: word}))
 	}
 
 	return out
@@ -134,7 +134,7 @@ func reviewed(at time.Time, task string, rounds int, cats map[string]int, verdic
 // their ids; the statistics need three neighbors.
 func TestRecurringFindingNamesItsTasks(t *testing.T) {
 	at := window.Add(24 * time.Hour)
-	docs := map[string]int{"tests and docs": 1}
+	docs := map[string]int32{"tests and docs": 1}
 
 	var events []ledger.Event
 	for i, id := range []string{"FT-1", "FT-2", "FT-3"} {
@@ -156,7 +156,7 @@ func TestRecurringFindingNamesItsTasks(t *testing.T) {
 
 func TestTwoNeighborsGetNoStatistic(t *testing.T) {
 	at := window.Add(24 * time.Hour)
-	docs := map[string]int{"tests and docs": 1}
+	docs := map[string]int32{"tests and docs": 1}
 
 	events := append(reviewed(at, "FT-1", 3, docs, "tests and docs=fix"), reviewed(at, "FT-2", 3, docs)...)
 	b := Build(Input{Paths: []string{"a.go"}, Since: window, Touches: live("FT-1", "FT-2"), Events: events})
@@ -182,7 +182,7 @@ func TestTwoNeighborsGetNoStatistic(t *testing.T) {
 func TestRegressionsOnThePathsOrFromANeighbor(t *testing.T) {
 	at := window.Add(24 * time.Hour)
 	found := func(at time.Time, bug, origin string, lines ...string) ledger.Event {
-		return ev(at, bug, ledger.RegressionFound, ledger.RegressionFoundPayload{OriginTask: origin, Lines: lines})
+		return ev(at, bug, ledger.RegressionFound, &ledger.RegressionFoundPayload{OriginTask: origin, Lines: lines})
 	}
 
 	events := []ledger.Event{
@@ -281,8 +281,8 @@ func TestPlanKind(t *testing.T) {
 func TestStatisticsCountReviewedNeighborsOnly(t *testing.T) {
 	at := window.Add(24 * time.Hour)
 	opened := func(task, round, sha string) ledger.Event {
-		return ev(at, task, ledger.ReviewRoundOpened, ledger.ReviewRoundOpenedPayload{
-			Round: round, Reviewed: sha, Categories: map[string]int{"correctness and logic": 1},
+		return ev(at, task, ledger.ReviewRoundOpened, &ledger.ReviewRoundOpenedPayload{
+			Round: round, Reviewed: sha, Categories: map[string]int32{"correctness and logic": 1},
 		})
 	}
 
@@ -328,11 +328,11 @@ func TestDecisionCarriesItsAnchors(t *testing.T) {
 func TestFollowUpVerdictsKeepTheFirstSeries(t *testing.T) {
 	at := window.Add(24 * time.Hour)
 	opened := func(sha string) ledger.Event {
-		return ev(at, "FT-1", ledger.ReviewRoundOpened, ledger.ReviewRoundOpenedPayload{Round: "1", Reviewed: sha})
+		return ev(at, "FT-1", ledger.ReviewRoundOpened, &ledger.ReviewRoundOpenedPayload{Round: "1", Reviewed: sha})
 	}
 	verdict := func(cat, word string) ledger.Event {
 		return ev(at, "FT-1", ledger.FindingVerdict,
-			ledger.FindingVerdictPayload{Round: "1", Finding: "1.1", Category: cat, Verdict: word})
+			&ledger.FindingVerdictPayload{Round: "1", Finding: "1.1", Category: cat, Verdict: word})
 	}
 
 	events := []ledger.Event{
@@ -373,10 +373,10 @@ func TestCatchupDecisionsAreLeftOut(t *testing.T) {
 // neighbors, and keeps each halt's reason.
 func TestTaskFactsMatchesTheBrief(t *testing.T) {
 	at := window.Add(24 * time.Hour)
-	events := reviewed(at, "FT-1", 2, map[string]int{"tests and docs": 1}, "tests and docs=fix")
+	events := reviewed(at, "FT-1", 2, map[string]int32{"tests and docs": 1}, "tests and docs=fix")
 	events = append(
 		events,
-		ev(at, "FT-1", ledger.TaskHalted, ledger.TaskHaltedPayload{Skill: "ship", Reason: "catchup conflict"}),
+		ev(at, "FT-1", ledger.TaskHalted, &ledger.TaskHaltedPayload{Skill: "ship", Reason: "catchup conflict"}),
 	)
 
 	b := Build(Input{Paths: []string{"a.go"}, Since: window, Touches: live("FT-1"), Events: events})

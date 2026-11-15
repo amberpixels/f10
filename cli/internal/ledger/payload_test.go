@@ -15,7 +15,9 @@ import (
 	"reflect"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
+	"time"
 )
 
 // rawPayload is a payload as some f10 stored it, for rows in a legacy shape.
@@ -95,35 +97,36 @@ func TestEveryKindHasAPayload(t *testing.T) {
 }
 
 func TestNewEventChecksTheKindsType(t *testing.T) {
-	if _, err := NewEvent(RunStarted, PROpenedPayload{}); err == nil {
+	if _, err := NewEvent(RunStarted, &PROpenedPayload{}); err == nil {
 		t.Error("a pr_opened payload made a run_started row")
 	}
 
-	if _, err := NewEvent(RunStarted, &RunStartedPayload{}); err == nil {
-		t.Error("a pointer payload was taken")
+	if _, err := NewEvent(RunStarted, "skill"); err == nil {
+		t.Error("a payload that is no message was taken")
 	}
 
-	if _, err := NewEvent("no_such_kind", RunStartedPayload{}); err == nil {
+	if _, err := NewEvent("no_such_kind", &RunStartedPayload{}); err == nil {
 		t.Error("an unknown kind was taken")
 	}
 
-	e, err := NewEvent(StateNote, ClaimPayload{Note: "n"})
+	e, err := NewEvent(StateNote, &ClaimPayload{Note: "n"})
 	if err != nil || storedKeys(t, e)["v"] != float64(1) {
 		t.Errorf("claim row %+v, err %v", e, err)
 	}
 
-	if _, err := Decode[RunStartedPayload](e); err == nil {
+	if _, err := Decode[*RunStartedPayload](e); err == nil {
 		t.Error("a claim row decoded as run_started")
 	}
 }
 
-// absent reports a stored value that carries nothing: omitempty drops it.
+// absent reports a stored value that carries nothing: omitempty drops it,
+// and protojson writes an enum's zero as its UNSPECIFIED name.
 func absent(v any) bool {
 	switch v := v.(type) {
 	case nil:
 		return true
 	case string:
-		return v == ""
+		return v == "" || strings.HasSuffix(v, "_UNSPECIFIED")
 	case float64:
 		return v == 0
 	case bool:
@@ -137,22 +140,77 @@ func absent(v any) bool {
 	return false
 }
 
+// carried is a stored payload's content, nested objects included, with
+// what tells representation from loss settled: absent values dropped and
+// a timestamp written in UTC, since protojson re-encodes in UTC.
 func carried(m map[string]any) map[string]any {
-	out := map[string]any{}
+	delete(m, versionKey)
 
-	for k, v := range m {
-		if k != versionKey && !absent(v) {
-			out[k] = v
+	out, _ := normalized(m).(map[string]any)
+
+	return out
+}
+
+func normalized(v any) any {
+	switch v := v.(type) {
+	case map[string]any:
+		out := map[string]any{}
+
+		for k, x := range v {
+			if x = normalized(x); !absent(x) {
+				out[k] = x
+			}
+		}
+
+		return out
+	case []any:
+		out := make([]any, len(v))
+		for i, x := range v {
+			out[i] = normalized(x)
+		}
+
+		return out
+	case string:
+		if at, err := time.Parse(time.RFC3339Nano, v); err == nil {
+			return at.UTC().Format(time.RFC3339Nano)
 		}
 	}
 
-	return out
+	return v
 }
 
 // Rows the release before typed payloads wrote, one per writer and shape,
 // decode with nothing lost: re-encoded, every key with content survives.
 func TestStoredRowsDecodeWithoutLoss(t *testing.T) {
-	f, err := os.Open(filepath.Join("testdata", "v1-rows.jsonl"))
+	seen := checkFixture(t, "v1-rows.jsonl")
+
+	// kinds added after the fixture was frozen have no legacy rows to read
+	for k := range kinds {
+		if !seen[k] && !bornTyped[k] {
+			t.Errorf("the fixture has no %s row", k)
+		}
+	}
+}
+
+// Rows the last release before proto payloads wrote, through the structs
+// that were then the payloads, decode with nothing lost. Every kind existed
+// by then, so each one has rows here.
+func TestTypedRowsDecodeWithoutLoss(t *testing.T) {
+	seen := checkFixture(t, "typed-rows.jsonl")
+
+	for k := range kinds {
+		if !seen[k] {
+			t.Errorf("the fixture has no %s row", k)
+		}
+	}
+}
+
+// checkFixture stores testdata/name's rows, decodes each, re-encodes it and
+// fails on any key whose content changed; it returns the kinds it read.
+func checkFixture(t *testing.T, name string) map[string]bool {
+	t.Helper()
+
+	f, err := os.Open(filepath.Join("testdata", name))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,15 +263,16 @@ func TestStoredRowsDecodeWithoutLoss(t *testing.T) {
 					t.Errorf("%s: key %q stored %v, decodes to %v", e.Kind, k, want[k], got[k])
 				}
 			}
+
+			for k := range got {
+				if _, ok := want[k]; !ok {
+					t.Errorf("%s: key %q appeared on decode: %v", e.Kind, k, got[k])
+				}
+			}
 		}
 	}
 
-	// kinds added after the fixture was frozen have no legacy rows to read
-	for k := range kinds {
-		if !seen[k] && !bornTyped[k] {
-			t.Errorf("the fixture has no %s row", k)
-		}
-	}
+	return seen
 }
 
 // bornTyped is the kinds added after typed payloads, which have no untyped
@@ -222,44 +281,126 @@ var bornTyped = map[string]bool{
 	TurnUsed: true, RegressionFound: true, RegressionClaimed: true, AskRaised: true, AskAnswered: true,
 }
 
-type renamedV1 struct {
-	Who string `json:"who"`
-}
-
-type renamedV2 struct {
-	Author string `json:"author"`
-}
-
-// A kind bumped to v2 with a renamed key reads its v1 rows through the
-// upcaster; a v3 row from a newer f10 decodes as far as it can, flagged.
+// A kind bumped to a new message reads its v1 rows through the upcaster; a
+// v3 row from a newer f10 decodes as far as it can, flagged. Two unrelated
+// messages stand in for a kind's old and new shape.
 func TestUpcastAndNewerVersions(t *testing.T) {
 	r := registry{}
-	register[renamedV1](r, "renamed")
-	upcast(r, "renamed", func(o renamedV1) renamedV2 { return renamedV2{Author: o.Who} })
+	register[*PlanSavedPayload](r, "moved")
+	upcast(r, "moved", func(o *PlanSavedPayload) *PlanSupersededPayload {
+		return &PlanSupersededPayload{From: o.GetPath(), Task: o.GetTask()}
+	})
 
-	v1 := Event{Kind: "renamed", Payload: rawPayload(t, `{"who":"ann"}`)}
-	if got, err := decodeIn[renamedV2](r, v1); err != nil || got.Author != "ann" {
-		t.Errorf("v1 row: %+v, %v", got, err)
+	v1 := Event{Kind: "moved", Payload: rawPayload(t, `{"path":"/a.md","task":"FT-1"}`)}
+	if got, err := decodeIn[*PlanSupersededPayload](r, v1); err != nil || got.GetFrom() != "/a.md" {
+		t.Errorf("v1 row: %v, %v", got, err)
 	}
 
-	e, err := r.event("renamed", renamedV2{Author: "bob"})
+	e, err := r.event("moved", &PlanSupersededPayload{From: "/b.md"})
 	if err != nil || storedKeys(t, e)["v"] != float64(2) {
 		t.Fatalf("v2 row %+v, %v", e, err)
 	}
 
-	if got, err := decodeIn[renamedV2](r, e); err != nil || got.Author != "bob" {
-		t.Errorf("v2 row: %+v, %v", got, err)
+	if got, err := decodeIn[*PlanSupersededPayload](r, e); err != nil || got.GetFrom() != "/b.md" {
+		t.Errorf("v2 row: %v, %v", got, err)
 	}
 
-	if _, err := r.event("renamed", renamedV1{}); err == nil {
+	if _, err := r.event("moved", &PlanSavedPayload{}); err == nil {
 		t.Error("a v1 payload was written after the bump")
 	}
 
-	v3 := Event{Kind: "renamed", Payload: rawPayload(t, `{"v":3,"author":"cy","extra":1}`)}
+	v3 := Event{Kind: "moved", Payload: rawPayload(t, `{"v":3,"from":"/c.md","extra":1}`)}
 
-	got, err := decodeIn[renamedV2](r, v3)
-	if !errors.Is(err, ErrNewerVersion) || got.Author != "cy" {
-		t.Errorf("v3 row: %+v, %v", got, err)
+	got, err := decodeIn[*PlanSupersededPayload](r, v3)
+	if !errors.Is(err, ErrNewerVersion) || got.GetFrom() != "/c.md" {
+		t.Errorf("v3 row: %v, %v", got, err)
+	}
+}
+
+// A kind whose old versions only added keys keeps stamping its number, and
+// reads a row of each version with its one message.
+func TestAdditiveVersionsShareAMessage(t *testing.T) {
+	e := MustEvent(RunStarted, &RunStartedPayload{Skill: "ship", Model: "m"})
+	if storedKeys(t, e)["v"] != float64(2) {
+		t.Errorf("run_started stored %v", storedKeys(t, e))
+	}
+
+	v1 := Event{Kind: RunStarted, Payload: rawPayload(t, `{"skill":"plan"}`)}
+	if got, err := Decode[*RunStartedPayload](v1); err != nil || got.GetSkill() != "plan" {
+		t.Errorf("v1 row: %v, %v", got, err)
+	}
+}
+
+// Stored bytes are compact and open with v, whatever whitespace protojson
+// chose, and every scalar key is written, empty or not.
+func TestStoredPayloadIsCompact(t *testing.T) {
+	e := MustEvent(Committed, &CommittedPayload{Branch: "b", Sha: "abc"})
+
+	raw, err := json.Marshal(e.Payload.Val)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want := `{"v":1,"branch":"b","sha":"abc","subject":""}`; string(raw) != want {
+		t.Errorf("stored %s, want %s", raw, want)
+	}
+}
+
+// protojson refuses invalid UTF-8, which encoding/json replaced: the row is
+// still written, the bad bytes replaced, and the caller's message untouched.
+func TestInvalidUTF8IsReplaced(t *testing.T) {
+	p := &CommittedPayload{Subject: "fix \xff", Branch: "b"}
+
+	e, err := NewEvent(Committed, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := storedKeys(t, e)["subject"]; got != "fix \uFFFD" {
+		t.Errorf("stored subject %q", got)
+	}
+
+	if p.GetSubject() != "fix \xff" {
+		t.Error("the caller's message changed")
+	}
+
+	m := MustEvent(ReviewRoundOpened, &ReviewRoundOpenedPayload{Categories: map[string]int32{"a\xff": 1}})
+	if cats, _ := storedKeys(t, m)["categories"].(map[string]any); cats["a\uFFFD"] != float64(1) {
+		t.Errorf("stored categories %v", cats)
+	}
+}
+
+// An ask row the structs wrote stores an unset enum as "", which protojson
+// refuses on its own; it reads as unspecified, nested or not.
+func TestEmptyEnumReadsAsUnspecified(t *testing.T) {
+	answered := Event{
+		Kind:    AskAnswered,
+		Payload: rawPayload(t, `{"v":1,"id":"k","answer":"","answered_by":"","delivered":false}`),
+	}
+	if got, err := Decode[*AskAnsweredPayload](answered); err != nil || got.GetId() != "k" {
+		t.Errorf("ask_answered: %v, %v", got, err)
+	}
+
+	raised := Event{
+		Kind:    AskRaised,
+		Payload: rawPayload(t, `{"v":1,"ask":{"id":"k","answered_by":"","questions":[{"n":1}]}}`),
+	}
+	if got, err := Decode[*AskRaisedPayload](raised); err != nil || got.GetAsk().GetId() != "k" {
+		t.Errorf("ask_raised: %v, %v", got, err)
+	}
+}
+
+// A row that does not decode, or of another kind, still yields a message,
+// so a reader that ignores the error reads zero values.
+func TestDecodeNeverReturnsNil(t *testing.T) {
+	bad := Event{Kind: Committed, Payload: rawPayload(t, `{"sha":1}`)}
+	if got, err := Decode[*CommittedPayload](bad); err == nil || got == nil {
+		t.Errorf("bad row: %v, %v", got, err)
+	}
+
+	other := MustEvent(StateNote, &ClaimPayload{})
+	if got, err := Decode[*CommittedPayload](other); err == nil || got == nil {
+		t.Errorf("other kind: %v, %v", got, err)
 	}
 }
 
@@ -293,7 +434,7 @@ func TestReadEventsSyncsTheSpoolAndFilters(t *testing.T) {
 	}
 }
 
-// docs/ledger.schema.json is what the structs generate.
+// docs/ledger.schema.json is what the payload messages generate.
 func TestSchemaMatchesTheCheckedInFile(t *testing.T) {
 	got, err := Schema()
 	if err != nil {
@@ -307,7 +448,7 @@ func TestSchemaMatchesTheCheckedInFile(t *testing.T) {
 
 	if !bytes.Equal(got, want) {
 		t.Error(
-			"docs/ledger.schema.json drifted from the payload structs: run `go run ./cmd/f10 ledger schema > ../docs/ledger.schema.json` in cli/",
+			"docs/ledger.schema.json drifted from the payload messages: run `go run ./cmd/f10 ledger schema > ../docs/ledger.schema.json` in cli/",
 		)
 	}
 }

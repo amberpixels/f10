@@ -81,8 +81,8 @@ func FoldLedger(events []ledger.Event, id string, resolve func(string) string) L
 				lt.Halt = nil
 			}
 		case e.Kind == ledger.PROpened:
-			p, _ := ledger.Decode[ledger.PROpenedPayload](e)
-			lt.PR = cmp.Or(p.URL, lt.PR)
+			p, _ := ledger.Decode[*ledger.PROpenedPayload](e)
+			lt.PR = cmp.Or(p.GetUrl(), lt.PR)
 		case e.Kind == ledger.Pushed:
 			lt.Pushed = true
 		case e.Kind == ledger.TaskHalted:

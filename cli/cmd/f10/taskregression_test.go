@@ -58,8 +58,9 @@ func TestTaskRegressionCommand(t *testing.T) {
 		kinds = append(kinds, e.Kind)
 
 		if e.Kind == ledger.RegressionFound && len(kinds) == 1 {
-			p, err := ledger.Decode[ledger.RegressionFoundPayload](e)
-			if err != nil || p.OriginTask != "DM-4" || p.Repro != "obvious" || p.Lines[0] != "calc.go:3-3" {
+			p, err := ledger.Decode[*ledger.RegressionFoundPayload](e)
+			if err != nil || p.GetOriginTask() != "DM-4" || p.GetRepro() != "obvious" ||
+				p.GetLines()[0] != "calc.go:3-3" {
 				t.Errorf("found %+v %v", p, err)
 			}
 		}

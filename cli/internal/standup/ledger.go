@@ -309,13 +309,13 @@ func activity(evs []ledger.Event, since, until time.Time) []Activity {
 	for _, e := range evs {
 		switch e.Kind {
 		case ledger.ReviewRoundOpened:
-			if p, err := ledger.Decode[ledger.ReviewRoundOpenedPayload](e); err == nil && p.Round != "" {
-				roundOf(p.Round, series.Opened(p.Round, p.Reviewed), e.At)
+			if p, err := ledger.Decode[*ledger.ReviewRoundOpenedPayload](e); err == nil && p.GetRound() != "" {
+				roundOf(p.GetRound(), series.Opened(p.GetRound(), p.GetReviewed()), e.At)
 			}
 		case ledger.FindingVerdict:
-			if p, err := ledger.Decode[ledger.FindingVerdictPayload](e); err == nil {
-				word, _, _ := strings.Cut(strings.ToLower(p.Verdict), " ")
-				roundOf(p.Round, series.Of(p.Round), e.At).verdicts[p.Finding] = word
+			if p, err := ledger.Decode[*ledger.FindingVerdictPayload](e); err == nil {
+				word, _, _ := strings.Cut(strings.ToLower(p.GetVerdict()), " ")
+				roundOf(p.GetRound(), series.Of(p.GetRound()), e.At).verdicts[p.GetFinding()] = word
 			}
 		}
 	}
@@ -336,18 +336,18 @@ func activity(evs []ledger.Event, since, until time.Time) []Activity {
 		case ledger.SpikeSaved:
 			add(e.At, ActivitySpike, "spike report saved")
 		case ledger.JudgeVerdict:
-			if p, err := ledger.Decode[ledger.JudgeVerdictPayload](e); err == nil && p.Verdict != "" {
-				add(e.At, ActivityJudge, strings.TrimSpace("judge: "+p.Verdict+" on "+p.Subject))
+			if p, err := ledger.Decode[*ledger.JudgeVerdictPayload](e); err == nil && p.GetVerdict() != "" {
+				add(e.At, ActivityJudge, strings.TrimSpace("judge: "+p.GetVerdict()+" on "+p.GetSubject()))
 			}
 		case ledger.RegressionFound:
-			if p, err := ledger.Decode[ledger.RegressionFoundPayload](e); err == nil {
+			if p, err := ledger.Decode[*ledger.RegressionFoundPayload](e); err == nil {
 				debugAt = cmp.Or(debugAt, e.At)
 
 				switch {
-				case p.Repro == "unconfirmed":
+				case p.GetRepro() == "unconfirmed":
 					outcome = "not reproduced"
-				case p.OriginTask != "":
-					outcome = "cause found: regression of " + p.OriginTask
+				case p.GetOriginTask() != "":
+					outcome = "cause found: regression of " + p.GetOriginTask()
 				default:
 					outcome = "cause found"
 				}
@@ -430,8 +430,8 @@ func reviewRounds(evs []ledger.Event) int {
 
 	for _, e := range evs {
 		if e.Kind == ledger.ReviewRoundOpened {
-			if p, err := ledger.Decode[ledger.ReviewRoundOpenedPayload](e); err == nil && p.Round != "" {
-				rounds[series.Opened(p.Round, p.Reviewed)] = true
+			if p, err := ledger.Decode[*ledger.ReviewRoundOpenedPayload](e); err == nil && p.GetRound() != "" {
+				rounds[series.Opened(p.GetRound(), p.GetReviewed())] = true
 			}
 		}
 	}

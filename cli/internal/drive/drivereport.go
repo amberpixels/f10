@@ -138,12 +138,12 @@ func (in *DriveInput) reproLines(ctx context.Context, runs []*DriveRun) []string
 			continue
 		}
 
-		p, err := ledger.Decode[ledger.RegressionFoundPayload](events[len(events)-1])
+		p, err := ledger.Decode[*ledger.RegressionFoundPayload](events[len(events)-1])
 		if err != nil {
 			continue
 		}
 
-		switch p.Repro {
+		switch p.GetRepro() {
 		case "skipped":
 			out = append(out, in.id(id)+": reproduction skipped (costly), planned from a code reading")
 		case "unconfirmed":

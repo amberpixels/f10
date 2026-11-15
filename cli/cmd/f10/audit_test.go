@@ -60,15 +60,15 @@ func TestAuditMapListsTheCostlyArea(t *testing.T) {
 
 	for _, task := range []string{"DM-1", "DM-2", "DM-3"} {
 		for r := 1; r <= 3; r++ {
-			add(task, ledger.ReviewRoundOpened, ledger.ReviewRoundOpenedPayload{Round: strconv.Itoa(r)})
+			add(task, ledger.ReviewRoundOpened, &ledger.ReviewRoundOpenedPayload{Round: strconv.Itoa(r)})
 		}
 	}
 
-	add("DM-1", ledger.TaskHalted, ledger.TaskHaltedPayload{Skill: "ship", Reason: "catchup conflict"})
-	add("DM-2", ledger.TaskHalted, ledger.TaskHaltedPayload{Skill: "ship", Reason: "catchup conflict"})
+	add("DM-1", ledger.TaskHalted, &ledger.TaskHaltedPayload{Skill: "ship", Reason: "catchup conflict"})
+	add("DM-2", ledger.TaskHalted, &ledger.TaskHaltedPayload{Skill: "ship", Reason: "catchup conflict"})
 
 	for _, task := range []string{"DM-4", "DM-5", "DM-6", "DM-7", "DM-8"} {
-		add(task, ledger.ReviewRoundOpened, ledger.ReviewRoundOpenedPayload{Round: "1"})
+		add(task, ledger.ReviewRoundOpened, &ledger.ReviewRoundOpenedPayload{Round: "1"})
 	}
 
 	l, err := ledger.Open(ctx, ledger.Path(), time.Second, false)
@@ -124,7 +124,7 @@ func TestAuditMapWithNoLedger(t *testing.T) {
 
 	ctx := t.Context()
 	e := testkit.StatEvent(time.Now().Add(-time.Hour), "s-old", "XX-1", ledger.RegressionFound,
-		ledger.RegressionFoundPayload{OriginTask: "XX-0", Repro: "full"})
+		&ledger.RegressionFoundPayload{OriginTask: "XX-0", Repro: "full"})
 	e.ID, e.Project = "e1", ledger.Where(ctx, repo).Project
 
 	l, err := ledger.Open(ctx, ledger.Path(), time.Second, false)
