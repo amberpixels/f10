@@ -18,6 +18,8 @@ type RemoteState struct {
 	DaemonRunning bool
 	Bound         string // the address the daemon listens on
 	Reason        string // why it does not
+	URL           string // the web client's address while bound
+	HTTPSReason   string // why the listener serves plain HTTP
 
 	ServiceFile      string // "" on a platform with no service
 	ServiceInstalled bool
@@ -72,6 +74,9 @@ func checkRemote(env *Env) Result {
 		return problem("the listener is on, but this machine has no Tailscale address", "start Tailscale: tailscale up")
 	case st.Enabled && st.DaemonRunning && st.Bound == "":
 		return problem("the daemon is not listening on the tailnet: "+st.Reason, "f10 daemon logs")
+	case st.Bound != "" && st.HTTPSReason != "":
+		return problem("the web client serves plain HTTP, so it does not install or notify: "+st.HTTPSReason,
+			"enable HTTPS certificates on the DNS page of the tailnet's admin console")
 	}
 
 	var parts []string
@@ -87,6 +92,8 @@ func checkRemote(env *Env) Result {
 	}
 
 	switch {
+	case st.URL != "":
+		parts = append(parts, "web client at "+st.URL)
 	case st.Bound != "":
 		parts = append(parts, "daemon listening on "+st.Bound)
 	case !st.DaemonRunning:

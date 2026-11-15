@@ -9,6 +9,7 @@
 
 mod cli
 mod proto
+mod web 'ts/justfile'
 
 # machine-local recipes, untracked; absent is fine
 import? 'justfile.local'
@@ -20,8 +21,8 @@ default: fmt
 fmt: cli::fmt
     shfmt -w -i 2 -ci .
 
-# lint shell + Go + proto - reports findings, changes nothing
-lint: cli::lint proto::lint
+# lint shell + Go + proto + the web client - reports findings, changes nothing
+lint: cli::lint proto::lint web::lint
     shfmt -f . | xargs -r shellcheck
     shfmt -d -i 2 -ci .
 
@@ -30,8 +31,8 @@ fix: cli::fix
     shfmt -f . | xargs -r shellcheck -f diff | git apply --allow-empty
     shfmt -w -s -i 2 -ci .
 
-# run tests - the f10-load-project.sh parity suite included
-test: cli::test
+# run tests - the f10-load-project.sh parity suite and the web client's included
+test: cli::test web::test
 
 # time the ledger reads stats, status and the Stop hook make against their budgets
 bench-ledger: cli::bench-ledger
@@ -44,6 +45,9 @@ gen: proto::gen
 
 # build the f10 binary
 build: cli::build
+
+# build the web client into the Go tree, which embeds it
+build-web: web::build
 
 # build this checkout's f10 binary into the shim's cache
 install: cli::install

@@ -1,10 +1,12 @@
 package remote
 
 import (
+	"crypto/tls"
 	"net"
 	"net/http"
 	"net/netip"
 	"strconv"
+	"strings"
 )
 
 // A Listener is what the daemon asks of the tailnet listener: where to bind,
@@ -13,6 +15,8 @@ type Listener struct {
 	Dir    string                  // the setting's and the tokens' dir
 	Ifaces func() ([]Iface, error) // the machine's interfaces; Interfaces by default
 	Peer   func(netip.Addr) bool   // the peers accepted; InTailnet by default
+	App    http.Handler            // the web client's files, nil for none
+	Certs  *Certs                  // the HTTPS certificate, nil for plain HTTP
 	store  *Store
 }
 
@@ -51,11 +55,51 @@ func (l *Listener) Listen(ln net.Listener) net.Listener {
 	return peerFilter{Listener: ln, allow: allow}
 }
 
-// Handler puts the token check in front of h.
+// Handler puts the token check in front of h, and serves the web client's
+// files beside it without one: they hold no data, and the page that asks
+// for the token must load before it has one.
 func (l *Listener) Handler(h http.Handler) http.Handler {
 	if l.store == nil {
 		l.store = NewStore(l.Dir)
 	}
 
-	return Auth(l.store, h)
+	return Route(Auth(l.store, h), l.App)
+}
+
+// TLS is the HTTPS config from Certs; with none, the listener serves plain
+// HTTP and why says so.
+func (l *Listener) TLS() (*tls.Config, string, string) {
+	if l.Certs == nil {
+		return nil, "", "no certificate source"
+	}
+
+	return l.Certs.Config()
+}
+
+// apiPrefixes are the Connect packages' path prefixes, which always go
+// through the token check.
+var apiPrefixes = []string{"/f10.v1.", "/agents.v1."}
+
+// Route sends every Connect procedure to api, a GET or HEAD of anything
+// else to app, and refuses the rest.
+func Route(api, app http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		for _, p := range apiPrefixes {
+			if strings.HasPrefix(r.URL.Path, p) {
+				api.ServeHTTP(w, r)
+
+				return
+			}
+		}
+
+		switch {
+		case app == nil:
+			http.NotFound(w, r)
+		case r.Method != http.MethodGet && r.Method != http.MethodHead:
+			w.Header().Set("Allow", "GET, HEAD")
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		default:
+			app.ServeHTTP(w, r)
+		}
+	})
 }

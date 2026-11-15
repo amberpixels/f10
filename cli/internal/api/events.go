@@ -18,16 +18,16 @@ import (
 
 // EventPoll is how often a stream reads the ledger again once its backlog is
 // sent. The ledger is SQLite written by many processes, so nothing in this
-// one can say a row landed; an idle read costs a stat and one indexed query.
+// one can say a row landed; an idle read costs a stat and a rowid lookup.
 // A variable so tests need not wait.
 var EventPoll = 250 * time.Millisecond
 
 type eventService struct{}
 
 // WatchEvents streams the ledger's rows inserted after the request's
-// cursor, then every row as it lands, until the client goes. Without a
-// cursor it starts at the end, and its first response, with no event, says
-// where that is, so a client that drops before any event can still resume.
+// cursor, then every row as it lands, until the client goes. Started at the
+// tail, its first response has no event and says where the tail is, so a
+// client that drops before any event can still resume.
 func (eventService) WatchEvents(
 	ctx context.Context,
 	req *connect.Request[f10v1.WatchEventsRequest],
@@ -45,10 +45,10 @@ func (eventService) WatchEvents(
 	defer tail.Close()
 
 	after := m.GetAfter()
-	if after == "" {
+	if after == "" && m.GetTail() {
 		end, err := tail.End(ctx)
 		if err != nil {
-			return err
+			return connect.NewError(connect.CodeUnavailable, err)
 		}
 
 		if err := stream.Send(&f10v1.WatchEventsResponse{Cursor: end}); err != nil {

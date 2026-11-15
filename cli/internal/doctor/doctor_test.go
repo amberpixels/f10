@@ -254,6 +254,10 @@ func TestChecks(t *testing.T) {
 			f.e.Remote = remoteWell()
 			f.e.Remote.Bound, f.e.Remote.Reason = "", "listening on 100.64.0.7:7410: address in use"
 		}, StatusProblem, "f10 daemon logs"},
+		{CheckRemote, "plain HTTP", func(f *fixture) {
+			f.e.Remote = remoteWell()
+			f.e.Remote.HTTPSReason = "tailscale cert failed"
+		}, StatusProblem, "HTTPS certificates"},
 		{CheckRemote, "service program gone", func(f *fixture) {
 			f.e.Remote = remoteWell()
 			f.e.Remote.ProgramMissing = true

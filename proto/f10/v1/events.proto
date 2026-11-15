@@ -18,20 +18,24 @@ service EventService {
 
 message WatchEventsRequest {
   // after is the cursor of the last event the client holds; empty starts at
-  // the current end. It is opaque: clients store it and send it back.
+  // the first, or with tail at the newest. It is opaque: clients store it
+  // and send it back.
   string after = 1;
   // project and task narrow the stream; empty means every one. Ask rows
   // carry no project, so they match by their main label's project.
   string project = 2;
   string task = 3;
+  // tail starts an empty after at the newest row instead of the first, so a
+  // client that reads current state elsewhere skips the backlog.
+  bool tail = 4;
   // kinds are the ledger kinds to send, each state_* kind by its own name;
   // empty sends every kind.
-  repeated string kinds = 4;
+  repeated string kinds = 5;
 }
 
 message WatchEventsResponse {
-  // event is unset on the first response of a stream opened without a
-  // cursor: that response only says where the stream starts.
+  // event is unset on the first response of a stream started at the tail:
+  // that response only says where the stream starts.
   Event event = 1;
   // cursor is this event's place in insertion order, for the next after.
   string cursor = 2;

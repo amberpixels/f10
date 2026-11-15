@@ -41,6 +41,8 @@ const (
 	RunServiceDriveProcedure = "/f10.v1.RunService/Drive"
 	// RunServiceFinishProcedure is the fully-qualified name of the RunService's Finish RPC.
 	RunServiceFinishProcedure = "/f10.v1.RunService/Finish"
+	// RunServiceForwardProcedure is the fully-qualified name of the RunService's Forward RPC.
+	RunServiceForwardProcedure = "/f10.v1.RunService/Forward"
 )
 
 // RunServiceClient is a client for the f10.v1.RunService service.
@@ -52,6 +54,8 @@ type RunServiceClient interface {
 	Drive(context.Context, *connect.Request[v1.DriveRequest]) (*connect.Response[v1.DriveResponse], error)
 	// Finish merges a task's PR and removes its worktree, branch and workspace.
 	Finish(context.Context, *connect.Request[v1.FinishRequest]) (*connect.Response[v1.FinishResponse], error)
+	// Forward hands text to the agent working on a task, as f10 forward does.
+	Forward(context.Context, *connect.Request[v1.ForwardRequest]) (*connect.Response[v1.ForwardResponse], error)
 }
 
 // NewRunServiceClient constructs a client for the f10.v1.RunService service. By default, it uses
@@ -89,6 +93,12 @@ func NewRunServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...
 			connect.WithSchema(runServiceMethods.ByName("Finish")),
 			connect.WithClientOptions(opts...),
 		),
+		forward: connect.NewClient[v1.ForwardRequest, v1.ForwardResponse](
+			httpClient,
+			baseURL+RunServiceForwardProcedure,
+			connect.WithSchema(runServiceMethods.ByName("Forward")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -98,6 +108,7 @@ type runServiceClient struct {
 	start        *connect.Client[v1.StartRequest, v1.StartResponse]
 	drive        *connect.Client[v1.DriveRequest, v1.DriveResponse]
 	finish       *connect.Client[v1.FinishRequest, v1.FinishResponse]
+	forward      *connect.Client[v1.ForwardRequest, v1.ForwardResponse]
 }
 
 // GetRunStatus calls f10.v1.RunService.GetRunStatus.
@@ -120,6 +131,11 @@ func (c *runServiceClient) Finish(ctx context.Context, req *connect.Request[v1.F
 	return c.finish.CallUnary(ctx, req)
 }
 
+// Forward calls f10.v1.RunService.Forward.
+func (c *runServiceClient) Forward(ctx context.Context, req *connect.Request[v1.ForwardRequest]) (*connect.Response[v1.ForwardResponse], error) {
+	return c.forward.CallUnary(ctx, req)
+}
+
 // RunServiceHandler is an implementation of the f10.v1.RunService service.
 type RunServiceHandler interface {
 	GetRunStatus(context.Context, *connect.Request[v1.GetRunStatusRequest]) (*connect.Response[v1.GetRunStatusResponse], error)
@@ -129,6 +145,8 @@ type RunServiceHandler interface {
 	Drive(context.Context, *connect.Request[v1.DriveRequest]) (*connect.Response[v1.DriveResponse], error)
 	// Finish merges a task's PR and removes its worktree, branch and workspace.
 	Finish(context.Context, *connect.Request[v1.FinishRequest]) (*connect.Response[v1.FinishResponse], error)
+	// Forward hands text to the agent working on a task, as f10 forward does.
+	Forward(context.Context, *connect.Request[v1.ForwardRequest]) (*connect.Response[v1.ForwardResponse], error)
 }
 
 // NewRunServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -162,6 +180,12 @@ func NewRunServiceHandler(svc RunServiceHandler, opts ...connect.HandlerOption) 
 		connect.WithSchema(runServiceMethods.ByName("Finish")),
 		connect.WithHandlerOptions(opts...),
 	)
+	runServiceForwardHandler := connect.NewUnaryHandler(
+		RunServiceForwardProcedure,
+		svc.Forward,
+		connect.WithSchema(runServiceMethods.ByName("Forward")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/f10.v1.RunService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case RunServiceGetRunStatusProcedure:
@@ -172,6 +196,8 @@ func NewRunServiceHandler(svc RunServiceHandler, opts ...connect.HandlerOption) 
 			runServiceDriveHandler.ServeHTTP(w, r)
 		case RunServiceFinishProcedure:
 			runServiceFinishHandler.ServeHTTP(w, r)
+		case RunServiceForwardProcedure:
+			runServiceForwardHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -195,4 +221,8 @@ func (UnimplementedRunServiceHandler) Drive(context.Context, *connect.Request[v1
 
 func (UnimplementedRunServiceHandler) Finish(context.Context, *connect.Request[v1.FinishRequest]) (*connect.Response[v1.FinishResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("f10.v1.RunService.Finish is not implemented"))
+}
+
+func (UnimplementedRunServiceHandler) Forward(context.Context, *connect.Request[v1.ForwardRequest]) (*connect.Response[v1.ForwardResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("f10.v1.RunService.Forward is not implemented"))
 }

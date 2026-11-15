@@ -71,18 +71,18 @@ func next(t *testing.T, s eventStream) string {
 	return ev.GetId()
 }
 
-// A stream without a cursor starts at the end and says where; a client that
-// drops and resumes from its last cursor gets every row in between, once and
-// in order, a spooled row whose id predates the others included.
-func TestWatchEventsStartsAtTheEndAndResumes(t *testing.T) {
+// A stream started at the tail says where that is; a client that drops and
+// resumes from its last cursor gets every row in between, once and in order,
+// a spooled row whose id predates the others included.
+func TestWatchEventsStartsAtTheTailAndResumes(t *testing.T) {
 	seam.Swap(t, &EventPoll, 20*time.Millisecond)
 
 	watch := watcher(t)
 	req := func(after string) *f10v1.WatchEventsRequest {
-		return &f10v1.WatchEventsRequest{After: after, Task: "FT-1"}
+		return &f10v1.WatchEventsRequest{After: after, Task: "FT-11", Tail: after == ""}
 	}
 
-	row("FT-1", ledger.WaitStarted, &ledger.WaitStartedPayload{})
+	row("FT-11", ledger.WaitStarted, &ledger.WaitStartedPayload{})
 
 	s := watch(req(""))
 	if !s.Receive() || s.Msg().GetEvent() != nil || s.Msg().GetCursor() == "" {
@@ -91,7 +91,7 @@ func TestWatchEventsStartsAtTheEndAndResumes(t *testing.T) {
 
 	marker := s.Msg().GetCursor()
 
-	answered := row("FT-1", ledger.AskAnswered, &ledger.AskAnsweredPayload{
+	answered := row("FT-11", ledger.AskAnswered, &ledger.AskAnsweredPayload{
 		Id: "k", Answer: "yes", AnsweredBy: agentsv1.AnswerSource_ANSWER_SOURCE_PANE,
 	})
 	if id := next(t, s); id != answered.ID {
@@ -104,10 +104,10 @@ func TestWatchEventsStartsAtTheEndAndResumes(t *testing.T) {
 
 	// minted first, recorded last: a spooled row whose id predates the others
 	late := ulid.Make().String()
-	missed := []string{row("FT-1", ledger.WaitEnded, &ledger.WaitEndedPayload{}).ID}
+	missed := []string{row("FT-11", ledger.WaitEnded, &ledger.WaitEndedPayload{}).ID}
 
 	e := ledger.MustEvent(ledger.WaitStarted, &ledger.WaitStartedPayload{})
-	e.ID, e.Task = late, "FT-1"
+	e.ID, e.Task = late, "FT-11"
 	ledger.Record(e)
 
 	missed = append(missed, late)
@@ -131,7 +131,7 @@ func TestWatchEventsFiltersByKind(t *testing.T) {
 	watch := watcher(t)
 
 	s := watch(&f10v1.WatchEventsRequest{
-		Task: "FT-2", Kinds: []string{ledger.AskAnswered, ledger.WatchReported},
+		Task: "FT-2", Tail: true, Kinds: []string{ledger.AskAnswered, ledger.WatchReported},
 	})
 	if !s.Receive() {
 		t.Fatal(s.Err())
@@ -165,7 +165,7 @@ func TestWatchEventsMatchesAsksToTheirProject(t *testing.T) {
 	dir := t.TempDir()
 	watch := watcher(t)
 
-	s := watch(&f10v1.WatchEventsRequest{Project: "github.com/o/a"})
+	s := watch(&f10v1.WatchEventsRequest{Project: "github.com/o/a", Tail: true})
 	if !s.Receive() {
 		t.Fatal(s.Err())
 	}
@@ -200,7 +200,7 @@ func TestWatchEventsMatchesAsksToTheirProject(t *testing.T) {
 // An ask a driven agent raises reaches a stream within a second, at the
 // production poll.
 func TestWatchEventsDeliversAnAskWithinASecond(t *testing.T) {
-	s := watcher(t)(&f10v1.WatchEventsRequest{Task: "FT-4", Kinds: []string{ledger.AskRaised}})
+	s := watcher(t)(&f10v1.WatchEventsRequest{Task: "FT-4", Tail: true, Kinds: []string{ledger.AskRaised}})
 	if !s.Receive() {
 		t.Fatal(s.Err())
 	}

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/urfave/cli/v3"
@@ -24,6 +25,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/remote"
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/webui"
 )
 
 func Command() *cli.Command {
@@ -82,7 +84,11 @@ func runDaemon(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if dir, err := remote.Dir(); err == nil {
-		s.Remote = &remote.Listener{Dir: dir}
+		s.Remote = &remote.Listener{
+			Dir:   dir,
+			App:   webui.Handler(),
+			Certs: &remote.Certs{Dir: filepath.Join(dir, "tls")},
+		}
 	} else {
 		logger.Printf("no tailnet listener: %v", err)
 	}

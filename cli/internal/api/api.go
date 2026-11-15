@@ -30,6 +30,8 @@ func Handler(sup Supervisor) http.Handler {
 	mux.Handle(f10v1connect.NewTaskServiceHandler(&taskService{sup: sup}, opts...))
 	mux.Handle(f10v1connect.NewBoardServiceHandler(&boardService{sup: sup}, opts...))
 	mux.Handle(f10v1connect.NewEventServiceHandler(&eventService{}, opts...))
+	mux.Handle(f10v1connect.NewArtifactServiceHandler(&artifactService{sup: sup}, opts...))
+	mux.Handle(f10v1connect.NewProjectServiceHandler(&projectService{sup: sup}, opts...))
 
 	agentsrpc.Mount(mux, agentsrpc.Options{Deliverer: deliverer(sup)}, opts...)
 

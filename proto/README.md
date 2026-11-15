@@ -11,6 +11,9 @@ The daemon serves it on its unix socket (`docs/cli.md`, **Daemon**).
 - **`f10.v1`** is the task flow: tasks, runs, start, drive, finish, the board, and the event stream, plus `DaemonService`, the daemon's own hello, status, stop and project watch.
   It imports `agents.v1`, and `agents.v1` never imports it.
 
+`f10.v1` also carries `ArtifactService`, which reads a task's files from the storage root by kind and name, and `ProjectService`, which lists the projects the daemon knows.
+The web client in `ts/web` is built on the TypeScript code; `ts/` is the TypeScript root, so `ts/gen` resolves its imports from `ts/node_modules`.
+
 Each package lives in the directory its name gives (`agents/v1/`, `f10/v1/`), because buf's lint requires it.
 
 ## Generated code
@@ -21,7 +24,7 @@ Generated code is checked in, so a build needs no generator.
 |---|---|---|
 | Go messages | `cli/gen/<package path>/` | `github.com/amberpixels/f10/cli/gen/f10/v1` |
 | Go Connect stubs | `cli/gen/<package path>/<pkg>connect/` | `github.com/amberpixels/f10/cli/gen/f10/v1/f10v1connect` |
-| TypeScript (protobuf-es) | `ts/gen/<package path>/` | needs `@bufbuild/protobuf` at runtime |
+| TypeScript (protobuf-es) | `ts/gen/<package path>/` | needs `@bufbuild/protobuf` at runtime, which `ts/package.json` pins |
 
 The generators are pinned: buf and the Go plugins in `tools/go.mod`, `protoc-gen-es` in `package-lock.json`.
 `just proto::tools` installs them into `.bin/` and `node_modules/`, so you need Go and Node, but no global buf.
@@ -56,7 +59,7 @@ Clients built against `v1` keep working only if `v1` changes only by adding, so:
 `f10.v1.Event` is one ledger row, with a `oneof payload` case named after each ledger kind.
 The nine `state_*` kinds share the `claim` case, so a client tells them apart by `Event.kind`, and applies them to the `Run` whose session `Event.session` names.
 `WatchEvents` resumes from the `cursor` each response carries, never from `Event.id`, because rows land in the ledger out of id order: a spooled row is inserted after its id is minted, and other machines mint ids on their own clocks.
-A stream opened without a cursor starts at the current end, and its first response has no event, only the cursor of that end.
+A stream opened with `tail` and no cursor starts at the newest row, and its first response has no event, only the cursor of that row; without `tail` an empty cursor starts at the first row.
 A client that drops before any event resumes from that cursor, and takes the state before it from the read methods (`ListAsks`, `GetBoard`, `GetRunStatus`), not from the stream.
 `kinds` narrows the stream to the ledger kinds named, each `state_*` kind by its own name, and an unknown kind is refused, because a misspelt one would otherwise stream nothing.
 `ask_raised` and `ask_answered` are the asks inbox's, which records them in the ledger as asks are raised and answered.

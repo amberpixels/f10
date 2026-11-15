@@ -6,10 +6,13 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"slices"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/oklog/ulid/v2"
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	agentsv1 "github.com/amberpixels/f10/cli/gen/agents/v1"
@@ -188,6 +191,70 @@ func TestBoardOfNamesTheView(t *testing.T) {
 	}
 }
 
+// The stream sends the rows inserted after the cursor, then rows as they
+// land; a kind with no message arrives without a payload.
+func TestWatchEventsResumesAfterTheCursor(t *testing.T) {
+	seam.Swap(t, &EventPoll, 20*time.Millisecond)
+
+	// minted now, inserted last: a spooled row whose id predates the others
+	late := ulid.Make().String()
+
+	// Record fills ids on its own copies, so the test names them
+	first := ledger.MustEvent(ledger.WaitStarted, &ledger.WaitStartedPayload{})
+	first.ID, first.Task, first.Session = ulid.Make().String(), "FT-1", "s1"
+	second := ledger.MustEvent(ledger.AskAnswered, &ledger.AskAnsweredPayload{
+		Id: "k", Answer: "yes", AnsweredBy: agentsv1.AnswerSource_ANSWER_SOURCE_PANE,
+	})
+	second.ID, second.Task = ulid.Make().String(), "FT-1"
+	ledger.Record(first, second)
+
+	srv := httptest.NewServer(Handler(&fakeSup{}))
+	t.Cleanup(srv.Close)
+
+	c := f10v1connect.NewEventServiceClient(srv.Client(), srv.URL)
+
+	watch := func(after string) *connect.ServerStreamForClient[f10v1.WatchEventsResponse] {
+		stream, err := c.WatchEvents(
+			t.Context(),
+			connect.NewRequest(&f10v1.WatchEventsRequest{After: after, Task: "FT-1"}),
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		t.Cleanup(func() { _ = stream.Close() })
+
+		return stream
+	}
+
+	all := watch("")
+	if !all.Receive() || all.Msg().GetEvent().GetId() != first.ID || all.Msg().GetEvent().GetSession() != "s1" {
+		t.Fatalf("first event = %v, %v", all.Msg(), all.Err())
+	}
+
+	stream := watch(all.Msg().GetCursor())
+	if !stream.Receive() {
+		t.Fatal(stream.Err())
+	}
+
+	ev := stream.Msg().GetEvent()
+	if ev.GetId() != second.ID || ev.GetAskAnswered().GetAnsweredBy() != agentsv1.AnswerSource_ANSWER_SOURCE_PANE {
+		t.Fatalf("event after the cursor = %v, want the second row", ev)
+	}
+
+	third := ledger.MustEvent(ledger.WaitEnded, &ledger.WaitEndedPayload{})
+	third.ID, third.Task = late, "FT-1"
+	ledger.Record(third)
+
+	if !stream.Receive() || stream.Msg().GetEvent().GetId() != late {
+		t.Fatalf("a row with an older id, inserted during the stream, did not arrive: %v", stream.Err())
+	}
+
+	if ev, err := EventOf(ledger.Event{ID: "x", Kind: "made_up"}); err != nil || ev.GetPayload() != nil {
+		t.Errorf("an unknown kind = %v, %v; want no payload", ev, err)
+	}
+}
+
 // A drive given answers starts its own process even when the request names
 // the record to resume, so the answers reach a process that reads them.
 func TestDriveWithAnswersNeverAttaches(t *testing.T) {
@@ -245,8 +312,7 @@ func TestProjectDirRefusesAnAmbiguousName(t *testing.T) {
 }
 
 // An ask row written before payloads were messages stores an unanswered
-// ask's answered_by as "", which protojson refuses; it still streams with
-// its payload.
+// ask's answered_by as ""; it still streams with its payload.
 func TestEventOfReadsALegacyAskRow(t *testing.T) {
 	var e ledger.Event
 	if err := json.Unmarshal([]byte(`{"id":"01","kind":"ask_raised","payload":{"v":1,"ask":{`+
@@ -264,5 +330,93 @@ func TestEventOfReadsALegacyAskRow(t *testing.T) {
 	if ask.GetId() != "f10:FT-1" || ask.GetAnsweredBy() != agentsv1.AnswerSource_ANSWER_SOURCE_UNSPECIFIED ||
 		!ask.GetAskedAt().AsTime().Equal(time.Date(2026, 11, 14, 8, 30, 15, 0, time.UTC)) {
 		t.Errorf("ask %v", ask)
+	}
+}
+
+// A tail stream skips the backlog: its first response only places the
+// tail, and then it sends only what lands after it opened.
+func TestWatchEventsFromTheTail(t *testing.T) {
+	seam.Swap(t, &EventPoll, 20*time.Millisecond)
+
+	old := ledger.MustEvent(ledger.WaitStarted, &ledger.WaitStartedPayload{})
+	old.ID, old.Task = ulid.Make().String(), "FT-2"
+	ledger.Record(old)
+
+	srv := httptest.NewServer(Handler(&fakeSup{}))
+	t.Cleanup(srv.Close)
+
+	stream, err := f10v1connect.NewEventServiceClient(srv.Client(), srv.URL).WatchEvents(
+		t.Context(), connect.NewRequest(&f10v1.WatchEventsRequest{Task: "FT-2", Tail: true}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() { _ = stream.Close() })
+
+	if !stream.Receive() || stream.Msg().GetEvent() != nil || stream.Msg().GetCursor() == "" {
+		t.Fatalf("first response from the tail = %v, %v; want a start marker", stream.Msg(), stream.Err())
+	}
+
+	// recorded once the marker placed the tail, so it always lands after it
+	next := ledger.MustEvent(ledger.WaitEnded, &ledger.WaitEndedPayload{})
+	next.ID, next.Task = ulid.Make().String(), "FT-2"
+	ledger.Record(next)
+
+	if !stream.Receive() || stream.Msg().GetEvent().GetId() != next.ID {
+		t.Fatalf("first event from the tail = %v, %v; want only the new row", stream.Msg(), stream.Err())
+	}
+}
+
+// projSup runs a drive in a worktree of a watched project.
+type projSup struct{ fakeSup }
+
+func (*projSup) Status() daemon.Status {
+	return daemon.Status{
+		Watches: []daemon.Watch{{Dir: "/code/widgets"}},
+		Runs:    []daemon.Run{{Dir: "/code/widgets.FT-1"}, {Dir: "/code/gadgets"}},
+	}
+}
+
+func TestListProjectsOncePerID(t *testing.T) {
+	seam.Swap(t, &target.ProjectOf, func(_ context.Context, dir string) string {
+		return "github.com/acme/" + strings.Split(filepath.Base(dir), ".")[0]
+	})
+
+	srv := httptest.NewServer(Handler(&projSup{}))
+	t.Cleanup(srv.Close)
+
+	res, err := f10v1connect.NewProjectServiceClient(srv.Client(), srv.URL).
+		ListProjects(t.Context(), connect.NewRequest(&f10v1.ListProjectsRequest{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var got []string
+	for _, p := range res.Msg.GetProjects() {
+		got = append(got, p.GetId()+"="+strconv.FormatBool(p.GetWatched()))
+	}
+
+	if strings.Join(got, " ") != "github.com/acme/gadgets=false github.com/acme/widgets=true" {
+		t.Errorf("projects = %v", got)
+	}
+
+	// every listed id resolves, a drive-only project included
+	for _, p := range res.Msg.GetProjects() {
+		if _, err := projectDir(t.Context(), &projSup{}, p.GetId()); err != nil {
+			t.Errorf("listed %s does not resolve: %v", p.GetId(), err)
+		}
+	}
+}
+
+func TestForwardNeedsText(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(Handler(&fakeSup{}))
+	t.Cleanup(srv.Close)
+
+	_, err := f10v1connect.NewRunServiceClient(srv.Client(), srv.URL).
+		Forward(t.Context(), connect.NewRequest(&f10v1.ForwardRequest{Project: "/x", Task: "FT-1", Text: "  "}))
+	if connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Errorf("empty text = %v, want InvalidArgument", err)
 	}
 }

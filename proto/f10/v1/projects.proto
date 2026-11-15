@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package f10.v1;
+
+// ProjectService names the projects this machine works on, so a client can
+// pick one by id instead of knowing its checkout.
+service ProjectService {
+  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
+}
+
+// A KnownProject is a project the daemon watches or runs a drive in.
+message KnownProject {
+  // id is the project id, such as github.com/acme/widgets; every request's
+  // project field takes it.
+  string id = 1;
+  string name = 2;
+  // watched is true when the daemon runs watch passes for it.
+  bool watched = 3;
+}
+
+message ListProjectsRequest {}
+
+message ListProjectsResponse {
+  repeated KnownProject projects = 1;
+}

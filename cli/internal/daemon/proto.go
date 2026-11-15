@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"crypto/tls"
 	"errors"
 	"net"
 	"net/http"
@@ -133,11 +134,23 @@ type RemoteListener interface {
 	Handler(h http.Handler) http.Handler
 }
 
+// A RemoteTLS listener serves HTTPS once it holds a certificate, because a
+// browser installs a web app and shows notifications only over HTTPS.
+type RemoteTLS interface {
+	// TLS is the config to serve with and the host name its certificate
+	// names; a nil config comes with why there is none, and the listener
+	// serves plain HTTP meanwhile.
+	TLS() (cfg *tls.Config, host string, why string)
+}
+
 // RemoteState is the tailnet listener as the daemon last reconciled it.
 type RemoteState struct {
-	Enabled bool
-	Addr    string // bound; "" when none is
-	Reason  string // why none is bound
+	Enabled     bool
+	Addr        string // bound; "" when none is
+	Reason      string // why none is bound
+	URL         string // the web client's address while bound
+	HTTPS       bool
+	HTTPSReason string // why the listener serves plain HTTP
 }
 
 // A Run is one drive process the daemon supervises.

@@ -29,15 +29,19 @@ const (
 type WatchEventsRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// after is the cursor of the last event the client holds; empty starts at
-	// the current end. It is opaque: clients store it and send it back.
+	// the first, or with tail at the newest. It is opaque: clients store it
+	// and send it back.
 	After string `protobuf:"bytes,1,opt,name=after,proto3" json:"after,omitempty"`
 	// project and task narrow the stream; empty means every one. Ask rows
 	// carry no project, so they match by their main label's project.
 	Project string `protobuf:"bytes,2,opt,name=project,proto3" json:"project,omitempty"`
 	Task    string `protobuf:"bytes,3,opt,name=task,proto3" json:"task,omitempty"`
+	// tail starts an empty after at the newest row instead of the first, so a
+	// client that reads current state elsewhere skips the backlog.
+	Tail bool `protobuf:"varint,4,opt,name=tail,proto3" json:"tail,omitempty"`
 	// kinds are the ledger kinds to send, each state_* kind by its own name;
 	// empty sends every kind.
-	Kinds         []string `protobuf:"bytes,4,rep,name=kinds,proto3" json:"kinds,omitempty"`
+	Kinds         []string `protobuf:"bytes,5,rep,name=kinds,proto3" json:"kinds,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -93,6 +97,13 @@ func (x *WatchEventsRequest) GetTask() string {
 	return ""
 }
 
+func (x *WatchEventsRequest) GetTail() bool {
+	if x != nil {
+		return x.Tail
+	}
+	return false
+}
+
 func (x *WatchEventsRequest) GetKinds() []string {
 	if x != nil {
 		return x.Kinds
@@ -102,8 +113,8 @@ func (x *WatchEventsRequest) GetKinds() []string {
 
 type WatchEventsResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// event is unset on the first response of a stream opened without a
-	// cursor: that response only says where the stream starts.
+	// event is unset on the first response of a stream started at the tail:
+	// that response only says where the stream starts.
 	Event *Event `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
 	// cursor is this event's place in insertion order, for the next after.
 	Cursor        string `protobuf:"bytes,2,opt,name=cursor,proto3" json:"cursor,omitempty"`
@@ -2607,12 +2618,13 @@ var File_f10_v1_events_proto protoreflect.FileDescriptor
 
 const file_f10_v1_events_proto_rawDesc = "" +
 	"\n" +
-	"\x13f10/v1/events.proto\x12\x06f10.v1\x1a\x14agents/v1/asks.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"n\n" +
+	"\x13f10/v1/events.proto\x12\x06f10.v1\x1a\x14agents/v1/asks.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x82\x01\n" +
 	"\x12WatchEventsRequest\x12\x14\n" +
 	"\x05after\x18\x01 \x01(\tR\x05after\x12\x18\n" +
 	"\aproject\x18\x02 \x01(\tR\aproject\x12\x12\n" +
-	"\x04task\x18\x03 \x01(\tR\x04task\x12\x14\n" +
-	"\x05kinds\x18\x04 \x03(\tR\x05kinds\"R\n" +
+	"\x04task\x18\x03 \x01(\tR\x04task\x12\x12\n" +
+	"\x04tail\x18\x04 \x01(\bR\x04tail\x12\x14\n" +
+	"\x05kinds\x18\x05 \x03(\tR\x05kinds\"R\n" +
 	"\x13WatchEventsResponse\x12#\n" +
 	"\x05event\x18\x01 \x01(\v2\r.f10.v1.EventR\x05event\x12\x16\n" +
 	"\x06cursor\x18\x02 \x01(\tR\x06cursor\"\x8c\r\n" +

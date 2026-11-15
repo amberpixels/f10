@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -18,7 +19,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/drivectl"
 	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/launch"
+	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/start"
+	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/target"
 )
@@ -335,5 +338,59 @@ func (s *runService) Finish(
 		RemovedWorktree: out.RemovedWorktree,
 		RemovedBranch:   out.RemovedBranch,
 		ClosedWorkspace: out.ClosedWorkspace,
+	}), nil
+}
+
+// Forward hands text to the agent working on a task, through the same core
+// f10 forward runs, so its refusals (no worktree, no workspace, a stalled
+// agent) read the same.
+func (s *runService) Forward(
+	ctx context.Context,
+	req *connect.Request[f10v1.ForwardRequest],
+) (*connect.Response[f10v1.ForwardResponse], error) {
+	m := req.Msg
+
+	text := strings.TrimSpace(m.GetText())
+	if text == "" {
+		return nil, invalid("forward needs the text to send")
+	}
+
+	t, err := projectTarget(ctx, s.sup, m.GetProject(), "forward")
+	if err != nil {
+		return nil, err
+	}
+
+	id, suffix := ref.SplitSuffix(strings.TrimSpace(m.GetTask()))
+	if id == "" {
+		return nil, invalid("forward needs a task id")
+	}
+
+	r, err := t.Reference(ctx, id)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeNotFound, err)
+	}
+
+	out, err := start.Forward(ctx, start.ForwardInput{
+		Main:     cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot),
+		Driver:   t.Driver(),
+		Task:     r.Head(), // a bundle's member goes to the bundle's agent
+		Suffix:   suffix,
+		Text:     text,
+		StateDir: state.Dir(),
+		Ttl:      state.TTL(),
+		Now:      time.Now(),
+	})
+	if err != nil {
+		if _, ok := errors.AsType[*connect.Error](err); ok {
+			return nil, err
+		}
+
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
+	}
+
+	return connect.NewResponse(&f10v1.ForwardResponse{
+		Workspace: out.Workspace,
+		Sent:      out.Sent,
+		Note:      out.Note,
 	}), nil
 }
