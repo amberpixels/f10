@@ -7,10 +7,15 @@ import (
 	"sync"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/drivestore"
+	"github.com/amberpixels/f10/cli/internal/fsx"
+	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/scope"
 	"github.com/amberpixels/f10/cli/internal/standup"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // standupTracker keys where the target's task ids live. A host's issues
@@ -51,7 +56,46 @@ func collectTarget(ctx context.Context, t *target.Target, since time.Time) (stan
 
 	in.Repo, in.Project, in.Tracker = t.Layout.Project, project, tr
 
+	if in.Ledger, err = readLedger(ctx, t, src.Main, since); err != nil {
+		return standup.Input{}, err
+	}
+
 	return in, nil
+}
+
+// readLedger is the project's sessions active since, the person's
+// checkouts to keep them by, and the drive records; nil with no ledger.
+func readLedger(ctx context.Context, t *target.Target, main string, since time.Time) (*standup.Ledger, error) {
+	path := ledger.Path()
+	if !fsx.Exists(path) {
+		return nil, nil //nolint:nilnil // no ledger is not an error
+	}
+
+	events, err := ledger.ReadScope(ctx, path, ledger.SinceScope(ledger.Where(ctx, main).Project, since))
+	if err != nil {
+		return nil, fmt.Errorf("ledger: %w", err)
+	}
+
+	l := &standup.Ledger{
+		Events:     events,
+		Checkouts:  []string{main, t.Layout.CheckoutRoot},
+		WorktreeOf: func(branch string) string { return worktree.SiblingPath(main, branch) },
+		Until:      time.Now(),
+	}
+
+	if wts, err := gitx.Worktrees(ctx, main); err == nil {
+		for _, w := range wts {
+			l.Checkouts = append(l.Checkouts, w.Path)
+		}
+	}
+
+	if root := t.Layout.StorageRoot; root != "" {
+		if l.Drives, err = drivestore.List(root.Path()); err != nil {
+			return nil, err
+		}
+	}
+
+	return l, nil
 }
 
 // collectAll collects every target, a few at a time, keeping the scope's

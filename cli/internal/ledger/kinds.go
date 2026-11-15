@@ -145,6 +145,12 @@ type PlanSupersededV1 struct {
 	Task string `json:"task"`
 }
 
+// SpikeSavedV1 is a spike report written.
+type SpikeSavedV1 struct {
+	Path string `json:"path"`
+	Task string `json:"task"`
+}
+
 // ReviewRoundOpenedV1 is a findings file's round, once per reviewed sha;
 // ParseError alone with Path and Round when the file did not parse.
 type ReviewRoundOpenedV1 struct {
@@ -255,6 +261,7 @@ type (
 	WaitEndedPayload         = WaitEndedV1
 	PlanSavedPayload         = PlanSavedV1
 	PlanSupersededPayload    = PlanSupersededV1
+	SpikeSavedPayload        = SpikeSavedV1
 	ReviewRoundOpenedPayload = ReviewRoundOpenedV1
 	FindingVerdictPayload    = FindingVerdictV1
 	JudgeVerdictPayload      = JudgeVerdictV1
@@ -278,6 +285,7 @@ func init() {
 	register[WaitEndedV1](kinds, WaitEnded)
 	register[PlanSavedV1](kinds, PlanSaved)
 	register[PlanSupersededV1](kinds, PlanSuperseded)
+	register[SpikeSavedV1](kinds, SpikeSaved)
 	register[ReviewRoundOpenedV1](kinds, ReviewRoundOpened)
 	register[FindingVerdictV1](kinds, FindingVerdict)
 	register[JudgeVerdictV1](kinds, JudgeVerdict)

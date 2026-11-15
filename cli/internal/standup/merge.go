@@ -32,6 +32,7 @@ type Project struct {
 	Tasks    []Task       `json:"tasks"`
 	Other    Other        `json:"other"`
 	Reviewed []ReviewedPR `json:"reviewed"`
+	Drives   []Drive      `json:"drives"`
 }
 
 // Standup is the report `f10 standup --json` prints: one period, the
@@ -42,11 +43,15 @@ type Standup struct {
 	Period   string    `json:"period,omitempty"` // how since was chosen
 	Days     []string  `json:"days"`             // local dates with activity; SetDays sets it
 	Projects []Project `json:"projects"`
+	// Ledger is set when a ledger was read: its half is this machine's alone
+	Ledger *LedgerNote `json:"ledger,omitempty"`
 }
 
 // Merge joins per-repository reports into projects, one per tracker key, and
 // tasks by id. PRs stay in chain order repository by repository: a base_pr is
 // a number in one repository, so a chain never crosses two.
+//
+//nolint:lostfield // Ledger is the command's, set once it knows a ledger exists
 func Merge(since time.Time, period string, reports []Report) Standup {
 	since = since.UTC()
 	out := Standup{Schema: Schema, Since: since, Period: period, Days: []string{}, Projects: []Project{}}
@@ -62,7 +67,7 @@ func Merge(since time.Time, period string, reports []Report) Standup {
 			byID = append(byID, map[string]int{})
 			out.Projects = append(out.Projects, Project{
 				Name: r.Project, Tracker: r.Tracker, Repos: []Repo{}, Tasks: []Task{},
-				Other: Other{PRs: []PR{}, Commits: []Commit{}}, Reviewed: []ReviewedPR{},
+				Other: Other{PRs: []PR{}, Commits: []Commit{}}, Reviewed: []ReviewedPR{}, Drives: []Drive{},
 			})
 		}
 
@@ -84,6 +89,7 @@ func Merge(since time.Time, period string, reports []Report) Standup {
 		p.Other.PRs = append(p.Other.PRs, r.Other.PRs...)
 		p.Other.Commits = append(p.Other.Commits, r.Other.Commits...)
 		p.Reviewed = append(p.Reviewed, r.Reviewed...)
+		p.Drives = append(p.Drives, r.Drives...)
 	}
 
 	for i := range out.Projects {
@@ -106,6 +112,14 @@ func mergeTask(a, b Task, since time.Time) Task {
 	a.Class = taskClass(a, since, time.Time{})
 	a.Title = cmp.Or(a.Title, b.Title)
 	a.After = cmp.Or(a.After, b.After)
+
+	a.Activity = append(slices.Clone(a.Activity), b.Activity...)
+	slices.SortStableFunc(a.Activity, func(x, y Activity) int { return x.At.Compare(y.At) })
+	a.Blocked = cmp.Or(a.Blocked, b.Blocked)
+	a.Stage = cmp.Or(a.Stage, b.Stage)
+	a.Driven = max(a.Driven, b.Driven)
+	a.ActiveMinutes += b.ActiveMinutes
+	a.Ledger = a.Ledger || b.Ledger
 
 	a.Riders = slices.Clone(a.Riders)
 	for _, id := range b.Riders {

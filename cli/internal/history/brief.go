@@ -10,7 +10,6 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lore"
-	"github.com/amberpixels/f10/cli/internal/timing"
 )
 
 // MinSample is the fewest live neighbors a statistic is printed for: under
@@ -35,20 +34,12 @@ func (b *Brief) Empty() bool {
 		len(b.Decisions) == 0 && len(b.Lessons) == 0
 }
 
-// Neighbor is a live task's touch and what the ledger recorded about it;
-// a nil pointer was never recorded.
+// Neighbor is a live task's touch and what the ledger recorded about it.
 type Neighbor struct {
 	Touch
+	Facts
 
-	Kind             string           `json:"kind,omitempty"`
-	Lines            *int             `json:"lines,omitempty"`
-	ImplementMinutes *float64         `json:"implement_minutes,omitempty"`
-	Rounds           int              `json:"rounds"`
-	Categories       map[string]Count `json:"categories,omitempty"`
-	Superseded       int              `json:"plans_superseded"`
-	Halts            int              `json:"halts"`
-	Verdicts         []string         `json:"judge_verdicts,omitempty"`
-	Regressions      []string         `json:"regressions,omitempty"` // the bug tasks traced to it
+	Kind string `json:"kind,omitempty"`
 }
 
 // Count is a finding category in one task: raised as each round opened
@@ -118,8 +109,6 @@ func Build(in Input) *Brief {
 		Decisions: notes(in.Decisions, in.Paths), Lessons: notes(in.Lessons, in.Paths),
 	}
 
-	live := map[string]*Neighbor{}
-
 	for _, t := range in.Touches {
 		if t.Stale() {
 			b.Stale = append(b.Stale, t)
@@ -127,160 +116,37 @@ func Build(in Input) *Brief {
 			continue
 		}
 
-		b.Neighbors = append(b.Neighbors, Neighbor{Touch: t, Kind: in.Kinds[t.Task], Categories: map[string]Count{}})
+		b.Neighbors = append(b.Neighbors, Neighbor{Touch: t, Kind: in.Kinds[t.Task]})
 	}
 
+	tasks := make([]string, len(b.Neighbors))
+	for i, n := range b.Neighbors {
+		tasks[i] = n.Task
+	}
+
+	facts := TaskFacts(in.Events, tasks, in.Since)
 	for i := range b.Neighbors {
-		live[strings.ToUpper(b.Neighbors[i].Task)] = &b.Neighbors[i]
+		b.Neighbors[i].Facts = *facts[strings.ToUpper(b.Neighbors[i].Task)]
 	}
 
-	ledgerFacts(in.Events, live)
-	b.Regressions = regressions(in.Events, in.Paths, in.Since, live)
-	implementMinutes(in.Events, live)
+	b.Regressions = regressions(in.Events, in.Paths, in.Since, facts)
 
 	b.Aggregates = aggregate(b.Neighbors, len(b.Regressions))
 
 	return b
 }
 
-// ledgerFacts fills each neighbor from its own rows, the newest verdict per
-// finding and per verdict file standing.
-func ledgerFacts(events []ledger.Event, live map[string]*Neighbor) {
-	rounds := map[string]map[string]map[string]int{}      // task, review pass: the latest opening's categories
-	opened := map[string]string{}                         // task, round: the reviewed sha of its latest opening
-	findings := map[string]ledger.FindingVerdictPayload{} // task, round, finding
-	judged := map[string]string{}                         // task, verdict file
-
-	var judgedOrder []string
-
-	for _, e := range events {
-		n := live[strings.ToUpper(e.Task)]
-		if n == nil {
-			continue
-		}
-
-		switch e.Kind {
-		case ledger.TaskSized:
-			if p, ok := decode[ledger.TaskSizedPayload](e); ok {
-				n.Lines = &p.Lines
-			}
-		case ledger.ReviewRoundOpened:
-			if p, ok := decode[ledger.ReviewRoundOpenedPayload](e); ok && p.Round != "" {
-				if rounds[n.Task] == nil {
-					rounds[n.Task] = map[string]map[string]int{}
-				}
-
-				// a follow-up PR's series restarts at round 1, so the reviewed sha
-				// keeps its rounds apart from the first PR's
-				rounds[n.Task][p.Round+"\x00"+p.Reviewed] = p.Categories
-				opened[n.Task+"\x00"+p.Round] = p.Reviewed
-			}
-		case ledger.FindingVerdict:
-			// a verdict belongs to the series of its round's latest opening, so
-			// a follow-up PR's 1.1 never overwrites the first PR's
-			if p, ok := decode[ledger.FindingVerdictPayload](e); ok {
-				series := opened[n.Task+"\x00"+p.Round]
-				findings[n.Task+"\x00"+p.Round+"\x00"+series+"\x00"+p.Finding] = p
-			}
-		case ledger.PlanSuperseded:
-			n.Superseded++
-		case ledger.TaskHalted:
-			n.Halts++
-		case ledger.JudgeVerdict:
-			if p, ok := decode[ledger.JudgeVerdictPayload](e); ok && p.Verdict != "" {
-				key := n.Task + "\x00" + p.Path
-				if _, seen := judged[key]; !seen {
-					judgedOrder = append(judgedOrder, key)
-				}
-
-				judged[key] = p.Verdict
-			}
-		}
-	}
-
-	for task, byRound := range rounds {
-		n := live[strings.ToUpper(task)]
-		n.Rounds = len(byRound)
-
-		for _, cats := range byRound {
-			for cat, raised := range cats {
-				if raised > 0 {
-					c := n.Categories[cat]
-					c.Raised += raised
-					n.Categories[cat] = c
-				}
-			}
-		}
-	}
-
-	for key, p := range findings {
-		task, _, _ := strings.Cut(key, "\x00")
-		n := live[strings.ToUpper(task)]
-
-		if p.Category == "" {
-			continue
-		}
-
-		c := n.Categories[p.Category]
-
-		switch word, _, _ := strings.Cut(strings.ToLower(p.Verdict), " "); word {
-		case "fix":
-			c.Fixed++
-		case "skip":
-			c.Skipped++
-		default:
-			continue
-		}
-
-		n.Categories[p.Category] = c
-	}
-
-	for _, key := range judgedOrder {
-		task, _, _ := strings.Cut(key, "\x00")
-		n := live[strings.ToUpper(task)]
-		n.Verdicts = append(n.Verdicts, judged[key])
-	}
-}
-
-// regressions is the newest attribution of each bug that names these paths
-// or a live neighbor, found since the window opened.
-func regressions(events []ledger.Event, paths []string, since time.Time, live map[string]*Neighbor) []Regression {
-	latest := map[string]ledger.RegressionFoundPayload{}
-
-	var order []string
-
-	for _, e := range events {
-		if e.Kind != ledger.RegressionFound || e.At.Before(since) {
-			continue
-		}
-
-		p, ok := decode[ledger.RegressionFoundPayload](e)
-		if !ok {
-			continue
-		}
-
-		if _, seen := latest[e.Task]; !seen {
-			order = append(order, e.Task)
-		}
-
-		latest[e.Task] = p
-	}
-
+// regressions is the newest attribution of each bug found since the window
+// opened that names these paths or a live neighbor.
+func regressions(events []ledger.Event, paths []string, since time.Time, live map[string]*Facts) []Regression {
 	out := []Regression{}
 
-	for _, bug := range order {
-		p := latest[bug]
-		n := live[strings.ToUpper(p.OriginTask)]
-
-		if n == nil && !onPaths(p.Lines, paths) {
+	for _, f := range latestRegressions(events, since) {
+		if live[strings.ToUpper(f.OriginTask)] == nil && !onPaths(f.Lines, paths) {
 			continue
 		}
 
-		if n != nil {
-			n.Regressions = append(n.Regressions, bug)
-		}
-
-		out = append(out, Regression{Bug: bug, Origin: cmp.Or(p.OriginTask, p.Origin, "unknown"), Class: p.Class})
+		out = append(out, Regression{Bug: f.Bug, Origin: cmp.Or(f.OriginTask, f.Origin, "unknown"), Class: f.Class})
 	}
 
 	return out
@@ -296,24 +162,6 @@ func onPaths(lines, paths []string) bool {
 	}
 
 	return false
-}
-
-// implementMinutes sums each neighbor's implement windows; one with none
-// stays nil, never zero.
-func implementMinutes(events []ledger.Event, live map[string]*Neighbor) {
-	for _, w := range timing.Windows(events) {
-		n := live[strings.ToUpper(w.Task)]
-		if n == nil || w.Step != timing.Implement {
-			continue
-		}
-
-		m := w.Active.Minutes()
-		if n.ImplementMinutes != nil {
-			m += *n.ImplementMinutes
-		}
-
-		n.ImplementMinutes = &m
-	}
 }
 
 // aggregate is the statistics over the reviewed neighbors, nil under

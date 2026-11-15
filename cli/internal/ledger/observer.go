@@ -34,6 +34,7 @@ const (
 
 	PlanSaved         = "plan_saved"
 	PlanSuperseded    = "plan_superseded"
+	SpikeSaved        = "spike_saved"
 	ReviewRoundOpened = "review_round_opened"
 	FindingVerdict    = "finding_verdict"
 	JudgeVerdict      = "judge_verdict"
@@ -241,6 +242,8 @@ func (ob *Observer) events(ctx context.Context, o observe.Observation, m observe
 		return one(WaitEnded, Observed, "", WaitEndedPayload{Reason: o.Reason, Tool: o.Tool, By: o.By})
 	case *observe.PlanWritten:
 		return one(PlanSaved, Artifact, o.Task, PlanSavedPayload{Path: o.Path, Task: o.Task})
+	case *observe.SpikeWritten:
+		return one(SpikeSaved, Artifact, o.Task, SpikeSavedPayload{Path: o.Path, Task: o.Task})
 	case *observe.PlanArchived:
 		return one(PlanSuperseded, Artifact, o.Task, PlanSupersededPayload{From: o.From, To: o.To, Task: o.Task})
 	case *observe.FindingsWritten:

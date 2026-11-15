@@ -202,6 +202,9 @@ func TestObservationsFromRecordedPayloads(t *testing.T) {
 		{"post-write-plan", []observe.Observation{
 			&observe.PlanWritten{Path: "/work/acme/.f10/plans/FT-12.md", Task: "FT-12"},
 		}},
+		{"post-write-spike", []observe.Observation{
+			&observe.SpikeWritten{Path: "/work/acme/.f10/spikes/FT-12.md", Task: "FT-12"},
+		}},
 	} {
 		t.Run(tc.payload, func(t *testing.T) {
 			env := testEnv(t)

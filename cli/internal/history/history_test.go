@@ -368,3 +368,26 @@ func TestCatchupDecisionsAreLeftOut(t *testing.T) {
 		t.Errorf("decisions = %+v, want the design decision alone", b.Decisions)
 	}
 }
+
+// TaskFacts counts tasks that touch no path the same way Build counts its
+// neighbors, and keeps each halt's reason.
+func TestTaskFactsMatchesTheBrief(t *testing.T) {
+	at := window.Add(24 * time.Hour)
+	events := reviewed(at, "FT-1", 2, map[string]int{"tests and docs": 1}, "tests and docs=fix")
+	events = append(
+		events,
+		ev(at, "FT-1", ledger.TaskHalted, ledger.TaskHaltedPayload{Skill: "ship", Reason: "catchup conflict"}),
+	)
+
+	b := Build(Input{Paths: []string{"a.go"}, Since: window, Touches: live("FT-1"), Events: events})
+	f := TaskFacts(events, []string{"ft-1"}, window)["FT-1"]
+
+	if f.Rounds != b.Neighbors[0].Rounds ||
+		f.Categories["tests and docs"] != b.Neighbors[0].Categories["tests and docs"] {
+		t.Errorf("TaskFacts = %+v, brief = %+v", *f, b.Neighbors[0].Facts)
+	}
+
+	if !slices.Equal(f.HaltReasons, []string{"catchup conflict"}) || f.Halts != 1 {
+		t.Errorf("halts = %d %v, want one with its reason", f.Halts, f.HaltReasons)
+	}
+}

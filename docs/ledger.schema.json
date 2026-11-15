@@ -522,6 +522,25 @@
       ],
       "type": "object"
     },
+    "SpikeSavedV1": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "task": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [
+        "path",
+        "task"
+      ],
+      "type": "object"
+    },
     "StepEnteredV1": {
       "additionalProperties": false,
       "properties": {
@@ -863,6 +882,13 @@
         },
         {
           "$ref": "#/$defs/SessionStoppedV2"
+        }
+      ]
+    },
+    "spike_saved": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/SpikeSavedV1"
         }
       ]
     },

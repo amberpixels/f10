@@ -112,6 +112,7 @@ type Input struct {
 	PRs           []HostPR          // the user's own and the ones they reviewed or merged
 	Bases         map[string]string // head branch to the base branch `f10 start --after` recorded
 	UpkeepPaths   []string          // the project's globs, on top of the default upkeep paths
+	Ledger        *Ledger           // nil: no ledger read
 }
 
 // PR is one of the user's PRs in the report.
@@ -144,6 +145,15 @@ type Task struct {
 	Days    []Day    `json:"days"` // the command sets it
 	PRs     []PR     `json:"prs"`
 	Commits []Commit `json:"commits"` // commits on no PR of the user's
+
+	// from the ledger: what the task waits on, the steps that left no
+	// commit, where the run left it, the drive running it, and its time
+	Blocked       *Blocked   `json:"blocked,omitempty"`
+	Activity      []Activity `json:"activity"`
+	Stage         string     `json:"stage,omitempty"`
+	Driven        int        `json:"driven,omitempty"`
+	ActiveMinutes int        `json:"active_minutes"`
+	Ledger        bool       `json:"-"` // one of the person's ledger rows names it
 }
 
 // Other is the user's activity carrying no task id.
@@ -182,6 +192,7 @@ type Report struct {
 	Tasks    []Task
 	Other    Other
 	Reviewed []ReviewedPR
+	Drives   []Drive
 }
 
 // Group sorts the collected activity into tasks.
@@ -198,6 +209,7 @@ func Group(in Input) Report {
 		Tasks:    []Task{},
 		Other:    Other{PRs: []PR{}, Commits: []Commit{}},
 		Reviewed: []ReviewedPR{},
+		Drives:   []Drive{},
 	}
 
 	if in.Host != "" {
@@ -265,7 +277,7 @@ func Group(in Input) Report {
 			return t
 		}
 
-		t := &Task{ID: id, PRs: []PR{}, Commits: []Commit{}}
+		t := &Task{ID: id, PRs: []PR{}, Commits: []Commit{}, Activity: []Activity{}}
 		tasks[id] = t
 
 		return t
@@ -323,9 +335,23 @@ func Group(in Input) Report {
 		}
 	}
 
+	byUpper := make(map[string]*Task, len(tasks))
+	for id, t := range tasks {
+		byUpper[strings.ToUpper(id)] = t
+	}
+
+	addLedger(in.Ledger, byUpper, since, task)
+
+	if in.Ledger != nil {
+		rep.Drives = DriveSummaries(in.Repo, in.Ledger.Drives, since)
+	}
+
 	for _, t := range tasks {
 		t.PRs = chainOrder(t.PRs)
 		t.State = taskState(*t, in.DefaultBranch)
+		if len(t.PRs) == 0 && len(t.Commits) == 0 {
+			t.State = StateStarted // the ledger alone saw it: work begun, nothing landed
+		}
 		t.Class = taskClass(*t, since, time.Time{})
 
 		if len(t.PRs) > 0 {

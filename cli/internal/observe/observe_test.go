@@ -97,6 +97,7 @@ func TestFromWrite(t *testing.T) {
 		{"out-of-tree plan", "/h/.f10/w/plans/FT-1.md", "/h/.f10/w", &PlanWritten{Path: "/h/.f10/w/plans/FT-1.md", Task: "FT-1"}},
 		{"out-of-tree without its root", "/h/.f10/w/plans/FT-1.md", "", nil},
 		{"archive", "/w/.f10/plans/archive/FT-1.1.md", "/w/.f10", nil},
+		{"spike report", "/w/.f10/spikes/FT-1.md", "", &SpikeWritten{Path: "/w/.f10/spikes/FT-1.md", Task: "FT-1"}},
 		{"instructions", "/w/.f10/instructions/project.md", "/w/.f10", nil},
 		{"not markdown", "/w/.f10/plans/FT-1.txt", "/w/.f10", nil},
 		{"elsewhere", "/w/docs/plans/FT-1.md", "/w/.f10", nil},

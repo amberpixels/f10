@@ -30,6 +30,8 @@ func FromWrite(path, storageRoot string) Observation {
 		switch {
 		case dir == r.Plans():
 			return &PlanWritten{Path: path, Task: name}
+		case dir == r.Spikes():
+			return &SpikeWritten{Path: path, Task: name}
 		case parent == r.Reviews(""):
 			return &FindingsWritten{Path: path, Task: key, Round: name}
 		case parent == r.Verdicts(""):

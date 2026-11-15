@@ -83,6 +83,7 @@ f10 board [<window> | --since <window>] [--state] [--remote] [-C <checkout>]... 
 f10 atlas [-C <checkout>]... [--group <name>]... [--all] [--json] [--out <path>]   # your public projects: what ~/.f10/atlas.md declares and what their git history says
 f10 stats [--since 30d] [<id>]   # active minutes per task by step group, with size and density; a median row; an id adds its steps
 f10 history <path>... [--since 180d] [--task <id>] [--json]   # what the tasks that touched these files went through, in at most 15 lines
+f10 audit map <range | all> [--json]                    # churn, tasks and pain per area over a range, for /f10:audit to partition from
 f10 ledger dump [--json] [--project p] [--task id] [--session s]   # the recorded events, oldest first
 f10 ledger schema        # the JSON Schema of each event kind's payload, by version (docs/ledger.schema.json)
 
@@ -1067,6 +1068,16 @@ A task is `upkeep` when its period holds at least one upkeep item and no work it
 The text report folds upkeep tasks into one `kept up to date` line.
 Your own PR is also reported when its only activity in the period is a force-push of yours: a rebase keeps author dates, so it leaves no commit in the period.
 
+**The ledger half.**
+The ledger (`~/.f10/f10.db`, [ledger.md](ledger.md)) adds the work that leaves no commit, and what each task waits on.
+It is read once per repository: the project's sessions active in the period, by the scoped read.
+
+- **Whose work**: a row counts when it was recorded in one of the repository's checkouts (the main checkout or a worktree of it), in the worktree `f10 start` makes for the row's branch (still matched after `f10 finish` removed it), or on a task your commits or PRs already name.
+  A drive counts, because its agents run in your worktrees; a teammate's clone elsewhere on the machine does not.
+- **Period**: a row counts by its time, in the same period as commits, so `--since`, `--week` and the stored standup apply unchanged.
+  A task with ledger rows in the period but no commit or PR is reported too, its state `started`.
+- **Per machine**: the ledger is local, while git and the host are not, so on a second machine the ledger half is partial and `ledger.scope` says so.
+
 **JSON**, schema 2.
 The same history gives the same bytes in the same zone: no run timestamp, every time in UTC (`days` are local dates), every list in a fixed order.
 A breaking change bumps `schema`.
@@ -1103,7 +1114,12 @@ A breaking change bumps `schema`.
           "force_pushes": [{"at": "...", "before": "...", "after": "...", "class": "upkeep", "upkeep": "rebase"}]
         }
       ],
-      "commits": []
+      "commits": [],
+      "blocked": {"kind": "ask", "since": "...", "text": "1. Refactor as agreed? [yes | stop]"},
+      "activity": [{"at": "...", "kind": "review", "text": "round 1: 3 fixed, 1 skipped"}],
+      "stage": "review round 2",
+      "driven": 12,
+      "active_minutes": 95
     }
   ],
   "other": {"prs": [], "commits": []},
@@ -1111,9 +1127,11 @@ A breaking change bumps `schema`.
     {"repo": "svc-a", "number": 41, "title": "...", "url": "...", "state": "shipped", "author": "them",
      "actions": [{"kind": "reviewed", "at": "..."}, {"kind": "merged", "at": "..."}],
      "days": ["2026-10-15"]}
-  ]
+  ],
+  "drives": [{"repo": "svc-a", "number": 12, "tasks": 5, "shipped": 4, "needs_you": 1}]
   }
-  ]
+  ],
+  "ledger": {"scope": "this machine only", "contributed": true}
 }
 ```
 
@@ -1146,6 +1164,13 @@ A breaking change bumps `schema`.
 | `upkeep` | on an upkeep commit or force-push: `base-merge`, `rebase`, `files` or `ci-fix`; absent on work |
 | `prs[].force_pushes` | your force-pushes to it in the period, by time, then after-sha |
 | `reviewed[].actions` | by time, then kind |
+| `tasks[].blocked` | what the task waits on when the period ends, and `since` when: `ask` (an ask with no answer yet, the question in one line), `halt` (a drive halted it after its run's last word, with the skill and reason) or `failed` (its run stopped `failed` or `partial`, with the step and the note, such as a red verify or CI); absent when nothing |
+| `tasks[].activity` | the steps run in the period, by time, each once a day: `plan` (saved or superseded), `debug` (cause found, not reproduced, or run), `spike` (report saved), `review` (`round 2: 3 fixed, 1 skipped`, or `round 2 opened`) and `judge` (the verdict and its subject) |
+| `tasks[].stage` | where the run left the task, in words: `planned, not started`, `planning`, `review round 2`, `waiting on CI`, `waiting on <base>`, `shipping: <step>`; absent when the run has nothing `state` lacks, as after a finished ship. `state` keeps its values, because the carry-over and the classes read them |
+| `tasks[].driven` | the newest drive that lists the task and ran in the period; absent when none |
+| `tasks[].active_minutes` | the task's active minutes in the period, counted as `f10 stats` counts them, waits on you left out; always present. The `/f10:standup` skill renders it only when your `standup.md` asks for it |
+| `drives` | each drive active in the period (created in it, or not through yet), with its task count, the tasks shipped and the tasks that ended needing you |
+| `ledger` | present when a ledger exists: `scope` is always `this machine only`, and `contributed` says whether the ledger added anything to the report |
 
 ## Board
 
@@ -1304,13 +1329,51 @@ Nothing found prints `No history for these files.`
 | key | holds |
 |---|---|
 | `paths`, `since` | the repo-relative paths and the window's start |
-| `neighbors` | per live task: `task`, `commits`, `added`, `standing`, `kind`, `lines`, `implement_minutes`, `rounds`, `categories` (`raised`, `fixed`, `skipped` per category), `plans_superseded`, `halts`, `judge_verdicts`, `regressions` (the bug tasks traced to it) |
+| `neighbors` | per live task: `task`, `commits`, `added`, `standing`, `kind`, `lines`, `implement_minutes`, `rounds`, `categories` (`raised`, `fixed`, `skipped` per category), `plans_superseded`, `halts`, `halt_reasons`, `judge_verdicts`, `regressions` (the bug tasks traced to it) |
 | `stale` | the dropped tasks: `task`, `commits`, `added`, `standing` |
 | `regressions` | `bug`, `origin` (a task, `pre-f10` or `outside-f10`), `class` |
 | `aggregates` | `null` under 3 reviewed neighbors, else `n` (the reviewed neighbors), `median_rounds`, `recurring` (`category`, `tasks`), `regressions` |
 | `decisions`, `lessons` | `id`, `change`, `path`, `anchors` (on the paths, in the form `f10 lore add --anchor` takes), `text`, and for a decision `chosen` and `rejected` |
 
 A value never recorded is absent, never `0`.
+
+## Audit
+
+`f10 audit map <range | all>` is the map the `/f10:audit` skill partitions its reviewers from: churn, tasks and pain per area over a range.
+`all` is the newest 300 commits, because the full history would crowd out the code.
+
+1. **Areas** are each changed file's parent directory, repo-relative.
+2. **Churn** is the lines added and deleted per area, and the commits that touched it, from one `git log --numstat`, merges left out.
+3. **Tasks** are the range's commits by task, each with its commits and its areas.
+   A commit's task is found as `f10 history` finds it: its `Task:` trailer (a bundle under its lead), else its `Change:` trailer, else what `f10 task regression` would attribute it to.
+   A commit with no task goes to `upkeep`.
+4. **The pain map** compares each area's tasks with every task of the range (the project), using the same per-task counts as `f10 history`:
+   - review rounds, the median and the max, over the tasks a round was recorded for
+   - halts, each with its task and reason
+   - plans superseded
+   - recurring categories: a finding category with a **fixed** verdict in at least 3 tasks of the area; a category only skipped never counts
+   - regressions: the bugs traced to the area's tasks, with their class
+   - implement minutes per 100 lines, over the tasks with both a size and implement time
+
+   Medians need at least 3 tasks recording them, in the area and in the project; halts, replans and regressions are compared per task.
+   An area is listed only when it is over the project on at least one signal, with only the signals that put it there.
+   The ledger reads are the scoped ones: the sessions of the range's tasks and the project's `regression_found` rows.
+
+The text is one block per part, and the pain block holds one line per area, each citing task ids.
+With no ledger rows for the range it is `No ledger history for this range.`; with rows and no area over the project, `No area over the project median.`
+
+`--json` prints the whole map:
+
+| key | holds |
+|---|---|
+| `range` | the range as given |
+| `churn` | per area, most changed first: `dir`, `added`, `deleted`, `commits` |
+| `tasks` | by id: `id`, `commits` (short shas), `areas` |
+| `upkeep` | the short shas of commits naming no task |
+| `pain.project` | `tasks`, `median_rounds` and `implement_minutes_per_100_lines` (`null` under 3 tasks), `halts_per_task`, `superseded_per_task`, `regressions_per_task` |
+| `pain.areas` | per listed area: `dir`, `tasks`, and the signals over the project: `median_rounds` with `max_rounds`, `halts` (`task`, `reason`), `superseded` (a task per plan), `recurring` (`category`, `tasks`), `regressions` (`bug`, `origin`, `class`), `implement_minutes_per_100_lines`; then its text `line` |
+| `pain.lineages` | per task of the range with bugs traced to it: `origin`, `bugs`, `classes` |
+| `ledger` | whether the ledger held rows for the range's tasks |
 
 ## Ledger
 

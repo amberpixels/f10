@@ -11,6 +11,12 @@ Features land one task at a time, and per-PR review reads one diff.
 So the same concept ends up in several hand-written copies, old mechanisms stay beside their replacements, and a chain built over several tasks keeps steps it no longer needs.
 The audit reads the whole window at once to find those.
 It reads plans and lore, because recorded intent is what tells a deliberate difference apart from an accident.
+It reads the ledger's record of past runs too, through `f10 audit map`, because where changing code was costly is where to look first.
+
+**Process metrics say where to look, and are never findings.**
+"Review rounds are high in `drive/`" is not a finding.
+"The base-resolution logic exists in three copies, which is why every drive change draws catchup findings" is one, because it has a `file:line`, a design and a fix.
+Judging the process itself is not the audit's job.
 
 1. **The window.**
    - `since <ref>`: the range is `<ref>..HEAD`.
@@ -29,11 +35,11 @@ It reads plans and lore, because recorded intent is what tells a deliberate diff
 2. **The map**, built by the main agent in a few calls.
    - File and line counts per package or directory, from `git ls-files`.
    - The import graph, where the stack prints one (the stack's own module or package graph command).
-   - The churn per area over the range, from `git log --numstat <range>`, summed per directory in the same command (piped through `awk`) so the output stays one line per area.
-   - The **task map**: run `git log <range> --format='%h%x09%(trailers:key=Task,valueonly,separator=%x2C)%x09%s'`.
-     A commit with no `Task:` trailer maps to the task by a task id in its subject.
-     A commit with neither goes to an upkeep bucket.
-     Then, for each task, one call gathers its files (`git show --stat` over its commits), its plan and `f10 lore show <id>`.
+   - `f10 audit map <range>` (`all` under `all`) prints three parts in one call (`docs/cli.md` → Audit):
+     - the **churn** per area (a file's parent directory) over the range
+     - the **task map**: each task with its commits and areas, and the commits naming no task in an upkeep bucket
+     - the **pain map**: one line per area that was costlier to change than the project, by review rounds, halts, replans, findings fixed again and again, later regressions and implement time, each line citing its task ids
+   - For each task, one call gathers its files (`git show --stat` over its commits), its plan and `f10 lore show <id>`.
      The plan is `<storage root>/plans/<id>.md`, else the newest of `plans/archive/<id>.md` and `<id>.<N>.md`.
      Read `<id>.spike.md` or `<id>.spike.<N>.md` beside it too.
      Never use a wider glob, because it matches other ids.
@@ -41,15 +47,16 @@ It reads plans and lore, because recorded intent is what tells a deliberate diff
    - Probes the stack offers, when they are installed (`go vet`, `deadcode`, the linter the repo configures).
      A missing probe is one line in the report, never a failure.
 
-   Under `all`, the churn and the task map cover the newest 300 commits, because the full history would crowd out the code.
+   Under `all`, the map covers the newest 300 commits, because the full history would crowd out the code.
 3. **The partition.**
    Split the code into areas from the map, each holding a similar amount of code and churn, and give each area one reviewer.
+   An area high on both churn and pain gets a reviewer of its own, or more of the paths, because churn alone shows where code changed and not where changing it hurt.
    Add two reviewers that every audit has:
    - **cross-cutting**: repeated patterns, copied helpers, layering and tests, across every area.
    - **history**: feature lineages read from commits and release notes, and compatibility shims checked against what is still on disk.
 
    Keep the total at about eight, because more reviewers repeat each other and cost more than they find.
-   Print the partition: one line per reviewer with its area and the paths it holds.
+   Print the partition: one line per reviewer with its area and the paths it holds, naming the pain line that set an area apart.
    Then confirm the scale once with `AskUserQuestion`: go, go with fewer reviewers (the smaller partition named), or stop.
    The reason is cost: each reviewer is a full agent run, which no other f10 step spends at this scale.
    A stop ends normally.
@@ -57,6 +64,8 @@ It reads plans and lore, because recorded intent is what tells a deliberate diff
    Spawn one fresh `general-purpose` agent per partition, never `fork`, all in one message.
    Each Agent tool call carries the `model` and `effort` the load's `audit` profile line names (`conventions/context.md` → Agent profiles).
    Each agent gets the checkout root, the window and HEAD's sha, its area's paths, and the task map rows that touch them with their plan paths.
+   It also gets its area's pain lines, marked as **leads**: where to look, never findings.
+   The history reviewer also gets the regression lineages (`f10 audit map --json` → `pain.lineages`), each task with the bug tasks traced to it.
    Its instruction is to load the two context calls (`f10-load-conventions.sh`, `f10-load-project.sh audit`) and follow point 5.
    Each agent returns its findings and its drops as text, and writes no file.
 5. **The brief.**
@@ -92,7 +101,8 @@ It reads plans and lore, because recorded intent is what tells a deliberate diff
    - Findings that several reviewers raised about the same code merge into one, keeping the best-cited evidence.
    - Findings that share a target design group into a **theme**.
    - Re-read every claimed bug and every `high` finding at its `where:`, and mark it `verified` when the code shows it, or `reported` when one link could not be traced.
-   - Drop a finding with no `file:line`, or one the code at HEAD already settles.
+   - Drop a finding with no `file:line`, one whose only evidence is a process metric (rounds, halts, minutes), or one the code at HEAD already settles.
+     List each of these drops with the finding's id and the reason.
    - Order the themes into **phases**: a theme goes after the themes its findings depend on, and within a phase the cheaper or riskier-to-postpone theme goes first.
    - No findings is a valid result, so never pad the report to fill it.
      A reviewer that reports nothing in its area has reported, and it has not failed.
@@ -106,8 +116,10 @@ It reads plans and lore, because recorded intent is what tells a deliberate diff
    The sections follow:
    - `## Verdict`: a few lines on the state of the code over the window.
    - `## Bugs`: one block per bug, each marked `verified` or `reported`.
+   - `## Pain map`: the pain map's lines as `f10 audit map` printed them, so a reader sees why the partition looks as it does.
    - `## Phases`: one `### Phase <n>` per phase, its themes beneath, and each theme's findings with every field from point 5.
    - `## Dropped as deliberate`: one line per drop, with its `file:line` and the plan or lore citation.
+   - `## Dropped at merge`: one line per finding point 6 dropped, with its id and the reason (no `file:line`, a metric only, settled at HEAD).
    - `## Not recommended`: changes a reader might expect that the audit advises against, each with its reason.
    - `## Probes`: one line per probe, run or missing.
 
