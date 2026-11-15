@@ -32,6 +32,26 @@ describe("inlineImages", () => {
     expect(out).not.toContain("<script>");
   });
 
+  it("reads a few images at a time and drops a source it cannot inline", async () => {
+    let active = 0;
+    let peak = 0;
+    const html = Array.from({ length: 10 }, (_, i) => `<img src="s${i}.png">`).join("");
+    const out = await inlineImages(
+      html,
+      async (n) => {
+        active++;
+        peak = Math.max(peak, active);
+        await new Promise((r) => setTimeout(r, 5));
+        active--;
+        return n === "s3.png" ? null : `data:image/png;base64,${n}`;
+      },
+      4,
+    );
+    expect(peak).toBe(4);
+    expect(out).not.toContain('src="s3.png"');
+    expect(out).toContain('alt="image not shown"');
+  });
+
   it("names sources inside the demo directory", () => {
     expect(normalize("../../etc/passwd")).toBe("etc/passwd");
     expect(normalize("shots/./a%20b.png")).toBe("shots/a b.png");

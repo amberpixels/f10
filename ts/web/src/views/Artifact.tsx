@@ -14,6 +14,9 @@ type Shown =
   | { kind: "image"; url: string }
   | { kind: "text"; text: string };
 
+// what one report inlines, so a long report cannot exhaust a phone's tab
+const maxInlined = 24 << 20;
+
 export function dataURL(bytes: Uint8Array, type: string): string {
   let bin = "";
   for (let i = 0; i < bytes.length; i += 0x8000) {
@@ -53,9 +56,13 @@ export function ArtifactView(props: { root: string; task: string; kind: string; 
           out = { kind: "markdown", html: renderMarkdown(text()) };
         } else if (type.startsWith("text/html")) {
           const base = name.includes("/") ? name.slice(0, name.lastIndexOf("/") + 1) : "";
+          let inlined = 0;
           const html = await inlineImages(text(), async (src) => {
+            if (inlined >= maxInlined) return null;
             try {
               const img = await api.artifacts.getArtifact({ project: root, task, kind: kindOf(kind), name: base + src });
+              inlined += img.content.length;
+              if (inlined > maxInlined) return null;
               // a data URL, since the sandboxed frame has no origin a blob URL would resolve in
               return dataURL(img.content, img.artifact?.contentType ?? "application/octet-stream");
             } catch {

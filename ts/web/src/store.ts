@@ -66,6 +66,11 @@ export function onEvent(e: Event) {
   later("runs");
 }
 
+function reload() {
+  void refreshRuns();
+  void refreshAsks();
+}
+
 /** start loads every list and follows the event stream until stop. */
 export function start(): () => void {
   const ctl = new AbortController();
@@ -81,9 +86,18 @@ export function start(): () => void {
           live.value = s;
         },
         onRefused: forgetToken,
+        onReconnect: reload,
       },
       ctl.signal,
     );
   }
-  return () => ctl.abort();
+  // a phone drops the stream while it sleeps; waking reads the lists again
+  const onVisible = () => {
+    if (document.visibilityState === "visible") reload();
+  };
+  document.addEventListener("visibilitychange", onVisible);
+  return () => {
+    ctl.abort();
+    document.removeEventListener("visibilitychange", onVisible);
+  };
 }

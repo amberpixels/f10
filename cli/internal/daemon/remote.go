@@ -65,7 +65,7 @@ func (s *Server) reconcileRemote() {
 	}
 
 	if addr != "" {
-		r, err := s.listenRemote(addr, cfg)
+		r, err := s.listenRemote(addr, cfg, host)
 		if err == nil {
 			s.remote, s.remoteAt = r, boundState(on, addr, cfg, host, tlsWhy)
 			s.Log.Printf("tailnet listener on %s", s.remoteAt.URL)
@@ -86,7 +86,7 @@ func (s *Server) reconcileRemote() {
 
 // listenRemote serves the API on addr, behind Remote's peer filter and
 // token check, over TLS when cfg is set; the caller holds mu.
-func (s *Server) listenRemote(addr string, cfg *tls.Config) (*remoteServer, error) {
+func (s *Server) listenRemote(addr string, cfg *tls.Config, host string) (*remoteServer, error) {
 	ln, err := (&net.ListenConfig{}).Listen(s.ctx, "tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("listening on %s: %w", addr, err)
@@ -95,7 +95,8 @@ func (s *Server) listenRemote(addr string, cfg *tls.Config) (*remoteServer, erro
 	// the peer filter sees the raw connection, before any handshake
 	ln = s.Remote.Listen(ln)
 	if cfg != nil {
-		ln = tls.NewListener(ln, cfg)
+		_, port, _ := net.SplitHostPort(addr)
+		ln = tls.NewListener(redirectPlain(ln, "https://"+net.JoinHostPort(host, port)), cfg)
 	}
 
 	// an idle peer's connection is closed, so refused keep-alives cannot

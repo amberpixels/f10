@@ -39,12 +39,14 @@ func (s *projectService) ListProjects(
 		p.Watched = p.GetWatched() || watched
 	}
 
+	watched := map[string]bool{}
 	for _, w := range st.Watches {
-		add(w.Dir, true)
+		watched[w.Dir] = true
 	}
 
-	for _, r := range st.Runs {
-		add(r.Dir, false)
+	// the same checkouts projectDir resolves, so every listed id resolves
+	for _, dir := range knownDirs(st) {
+		add(dir, watched[dir])
 	}
 
 	out := make([]*f10v1.KnownProject, 0, len(byID))

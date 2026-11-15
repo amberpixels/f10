@@ -384,6 +384,24 @@ func TestRemoteListenerSwitchesToTLS(t *testing.T) {
 	if _, err := f10v1connect.NewDaemonServiceClient(client, "https://"+addr).Hello(t.Context(), req); err != nil {
 		t.Fatalf("hello over HTTPS = %v", err)
 	}
+
+	// the http:// address printed before the certificate came still leads to the page
+	plain := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+
+	get, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://"+addr+"/asks?x=1", http.NoBody)
+
+	res, err := plain.Do(get)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_ = res.Body.Close()
+
+	if res.StatusCode != http.StatusPermanentRedirect ||
+		res.Header.Get("Location") != "https://box.tail.ts.net:"+port+"/asks?x=1" {
+		t.Errorf("plain HTTP = %d to %q, want a redirect to the https address",
+			res.StatusCode, res.Header.Get("Location"))
+	}
 }
 
 // testCert is a self-signed certificate for box.tail.ts.net and the pool

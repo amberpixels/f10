@@ -376,6 +376,13 @@ func TestListProjectsOncePerID(t *testing.T) {
 	if strings.Join(got, " ") != "github.com/acme/gadgets=false github.com/acme/widgets=true" {
 		t.Errorf("projects = %v", got)
 	}
+
+	// every listed id resolves, a drive-only project included
+	for _, p := range res.Msg.GetProjects() {
+		if _, err := projectDir(t.Context(), &projSup{}, p.GetId()); err != nil {
+			t.Errorf("listed %s does not resolve: %v", p.GetId(), err)
+		}
+	}
 }
 
 func TestForwardNeedsText(t *testing.T) {

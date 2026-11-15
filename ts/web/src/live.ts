@@ -15,6 +15,9 @@ export type LiveDeps = {
   onEvent: (e: Event) => void;
   onState: (s: LiveState) => void;
   onRefused: () => void;
+  // onReconnect runs when a stream opens after one dropped, because a stream
+  // that had no cursor yet resumes from the tail and skips the gap
+  onReconnect?: () => void;
   sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
 };
 
@@ -33,19 +36,21 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
 /**
  * runLive follows the event stream until signal aborts. The first stream
  * starts at the tail, because current state comes from the list calls; a
- * reconnect resumes from the last cursor, so a dropped connection misses
- * nothing.
+ * reconnect resumes from the last cursor, or calls onReconnect so the lists
+ * are read again when there was none yet.
  */
 export async function runLive(deps: LiveDeps, signal: AbortSignal): Promise<void> {
   const wait = deps.sleep ?? sleep;
   let cursor = "";
   let backoff = 1000;
+  let dropped = false;
 
   while (!signal.aborted) {
     deps.onState("connecting");
     try {
       const stream = deps.watch(cursor, cursor === "", signal);
       deps.onState("live");
+      if (dropped) deps.onReconnect?.();
       for await (const res of stream) {
         backoff = 1000;
         cursor = res.cursor;
@@ -59,6 +64,7 @@ export async function runLive(deps: LiveDeps, signal: AbortSignal): Promise<void
       }
     }
     if (signal.aborted) return;
+    dropped = true;
     deps.onState("down");
     await wait(backoff, signal);
     backoff = Math.min(backoff * 2, maxBackoff);

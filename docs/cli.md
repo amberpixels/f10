@@ -871,6 +871,7 @@ Its socket serves the control-plane API over Connect: `f10.v1.DaemonService` for
 - **The web client.** The listener also serves a web app at its address, `https://<machine>.<tailnet>.ts.net:7410/`, which `f10 remote on` and `f10 daemon status` print.
   Its files load without a token, because they hold no data. Every API call still carries one.
   You sign in once with a device token, and the browser keeps it. A refused token signs the page out.
+  Once the certificate is in place, the `http://` address redirects to the `https://` one. The browser keeps the token per address, so you sign in once more there.
   The app has these screens:
   - **Runs**: every live run, grouped by project, with why a run stopped and its PR's checks.
   - **Asks**: the open asks, answered in place by tapping an option.

@@ -54,6 +54,35 @@ describe("runLive", () => {
   });
 });
 
+describe("runLive reconnect", () => {
+  it("reloads the lists when a stream drops before its first event", async () => {
+    const ctl = new AbortController();
+    const reconnects = vi.fn();
+    const tails: boolean[] = [];
+    await runLive(
+      {
+        watch: (_after, tail) => {
+          tails.push(tail);
+          return (async function* () {
+            if (tails.length === 1) throw new ConnectError("asleep", Code.Unavailable);
+            ctl.abort();
+            yield* [];
+          })();
+        },
+        onEvent: () => {},
+        onState: () => {},
+        onRefused: () => {},
+        onReconnect: reconnects,
+        sleep: async () => {},
+      },
+      ctl.signal,
+    );
+    // no cursor yet, so it tails again: the reload covers the gap
+    expect(tails).toEqual([true, true]);
+    expect(reconnects).toHaveBeenCalledOnce();
+  });
+});
+
 describe("debounced", () => {
   it("calls once per key in the window", () => {
     vi.useFakeTimers();
