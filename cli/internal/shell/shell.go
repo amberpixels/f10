@@ -37,9 +37,31 @@ var CaptureInput = func(ctx context.Context, dir, input, name string, args ...st
 // (a driver's curl) may hold its pipes open before run stops reading them.
 const waitDelay = 2 * time.Second
 
+// envKey carries the environment WithEnv gives a context's commands.
+type envKey struct{}
+
+// WithEnv runs the commands Capture starts under ctx with env instead of
+// this process's environment: the daemon calling a tool for a session it
+// does not belong to.
+func WithEnv(ctx context.Context, env []string) context.Context {
+	if env == nil {
+		return ctx
+	}
+
+	return context.WithValue(ctx, envKey{}, env)
+}
+
+// EnvOf is the environment WithEnv set on ctx, nil for none.
+func EnvOf(ctx context.Context) []string {
+	env, _ := ctx.Value(envKey{}).([]string)
+
+	return env
+}
+
 func run(ctx context.Context, dir string, stdin io.Reader, name string, args ...string) (Result, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
+	cmd.Env = EnvOf(ctx)
 	cmd.Stdin = stdin
 	cmd.WaitDelay = waitDelay
 

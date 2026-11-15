@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/agents"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
@@ -20,10 +21,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/target"
-	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
-func boardPeople(people []scope.Person) []lookaround.Person {
+func People(people []scope.Person) []lookaround.Person {
 	out := make([]lookaround.Person, 0, len(people))
 	for _, p := range people {
 		out = append(out, lookaround.Person{Name: p.Name, Tracker: p.Tracker, Host: p.Host, Emails: p.Emails})
@@ -32,15 +32,15 @@ func boardPeople(people []scope.Person) []lookaround.Person {
 	return out
 }
 
-// collectBoards derives one board per entry; one that could not be bound is
+// Collect derives one board per entry; one that could not be bound is
 // a board whose sources all failed, so the others still render. The feed's
 // span is chosen once every entry's facts are in: the day is the person's.
-func collectBoards(
+func Collect(
 	ctx context.Context,
 	entries []scope.ScopeEntry,
 	warn io.Writer,
 	now time.Time,
-	span boardSpan,
+	span Span,
 	stateView, remote bool,
 	people []lookaround.Person,
 ) []lookaround.Board {
@@ -62,7 +62,7 @@ func collectBoards(
 			if e.Repo != nil {
 				in = repoInputs(*e.Repo, warn, span.From())
 			} else {
-				in = boardInputs(ctx, e.Target, warn, span.From(), remote)
+				in = inputs(ctx, e.Target, warn, span.From(), remote)
 			}
 
 			in.People, in.Feed = people, !stateView
@@ -111,9 +111,9 @@ func collectBoards(
 	return boards
 }
 
-// boardInputs binds the collectors to the target. A checkout with no origin
+// inputs binds the collectors to the target. A checkout with no origin
 // remote is local only: no host, and no tracker but a driver.
-func boardInputs(
+func inputs(
 	ctx context.Context,
 	t *target.Target,
 	warn io.Writer,
@@ -134,12 +134,12 @@ func boardInputs(
 	}
 
 	in.Tasks = func(ctx context.Context) ([]lookaround.Task, error) {
-		rows, err := stack.TaskRows(ctx, t, BoardPage)
+		rows, err := stack.TaskRows(ctx, t, Page)
 		if err != nil {
 			return nil, err
 		}
 
-		return BoardTasks(hostops.SettlePriorities(rows, warn), t.Effective.IDPrefix), nil
+		return Tasks(hostops.SettlePriorities(rows, warn), t.Effective.IDPrefix), nil
 	}
 
 	if t.Probes.RemoteURL == "" {
@@ -180,7 +180,7 @@ func boardInputs(
 			TTL:        state.TTL(),
 			LedgerPath: ledger.Path(),
 			ProjectID:  place.Project,
-			Agents:     worktree.ReachableAgents(main),
+			Agents:     agents.ReachableAgents(main),
 			SharedRoot: t.Layout.StorageRoot,
 			Resolve:    t.IDOf(ctx),
 		}
@@ -200,19 +200,19 @@ func repoInputs(r scope.RepoRef, warn io.Writer, since time.Time) lookaround.Inp
 		Since:   since,
 		Host:    &h.Host,
 		Tasks: func(ctx context.Context) ([]lookaround.Task, error) {
-			rows, err := h.ListIssues(ctx, "", r.Prefix, nil, BoardPage)
+			rows, err := h.ListIssues(ctx, "", r.Prefix, nil, Page)
 			if err != nil {
 				return nil, err
 			}
 
-			return BoardTasks(hostops.SettlePriorities(rows, warn), r.Prefix), nil
+			return Tasks(hostops.SettlePriorities(rows, warn), r.Prefix), nil
 		},
 	}
 }
 
-// BoardTasks is tracker rows in the board's shape, the base in the project's
+// Tasks is tracker rows in the board's shape, the base in the project's
 // id format since a driver may send the bare number.
-func BoardTasks(rows []hostops.Row, prefix string) []lookaround.Task {
+func Tasks(rows []hostops.Row, prefix string) []lookaround.Task {
 	out := make([]lookaround.Task, 0, len(rows))
 
 	for _, r := range rows {

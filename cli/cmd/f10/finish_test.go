@@ -1,11 +1,10 @@
 package main
 
 import (
-	"errors"
 	"strings"
 	"testing"
 
-	"github.com/amberpixels/f10/cli/internal/herdr"
+	"github.com/amberpixels/f10/cli/internal/agents"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 )
 
@@ -14,7 +13,7 @@ func TestFinishRefusesOutsideHerdr(t *testing.T) {
 	t.Setenv("HERDR_ENV", "")
 
 	err := runApp(t, "finish", "42").err
-	if !errors.Is(err, herdr.ErrNotInside) {
+	if !agents.IsOutside(err) {
 		t.Fatalf("err = %v, want ErrNotInside", err)
 	}
 

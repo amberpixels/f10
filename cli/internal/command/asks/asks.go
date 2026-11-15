@@ -18,6 +18,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/agents"
 	"github.com/amberpixels/f10/cli/internal/asknotify"
 	"github.com/amberpixels/f10/cli/internal/asks"
 	"github.com/amberpixels/f10/cli/internal/buildinfo"
@@ -208,15 +209,6 @@ func printAsk(w io.Writer, links *render.TaskLinks, a asks.Ask, now time.Time) {
 	}
 }
 
-// askName is the task, with its project where the inbox spans several.
-func askName(a asks.Ask) string {
-	if a.Project == "" {
-		return a.Task
-	}
-
-	return a.Project + ":" + a.Task
-}
-
 // loadAskLinks reads each ask's task urls from the ledger of the project
 // its main checkout belongs to, keyed by the ask's display project.
 func loadAskLinks(ctx context.Context, links *render.TaskLinks, all []asks.Ask) {
@@ -240,132 +232,8 @@ func loadAskLinks(ctx context.Context, links *render.TaskLinks, all []asks.Ask) 
 	}
 }
 
-// findOpen is the open ask a token names: a task id, or project:task where
-// two projects share one.
-func findOpen(dir, token string) (asks.Ask, error) {
-	open, err := asks.Open(dir)
-	if err != nil {
-		return asks.Ask{}, err
-	}
-
-	project, task, scoped := strings.Cut(token, ":")
-	if !scoped {
-		task, project = token, ""
-	}
-
-	named := func(a asks.Ask) bool {
-		return strings.EqualFold(a.Task, task) && (project == "" || strings.EqualFold(a.Project, project))
-	}
-
-	var hits []asks.Ask
-
-	for _, a := range open {
-		if named(a) {
-			hits = append(hits, a)
-		}
-	}
-
-	switch len(hits) {
-	case 1:
-		return hits[0], nil
-	case 0:
-		// the newest answer names who closed it
-		answered, _ := asks.Answered(dir, time.Time{})
-		for _, a := range slices.Backward(answered) {
-			if named(a) {
-				return asks.Ask{}, fmt.Errorf(
-					"%s has no open ask: %w",
-					token,
-					asks.ClosedError{By: a.By, At: a.AnsweredAt},
-				)
-			}
-		}
-
-		return asks.Ask{}, fmt.Errorf("%s has no open ask: f10 asks list shows them", token)
-	}
-
-	names := make([]string, len(hits))
-	for i, a := range hits {
-		names[i] = askName(a)
-	}
-
-	return asks.Ask{}, fmt.Errorf("%s asks in several projects: name one, %s", task, strings.Join(names, " or "))
-}
-
-func answersFor(a asks.Ask, values []string) (string, error) {
-	given := map[int]string{}
-
-	for _, v := range values {
-		num, value, ok := strings.Cut(v, "=")
-		n, err := strconv.Atoi(strings.TrimSpace(num))
-
-		if !ok || err != nil {
-			return "", fmt.Errorf("%q is not N=VALUE", v)
-		}
-
-		i := slices.IndexFunc(a.Questions, func(q asks.Question) bool { return q.N == n })
-		if i < 0 {
-			return "", fmt.Errorf("%s's ask has no question %d", a.Task, n)
-		}
-
-		resolved, err := asks.Resolve(a.Questions[i], value)
-		if err != nil {
-			return "", err
-		}
-
-		given[n] = resolved
-	}
-
-	for _, q := range a.Questions {
-		if given[q.N] == "" && q.Default() == "" {
-			return "", fmt.Errorf("question %d (%s) has no default: answer it as %d=VALUE", q.N, q.Text, q.N)
-		}
-	}
-
-	return asks.Format(a.Questions, given), nil
-}
-
-// A Deliverer moves a claimed answer on: prompt reaches an agent no drive
-// watches, resume restarts a stopped drive, and live says whether a drive
-// still runs.
-type Deliverer struct {
-	Prompt func(ctx context.Context, w io.Writer, a asks.Ask) error
-	Resume func(ctx context.Context, w io.Writer, a asks.Ask) error
-	Live   func(a asks.Ask) bool
-}
-
-// deliver moves a claimed answer to where it acts. A drive's ask goes to its
-// drive, a running one taking it as it exits so nothing runs twice; any
-// other is sent to its agent, unless typed in the pane already.
-func (d Deliverer) deliver(ctx context.Context, w io.Writer, dir string, a asks.Ask) error {
-	switch {
-	case a.Drive > 0 && d.Live(a):
-		fmt.Fprintf(w, "drive %d takes it as it stops\n", a.Drive)
-
-		return nil
-	case a.Drive > 0:
-		return d.Resume(ctx, w, a)
-	case !a.DeliveredAt.IsZero():
-		return nil
-	}
-
-	if err := d.Prompt(ctx, w, a); err != nil {
-		return fmt.Errorf("sending the answer to %s's agent: %w; type it in its pane: %s", a.Task, err, a.Answer)
-	}
-
-	// no drive takes an answer sent this way: it is done once sent
-	if err := asks.Update(
-		dir,
-		a.Key(),
-		func(x *asks.Ask) { x.DeliveredAt, x.TakenAt = time.Now(), time.Now() },
-	); err != nil {
-		fmt.Fprintf(w, "  recording the answer sent: %v\n", err)
-	}
-
-	fmt.Fprintf(w, "sent to %s's agent\n", asknotify.AskLink(render.LinksFor(w, false), a))
-
-	return nil
-}
+// A Deliverer moves a claimed answer on (agents.Deliverer).
+type Deliverer = agents.Deliverer
 
 func liveDeliver() Deliverer {
 	return Deliverer{
@@ -401,24 +269,14 @@ func runAsksAnswer(ctx context.Context, cmd *cli.Command) error {
 }
 
 func AnswerAsk(ctx context.Context, w io.Writer, dir, token string, values []string, by string, d Deliverer) error {
-	a, err := findOpen(dir, token)
+	a, err := agents.FindOpen(dir, token)
 	if err != nil {
 		return err
 	}
 
-	text, err := answersFor(a, values)
-	if err != nil {
-		return err
-	}
+	_, _, err = agents.Answer(ctx, w, dir, a, values, by, d)
 
-	claimed, err := asks.Claim(dir, a.Key(), by, text, false, time.Now())
-	if err != nil {
-		return fmt.Errorf("%s: %w", askName(a), err)
-	}
-
-	fmt.Fprintf(w, "%s answered: %s\n", askName(claimed), text)
-
-	return d.deliver(ctx, w, dir, claimed)
+	return err
 }
 
 func WalkAsks(ctx context.Context, w io.Writer, in *bufio.Reader, dir string, d Deliverer) error {
@@ -471,14 +329,14 @@ func WalkAsks(ctx context.Context, w io.Writer, in *bufio.Reader, dir string, d 
 
 		claimed, err := asks.Claim(dir, a.Key(), asks.ByAsks, text, false, time.Now())
 		if err != nil {
-			fmt.Fprintf(w, "%s: %v\n", askName(a), err)
+			fmt.Fprintf(w, "%s: %v\n", agents.AskName(a), err)
 
 			continue
 		}
 
 		fmt.Fprintf(w, "answered: %s\n", text)
 
-		if err := d.deliver(ctx, w, dir, claimed); err != nil {
+		if _, err := d.Deliver(ctx, w, dir, claimed); err != nil {
 			fmt.Fprintln(w, err)
 		}
 	}
@@ -533,7 +391,9 @@ func runAsksResume(ctx context.Context, cmd *cli.Command) error {
 		return nil
 	}
 
-	return liveDeliver().deliver(ctx, cmd.Writer, dir, *a)
+	_, err = liveDeliver().Deliver(ctx, cmd.Writer, dir, *a)
+
+	return err
 }
 
 func resumeAskDrive(ctx context.Context, w io.Writer, a asks.Ask) error {
@@ -557,12 +417,9 @@ func resumeAskDrive(ctx context.Context, w io.Writer, a asks.Ask) error {
 		return fmt.Errorf("resuming drive %d: %w", a.Drive, err)
 	}
 
-	_, err := daemon.Call(
-		ctx,
-		dir,
-		daemon.ResumeRequest(a.Root, a.Main, daemon.DriveEnv(os.Environ(), extra), a.Drive),
-		0,
-	)
+	call := daemon.ResumeCall(a.Main, daemon.DriveEnv(os.Environ(), extra), a.Drive)
+
+	_, err := daemon.RunDrive(ctx, dir, call)
 	if err != nil {
 		return fmt.Errorf("resuming drive %d: %w", a.Drive, err)
 	}
@@ -642,7 +499,7 @@ func AsksContext(dir, stateDir, session, event, root string) []byte {
 			where = " at " + a.Skill
 		}
 
-		lines = append(lines, fmt.Sprintf("- %s asks%s: %s", askName(a), where, a.Text))
+		lines = append(lines, fmt.Sprintf("- %s asks%s: %s", agents.AskName(a), where, a.Text))
 	}
 
 	if len(lines) == 0 {

@@ -16,6 +16,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/agents"
 	"github.com/amberpixels/f10/cli/internal/asknotify"
 	"github.com/amberpixels/f10/cli/internal/asks"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
@@ -127,7 +128,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	drain, unwatch := drive.WatchDrain(a.Fore)
 	defer unwatch()
 
-	if err := worktree.RequireAgents(); err != nil {
+	if err := agents.RequireAgents(); err != nil {
 		return err
 	}
 
@@ -502,7 +503,7 @@ func runWatchPass(ctx context.Context, cmd *cli.Command, t *target.Target) error
 		in.Checks = h.HeadChecks
 	}
 
-	if b := worktree.ReachableAgents(main); b != nil {
+	if b := agents.ReachableAgents(main); b != nil {
 		in.Agents = b
 		in.Prompt = func(ctx context.Context, task drive.WatchedTask, text string) error {
 			note, err := launch.PromptChecked(ctx, task.Path, task.ID, "", text)

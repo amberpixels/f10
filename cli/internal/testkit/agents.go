@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/agents"
 	"github.com/amberpixels/f10/cli/internal/seam"
-	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // MemAgents is an agent backend held in memory: what a backend other than
@@ -92,7 +92,7 @@ func UseAgents(t *testing.T) *MemAgents {
 	t.Helper()
 
 	m := &MemAgents{Prompts: map[string][]string{}}
-	seam.Swap(t, &worktree.Agents, func(string) agentctl.Backend { return m })
+	seam.Swap(t, &agents.Agents, func(string) agentctl.Backend { return m })
 
 	return m
 }

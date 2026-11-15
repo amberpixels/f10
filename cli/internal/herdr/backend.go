@@ -9,12 +9,16 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
 // Backend is Herdr as an agentctl.Backend: a workspace's agent slot is its
 // pane, and every call runs the herdr CLI from Dir.
 type Backend struct {
 	Dir string
+	// Env is the environment the herdr CLI runs under, nil for this
+	// process's own: the daemon's handlers pass a registered session's.
+	Env []string
 }
 
 var _ agentctl.Backend = Backend{}
@@ -24,33 +28,49 @@ func New(dir string) Backend { return Backend{Dir: dir} }
 
 func (Backend) Name() string { return "Herdr" }
 
-func (Backend) Available() error { return Available() }
+func (b Backend) Available() error {
+	if b.Env == nil {
+		return Available()
+	}
 
-func (b Backend) Workspaces(ctx context.Context) ([]agentctl.Workspace, error) {
-	listed, err := Workspaces(ctx, b.Dir)
+	if !slices.Contains(b.Env, "HERDR_ENV=1") || !shell.Has("herdr") {
+		return ErrNotInside
+	}
+
+	return nil
+}
+
+var _ agentctl.Lister = Backend{}
+
+func (b Backend) Agents(ctx context.Context) ([]agentctl.AgentInfo, error) {
+	ctx = b.scope(ctx)
+
+	running, err := Agents(ctx, b.Dir)
 	if err != nil {
 		return nil, err
 	}
 
-	wss := make([]agentctl.Workspace, 0, len(listed))
+	out := make([]agentctl.AgentInfo, 0, len(running))
 
-	for _, l := range listed {
-		wss = append(wss, agentctl.Workspace{
-			ID:      l.ID,
-			Label:   l.Label,
-			Path:    l.Path,
-			Focused: l.Focused,
-			Status:  agentctl.Status(l.Agent),
+	for _, r := range running {
+		out = append(out, agentctl.AgentInfo{
+			Name:      cmp.Or(r.Name, r.Pane),
+			Workspace: r.Workspace,
+			Slot:      r.Pane,
+			Kind:      r.Kind,
+			Status:    agentctl.Status(r.Status),
 		})
 	}
 
-	return wss, nil
+	return out, nil
 }
 
 // Open adopts a workspace Herdr already shows on the checkout (one with an
 // agent in a pane, else the first), since `worktree open` can answer with a
 // second one; others are noted, not closed: their panes may be the user's.
 func (b Backend) Open(ctx context.Context, path, label string) (agentctl.Opened, []string, error) {
+	ctx = b.scope(ctx)
+
 	listed, err := Workspaces(ctx, b.Dir)
 	if err != nil {
 		return agentctl.Opened{}, nil, err
@@ -109,6 +129,8 @@ func (b Backend) Open(ctx context.Context, path, label string) (agentctl.Opened,
 // Occupancy asks Herdr for an agent in the pane, by the pane's id since
 // its name is unknown here, then whether the pane sits at an idle shell.
 func (b Backend) Occupancy(ctx context.Context, ws agentctl.Opened) (agentctl.Occupancy, error) {
+	ctx = b.scope(ctx)
+
 	exists, err := AgentExists(ctx, b.Dir, ws.Slot)
 	if err != nil {
 		return 0, err
@@ -137,6 +159,8 @@ func (b Backend) StartAgent(
 	args []string,
 	waiting func(waited, limit time.Duration),
 ) error {
+	ctx = b.scope(ctx)
+
 	var report func(time.Duration)
 	if waiting != nil {
 		report = func(waited time.Duration) { waiting(waited, StartDeadline) }
@@ -146,21 +170,57 @@ func (b Backend) StartAgent(
 }
 
 func (b Backend) Prompt(ctx context.Context, name, text string) error {
+	ctx = b.scope(ctx)
+
 	return Prompt(ctx, b.Dir, name, text)
 }
 
 func (b Backend) Screen(ctx context.Context, name string) (string, error) {
+	ctx = b.scope(ctx)
+
 	return Screen(ctx, b.Dir, name)
 }
 
 func (b Backend) SendEnter(ctx context.Context, name string) error {
+	ctx = b.scope(ctx)
+
 	return SendKeys(ctx, b.Dir, name, "Enter")
 }
 
 func (b Backend) Focus(ctx context.Context, id string) error {
+	ctx = b.scope(ctx)
+
 	return FocusWorkspace(ctx, b.Dir, id)
 }
 
 func (b Backend) Close(ctx context.Context, id string) error {
+	ctx = b.scope(ctx)
+
 	return CloseWorkspace(ctx, b.Dir, id)
 }
+
+func (b Backend) Workspaces(ctx context.Context) ([]agentctl.Workspace, error) {
+	ctx = b.scope(ctx)
+
+	listed, err := Workspaces(ctx, b.Dir)
+	if err != nil {
+		return nil, err
+	}
+
+	wss := make([]agentctl.Workspace, 0, len(listed))
+
+	for _, l := range listed {
+		wss = append(wss, agentctl.Workspace{
+			ID:      l.ID,
+			Label:   l.Label,
+			Path:    l.Path,
+			Focused: l.Focused,
+			Status:  agentctl.Status(l.Agent),
+		})
+	}
+
+	return wss, nil
+}
+
+// scope runs the calls under ctx with b's environment, when it has one.
+func (b Backend) scope(ctx context.Context) context.Context { return shell.WithEnv(ctx, b.Env) }

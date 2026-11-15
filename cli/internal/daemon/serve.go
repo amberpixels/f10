@@ -11,6 +11,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,6 +22,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/amberpixels/f10/cli/gen/f10/v1/f10v1connect"
 	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/flock"
 )
@@ -51,6 +53,12 @@ type Server struct {
 	DrainWait  time.Duration // how long a drain waits for drives before SIGTERM
 	Tick       time.Duration // how often idleness is checked
 	Log        *log.Logger
+	// Handler is the API the socket serves, built over this server; the
+	// daemon command passes the Connect handlers, a test its own.
+	Handler func(s *Server) http.Handler
+	// Key is the attach key of a drive's arguments, "" for a drive that must
+	// start its own process (one given answers).
+	Key func(argv []string) string
 
 	mu       sync.Mutex
 	runs     []*child
@@ -60,6 +68,9 @@ type Server struct {
 	draining bool
 	drained  []drained
 	ln       net.Listener
+	http     *http.Server
+	session  []string        // the newest local session's environment
+	calls    int             // calls in flight, an event stream among them
 	ctx      context.Context //nolint:containedctx // the serve call's, for the drives it starts
 	stop     chan stopMode
 	escalate chan struct{} // closed by a stop --now during a drain
@@ -154,10 +165,13 @@ func (s *Server) Serve(ctx context.Context) error {
 	s.Log.Printf("daemon %s started, pid %d", s.Version, os.Getpid())
 
 	pruneLogs(s.Dir, time.Now())
+	s.loadSession()
 	s.resumeDrained()
 	s.loadWatches()
 
-	go s.accept()
+	s.http = &http.Server{Handler: s.stamp(s.handler()), ReadHeaderTimeout: callTimeout}
+
+	go func() { _ = s.http.Serve(newSniffListener(ln, s.legacy)) }()
 
 	tick := time.NewTicker(s.Tick)
 	defer tick.Stop()
@@ -185,6 +199,7 @@ loop:
 	// the socket stays up through the drain: status answers, and a stop
 	// --now cuts it short
 	s.shutdown(mode)
+	s.closeHTTP()
 	_ = ln.Close()
 	_ = os.Remove(sock)
 	s.Log.Printf("daemon %s stopped", s.Version)
@@ -192,107 +207,133 @@ loop:
 	return nil
 }
 
-func (s *Server) idle() bool {
+// Info is who this daemon is.
+func (s *Server) Info() Info {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	return len(s.runs) == 0 && len(s.watches) == 0 && time.Since(s.last) >= s.Idle
+	return Info{Version: s.Version, API: APIVersion, PID: os.Getpid(), Started: s.started, Stopping: s.draining}
 }
 
-func (s *Server) accept() {
-	for {
-		conn, err := s.ln.Accept()
-		if err != nil {
-			return
-		}
-
-		go s.handle(conn)
-	}
+// Status is what this daemon runs and watches.
+func (s *Server) Status() Status {
+	return Status{Info: s.Info(), Runs: s.list(), Watches: s.watchList()}
 }
 
-func (s *Server) handle(conn net.Conn) {
-	defer conn.Close()
-
-	_ = conn.SetReadDeadline(time.Now().Add(callTimeout))
-
-	var req Request
-	if err := json.NewDecoder(conn).Decode(&req); err != nil {
-		return
-	}
-
-	s.mu.Lock()
-	s.last = time.Now()
-	s.mu.Unlock()
-
-	rep := s.reply(req)
-	rep.Version, rep.PID, rep.Started = s.Version, os.Getpid(), s.started
-
-	s.mu.Lock()
-	rep.Stopping = s.draining
-	s.mu.Unlock()
-
-	_ = conn.SetWriteDeadline(time.Now().Add(callTimeout))
-	_ = json.NewEncoder(conn).Encode(rep)
-}
-
-func (s *Server) reply(req Request) Reply {
-	switch req.Op {
-	case OpHello:
-		return Reply{}
-	case OpRun:
-		return s.run(req)
-	case OpStatus:
-		return Reply{Runs: s.list(), Watches: s.watchList()}
-	case OpWatch:
-		return s.watch(req)
-	case OpStop:
-		s.mu.Lock()
-		defer s.mu.Unlock()
-
-		if s.draining {
-			// a second stop can only cut a drain short
-			if !req.Drain {
-				s.stopNow()
-			}
-
-			return Reply{}
-		}
-
-		s.draining, s.upgrade = true, req.Upgrade
-		s.stop <- stopMode{drain: req.Drain, upgrade: req.Upgrade}
-
-		return Reply{}
-	}
-
-	return Reply{Error: "unknown daemon op " + strconv.Quote(req.Op)}
-}
-
-// run attaches to the drive already running this record, else starts it.
-func (s *Server) run(req Request) Reply {
+// Stop stops the daemon: drain lets each drive reach its next tick, and
+// upgrade hands the drained ones to the next daemon. A second stop can only
+// cut a drain short.
+func (s *Server) Stop(drain, upgrade bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.draining {
-		return Reply{Error: "the daemon is stopping: run the command again"}
+		if !drain {
+			s.stopNow()
+		}
+
+		return
+	}
+
+	s.draining, s.upgrade = true, upgrade
+	s.stop <- stopMode{drain: drain, upgrade: upgrade}
+}
+
+// RunDrive attaches to the drive already running this record, else starts
+// it, and returns its log.
+func (s *Server) RunDrive(spec DriveSpec) (Started, error) {
+	key := ""
+	if s.Key != nil && spec.Resume == 0 {
+		key = s.Key(spec.Argv)
+	}
+
+	return s.run(spec, key)
+}
+
+// ResumeDrive starts drive n again with --resume, as a stopped drive's
+// answer does.
+func (s *Server) ResumeDrive(root, dir string, env []string, n int) (Started, error) {
+	return s.run(DriveSpec{Argv: ResumeCall(dir, env, n).Args, Dir: dir, Root: root, Env: env, Resume: n}, "")
+}
+
+func (s *Server) idle() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return len(s.runs) == 0 && len(s.watches) == 0 && s.calls == 0 && time.Since(s.last) >= s.Idle
+}
+
+// closeHTTP lets the calls in flight, the stop that ended the daemon among
+// them, write their replies; a stream never ends by itself, so it is cut.
+func (s *Server) closeHTTP() {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(s.ctx), time.Second)
+	defer cancel()
+
+	if s.http.Shutdown(ctx) != nil {
+		_ = s.http.Close()
+	}
+}
+
+// handler is DaemonService, which the daemon serves itself, and whatever
+// else Handler mounts.
+func (s *Server) handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.Handle(f10v1connect.NewDaemonServiceHandler(&daemonService{sup: s}))
+
+	if s.Handler != nil {
+		mux.Handle("/", s.Handler(s))
+	}
+
+	return mux
+}
+
+// stamp marks every call as activity, and counts it while it runs, so a
+// daemon serving a long call, such as an event stream, never idles out.
+func (s *Server) stamp(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		s.last, s.calls = time.Now(), s.calls+1
+		s.mu.Unlock()
+
+		defer func() {
+			s.mu.Lock()
+			s.last, s.calls = time.Now(), s.calls-1
+			s.mu.Unlock()
+		}()
+
+		h.ServeHTTP(w, r)
+	})
+}
+
+// run attaches to the drive already running this record, else starts it.
+func (s *Server) run(req DriveSpec, key string) (Started, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.draining {
+		return Started{}, ErrStopping
+	}
+
+	if len(req.Env) > 0 {
+		s.remember(req.Env)
 	}
 
 	// a drive reports its number only once it has taken its answers, so a
 	// resume matches by its record's command line too, and its child is
 	// numbered at start
-	key := req.Key
 	if req.Resume > 0 {
 		key = cmp.Or(liveKey(req.Root, req.Resume), key)
 	}
 
 	for _, c := range s.runs {
 		if c.is(req.Root, key, req.Resume) {
-			return Reply{Log: c.Log, Attach: true}
+			return Started{Log: c.Log, Attach: true, Drive: c.Drive}, nil
 		}
 	}
 
 	c, err := s.start(req.Root, req.Dir, req.Argv, req.Env)
 	if err != nil {
-		return Reply{Error: err.Error()}
+		return Started{}, err
 	}
 
 	c.key = key
@@ -300,7 +341,7 @@ func (s *Server) run(req Request) Reply {
 		c.Drive = req.Resume
 	}
 
-	return Reply{Log: c.Log}
+	return Started{Log: c.Log, Drive: c.Drive}, nil
 }
 
 // is reports c as the drive a request names: in the same project, by its
@@ -582,9 +623,7 @@ func (s *Server) resumeDrained() {
 // startResume starts drive n again with --resume, numbered and keyed at
 // start so a rerun attaches before it reports; the caller holds mu.
 func (s *Server) startResume(root, dir string, env []string, n int) error {
-	req := ResumeRequest(root, dir, env, n)
-
-	c, err := s.start(req.Root, req.Dir, req.Argv, req.Env)
+	c, err := s.start(root, dir, ResumeCall(dir, env, n).Args, env)
 	if err != nil {
 		return err
 	}

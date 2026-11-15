@@ -34,8 +34,22 @@ type Ensurer struct {
 
 // Ensure returns a daemon listening, starting one when none does. Only a
 // strictly newer client replaces a running one, so two versions never take
-// turns; the start lease keeps two clients at once to one daemon.
-func (e *Ensurer) Ensure(ctx context.Context) (Reply, error) {
+// turns; the start lease keeps two clients at once to one daemon. A daemon
+// kept whose API this client does not speak is an error naming both.
+func (e *Ensurer) Ensure(ctx context.Context) (Info, error) {
+	info, err := e.ensure(ctx)
+	if err != nil {
+		return info, err
+	}
+
+	if info.Legacy {
+		return info, errors.New(legacyStatusError(info.Version))
+	}
+
+	return info, APIError(info, e.Version)
+}
+
+func (e *Ensurer) ensure(ctx context.Context) (Info, error) {
 	if e.StartWait == 0 {
 		e.StartWait = 5 * time.Second
 	}
@@ -64,19 +78,19 @@ func (e *Ensurer) Ensure(ctx context.Context) (Reply, error) {
 		}
 	}
 
-	return Reply{}, errors.New("the f10 daemon kept changing while this client started: run the command again")
+	return Info{}, errors.New("the f10 daemon kept changing while this client started: run the command again")
 }
 
 // settle keeps, waits out or drains the daemon running; done is false when
 // this client must start one.
-func (e *Ensurer) settle(ctx context.Context) (Reply, bool, error) {
+func (e *Ensurer) settle(ctx context.Context) (Info, bool, error) {
 	rep, err := e.hello(ctx)
 
 	held := daemonHeld(e.Dir)
 
 	switch {
 	case (err == nil && rep.Stopping) || (err != nil && held):
-		return Reply{}, false, e.gone(ctx)
+		return Info{}, false, e.gone(ctx)
 	case err == nil && e.keeps(rep):
 		if rep.Version != e.Version && !e.Follow && e.Kept != nil {
 			e.Kept(rep.Version)
@@ -88,31 +102,31 @@ func (e *Ensurer) settle(ctx context.Context) (Reply, bool, error) {
 			e.Draining(rep.Version)
 		}
 
-		if _, err := Call(ctx, e.Dir, Request{Op: OpStop, Drain: true, Upgrade: true}, 0); err != nil {
-			return Reply{}, false, fmt.Errorf("stopping daemon %s: %w", rep.Version, err)
+		if err := Stop(ctx, e.Dir, true, true); err != nil {
+			return Info{}, false, fmt.Errorf("stopping daemon %s: %w", rep.Version, err)
 		}
 
-		return Reply{}, false, e.gone(ctx)
+		return Info{}, false, e.gone(ctx)
 	}
 
-	return Reply{}, false, nil
+	return Info{}, false, nil
 }
 
 // start spawns this binary's daemon under the start lease. started is
 // false when, holding the lease, it finds a daemon it must not start over:
 // one stopping, or one it replaces, which settle handles again.
-func (e *Ensurer) start(ctx context.Context) (Reply, bool, error) {
+func (e *Ensurer) start(ctx context.Context) (Info, bool, error) {
 	if err := os.MkdirAll(e.Dir, 0o700); err != nil {
-		return Reply{}, false, fmt.Errorf("daemon: %w", err)
+		return Info{}, false, fmt.Errorf("daemon: %w", err)
 	}
 
 	if err := ownDir(e.Dir); err != nil {
-		return Reply{}, false, err
+		return Info{}, false, err
 	}
 
 	lease, err := e.startLease(ctx)
 	if err != nil {
-		return Reply{}, false, err
+		return Info{}, false, err
 	}
 	defer lease.Release()
 
@@ -121,7 +135,7 @@ func (e *Ensurer) start(ctx context.Context) (Reply, bool, error) {
 	}
 
 	if daemonHeld(e.Dir) {
-		return Reply{}, false, nil
+		return Info{}, false, nil
 	}
 
 	spawn := e.Spawn
@@ -130,7 +144,7 @@ func (e *Ensurer) start(ctx context.Context) (Reply, bool, error) {
 	}
 
 	if err := spawn(ctx); err != nil {
-		return Reply{}, false, fmt.Errorf("starting the f10 daemon: %w", err)
+		return Info{}, false, fmt.Errorf("starting the f10 daemon: %w", err)
 	}
 
 	deadline := time.Now().Add(e.StartWait)
@@ -141,7 +155,7 @@ func (e *Ensurer) start(ctx context.Context) (Reply, bool, error) {
 		}
 
 		if time.Now().After(deadline) {
-			return Reply{}, false, fmt.Errorf(
+			return Info{}, false, fmt.Errorf(
 				"the f10 daemon did not start within %s: see %s",
 				e.StartWait,
 				LogPath(e.Dir),
@@ -149,7 +163,7 @@ func (e *Ensurer) start(ctx context.Context) (Reply, bool, error) {
 		}
 
 		if err := sleep(ctx, 50*time.Millisecond); err != nil {
-			return Reply{}, false, err
+			return Info{}, false, err
 		}
 	}
 }
@@ -157,7 +171,7 @@ func (e *Ensurer) start(ctx context.Context) (Reply, bool, error) {
 // awaitAny waits for a daemon, any version, to listen and not be stopping.
 // False when none appears: past DrainWait, or once no daemon has held the
 // lease for StartWait, the upgrading client having died.
-func (e *Ensurer) awaitAny(ctx context.Context) (Reply, bool) {
+func (e *Ensurer) awaitAny(ctx context.Context) (Info, bool) {
 	deadline := time.Now().Add(e.DrainWait + e.StartWait)
 
 	var free time.Time
@@ -176,23 +190,23 @@ func (e *Ensurer) awaitAny(ctx context.Context) (Reply, bool) {
 		case free.IsZero():
 			free = time.Now()
 		case time.Since(free) > e.StartWait:
-			return Reply{}, false
+			return Info{}, false
 		}
 
 		if sleep(ctx, 100*time.Millisecond) != nil {
-			return Reply{}, false
+			return Info{}, false
 		}
 	}
 
-	return Reply{}, false
+	return Info{}, false
 }
 
-func (e *Ensurer) keeps(rep Reply) bool {
+func (e *Ensurer) keeps(rep Info) bool {
 	return e.Follow || rep.Version == e.Version || !Newer(e.Version, rep.Version)
 }
 
-func (e *Ensurer) hello(ctx context.Context) (Reply, error) {
-	return Call(ctx, e.Dir, Request{Op: OpHello}, 0)
+func (e *Ensurer) hello(ctx context.Context) (Info, error) {
+	return Hello(ctx, e.Dir, e.Version)
 }
 
 // gone waits for a stopping daemon's lease to free. A held lease with no

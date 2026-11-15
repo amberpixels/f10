@@ -41,6 +41,7 @@ const (
 	BySkill     = "skill"     // /f10:asks
 	ByDrive     = "drive"     // f10 drive --answer
 	ByCancelled = "cancelled" // its drive was cancelled
+	ByAPI       = "api"       // a client of the control-plane API
 )
 
 // A Question is one numbered question of an ask; Options[0] is the default.

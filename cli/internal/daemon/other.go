@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"net/http"
 	"time"
 )
 
@@ -27,6 +28,8 @@ type Server struct {
 	Child                 func(argv []string) (string, []string)
 	Idle, DrainWait, Tick time.Duration
 	Log                   *log.Logger
+	Handler               func(s *Server) http.Handler
+	Key                   func(argv []string) string
 }
 
 // Serve refuses: there is no daemon on this platform.
@@ -42,7 +45,21 @@ type Ensurer struct {
 }
 
 // Ensure refuses: drive runs in the foreground on this platform.
-func (*Ensurer) Ensure(context.Context) (Reply, error) { return Reply{}, errUnsupported }
+func (*Ensurer) Ensure(context.Context) (Info, error) { return Info{}, errUnsupported }
 
 // FindLog finds nothing: no daemon wrote one.
 func FindLog(string, string, int) string { return "" }
+
+// Status, WatchProject, RunDrive, ResumeDrive and SessionEnv have nothing
+// to report or run on this platform.
+func (*Server) Status() Status { return Status{} }
+
+func (*Server) WatchProject(string, string, []string) (string, error) { return "", errUnsupported }
+
+func (*Server) RunDrive(DriveSpec) (Started, error) { return Started{}, errUnsupported }
+
+func (*Server) ResumeDrive(string, string, []string, int) (Started, error) {
+	return Started{}, errUnsupported
+}
+
+func (*Server) SessionEnv() []string { return nil }

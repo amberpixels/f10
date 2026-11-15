@@ -9,16 +9,16 @@ import (
 	"github.com/amberpixels/f10/cli/internal/lookaround"
 )
 
-// A boardSpan is the window the argument named, or for the feed's default
+// A Span is the window the argument named, or for the feed's default
 // two candidates chosen between once the facts are in.
-type boardSpan struct {
+type Span struct {
 	Named              *lookaround.Window
 	Today, LastWorkday lookaround.Window
 }
 
 // From is where collection starts: the named window's start, or the
 // earlier candidate's, so one collection answers both.
-func (s boardSpan) From() time.Time {
+func (s Span) From() time.Time {
 	if s.Named != nil {
 		return s.Named.Since
 	}
@@ -26,18 +26,21 @@ func (s boardSpan) From() time.Time {
 	return s.LastWorkday.Since
 }
 
-const BoardStateWindow = 7 * 24 * time.Hour
+const StateWindow = 7 * 24 * time.Hour
 
-// ResolveBoardSpan goes through calendar, which owns every calendar rule.
+// Page is how many tasks and PRs one source read lists.
+const Page = 100
+
+// ResolveSpan goes through calendar, which owns every calendar rule.
 // Working days are read only when the default or `last-workday` needs them;
 // the state view takes a start alone, seven days back without a window.
-func ResolveBoardSpan(
+func ResolveSpan(
 	arg string, state bool, now time.Time, workdays func() (calendar.Workdays, error),
-) (boardSpan, error) {
+) (Span, error) {
 	arg = strings.TrimSpace(arg)
 
 	if state && arg == "" {
-		return boardSpan{Named: &lookaround.Window{Since: now.Add(-BoardStateWindow)}}, nil
+		return Span{Named: &lookaround.Window{Since: now.Add(-StateWindow)}}, nil
 	}
 
 	// a broken standup.md is its own error, not a window misspelled
@@ -78,18 +81,18 @@ func ResolveBoardSpan(
 	if arg != "" {
 		w, err := window(arg)
 
-		return boardSpan{Named: &w}, err
+		return Span{Named: &w}, err
 	}
 
 	today, err := window("today")
 	if err != nil {
-		return boardSpan{}, err
+		return Span{}, err
 	}
 
 	last, err := window("last-workday")
 	if err != nil {
-		return boardSpan{}, err
+		return Span{}, err
 	}
 
-	return boardSpan{Today: today, LastWorkday: last}, nil
+	return Span{Today: today, LastWorkday: last}, nil
 }

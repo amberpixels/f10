@@ -61,8 +61,9 @@ func TestStateCallsAreRecordedAsClaimed(t *testing.T) {
 		t.Errorf("kinds %q, want %q", got, want)
 	}
 
-	if out := runApp(t, "ledger", "dump", "--task", "GH-7").must(t); strings.Count(out, "\n") != 8 ||
-		!strings.Contains(out, "claimed") {
+	// the eight claims, and the ask_raised row the ask claim put in the inbox
+	if out := runApp(t, "ledger", "dump", "--task", "GH-7").must(t); strings.Count(out, "\n") != 9 ||
+		!strings.Contains(out, "claimed") || !strings.Contains(out, ledger.AskRaised) {
 		t.Errorf("dump by task:\n%s", out)
 	}
 }

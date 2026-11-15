@@ -9,6 +9,7 @@ package f10v1
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	durationpb "google.golang.org/protobuf/types/known/durationpb"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
@@ -1546,7 +1547,23 @@ type DriveRequest struct {
 	Model    string `protobuf:"bytes,7,opt,name=model,proto3" json:"model,omitempty"`
 	Parallel int32  `protobuf:"varint,8,opt,name=parallel,proto3" json:"parallel,omitempty"`
 	// plan_first plans every task before any ships.
-	PlanFirst     bool `protobuf:"varint,9,opt,name=plan_first,json=planFirst,proto3" json:"plan_first,omitempty"`
+	PlanFirst bool `protobuf:"varint,9,opt,name=plan_first,json=planFirst,proto3" json:"plan_first,omitempty"`
+	// args are the drive's arguments as `f10 drive` takes them. When set they
+	// win over the fields above, so a rerun of a typed command line keys to
+	// the record it opened.
+	Args []string `protobuf:"bytes,10,rep,name=args,proto3" json:"args,omitempty"`
+	// dir is the checkout the drive runs from.
+	Dir string `protobuf:"bytes,11,opt,name=dir,proto3" json:"dir,omitempty"`
+	// env is the allowlisted environment the drive runs with. Honored only on
+	// the unix socket, because a remote client has no local session to pass.
+	Env []string `protobuf:"bytes,12,rep,name=env,proto3" json:"env,omitempty"`
+	// resume picks up the drive record with this number.
+	Resume int32 `protobuf:"varint,13,opt,name=resume,proto3" json:"resume,omitempty"`
+	// answers are the answers to the drive's open asks, `ID=text` for one
+	// task or bare text.
+	Answers []string `protobuf:"bytes,14,rep,name=answers,proto3" json:"answers,omitempty"`
+	// every is how often the drive polls its tasks; unset keeps the default.
+	Every         *durationpb.Duration `protobuf:"bytes,15,opt,name=every,proto3" json:"every,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1644,10 +1661,58 @@ func (x *DriveRequest) GetPlanFirst() bool {
 	return false
 }
 
+func (x *DriveRequest) GetArgs() []string {
+	if x != nil {
+		return x.Args
+	}
+	return nil
+}
+
+func (x *DriveRequest) GetDir() string {
+	if x != nil {
+		return x.Dir
+	}
+	return ""
+}
+
+func (x *DriveRequest) GetEnv() []string {
+	if x != nil {
+		return x.Env
+	}
+	return nil
+}
+
+func (x *DriveRequest) GetResume() int32 {
+	if x != nil {
+		return x.Resume
+	}
+	return 0
+}
+
+func (x *DriveRequest) GetAnswers() []string {
+	if x != nil {
+		return x.Answers
+	}
+	return nil
+}
+
+func (x *DriveRequest) GetEvery() *durationpb.Duration {
+	if x != nil {
+		return x.Every
+	}
+	return nil
+}
+
 type DriveResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// drive is the drive's number in the project.
-	Drive         int32 `protobuf:"varint,1,opt,name=drive,proto3" json:"drive,omitempty"`
+	// drive is the drive's number in the project, 0 until the drive opened
+	// its record.
+	Drive int32 `protobuf:"varint,1,opt,name=drive,proto3" json:"drive,omitempty"`
+	// log is the drive's log file, which grows until the drive exits.
+	Log string `protobuf:"bytes,2,opt,name=log,proto3" json:"log,omitempty"`
+	// attached is true when the daemon already ran this drive and the call
+	// joined it instead of starting another.
+	Attached      bool `protobuf:"varint,3,opt,name=attached,proto3" json:"attached,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1687,6 +1752,20 @@ func (x *DriveResponse) GetDrive() int32 {
 		return x.Drive
 	}
 	return 0
+}
+
+func (x *DriveResponse) GetLog() string {
+	if x != nil {
+		return x.Log
+	}
+	return ""
+}
+
+func (x *DriveResponse) GetAttached() bool {
+	if x != nil {
+		return x.Attached
+	}
+	return false
 }
 
 type FinishRequest struct {
@@ -1855,7 +1934,7 @@ var File_f10_v1_runs_proto protoreflect.FileDescriptor
 
 const file_f10_v1_runs_proto_rawDesc = "" +
 	"\n" +
-	"\x11f10/v1/runs.proto\x12\x06f10.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xbf\x04\n" +
+	"\x11f10/v1/runs.proto\x12\x06f10.v1\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xbf\x04\n" +
 	"\x03Run\x12\x18\n" +
 	"\asession\x18\x01 \x01(\tR\asession\x12\x12\n" +
 	"\x04task\x18\x02 \x01(\tR\x04task\x12\x10\n" +
@@ -1969,7 +2048,7 @@ const file_f10_v1_runs_proto_rawDesc = "" +
 	"\x05agent\x18\x05 \x01(\tR\x05agent\"1\n" +
 	"\tDriveTask\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
-	"\x05agent\x18\x02 \x01(\tR\x05agent\"\xf6\x01\n" +
+	"\x05agent\x18\x02 \x01(\tR\x05agent\"\x91\x03\n" +
 	"\fDriveRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12'\n" +
 	"\x05tasks\x18\x02 \x03(\v2\x11.f10.v1.DriveTaskR\x05tasks\x12\x14\n" +
@@ -1980,9 +2059,18 @@ const file_f10_v1_runs_proto_rawDesc = "" +
 	"\x05model\x18\a \x01(\tR\x05model\x12\x1a\n" +
 	"\bparallel\x18\b \x01(\x05R\bparallel\x12\x1d\n" +
 	"\n" +
-	"plan_first\x18\t \x01(\bR\tplanFirst\"%\n" +
+	"plan_first\x18\t \x01(\bR\tplanFirst\x12\x12\n" +
+	"\x04args\x18\n" +
+	" \x03(\tR\x04args\x12\x10\n" +
+	"\x03dir\x18\v \x01(\tR\x03dir\x12\x10\n" +
+	"\x03env\x18\f \x03(\tR\x03env\x12\x16\n" +
+	"\x06resume\x18\r \x01(\x05R\x06resume\x12\x18\n" +
+	"\aanswers\x18\x0e \x03(\tR\aanswers\x12/\n" +
+	"\x05every\x18\x0f \x01(\v2\x19.google.protobuf.DurationR\x05every\"S\n" +
 	"\rDriveResponse\x12\x14\n" +
-	"\x05drive\x18\x01 \x01(\x05R\x05drive\"\x9f\x01\n" +
+	"\x05drive\x18\x01 \x01(\x05R\x05drive\x12\x10\n" +
+	"\x03log\x18\x02 \x01(\tR\x03log\x12\x1a\n" +
+	"\battached\x18\x03 \x01(\bR\battached\"\x9f\x01\n" +
 	"\rFinishRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x12\n" +
 	"\x04task\x18\x02 \x01(\tR\x04task\x12'\n" +
@@ -2064,6 +2152,7 @@ var file_f10_v1_runs_proto_goTypes = []any{
 	(*FinishRequest)(nil),         // 20: f10.v1.FinishRequest
 	(*FinishResponse)(nil),        // 21: f10.v1.FinishResponse
 	(*timestamppb.Timestamp)(nil), // 22: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),   // 23: google.protobuf.Duration
 }
 var file_f10_v1_runs_proto_depIdxs = []int32{
 	0,  // 0: f10.v1.Run.capture:type_name -> f10.v1.PhaseStatus
@@ -2086,20 +2175,21 @@ var file_f10_v1_runs_proto_depIdxs = []int32{
 	12, // 17: f10.v1.GetRunStatusResponse.runs:type_name -> f10.v1.RunStatus
 	1,  // 18: f10.v1.StartRequest.mode:type_name -> f10.v1.StartMode
 	17, // 19: f10.v1.DriveRequest.tasks:type_name -> f10.v1.DriveTask
-	2,  // 20: f10.v1.FinishRequest.merge:type_name -> f10.v1.MergeMode
-	13, // 21: f10.v1.RunService.GetRunStatus:input_type -> f10.v1.GetRunStatusRequest
-	15, // 22: f10.v1.RunService.Start:input_type -> f10.v1.StartRequest
-	18, // 23: f10.v1.RunService.Drive:input_type -> f10.v1.DriveRequest
-	20, // 24: f10.v1.RunService.Finish:input_type -> f10.v1.FinishRequest
-	14, // 25: f10.v1.RunService.GetRunStatus:output_type -> f10.v1.GetRunStatusResponse
-	16, // 26: f10.v1.RunService.Start:output_type -> f10.v1.StartResponse
-	19, // 27: f10.v1.RunService.Drive:output_type -> f10.v1.DriveResponse
-	21, // 28: f10.v1.RunService.Finish:output_type -> f10.v1.FinishResponse
-	25, // [25:29] is the sub-list for method output_type
-	21, // [21:25] is the sub-list for method input_type
-	21, // [21:21] is the sub-list for extension type_name
-	21, // [21:21] is the sub-list for extension extendee
-	0,  // [0:21] is the sub-list for field type_name
+	23, // 20: f10.v1.DriveRequest.every:type_name -> google.protobuf.Duration
+	2,  // 21: f10.v1.FinishRequest.merge:type_name -> f10.v1.MergeMode
+	13, // 22: f10.v1.RunService.GetRunStatus:input_type -> f10.v1.GetRunStatusRequest
+	15, // 23: f10.v1.RunService.Start:input_type -> f10.v1.StartRequest
+	18, // 24: f10.v1.RunService.Drive:input_type -> f10.v1.DriveRequest
+	20, // 25: f10.v1.RunService.Finish:input_type -> f10.v1.FinishRequest
+	14, // 26: f10.v1.RunService.GetRunStatus:output_type -> f10.v1.GetRunStatusResponse
+	16, // 27: f10.v1.RunService.Start:output_type -> f10.v1.StartResponse
+	19, // 28: f10.v1.RunService.Drive:output_type -> f10.v1.DriveResponse
+	21, // 29: f10.v1.RunService.Finish:output_type -> f10.v1.FinishResponse
+	26, // [26:30] is the sub-list for method output_type
+	22, // [22:26] is the sub-list for method input_type
+	22, // [22:22] is the sub-list for extension type_name
+	22, // [22:22] is the sub-list for extension extendee
+	0,  // [0:22] is the sub-list for field type_name
 }
 
 func init() { file_f10_v1_runs_proto_init() }

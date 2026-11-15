@@ -22,7 +22,7 @@ import (
 )
 
 // WriteDaemonStatus prints what the daemon runs and watches.
-func WriteDaemonStatus(ctx context.Context, w io.Writer, links *render.TaskLinks, rep daemon.Reply) {
+func WriteDaemonStatus(ctx context.Context, w io.Writer, links *render.TaskLinks, rep daemon.Status) {
 	fmt.Fprintf(w, "pid      %d\nversion  %s\nsince    %s\ndrives   %d\nwatching %d\n", rep.PID, rep.Version,
 		rep.Started.Format(time.DateTime), len(rep.Runs), len(rep.Watches))
 
@@ -85,6 +85,18 @@ func projectName(root string) string {
 	return filepath.Base(filepath.Dir(root))
 }
 
+// RecordKey is the key the daemon attaches a drive's arguments by: its
+// record's command line, "" for a drive given answers or a resume, which
+// starts or names its own.
+func RecordKey(argv []string) string {
+	a, err := drivectl.ParseDriveArgs(argv)
+	if err != nil || len(a.Answers) > 0 || a.Resume > 0 {
+		return ""
+	}
+
+	return drivestore.Key(recordArgs(argv))
+}
+
 func ThroughDaemon(ctx context.Context, w io.Writer, t *target.Target, argv []string, a drivectl.DriveArgs) error {
 	dir, ver := daemon.RunDir(), buildinfo.Version()
 
@@ -93,11 +105,9 @@ func ThroughDaemon(ctx context.Context, w io.Writer, t *target.Target, argv []st
 		return fmt.Errorf("getwd: %w", err)
 	}
 
-	req := daemon.Request{
-		Op:   daemon.OpRun,
-		Argv: argv,
+	req := daemon.DriveCall{
+		Args: argv,
 		Dir:  cwd,
-		Root: t.Layout.StorageRoot.Path(),
 		Env:  daemon.DriveEnv(os.Environ(), t.Effective.DriveEnv),
 	}
 
@@ -107,12 +117,10 @@ func ThroughDaemon(ctx context.Context, w io.Writer, t *target.Target, argv []st
 		setDriveParallel(w, t.Layout.StorageRoot.Path(), argv, a)
 	}
 
-	// a drive given answers starts its own process, so the answers reach it
+	// a drive given answers starts its own process, so the answers reach it;
+	// the daemon keys the rest by RecordKey
 	if len(a.Answers) == 0 {
 		req.Resume = a.Resume
-		if a.Resume == 0 {
-			req.Key = drivestore.Key(recordArgs(argv))
-		}
 	}
 
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
@@ -157,7 +165,7 @@ func followDrive(
 	ctx context.Context,
 	w io.Writer,
 	dir, ver string,
-	req daemon.Request,
+	req daemon.DriveCall,
 	spawn func(context.Context) error,
 ) error {
 	follow := false
@@ -180,7 +188,7 @@ func followDrive(
 			return err
 		}
 
-		rep, err := daemon.Call(ctx, dir, req, 0)
+		rep, err := daemon.RunDrive(ctx, dir, req)
 		if err != nil {
 			return err
 		}
@@ -225,7 +233,7 @@ func followDrive(
 		// the drive runs again, after an upgrade in the new daemon: follow
 		// it there, whatever that daemon's version
 		follow = true
-		req = daemon.ResumeRequest(req.Root, req.Dir, req.Env, exit.Drive)
+		req = daemon.ResumeCall(req.Dir, req.Env, exit.Drive)
 	}
 }
 
@@ -268,7 +276,7 @@ func TailLog(ctx context.Context, w io.Writer, path string) (daemon.Exit, error)
 // runningDrive is the number of the drive writing log, as the daemon
 // knows it; 0 before the drive opened its record, or with no daemon.
 func runningDrive(dir, logPath string) int {
-	rep, err := daemon.Call(context.Background(), dir, daemon.Request{Op: daemon.OpStatus}, 0)
+	rep, err := daemon.GetStatus(context.Background(), dir, buildinfo.Version())
 	if err != nil {
 		return 0
 	}

@@ -41,11 +41,13 @@ func serve(t *testing.T, s *Server) <-chan error {
 
 	done := make(chan error, 1)
 
+	register(s)
+
 	go func() { done <- s.Serve(t.Context()) }()
 
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		if _, err := Call(t.Context(), s.Dir, Request{Op: OpHello}, 0); err == nil {
+		if _, err := call(t.Context(), s.Dir, request{Op: opHello}, 0); err == nil {
 			return done
 		}
 
@@ -80,20 +82,20 @@ func TestServeRunsAndAttaches(t *testing.T) {
 	s := &Server{Dir: runDir(t), Version: "v1", Child: shell}
 	serve(t, s)
 
-	req := Request{
-		Op:   OpRun,
+	req := request{
+		Op:   opRun,
 		Argv: []string{`echo 3 > "$F10_DRIVE_FILE"; echo drive 3; sleep 0.3; echo done; exit 4`},
 		Dir:  "/",
 		Root: "/r",
 		Key:  "GH-1",
 	}
 
-	first, err := Call(t.Context(), s.Dir, req, 0)
+	first, err := call(t.Context(), s.Dir, req, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	second, err := Call(t.Context(), s.Dir, req, 0)
+	second, err := call(t.Context(), s.Dir, req, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +107,7 @@ func TestServeRunsAndAttaches(t *testing.T) {
 	other := req
 	other.Root = "/other"
 
-	if rep, err := Call(t.Context(), s.Dir, other, 0); err != nil || rep.Attach {
+	if rep, err := call(t.Context(), s.Dir, other, 0); err != nil || rep.Attach {
 		t.Errorf("another project's drive attached: %+v, %v", rep, err)
 	}
 
@@ -138,8 +140,8 @@ func TestServeAttachesToAResumeBeforeItsNumber(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	resume, err := Call(t.Context(), s.Dir, Request{
-		Op:     OpRun,
+	resume, err := call(t.Context(), s.Dir, request{
+		Op:     opRun,
 		Argv:   []string{`sleep 0.5; echo 1 > "$F10_DRIVE_FILE"; sleep 0.3`},
 		Dir:    "/",
 		Root:   root,
@@ -150,10 +152,10 @@ func TestServeAttachesToAResumeBeforeItsNumber(t *testing.T) {
 	}
 
 	for _, key := range []string{"FT-1 FT-2", "ft-1 ft-2"} {
-		rerun, err := Call(
+		rerun, err := call(
 			t.Context(),
 			s.Dir,
-			Request{Op: OpRun, Argv: []string{"exit 1"}, Dir: "/", Root: root, Key: key},
+			request{Op: opRun, Argv: []string{"exit 1"}, Dir: "/", Root: root, Key: key},
 			0,
 		)
 		if err != nil {
@@ -183,8 +185,8 @@ func TestServeAttachesAResumeToAnUnnumberedDrive(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	first, err := Call(t.Context(), s.Dir, Request{
-		Op:   OpRun,
+	first, err := call(t.Context(), s.Dir, request{
+		Op:   opRun,
 		Argv: []string{`sleep 0.5; echo 1 > "$F10_DRIVE_FILE"; sleep 0.3`},
 		Dir:  "/",
 		Root: root,
@@ -194,8 +196,8 @@ func TestServeAttachesAResumeToAnUnnumberedDrive(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	resume, err := Call(t.Context(), s.Dir, Request{
-		Op:     OpRun,
+	resume, err := call(t.Context(), s.Dir, request{
+		Op:     opRun,
 		Argv:   []string{"exit 1"},
 		Dir:    "/",
 		Root:   root,
@@ -217,8 +219,8 @@ func TestServeAttachesAResumeToAnUnnumberedDrive(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stale, err := Call(t.Context(), s.Dir, Request{
-		Op:     OpRun,
+	stale, err := call(t.Context(), s.Dir, request{
+		Op:     opRun,
 		Argv:   []string{"exit 1"},
 		Dir:    "/",
 		Root:   root,
@@ -267,10 +269,10 @@ func TestDrainResumesInTheNextDaemon(t *testing.T) {
 
 	script := `trap 'exit 6' USR1; echo 5 > "$F10_DRIVE_FILE"; while :; do sleep 0.05; done`
 
-	rep, err := Call(
+	rep, err := call(
 		t.Context(),
 		dir,
-		Request{Op: OpRun, Argv: []string{script}, Dir: "/", Root: "/r", Env: []string{"A=1"}},
+		request{Op: opRun, Argv: []string{script}, Dir: "/", Root: "/r", Env: []string{"A=1"}},
 		0,
 	)
 	if err != nil {
@@ -278,7 +280,7 @@ func TestDrainResumesInTheNextDaemon(t *testing.T) {
 	}
 
 	for deadline := time.Now().Add(5 * time.Second); ; {
-		st, _ := Call(t.Context(), dir, Request{Op: OpStatus}, 0)
+		st, _ := call(t.Context(), dir, request{Op: opStatus}, 0)
 		if len(st.Runs) == 1 && st.Runs[0].Drive == 5 {
 			break
 		}
@@ -290,7 +292,7 @@ func TestDrainResumesInTheNextDaemon(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	if _, err := Call(t.Context(), dir, Request{Op: OpStop, Drain: true, Upgrade: true}, 0); err != nil {
+	if _, err := call(t.Context(), dir, request{Op: opStop, Drain: true, Upgrade: true}, 0); err != nil {
 		t.Fatal(err)
 	}
 
@@ -400,14 +402,14 @@ func TestStopKeepsNoDrainedList(t *testing.T) {
 
 	script := `trap 'exit 6' USR1; echo 5 > "$F10_DRIVE_FILE"; while :; do sleep 0.05; done`
 
-	rep, err := Call(t.Context(), dir, Request{Op: OpRun, Argv: []string{script}, Dir: "/", Root: "/r"}, 0)
+	rep, err := call(t.Context(), dir, request{Op: opRun, Argv: []string{script}, Dir: "/", Root: "/r"}, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	waitNumbered(t, dir, 5)
 
-	if _, err := Call(t.Context(), dir, Request{Op: OpStop, Drain: true}, 0); err != nil {
+	if _, err := call(t.Context(), dir, request{Op: opStop, Drain: true}, 0); err != nil {
 		t.Fatal(err)
 	}
 
@@ -432,11 +434,11 @@ func TestStopNowCutsADrainShort(t *testing.T) {
 	s := &Server{Dir: dir, Version: "v1", Child: shell, DrainWait: time.Hour}
 	done := serve(t, s)
 
-	if _, err := Call(
+	if _, err := call(
 		t.Context(),
 		dir,
-		Request{
-			Op:   OpRun,
+		request{
+			Op:   opRun,
 			Argv: []string{`trap '' USR1; echo 2 > "$F10_DRIVE_FILE"; while :; do sleep 0.05; done`},
 			Dir:  "/",
 			Root: "/r",
@@ -448,16 +450,16 @@ func TestStopNowCutsADrainShort(t *testing.T) {
 
 	waitNumbered(t, dir, 2)
 
-	if _, err := Call(t.Context(), dir, Request{Op: OpStop, Drain: true}, 0); err != nil {
+	if _, err := call(t.Context(), dir, request{Op: opStop, Drain: true}, 0); err != nil {
 		t.Fatal(err)
 	}
 
-	st, err := Call(t.Context(), dir, Request{Op: OpStatus}, 0)
+	st, err := call(t.Context(), dir, request{Op: opStatus}, 0)
 	if err != nil || !st.Stopping {
 		t.Fatalf("a draining daemon's status = %+v, %v", st, err)
 	}
 
-	if _, err := Call(t.Context(), dir, Request{Op: OpStop}, 0); err != nil {
+	if _, err := call(t.Context(), dir, request{Op: opStop}, 0); err != nil {
 		t.Fatal(err)
 	}
 
@@ -564,7 +566,7 @@ func waitNumbered(t *testing.T, dir string, n int) {
 	t.Helper()
 
 	for deadline := time.Now().Add(5 * time.Second); ; {
-		st, _ := Call(t.Context(), dir, Request{Op: OpStatus}, 0)
+		st, _ := call(t.Context(), dir, request{Op: opStatus}, 0)
 		if len(st.Runs) == 1 && st.Runs[0].Drive == n {
 			return
 		}
@@ -588,13 +590,13 @@ func TestDrainDeadlineStopsEveryDrive(t *testing.T) {
 	done := serve(t, s)
 
 	for _, root := range []string{"/a", "/b"} {
-		req := Request{Op: OpRun, Argv: []string{"trap '' USR1; while :; do sleep 0.05; done"}, Dir: "/", Root: root}
-		if _, err := Call(t.Context(), dir, req, 0); err != nil {
+		req := request{Op: opRun, Argv: []string{"trap '' USR1; while :; do sleep 0.05; done"}, Dir: "/", Root: root}
+		if _, err := call(t.Context(), dir, req, 0); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	if _, err := Call(t.Context(), dir, Request{Op: OpStop, Drain: true}, 0); err != nil {
+	if _, err := call(t.Context(), dir, request{Op: opStop, Drain: true}, 0); err != nil {
 		t.Fatal(err)
 	}
 
@@ -622,8 +624,8 @@ func TestDrainReadsADriveNumberedLate(t *testing.T) {
 	trapped := filepath.Join(t.TempDir(), "trapped")
 	script := `trap '' USR1; : > '` + trapped + `'; sleep 0.3; echo 7 > "$` + NumberFileEnv +
 		`"; while :; do sleep 0.05; done`
-	run := Request{Op: OpRun, Argv: []string{script}, Dir: "/", Root: "/a"}
-	if _, err := Call(t.Context(), dir, run, 0); err != nil {
+	run := request{Op: opRun, Argv: []string{script}, Dir: "/", Root: "/a"}
+	if _, err := call(t.Context(), dir, run, 0); err != nil {
 		t.Fatal(err)
 	}
 
@@ -638,7 +640,7 @@ func TestDrainReadsADriveNumberedLate(t *testing.T) {
 		}
 	}
 
-	if _, err := Call(t.Context(), dir, Request{Op: OpStop, Drain: true}, 0); err != nil {
+	if _, err := call(t.Context(), dir, request{Op: opStop, Drain: true}, 0); err != nil {
 		t.Fatal(err)
 	}
 
@@ -678,8 +680,8 @@ func TestServeResumesADriveThatAsksIt(t *testing.T) {
 	}}
 	serve(t, s)
 
-	first, err := Call(t.Context(), dir, Request{
-		Op:   OpRun,
+	first, err := call(t.Context(), dir, request{
+		Op:   opRun,
 		Argv: []string{`echo 5 > "$F10_DRIVE_FILE"; sleep 0.4; exit 8`},
 		Dir:  "/",
 		Root: "/r",
@@ -693,7 +695,7 @@ func TestServeResumesADriveThatAsksIt(t *testing.T) {
 		t.Fatalf("exit = %+v, want drive 5 resumed", exit)
 	}
 
-	follow, err := Call(t.Context(), dir, ResumeRequest("/r", "/", nil, 5), 0)
+	follow, err := call(t.Context(), dir, resumeRequest("/r", "/", nil, 5), 0)
 	if err != nil || !follow.Attach || follow.Log == first.Log {
 		t.Fatalf("follower got %+v, %v, want to attach to the resumed run", follow, err)
 	}
@@ -721,8 +723,8 @@ func TestDrainKeepsADriveThatAsksToResume(t *testing.T) {
 	s := &Server{Dir: dir, Version: "v1", Child: shell}
 	done := serve(t, s)
 
-	rep, err := Call(t.Context(), dir, Request{
-		Op:   OpRun,
+	rep, err := call(t.Context(), dir, request{
+		Op:   opRun,
 		Argv: []string{`trap 'exit 8' USR1; echo 5 > "$F10_DRIVE_FILE"; while :; do sleep 0.05; done`},
 		Dir:  "/",
 		Root: "/r",
@@ -732,7 +734,7 @@ func TestDrainKeepsADriveThatAsksToResume(t *testing.T) {
 	}
 
 	for deadline := time.Now().Add(5 * time.Second); ; {
-		st, _ := Call(t.Context(), dir, Request{Op: OpStatus}, 0)
+		st, _ := call(t.Context(), dir, request{Op: opStatus}, 0)
 		if len(st.Runs) == 1 && st.Runs[0].Drive == 5 {
 			break
 		}
@@ -744,7 +746,7 @@ func TestDrainKeepsADriveThatAsksToResume(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	if _, err := Call(t.Context(), dir, Request{Op: OpStop, Drain: true, Upgrade: true}, 0); err != nil {
+	if _, err := call(t.Context(), dir, request{Op: opStop, Drain: true, Upgrade: true}, 0); err != nil {
 		t.Fatal(err)
 	}
 

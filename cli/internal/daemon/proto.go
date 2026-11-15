@@ -1,12 +1,7 @@
 package daemon
 
 import (
-	"cmp"
-	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -100,46 +95,28 @@ func ReadExit(log string) (Exit, bool) {
 	return exit, true
 }
 
-// Ops a Request names.
-const (
-	OpHello  = "hello"
-	OpRun    = "run"
-	OpStatus = "status"
-	OpStop   = "stop"
-	OpWatch  = "watch"
-)
+// APIVersion is the control-plane API version this binary serves and
+// calls; it rises only when a v2 package lands.
+const APIVersion = 1
 
-// A Request is one call: an op and what it needs.
-type Request struct {
-	Op      string   `json:"op"`
-	Argv    []string `json:"argv,omitempty"`    // run: drive's arguments, --foreground added by the daemon
-	Dir     string   `json:"dir,omitempty"`     // run: where the drive was typed; watch: the main checkout
-	Root    string   `json:"root,omitempty"`    // run, watch: the storage root, telling projects apart
-	Env     []string `json:"env,omitempty"`     // run, watch: the allowlisted environment
-	Key     string   `json:"key,omitempty"`     // run: drivestore.Key of the command line; "" never attaches
-	Resume  int      `json:"resume,omitempty"`  // run: the record --resume names
-	Drain   bool     `json:"drain,omitempty"`   // stop: let each drive reach a tick boundary
-	Upgrade bool     `json:"upgrade,omitempty"` // stop: a newer daemon follows and resumes the drained drives
+// Info is what Hello answers: which daemon runs, and whether it is stopping.
+// Legacy is a daemon of a release before the Connect API, reached through
+// its JSON protocol only to replace it.
+type Info struct {
+	Version  string
+	API      int
+	PID      int
+	Started  time.Time
+	Stopping bool
+	Legacy   bool
 }
 
-// ResumeRequest is the run request that picks drive n up again. It carries
-// no key: the daemon reads it from the live record, as it must for an older
-// client's resume, which sends none.
-func ResumeRequest(root, dir string, env []string, n int) Request {
-	return Request{Op: OpRun, Argv: []string{"--resume", strconv.Itoa(n)}, Dir: dir, Root: root, Env: env, Resume: n}
-}
+// Status is what the daemon runs and watches, with who it is.
+type Status struct {
+	Info
 
-// A Reply answers one Request; Error set means it was refused.
-type Reply struct {
-	Error    string    `json:"error,omitempty"`
-	Stopping bool      `json:"stopping,omitempty"` // a stop is draining it
-	Version  string    `json:"version,omitempty"`
-	PID      int       `json:"pid,omitempty"`
-	Started  time.Time `json:"started,omitzero"`
-	Log      string    `json:"log,omitempty"`     // run: the drive's log; watch: the project's pass log
-	Attach   bool      `json:"attach,omitempty"`  // run: the log is a drive already running
-	Runs     []Run     `json:"runs,omitempty"`    // status
-	Watches  []Watch   `json:"watches,omitempty"` // status
+	Runs    []Run
+	Watches []Watch
 }
 
 // A Run is one drive process the daemon supervises.
@@ -175,39 +152,24 @@ const NumberFileEnv = "F10_DRIVE_FILE"
 // command instead of exiting for a restart that never comes.
 const ResumeEnv = "F10_DRIVE_RESUMES"
 
+// A DriveSpec is one drive to run: its arguments, where it was typed, its
+// project's storage root, its environment, and the record a resume names.
+type DriveSpec struct {
+	Argv   []string
+	Dir    string
+	Root   string
+	Env    []string
+	Resume int
+}
+
+// ErrStopping is a drive refused because a stop drains the daemon.
+var ErrStopping = errors.New("the daemon is stopping: run the command again")
+
 // ErrNotRunning is a socket nobody listens on.
 var ErrNotRunning = errors.New("no f10 daemon is running")
 
-// callTimeout bounds one call; only a drain's stop waits longer.
+// callTimeout bounds one call.
 const callTimeout = 10 * time.Second
-
-// Call sends req to the daemon in dir and reads its reply.
-func Call(ctx context.Context, dir string, req Request, wait time.Duration) (Reply, error) {
-	d := net.Dialer{Timeout: time.Second}
-
-	conn, err := d.DialContext(ctx, "unix", SocketPath(dir))
-	if err != nil {
-		return Reply{}, fmt.Errorf("%w: %w", ErrNotRunning, err)
-	}
-	defer conn.Close()
-
-	_ = conn.SetDeadline(time.Now().Add(cmp.Or(wait, callTimeout)))
-
-	if err := json.NewEncoder(conn).Encode(req); err != nil {
-		return Reply{}, fmt.Errorf("daemon %s: %w", req.Op, err)
-	}
-
-	var rep Reply
-	if err := json.NewDecoder(conn).Decode(&rep); err != nil {
-		return Reply{}, fmt.Errorf("daemon %s: %w", req.Op, err)
-	}
-
-	if rep.Error != "" {
-		return rep, errors.New(rep.Error)
-	}
-
-	return rep, nil
-}
 
 // Newer reports a strictly newer than b, both release versions
 // (`0.46.0`, `v0.46.0`); a development build is newer than nothing, and

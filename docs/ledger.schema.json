@@ -1,5 +1,138 @@
 {
   "$defs": {
+    "AskAnsweredV1": {
+      "additionalProperties": false,
+      "properties": {
+        "answer": {
+          "type": "string"
+        },
+        "answered_by": {
+          "type": "string"
+        },
+        "delivered": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [
+        "id",
+        "answer",
+        "answered_by",
+        "delivered"
+      ],
+      "type": "object"
+    },
+    "AskRaisedV1": {
+      "additionalProperties": false,
+      "properties": {
+        "ask": {
+          "additionalProperties": false,
+          "properties": {
+            "agent": {
+              "type": "string"
+            },
+            "answer": {
+              "type": "string"
+            },
+            "answered_at": {
+              "additionalProperties": false,
+              "properties": {},
+              "required": [],
+              "type": "object"
+            },
+            "answered_by": {
+              "type": "string"
+            },
+            "asked_at": {
+              "additionalProperties": false,
+              "properties": {},
+              "required": [],
+              "type": "object"
+            },
+            "delivered_at": {
+              "additionalProperties": false,
+              "properties": {},
+              "required": [],
+              "type": "object"
+            },
+            "id": {
+              "type": "string"
+            },
+            "labels": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": [
+                "object",
+                "null"
+              ]
+            },
+            "questions": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "n": {
+                    "type": "integer"
+                  },
+                  "options": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": [
+                      "array",
+                      "null"
+                    ]
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "n",
+                  "text",
+                  "options"
+                ],
+                "type": "object"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "text": {
+              "type": "string"
+            },
+            "workspace_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "agent",
+            "workspace_id",
+            "text",
+            "questions",
+            "asked_at",
+            "answer",
+            "answered_by",
+            "labels"
+          ],
+          "type": "object"
+        },
+        "v": {
+          "const": 1
+        }
+      },
+      "required": [
+        "ask"
+      ],
+      "type": "object"
+    },
     "ClaimV1": {
       "additionalProperties": false,
       "properties": {
@@ -794,6 +927,20 @@
         "reason"
       ],
       "type": "object"
+    },
+    "ask_answered": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/AskAnsweredV1"
+        }
+      ]
+    },
+    "ask_raised": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/AskRaisedV1"
+        }
+      ]
     },
     "committed": {
       "oneOf": [

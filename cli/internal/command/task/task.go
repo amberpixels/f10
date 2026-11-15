@@ -18,12 +18,12 @@ import (
 	"github.com/amberpixels/f10/cli/internal/command"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/images"
-	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasksource"
+	"github.com/amberpixels/f10/cli/internal/taskwrite"
 	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -252,14 +252,9 @@ func fetchFallback(err error) error {
 		"(project.md, Tracker)", err)
 }
 
-// ReadDoc feeds the ledger's task refs, so a later ref costs no tracker call.
+// ReadDoc is taskwrite.Read.
 func ReadDoc(ctx context.Context, t *target.Target, r ref.Ref) (string, error) {
-	doc, k, err := tasksource.TasksFor(t).Read(ctx, r)
-	if err == nil {
-		stack.RememberRefsFor(ctx, t, k)
-	}
-
-	return doc, err
+	return taskwrite.Read(ctx, t, r)
 }
 
 // WithImages ends doc with a footer naming its downloaded images. A dir
@@ -426,7 +421,7 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	// nowhere to create answers exit 3 before stdin or any check, so capture falls back
-	if rs, ok := refusedUpFrontFor(t); ok {
+	if rs, ok := taskwrite.RefusedUpFront(t); ok {
 		return rs.RefuseCreate()
 	}
 
@@ -441,57 +436,19 @@ func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
 		return errors.New("task create reads the task as markdown on stdin, `# <title>` on its first line")
 	}
 
-	doc = linkBodyAfterFor(ctx, t, doc, cmd.ErrWriter)
-
-	nt, err := readNewTask(ctx, t, cmd, doc)
+	p, err := readProps(cmd)
 	if err != nil {
 		return err
 	}
 
-	r, url, err := tasksource.TasksFor(t).Create(ctx, cmd.ErrWriter, nt)
+	nt := taskwrite.New{Doc: doc, Props: p, Parent: cmd.String("parent")}
+
+	r, _, err := taskwrite.Create(ctx, cmd.ErrWriter, t, nt)
 	if err != nil {
 		return err
 	}
-
-	// the number exists only now, so the template goes on in a second write
-	hostops.RetitleAfter(ctx, cmd.ErrWriter, t, r, "created")
-
-	// the url too, so naming the new task costs no tracker call
-	stack.RememberRefsFor(ctx, t, ledger.TaskRef{ID: r.ID, Title: docTitle(r.ID, doc), URL: url})
 
 	_, err = fmt.Fprintln(cmd.Writer, r.ID)
 
 	return err
-}
-
-// readNewTask reads the properties and resolves the parent and the body's
-// After: base once, before any source sees them.
-func readNewTask(ctx context.Context, t *target.Target, cmd *cli.Command, doc string) (tasksource.NewTask, error) {
-	p, err := readProps(cmd)
-	if err != nil {
-		return tasksource.NewTask{}, err
-	}
-
-	nt := tasksource.NewTask{Doc: doc, Props: p}
-
-	for _, link := range []struct {
-		flag, id string
-		to       *ref.Ref
-	}{
-		{"--parent", cmd.String("parent"), &nt.Parent},
-		{"--after", hostops.AfterIn(doc), &nt.After},
-	} {
-		if strings.TrimSpace(link.id) == "" {
-			continue
-		}
-
-		r, err := t.Reference(ctx, link.id)
-		if err != nil {
-			return tasksource.NewTask{}, fmt.Errorf("%s %s: %w", link.flag, link.id, err)
-		}
-
-		*link.to = r
-	}
-
-	return nt, nil
 }

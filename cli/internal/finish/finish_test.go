@@ -326,9 +326,22 @@ func TestFinishMergesAndCleansUp(t *testing.T) {
 	plan := fx.plan(t, "# plan")
 	testkit.WriteFile(t, filepath.Join(fx.main, ".f10", "reviews", "GH-1", "1.md"), "task: GH-1\nround: 1\n")
 
+	var outcome Finished
+	fx.in.Outcome = &outcome
+
 	out, err := fx.run(t)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	// the API reads the outcome from the report's rows, so a renamed row
+	// must fail here rather than empty FinishResponse
+	want := Finished{
+		Task: "GH-1", PR: "https://gh/pr/9", Commit: "m3rge",
+		RemovedWorktree: true, RemovedBranch: true, ClosedWorkspace: true,
+	}
+	if outcome != want {
+		t.Errorf("outcome = %+v, want %+v", outcome, want)
 	}
 
 	archived := filepath.Join(fx.main, ".f10", "plans", "archive", "GH-1.md")

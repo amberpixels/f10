@@ -92,7 +92,7 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 
 			var out bytes.Buffer
 			drive.WriteDaemonStatus(t.Context(), &out, render.LinksFor(&out, false),
-				daemon.Reply{Runs: []daemon.Run{{Root: root, Dir: "/x", Drive: 1}}})
+				daemon.Status{Runs: []daemon.Run{{Root: root, Dir: "/x", Drive: 1}}})
 
 			return out.String()
 		},

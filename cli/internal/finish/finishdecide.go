@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/agents"
 	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
@@ -46,7 +47,15 @@ func Finish(ctx context.Context, w io.Writer, in FinishInput) error {
 		return err
 	}
 
-	return cleanup(ctx, w, in, d, l, errs)
+	err = cleanup(ctx, w, in, d, l, errs)
+
+	// the branch goes after the report is written, so what went is known only now
+	if in.Outcome != nil {
+		in.Outcome.RemovedBranch = errs.removed || errs.deleted
+		in.Outcome.RemovedWorktree = in.Outcome.RemovedWorktree && errs.removed
+	}
+
+	return err
 }
 
 // A checkoutPlace is where the task's branch is checked out, which decides
@@ -117,7 +126,7 @@ func decideFinish(ctx context.Context, in FinishInput) (finishDecision, error) {
 		}
 	}
 
-	wss, err := worktree.Agents(in.Main).Workspaces(ctx)
+	wss, err := agents.Agents(in.Main).Workspaces(ctx)
 	if err != nil {
 		return d, err
 	}
@@ -270,6 +279,9 @@ type cleanupErrs struct {
 	keep string
 	// removed: the branch is gone, so a rerun reads the task as finished
 	removed bool
+	// deleted: a finish with no worktree left deleted the branch, which the
+	// outcome reports without changing what a failure tells the user
+	deleted bool
 }
 
 // check returns err before a landing, and collects it after, under step

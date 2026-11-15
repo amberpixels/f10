@@ -36,6 +36,21 @@ type Workspace struct {
 	Status  Status
 }
 
+// AgentInfo is one running agent as a listing reports it. Name addresses
+// it in every other call; a backend without names gives its slot instead.
+type AgentInfo struct {
+	Name      string
+	Workspace string
+	Slot      string
+	Kind      string
+	Status    Status
+}
+
+// A Lister is a backend that lists its running agents.
+type Lister interface {
+	Agents(ctx context.Context) ([]AgentInfo, error)
+}
+
 // Opened is the workspace a checkout was opened or adopted in, and the
 // slot its agent runs in: an id only the backend reads (Herdr: a pane).
 type Opened struct {

@@ -8,12 +8,15 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/agents"
+	"github.com/amberpixels/f10/cli/internal/api"
 	"github.com/amberpixels/f10/cli/internal/buildinfo"
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/drive"
@@ -63,7 +66,13 @@ func runDaemon(ctx context.Context, cmd *cli.Command) error {
 		Dir:     daemon.RunDir(),
 		Version: buildinfo.Version(),
 		Log:     log.New(cmd.ErrWriter, "", log.LstdFlags),
+		Handler: func(s *daemon.Server) http.Handler { return api.Handler(s) },
+		Key:     drive.RecordKey,
 	}
+
+	// the handlers' Herdr calls run under the newest local session, since the
+	// daemon outlives the client that spawned it
+	agents.SessionEnv = s.SessionEnv
 
 	err := s.Serve(ctx)
 	if errors.Is(err, daemon.ErrRunning) {
@@ -78,7 +87,7 @@ func runDaemon(ctx context.Context, cmd *cli.Command) error {
 func runDaemonStatus(ctx context.Context, cmd *cli.Command) error {
 	w := cmd.Writer
 
-	rep, err := daemon.Call(ctx, daemon.RunDir(), daemon.Request{Op: daemon.OpStatus}, 0)
+	rep, err := daemon.GetStatus(ctx, daemon.RunDir(), buildinfo.Version())
 	if errors.Is(err, daemon.ErrNotRunning) {
 		fmt.Fprintln(w, "no f10 daemon is running")
 
@@ -95,7 +104,7 @@ func runDaemonStatus(ctx context.Context, cmd *cli.Command) error {
 }
 
 func runDaemonStop(ctx context.Context, cmd *cli.Command) error {
-	_, err := daemon.Call(ctx, daemon.RunDir(), daemon.Request{Op: daemon.OpStop, Drain: !cmd.Bool("now")}, 0)
+	err := daemon.Stop(ctx, daemon.RunDir(), !cmd.Bool("now"), false)
 	if errors.Is(err, daemon.ErrNotRunning) {
 		fmt.Fprintln(cmd.Writer, "no f10 daemon is running")
 

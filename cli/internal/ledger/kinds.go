@@ -1,5 +1,7 @@
 package ledger
 
+import "time"
+
 // Each kind's payload, by version. A key's json tag is its stored name, so
 // renaming one is a new version with an upcaster, never an edit here. The
 // unversioned aliases name each kind's current version for readers.
@@ -247,7 +249,45 @@ type RegressionClaimedV1 struct {
 	Text       string `json:"text,omitempty"`
 }
 
+// AskV1 is an ask as agents.v1.Ask stores it: answered_by holds the
+// AnswerSource enum's name, and the owner's context sits in labels.
+type AskV1 struct {
+	ID          string            `json:"id"`
+	Agent       string            `json:"agent"`
+	WorkspaceID string            `json:"workspace_id"`
+	Text        string            `json:"text"`
+	Questions   []AskQuestionV1   `json:"questions"`
+	AskedAt     time.Time         `json:"asked_at"`
+	Answer      string            `json:"answer"`
+	AnsweredBy  string            `json:"answered_by"`
+	AnsweredAt  time.Time         `json:"answered_at,omitzero"`
+	DeliveredAt time.Time         `json:"delivered_at,omitzero"`
+	Labels      map[string]string `json:"labels"`
+}
+
+// AskQuestionV1 is one numbered question of an ask, its default first.
+type AskQuestionV1 struct {
+	N       int      `json:"n"`
+	Text    string   `json:"text"`
+	Options []string `json:"options"`
+}
+
+// AskRaisedV1 is an agent stopping on an ask.
+type AskRaisedV1 struct {
+	Ask AskV1 `json:"ask"`
+}
+
+// AskAnsweredV1 is an ask closed by its first answer.
+type AskAnsweredV1 struct {
+	ID         string `json:"id"`
+	Answer     string `json:"answer"`
+	AnsweredBy string `json:"answered_by"`
+	Delivered  bool   `json:"delivered"`
+}
+
 type (
+	AskRaisedPayload         = AskRaisedV1
+	AskAnsweredPayload       = AskAnsweredV1
 	RunStartedPayload        = RunStartedV2
 	StepEnteredPayload       = StepEnteredV1
 	TaskFinishedPayload      = TaskFinishedV1
@@ -306,6 +346,8 @@ func init() {
 		StatePipeline,
 	)
 	register[TurnUsedV1](kinds, TurnUsed)
+	register[AskRaisedV1](kinds, AskRaised)
+	register[AskAnsweredV1](kinds, AskAnswered)
 
 	upcast(kinds, RunStarted, func(o RunStartedV1) RunStartedV2 {
 		return RunStartedV2{Skill: o.Skill, Args: o.Args}

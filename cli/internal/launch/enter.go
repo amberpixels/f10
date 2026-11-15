@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/agents"
 	"github.com/amberpixels/f10/cli/internal/state"
-	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // A typed prompt's Enter can arrive while the input box is still busy with
@@ -105,7 +105,7 @@ func PromptChecked(ctx context.Context, path, id, suffix, text string) (string, 
 		return "", err
 	}
 
-	return WatchEnter(ctx, worktree.Agents(path), path, name, text, sent), nil
+	return WatchEnter(ctx, agents.Agents(path), path, name, text, sent), nil
 }
 
 // WatchEnter is PromptChecked's wait, for a prompt typed at sent into the
