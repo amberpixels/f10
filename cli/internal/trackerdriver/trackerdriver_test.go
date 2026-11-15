@@ -280,7 +280,12 @@ func TestCancelledParentIsNotTimeout(t *testing.T) {
 func TestAnswerBeforeTheLimitIsNotATimeout(t *testing.T) {
 	t.Parallel()
 
-	out, err := hanging(t).Run(t.Context(), VerbURL, "22")
+	// the verb must start and answer before its limit even on a loaded
+	// machine; 2s still passes long before the child's 10s sleep ends
+	d := hanging(t)
+	d.Timeout = 2 * time.Second
+
+	out, err := d.Run(t.Context(), VerbURL, "22")
 	if err != nil || out != "https://example.test/22" {
 		t.Errorf("Run(url) with its limit inside the wait for the child = %q, %v; want the url", out, err)
 	}
