@@ -24,7 +24,6 @@ import (
 
 	"github.com/amberpixels/f10/cli/gen/f10/v1/f10v1connect"
 	"github.com/amberpixels/f10/cli/internal/drivestore"
-	"github.com/amberpixels/f10/cli/internal/flock"
 )
 
 // Supported reports whether this platform runs a daemon; elsewhere drive
@@ -59,6 +58,12 @@ type Server struct {
 	// Key is the attach key of a drive's arguments, "" for a drive that must
 	// start its own process (one given answers).
 	Key func(argv []string) string
+	// Remote is the tailnet listener, nil for the socket alone. While its
+	// setting is on the daemon never idles out.
+	Remote RemoteListener
+	// Service is a daemon launchd or systemd keeps: it never idles out, and
+	// while another daemon holds the lease it waits to take over.
+	Service bool
 
 	mu       sync.Mutex
 	runs     []*child
@@ -69,6 +74,9 @@ type Server struct {
 	drained  []drained
 	ln       net.Listener
 	http     *http.Server
+	api      http.Handler  // what both listeners serve
+	remote   *remoteServer // the tailnet listener, nil while none is bound
+	remoteAt RemoteState
 	session  []string        // the newest local session's environment
 	calls    int             // calls in flight, an event stream among them
 	ctx      context.Context //nolint:containedctx // the serve call's, for the drives it starts
@@ -140,12 +148,8 @@ func (s *Server) Serve(ctx context.Context) error {
 		return err
 	}
 
-	own, err := lock(s.Dir, lockDaemon)
-	if held := (flock.HeldError{}); errors.As(err, &held) {
-		return ErrRunning
-	}
-
-	if err != nil {
+	own, err := s.lease(ctx)
+	if err != nil || own == nil {
 		return err
 	}
 	defer own.Release()
@@ -169,9 +173,14 @@ func (s *Server) Serve(ctx context.Context) error {
 	s.resumeDrained()
 	s.loadWatches()
 
-	s.http = &http.Server{Handler: s.stamp(s.handler()), ReadHeaderTimeout: callTimeout}
+	s.api = s.stamp(s.handler())
+	s.http = &http.Server{Handler: s.api, ReadHeaderTimeout: callTimeout}
 
 	go func() { _ = s.http.Serve(newSniffListener(ln, s.legacy)) }()
+
+	// now, not on the first tick: f10 remote on and a service starting at
+	// login should not wait a minute for the listener
+	s.reconcileRemote()
 
 	tick := time.NewTicker(s.Tick)
 	defer tick.Stop()
@@ -187,6 +196,7 @@ loop:
 			break loop
 		case now := <-tick.C:
 			s.passDue(now)
+			s.reconcileRemote()
 
 			if s.idle() {
 				s.Log.Printf("idle for %s: exiting", s.Idle)
@@ -217,7 +227,11 @@ func (s *Server) Info() Info {
 
 // Status is what this daemon runs and watches.
 func (s *Server) Status() Status {
-	return Status{Info: s.Info(), Runs: s.list(), Watches: s.watchList()}
+	s.mu.Lock()
+	remote := s.remoteAt
+	s.mu.Unlock()
+
+	return Status{Info: s.Info(), Runs: s.list(), Watches: s.watchList(), Remote: remote}
 }
 
 // Stop stops the daemon: drain lets each drive reach its next tick, and
@@ -260,7 +274,8 @@ func (s *Server) idle() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	return len(s.runs) == 0 && len(s.watches) == 0 && s.calls == 0 && time.Since(s.last) >= s.Idle
+	return !s.Service && !s.remoteAt.Enabled &&
+		len(s.runs) == 0 && len(s.watches) == 0 && s.calls == 0 && time.Since(s.last) >= s.Idle
 }
 
 // closeHTTP lets the calls in flight, the stop that ended the daemon among
@@ -271,6 +286,15 @@ func (s *Server) closeHTTP() {
 
 	if s.http.Shutdown(ctx) != nil {
 		_ = s.http.Close()
+	}
+
+	s.mu.Lock()
+	r := s.remote
+	s.remote = nil
+	s.mu.Unlock()
+
+	if r != nil {
+		_ = r.srv.Close()
 	}
 }
 

@@ -92,6 +92,7 @@ f10 forward <id>[-suffix] <text...>   # hand a command or a steering note to the
 f10 drive <id | id+id>[:profile]... | <id> -- <id> [--flow <name> | --local] [--pace <name>] [--agent <profile> | --model <model>] [--parallel <n>] [--answer [<id>=]<text>] [--every 30s] [--foreground] [--planned <args>]   # a list through a flow, each task once its base has a commit; runs in the daemon
 f10 drive plan <parent | id | id+id>[:profile]... [--flow | --local | --pace | --agent | --parallel] [--facts F] [--json | --hint]   # propose what to bundle, run in parallel and order; changes nothing
 f10 daemon status | stop [--now] | logs [<drive>] [-f]   # the per-user process drives run in
+f10 remote on [--port N] | off | token add <name> --scope <scopes> | token list | token revoke <name> | install | uninstall   # serve the daemon's API to your other devices on the tailnet
 f10 asks [list [--json] | answer <task> [N=VALUE ...]]   # the questions driven agents wait on, across projects; bare walks them in a terminal
 f10 finish [<id>[-suffix]] [--yes] [--ignore-checks] [--close <ids|all|none>] [--keep]   # no id: the branch's task; merge the PR (a branch never pushed: here), pull main, archive the plan, close the workspace, remove the worktree; a spike with no PR closes without a merge; a parent whose subtasks are done closes
 f10 janitor [--dry-run]  # remove task branches whose PR merged or closed outside finish, locally and on origin; start and finish run it every 6 hours
@@ -123,6 +124,7 @@ It changes nothing, so it is always safe to run; `-C` points it at another check
 | `hooks` | the plugin enabled in `settings.json` (a plugin loaded on the session's PATH counts as enabled) and its `hooks/hooks.json`; "registered but needs a restart" when the install changed after this session started (the `<session>.started` marker the SessionStart hook writes), or, outside a session, after the last session start anywhere | `claude plugin enable`, or restart Claude Code |
 | `statusline` | `statusLine` in `settings.json` runs `~/.claude/f10/statusline`, and the link resolves; scoped to the status-line badge | add the segment from [the status line](statusline.md), or start a session to relink it |
 | `herdr` | `herdr` on PATH; scoped to `start`, `forward`, `drive` and `finish` | install Herdr |
+| `remote` | the tailnet listener's setting, this machine's Tailscale address, the address the running daemon bound (asked of a running daemon, never starting one) and the service file with the program it runs; `not needed here` while the listener is off and no service is installed; scoped to `remote` | `tailscale up`, `f10 daemon logs`, or `f10 remote install` again when the service's program is gone |
 | `host` | the `gh` or `glab` the remote routes to, installed and `auth status` green for the host; `not needed here` without a remote | `<cli> auth login --hostname <host>` |
 | `driver` | the `f10-drivers` the `.f10/driver` shim runs (the shim itself, or the path or bare name its text gives): its `--version` against the oldest release this binary works with, v0.4.0, the first that takes `--set` on `task create`; a too-old one, or one that predates `--version`, is scoped to `task create --set`; a custom driver is not compared; a tracker that reads only through a driver (Notion, Jira) with no `.f10/driver` is a problem scoped to `task`, `start` and `drive`, and a host-issues tracker without a driver gets no row | `go install github.com/amberpixels/f10-drivers/cmd/f10-drivers@latest`, or add the shim per [the driver contract](driver-contract.md) |
 | `project` | `project.md` frontmatter and the user's own files in `~/.f10` (`agents.md`, `paces.md`): no unknown keys or values; `not needed here` outside a project when the user's files are clean | edit the named file; `f10 config` shows every fact |
@@ -130,7 +132,7 @@ It changes nothing, so it is always safe to run; `-C` points it at another check
 Inside a session the plugin judged is the one on the session's PATH (a directory marketplace or `--plugin-dir` included); outside one, the install `installed_plugins.json` records.
 
 It exits 1 when any check that every command needs has a problem.
-A scoped problem (`herdr`, `statusline`) is printed but affects only what it names, and `not needed here` never fails.
+A scoped problem (`herdr`, `statusline`, `remote`) is printed but affects only what it names, and `not needed here` never fails.
 
 `--json` emits an array, one object per check:
 
@@ -841,9 +843,30 @@ Its socket serves the control-plane API over Connect: `f10.v1.DaemonService` for
 - **Herdr from the daemon.** The API's handlers that reach agents run `herdr` with the environment of the newest local drive or watch registration made inside Herdr, kept in `session.json` (`0600`) across restarts; with none, they answer that no Herdr session has registered.
 - **A crash or a reboot** leaves running drives stopped, their records intact: rerunning the drive's command resumes it.
 
-`f10 daemon status` prints the pid, version and start time, then each drive: its project, number, pid, log, and each task's standing from its record; then each watched project: its last pass, that pass's exit, and its log.
+`f10 daemon status` prints the pid, version and start time, the tailnet listener's address (or why it is not listening) when **Remote** below turned it on, then each drive: its project, number, pid, log, and each task's standing from its record; then each watched project: its last pass, that pass's exit, and its log.
 `f10 daemon stop` drains the daemon the same way but keeps no drained list: each drive stops at its next tick, a client following one ends with `f10 drive --resume <n> goes on`, and nothing resumes until someone runs that. `--now` stops each drive at once, and cuts a drain in progress short: the daemon keeps answering `status` and `stop` until its drives are gone.
 `f10 daemon logs` prints the daemon's log, `f10 daemon logs <n>` drive `n`'s newest log in this project, `-f` following it until the drive exits.
+
+### Remote
+
+`f10 remote` serves the daemon's API to your other devices on the tailnet, through the same handlers as the socket.
+
+- **The listener.** `f10 remote on [--port N]` turns it on (port 7410 by default) and starts the daemon; `f10 remote off` turns it off. The setting is `remote/config.json` in the user's f10 dir. The daemon binds only this machine's Tailscale IPv4 address, found on its interfaces in 100.64.0.0/10, so nothing listens on any other interface. It closes any connection whose peer is outside that range before reading a byte, because macOS accepts a packet for a local address on any interface. It checks the setting and the address when it starts and every minute after, so it binds once Tailscale comes up after login, rebinds when the address changes, and closes when the setting goes off. The traffic is plain HTTP, because WireGuard already encrypts it between devices.
+- **Device tokens.** `f10 remote token add <name> --scope read,answer` prints a token once; `remote/tokens.json` (`0600`) keeps only its SHA-256 hash, its scopes and when it was made. `f10 remote token list` shows names and scopes, and `f10 remote token revoke <name>` deletes one, which refuses that device's next call without a restart. Every call on the tailnet carries `Authorization: Bearer <token>`: a missing or unknown token is refused `unauthenticated`, and a token without the method's scope `permission_denied`, naming the scope.
+- **Scopes.** A method missing from this table is refused on the tailnet. The socket keeps full access, because only the local user can open it.
+
+  | scope | methods |
+  |---|---|
+  | any token | `Hello` |
+  | `read` | `GetDaemonStatus`, `GetTask`, `GetRunStatus`, `GetBoard`, `WatchEvents`, `ListAsks`, `ListWorkspaces`, `ListAgents`, `GetAgentStatus` |
+  | `answer` | `AnswerAsk` |
+  | `steer` | `SendText` |
+  | `start` | `Start`, `Drive`, `CreateTask` |
+  | `finish` | `Finish` |
+  | socket only | `StopDaemon`, `WatchProject` |
+
+  A remote call's environment fields are ignored, because a remote client has no local session to pass.
+- **Always on.** With the listener on, the daemon does not exit when idle. `f10 remote install` writes and loads a launchd agent (`~/Library/LaunchAgents/io.github.amberpixels.f10.daemon.plist`) on macOS, or a systemd user unit (`~/.config/systemd/user/f10-daemon.service`) on Linux, that runs `f10 daemon --service` at login and restarts it when it exits; `f10 remote uninstall` removes it. The service runs the `f10` the installing shell's PATH finds, the plugin's shim in a session, so it follows plugin upgrades, and carries that shell's `PATH`, `HOME`, `F10_RUN_DIR`, `XDG_RUNTIME_DIR` and `F10_USER_DIR`, so it uses the same run dir and finds the same tools. Run `install` again after any of them moves. A `--service` daemon never idles out, and while another daemon holds the lease it waits and takes over when that one exits. A client that replaces an older daemon writes its version to `newest` in the run dir first, and a service older than that keeps waiting, so the service manager restarting an old binary cannot take the drained drives back.
 
 ## Asks
 

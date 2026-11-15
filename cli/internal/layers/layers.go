@@ -85,6 +85,7 @@ var Table = []Rule{
 	{Prefix: "internal/command/history", Rank: 3},
 	{Prefix: "internal/command/audit", Rank: 3},
 	{Prefix: "internal/command/atlas", Rank: 3},
+	{Prefix: "internal/command/remote", Rank: 3},
 
 	// the commands that read a task, its request, the config and the board
 	{Prefix: "internal/command/task", Rank: 4},

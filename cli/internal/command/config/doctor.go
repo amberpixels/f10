@@ -50,6 +50,7 @@ func runDoctor(ctx context.Context, cmd *cli.Command) error {
 		Version:     buildinfo.Version(),
 		Driver:      t.Driver(),
 		NeedsDriver: !t.HostIssues(),
+		Remote:      remoteState(ctx, home),
 		Getenv:      os.Getenv,
 		LookPath:    shell.LookPath,
 		Run:         shell.Capture,

@@ -29,6 +29,7 @@ import (
 	ledgercmd "github.com/amberpixels/f10/cli/internal/command/ledger"
 	lorecmd "github.com/amberpixels/f10/cli/internal/command/lore"
 	prcmd "github.com/amberpixels/f10/cli/internal/command/pr"
+	remotecmd "github.com/amberpixels/f10/cli/internal/command/remote"
 	reviewcmd "github.com/amberpixels/f10/cli/internal/command/review"
 	standupcmd "github.com/amberpixels/f10/cli/internal/command/standup"
 	startcmd "github.com/amberpixels/f10/cli/internal/command/start"
@@ -84,6 +85,7 @@ func newApp() *cli.Command {
 			startcmd.ForwardCommand(),
 			drivecmd.Command(),
 			daemoncmd.Command(),
+			remotecmd.Command(),
 			askscmd.Command(),
 			drivecmd.WatchCommand(),
 			finishcmd.Command(),

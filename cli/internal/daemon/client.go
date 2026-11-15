@@ -151,6 +151,10 @@ func GetStatus(ctx context.Context, dir, version string) (Status, error) {
 		st.Watches = append(st.Watches, wt)
 	}
 
+	if r := res.Msg.GetRemote(); r != nil {
+		st.Remote = RemoteState{Enabled: r.GetEnabled(), Addr: r.GetAddr(), Reason: r.GetReason()}
+	}
+
 	return st, nil
 }
 

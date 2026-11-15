@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file f10/v1/daemon.proto.
  */
 export const file_f10_v1_daemon: GenFile = /*@__PURE__*/
-  fileDesc("ChNmMTAvdjEvZGFlbW9uLnByb3RvEgZmMTAudjEiNAoMSGVsbG9SZXF1ZXN0Eg8KB3ZlcnNpb24YASABKAkSEwoLYXBpX3ZlcnNpb24YAiABKAUihAEKDUhlbGxvUmVzcG9uc2USDwoHdmVyc2lvbhgBIAEoCRITCgthcGlfdmVyc2lvbhgCIAEoBRILCgNwaWQYAyABKAUSLgoKc3RhcnRlZF9hdBgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEAoIc3RvcHBpbmcYBSABKAgigAEKD1N1cGVydmlzZWREcml2ZRIMCgRyb290GAEgASgJEgsKA2RpchgCIAEoCRINCgVkcml2ZRgDIAEoBRILCgNwaWQYBCABKAUSKQoFc2luY2UYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEgsKA2xvZxgGIAEoCSJ4Cg5XYXRjaGVkUHJvamVjdBIMCgRyb290GAEgASgJEgsKA2RpchgCIAEoCRIwCgxsYXN0X3Bhc3NfYXQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEgwKBGV4aXQYBCABKAUSCwoDbG9nGAUgASgJIhgKFkdldERhZW1vblN0YXR1c1JlcXVlc3QiawoXR2V0RGFlbW9uU3RhdHVzUmVzcG9uc2USJwoGZHJpdmVzGAEgAygLMhcuZjEwLnYxLlN1cGVydmlzZWREcml2ZRInCgd3YXRjaGVzGAIgAygLMhYuZjEwLnYxLldhdGNoZWRQcm9qZWN0IjMKEVN0b3BEYWVtb25SZXF1ZXN0Eg0KBWRyYWluGAEgASgIEg8KB3VwZ3JhZGUYAiABKAgiFAoSU3RvcERhZW1vblJlc3BvbnNlIj0KE1dhdGNoUHJvamVjdFJlcXVlc3QSDAoEcm9vdBgBIAEoCRILCgNkaXIYAiABKAkSCwoDZW52GAMgAygJIiMKFFdhdGNoUHJvamVjdFJlc3BvbnNlEgsKA2xvZxgBIAEoCTKpAgoNRGFlbW9uU2VydmljZRI0CgVIZWxsbxIULmYxMC52MS5IZWxsb1JlcXVlc3QaFS5mMTAudjEuSGVsbG9SZXNwb25zZRJSCg9HZXREYWVtb25TdGF0dXMSHi5mMTAudjEuR2V0RGFlbW9uU3RhdHVzUmVxdWVzdBofLmYxMC52MS5HZXREYWVtb25TdGF0dXNSZXNwb25zZRJDCgpTdG9wRGFlbW9uEhkuZjEwLnYxLlN0b3BEYWVtb25SZXF1ZXN0GhouZjEwLnYxLlN0b3BEYWVtb25SZXNwb25zZRJJCgxXYXRjaFByb2plY3QSGy5mMTAudjEuV2F0Y2hQcm9qZWN0UmVxdWVzdBocLmYxMC52MS5XYXRjaFByb2plY3RSZXNwb25zZUKDAQoKY29tLmYxMC52MUILRGFlbW9uUHJvdG9QAVovZ2l0aHViLmNvbS9hbWJlcnBpeGVscy9mMTAvY2xpL2dlbi9mMTAvdjE7ZjEwdjGiAgNGWFiqAgZGMTAuVjHKAgZGMTBcVjHiAhJGMTBcVjFcR1BCTWV0YWRhdGHqAgdGMTA6OlYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
+  fileDesc("ChNmMTAvdjEvZGFlbW9uLnByb3RvEgZmMTAudjEiNAoMSGVsbG9SZXF1ZXN0Eg8KB3ZlcnNpb24YASABKAkSEwoLYXBpX3ZlcnNpb24YAiABKAUihAEKDUhlbGxvUmVzcG9uc2USDwoHdmVyc2lvbhgBIAEoCRITCgthcGlfdmVyc2lvbhgCIAEoBRILCgNwaWQYAyABKAUSLgoKc3RhcnRlZF9hdBgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEAoIc3RvcHBpbmcYBSABKAgigAEKD1N1cGVydmlzZWREcml2ZRIMCgRyb290GAEgASgJEgsKA2RpchgCIAEoCRINCgVkcml2ZRgDIAEoBRILCgNwaWQYBCABKAUSKQoFc2luY2UYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEgsKA2xvZxgGIAEoCSJ4Cg5XYXRjaGVkUHJvamVjdBIMCgRyb290GAEgASgJEgsKA2RpchgCIAEoCRIwCgxsYXN0X3Bhc3NfYXQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEgwKBGV4aXQYBCABKAUSCwoDbG9nGAUgASgJIhgKFkdldERhZW1vblN0YXR1c1JlcXVlc3QiPwoOUmVtb3RlTGlzdGVuZXISDwoHZW5hYmxlZBgBIAEoCBIMCgRhZGRyGAIgASgJEg4KBnJlYXNvbhgDIAEoCSKTAQoXR2V0RGFlbW9uU3RhdHVzUmVzcG9uc2USJwoGZHJpdmVzGAEgAygLMhcuZjEwLnYxLlN1cGVydmlzZWREcml2ZRInCgd3YXRjaGVzGAIgAygLMhYuZjEwLnYxLldhdGNoZWRQcm9qZWN0EiYKBnJlbW90ZRgDIAEoCzIWLmYxMC52MS5SZW1vdGVMaXN0ZW5lciIzChFTdG9wRGFlbW9uUmVxdWVzdBINCgVkcmFpbhgBIAEoCBIPCgd1cGdyYWRlGAIgASgIIhQKElN0b3BEYWVtb25SZXNwb25zZSI9ChNXYXRjaFByb2plY3RSZXF1ZXN0EgwKBHJvb3QYASABKAkSCwoDZGlyGAIgASgJEgsKA2VudhgDIAMoCSIjChRXYXRjaFByb2plY3RSZXNwb25zZRILCgNsb2cYASABKAkyqQIKDURhZW1vblNlcnZpY2USNAoFSGVsbG8SFC5mMTAudjEuSGVsbG9SZXF1ZXN0GhUuZjEwLnYxLkhlbGxvUmVzcG9uc2USUgoPR2V0RGFlbW9uU3RhdHVzEh4uZjEwLnYxLkdldERhZW1vblN0YXR1c1JlcXVlc3QaHy5mMTAudjEuR2V0RGFlbW9uU3RhdHVzUmVzcG9uc2USQwoKU3RvcERhZW1vbhIZLmYxMC52MS5TdG9wRGFlbW9uUmVxdWVzdBoaLmYxMC52MS5TdG9wRGFlbW9uUmVzcG9uc2USSQoMV2F0Y2hQcm9qZWN0EhsuZjEwLnYxLldhdGNoUHJvamVjdFJlcXVlc3QaHC5mMTAudjEuV2F0Y2hQcm9qZWN0UmVzcG9uc2VCgwEKCmNvbS5mMTAudjFCC0RhZW1vblByb3RvUAFaL2dpdGh1Yi5jb20vYW1iZXJwaXhlbHMvZjEwL2NsaS9nZW4vZjEwL3YxO2YxMHYxogIDRlhYqgIGRjEwLlYxygIGRjEwXFYx4gISRjEwXFYxXEdQQk1ldGFkYXRh6gIHRjEwOjpWMWIGcHJvdG8z", [file_google_protobuf_timestamp]);
 
 /**
  * @generated from message f10.v1.HelloRequest
@@ -190,6 +190,42 @@ export const GetDaemonStatusRequestSchema: GenMessage<GetDaemonStatusRequest> = 
   messageDesc(file_f10_v1_daemon, 4);
 
 /**
+ * A RemoteListener is the daemon's listener on the tailnet.
+ *
+ * @generated from message f10.v1.RemoteListener
+ */
+export type RemoteListener = Message<"f10.v1.RemoteListener"> & {
+  /**
+   * enabled is the user's setting: f10 remote on.
+   *
+   * @generated from field: bool enabled = 1;
+   */
+  enabled: boolean;
+
+  /**
+   * addr is the address bound, such as 100.101.102.103:7410; empty when
+   * none is.
+   *
+   * @generated from field: string addr = 2;
+   */
+  addr: string;
+
+  /**
+   * reason says why none is bound, when the setting is on or unreadable.
+   *
+   * @generated from field: string reason = 3;
+   */
+  reason: string;
+};
+
+/**
+ * Describes the message f10.v1.RemoteListener.
+ * Use `create(RemoteListenerSchema)` to create a new message.
+ */
+export const RemoteListenerSchema: GenMessage<RemoteListener> = /*@__PURE__*/
+  messageDesc(file_f10_v1_daemon, 5);
+
+/**
  * @generated from message f10.v1.GetDaemonStatusResponse
  */
 export type GetDaemonStatusResponse = Message<"f10.v1.GetDaemonStatusResponse"> & {
@@ -202,6 +238,11 @@ export type GetDaemonStatusResponse = Message<"f10.v1.GetDaemonStatusResponse"> 
    * @generated from field: repeated f10.v1.WatchedProject watches = 2;
    */
   watches: WatchedProject[];
+
+  /**
+   * @generated from field: f10.v1.RemoteListener remote = 3;
+   */
+  remote?: RemoteListener | undefined;
 };
 
 /**
@@ -209,7 +250,7 @@ export type GetDaemonStatusResponse = Message<"f10.v1.GetDaemonStatusResponse"> 
  * Use `create(GetDaemonStatusResponseSchema)` to create a new message.
  */
 export const GetDaemonStatusResponseSchema: GenMessage<GetDaemonStatusResponse> = /*@__PURE__*/
-  messageDesc(file_f10_v1_daemon, 5);
+  messageDesc(file_f10_v1_daemon, 6);
 
 /**
  * @generated from message f10.v1.StopDaemonRequest
@@ -235,7 +276,7 @@ export type StopDaemonRequest = Message<"f10.v1.StopDaemonRequest"> & {
  * Use `create(StopDaemonRequestSchema)` to create a new message.
  */
 export const StopDaemonRequestSchema: GenMessage<StopDaemonRequest> = /*@__PURE__*/
-  messageDesc(file_f10_v1_daemon, 6);
+  messageDesc(file_f10_v1_daemon, 7);
 
 /**
  * @generated from message f10.v1.StopDaemonResponse
@@ -248,7 +289,7 @@ export type StopDaemonResponse = Message<"f10.v1.StopDaemonResponse"> & {
  * Use `create(StopDaemonResponseSchema)` to create a new message.
  */
 export const StopDaemonResponseSchema: GenMessage<StopDaemonResponse> = /*@__PURE__*/
-  messageDesc(file_f10_v1_daemon, 7);
+  messageDesc(file_f10_v1_daemon, 8);
 
 /**
  * @generated from message f10.v1.WatchProjectRequest
@@ -280,7 +321,7 @@ export type WatchProjectRequest = Message<"f10.v1.WatchProjectRequest"> & {
  * Use `create(WatchProjectRequestSchema)` to create a new message.
  */
 export const WatchProjectRequestSchema: GenMessage<WatchProjectRequest> = /*@__PURE__*/
-  messageDesc(file_f10_v1_daemon, 8);
+  messageDesc(file_f10_v1_daemon, 9);
 
 /**
  * @generated from message f10.v1.WatchProjectResponse
@@ -299,7 +340,7 @@ export type WatchProjectResponse = Message<"f10.v1.WatchProjectResponse"> & {
  * Use `create(WatchProjectResponseSchema)` to create a new message.
  */
 export const WatchProjectResponseSchema: GenMessage<WatchProjectResponse> = /*@__PURE__*/
-  messageDesc(file_f10_v1_daemon, 9);
+  messageDesc(file_f10_v1_daemon, 10);
 
 /**
  * DaemonService is the per-user daemon's own lifecycle: the version

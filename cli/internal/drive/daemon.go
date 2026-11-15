@@ -26,6 +26,13 @@ func WriteDaemonStatus(ctx context.Context, w io.Writer, links *render.TaskLinks
 	fmt.Fprintf(w, "pid      %d\nversion  %s\nsince    %s\ndrives   %d\nwatching %d\n", rep.PID, rep.Version,
 		rep.Started.Format(time.DateTime), len(rep.Runs), len(rep.Watches))
 
+	switch r := rep.Remote; {
+	case r.Addr != "":
+		fmt.Fprintf(w, "remote   %s\n", r.Addr)
+	case r.Enabled:
+		fmt.Fprintf(w, "remote   not listening: %s\n", r.Reason)
+	}
+
 	for _, r := range rep.Runs {
 		fmt.Fprintf(w, "\n%s\n", driveTitle(r))
 		fmt.Fprintf(w, "  pid    %d, since %s\n  log    %s\n", r.PID, r.Since.Format(time.DateTime), r.Log)

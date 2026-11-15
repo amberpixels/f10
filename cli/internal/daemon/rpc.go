@@ -34,6 +34,10 @@ func (d *daemonService) GetDaemonStatus(
 	_ context.Context,
 	_ *connect.Request[f10v1.GetDaemonStatusRequest],
 ) (*connect.Response[f10v1.GetDaemonStatusResponse], error) {
+	// so f10 remote on and off report the listener as it now is, not as
+	// the last tick left it
+	d.sup.reconcileRemote()
+
 	st := d.sup.Status()
 	out := &f10v1.GetDaemonStatusResponse{}
 
@@ -60,6 +64,10 @@ func (d *daemonService) GetDaemonStatus(
 		}
 
 		out.Watches = append(out.Watches, wp)
+	}
+
+	if r := st.Remote; r != (RemoteState{}) {
+		out.Remote = &f10v1.RemoteListener{Enabled: r.Enabled, Addr: r.Addr, Reason: r.Reason}
 	}
 
 	return connect.NewResponse(out), nil

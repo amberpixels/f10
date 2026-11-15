@@ -102,6 +102,12 @@ func (e *Ensurer) settle(ctx context.Context) (Info, bool, error) {
 			e.Draining(rep.Version)
 		}
 
+		// so a service of the older release, restarted by launchd or
+		// systemd, stands by instead of taking the drained drives back
+		if err := writeNewest(e.Dir, e.Version); err != nil {
+			return Info{}, false, fmt.Errorf("daemon: %w", err)
+		}
+
 		if err := Stop(ctx, e.Dir, true, true); err != nil {
 			return Info{}, false, fmt.Errorf("stopping daemon %s: %w", rep.Version, err)
 		}

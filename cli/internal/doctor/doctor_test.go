@@ -240,6 +240,28 @@ func TestChecks(t *testing.T) {
 		{CheckHerdr, "present", nil, StatusOK, ""},
 		{CheckHerdr, "missing", func(f *fixture) { delete(f.path, "herdr") }, StatusProblem, "herdr.dev"},
 
+		{CheckRemote, "off", nil, StatusNotNeeded, ""},
+		{CheckRemote, "listening, service installed", func(f *fixture) { f.e.Remote = remoteWell() }, StatusOK, ""},
+		{CheckRemote, "on without a service", func(f *fixture) {
+			f.e.Remote = remoteWell()
+			f.e.Remote.ServiceInstalled = false
+		}, StatusOK, ""},
+		{CheckRemote, "Tailscale down", func(f *fixture) {
+			f.e.Remote = remoteWell()
+			f.e.Remote.Tailnet, f.e.Remote.Bound = "", ""
+		}, StatusProblem, "tailscale up"},
+		{CheckRemote, "daemon not listening", func(f *fixture) {
+			f.e.Remote = remoteWell()
+			f.e.Remote.Bound, f.e.Remote.Reason = "", "listening on 100.64.0.7:7410: address in use"
+		}, StatusProblem, "f10 daemon logs"},
+		{CheckRemote, "service program gone", func(f *fixture) {
+			f.e.Remote = remoteWell()
+			f.e.Remote.ProgramMissing = true
+		}, StatusProblem, "f10 remote install"},
+		{CheckRemote, "setting unreadable", func(f *fixture) {
+			f.e.Remote = &RemoteState{ConfigErr: "config.json does not read"}
+		}, StatusProblem, "f10 remote on"},
+
 		{CheckHost, "signed in", nil, StatusOK, ""},
 		{
 			CheckHost,
@@ -376,8 +398,8 @@ func TestResultsMarshalEveryKey(t *testing.T) {
 	var got []map[string]any
 	must(t, json.Unmarshal(data, &got))
 
-	if len(got) != 7 {
-		t.Fatalf("%d checks, want 7", len(got))
+	if len(got) != 8 {
+		t.Fatalf("%d checks, want 8", len(got))
 	}
 
 	for _, r := range got {
@@ -511,5 +533,30 @@ func TestNoDriverPrintsNoDriverRow(t *testing.T) {
 		if r.Name == CheckDriver {
 			t.Fatalf("driver row without a driver: %+v", r)
 		}
+	}
+}
+
+// remoteWell is a machine with the listener on, Tailscale up, the daemon
+// listening and the service installed.
+func remoteWell() *RemoteState {
+	return &RemoteState{
+		Enabled: true, Port: 7410, Tailnet: "100.64.0.7",
+		DaemonRunning: true, Bound: "100.64.0.7:7410",
+		ServiceFile: "/home/me/.config/systemd/user/f10-daemon.service", ServiceInstalled: true,
+		ServiceProgram: "/home/me/bin/f10",
+	}
+}
+
+// A remote problem affects remote calls only, so it never fails the run.
+func TestRemoteProblemIsScopedAndDoesNotFail(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t)
+	f.e.Remote = remoteWell()
+	f.e.Remote.Tailnet = ""
+
+	r := f.run(CheckRemote)
+	if strings.Join(r.Scope, ",") != "remote" || Failed([]Result{r}) {
+		t.Errorf("scope = %v, failed = %v; want remote, not failed", r.Scope, Failed([]Result{r}))
 	}
 }

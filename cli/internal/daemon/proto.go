@@ -2,6 +2,8 @@ package daemon
 
 import (
 	"errors"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -117,6 +119,25 @@ type Status struct {
 
 	Runs    []Run
 	Watches []Watch
+	Remote  RemoteState
+}
+
+// A RemoteListener is the daemon's listener on the tailnet: the address to
+// bind, the peers it accepts and the check in front of the API. The daemon
+// command builds it, so this package knows nothing of tokens.
+type RemoteListener interface {
+	// Addr is the address to bind and whether the user's setting is on;
+	// with no address, the third value says why none is wanted or possible.
+	Addr() (addr string, on bool, why string)
+	Listen(ln net.Listener) net.Listener
+	Handler(h http.Handler) http.Handler
+}
+
+// RemoteState is the tailnet listener as the daemon last reconciled it.
+type RemoteState struct {
+	Enabled bool
+	Addr    string // bound; "" when none is
+	Reason  string // why none is bound
 }
 
 // A Run is one drive process the daemon supervises.
