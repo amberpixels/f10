@@ -116,18 +116,17 @@ func gather(
 
 	store := &lore.Store{Root: t.LoreRoot(), Git: lore.CLIGit{Dir: top}}
 
-	for _, p := range paths {
-		lessons, err := store.Lessons(p)
-		if err != nil {
-			return in, err
-		}
+	entries, err := store.OnPaths(paths, lore.KindLesson, lore.KindDecision)
+	if err != nil {
+		return in, err
+	}
 
-		decisions, err := store.Decisions(p)
-		if err != nil {
-			return in, err
+	for _, e := range entries {
+		if e.Kind == lore.KindLesson {
+			in.Lessons = append(in.Lessons, e)
+		} else {
+			in.Decisions = append(in.Decisions, e)
 		}
-
-		in.Lessons, in.Decisions = append(in.Lessons, lessons...), append(in.Decisions, decisions...)
 	}
 
 	return in, nil

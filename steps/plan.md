@@ -64,7 +64,8 @@ Badge: `f10-state.sh set plan running` on entry, unless `fetch` already opened t
    - **The history is evidence for the design, not a rule over it.**
      The history may change only one header line, the size: a `small` plan in files whose tasks needed a median of 2 review rounds or more, meaning most of them needed a second round, is raised to `normal`, or its bullet says why this one differs.
    - **A plan that departs from a lesson or a decision records it as a decision of its own**, so whoever reads the file's lore later sees the override and its reason.
-     Once the file is on disk, write `f10 lore add decision --change <change> --anchor <the entry's anchor, from the `anchors` that `f10 history --json` lists> --chosen <the plan's approach> --rejected '<what the entry holds>: <why it no longer holds>' -m "<why, naming the entry's id>"`.
+     The entry's anchor is one of the `anchors` that `f10 history --json` lists for it.
+     Once the file is on disk, write `f10 lore add decision --change <change> --anchor <the entry's anchor> --chosen <the plan's approach> --rejected '<what the entry holds>: <why it no longer holds>' -m "<why, naming the entry's id>"`.
    - **With nothing found**, the section is the one line `No history for these files.`, which the command prints.
      The section is never left out, so a reader can tell "checked, nothing" from "not checked".
    - **A replan runs `f10 history` again**, because its stages may name other files.

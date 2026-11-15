@@ -322,3 +322,28 @@ func TestDecisionCarriesItsAnchors(t *testing.T) {
 		t.Errorf("anchors = %v, want the one on a.go", got)
 	}
 }
+
+// A follow-up PR's series restarts its finding ids, so its 1.1 is a finding
+// of its own, not a rewrite of the first PR's.
+func TestFollowUpVerdictsKeepTheFirstSeries(t *testing.T) {
+	at := window.Add(24 * time.Hour)
+	opened := func(sha string) ledger.Event {
+		return ev(at, "FT-1", ledger.ReviewRoundOpened, ledger.ReviewRoundOpenedPayload{Round: "1", Reviewed: sha})
+	}
+	verdict := func(cat, word string) ledger.Event {
+		return ev(at, "FT-1", ledger.FindingVerdict,
+			ledger.FindingVerdictPayload{Round: "1", Finding: "1.1", Category: cat, Verdict: word})
+	}
+
+	events := []ledger.Event{
+		opened("aaa"), verdict("tests and docs", "fix"),
+		opened("bbb"), verdict("correctness and logic", "skip"),
+	}
+
+	b := Build(Input{Paths: []string{"a.go"}, Since: window, Touches: live("FT-1"), Events: events})
+	cats := b.Neighbors[0].Categories
+
+	if cats["tests and docs"].Fixed != 1 || cats["correctness and logic"].Skipped != 1 {
+		t.Errorf("categories = %+v, want the first PR's fix and the follow-up's skip", cats)
+	}
+}

@@ -147,6 +147,7 @@ func Build(in Input) *Brief {
 // finding and per verdict file standing.
 func ledgerFacts(events []ledger.Event, live map[string]*Neighbor) {
 	rounds := map[string]map[string]map[string]int{}      // task, review pass: the latest opening's categories
+	opened := map[string]string{}                         // task, round: the reviewed sha of its latest opening
 	findings := map[string]ledger.FindingVerdictPayload{} // task, round, finding
 	judged := map[string]string{}                         // task, verdict file
 
@@ -172,10 +173,14 @@ func ledgerFacts(events []ledger.Event, live map[string]*Neighbor) {
 				// a follow-up PR's series restarts at round 1, so the reviewed sha
 				// keeps its rounds apart from the first PR's
 				rounds[n.Task][p.Round+"\x00"+p.Reviewed] = p.Categories
+				opened[n.Task+"\x00"+p.Round] = p.Reviewed
 			}
 		case ledger.FindingVerdict:
+			// a verdict belongs to the series of its round's latest opening, so
+			// a follow-up PR's 1.1 never overwrites the first PR's
 			if p, ok := decode[ledger.FindingVerdictPayload](e); ok {
-				findings[n.Task+"\x00"+p.Round+"\x00"+p.Finding] = p
+				series := opened[n.Task+"\x00"+p.Round]
+				findings[n.Task+"\x00"+p.Round+"\x00"+series+"\x00"+p.Finding] = p
 			}
 		case ledger.PlanSuperseded:
 			n.Superseded++

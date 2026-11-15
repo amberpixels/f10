@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/gitx"
@@ -42,7 +43,7 @@ func Neighbors(ctx context.Context, dir, prefix string, paths []string, since ti
 
 	byTask := map[string]*Touch{}
 
-	var order []string
+	var order, touched []string
 
 	for _, c := range slices.Backward(commits) {
 		task := c.task
@@ -65,6 +66,7 @@ func Neighbors(ctx context.Context, dir, prefix string, paths []string, since ti
 
 		t.Commits = append(t.Commits, c.sha)
 		t.Added += c.added
+		touched = append(touched, c.files...)
 	}
 
 	owner := map[string]*Touch{}
@@ -75,8 +77,8 @@ func Neighbors(ctx context.Context, dir, prefix string, paths []string, since ti
 		}
 	}
 
-	for _, p := range paths {
-		for sha, n := range blameCounts(ctx, dir, p) {
+	for _, counts := range blameAll(ctx, dir, uniq(touched)) {
+		for sha, n := range counts {
 			if t := owner[sha]; t != nil {
 				t.Standing += n
 			}
@@ -95,6 +97,7 @@ type commit struct {
 	sha   string
 	task  string // from its trailers; "" when they name none
 	added int
+	files []string // the paths it added lines to
 }
 
 const (
@@ -124,9 +127,10 @@ func commitsSince(ctx context.Context, dir string, paths []string, since time.Ti
 		}
 
 		trailers, numstat, _ := strings.Cut(rest, fieldSep)
+		added, files := addedLines(numstat)
 		commits = append(
 			commits,
-			commit{sha: strings.TrimSpace(sha), task: trailerTask(trailers), added: addedLines(numstat)},
+			commit{sha: strings.TrimSpace(sha), task: trailerTask(trailers), added: added, files: files},
 		)
 	}
 
@@ -150,22 +154,57 @@ func trailerTask(trailers string) string {
 	return ""
 }
 
-// addedLines sums numstat's first column; a binary file's "-" counts none.
-func addedLines(numstat string) int {
+// addedLines sums numstat's first column, with the files it counted; a
+// binary file's "-" counts none.
+func addedLines(numstat string) (int, []string) {
 	total := 0
 
+	var files []string
+
 	for line := range strings.SplitSeq(numstat, "\n") {
-		added, _, ok := strings.Cut(strings.TrimSpace(line), "\t")
-		if !ok {
+		fields := strings.SplitN(strings.TrimSpace(line), "\t", 3)
+		if len(fields) < 3 {
 			continue
 		}
 
-		if n, err := strconv.Atoi(added); err == nil {
+		if n, err := strconv.Atoi(fields[0]); err == nil && n > 0 {
 			total += n
+			files = append(files, fields[2])
 		}
 	}
 
-	return total
+	return total, files
+}
+
+// blameJobs bounds the git blame processes running at once.
+const blameJobs = 8
+
+// blameAll is blameCounts for each path, a few at a time: only the files a
+// neighbor added lines to are blamed, so a directory's other files cost none.
+func blameAll(ctx context.Context, dir string, paths []string) []map[string]int {
+	out := make([]map[string]int, len(paths))
+	sem := make(chan struct{}, blameJobs)
+
+	var wg sync.WaitGroup
+
+	for i, p := range paths {
+		wg.Go(func() {
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			out[i] = blameCounts(ctx, dir, p)
+		})
+	}
+
+	wg.Wait()
+
+	return out
+}
+
+func uniq(ss []string) []string {
+	slices.Sort(ss)
+
+	return slices.Compact(ss)
 }
 
 var blameHeader = regexp.MustCompile(`^([0-9a-f]{40}) \d+ \d+`)

@@ -76,7 +76,12 @@ func (b *Brief) Lines() []string {
 		out = append(out, n.line())
 	}
 
-	return out[:min(len(out), MaxLines)]
+	out = out[:min(len(out), MaxLines)]
+	for i, l := range out {
+		out[i] = clip(l)
+	}
+
+	return out
 }
 
 // Write prints the text form.

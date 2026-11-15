@@ -1282,6 +1282,7 @@ It is a lookup over git, the ledger and lore, so the same history prints the sam
    A commit's task is its `Task:` trailer (a bundle counts once, under its lead), else its `Change:` trailer, else what `f10 task regression` would attribute it to (the closest unmerged branch, then a subject opening with an id).
    `--task`, else the branch's task, is left out, because a task is not its own history.
 2. **Stale** neighbors are dropped and counted: one whose added lines in these paths stand under 30% at `HEAD`, by `git blame`, was mostly rewritten since, so its record no longer applies.
+   Only the files a neighbor added lines to are blamed.
    A neighbor that only deleted lines has nothing to measure and stays.
 3. **Per neighbor**, from the ledger: its kind (the `Kind:` line of its live or newest archived plan), size, implement minutes (as `f10 stats` counts them), review rounds, finding categories raised and the fixed and skipped counts resolve recorded, plans superseded, halts, judge verdicts, and the bugs later traced to it.
 4. **Regressions**: the `regression_found` rows in the window whose lines are on these paths or whose origin is a neighbor.
@@ -1294,7 +1295,7 @@ Counts and outcomes come from the ledger and reasons from lore, so a finding wri
 The ledger reads are the scoped ones: the sessions of the neighbors and the project's `regression_found` rows, both indexed.
 
 The text is at most 15 lines, each citing task or lore ids, most decision-relevant first: the neighbors by id with the stale count, regressions, recurring findings, the median, decisions, lessons, then a line per neighbor; lines past 15 drop from the bottom.
-A long line is cut at 160 characters.
+Every line is cut at 160 characters.
 Nothing found prints `No history for these files.`
 
 `--json` prints the whole brief, uncapped:
