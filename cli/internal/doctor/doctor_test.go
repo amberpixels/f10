@@ -559,6 +559,20 @@ func remoteWell() *RemoteState {
 	}
 }
 
+func TestRemoteNamesTheMCPEndpoint(t *testing.T) {
+	t.Parallel()
+
+	st := remoteWell()
+	st.MCP = true
+
+	if r := checkRemote(
+		&Env{Remote: st},
+	); r.Status != StatusOK ||
+		!strings.Contains(r.Detail, "MCP tools at http://100.64.0.7:7410/mcp") {
+		t.Errorf("remote = %s %q, want the MCP endpoint named", r.Status, r.Detail)
+	}
+}
+
 // A remote problem affects remote calls only, so it never fails the run.
 func TestRemoteProblemIsScopedAndDoesNotFail(t *testing.T) {
 	t.Parallel()

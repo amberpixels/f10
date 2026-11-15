@@ -10,6 +10,8 @@ service DaemonService {
   // Hello is the first call a client makes, to learn which daemon answers
   // and whether this client may keep it or must replace it.
   rpc Hello(HelloRequest) returns (HelloResponse);
+  // GetDaemonStatus is who the daemon is, the drives it runs, the
+  // projects it watches and its tailnet listener.
   rpc GetDaemonStatus(GetDaemonStatusRequest) returns (GetDaemonStatusResponse);
   // StopDaemon stops the daemon; a second call without drain cuts a drain
   // short.

@@ -51,6 +51,8 @@ type DaemonServiceClient interface {
 	// Hello is the first call a client makes, to learn which daemon answers
 	// and whether this client may keep it or must replace it.
 	Hello(context.Context, *connect.Request[v1.HelloRequest]) (*connect.Response[v1.HelloResponse], error)
+	// GetDaemonStatus is who the daemon is, the drives it runs, the
+	// projects it watches and its tailnet listener.
 	GetDaemonStatus(context.Context, *connect.Request[v1.GetDaemonStatusRequest]) (*connect.Response[v1.GetDaemonStatusResponse], error)
 	// StopDaemon stops the daemon; a second call without drain cuts a drain
 	// short.
@@ -131,6 +133,8 @@ type DaemonServiceHandler interface {
 	// Hello is the first call a client makes, to learn which daemon answers
 	// and whether this client may keep it or must replace it.
 	Hello(context.Context, *connect.Request[v1.HelloRequest]) (*connect.Response[v1.HelloResponse], error)
+	// GetDaemonStatus is who the daemon is, the drives it runs, the
+	// projects it watches and its tailnet listener.
 	GetDaemonStatus(context.Context, *connect.Request[v1.GetDaemonStatusRequest]) (*connect.Response[v1.GetDaemonStatusResponse], error)
 	// StopDaemon stops the daemon; a second call without drain cuts a drain
 	// short.

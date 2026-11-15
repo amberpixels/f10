@@ -5,6 +5,8 @@ package f10.v1;
 // ProjectService names the projects this machine works on, so a client can
 // pick one by id instead of knowing its checkout.
 service ProjectService {
+  // ListProjects lists the projects the daemon watches or runs a drive in,
+  // with the id every other request's project field takes.
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
 }
 

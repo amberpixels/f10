@@ -1,13 +1,27 @@
 package remote
 
 import (
+	"context"
 	"crypto/tls"
 	"net"
 	"net/http"
 	"net/netip"
 	"strconv"
 	"strings"
+
+	"connectrpc.com/connect"
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/amberpixels/f10/cli/internal/mcp"
 )
+
+// MCPPath is where the listener serves the API as MCP tools while the
+// setting has MCP on.
+const MCPPath = "/mcp"
+
+// inProcessURL is the base MCP tool calls go to; they never leave the
+// process, so the host is a placeholder.
+const inProcessURL = "http://f10-daemon"
 
 // A Listener is what the daemon asks of the tailnet listener: where to bind,
 // which peers to accept, and the check in front of the API.
@@ -17,7 +31,9 @@ type Listener struct {
 	Peer   func(netip.Addr) bool   // the peers accepted; InTailnet by default
 	App    http.Handler            // the web client's files, nil for none
 	Certs  *Certs                  // the HTTPS certificate, nil for plain HTTP
-	store  *Store
+	// Version is the daemon's release, reported to MCP clients.
+	Version string
+	store   *Store
 }
 
 // Addr is the address to bind and whether the setting is on; with no
@@ -57,13 +73,54 @@ func (l *Listener) Listen(ln net.Listener) net.Listener {
 
 // Handler puts the token check in front of h, and serves the web client's
 // files beside it without one: they hold no data, and the page that asks
-// for the token must load before it has one.
+// for the token must load before it has one. While the setting has MCP on,
+// it also serves MCPPath, each request's tools built from its own token.
 func (l *Listener) Handler(h http.Handler) http.Handler {
-	if l.store == nil {
-		l.store = NewStore(l.Dir)
-	}
+	store := l.storeOf()
+	api := Auth(store, h)
+	routed := Route(api, l.App)
+	ew := connect.NewErrorWriter()
 
-	return Route(Auth(l.store, h), l.App)
+	tools := sdk.NewStreamableHTTPHandler(func(r *http.Request) *sdk.Server {
+		tok, _ := r.Context().Value(tokenKey{}).(Token)
+
+		return mcp.New(mcp.Options{
+			Allow: Allows(tok.Scopes),
+			// each call goes through the token check again, as the caller,
+			// and from the caller's address, so the API still drops a remote
+			// call's environment
+			HTTP:    mcp.InProcess(withAuth(api, r.Header.Get("Authorization")), r.RemoteAddr),
+			BaseURL: inProcessURL,
+			Version: l.Version,
+		})
+	}, &sdk.StreamableHTTPOptions{Stateless: true})
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != MCPPath || !l.mcpOn() {
+			routed.ServeHTTP(w, r)
+
+			return
+		}
+
+		tok, err := authenticate(store, r)
+		if err != nil {
+			_ = ew.Write(w, r, err)
+
+			return
+		}
+
+		tools.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), tokenKey{}, tok)))
+	})
+}
+
+type tokenKey struct{}
+
+// withAuth is h with every request carrying auth, the MCP client's own header.
+func withAuth(h http.Handler, auth string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Header.Set("Authorization", auth)
+		h.ServeHTTP(w, r)
+	})
 }
 
 // TLS is the HTTPS config from Certs; with none, the listener serves plain
@@ -74,6 +131,22 @@ func (l *Listener) TLS() (*tls.Config, string, string) {
 	}
 
 	return l.Certs.Config()
+}
+
+func (l *Listener) storeOf() *Store {
+	if l.store == nil {
+		l.store = NewStore(l.Dir)
+	}
+
+	return l.store
+}
+
+// mcpOn reads the setting on each request, so f10 remote on --mcp and off
+// apply without a restart.
+func (l *Listener) mcpOn() bool {
+	c, err := ReadConfig(l.Dir)
+
+	return err == nil && c.MCP
 }
 
 // apiPrefixes are the Connect packages' path prefixes, which always go

@@ -84,6 +84,9 @@ export const ListProjectsResponseSchema: GenMessage<ListProjectsResponse> = /*@_
  */
 export const ProjectService: GenService<{
   /**
+   * ListProjects lists the projects the daemon watches or runs a drive in,
+   * with the id every other request's project field takes.
+   *
    * @generated from rpc f10.v1.ProjectService.ListProjects
    */
   listProjects: {

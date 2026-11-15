@@ -38,7 +38,8 @@ func Auth(store *Store, next http.Handler) http.Handler {
 	})
 }
 
-func allowed(store *Store, r *http.Request) (Token, error) {
+// authenticate is the valid token r carries.
+func authenticate(store *Store, r *http.Request) (Token, error) {
 	secret, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 	if !ok || strings.TrimSpace(secret) == "" {
 		return Token{}, connect.NewError(connect.CodeUnauthenticated,
@@ -51,6 +52,15 @@ func allowed(store *Store, r *http.Request) (Token, error) {
 			connect.CodeUnauthenticated,
 			errors.New("this device token is unknown or revoked"),
 		)
+	}
+
+	return tok, nil
+}
+
+func allowed(store *Store, r *http.Request) (Token, error) {
+	tok, err := authenticate(store, r)
+	if err != nil {
+		return Token{}, err
 	}
 
 	proc := r.URL.Path

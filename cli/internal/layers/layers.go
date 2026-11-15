@@ -51,6 +51,10 @@ var Table = []Rule{
 	{Prefix: "internal/ui", Rank: -1},
 	{Prefix: "internal/tasktree", Rank: -1},
 	{Prefix: "internal/trackerdriver", Rank: -1}, // imports shell
+	{
+		Prefix: "internal/mcp",
+		Rank:   -1,
+	}, // the generated MCP tools served over any HTTP client; knows no tokens
 
 	// the domain packages, which Go's own cycle check keeps acyclic
 	{Prefix: "internal", Rank: 0, Peers: true},
@@ -86,6 +90,7 @@ var Table = []Rule{
 	{Prefix: "internal/command/audit", Rank: 3},
 	{Prefix: "internal/command/atlas", Rank: 3},
 	{Prefix: "internal/command/remote", Rank: 3},
+	{Prefix: "internal/command/mcp", Rank: 3},
 
 	// the commands that read a task, its request, the config and the board
 	{Prefix: "internal/command/task", Rank: 4},
@@ -115,6 +120,7 @@ var Table = []Rule{
 
 	{Prefix: "cmd/f10", Rank: 11},
 	{Prefix: "cmd/f10eval", Rank: 11},
+	{Prefix: "cmd/protoc-gen-f10-mcp", Rank: 11}, // the buf plugin that writes gen/mcptools
 }
 
 // A Violation is one import the table forbids, or a package it does not rank.

@@ -749,6 +749,9 @@ export const BoardViewSchema: GenEnum<BoardView> = /*@__PURE__*/
  */
 export const BoardService: GenService<{
   /**
+   * GetBoard is what changed in a project over a window, or with the
+   * state view, where every task stands and who owes the next move.
+   *
    * @generated from rpc f10.v1.BoardService.GetBoard
    */
   getBoard: {

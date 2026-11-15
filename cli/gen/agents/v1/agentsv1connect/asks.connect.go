@@ -41,7 +41,11 @@ const (
 
 // AskServiceClient is a client for the agents.v1.AskService service.
 type AskServiceClient interface {
+	// ListAsks lists the questions agents are waiting on, and with
+	// answered_since also the ones answered since then.
 	ListAsks(context.Context, *connect.Request[v1.ListAsksRequest]) (*connect.Response[v1.ListAsksResponse], error)
+	// AnswerAsk answers an open ask by its id, one value per numbered
+	// question, and delivers the answer to the agent that asked.
 	AnswerAsk(context.Context, *connect.Request[v1.AnswerAskRequest]) (*connect.Response[v1.AnswerAskResponse], error)
 }
 
@@ -89,7 +93,11 @@ func (c *askServiceClient) AnswerAsk(ctx context.Context, req *connect.Request[v
 
 // AskServiceHandler is an implementation of the agents.v1.AskService service.
 type AskServiceHandler interface {
+	// ListAsks lists the questions agents are waiting on, and with
+	// answered_since also the ones answered since then.
 	ListAsks(context.Context, *connect.Request[v1.ListAsksRequest]) (*connect.Response[v1.ListAsksResponse], error)
+	// AnswerAsk answers an open ask by its id, one value per numbered
+	// question, and delivers the answer to the agent that asked.
 	AnswerAsk(context.Context, *connect.Request[v1.AnswerAskRequest]) (*connect.Response[v1.AnswerAskResponse], error)
 }
 

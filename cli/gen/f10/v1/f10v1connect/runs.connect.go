@@ -47,6 +47,8 @@ const (
 
 // RunServiceClient is a client for the f10.v1.RunService service.
 type RunServiceClient interface {
+	// GetRunStatus is where f10 runs stand: one task's, a project's, or every
+	// live run on the machine, with the question a stopped run waits on.
 	GetRunStatus(context.Context, *connect.Request[v1.GetRunStatusRequest]) (*connect.Response[v1.GetRunStatusResponse], error)
 	// Start opens a task's worktree, workspace and agent, already prompted.
 	Start(context.Context, *connect.Request[v1.StartRequest]) (*connect.Response[v1.StartResponse], error)
@@ -138,6 +140,8 @@ func (c *runServiceClient) Forward(ctx context.Context, req *connect.Request[v1.
 
 // RunServiceHandler is an implementation of the f10.v1.RunService service.
 type RunServiceHandler interface {
+	// GetRunStatus is where f10 runs stand: one task's, a project's, or every
+	// live run on the machine, with the question a stopped run waits on.
 	GetRunStatus(context.Context, *connect.Request[v1.GetRunStatusRequest]) (*connect.Response[v1.GetRunStatusResponse], error)
 	// Start opens a task's worktree, workspace and agent, already prompted.
 	Start(context.Context, *connect.Request[v1.StartRequest]) (*connect.Response[v1.StartResponse], error)

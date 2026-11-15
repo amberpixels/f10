@@ -39,6 +39,8 @@ const (
 
 // BoardServiceClient is a client for the f10.v1.BoardService service.
 type BoardServiceClient interface {
+	// GetBoard is what changed in a project over a window, or with the
+	// state view, where every task stands and who owes the next move.
 	GetBoard(context.Context, *connect.Request[v1.GetBoardRequest]) (*connect.Response[v1.GetBoardResponse], error)
 }
 
@@ -74,6 +76,8 @@ func (c *boardServiceClient) GetBoard(ctx context.Context, req *connect.Request[
 
 // BoardServiceHandler is an implementation of the f10.v1.BoardService service.
 type BoardServiceHandler interface {
+	// GetBoard is what changed in a project over a window, or with the
+	// state view, where every task stands and who owes the next move.
 	GetBoard(context.Context, *connect.Request[v1.GetBoardRequest]) (*connect.Response[v1.GetBoardResponse], error)
 }
 

@@ -11,6 +11,7 @@ import (
 type RemoteState struct {
 	Enabled   bool
 	Port      int
+	MCP       bool   // MCP tools served on the listener at /mcp
 	ConfigErr string // the setting does not read
 
 	Tailnet string // this machine's Tailscale address; "" when Tailscale is down
@@ -98,6 +99,13 @@ func checkRemote(env *Env) Result {
 		parts = append(parts, "daemon listening on "+st.Bound)
 	case !st.DaemonRunning:
 		parts = append(parts, "no daemon running")
+	}
+
+	switch {
+	case st.Enabled && st.MCP && st.Bound != "":
+		parts = append(parts, "MCP tools at http://"+st.Bound+"/mcp")
+	case st.Enabled && st.MCP:
+		parts = append(parts, "MCP on")
 	}
 
 	switch {

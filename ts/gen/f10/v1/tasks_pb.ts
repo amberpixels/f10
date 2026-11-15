@@ -225,6 +225,8 @@ export const GetTaskResponseSchema: GenMessage<GetTaskResponse> = /*@__PURE__*/
  */
 export const TaskService: GenService<{
   /**
+   * CreateTask creates a task in a project's tracker and returns its id.
+   *
    * @generated from rpc f10.v1.TaskService.CreateTask
    */
   createTask: {
@@ -233,6 +235,8 @@ export const TaskService: GenService<{
     output: typeof CreateTaskResponseSchema;
   },
   /**
+   * GetTask reads a task from a project's tracker, comments included.
+   *
    * @generated from rpc f10.v1.TaskService.GetTask
    */
   getTask: {
