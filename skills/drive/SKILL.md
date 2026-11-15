@@ -70,8 +70,10 @@ A parent with a draft candidate goes through **Parents** points 4 and 5 first, a
 4. **Show the proposal** verbatim in a plain fenced block, then take edits in plain words ("keep FT-45 alone", "bundle 46 with 45", "put 47 in stage 2").
    Turn each into an override in the sheet: `alone: true`; `with: <id>`; `after: <id>` or `after: "none"` (stage 2 means after nothing in stage 2 or later).
    Rerun the command and show the new proposal; never edit the command or the stages by hand, because the reasons would no longer match.
-5. **Confirm once**, in one `AskUserQuestion`: a question `Drive this command?` `[drive it | change it]`, plus one per proposed `After:` edit, `[add After: <base> to <id> | leave it]`.
-   `change it` goes back to point 4.
+5. **Confirm once**, in one `AskUserQuestion`: a single-select question `Drive this command?` `[drive it | change it]`, each option carrying the proposal as its `preview`, plus one per proposed `After:` edit, `[add After: <base> to <id> | leave it]`.
+   The preview is the last point 3 run's output, verbatim in a plain fenced block, because the dialog can cover what point 4 printed, and the user must see the stages whenever the question is on screen.
+   Both options carry it, because the preview pane shows only the option in focus.
+   `change it` goes back to point 4, so the next question previews the new proposal.
    Apply each accepted edit with `f10 task update <id> --after <base>` (`none` drops the line), all in one Bash call.
    A declined or refused (exit 3) edit is taken back in the sheet, so the command never relies on an order the tracker lacks, nor drops one it holds:
    - an edit the planner proposed (the task has no `After:` of its own, the order came from `buildsOn` or a shared file) sets `after: "none"`;
