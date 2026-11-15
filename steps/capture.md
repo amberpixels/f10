@@ -50,7 +50,6 @@ Context: `project.md → Tracker`, for the task **id format**, the **create adap
      Create tasks meant to run in sequence in that order, so that each `After:` line names an id that already exists.
    - **Other tasks named in the body**, such as a base task mentioned in prose, a parent or a subtask, carry their titles.
      Get every title from one `f10 task ref` call, and write each in the renderer's form (`conventions/context.md` → Task references).
-     The `[closed]` marker `f10 task ref` prints after a closed task is a note to you, so it never goes into the body.
      A closed task the description asks to change is not asked in its own body or comments: the change becomes a new follow-up task.
    - **Markup follows the tracker's renderer**, because markdown is not a safe default.
      `f10 task create` takes markdown (point 3).

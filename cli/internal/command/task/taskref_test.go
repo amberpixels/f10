@@ -206,35 +206,74 @@ func TestTaskRefsReplannedIsOpen(t *testing.T) {
 	}
 }
 
-// A comment on a finished task is refused before anything is posted, unless
-// the caller says it is meant for a closed task.
+// A comment on a closed task is refused before anything is posted. The
+// tracker's state wins over a finish, which a reopen never clears; the
+// finish decides only when the tracker does not answer.
 func TestRefuseClosedComment(t *testing.T) {
 	f, tg := finishedRefTarget(t)
-	r := ref.Ref{ID: "FT-109", Number: "109"}
+	view := func(n string) string {
+		return "gh issue view " + n + " --json number,title,state,labels,createdAt,url,body,assignees"
+	}
 
-	err := taskcmd.RefuseClosed(t.Context(), tg, r, io.Discard)
+	f.Script(view("109"), `{"number":109,"title":"Base task","state":"CLOSED"}`)
+
+	err := taskcmd.RefuseClosed(t.Context(), tg, ref.Ref{ID: "FT-109", Number: "109"}, io.Discard)
 	if err == nil || !strings.Contains(err.Error(), "FT-109 is closed") || !strings.Contains(err.Error(), "--closed") {
-		t.Errorf("refuse finished = %v", err)
+		t.Errorf("refuse closed = %v", err)
 	}
 
-	if len(f.Calls) != 0 {
-		t.Errorf("a ledger finish read the tracker: %v", f.Calls)
+	f.Script(view("109"), `{"number":109,"title":"Base task","state":"OPEN"}`)
+
+	if err := taskcmd.RefuseClosed(t.Context(), tg, ref.Ref{ID: "FT-109", Number: "109"}, io.Discard); err != nil {
+		t.Errorf("reopened FT-109 refused: %v", err)
 	}
 
-	f.Script(
-		"gh issue view 7 --json number,title,state,labels,createdAt,url,body,assignees",
-		`{"number":7,"title":"Gone","state":"CLOSED","url":"https://github.com/o/r/issues/7"}`,
-	)
-	f.Script(
-		"gh issue view 8 --json number,title,state,labels,createdAt,url,body,assignees",
-		`{"number":8,"title":"Live","state":"OPEN","url":"https://github.com/o/r/issues/8"}`,
-	)
+	f.Fail(view("109"), shell.Result{Code: 1, Stderr: "offline"})
 
-	if err := taskcmd.RefuseClosed(t.Context(), tg, ref.Ref{ID: "FT-7", Number: "7"}, io.Discard); err == nil {
-		t.Error("a task the tracker reads as closed was not refused")
+	if err := taskcmd.RefuseClosed(t.Context(), tg, ref.Ref{ID: "FT-109", Number: "109"}, io.Discard); err == nil {
+		t.Error("an unanswered tracker let a finished task through")
 	}
+
+	f.Fail(view("8"), shell.Result{Code: 1, Stderr: "offline"})
 
 	if err := taskcmd.RefuseClosed(t.Context(), tg, ref.Ref{ID: "FT-8", Number: "8"}, io.Discard); err != nil {
-		t.Errorf("open FT-8 refused: %v", err)
+		t.Errorf("an unanswered tracker refused FT-8, which no finish names: %v", err)
+	}
+}
+
+// A tracker read in this call beats the finish: a task reopened after it
+// prints open under --fresh.
+func TestTaskRefsFreshReadBeatsFinish(t *testing.T) {
+	f, tg := finishedRefTarget(t)
+
+	f.Script(
+		"gh issue view 109 --json number,title,state,labels,createdAt,url,body,assignees",
+		`{"title":"Base task","state":"OPEN","url":"https://github.com/o/r/issues/109"}`,
+	)
+
+	got := statusview.TaskRefsFor(tg, t.Context(), []ref.Ref{{ID: "FT-109", Number: "109"}}, true, true, nil)
+	if got["FT-109"].Closed {
+		t.Errorf("reopened FT-109 under --fresh = %+v, want open", got["FT-109"])
+	}
+}
+
+// A finish row naming no task marks nothing: resolved, its empty token would
+// name this checkout's own task.
+func TestTaskRefsSkipEmptyFinish(t *testing.T) {
+	f := testkit.NewFakes(t)
+	tg := testkit.ChildTarget(t, "gh")
+	t.Setenv(ledger.PathEnv, filepath.Join(t.TempDir(), "f10.db"))
+	seam.Swap(t, &target.ProjectOf, func(context.Context, string) string { return "github.com/o/r" })
+
+	ledger.RememberRefs(t.Context(), "github.com/o/r",
+		ledger.TaskRef{ID: "FT-5", Title: "Here", URL: "https://github.com/o/r/issues/5"})
+
+	e := ledger.MustEvent(ledger.TaskFinished, ledger.TaskFinishedPayload{})
+	e.Project = "github.com/o/r"
+	ledger.Record(e)
+
+	got := statusview.TaskRefsFor(tg, t.Context(), []ref.Ref{{ID: "FT-5", Number: "5"}}, true, false, nil)
+	if got["FT-5"].Closed || len(f.Calls) != 0 {
+		t.Errorf("FT-5 = %+v, calls %v", got["FT-5"], f.Calls)
 	}
 }

@@ -44,7 +44,6 @@ Any commit this step makes follows `conventions/context.md` → Commits, with `-
    - Write the draft to a temp file outside the repo.
    - In stealth mode, the branch name, the commits and the PR text carry no f10 traces.
    - Another task named in the PR text is a link carrying its title, from `f10 task ref <id>... --md` (`conventions/context.md` → Task references).
-     Drop the `[closed]` marker it prints after a closed task, and keep the link, because naming shipped work in a PR is normal.
    - A **bundle** is several tasks shipped in one PR, and the `task:` line of `f10 pr view` names it as `<lead>+<riders>`.
      Draft a bundle's title from the lead's, and its body links every member with its title.
      The riders go after the lead id, up to two and then a count (`ABC-1 (+ABC-2, ABC-3, 2 more): <lead title>`).

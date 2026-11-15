@@ -289,19 +289,18 @@ func runTaskRetitle(ctx context.Context, cmd *cli.Command) error {
 }
 
 // RefuseClosed stops a comment on a closed task, which is usually meant for
-// open work. The ledger answers first because it is free; a tracker that
-// gives no state, or fails to answer, lets the comment through.
+// open work. The tracker's state wins, since a reopen never clears a finish;
+// the ledger decides only where the tracker gives no state or no answer.
 func RefuseClosed(ctx context.Context, t *target.Target, r ref.Ref, warn io.Writer) error {
-	closed := statusview.FinishedIn(ctx, t, []string{r.ID})[r.ID]
-	if !closed {
-		info, err := tasksource.TasksFor(t).Info(ctx, r)
-		if err != nil {
-			ui.Warnf(warn, "%s: state not read, commenting anyway: %v", r.ID, err)
+	info, err := tasksource.TasksFor(t).Info(ctx, r)
 
-			return nil
-		}
+	closed := info.Closed
+	if err != nil || !info.Stated {
+		closed = statusview.FinishedIn(ctx, t, []ref.Ref{r})[r.ID]
+	}
 
-		closed = info.Closed
+	if err != nil && !closed {
+		ui.Warnf(warn, "task state not read, commenting anyway: %v", err)
 	}
 
 	if closed {

@@ -444,6 +444,7 @@ func (s HostSource) Info(ctx context.Context, r ref.Ref) (TaskInfo, error) {
 	return TaskInfo{
 		Body:   iss.Body,
 		Closed: strings.EqualFold(iss.State, "closed"),
+		Stated: true,
 		Pull:   iss.Pull,
 		Labels: iss.Labels,
 	}, nil

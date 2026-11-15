@@ -1510,7 +1510,8 @@ A task not there costs one tracker call (the host's issue, or the driver's `read
 A title renamed on the tracker stays stale until f10 reads that task again.
 An id the tracker does not know, or a tracker that fails, prints bare with a note on stderr, and the exit is 0.
 A closed task's line ends in ` [closed]`, in both forms.
-It is closed when the ledger records an `f10 finish` of it that still stands (no live plan re-planned it since), which costs no tracker call, or when a tracker read this call made reports it closed.
+A tracker read this call made decides, so `--fresh` shows a task reopened after its finish as open.
+Otherwise it is closed when the ledger records an `f10 finish` of it that still stands (no live plan re-planned it since), which costs no tracker call.
 The state is never kept, so a task closed outside f10 shows closed only once f10 reads it again (`--fresh`).
 Text that leaves the machine never carries the marker.
 `task create` warns on stderr when the body's `After:` line names a closed task, and links it anyway.
@@ -1529,7 +1530,8 @@ It shows no run stages or gates, which a task just captured cannot have.
 
 `f10 task comment` posts markdown on stdin as a comment on the task, through the driver's `comment` verb, else the host's issues (`gh issue comment`, `glab issue note`), and prints the comment's url when one comes back.
 It refuses a closed task, exiting 1 with `<id> is closed; pass --closed to comment on it anyway` and posting nothing, because a comment there is usually meant for open work.
-It reads the ledger's finishes first, then the tracker's state; a tracker that gives no state, as a driver does, or fails to answer lets the comment through.
+It reads the tracker's state, which wins over the ledger because a reopen never clears a finish.
+Where the tracker gives no state, as a driver does, or fails to answer, a standing finish in the ledger refuses the comment, and with none the comment goes through.
 `--closed` skips the check.
 `f10 task update` sets the task's `--status`, `--priority`, `--label` (repeatable, adds), `--assignee` (replaces) and `--set key=value` (a property the driver knows), through the driver's `update` verb, else the host's issues, where a status is `open` or `closed`, a priority is the label `tracker.priority` maps it to, and `--set` is refused ([driver contract](driver-contract.md#commenting-on-and-updating-a-task)).
 Both exit **3** on a tracker that is not the host's when no driver takes the verb, and a ship run then reports its shipment locally only.
