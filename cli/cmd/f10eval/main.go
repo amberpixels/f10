@@ -412,7 +412,10 @@ func seedReviews(ctx context.Context, dir, path string, reviews []SeedReview) er
 	for _, r := range reviews {
 		for n := 1; n <= r.Rounds; n++ {
 			e, err := ledger.NewEvent(ledger.ReviewRoundOpened,
-				ledger.ReviewRoundOpenedPayload{Round: strconv.Itoa(n), Categories: r.Categories})
+				// review writes rounds 1 and 2 only; a later pass is a follow-up PR's series
+				ledger.ReviewRoundOpenedPayload{
+					Round: strconv.Itoa(min(n, 2)), Reviewed: fmt.Sprintf("seed%03d", n), Categories: r.Categories,
+				})
 			if err != nil {
 				return err
 			}

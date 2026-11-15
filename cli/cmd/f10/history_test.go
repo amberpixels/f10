@@ -59,8 +59,14 @@ func TestHistoryNamesARecurringFinding(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if want := "recurring finding: tests and docs in 3 of 3 (DM-1, DM-2, DM-3)"; !strings.Contains(out, want) {
+	if want := "recurring finding: tests and docs in 3 of 3 reviewed (DM-1, DM-2, DM-3)"; !strings.Contains(out, want) {
 		t.Errorf("missing %q in:\n%s", want, out)
+	}
+
+	// a directory reads as the files under it, not as one stale path
+	dirOut, err := runApp(t, "-C", repo, "history", ".").outErr()
+	if err != nil || !strings.Contains(dirOut, "in 3 of 3 reviewed (DM-1, DM-2, DM-3)") {
+		t.Errorf("history . (%v):\n%s", err, dirOut)
 	}
 
 	if strings.Contains(out, "DM-9") {

@@ -57,7 +57,7 @@ A review scenario adds three fields to `scenario.json`:
 A history scenario gives the run a past to plan against:
 
 - `history`: commits made on `main` after the initial one, each `{message, file, append}`, the message carrying the `Task:` trailer of the task it stands for.
-- `reviews`: review rounds seeded into the run's ledger, each `{task, rounds, categories}`, under the project the run records itself as.
+- `reviews`: review rounds seeded into the run's ledger, each `{task, rounds, categories}`, under the project the run records itself as; each round is round `1`, then `2`, at a reviewed sha of its own.
 - `history_cites`: the ids the plan's `## History` section must name.
 
 The checks (`cli/cmd/f10eval/checks.go`):
@@ -80,6 +80,6 @@ It runs once at `opus:high` and once at `opus:medium`, so the two reports compar
 `review-planted` reviews a branch that plants four defects in a small HTTP server: an off-by-one page, a file never closed, a path traversal and an unbounded body read. It runs `/f10:review EV-2 --driven`, the blind reviewer.
 Three of its four defects fall in security and performance, which keeps three findings, so a miss there can mean the reviewer ranked another real finding above a planted one: read the findings file before blaming the reviewer.
 `review-planted-host` runs the same fixture and change through `/f10:review EV-2 host --driven`, the host engine, so the two reports compare the reviewers finding for finding on the `planted` check.
-`plan-history` plans `feature-small`'s task after three earlier tasks touched `main.go`, each with three review rounds raising a tests-and-docs finding, through `/f10:plan EV-1 --driven`. Its `history` check passes when the plan's `## History` names all three, which `f10 history` printed as a recurring finding and a median of 3 rounds.
+`plan-history` plans `feature-small`'s task after three earlier tasks touched `main.go`, each with two review rounds raising a tests-and-docs finding, through `/f10:plan EV-1 --driven`. Its `history` check passes when the plan's `## History` names all three, which `f10 history` printed as a recurring finding and a median of 2 rounds.
 A bug scenario (a failing test to fix) and a spike scenario are the next ones to add. The runner needs no change for them.
 `go test ./cmd/f10eval` covers the checks against a canned result, with no model call.

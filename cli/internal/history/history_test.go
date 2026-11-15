@@ -145,7 +145,7 @@ func TestRecurringFindingNamesItsTasks(t *testing.T) {
 	text := strings.Join(b.Lines(), "\n")
 
 	for _, want := range []string{
-		"recurring finding: tests and docs in 3 of 3 (FT-1, FT-2, FT-3), 3 fixed, 0 skipped",
+		"recurring finding: tests and docs in 3 of 3 reviewed (FT-1, FT-2, FT-3), 3 fixed, 0 skipped",
 		"median review rounds: 3 (FT-1 2, FT-2 3, FT-3 4)",
 	} {
 		if !strings.Contains(text, want) {
@@ -272,5 +272,53 @@ func TestPlanKind(t *testing.T) {
 		if got := PlanKind(dir, task); got != want {
 			t.Errorf("PlanKind(%s) = %q, want %q", task, got, want)
 		}
+	}
+}
+
+// A follow-up PR's series restarts at round 1, so rounds are told apart by
+// their reviewed sha; neighbors with no review recorded stay out of the
+// rates, because they predate the ledger.
+func TestStatisticsCountReviewedNeighborsOnly(t *testing.T) {
+	at := window.Add(24 * time.Hour)
+	opened := func(task, round, sha string) ledger.Event {
+		return ev(at, task, ledger.ReviewRoundOpened, ledger.ReviewRoundOpenedPayload{
+			Round: round, Reviewed: sha, Categories: map[string]int{"correctness and logic": 1},
+		})
+	}
+
+	events := []ledger.Event{
+		opened("FT-1", "1", "aaa"), opened("FT-1", "2", "bbb"), opened("FT-1", "1", "ccc"),
+		opened("FT-2", "1", "ddd"), opened("FT-2", "2", "eee"),
+		opened("FT-3", "1", "fff"),
+	}
+
+	b := Build(Input{
+		Paths: []string{"a.go"}, Since: window, Events: events,
+		Touches: live("FT-1", "FT-2", "FT-3", "FT-4", "FT-5", "FT-6", "FT-7"),
+	})
+
+	if b.Neighbors[0].Rounds != 3 {
+		t.Errorf("FT-1 rounds = %d, want 3 over two series", b.Neighbors[0].Rounds)
+	}
+
+	a := b.Aggregates
+	if a == nil || a.N != 3 || a.MedianRounds != 2 {
+		t.Fatalf("aggregates = %+v, want 3 reviewed with a median of 2", a)
+	}
+
+	if len(a.Recurring) != 1 || !slices.Equal(a.Recurring[0].Tasks, []string{"FT-1", "FT-2", "FT-3"}) {
+		t.Errorf("recurring = %+v, want correctness and logic in all three reviewed", a.Recurring)
+	}
+}
+
+func TestDecisionCarriesItsAnchors(t *testing.T) {
+	d := lore.Entry{
+		ID: "01D", Kind: lore.KindDecision, Change: "FT-1", Chosen: "x",
+		Anchors: []lore.Anchor{{Path: "a.go", Line: 3, EndLine: 9, Commit: "abcdef1"}, {Path: "z.go", Line: 1}},
+	}
+
+	b := Build(Input{Paths: []string{"a.go"}, Since: window, Decisions: []lore.Entry{d}})
+	if got := b.Decisions[0].Anchors; !slices.Equal(got, []string{"a.go:3-9@abcdef1"}) {
+		t.Errorf("anchors = %v, want the one on a.go", got)
 	}
 }

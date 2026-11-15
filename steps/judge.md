@@ -35,7 +35,7 @@ However, never agree because agreeing is cheaper.
    Resizing it to normal is then a change the verdict names, whatever its color.
 2. **Restate the problem, then find it in the code**, with a few targeted `Read` and `Grep` calls sent in one message.
    If the stated problem and the real one differ, build the judgment on the real one.
-   On a plan or a change, send `f10 history <path>...` in the same message, over the files the plan's stages name or the ones `f10 pr diff --name-only` lists.
+   On a plan or a change, send `f10 history --task <id> <path>...` in the same message, over the files the plan's stages name or the ones `f10 pr diff --name-only` lists.
    It prints what the tasks that touched those files went through: review rounds, recurring findings, regressions, and the lessons and decisions anchored there.
    An idea or a bare task names no files yet, so it runs none.
 3. **Symptom or cause.**
@@ -47,7 +47,7 @@ However, never agree because agreeing is cheaper.
    Weigh its cost now against the cost of reaching it later.
    A quick hack counts as a hack only if a better shape is reachable now.
    Weigh the history from point 2 under the same rules, as evidence about these files rather than a rule of its own:
-   - A regression hotspot, two or more regressions on these files in the window, is a cost the subject must address, or the verdict names it.
+   - A regression hotspot, two or more regressions in the window on these files or shipped by the tasks that touched them, is a cost the subject must address, or the verdict names it.
    - A subject that takes an option a decision rejected, with no reason given, is at best **proceed with changes**.
    - A plan's `## History` section says what the plan did with each fact, so judge the reasons it gives, not only whether the section exists.
 6. **For code: keep, reshape or discard**, and say which parts.

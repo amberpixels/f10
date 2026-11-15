@@ -44,23 +44,21 @@ func (b *Brief) Lines() []string {
 
 	if a := b.Aggregates; a != nil {
 		for _, r := range a.Recurring {
-			out = append(out, fmt.Sprintf("recurring finding: %s in %d of %d (%s)%s",
+			out = append(out, fmt.Sprintf("recurring finding: %s in %d of %d reviewed (%s)%s",
 				r.Category, len(r.Tasks), a.N, strings.Join(r.Tasks, ", "), b.settled(r.Category)))
 		}
 
-		if a.MedianRounds != nil {
-			var parts []string
-			for _, n := range b.Neighbors {
-				if n.Rounds > 0 {
-					parts = append(parts, n.Task+" "+strconv.Itoa(n.Rounds))
-				}
+		var parts []string
+		for _, n := range b.Neighbors {
+			if n.Rounds > 0 {
+				parts = append(parts, n.Task+" "+strconv.Itoa(n.Rounds))
 			}
-
-			out = append(
-				out,
-				fmt.Sprintf("median review rounds: %s (%s)", number(*a.MedianRounds), strings.Join(parts, ", ")),
-			)
 		}
+
+		out = append(
+			out,
+			fmt.Sprintf("median review rounds: %s (%s)", number(a.MedianRounds), strings.Join(parts, ", ")),
+		)
 	}
 
 	for _, d := range b.Decisions {

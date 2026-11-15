@@ -68,15 +68,18 @@ type Regression struct {
 	Class  string `json:"class,omitempty"`
 }
 
-// Aggregates are the statistics over at least MinSample live neighbors.
+// Aggregates are the statistics over the reviewed neighbors, those the
+// ledger holds a review round for, once there are MinSample of them: older
+// work predates the ledger, and counting it would dilute every rate.
 type Aggregates struct {
-	N            int         `json:"n"`
-	MedianRounds *float64    `json:"median_rounds"`
+	N            int         `json:"n"` // the reviewed neighbors
+	MedianRounds float64     `json:"median_rounds"`
 	Recurring    []Recurring `json:"recurring"`
 	Regressions  int         `json:"regressions"`
 }
 
-// Recurring is a finding category raised in at least half the neighbors.
+// Recurring is a finding category raised in at least half the reviewed
+// neighbors.
 type Recurring struct {
 	Category string   `json:"category"`
 	Tasks    []string `json:"tasks"`
@@ -87,6 +90,7 @@ type Note struct {
 	ID       string          `json:"id"`
 	Change   string          `json:"change"`
 	Path     string          `json:"path"`
+	Anchors  []string        `json:"anchors"` // on the paths, as `f10 lore add --anchor` takes them
 	Text     string          `json:"text"`
 	Chosen   string          `json:"chosen,omitempty"`
 	Rejected []lore.Rejected `json:"rejected,omitempty"`
@@ -134,9 +138,7 @@ func Build(in Input) *Brief {
 	b.Regressions = regressions(in.Events, in.Paths, in.Since, live)
 	implementMinutes(in.Events, live)
 
-	if len(b.Neighbors) >= MinSample {
-		b.Aggregates = aggregate(b.Neighbors, len(b.Regressions))
-	}
+	b.Aggregates = aggregate(b.Neighbors, len(b.Regressions))
 
 	return b
 }
@@ -144,7 +146,7 @@ func Build(in Input) *Brief {
 // ledgerFacts fills each neighbor from its own rows, the newest verdict per
 // finding and per verdict file standing.
 func ledgerFacts(events []ledger.Event, live map[string]*Neighbor) {
-	rounds := map[string]map[string]map[string]int{}      // task, round: the latest opening's categories
+	rounds := map[string]map[string]map[string]int{}      // task, review pass: the latest opening's categories
 	findings := map[string]ledger.FindingVerdictPayload{} // task, round, finding
 	judged := map[string]string{}                         // task, verdict file
 
@@ -167,7 +169,9 @@ func ledgerFacts(events []ledger.Event, live map[string]*Neighbor) {
 					rounds[n.Task] = map[string]map[string]int{}
 				}
 
-				rounds[n.Task][p.Round] = p.Categories
+				// a follow-up PR's series restarts at round 1, so the reviewed sha
+				// keeps its rounds apart from the first PR's
+				rounds[n.Task][p.Round+"\x00"+p.Reviewed] = p.Categories
 			}
 		case ledger.FindingVerdict:
 			if p, ok := decode[ledger.FindingVerdictPayload](e); ok {
@@ -307,22 +311,22 @@ func implementMinutes(events []ledger.Event, live map[string]*Neighbor) {
 	}
 }
 
-// aggregate is the statistics over the live neighbors. The median counts
-// only the neighbors a review round was recorded for, and is left out when
-// fewer than MinSample were, because older work predates the ledger.
+// aggregate is the statistics over the reviewed neighbors, nil under
+// MinSample of them.
 //
 //nolint:lostfield // a statistic over the neighbors, not a conversion of one
 func aggregate(ns []Neighbor, regressions int) *Aggregates {
-	a := &Aggregates{N: len(ns), Recurring: []Recurring{}, Regressions: regressions}
-
-	var rounds []float64
-
-	raisedIn := map[string][]string{}
+	var (
+		rounds   []float64
+		raisedIn = map[string][]string{}
+	)
 
 	for _, n := range ns {
-		if n.Rounds > 0 {
-			rounds = append(rounds, float64(n.Rounds))
+		if n.Rounds == 0 {
+			continue
 		}
+
+		rounds = append(rounds, float64(n.Rounds))
 
 		for cat, c := range n.Categories {
 			if c.Raised > 0 || c.Fixed > 0 {
@@ -331,13 +335,14 @@ func aggregate(ns []Neighbor, regressions int) *Aggregates {
 		}
 	}
 
-	if len(rounds) >= MinSample {
-		m := median(rounds)
-		a.MedianRounds = &m
+	if len(rounds) < MinSample {
+		return nil
 	}
 
+	a := &Aggregates{N: len(rounds), MedianRounds: median(rounds), Recurring: []Recurring{}, Regressions: regressions}
+
 	for cat, tasks := range raisedIn {
-		if 2*len(tasks) >= len(ns) {
+		if 2*len(tasks) >= a.N {
 			a.Recurring = append(a.Recurring, Recurring{Category: cat, Tasks: tasks})
 		}
 	}
@@ -370,13 +375,15 @@ func notes(entries []lore.Entry, paths []string) []Note {
 
 		seen[e.ID] = true
 
-		n := Note{ID: e.ID, Change: e.Change, Text: firstLine(e.Body), Chosen: e.Chosen, Rejected: e.Rejected}
+		n := Note{
+			ID: e.ID, Change: e.Change, Text: firstLine(e.Body), Chosen: e.Chosen, Rejected: e.Rejected,
+			Anchors: []string{},
+		}
 
 		for _, a := range e.Anchors {
 			if slices.Contains(paths, a.Path) {
-				n.Path = a.Path
-
-				break
+				n.Path = cmp.Or(n.Path, a.Path)
+				n.Anchors = append(n.Anchors, a.String())
 			}
 		}
 

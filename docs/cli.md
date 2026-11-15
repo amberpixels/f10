@@ -1278,6 +1278,7 @@ Counting starts with the release that records waits: a session with no wait in t
 It is a lookup over git, the ledger and lore, so the same history prints the same brief.
 
 1. **Neighbors** are the tasks whose commits touched the paths since `--since` (default `180d`), read in one `git log` at `HEAD`.
+   A directory stands for the files `HEAD` holds under it.
    A commit's task is its `Task:` trailer (a bundle counts once, under its lead), else its `Change:` trailer, else what `f10 task regression` would attribute it to (the closest unmerged branch, then a subject opening with an id).
    `--task`, else the branch's task, is left out, because a task is not its own history.
 2. **Stale** neighbors are dropped and counted: one whose added lines in these paths stand under 30% at `HEAD`, by `git blame`, was mostly rewritten since, so its record no longer applies.
@@ -1285,7 +1286,8 @@ It is a lookup over git, the ledger and lore, so the same history prints the sam
 3. **Per neighbor**, from the ledger: its kind (the `Kind:` line of its live or newest archived plan), size, implement minutes (as `f10 stats` counts them), review rounds, finding categories raised and the fixed and skipped counts resolve recorded, plans superseded, halts, judge verdicts, and the bugs later traced to it.
 4. **Regressions**: the `regression_found` rows in the window whose lines are on these paths or whose origin is a neighbor.
 5. **Lore**: the effective lessons and decisions anchored to the paths, a decision with its rejected options.
-6. **Statistics** print only over 3 live neighbors or more: the median review rounds (over those with a round recorded, again only from 3), and each category raised in at least half the neighbors.
+6. **Statistics** print only over 3 reviewed neighbors or more, the live ones the ledger holds a review round for, because work from before the ledger has none to count: the median review rounds, and each category raised in at least half the reviewed neighbors.
+   A review round is a round label at one reviewed sha, so a follow-up PR's rounds add to the first PR's.
    Under 3, the neighbors are listed and no statistic is printed.
 
 Counts and outcomes come from the ledger and reasons from lore, so a finding written to both (`finding_verdict` and a lore `finding`) counts once.
@@ -1303,8 +1305,8 @@ Nothing found prints `No history for these files.`
 | `neighbors` | per live task: `task`, `commits`, `added`, `standing`, `kind`, `lines`, `implement_minutes`, `rounds`, `categories` (`raised`, `fixed`, `skipped` per category), `plans_superseded`, `halts`, `judge_verdicts`, `regressions` (the bug tasks traced to it) |
 | `stale` | the dropped tasks: `task`, `commits`, `added`, `standing` |
 | `regressions` | `bug`, `origin` (a task, `pre-f10` or `outside-f10`), `class` |
-| `aggregates` | `null` under 3 neighbors, else `n`, `median_rounds` (`null` under 3 reviewed), `recurring` (`category`, `tasks`), `regressions` |
-| `decisions`, `lessons` | `id`, `change`, `path`, `text`, and for a decision `chosen` and `rejected` |
+| `aggregates` | `null` under 3 reviewed neighbors, else `n` (the reviewed neighbors), `median_rounds`, `recurring` (`category`, `tasks`), `regressions` |
+| `decisions`, `lessons` | `id`, `change`, `path`, `anchors` (on the paths, in the form `f10 lore add --anchor` takes), `text`, and for a decision `chosen` and `rejected` |
 
 A value never recorded is absent, never `0`.
 

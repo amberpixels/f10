@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -64,6 +65,8 @@ func runHistory(ctx context.Context, cmd *cli.Command) error {
 	if err != nil {
 		return ui.Exit(ui.ExitUsage, "history: %v", err)
 	}
+
+	paths = tracked(ctx, top, paths)
 
 	in, err := gather(ctx, t, top, paths, window.Start, ownTask(ctx, t, cmd.String("task")))
 	if err != nil {
@@ -171,6 +174,27 @@ func repoPaths(top string, args []string) ([]string, error) {
 	}
 
 	return out, nil
+}
+
+// tracked expands a directory to the files HEAD holds under it, because
+// blame and lore anchors read files; a path HEAD lacks stays as given.
+func tracked(ctx context.Context, top string, paths []string) []string {
+	var out []string
+
+	for _, p := range paths {
+		files := strings.Fields(gitx.Out(ctx, top, "ls-tree", "-r", "--name-only", "HEAD", "--", p))
+		if len(files) == 0 {
+			files = []string{p}
+		}
+
+		for _, f := range files {
+			if !slices.Contains(out, f) {
+				out = append(out, f)
+			}
+		}
+	}
+
+	return out
 }
 
 func inside(root, path string) bool {
