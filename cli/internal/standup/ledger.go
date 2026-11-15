@@ -294,12 +294,16 @@ func activity(evs []ledger.Event, since, until time.Time) []Activity {
 	roundOf := func(name, series string, at time.Time) *round {
 		key := name + "\x00" + series
 		if rounds[key] == nil {
-			rounds[key] = &round{name: name, at: at, verdicts: map[string]string{}}
+			rounds[key] = &round{name: name, verdicts: map[string]string{}}
 			roundOrder = append(roundOrder, key)
 		}
 
+		// dated by its first row in the period, so a round opened before it
+		// and resolved in it still lands on a day of the report
 		r := rounds[key]
-		r.inPeriod = r.inPeriod || inWindow(at, since, until)
+		if !r.inPeriod && inWindow(at, since, until) {
+			r.at, r.inPeriod = at, true
+		}
 
 		return r
 	}

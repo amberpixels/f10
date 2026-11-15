@@ -238,3 +238,26 @@ func TestFollowUpRoundIsItsOwn(t *testing.T) {
 		t.Errorf("activity = %q, want %q", got, want)
 	}
 }
+
+// A round opened before the period and resolved in it is dated in the
+// period, so the task gets that day.
+func TestRoundOpenedBeforeThePeriod(t *testing.T) {
+	opening := row(0, "FT-24", ledger.ReviewRoundOpened, ledger.ReviewRoundOpenedPayload{Round: "1", Reviewed: "aaa"})
+	opening.At = since.Add(-72 * time.Hour)
+
+	in := withLedger(
+		input(nil, nil),
+		opening,
+		row(
+			3,
+			"FT-24",
+			ledger.FindingVerdict,
+			ledger.FindingVerdictPayload{Round: "1", Finding: "1.1", Verdict: "skip"},
+		),
+	)
+
+	task := taskByID(t, Group(in), "FT-24")
+	if len(task.Activity) != 1 || !task.Activity[0].At.Equal(at(3)) {
+		t.Errorf("activity = %+v, want the round dated at its verdict", task.Activity)
+	}
+}

@@ -148,23 +148,27 @@ func Commits(ctx context.Context, dir, prefix, rng string) ([]Commit, error) {
 			"%(trailers:only,unfold)" + fieldSep,
 	}
 
+	revs := []string{rng}
 	if rng == "all" {
-		args = append(args, "-"+strconv.Itoa(AllCommits), "HEAD")
-	} else {
-		args = append(args, rng)
+		revs = []string{"-" + strconv.Itoa(AllCommits), "HEAD"}
 	}
+
+	args = append(args, revs...)
 
 	out, err := gitx.Exec(ctx, dir, append(args, "--")...)
 	if err != nil {
 		return nil, fmt.Errorf("audit map: %w", err)
 	}
 
-	// one rev-list tells which commits the default branch holds: those need
-	// only their subject, the branch lookup being CommitTask's for the rest
-	onDefault := map[string]bool{}
-	if shas, err := gitx.Exec(ctx, dir, "rev-list", regression.DefaultRef(ctx, dir), "--"); err == nil {
+	// the range's commits the default branch does not hold, the short tail
+	// that needs CommitTask's branch lookup; the rest need only their subject.
+	// Bounded by the range, never by the repository's age.
+	offDefault := map[string]bool{}
+
+	revList := append(append([]string{"rev-list"}, revs...), "--not", regression.DefaultRef(ctx, dir), "--")
+	if shas, err := gitx.Exec(ctx, dir, revList...); err == nil {
 		for sha := range strings.FieldsSeq(shas) {
-			onDefault[sha] = true
+			offDefault[sha] = true
 		}
 	}
 
@@ -181,12 +185,12 @@ func Commits(ctx context.Context, dir, prefix, rng string) ([]Commit, error) {
 
 		switch {
 		case c.Task != "":
-		case onDefault[c.SHA]:
-			c.Task = regression.SubjectTask(prefix, fields[2])
-		default:
+		case offDefault[c.SHA]:
 			if c.Task, err = regression.CommitTask(ctx, dir, prefix, c.SHA); err != nil {
 				return nil, err
 			}
+		default:
+			c.Task = regression.SubjectTask(prefix, fields[2])
 		}
 
 		commits = append(commits, c)

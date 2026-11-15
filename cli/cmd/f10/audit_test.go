@@ -151,3 +151,31 @@ func TestAuditMapWithNoLedger(t *testing.T) {
 		t.Errorf("no ledger:\n%s", out)
 	}
 }
+
+// A commit off the default branch still maps by its branch, through the
+// tail the bounded rev-list finds.
+func TestAuditMapOffDefaultCommit(t *testing.T) {
+	repo := testkit.TracedRepo(t, "main", "")
+	t.Setenv(ledger.PathEnv, filepath.Join(t.TempDir(), "f10.db"))
+
+	base := strings.TrimSpace(testkit.Git(t, repo, "rev-parse", "HEAD"))
+	testkit.Git(t, repo, "update-ref", "refs/remotes/origin/main", base)
+	testkit.Git(t, repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+	testkit.Git(t, repo, "checkout", "-q", "-b", "DM-30/side")
+
+	if err := os.WriteFile(filepath.Join(repo, "c.go"), []byte("x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	testkit.Git(t, repo, "add", "c.go")
+	testkit.Git(t, repo, "commit", "-q", "-m", "no id here")
+
+	out, err := runApp(t, "-C", repo, "audit", "map", base+"..HEAD").outErr()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(out, "DM-30") {
+		t.Errorf("the side commit did not map to its branch's task:\n%s", out)
+	}
+}
