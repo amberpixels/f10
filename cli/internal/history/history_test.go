@@ -347,3 +347,24 @@ func TestFollowUpVerdictsKeepTheFirstSeries(t *testing.T) {
 		t.Errorf("categories = %+v, want the first PR's fix and the follow-up's skip", cats)
 	}
 }
+
+func TestCatchupDecisionsAreLeftOut(t *testing.T) {
+	anchor := []lore.Anchor{{Path: "a.go", Line: 1}}
+	design := lore.Entry{
+		ID:      "01A",
+		Kind:    lore.KindDecision,
+		Change:  "FT-1",
+		Chosen:  "x",
+		Anchors: anchor,
+		Body:    "why x",
+	}
+	merge := lore.Entry{
+		ID: "01B", Kind: lore.KindDecision, Change: "FT-2", Chosen: "theirs", Anchors: anchor,
+		Body: "catchup: a.go\n\nkept main's side",
+	}
+
+	b := Build(Input{Paths: []string{"a.go"}, Since: window, Decisions: []lore.Entry{design, merge}})
+	if len(b.Decisions) != 1 || b.Decisions[0].ID != "01A" {
+		t.Errorf("decisions = %+v, want the design decision alone", b.Decisions)
+	}
+}

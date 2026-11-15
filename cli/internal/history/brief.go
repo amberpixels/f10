@@ -374,7 +374,7 @@ func notes(entries []lore.Entry, paths []string) []Note {
 	seen := map[string]bool{}
 
 	for _, e := range entries {
-		if seen[e.ID] {
+		if seen[e.ID] || catchupDecision(e) {
 			continue
 		}
 
@@ -431,4 +431,11 @@ func ReadLedger(ctx context.Context, path, project string, tasks []string) ([]le
 	}
 
 	return append(events, found...), nil
+}
+
+// catchupDecision is a merge conflict's settlement, whose body the catchup
+// step opens with `catchup: <path>`: which side a merge kept says nothing
+// about the design a plan must respect, and would crowd out what does.
+func catchupDecision(e lore.Entry) bool {
+	return e.Kind == lore.KindDecision && strings.HasPrefix(strings.TrimSpace(e.Body), "catchup:")
 }

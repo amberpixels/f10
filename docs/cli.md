@@ -1287,6 +1287,7 @@ It is a lookup over git, the ledger and lore, so the same history prints the sam
 3. **Per neighbor**, from the ledger: its kind (the `Kind:` line of its live or newest archived plan), size, implement minutes (as `f10 stats` counts them), review rounds, finding categories raised and the fixed and skipped counts resolve recorded, plans superseded, halts, judge verdicts, and the bugs later traced to it.
 4. **Regressions**: the `regression_found` rows in the window whose lines are on these paths or whose origin is a neighbor.
 5. **Lore**: the effective lessons and decisions anchored to the paths, a decision with its rejected options.
+   A catchup's decision (its body opens `catchup:`) is left out, because which side a merge kept says nothing about the design.
 6. **Statistics** print only over 3 reviewed neighbors or more, the live ones the ledger holds a review round for, because work from before the ledger has none to count: the median review rounds, and each category raised in at least half the reviewed neighbors.
    A review round is a round label at one reviewed sha, so a follow-up PR's rounds add to the first PR's.
    Under 3, the neighbors are listed and no statistic is printed.
