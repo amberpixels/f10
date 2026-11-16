@@ -278,6 +278,16 @@ func TestCleanupCheckProse(t *testing.T) {
 			0,
 		},
 		{
+			"key label",
+			"HEAD",
+			"p.md",
+			plain,
+			plain + "- `a`, `b` and `c`: run it here, then there, and stop.\n",
+			nil,
+			"no dense sentences",
+			0,
+		},
+		{
 			"bold sentence ends",
 			"HEAD",
 			"p.md",
@@ -305,6 +315,16 @@ func TestCleanupCheckProse(t *testing.T) {
 			"package x\n\nvar n = 1 // a, b; c\n",
 			nil,
 			"a.go:3: semicolon",
+			1,
+		},
+		{
+			"unclosed quote hides no comment",
+			"HEAD",
+			"b.sh",
+			"x=1\n",
+			"x=1\ncat <<EOF\nit's\nEOF\n# a, b; c\n",
+			nil,
+			"b.sh:5: semicolon",
 			1,
 		},
 		{

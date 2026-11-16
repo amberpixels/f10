@@ -89,7 +89,7 @@ If the loader is unavailable, follow the points below by hand.
    Never refuse to run for missing config.
 6. **Agent profiles.**
    A step that spawns a subagent passes the Agent tool the `model` and `effort` its profile line's `Agent tool:` part names.
-   Such subagents are review's blind reviewer, `judge --blind`, cleanup's rules check and the audit's reviewers.
+   These are review's blind reviewer, `judge --blind`, cleanup's rules check and the audit's reviewers.
    That line is `<step>.<kind>` for the plan's `Kind` when the load prints one, else the plain `<step>` line.
    A line with no `Agent tool:` part passes neither, so the tool's own defaults apply.
    Every other step runs inline, on the task agent's profile (`docs/project-setup.md` → Agents).
@@ -107,8 +107,7 @@ A fact belongs to whatever acts on it, which says what it means:
 - `ceiling`: `f10 drive`, `f10 flow` and every reader of a pace.
 - `review`, `catchup`, `stale_after`: the **review**, **catchup** and **fetch** steps.
 - `traces`: the **commit**, **resolve**, **judge** and **catchup** steps, and `f10 finish`.
-- `agents`: `f10 start` and `f10 drive`, for the task agent's `default`.
-  Each step that spawns a subagent reads it too (point 6 above).
+- `agents`: `f10 start` and `f10 drive` (the task agent's `default`), and each step that spawns a subagent (point 6 above).
 
 Every heading is optional, and only **Tracker** matters for the pipeline's contracts.
 

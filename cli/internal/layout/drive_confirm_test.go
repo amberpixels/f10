@@ -15,14 +15,24 @@ func TestDriveConfirmCarriesProposal(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var point5 string
+	// The point runs from its numbered line through its indented lines, one sentence each.
+	var point5 strings.Builder
+
+	in := false
 	for l := range strings.SplitSeq(string(data), "\n") {
-		if strings.HasPrefix(l, "5. **Confirm once**") {
-			point5 = l
+		switch {
+		case strings.HasPrefix(l, "5. **Confirm once**"):
+			in = true
+		case in && !strings.HasPrefix(l, "   "):
+			in = false
+		}
+
+		if in {
+			point5.WriteString(l + "\n")
 		}
 	}
 
-	if !strings.Contains(point5, "each option carrying the proposal as its `preview`") {
-		t.Errorf("Plan point 5 asks `Drive this command?` without the proposal as its preview:\n%s", point5)
+	if !strings.Contains(point5.String(), "each option carrying the proposal as its `preview`") {
+		t.Errorf("Plan point 5 asks `Drive this command?` without the proposal as its preview:\n%s", point5.String())
 	}
 }

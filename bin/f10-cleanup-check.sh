@@ -174,8 +174,10 @@ markdown_text() { # markdown_text <file>: a `<line>\t<prose>` row per line, the 
         print NR "\t"
         sub(/^([-*+]|[0-9]+\.)[[:space:]]+/, "", line)
       }
-      # A leading bold label (`**Name** - `, `**Name:**`) names a rule in the house style, so it is not a joint.
+      # A leading label names a rule in the house style, so it is not a joint.
+      # The forms are `**Name** - ` and `**Name:**`, and code-span keys such as `` `key`: ``.
       if (!sub(/^\*\*[^*]+\*\*( -|:)[[:space:]]+/, "", line)) sub(/^\*\*[^*]+:\*\*[[:space:]]+/, "", line)
+      sub(/^(`[^`]+`(, | and | or )?)+:[[:space:]]+/, "", line)
       print NR "\t" line
     }' "$1"
 }
@@ -188,10 +190,12 @@ comment_text() { # comment_text <style> <file>: like markdown_text, for the comm
     dash) lc='--' bopen='/*' bclose='*/' quotes="\"'" ;;
     erb) bopen='<%#' bclose='%>' ;;
   esac
-  # The code_lines lexer, keeping the comment instead of the code.
+  # The code_lines lexer, keeping the comment instead of the code. A string never spans lines here,
+  # because an unclosed quote (an apostrophe in a heredoc) would hide every later comment.
   awk -v lc="$lc" -v bopen="$bopen" -v bclose="$bclose" -v quotes="$quotes" -v hash="$([ "$1" = hash ] && echo 1)" '
     {
       line = $0; n = length(line); com = ""; i = 1
+      if (state == "str") state = ""
       while (i <= n) {
         c = substr(line, i, 1)
         if (state == "block") {
