@@ -17,8 +17,8 @@ const (
 	ScopeRead   Scope = "read"   // status, board, tasks, events, asks and agents
 	ScopeAnswer Scope = "answer" // answer an ask
 	ScopeSteer  Scope = "steer"  // send text to an agent
-	ScopeStart  Scope = "start"  // start, drive, create a task
-	ScopeFinish Scope = "finish" // finish a task
+	ScopeStart  Scope = "start"  // start, drive or cancel one, create a task
+	ScopeFinish Scope = "finish" // finish a task, close its workspace
 )
 
 // Scopes is every scope, in the order help lists them.
@@ -40,6 +40,7 @@ var procedures = map[string]Scope{
 	f10v1connect.ArtifactServiceListArtifactsProcedure:  ScopeRead,
 	f10v1connect.ArtifactServiceGetArtifactProcedure:    ScopeRead,
 	f10v1connect.ProjectServiceListProjectsProcedure:    ScopeRead,
+	f10v1connect.RunServiceListDrivesProcedure:          ScopeRead,
 	agentsv1connect.AskServiceListAsksProcedure:         ScopeRead,
 	agentsv1connect.AgentServiceListWorkspacesProcedure: ScopeRead,
 	agentsv1connect.AgentServiceListAgentsProcedure:     ScopeRead,
@@ -49,8 +50,10 @@ var procedures = map[string]Scope{
 	f10v1connect.RunServiceForwardProcedure:             ScopeSteer,
 	f10v1connect.RunServiceStartProcedure:               ScopeStart,
 	f10v1connect.RunServiceDriveProcedure:               ScopeStart,
+	f10v1connect.RunServiceCancelDriveProcedure:         ScopeStart,
 	f10v1connect.TaskServiceCreateTaskProcedure:         ScopeStart,
 	f10v1connect.RunServiceFinishProcedure:              ScopeFinish,
+	agentsv1connect.AgentServiceCloseWorkspaceProcedure: ScopeFinish,
 }
 
 // socketOnly are the procedures no token reaches: stopping the daemon ends

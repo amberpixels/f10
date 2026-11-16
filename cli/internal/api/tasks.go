@@ -2,7 +2,10 @@ package api
 
 import (
 	"context"
-	"io"
+	"errors"
+	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -22,33 +25,56 @@ func (s *taskService) CreateTask(
 	req *connect.Request[f10v1.CreateTaskRequest],
 ) (*connect.Response[f10v1.CreateTaskResponse], error) {
 	m := req.Msg
+	c := callerOf(req, m.GetCaller())
 
-	if strings.TrimSpace(m.GetTitle()) == "" {
-		return nil, invalid("a task needs a title")
-	}
-
-	t, err := projectTarget(ctx, s.sup, m.GetProject(), "task")
+	t, err := callerTarget(ctx, s.sup, m.GetProject(), c, "task")
 	if err != nil {
 		return nil, err
 	}
 
-	p := hostops.Props{Status: m.GetStatus(), Priority: m.GetPriority(), Labels: m.GetLabels()}
-	for k, v := range m.GetProperties() {
-		p.Set = append(p.Set, k+"="+v)
+	// nowhere to create answers exit 3 before any check, so capture falls back
+	if rs, ok := taskwrite.RefusedUpFront(t); ok {
+		return nil, rs.RefuseCreate()
+	}
+
+	if m.GetCheck() {
+		return connect.NewResponse(&f10v1.CreateTaskResponse{}), nil
+	}
+
+	// a local f10 task create sends stdin whole, an empty one included
+	whole := c != nil || m.GetMarkdown() != ""
+	if !whole && strings.TrimSpace(m.GetTitle()) == "" {
+		return nil, invalid("a task needs a title")
 	}
 
 	doc := "# " + strings.TrimSpace(m.GetTitle()) + "\n\n" + m.GetBody()
 
-	r, url, err := taskwrite.Create(ctx, io.Discard, t, taskwrite.New{Doc: doc, Props: p, Parent: m.GetParent()})
-	if err != nil {
-		return nil, err
+	// the contract puts the title on the first line, so leading blanks go
+	if whole {
+		doc = strings.TrimLeft(m.GetMarkdown(), " \t\r\n")
+		if hostops.TaskTitle(doc) == "" {
+			return nil, errors.New("task create reads the task as markdown on stdin, `# <title>` on its first line")
+		}
 	}
 
-	return connect.NewResponse(&f10v1.CreateTaskResponse{Task: &f10v1.TaskRef{
-		Id:    r.ID,
-		Title: taskwrite.DocTitle(r.ID, doc),
-		Url:   url,
-	}}), nil
+	p := hostops.Props{Status: m.GetStatus(), Priority: m.GetPriority(), Labels: m.GetLabels()}
+	for _, k := range slices.Sorted(maps.Keys(m.GetProperties())) {
+		p.Set = append(p.Set, k+"="+m.GetProperties()[k])
+	}
+
+	o := output(c)
+
+	r, url, err := taskwrite.Create(ctx, &o.Stderr, t, taskwrite.New{Doc: doc, Props: p, Parent: m.GetParent()})
+	if err != nil {
+		return nil, o.Wrap(err)
+	}
+
+	fmt.Fprintln(&o.Stdout, r.ID)
+
+	return connect.NewResponse(&f10v1.CreateTaskResponse{
+		Task:    &f10v1.TaskRef{Id: r.ID, Title: taskwrite.DocTitle(r.ID, doc), Url: url},
+		Printed: printedOf(o),
+	}), nil
 }
 
 func (s *taskService) GetTask(
@@ -56,10 +82,26 @@ func (s *taskService) GetTask(
 	req *connect.Request[f10v1.GetTaskRequest],
 ) (*connect.Response[f10v1.GetTaskResponse], error) {
 	m := req.Msg
+	c := callerOf(req, m.GetCaller())
 
-	t, err := projectTarget(ctx, s.sup, m.GetProject(), "task")
+	t, err := callerTarget(ctx, s.sup, m.GetProject(), c, "task")
 	if err != nil {
 		return nil, err
+	}
+
+	// a local f10 task read: its words, its bundles and its images
+	if c != nil {
+		doc, err := taskwrite.Document(ctx, t, m.GetId(), !m.GetSkipImages() && !c.GetTerminal())
+		if err != nil {
+			return nil, err
+		}
+
+		r, err := t.Reference(ctx, m.GetId())
+		if err != nil {
+			return nil, err
+		}
+
+		return connect.NewResponse(&f10v1.GetTaskResponse{Task: taskOf(r, doc), Document: doc}), nil
 	}
 
 	r, err := t.Reference(ctx, m.GetId())
@@ -72,7 +114,7 @@ func (s *taskService) GetTask(
 		return nil, err
 	}
 
-	return connect.NewResponse(&f10v1.GetTaskResponse{Task: taskOf(r, doc)}), nil
+	return connect.NewResponse(&f10v1.GetTaskResponse{Task: taskOf(r, doc), Document: doc}), nil
 }
 
 // taskOf is the task as read: its ref, and the meta lines task read prints

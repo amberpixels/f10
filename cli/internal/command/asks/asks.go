@@ -6,29 +6,25 @@ import (
 	"bufio"
 	"cmp"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/urfave/cli/v3"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
+	agentsv1 "github.com/amberpixels/f10/cli/gen/agents/v1"
+	"github.com/amberpixels/f10/cli/gen/agents/v1/agentsv1connect"
 	"github.com/amberpixels/f10/cli/internal/agents"
+	"github.com/amberpixels/f10/cli/internal/apiclient"
 	"github.com/amberpixels/f10/cli/internal/asknotify"
 	"github.com/amberpixels/f10/cli/internal/asks"
-	"github.com/amberpixels/f10/cli/internal/buildinfo"
-	"github.com/amberpixels/f10/cli/internal/daemon"
-	"github.com/amberpixels/f10/cli/internal/drivestore"
-	"github.com/amberpixels/f10/cli/internal/launch"
-	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/render"
-	"github.com/amberpixels/f10/cli/internal/state"
-	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -81,11 +77,16 @@ func Command() *cli.Command {
 }
 
 func runAsks(ctx context.Context, cmd *cli.Command) error {
-	if ui.Interactive() {
-		return WalkAsks(ctx, cmd.Writer, bufio.NewReader(os.Stdin), asks.Dir(), liveDeliver())
+	if !ui.Interactive() {
+		return runAsksList(ctx, cmd)
 	}
 
-	return runAsksList(ctx, cmd)
+	c, err := apiclient.Dial(ctx)
+	if err != nil {
+		return err
+	}
+
+	return walk(ctx, cmd.Writer, bufio.NewReader(os.Stdin), c.Asks, c.AgentsCaller(cmd))
 }
 
 type askView struct {
@@ -124,19 +125,30 @@ func viewOf(a asks.Ask) askView {
 }
 
 func runAsksList(ctx context.Context, cmd *cli.Command) error {
-	return ListAsks(ctx, cmd.Writer, asks.Dir(), time.Now(), cmd.Bool("json"))
+	c, err := apiclient.Dial(ctx)
+	if err != nil {
+		return err
+	}
+
+	return list(ctx, cmd.Writer, c.Asks, c.AgentsCaller(cmd), time.Now(), cmd.Bool("json"))
 }
 
+// ListAsks prints the inbox in dir, served in process: the asks command's
+// list for a test's inbox.
 func ListAsks(ctx context.Context, w io.Writer, dir string, now time.Time, asJSON bool) error {
-	open, err := asks.Open(dir)
+	return list(ctx, w, apiclient.AsksIn(dir, Deliverer{}), nil, now, asJSON)
+}
+
+func list(
+	ctx context.Context, w io.Writer, c agentsv1connect.AskServiceClient, caller *agentsv1.CallerContext,
+	now time.Time, asJSON bool,
+) error {
+	inbox, err := readInbox(ctx, c, caller, now.Add(-recentAnswered))
 	if err != nil {
 		return err
 	}
 
-	answered, err := asks.Answered(dir, now.Add(-recentAnswered))
-	if err != nil {
-		return err
-	}
+	open, answered := inbox.Open, inbox.Answered
 
 	if asJSON {
 		out := AskList{Open: []askView{}, Answered: []askView{}}
@@ -156,8 +168,7 @@ func ListAsks(ctx context.Context, w io.Writer, dir string, now time.Time, asJSO
 		fmt.Fprintln(w, "no open asks")
 	}
 
-	links := render.LinksFor(w, false)
-	loadAskLinks(ctx, links, append(slices.Clone(open), answered...))
+	links := linksOf(w, inbox)
 
 	for i, a := range open {
 		if i > 0 {
@@ -188,6 +199,41 @@ func ListAsks(ctx context.Context, w io.Writer, dir string, now time.Time, asJSO
 	return nil
 }
 
+// readInbox is the open asks, and those answered since since when it is set.
+func readInbox(
+	ctx context.Context, c agentsv1connect.AskServiceClient, caller *agentsv1.CallerContext, since time.Time,
+) (asks.Inbox, error) {
+	req := &agentsv1.ListAsksRequest{Caller: caller}
+	if !since.IsZero() {
+		req.AnsweredSince = timestamppb.New(since)
+	}
+
+	res, err := c.ListAsks(ctx, connect.NewRequest(req))
+	if err != nil {
+		return asks.Inbox{}, apiclient.Err(err, io.Discard, io.Discard)
+	}
+
+	var inbox asks.Inbox
+	if err := apiclient.View(res.Msg.GetView(), &inbox); err != nil {
+		return asks.Inbox{}, err
+	}
+
+	return inbox, nil
+}
+
+// linksOf links each ask's task on a terminal, by the urls the inbox knows.
+func linksOf(w io.Writer, inbox asks.Inbox) *render.TaskLinks {
+	links := render.LinksFor(w, false)
+
+	for project, urls := range inbox.Links {
+		for id, url := range urls {
+			links.Known(project, id, url)
+		}
+	}
+
+	return links
+}
+
 func printAsk(w io.Writer, links *render.TaskLinks, a asks.Ask, now time.Time) {
 	where := ""
 	if a.Skill != "" {
@@ -209,50 +255,8 @@ func printAsk(w io.Writer, links *render.TaskLinks, a asks.Ask, now time.Time) {
 	}
 }
 
-// loadAskLinks reads each ask's task urls from the ledger of the project
-// its main checkout belongs to, keyed by the ask's display project.
-func loadAskLinks(ctx context.Context, links *render.TaskLinks, all []asks.Ask) {
-	if links == nil || !links.On {
-		return
-	}
-
-	projects := map[string]string{}
-
-	for _, a := range all {
-		dir := cmp.Or(a.Main, a.Worktree)
-		if dir == "" {
-			continue
-		}
-
-		if _, ok := projects[dir]; !ok {
-			projects[dir] = target.ProjectOf(ctx, dir)
-		}
-
-		links.LoadAs(ctx, projects[dir], a.Project, a.Task)
-	}
-}
-
 // A Deliverer moves a claimed answer on (agents.Deliverer).
 type Deliverer = agents.Deliverer
-
-func liveDeliver() Deliverer {
-	return Deliverer{
-		Prompt: func(ctx context.Context, w io.Writer, a asks.Ask) error {
-			note, err := launch.PromptChecked(ctx, a.Worktree, a.Task, a.Suffix, a.Answer)
-			if note != "" {
-				fmt.Fprintln(w, note)
-			}
-
-			return err
-		},
-		Resume: resumeAskDrive,
-		Live: func(a asks.Ask) bool {
-			_, held := drivestore.Probe(a.Root, drivestore.DriveKey(a.Drive))
-
-			return held
-		},
-	}
-}
 
 func runAsksAnswer(ctx context.Context, cmd *cli.Command) error {
 	args := cmd.Args().Slice()
@@ -265,34 +269,64 @@ func runAsksAnswer(ctx context.Context, cmd *cli.Command) error {
 		return fmt.Errorf("--by takes %s or %s", asks.ByAsks, asks.BySkill)
 	}
 
-	return AnswerAsk(ctx, cmd.Writer, asks.Dir(), args[0], args[1:], by, liveDeliver())
-}
-
-func AnswerAsk(ctx context.Context, w io.Writer, dir, token string, values []string, by string, d Deliverer) error {
-	a, err := agents.FindOpen(dir, token)
+	c, err := apiclient.Dial(ctx)
 	if err != nil {
 		return err
 	}
 
-	_, _, err = agents.Answer(ctx, w, dir, a, values, by, d)
+	return answer(ctx, cmd.Writer, c.Asks, c.AgentsCaller(cmd), args[0], args[1:], by)
+}
+
+// AnswerAsk answers token's open ask in the inbox in dir with d moving it
+// on, served in process: the asks command's answer for a test's inbox.
+func AnswerAsk(ctx context.Context, w io.Writer, dir, token string, values []string, by string, d Deliverer) error {
+	return answer(ctx, w, apiclient.AsksIn(dir, d), nil, token, values, by)
+}
+
+func answer(
+	ctx context.Context, w io.Writer, c agentsv1connect.AskServiceClient, caller *agentsv1.CallerContext,
+	token string, values []string, by string,
+) error {
+	res, err := c.AnswerAsk(ctx, connect.NewRequest(&agentsv1.AnswerAskRequest{
+		Match: token, Values: values, AnsweredBy: by, Caller: caller,
+	}))
+	if err != nil {
+		return apiclient.Err(err, w, w)
+	}
+
+	_, err = io.WriteString(w, res.Msg.GetOutput())
 
 	return err
 }
 
+// WalkAsks walks the inbox in dir with d moving answers on, served in
+// process: the asks command's walk for a test's inbox.
 func WalkAsks(ctx context.Context, w io.Writer, in *bufio.Reader, dir string, d Deliverer) error {
-	open, err := asks.Open(dir)
+	return walk(ctx, w, in, apiclient.AsksIn(dir, d), nil)
+}
+
+// walk puts each open ask's questions to the person at the terminal, and
+// answers it unless they skip it.
+func walk(
+	ctx context.Context,
+	w io.Writer,
+	in *bufio.Reader,
+	c agentsv1connect.AskServiceClient,
+	caller *agentsv1.CallerContext,
+) error {
+	inbox, err := readInbox(ctx, c, caller, time.Time{})
 	if err != nil {
 		return err
 	}
 
+	open := inbox.Open
 	if len(open) == 0 {
 		fmt.Fprintln(w, "no open asks")
 
 		return nil
 	}
 
-	links := render.LinksFor(w, false)
-	loadAskLinks(ctx, links, open)
+	links := linksOf(w, inbox)
 
 	for i, a := range open {
 		if i > 0 {
@@ -301,7 +335,8 @@ func WalkAsks(ctx context.Context, w io.Writer, in *bufio.Reader, dir string, d 
 
 		printAsk(w, links, a, time.Now())
 
-		given := map[int]string{}
+		var values []string
+
 		skip := false
 
 		for _, q := range a.Questions {
@@ -316,7 +351,7 @@ func WalkAsks(ctx context.Context, w io.Writer, in *bufio.Reader, dir string, d 
 				break
 			}
 
-			given[q.N] = value
+			values = append(values, strconv.Itoa(q.N)+"="+value)
 		}
 
 		if skip {
@@ -325,20 +360,16 @@ func WalkAsks(ctx context.Context, w io.Writer, in *bufio.Reader, dir string, d 
 			continue
 		}
 
-		text := asks.Format(a.Questions, given)
-
-		claimed, err := asks.Claim(dir, a.Key(), asks.ByAsks, text, false, time.Now())
+		res, err := c.AnswerAsk(ctx, connect.NewRequest(&agentsv1.AnswerAskRequest{
+			Id: a.Key(), Values: values, AnsweredBy: asks.ByAsks, Caller: caller,
+		}))
 		if err != nil {
-			fmt.Fprintf(w, "%s: %v\n", agents.AskName(a), err)
+			fmt.Fprintln(w, apiclient.Err(err, w, w))
 
 			continue
 		}
 
-		fmt.Fprintf(w, "answered: %s\n", text)
-
-		if _, err := d.Deliver(ctx, w, dir, claimed); err != nil {
-			fmt.Fprintln(w, err)
-		}
+		_, _ = io.WriteString(w, res.Msg.GetOutput())
 	}
 
 	return nil
@@ -376,151 +407,4 @@ func askLine(w io.Writer, in *bufio.Reader, q asks.Question) (string, error) {
 
 		fmt.Fprintln(w, err)
 	}
-}
-
-// runAsksResume resumes the drive an answered ask names.
-func runAsksResume(ctx context.Context, cmd *cli.Command) error {
-	dir := asks.Dir()
-
-	a, isOpen, err := asks.Get(dir, cmd.Args().First())
-	if err != nil {
-		return err
-	}
-
-	if isOpen || a.Drive == 0 {
-		return nil
-	}
-
-	_, err = liveDeliver().Deliver(ctx, cmd.Writer, dir, *a)
-
-	return err
-}
-
-func resumeAskDrive(ctx context.Context, w io.Writer, a asks.Ask) error {
-	n := strconv.Itoa(a.Drive)
-
-	if !daemon.Supported {
-		fmt.Fprintf(w, "drive %d is stopped: f10 drive --resume %s in %s takes the answer\n", a.Drive, n, a.Main)
-
-		return nil
-	}
-
-	var extra []string
-	if t, err := target.At(ctx, a.Main, false, "asks"); err == nil {
-		extra = t.Effective.DriveEnv
-	}
-
-	dir := daemon.RunDir()
-
-	e := &daemon.Ensurer{Dir: dir, Version: buildinfo.Version()}
-	if _, err := e.Ensure(ctx); err != nil {
-		return fmt.Errorf("resuming drive %d: %w", a.Drive, err)
-	}
-
-	call := daemon.ResumeCall(a.Main, daemon.DriveEnv(os.Environ(), extra), a.Drive)
-
-	_, err := daemon.RunDrive(ctx, dir, call)
-	if err != nil {
-		return fmt.Errorf("resuming drive %d: %w", a.Drive, err)
-	}
-
-	fmt.Fprintf(w, "drive %d resumed: f10 daemon logs %d -f follows it\n", a.Drive, a.Drive)
-
-	return nil
-}
-
-// runAsksHook prints, as context, the open asks this session has not been
-// told, leaving out the asking agent's own session.
-func runAsksHook(ctx context.Context, cmd *cli.Command) error {
-	// a hook never fails the prompt it runs for
-	defer func() { _ = recover() }()
-
-	raw, err := io.ReadAll(os.Stdin)
-	if err != nil {
-		return nil
-	}
-
-	var p struct {
-		Event   string `json:"hook_event_name"`
-		Session string `json:"session_id"`
-		Cwd     string `json:"cwd"`
-	}
-
-	if json.Unmarshal(raw, &p) != nil || p.Session == "" {
-		return nil
-	}
-
-	if p.Event == "SessionStart" {
-		asks.Prune(asks.Dir(), time.Now())
-	}
-
-	// every prompt in every session runs this: an empty inbox costs no git
-	if open, _ := asks.Open(asks.Dir()); len(open) == 0 {
-		return nil
-	}
-
-	root := ""
-	if p.Cwd != "" {
-		root = layout.Locate(ctx, p.Cwd).CheckoutRoot
-	}
-
-	_, _ = cmd.Writer.Write(AsksContext(asks.Dir(), state.Dir(), p.Session, p.Event, root))
-
-	return nil
-}
-
-// AsksContext is the hook's output: the untold open asks, outside the
-// session's own checkout, as additional context; nothing when none.
-func AsksContext(dir, stateDir, session, event, root string) []byte {
-	open, err := asks.Open(dir)
-	if err != nil || len(open) == 0 {
-		return nil
-	}
-
-	markPath := state.AsksPath(stateDir, session)
-	raw, _ := os.ReadFile(markPath)
-	told := strings.Fields(string(raw))
-
-	var lines, marks []string
-
-	for _, a := range open {
-		mark := a.Key() + "@" + strconv.FormatInt(a.AskedAt.Unix(), 10)
-		if a.Worktree == root && root != "" {
-			continue
-		}
-
-		marks = append(marks, mark)
-		if slices.Contains(told, mark) {
-			continue
-		}
-
-		where := ""
-		if a.Skill != "" {
-			where = " at " + a.Skill
-		}
-
-		lines = append(lines, fmt.Sprintf("- %s asks%s: %s", agents.AskName(a), where, a.Text))
-	}
-
-	if len(lines) == 0 {
-		return nil
-	}
-
-	_ = os.MkdirAll(stateDir, 0o750)
-	_ = os.WriteFile(markPath, []byte(strings.Join(marks, "\n")+"\n"), 0o600)
-
-	text := "f10: driven agents are waiting on these questions. Tell the user about them once; " +
-		"/f10:asks answers them here, or `f10 asks answer <task> N=VALUE` in a terminal.\n" + strings.Join(lines, "\n")
-
-	out, err := json.Marshal(map[string]any{
-		"hookSpecificOutput": map[string]any{
-			"hookEventName":     event,
-			"additionalContext": text,
-		},
-	})
-	if err != nil {
-		return nil
-	}
-
-	return append(out, '\n')
 }

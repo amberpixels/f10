@@ -10,11 +10,9 @@ import (
 	"net/http"
 	"slices"
 	"strings"
-	"sync"
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/command"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/images"
@@ -192,44 +190,6 @@ func Command() *cli.Command {
 	}
 }
 
-func runTaskRead(ctx context.Context, cmd *cli.Command) error {
-	t, err := target.For(ctx, cmd)
-	if err != nil {
-		return err
-	}
-
-	token := cmd.Args().First()
-
-	r, err := t.Reference(ctx, token)
-	if err != nil {
-		return fetchFallback(err)
-	}
-
-	members := []ref.Ref{r}
-	if strings.Contains(token, ref.Separator) {
-		members = r.MemberRefs()
-	}
-
-	docs := make([]string, 0, len(members))
-
-	for _, m := range members {
-		doc, err := ReadDoc(ctx, t, m)
-		if err != nil {
-			return fetchFallback(err)
-		}
-
-		// a person at a terminal opens the links themselves and would wait on
-		// the downloads; an agent gets local files in place of urls that expire
-		if !ui.IsTerminal(cmd.Writer) && !cmd.Bool("no-images") {
-			doc = WithImages(ctx, doc, imagesDirFor(ctx, t, m.ID), images.Downloader{Authorize: GithubAuth(ctx, t)})
-		}
-
-		docs = append(docs, strings.TrimRight(doc, "\n"))
-	}
-
-	return render.WriteDoc(ctx, cmd.Writer, t.Dir, strings.Join(docs, "\n\n---\n\n"))
-}
-
 // runTaskCurrent names the task a bare skill call stands for, by the cascade
 // a bare finish walks, so no skill parses a branch name itself.
 func runTaskCurrent(ctx context.Context, cmd *cli.Command) error {
@@ -248,77 +208,19 @@ func runTaskCurrent(ctx context.Context, cmd *cli.Command) error {
 	return err
 }
 
-// fetchFallback tells an agent reading a failed read that the project's
-// fetch adapter is its fallback: here, when it applies, not in every prompt.
-func fetchFallback(err error) error {
-	return fmt.Errorf("%w\nfetch the task through the project's fetch adapter instead "+
-		"(project.md, Tracker)", err)
-}
-
 // ReadDoc is taskwrite.Read.
 func ReadDoc(ctx context.Context, t *target.Target, r ref.Ref) (string, error) {
 	return taskwrite.Read(ctx, t, r)
 }
 
-// WithImages ends doc with a footer naming its downloaded images. A dir
-// that cannot be written fails every image, never the read.
+// WithImages is taskwrite.WithImages.
 func WithImages(ctx context.Context, doc, dir string, d images.Downloader) string {
-	links := images.Links(doc)
-	if len(links) == 0 {
-		return doc
-	}
-
-	results, err := d.Download(ctx, dir, links)
-	if err != nil {
-		results = make([]images.Result, len(links))
-		for i, u := range links {
-			results[i] = images.Result{URL: u, Err: err}
-		}
-	}
-
-	return strings.TrimRight(doc, "\n") + "\n\n" + images.Footer(results)
+	return taskwrite.WithImages(ctx, doc, dir, d)
 }
 
-// imagesDir puts .f10/ into info/exclude first under stealth, since a read
-// may be the first thing to create it.
-func imagesDirFor(ctx context.Context, t *target.Target, id string) string {
-	if !t.OutOfTree() && t.Effective.Visibility == "stealth" {
-		_, _ = archive.ExcludeF10(ctx, t.Layout.CheckoutRoot)
-	}
-
-	return t.Layout.StorageRoot.Images(strings.ToUpper(id))
-}
-
-// GithubAuth sends the gh token only to GitHub's own hosts over https,
-// where a private repo's attachments sit. It is read once; a failed read
-// leaves the request bare, so its error names the image.
+// GithubAuth is taskwrite.GithubAuth.
 func GithubAuth(ctx context.Context, t *target.Target) func(*http.Request) {
-	h, err := hostops.HostOf(t)
-	if err != nil {
-		return nil
-	}
-
-	var (
-		once  sync.Once
-		token string
-	)
-
-	return func(r *http.Request) {
-		host := r.URL.Hostname()
-		if r.URL.Scheme != "https" || (host != "github.com" && !strings.HasSuffix(host, ".githubusercontent.com")) {
-			return
-		}
-
-		once.Do(func() {
-			if tok, err := h.Token(ctx); err == nil {
-				token = tok
-			}
-		})
-
-		if token != "" {
-			r.Header.Set("Authorization", "Bearer "+token)
-		}
-	}
+	return taskwrite.GithubAuth(ctx, t)
 }
 
 func runTaskOpen(ctx context.Context, cmd *cli.Command) error {
@@ -412,46 +314,4 @@ func SearchRows(ctx context.Context, t *target.Target, query string) ([]hostops.
 	stack.RememberRefsFor(ctx, t, hostops.RowRefs(rows)...)
 
 	return rows, err
-}
-
-// runTaskCreate sends the task on stdin to the driver's create, else makes it
-// an issue on the host. f10 never retries it, since a failed write is an
-// unknown outcome.
-func runTaskCreate(ctx context.Context, cmd *cli.Command) error {
-	t, err := target.For(ctx, cmd)
-	if err != nil {
-		return err
-	}
-
-	// nowhere to create answers exit 3 before stdin or any check, so capture falls back
-	if rs, ok := taskwrite.RefusedUpFront(t); ok {
-		return rs.RefuseCreate()
-	}
-
-	in, err := io.ReadAll(cmd.Reader)
-	if err != nil {
-		return fmt.Errorf("reading the task from stdin: %w", err)
-	}
-
-	// the contract puts the title on the first line, so leading blanks go
-	doc := strings.TrimLeft(string(in), " \t\r\n")
-	if hostops.TaskTitle(doc) == "" {
-		return errors.New("task create reads the task as markdown on stdin, `# <title>` on its first line")
-	}
-
-	p, err := readProps(cmd)
-	if err != nil {
-		return err
-	}
-
-	nt := taskwrite.New{Doc: doc, Props: p, Parent: cmd.String("parent")}
-
-	r, _, err := taskwrite.Create(ctx, cmd.ErrWriter, t, nt)
-	if err != nil {
-		return err
-	}
-
-	_, err = fmt.Fprintln(cmd.Writer, r.ID)
-
-	return err
 }

@@ -33,6 +33,36 @@ type Tool struct {
 // Tools is every unary method, in proto file and declaration order.
 var Tools = []Tool{
 	{
+		Name:        "list_asks",
+		Procedure:   "/agents.v1.AskService/ListAsks",
+		Description: "ListAsks lists the questions agents are waiting on, and with answered_since also the ones answered since then.",
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"answered_since\":{\"description\":\"answered_since adds the asks answered after it; unset lists open asks only.\",\"format\":\"date-time\",\"type\":\"string\"}},\"type\":\"object\"}",
+		NewRequest:  func() proto.Message { return &v1.ListAsksRequest{} },
+		Call: func(ctx context.Context, hc connect.HTTPClient, baseURL string, req proto.Message, opts ...connect.ClientOption) (proto.Message, error) {
+			res, err := agentsv1connect.NewAskServiceClient(hc, baseURL, opts...).ListAsks(ctx, connect.NewRequest(req.(*v1.ListAsksRequest)))
+			if err != nil {
+				return nil, err
+			}
+
+			return res.Msg, nil
+		},
+	},
+	{
+		Name:        "answer_ask",
+		Procedure:   "/agents.v1.AskService/AnswerAsk",
+		Description: "AnswerAsk answers an open ask by its id, one value per numbered question, and delivers the answer to the agent that asked.",
+		InputSchema: "{\"$defs\":{\"agents.v1.Answer\":{\"additionalProperties\":false,\"description\":\"An Answer is the value given to one question, by its number.\",\"properties\":{\"n\":{\"type\":\"integer\"},\"value\":{\"type\":\"string\"}},\"type\":\"object\"}},\"additionalProperties\":false,\"properties\":{\"answered_by\":{\"description\":\"answered_by is the way in to record, asks or skill; empty is the API.\",\"type\":\"string\"},\"answers\":{\"description\":\"answers names questions by number; a question not named takes its default.\",\"items\":{\"$ref\":\"#/$defs/agents.v1.Answer\"},\"type\":\"array\"},\"id\":{\"type\":\"string\"},\"match\":{\"description\":\"match finds the open ask by its task, or project:task, as the asks command takes it, in place of id.\",\"type\":\"string\"},\"values\":{\"description\":\"values are the answers as the asks command takes them, N=VALUE each, in place of answers.\",\"items\":{\"type\":\"string\"},\"type\":\"array\"}},\"type\":\"object\"}",
+		NewRequest:  func() proto.Message { return &v1.AnswerAskRequest{} },
+		Call: func(ctx context.Context, hc connect.HTTPClient, baseURL string, req proto.Message, opts ...connect.ClientOption) (proto.Message, error) {
+			res, err := agentsv1connect.NewAskServiceClient(hc, baseURL, opts...).AnswerAsk(ctx, connect.NewRequest(req.(*v1.AnswerAskRequest)))
+			if err != nil {
+				return nil, err
+			}
+
+			return res.Msg, nil
+		},
+	},
+	{
 		Name:        "list_workspaces",
 		Procedure:   "/agents.v1.AgentService/ListWorkspaces",
 		Description: "ListWorkspaces lists the Herdr workspaces, each with its agents.",
@@ -93,28 +123,13 @@ var Tools = []Tool{
 		},
 	},
 	{
-		Name:        "list_asks",
-		Procedure:   "/agents.v1.AskService/ListAsks",
-		Description: "ListAsks lists the questions agents are waiting on, and with answered_since also the ones answered since then.",
-		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"answered_since\":{\"description\":\"answered_since adds the asks answered after it; unset lists open asks only.\",\"format\":\"date-time\",\"type\":\"string\"}},\"type\":\"object\"}",
-		NewRequest:  func() proto.Message { return &v1.ListAsksRequest{} },
+		Name:        "close_workspace",
+		Procedure:   "/agents.v1.AgentService/CloseWorkspace",
+		Description: "CloseWorkspace closes a workspace, focusing another one first when focus_id is set.",
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"focus_id\":{\"description\":\"focus_id is the workspace to focus before the close, empty for none.\",\"type\":\"string\"},\"id\":{\"type\":\"string\"}},\"type\":\"object\"}",
+		NewRequest:  func() proto.Message { return &v1.CloseWorkspaceRequest{} },
 		Call: func(ctx context.Context, hc connect.HTTPClient, baseURL string, req proto.Message, opts ...connect.ClientOption) (proto.Message, error) {
-			res, err := agentsv1connect.NewAskServiceClient(hc, baseURL, opts...).ListAsks(ctx, connect.NewRequest(req.(*v1.ListAsksRequest)))
-			if err != nil {
-				return nil, err
-			}
-
-			return res.Msg, nil
-		},
-	},
-	{
-		Name:        "answer_ask",
-		Procedure:   "/agents.v1.AskService/AnswerAsk",
-		Description: "AnswerAsk answers an open ask by its id, one value per numbered question, and delivers the answer to the agent that asked.",
-		InputSchema: "{\"$defs\":{\"agents.v1.Answer\":{\"additionalProperties\":false,\"description\":\"An Answer is the value given to one question, by its number.\",\"properties\":{\"n\":{\"type\":\"integer\"},\"value\":{\"type\":\"string\"}},\"type\":\"object\"}},\"additionalProperties\":false,\"properties\":{\"answers\":{\"description\":\"answers names questions by number; a question not named takes its default.\",\"items\":{\"$ref\":\"#/$defs/agents.v1.Answer\"},\"type\":\"array\"},\"id\":{\"type\":\"string\"}},\"type\":\"object\"}",
-		NewRequest:  func() proto.Message { return &v1.AnswerAskRequest{} },
-		Call: func(ctx context.Context, hc connect.HTTPClient, baseURL string, req proto.Message, opts ...connect.ClientOption) (proto.Message, error) {
-			res, err := agentsv1connect.NewAskServiceClient(hc, baseURL, opts...).AnswerAsk(ctx, connect.NewRequest(req.(*v1.AnswerAskRequest)))
+			res, err := agentsv1connect.NewAgentServiceClient(hc, baseURL, opts...).CloseWorkspace(ctx, connect.NewRequest(req.(*v1.CloseWorkspaceRequest)))
 			if err != nil {
 				return nil, err
 			}
@@ -156,7 +171,7 @@ var Tools = []Tool{
 		Name:        "create_task",
 		Procedure:   "/f10.v1.TaskService/CreateTask",
 		Description: "CreateTask creates a task in a project's tracker and returns its id.",
-		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"body\":{\"description\":\"body is the task's text in markdown.\",\"type\":\"string\"},\"labels\":{\"items\":{\"type\":\"string\"},\"type\":\"array\"},\"parent\":{\"description\":\"parent is the id of the task this one is a subtask of.\",\"type\":\"string\"},\"priority\":{\"type\":\"string\"},\"project\":{\"description\":\"project is a project id, such as github.com/acme/widgets, or the path of its main checkout.\",\"type\":\"string\"},\"properties\":{\"additionalProperties\":{\"type\":\"string\"},\"description\":\"properties sets the tracker's named properties.\",\"type\":\"object\"},\"status\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"}},\"type\":\"object\"}",
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"body\":{\"description\":\"body is the task's text in markdown.\",\"type\":\"string\"},\"check\":{\"description\":\"check refuses as a create would before it reads the task, where nothing here creates tasks, and creates nothing, so f10 task create leaves stdin unread for the caller to fall back on.\",\"type\":\"boolean\"},\"labels\":{\"items\":{\"type\":\"string\"},\"type\":\"array\"},\"markdown\":{\"description\":\"markdown is the whole task, `# \\u003ctitle\\u003e` on its first line, as f10 task create reads it. When set it wins over title and body.\",\"type\":\"string\"},\"parent\":{\"description\":\"parent is the id of the task this one is a subtask of.\",\"type\":\"string\"},\"priority\":{\"type\":\"string\"},\"project\":{\"description\":\"project is a project id, such as github.com/acme/widgets, or the path of its main checkout.\",\"type\":\"string\"},\"properties\":{\"additionalProperties\":{\"type\":\"string\"},\"description\":\"properties sets the tracker's named properties.\",\"type\":\"object\"},\"status\":{\"type\":\"string\"},\"title\":{\"type\":\"string\"}},\"type\":\"object\"}",
 		NewRequest:  func() proto.Message { return &v11.CreateTaskRequest{} },
 		Call: func(ctx context.Context, hc connect.HTTPClient, baseURL string, req proto.Message, opts ...connect.ClientOption) (proto.Message, error) {
 			res, err := f10v1connect.NewTaskServiceClient(hc, baseURL, opts...).CreateTask(ctx, connect.NewRequest(req.(*v11.CreateTaskRequest)))
@@ -186,7 +201,7 @@ var Tools = []Tool{
 		Name:        "get_board",
 		Procedure:   "/f10.v1.BoardService/GetBoard",
 		Description: "GetBoard is what changed in a project over a window, or with the state view, where every task stands and who owes the next move.",
-		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"project\":{\"type\":\"string\"},\"remote\":{\"description\":\"remote asks the host and tracker even where local facts would do.\",\"type\":\"boolean\"},\"since\":{\"description\":\"since starts the window; unset means today, else the last working day.\",\"format\":\"date-time\",\"type\":\"string\"},\"view\":{\"description\":\"BOARD_VIEW_CHANGES: what changed in the window; BOARD_VIEW_STATE: where every task stands and who owes the next move\",\"enum\":[\"BOARD_VIEW_UNSPECIFIED\",\"BOARD_VIEW_CHANGES\",\"BOARD_VIEW_STATE\"],\"type\":\"string\"}},\"type\":\"object\"}",
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"all\":{\"type\":\"boolean\"},\"checkouts\":{\"description\":\"checkouts, groups and all widen the board to several projects, as f10 board's -C, --group and --all do.\",\"items\":{\"type\":\"string\"},\"type\":\"array\"},\"groups\":{\"items\":{\"type\":\"string\"},\"type\":\"array\"},\"project\":{\"type\":\"string\"},\"remote\":{\"description\":\"remote asks the host and tracker even where local facts would do.\",\"type\":\"boolean\"},\"since\":{\"description\":\"since starts the window; unset means today, else the last working day.\",\"format\":\"date-time\",\"type\":\"string\"},\"view\":{\"description\":\"BOARD_VIEW_CHANGES: what changed in the window; BOARD_VIEW_STATE: where every task stands and who owes the next move\",\"enum\":[\"BOARD_VIEW_UNSPECIFIED\",\"BOARD_VIEW_CHANGES\",\"BOARD_VIEW_STATE\"],\"type\":\"string\"},\"window\":{\"description\":\"window names the window as f10 board takes it: today, yesterday, last-workday, this-week, last-week, a date or an RFC 3339 time. When set it wins over since, and is read against the user's workdays.\",\"type\":\"string\"}},\"type\":\"object\"}",
 		NewRequest:  func() proto.Message { return &v11.GetBoardRequest{} },
 		Call: func(ctx context.Context, hc connect.HTTPClient, baseURL string, req proto.Message, opts ...connect.ClientOption) (proto.Message, error) {
 			res, err := f10v1connect.NewBoardServiceClient(hc, baseURL, opts...).GetBoard(ctx, connect.NewRequest(req.(*v11.GetBoardRequest)))
@@ -291,7 +306,7 @@ var Tools = []Tool{
 		Name:        "start",
 		Procedure:   "/f10.v1.RunService/Start",
 		Description: "Start opens a task's worktree, workspace and agent, already prompted.",
-		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"after\":{\"description\":\"after is the task this one builds on; base is a branch to start from.\",\"type\":\"string\"},\"agent\":{\"description\":\"agent is a profile name; model overrides only the model.\",\"type\":\"string\"},\"base\":{\"type\":\"string\"},\"flow\":{\"description\":\"flow names a declared flow; empty lets the project's rules pick it.\",\"type\":\"string\"},\"mode\":{\"description\":\"START_MODE_SHIP: ship the task through its flow; START_MODE_PLAN: plan the task and stop; START_MODE_DISCUSS: read the task and wait to discuss it\",\"enum\":[\"START_MODE_UNSPECIFIED\",\"START_MODE_SHIP\",\"START_MODE_PLAN\",\"START_MODE_DISCUSS\"],\"type\":\"string\"},\"model\":{\"type\":\"string\"},\"note\":{\"description\":\"note is extra text the agent's prompt carries.\",\"type\":\"string\"},\"pace\":{\"type\":\"string\"},\"pr\":{\"type\":\"string\"},\"project\":{\"type\":\"string\"},\"task\":{\"description\":\"task is the task id; pr picks up an existing PR instead, by url or number.\",\"type\":\"string\"}},\"type\":\"object\"}",
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"after\":{\"description\":\"after is the task this one builds on; base is a branch to start from.\",\"type\":\"string\"},\"agent\":{\"description\":\"agent is a profile name; model overrides only the model.\",\"type\":\"string\"},\"base\":{\"type\":\"string\"},\"flow\":{\"description\":\"flow names a declared flow; empty lets the project's rules pick it.\",\"type\":\"string\"},\"mode\":{\"description\":\"START_MODE_SHIP: ship the task through its flow; START_MODE_PLAN: plan the task and stop; START_MODE_DISCUSS: read the task and wait to discuss it\",\"enum\":[\"START_MODE_UNSPECIFIED\",\"START_MODE_SHIP\",\"START_MODE_PLAN\",\"START_MODE_DISCUSS\"],\"type\":\"string\"},\"model\":{\"type\":\"string\"},\"note\":{\"description\":\"note is extra text the agent's prompt carries.\",\"type\":\"string\"},\"pace\":{\"type\":\"string\"},\"pr\":{\"type\":\"string\"},\"project\":{\"type\":\"string\"},\"task\":{\"description\":\"task is the task id; pr picks up an existing PR instead, by url or number.\",\"type\":\"string\"},\"token\":{\"description\":\"token is the argument as f10 start takes it: a task id with its -suffix, a PR url or #n. When set it wins over task and pr, and task names the task a picked-up PR belongs to.\",\"type\":\"string\"}},\"type\":\"object\"}",
 		NewRequest:  func() proto.Message { return &v11.StartRequest{} },
 		Call: func(ctx context.Context, hc connect.HTTPClient, baseURL string, req proto.Message, opts ...connect.ClientOption) (proto.Message, error) {
 			res, err := f10v1connect.NewRunServiceClient(hc, baseURL, opts...).Start(ctx, connect.NewRequest(req.(*v11.StartRequest)))
@@ -321,7 +336,7 @@ var Tools = []Tool{
 		Name:        "finish",
 		Procedure:   "/f10.v1.RunService/Finish",
 		Description: "Finish merges a task's PR and removes its worktree, branch and workspace.",
-		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"ignore_checks\":{\"type\":\"boolean\"},\"keep\":{\"description\":\"keep keeps a spike's experiment, committed on a branch.\",\"type\":\"boolean\"},\"merge\":{\"description\":\"MERGE_MODE_PR: merge the task's own PR; MERGE_MODE_FORCE: merge the PR even when someone else opened it; MERGE_MODE_LOCAL: merge a branch never pushed into the local default branch; MERGE_MODE_CLOSE: close without merging\",\"enum\":[\"MERGE_MODE_UNSPECIFIED\",\"MERGE_MODE_PR\",\"MERGE_MODE_FORCE\",\"MERGE_MODE_LOCAL\",\"MERGE_MODE_CLOSE\"],\"type\":\"string\"},\"project\":{\"type\":\"string\"},\"task\":{\"type\":\"string\"}},\"type\":\"object\"}",
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"close\":{\"description\":\"close names the bundle riders the PR delivers: ids, all or none.\",\"type\":\"string\"},\"empty\":{\"description\":\"empty finishes a branch never pushed that adds nothing.\",\"type\":\"boolean\"},\"ignore_checks\":{\"type\":\"boolean\"},\"keep\":{\"description\":\"keep keeps a spike's experiment, committed on a branch.\",\"type\":\"boolean\"},\"merge\":{\"description\":\"MERGE_MODE_PR: merge the task's own PR; MERGE_MODE_FORCE: merge the PR even when someone else opened it; MERGE_MODE_LOCAL: merge a branch never pushed into the local default branch; MERGE_MODE_CLOSE: close without merging\",\"enum\":[\"MERGE_MODE_UNSPECIFIED\",\"MERGE_MODE_PR\",\"MERGE_MODE_FORCE\",\"MERGE_MODE_LOCAL\",\"MERGE_MODE_CLOSE\"],\"type\":\"string\"},\"project\":{\"type\":\"string\"},\"task\":{\"type\":\"string\"},\"yes\":{\"description\":\"yes closes the caller's own workspace after the report, when the caller runs inside the task's workspace, instead of refusing.\",\"type\":\"boolean\"}},\"type\":\"object\"}",
 		NewRequest:  func() proto.Message { return &v11.FinishRequest{} },
 		Call: func(ctx context.Context, hc connect.HTTPClient, baseURL string, req proto.Message, opts ...connect.ClientOption) (proto.Message, error) {
 			res, err := f10v1connect.NewRunServiceClient(hc, baseURL, opts...).Finish(ctx, connect.NewRequest(req.(*v11.FinishRequest)))
@@ -340,6 +355,36 @@ var Tools = []Tool{
 		NewRequest:  func() proto.Message { return &v11.ForwardRequest{} },
 		Call: func(ctx context.Context, hc connect.HTTPClient, baseURL string, req proto.Message, opts ...connect.ClientOption) (proto.Message, error) {
 			res, err := f10v1connect.NewRunServiceClient(hc, baseURL, opts...).Forward(ctx, connect.NewRequest(req.(*v11.ForwardRequest)))
+			if err != nil {
+				return nil, err
+			}
+
+			return res.Msg, nil
+		},
+	},
+	{
+		Name:        "list_drives",
+		Procedure:   "/f10.v1.RunService/ListDrives",
+		Description: "ListDrives lists a project's drive records, as f10 drive list does.",
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"all\":{\"description\":\"all lists finished and cancelled drives too.\",\"type\":\"boolean\"},\"project\":{\"type\":\"string\"}},\"type\":\"object\"}",
+		NewRequest:  func() proto.Message { return &v11.ListDrivesRequest{} },
+		Call: func(ctx context.Context, hc connect.HTTPClient, baseURL string, req proto.Message, opts ...connect.ClientOption) (proto.Message, error) {
+			res, err := f10v1connect.NewRunServiceClient(hc, baseURL, opts...).ListDrives(ctx, connect.NewRequest(req.(*v11.ListDrivesRequest)))
+			if err != nil {
+				return nil, err
+			}
+
+			return res.Msg, nil
+		},
+	},
+	{
+		Name:        "cancel_drive",
+		Procedure:   "/f10.v1.RunService/CancelDrive",
+		Description: "CancelDrive stops a drive from prompting further and closes its asks.",
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"drive\":{\"type\":\"integer\"},\"project\":{\"type\":\"string\"}},\"type\":\"object\"}",
+		NewRequest:  func() proto.Message { return &v11.CancelDriveRequest{} },
+		Call: func(ctx context.Context, hc connect.HTTPClient, baseURL string, req proto.Message, opts ...connect.ClientOption) (proto.Message, error) {
+			res, err := f10v1connect.NewRunServiceClient(hc, baseURL, opts...).CancelDrive(ctx, connect.NewRequest(req.(*v11.CancelDriveRequest)))
 			if err != nil {
 				return nil, err
 			}

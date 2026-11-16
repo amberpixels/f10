@@ -127,7 +127,7 @@ func TestRefuseNote(t *testing.T) {
 		{launch.ModePlan, nil, "judge it first", true},
 		{launch.ModePlan, pick, "judge it first", true},
 	} {
-		if err := startcmd.RefuseNote(tc.mode, tc.pick, tc.note); (err != nil) != tc.refuse {
+		if err := start.RefuseNote(tc.mode, tc.pick, tc.note); (err != nil) != tc.refuse {
 			t.Errorf(
 				"refuseNote(%q, pick %v, %q) = %v, want refused %v",
 				tc.mode,

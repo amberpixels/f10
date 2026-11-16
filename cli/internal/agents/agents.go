@@ -109,6 +109,31 @@ func RequireAgents() error {
 	return err
 }
 
+// RequireAgentsIn is RequireAgents for a client whose environment is env,
+// which the daemon checks for it; a nil env checks this process's own.
+func RequireAgentsIn(env []string) error {
+	if env == nil {
+		return RequireAgents()
+	}
+
+	err := herdr.Backend{Env: env}.Available()
+	if errors.Is(err, herdr.ErrNotInside) {
+		return outsideHerdrError{err}
+	}
+
+	return err
+}
+
+// WithSession runs the agent calls made under ctx in env's session
+// (herdr.WithSession), for a daemon calling for one client of several.
+func WithSession(ctx context.Context, env []string) context.Context {
+	return herdr.WithSession(ctx, env)
+}
+
+// ErrNotInside is the refusal of a process outside Herdr, which IsOutside
+// reports.
+var ErrNotInside = herdr.ErrNotInside
+
 // IsOutside reports err as the refusal of a process outside Herdr.
 func IsOutside(err error) bool { return errors.Is(err, herdr.ErrNotInside) }
 

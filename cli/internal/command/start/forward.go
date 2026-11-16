@@ -1,22 +1,16 @@
 package start
 
 import (
-	"cmp"
 	"context"
 	"errors"
-	"io"
 	"strings"
-	"time"
 
+	"connectrpc.com/connect"
 	"github.com/urfave/cli/v3"
 
+	f10v1 "github.com/amberpixels/f10/cli/gen/f10/v1"
+	"github.com/amberpixels/f10/cli/internal/apiclient"
 	"github.com/amberpixels/f10/cli/internal/command"
-	"github.com/amberpixels/f10/cli/internal/ref"
-	"github.com/amberpixels/f10/cli/internal/render"
-	"github.com/amberpixels/f10/cli/internal/start"
-	"github.com/amberpixels/f10/cli/internal/state"
-	"github.com/amberpixels/f10/cli/internal/target"
-	"github.com/amberpixels/f10/cli/internal/textx"
 )
 
 // ForwardCommand is the forward verb, which hands a command to the agent already working on a task:
@@ -50,47 +44,22 @@ func runForward(ctx context.Context, cmd *cli.Command) error {
 		return errors.New("forward needs the text to send after the task id")
 	}
 
-	t, err := target.For(ctx, cmd)
+	c, err := apiclient.Dial(ctx)
 	if err != nil {
 		return err
 	}
 
-	id, suffix := ref.SplitSuffix(token)
-
-	r, err := t.Reference(ctx, id)
+	caller, err := c.Caller(cmd)
 	if err != nil {
 		return err
 	}
 
-	// a bundle's member goes to the bundle's agent, named for its lead
-	r = r.Head()
-
-	return Forward(ctx, cmd.Writer, ForwardInput{
-		Main:     cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot),
-		Here:     t.Layout.CheckoutRoot,
-		Driver:   t.Driver(),
-		Task:     r,
-		Suffix:   suffix,
-		Text:     text,
-		StateDir: state.Dir(),
-		Ttl:      state.TTL(),
-		Now:      time.Now(),
-	})
-}
-
-// ForwardInput is everything forward needs once the target is settled.
-type ForwardInput = start.ForwardInput
-
-// Forward hands the text on and reports where it went.
-func Forward(ctx context.Context, w io.Writer, in ForwardInput) error {
-	out, err := start.Forward(ctx, in)
+	res, err := c.Runs.Forward(ctx, connect.NewRequest(&f10v1.ForwardRequest{Task: token, Text: text, Caller: caller}))
 	if err != nil {
-		return err
+		return apiclient.Err(err, cmd.Writer, cmd.ErrWriter)
 	}
 
-	return render.WriteReport(w, []render.Fact{
-		render.TaskFact(ctx, w, in.Main, in.Task.ID),
-		{Label: "workspace", Value: out.Workspace},
-		{Label: "sent", Value: out.Sent},
-	}, textx.AppendNote(nil, out.Note))
+	apiclient.Print(cmd.Writer, cmd.ErrWriter, res.Msg.GetPrinted())
+
+	return nil
 }

@@ -46,6 +46,8 @@ func (*fakeSup) ResumeDrive(string, string, []string, int) (daemon.Started, erro
 
 func (*fakeSup) SessionEnv() []string { return []string{"HERDR_ENV=1"} }
 
+func (*fakeSup) Remember([]string) {}
+
 func TestDriveArgvFromFields(t *testing.T) {
 	t.Parallel()
 

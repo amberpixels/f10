@@ -106,16 +106,28 @@ func ParseRepo(entry, prefix string) (RepoRef, error) {
 
 // ScopeItems is what the flags name, in scope order, before anything is bound.
 func ScopeItems(cmd *cli.Command, groupsFile string, repos []repoEntry, reposPath string) ([]scopeItem, error) {
-	sels, groups := target.CheckoutFlags(cmd), cmd.StringSlice("group")
+	var dirs []string
 
-	var items []scopeItem
-
-	for _, sel := range sels {
+	for _, sel := range target.CheckoutFlags(cmd) {
 		dir, err := target.CheckoutDir(sel)
 		if err != nil {
 			return nil, err
 		}
 
+		dirs = append(dirs, dir)
+	}
+
+	return ScopeItemsOf(dirs, cmd.StringSlice("group"), cmd.Bool("all"), groupsFile, repos, reposPath)
+}
+
+// ScopeItemsOf is ScopeItems for a scope already read: the checkouts -C
+// named, resolved to directories, the groups, and --all.
+func ScopeItemsOf(
+	dirs, groups []string, all bool, groupsFile string, repos []repoEntry, reposPath string,
+) ([]scopeItem, error) {
+	var items []scopeItem
+
+	for _, dir := range dirs {
 		items = append(items, scopeItem{Dir: dir})
 	}
 
@@ -128,7 +140,7 @@ func ScopeItems(cmd *cli.Command, groupsFile string, repos []repoEntry, reposPat
 		items = append(items, found...)
 	}
 
-	if cmd.Bool("all") {
+	if all {
 		found, err := projects.All()
 		if err != nil {
 			return nil, err

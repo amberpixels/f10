@@ -1,18 +1,18 @@
 // Package status is the f10 status command: where a run stands, read from
-// the status service.
+// the daemon's API and printed here.
 package status
 
 import (
 	"context"
 	"errors"
 	"strings"
-	"time"
 
+	"connectrpc.com/connect"
 	"github.com/urfave/cli/v3"
 
-	"github.com/amberpixels/f10/cli/internal/state"
+	f10v1 "github.com/amberpixels/f10/cli/gen/f10/v1"
+	"github.com/amberpixels/f10/cli/internal/apiclient"
 	"github.com/amberpixels/f10/cli/internal/statusview"
-	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -40,34 +40,37 @@ func Command() *cli.Command {
 func runStatus(ctx context.Context, cmd *cli.Command) error {
 	all := cmd.Bool("all")
 	token := strings.TrimSpace(cmd.Args().First())
-	v := statusview.StatusView{Out: cmd.Writer, Warn: cmd.ErrWriter, JSON: cmd.Bool("json"), Plain: cmd.Bool("plain")}
 
-	if token == "" {
-		dir, scoped, err := target.RootDir(cmd)
-		if err != nil {
-			return err
-		}
-
-		_, err = statusview.BareStatus(ctx, v, dir, scoped, state.Session(), all)
-
-		return err
-	}
-
-	if all {
+	if token != "" && all {
 		return errors.New("status takes a task id or --all, not both: the id already picks a checkout")
 	}
 
-	t, err := target.For(ctx, cmd)
+	c, err := apiclient.Dial(ctx)
 	if err != nil {
 		return err
 	}
 
-	rd, err := statusview.NewStatusReader(t, time.Now())
+	caller, err := c.Caller(cmd)
 	if err != nil {
 		return err
 	}
 
-	_, err = rd.Task(ctx, v, token, false)
+	res, err := c.Runs.GetRunStatus(ctx, connect.NewRequest(&f10v1.GetRunStatusRequest{
+		Task: token, All: all, Caller: caller,
+	}))
+	if err != nil {
+		return apiclient.Err(err, cmd.Writer, cmd.ErrWriter)
+	}
 
-	return err
+	apiclient.Print(cmd.Writer, cmd.ErrWriter, res.Msg.GetPrinted())
+
+	var rep statusview.Report
+	if err := apiclient.View(res.Msg.GetView(), &rep); err != nil {
+		return err
+	}
+
+	return statusview.Render(
+		statusview.StatusView{Out: cmd.Writer, Warn: cmd.ErrWriter, JSON: cmd.Bool("json"), Plain: cmd.Bool("plain")},
+		rep,
+	)
 }

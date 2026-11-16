@@ -10,28 +10,37 @@ import (
 
 // An Ask is one question set a driven agent, or a drive's finish, stopped on.
 type Ask struct {
-	Task      string     `yaml:"task"`
-	URL       string     `yaml:"url,omitempty"`
-	Root      string     `yaml:"root"`              // the storage root
-	Main      string     `yaml:"main,omitempty"`    // the main checkout, where a drive is resumed from
-	Project   string     `yaml:"project,omitempty"` // the main checkout's basename, for display
-	Worktree  string     `yaml:"worktree"`          // the asking agent's checkout
-	Suffix    string     `yaml:"suffix,omitempty"`  // the agent's name suffix, for a second attempt at a task
-	Drive     int        `yaml:"drive,omitempty"`   // the drive whose task asks, 0 for none
-	Skill     string     `yaml:"skill,omitempty"`   // where it asked; finish for finish's own question
-	Text      string     `yaml:"text"`              // the ask as written, one line
-	Questions []Question `yaml:"questions"`
-	AskedAt   time.Time  `yaml:"asked_at"`
+	Task      string     `yaml:"task"              json:"task"`
+	URL       string     `yaml:"url,omitempty"     json:"url,omitempty"`
+	Root      string     `yaml:"root"              json:"root"`              // the storage root
+	Main      string     `yaml:"main,omitempty"    json:"main,omitempty"`    // the main checkout, where a drive is resumed from
+	Project   string     `yaml:"project,omitempty" json:"project,omitempty"` // the main checkout's basename, for display
+	Worktree  string     `yaml:"worktree"          json:"worktree"`          // the asking agent's checkout
+	Suffix    string     `yaml:"suffix,omitempty"  json:"suffix,omitempty"`  // the agent's name suffix, for a second attempt at a task
+	Drive     int        `yaml:"drive,omitempty"   json:"drive,omitempty"`   // the drive whose task asks, 0 for none
+	Skill     string     `yaml:"skill,omitempty"   json:"skill,omitempty"`   // where it asked; finish for finish's own question
+	Text      string     `yaml:"text"              json:"text"`              // the ask as written, one line
+	Questions []Question `yaml:"questions"         json:"questions"`
+	AskedAt   time.Time  `yaml:"asked_at"          json:"asked_at"`
 
-	Answer     string    `yaml:"answer,omitempty"` // what the agent, or finish, receives
-	By         string    `yaml:"by,omitempty"`     // which way in answered it
-	AnsweredAt time.Time `yaml:"answered_at,omitempty"`
+	Answer     string    `yaml:"answer,omitempty"      json:"answer,omitempty"` // what the agent, or finish, receives
+	By         string    `yaml:"by,omitempty"          json:"by,omitempty"`     // which way in answered it
+	AnsweredAt time.Time `yaml:"answered_at,omitempty" json:"answered_at,omitzero"`
 	// DeliveredAt is when the answer reached the agent: at once when typed in
 	// its pane or prompted by the answering command, else when a drive sends it
-	DeliveredAt time.Time `yaml:"delivered_at,omitempty"`
+	DeliveredAt time.Time `yaml:"delivered_at,omitempty" json:"delivered_at,omitzero"`
 	// TakenAt is when a drive acted on the answer, so no later run of it
 	// acts again
-	TakenAt time.Time `yaml:"taken_at,omitempty"`
+	TakenAt time.Time `yaml:"taken_at,omitempty" json:"taken_at,omitzero"`
+}
+
+// An Inbox is the asks a list shows, open then answered, with the task
+// urls known for them by display project and task id, so a terminal's list
+// links them.
+type Inbox struct {
+	Open     []Ask                        `json:"open"`
+	Answered []Ask                        `json:"answered"`
+	Links    map[string]map[string]string `json:"links,omitempty"`
 }
 
 // Ways in an ask was answered by.

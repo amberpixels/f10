@@ -81,7 +81,17 @@ type GetBoardRequest struct {
 	// since starts the window; unset means today, else the last working day.
 	Since *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=since,proto3" json:"since,omitempty"`
 	// remote asks the host and tracker even where local facts would do.
-	Remote        bool `protobuf:"varint,4,opt,name=remote,proto3" json:"remote,omitempty"`
+	Remote bool           `protobuf:"varint,4,opt,name=remote,proto3" json:"remote,omitempty"`
+	Caller *CallerContext `protobuf:"bytes,5,opt,name=caller,proto3" json:"caller,omitempty"`
+	// window names the window as f10 board takes it: today, yesterday,
+	// last-workday, this-week, last-week, a date or an RFC 3339 time. When
+	// set it wins over since, and is read against the user's workdays.
+	Window string `protobuf:"bytes,6,opt,name=window,proto3" json:"window,omitempty"`
+	// checkouts, groups and all widen the board to several projects, as
+	// f10 board's -C, --group and --all do.
+	Checkouts     []string `protobuf:"bytes,7,rep,name=checkouts,proto3" json:"checkouts,omitempty"`
+	Groups        []string `protobuf:"bytes,8,rep,name=groups,proto3" json:"groups,omitempty"`
+	All           bool     `protobuf:"varint,9,opt,name=all,proto3" json:"all,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -144,9 +154,49 @@ func (x *GetBoardRequest) GetRemote() bool {
 	return false
 }
 
+func (x *GetBoardRequest) GetCaller() *CallerContext {
+	if x != nil {
+		return x.Caller
+	}
+	return nil
+}
+
+func (x *GetBoardRequest) GetWindow() string {
+	if x != nil {
+		return x.Window
+	}
+	return ""
+}
+
+func (x *GetBoardRequest) GetCheckouts() []string {
+	if x != nil {
+		return x.Checkouts
+	}
+	return nil
+}
+
+func (x *GetBoardRequest) GetGroups() []string {
+	if x != nil {
+		return x.Groups
+	}
+	return nil
+}
+
+func (x *GetBoardRequest) GetAll() bool {
+	if x != nil {
+		return x.All
+	}
+	return false
+}
+
 type GetBoardResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Board         *Board                 `protobuf:"bytes,1,opt,name=board,proto3" json:"board,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Board *Board                 `protobuf:"bytes,1,opt,name=board,proto3" json:"board,omitempty"`
+	// view is every board read, as f10 board --json prints them, for a
+	// client of the same release. Other clients read board.
+	View []byte `protobuf:"bytes,2,opt,name=view,proto3" json:"view,omitempty"`
+	// printed carries the warnings the read wrote to stderr.
+	Printed       *Printed `protobuf:"bytes,3,opt,name=printed,proto3" json:"printed,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -184,6 +234,20 @@ func (*GetBoardResponse) Descriptor() ([]byte, []int) {
 func (x *GetBoardResponse) GetBoard() *Board {
 	if x != nil {
 		return x.Board
+	}
+	return nil
+}
+
+func (x *GetBoardResponse) GetView() []byte {
+	if x != nil {
+		return x.View
+	}
+	return nil
+}
+
+func (x *GetBoardResponse) GetPrinted() *Printed {
+	if x != nil {
+		return x.Printed
 	}
 	return nil
 }
@@ -1452,14 +1516,21 @@ var File_f10_v1_board_proto protoreflect.FileDescriptor
 
 const file_f10_v1_board_proto_rawDesc = "" +
 	"\n" +
-	"\x12f10/v1/board.proto\x12\x06f10.v1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x12f10/v1/tasks.proto\"\x9c\x01\n" +
+	"\x12f10/v1/board.proto\x12\x06f10.v1\x1a\x13f10/v1/caller.proto\x1a\x12f10/v1/tasks.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xab\x02\n" +
 	"\x0fGetBoardRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12%\n" +
 	"\x04view\x18\x02 \x01(\x0e2\x11.f10.v1.BoardViewR\x04view\x120\n" +
 	"\x05since\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x05since\x12\x16\n" +
-	"\x06remote\x18\x04 \x01(\bR\x06remote\"7\n" +
+	"\x06remote\x18\x04 \x01(\bR\x06remote\x12-\n" +
+	"\x06caller\x18\x05 \x01(\v2\x15.f10.v1.CallerContextR\x06caller\x12\x16\n" +
+	"\x06window\x18\x06 \x01(\tR\x06window\x12\x1c\n" +
+	"\tcheckouts\x18\a \x03(\tR\tcheckouts\x12\x16\n" +
+	"\x06groups\x18\b \x03(\tR\x06groups\x12\x10\n" +
+	"\x03all\x18\t \x01(\bR\x03all\"v\n" +
 	"\x10GetBoardResponse\x12#\n" +
-	"\x05board\x18\x01 \x01(\v2\r.f10.v1.BoardR\x05board\"\xad\x02\n" +
+	"\x05board\x18\x01 \x01(\v2\r.f10.v1.BoardR\x05board\x12\x12\n" +
+	"\x04view\x18\x02 \x01(\fR\x04view\x12)\n" +
+	"\aprinted\x18\x03 \x01(\v2\x0f.f10.v1.PrintedR\aprinted\"\xad\x02\n" +
 	"\x05Board\x12=\n" +
 	"\fgenerated_at\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\vgeneratedAt\x12%\n" +
 	"\x04view\x18\x02 \x01(\x0e2\x11.f10.v1.BoardViewR\x04view\x12)\n" +
@@ -1617,45 +1688,49 @@ var file_f10_v1_board_proto_goTypes = []any{
 	(*Quiet)(nil),                 // 16: f10.v1.Quiet
 	(*Feed)(nil),                  // 17: f10.v1.Feed
 	(*timestamppb.Timestamp)(nil), // 18: google.protobuf.Timestamp
-	(*TaskRef)(nil),               // 19: f10.v1.TaskRef
+	(*CallerContext)(nil),         // 19: f10.v1.CallerContext
+	(*Printed)(nil),               // 20: f10.v1.Printed
+	(*TaskRef)(nil),               // 21: f10.v1.TaskRef
 }
 var file_f10_v1_board_proto_depIdxs = []int32{
 	0,  // 0: f10.v1.GetBoardRequest.view:type_name -> f10.v1.BoardView
 	18, // 1: f10.v1.GetBoardRequest.since:type_name -> google.protobuf.Timestamp
-	3,  // 2: f10.v1.GetBoardResponse.board:type_name -> f10.v1.Board
-	18, // 3: f10.v1.Board.generated_at:type_name -> google.protobuf.Timestamp
-	0,  // 4: f10.v1.Board.view:type_name -> f10.v1.BoardView
-	4,  // 5: f10.v1.Board.project:type_name -> f10.v1.Project
-	5,  // 6: f10.v1.Board.window:type_name -> f10.v1.Window
-	6,  // 7: f10.v1.Board.sources:type_name -> f10.v1.Source
-	13, // 8: f10.v1.Board.rows:type_name -> f10.v1.Row
-	17, // 9: f10.v1.Board.feed:type_name -> f10.v1.Feed
-	18, // 10: f10.v1.Window.since:type_name -> google.protobuf.Timestamp
-	18, // 11: f10.v1.Window.end:type_name -> google.protobuf.Timestamp
-	19, // 12: f10.v1.BoardTask.ref:type_name -> f10.v1.TaskRef
-	18, // 13: f10.v1.BoardTask.created:type_name -> google.protobuf.Timestamp
-	9,  // 14: f10.v1.Where.pr:type_name -> f10.v1.PrRef
-	7,  // 15: f10.v1.Row.task:type_name -> f10.v1.BoardTask
-	8,  // 16: f10.v1.Row.who:type_name -> f10.v1.Who
-	10, // 17: f10.v1.Row.where:type_name -> f10.v1.Where
-	11, // 18: f10.v1.Row.review:type_name -> f10.v1.ReviewFacts
-	18, // 19: f10.v1.Row.last_activity:type_name -> google.protobuf.Timestamp
-	12, // 20: f10.v1.Row.next:type_name -> f10.v1.Next
-	7,  // 21: f10.v1.FeedRow.task:type_name -> f10.v1.BoardTask
-	9,  // 22: f10.v1.FeedRow.pr:type_name -> f10.v1.PrRef
-	8,  // 23: f10.v1.FeedRow.who:type_name -> f10.v1.Who
-	14, // 24: f10.v1.FeedRow.related:type_name -> f10.v1.RelatedPr
-	18, // 25: f10.v1.FeedRow.at:type_name -> google.protobuf.Timestamp
-	18, // 26: f10.v1.Quiet.oldest:type_name -> google.protobuf.Timestamp
-	15, // 27: f10.v1.Feed.rows:type_name -> f10.v1.FeedRow
-	16, // 28: f10.v1.Feed.quiet:type_name -> f10.v1.Quiet
-	1,  // 29: f10.v1.BoardService.GetBoard:input_type -> f10.v1.GetBoardRequest
-	2,  // 30: f10.v1.BoardService.GetBoard:output_type -> f10.v1.GetBoardResponse
-	30, // [30:31] is the sub-list for method output_type
-	29, // [29:30] is the sub-list for method input_type
-	29, // [29:29] is the sub-list for extension type_name
-	29, // [29:29] is the sub-list for extension extendee
-	0,  // [0:29] is the sub-list for field type_name
+	19, // 2: f10.v1.GetBoardRequest.caller:type_name -> f10.v1.CallerContext
+	3,  // 3: f10.v1.GetBoardResponse.board:type_name -> f10.v1.Board
+	20, // 4: f10.v1.GetBoardResponse.printed:type_name -> f10.v1.Printed
+	18, // 5: f10.v1.Board.generated_at:type_name -> google.protobuf.Timestamp
+	0,  // 6: f10.v1.Board.view:type_name -> f10.v1.BoardView
+	4,  // 7: f10.v1.Board.project:type_name -> f10.v1.Project
+	5,  // 8: f10.v1.Board.window:type_name -> f10.v1.Window
+	6,  // 9: f10.v1.Board.sources:type_name -> f10.v1.Source
+	13, // 10: f10.v1.Board.rows:type_name -> f10.v1.Row
+	17, // 11: f10.v1.Board.feed:type_name -> f10.v1.Feed
+	18, // 12: f10.v1.Window.since:type_name -> google.protobuf.Timestamp
+	18, // 13: f10.v1.Window.end:type_name -> google.protobuf.Timestamp
+	21, // 14: f10.v1.BoardTask.ref:type_name -> f10.v1.TaskRef
+	18, // 15: f10.v1.BoardTask.created:type_name -> google.protobuf.Timestamp
+	9,  // 16: f10.v1.Where.pr:type_name -> f10.v1.PrRef
+	7,  // 17: f10.v1.Row.task:type_name -> f10.v1.BoardTask
+	8,  // 18: f10.v1.Row.who:type_name -> f10.v1.Who
+	10, // 19: f10.v1.Row.where:type_name -> f10.v1.Where
+	11, // 20: f10.v1.Row.review:type_name -> f10.v1.ReviewFacts
+	18, // 21: f10.v1.Row.last_activity:type_name -> google.protobuf.Timestamp
+	12, // 22: f10.v1.Row.next:type_name -> f10.v1.Next
+	7,  // 23: f10.v1.FeedRow.task:type_name -> f10.v1.BoardTask
+	9,  // 24: f10.v1.FeedRow.pr:type_name -> f10.v1.PrRef
+	8,  // 25: f10.v1.FeedRow.who:type_name -> f10.v1.Who
+	14, // 26: f10.v1.FeedRow.related:type_name -> f10.v1.RelatedPr
+	18, // 27: f10.v1.FeedRow.at:type_name -> google.protobuf.Timestamp
+	18, // 28: f10.v1.Quiet.oldest:type_name -> google.protobuf.Timestamp
+	15, // 29: f10.v1.Feed.rows:type_name -> f10.v1.FeedRow
+	16, // 30: f10.v1.Feed.quiet:type_name -> f10.v1.Quiet
+	1,  // 31: f10.v1.BoardService.GetBoard:input_type -> f10.v1.GetBoardRequest
+	2,  // 32: f10.v1.BoardService.GetBoard:output_type -> f10.v1.GetBoardResponse
+	32, // [32:33] is the sub-list for method output_type
+	31, // [31:32] is the sub-list for method input_type
+	31, // [31:31] is the sub-list for extension type_name
+	31, // [31:31] is the sub-list for extension extendee
+	0,  // [0:31] is the sub-list for field type_name
 }
 
 func init() { file_f10_v1_board_proto_init() }
@@ -1663,6 +1738,7 @@ func file_f10_v1_board_proto_init() {
 	if File_f10_v1_board_proto != nil {
 		return
 	}
+	file_f10_v1_caller_proto_init()
 	file_f10_v1_tasks_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{

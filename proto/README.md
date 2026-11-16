@@ -16,6 +16,18 @@ The web client in `ts/web` is built on the TypeScript code; `ts/` is the TypeScr
 
 Each package lives in the directory its name gives (`agents/v1/`, `f10/v1/`), because buf's lint requires it.
 
+## Local callers
+
+f10's own CLI is a client of this API, and needs what only its process knows: where it runs.
+
+- **`CallerContext`** (`f10.v1`, and a smaller one in `agents.v1`) carries the command's directory and `-C` checkout, its Claude session, its Herdr workspace, its environment, and whether its output is a terminal.
+  The daemon honors it only on the unix socket, and drops it whole from any other listener.
+  MCP tools leave any field of this type out of their schemas, because a model has no checkout or session to pass.
+- **`Printed`** is what a write command prints for a call, stdout then stderr, linked for the caller's terminal when it is one.
+  The CLI prints it as is, so a command over the API prints the bytes it printed in process.
+- **`view`** on a read reply (`GetRunStatus`, `GetBoard`, `ListAsks`) is the model the command renders, as its own JSON, for a client of the same release; the typed fields beside it are for every other client.
+- **A failed call** carries the command's exit code in the `F10-Exit` metadata key, a `Printed` error detail when it printed something before failing, and `F10-Error: outside-herdr` when it refused a caller outside Herdr.
+
 ## Generated code
 
 Generated code is checked in, so a build needs no generator.

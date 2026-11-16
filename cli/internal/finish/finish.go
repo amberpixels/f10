@@ -128,6 +128,10 @@ type FinishInput struct {
 	// ChecksWait is how long a pending head may hold the merge; zero refuses it
 	// at once, for the drive, which holds the task itself
 	ChecksWait time.Duration
+	// DeferSelfClose leaves the caller's own workspace open and names it in
+	// Outcome, for a caller in another process (the daemon), whose close
+	// would end the client before it printed the report
+	DeferSelfClose bool
 }
 
 // Flags are the caller's choices; everything else finish derives.
@@ -199,6 +203,9 @@ type Finished struct {
 	RemovedWorktree bool
 	RemovedBranch   bool
 	ClosedWorkspace bool
+	// CloseWorkspace is the caller's own workspace a deferred self-close
+	// leaves to the caller, which focuses FocusWorkspace first; "" for none
+	CloseWorkspace, FocusWorkspace string
 }
 
 // FinishedEvent records a finish that ran in this process, where no hook

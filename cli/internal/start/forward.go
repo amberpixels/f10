@@ -3,6 +3,7 @@ package start
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
@@ -10,7 +11,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/textx"
 	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 	"github.com/amberpixels/f10/cli/internal/ui"
 	"github.com/amberpixels/f10/cli/internal/worktree"
@@ -37,6 +40,21 @@ type Forwarded struct {
 	Workspace string
 	Sent      string
 	Note      string
+}
+
+// ForwardReport hands the text on and reports where it went, as f10
+// forward prints it.
+func ForwardReport(ctx context.Context, w io.Writer, in ForwardInput) (Forwarded, error) {
+	out, err := Forward(ctx, in)
+	if err != nil {
+		return out, err
+	}
+
+	return out, render.WriteReport(w, []render.Fact{
+		render.TaskFact(ctx, w, in.Main, in.Task.ID),
+		{Label: "workspace", Value: out.Workspace},
+		{Label: "sent", Value: out.Sent},
+	}, textx.AppendNote(nil, out.Note))
 }
 
 func (in ForwardInput) stall() StallCheck {

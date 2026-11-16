@@ -1,19 +1,17 @@
-// Package finish is the f10 finish and f10 janitor commands: it parses their
-// flags and hands the work to the finish service.
+// Package finish is the f10 finish and f10 janitor commands: finish calls
+// the daemon's API, and janitor sweeps this checkout in process.
 package finish
 
 import (
 	"context"
 	"errors"
-	"fmt"
-	"path/filepath"
-	"time"
 
+	"connectrpc.com/connect"
 	"github.com/urfave/cli/v3"
 
-	"github.com/amberpixels/f10/cli/internal/agents"
-	"github.com/amberpixels/f10/cli/internal/finish"
-	"github.com/amberpixels/f10/cli/internal/target"
+	agentsv1 "github.com/amberpixels/f10/cli/gen/agents/v1"
+	f10v1 "github.com/amberpixels/f10/cli/gen/f10/v1"
+	"github.com/amberpixels/f10/cli/internal/apiclient"
 )
 
 // Command is the finish verb, start's inverse. Nothing local moves until the merge
@@ -66,66 +64,51 @@ func runFinish(ctx context.Context, cmd *cli.Command) error {
 		return errors.New("--keep keeps a spike's experiment, which has no PR to --merge or leave --local")
 	}
 
-	if err := agents.RequireAgents(); err != nil {
-		return err
-	}
-
-	t, err := target.For(ctx, cmd)
+	c, err := apiclient.Dial(ctx)
 	if err != nil {
 		return err
 	}
 
-	cwd, ws, err := finish.ProcessPlace()
+	caller, err := c.Caller(cmd)
 	if err != nil {
 		return err
 	}
 
-	return finish.Run(ctx, cmd.Writer, cmd.ErrWriter, t, finish.Request{
-		Token: cmd.Args().First(),
-		Close: cmd.String("close"),
-		Flags: finish.Flags{
-			Yes: cmd.Bool("yes"), Merge: cmd.Bool("merge"), LeaveOpen: cmd.Bool("local"), Keep: cmd.Bool("keep"),
-			IgnoreChecks: cmd.Bool("ignore-checks"), Empty: cmd.Bool("empty"),
-		},
-		Cwd:       cwd,
-		Workspace: ws,
-	}, nil)
-}
+	merge := f10v1.MergeMode_MERGE_MODE_PR
 
-func JanitorCommand() *cli.Command {
-	return &cli.Command{
-		Name: "janitor",
-		Usage: "remove task branches whose PR merged or closed, locally and on origin, and archive their plans; " +
-			"f10 start and f10 finish run it every few hours",
-		Flags: []cli.Flag{
-			&cli.BoolFlag{Name: "dry-run", Usage: "list what would be removed and change nothing"},
-		},
-		Action: runJanitor,
+	switch {
+	case cmd.Bool("merge"):
+		merge = f10v1.MergeMode_MERGE_MODE_FORCE
+	case cmd.Bool("local"):
+		merge = f10v1.MergeMode_MERGE_MODE_CLOSE
 	}
-}
 
-func runJanitor(ctx context.Context, cmd *cli.Command) error {
-	t, err := target.For(ctx, cmd)
+	res, err := c.Runs.Finish(ctx, connect.NewRequest(&f10v1.FinishRequest{
+		Task:         cmd.Args().First(),
+		Merge:        merge,
+		IgnoreChecks: cmd.Bool("ignore-checks"),
+		Keep:         cmd.Bool("keep"),
+		Yes:          cmd.Bool("yes"),
+		Empty:        cmd.Bool("empty"),
+		Close:        cmd.String("close"),
+		Caller:       caller,
+	}))
 	if err != nil {
-		return err
+		return apiclient.Err(err, cmd.Writer, cmd.ErrWriter)
 	}
 
-	in := finish.JanitorFor(t)
-	in.Dry = cmd.Bool("dry-run")
+	m := res.Msg
+	apiclient.Print(cmd.Writer, cmd.ErrWriter, m.GetPrinted())
 
-	if !in.Dry {
-		if err := finish.TouchStamp(
-			filepath.Join(t.Layout.StorageRoot.Path(), finish.JanitorStamp),
-			time.Now(),
-		); err != nil {
-			return err
-		}
+	// the daemon leaves this workspace open: closing it ends this process,
+	// so the close comes last, after the report
+	if m.GetCloseWorkspaceId() == "" {
+		return nil
 	}
 
-	lines, err := finish.Janitor(ctx, in)
-	for _, l := range lines {
-		fmt.Fprintln(cmd.Writer, l)
-	}
+	_, err = c.Agents.CloseWorkspace(ctx, connect.NewRequest(&agentsv1.CloseWorkspaceRequest{
+		Id: m.GetCloseWorkspaceId(), FocusId: m.GetFocusWorkspaceId(), Caller: c.AgentsCaller(cmd),
+	}))
 
-	return err
+	return apiclient.Err(err, cmd.Writer, cmd.ErrWriter)
 }
