@@ -220,25 +220,59 @@ func TestForwardNeedsAWorkspace(t *testing.T) {
 	}
 }
 
-// An idle agent whose run says running stopped mid-turn: the text is what
-// resumes it, so it is sent, and the report names the run it lands in.
+// What Claude draws at rest: its input box between two rules.
+const restingScreen = "● done\n" + "──────────────────────\n" + "> \n" + "──────────────────────\n"
+
+// An agent at rest whose run says running stopped mid-turn: the text is what
+// resumes it, so it is sent, and the report names the run it lands in. Done is
+// idle after a turn nobody looked at, the likely state of an unattended stop.
 func TestForwardResumesAnIdleAgentStillRunning(t *testing.T) {
+	for _, status := range []string{"idle", "done"} {
+		t.Run(status, func(t *testing.T) {
+			fx := newForwardFixture(t)
+			fx.f.Script(testkit.WsList, fx.workspaces(status))
+			fx.run(t, "running", "review", "")
+			fx.f.Script("herdr agent read "+testkit.AgentOf("GH-1")+" --source visible", restingScreen)
+			fx.f.Script("herdr agent prompt "+testkit.AgentOf("GH-1")+" "+testkit.FwdText+" --driven", "{}")
+
+			out, err := fx.forward(t)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if !fx.f.Called("herdr agent prompt") {
+				t.Error("the idle agent was not prompted")
+			}
+
+			if !strings.Contains(out, "ship running: review") {
+				t.Errorf("report lacks the stalled run:\n%s", out)
+			}
+		})
+	}
+}
+
+// A pane with no input box holds a dialog or a menu, and the typed text's
+// Enter would answer it: nothing is sent.
+func TestForwardRefusesAStalledAgentShowingADialog(t *testing.T) {
 	fx := newForwardFixture(t)
 	fx.f.Script(testkit.WsList, fx.workspaces("idle"))
-	fx.run(t, "running", "review", "")
-	fx.f.Script("herdr agent prompt "+testkit.AgentOf("GH-1")+" "+testkit.FwdText+" --driven", "{}")
+	fx.run(t, "running", "implement", "")
+	fx.f.Script("herdr agent read "+testkit.AgentOf("GH-1")+" --source visible",
+		"Bash command\n  rm -rf build\nDo you want to proceed?\n> 1. Yes\n  2. No\n")
 
-	out, err := fx.forward(t)
-	if err != nil {
-		t.Fatal(err)
+	_, err := fx.forward(t)
+	if err == nil {
+		t.Fatal("forwarded into a dialog")
 	}
 
-	if !fx.f.Called("herdr agent prompt") {
-		t.Error("the idle agent was not prompted")
+	for _, want := range []string{"agent gh-1", "workspace GH-1", "ship running: implement", "no input box"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("err = %v, want %q in it", err, want)
+		}
 	}
 
-	if !strings.Contains(out, "ship running: review") {
-		t.Errorf("report lacks the stalled run:\n%s", out)
+	if fx.f.Called("herdr agent prompt") {
+		t.Error("prompted the agent over its dialog")
 	}
 }
 

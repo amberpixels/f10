@@ -661,8 +661,8 @@ This session's badge does not move.
 An answer to a question the agent stopped on goes through the asks inbox instead: `f10 asks answer 1042 1=proceed 2="keep ours"`.
 
 If the task's branch is checked out here, or nowhere, `f10 forward` exits 3 and the skill runs locally.
-An agent that is idle while its run says running stopped mid-turn, and forward's text resumes it.
-Herdr cannot tell that from a permission dialog open in the pane, so the report names the run the text landed in.
+An agent that is idle while its run says running stopped mid-turn, and forward's text resumes it, with a note naming that run.
+A permission dialog open in that pane would take the text's Enter as its answer, so forward first reads the pane, and sends nothing when it shows no input box.
 A run stopped on an ask takes the text as its answer, and the report quotes the ask.
 Judge, demo, handoff and explain are never forwarded, because they can read another worktree's branch and write nothing in it.
 

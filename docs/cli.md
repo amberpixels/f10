@@ -465,10 +465,10 @@ The plan and ship skills run it first whenever their argument is a task id, beca
    A task started with a suffix is forwarded to with the same suffix.
 2. **Three outcomes.**
    Exit 0: the command was submitted, and the report has three rows - `task`, `workspace`, `sent`.
-   A note under them says where the text landed: the open ask it answers, or, for an agent idle while its run says running, that run, since the text resumes its turn or answers a dialog open in the pane.
+   A note under them says where the text landed: the open ask it answers, or, for an agent idle (or done) while its run says running, that run, since the text resumes its turn.
    The command returns at submission, since Herdr's prompt call does, and the outcome lands in that tab; nothing here waits or tails.
    Exit 3: the task is in this checkout (its branch is checked out here, or nowhere, or it has no branch) and the command runs locally; a one-line reason says which.
-   Anything else is a failure: outside Herdr, with start's own refusal; no workspace shows the worktree; Herdr refused the prompt.
+   Anything else is a failure: outside Herdr, with start's own refusal; no workspace shows the worktree; an agent idle while its run says running whose pane shows no input box, because a permission dialog there would take the text's Enter as its answer; Herdr refused the prompt.
 3. **The marker.**
    Text that begins with `/f10:` and does not already carry `--driven` gets it appended, so the agent knows from its first turn that it is driven ([driven mode](../modes/driven.md)).
    Plain text, an answer or a steering note, is sent as it is.

@@ -20,7 +20,7 @@ type StallCheck struct {
 
 // RefuseStalled stops a drive's prompt to an agent idle while its run says
 // running: it may sit on a permission dialog, and a new skill prompt typed
-// there could answer it. A forward is the user's own text, so it sends.
+// there could answer it. Forward reads the screen instead (forwardReady).
 func RefuseStalled(in StallCheck, ws *agentctl.Workspace, agent, root string) error {
 	if ws.Status != agentctl.StatusIdle {
 		return nil
@@ -43,32 +43,35 @@ func RefuseStalled(in StallCheck, ws *agentctl.Workspace, agent, root string) er
 	return nil
 }
 
-// stalledNote says where a forward's text lands: the open ask it answers, or
-// the run an idle agent stopped in. Empty when neither holds.
-func stalledNote(in StallCheck, ws *agentctl.Workspace, root string) (string, error) {
+// landing says where a forward's text lands: the open ask it answers, or the
+// run an agent at rest stopped in. stalled names that run, "" when none.
+func landing(in StallCheck, ws *agentctl.Workspace, root string) (string, string, error) {
 	runs, err := liveRuns(in, root)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	for _, r := range runs {
 		if r.Ask != "" {
-			return "the text answers the open ask: " + r.Ask, nil
+			return "the text answers the open ask: " + r.Ask, "", nil
 		}
 	}
 
-	if ws.Status != agentctl.StatusIdle {
-		return "", nil
+	// done is idle after a turn nobody looked at, the likely state of a run
+	// that stopped unattended
+	if ws.Status != agentctl.StatusIdle && ws.Status != agentctl.StatusDone {
+		return "", "", nil
 	}
 
 	for _, r := range runs {
 		if p := runningPhase(r); p != "" {
-			return fmt.Sprintf("agent was idle while its run says %s %s: the text resumes that turn, "+
-				"or answers a dialog if one is open in its pane", p, r.PhaseText(p)), nil
+			stalled := p + " " + r.PhaseText(p)
+
+			return "agent was idle while its run says " + stalled + ": the text resumes that turn", stalled, nil
 		}
 	}
 
-	return "", nil
+	return "", "", nil
 }
 
 // liveRuns are the runs in root an agent still writes: not expired, and
