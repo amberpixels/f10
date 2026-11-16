@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"time"
 
@@ -31,6 +30,16 @@ import (
 // BareStatus is what `status` with no task id prints, and whether it
 // printed a question a driven agent waits on.
 func BareStatus(ctx context.Context, v StatusView, dir string, scoped bool, sid string, all bool) (bool, error) {
+	rep, err := ReadBare(ctx, v.Warn, dir, scoped, sid, all)
+	if err != nil {
+		return false, err
+	}
+
+	return rep.Asks, Render(v, rep)
+}
+
+// ReadBare reads what `status` with no task id shows, warning on warn.
+func ReadBare(ctx context.Context, warn io.Writer, dir string, scoped bool, sid string, all bool) (Report, error) {
 	now := time.Now()
 
 	// the listing below reads the reader's runs when the guesses built one
@@ -42,19 +51,19 @@ func BareStatus(ctx context.Context, v StatusView, dir string, scoped bool, sid 
 	if !all && !scoped {
 		if t, err := target.At(ctx, dir, false, "status"); err == nil {
 			if rd, err = NewStatusReader(t, now); err != nil {
-				return false, err
+				return Report{}, err
 			}
 
 			here := checkoutTaskID(ctx, t)
 			if here == "" && sid != "" {
-				if p, err := rd.launches(ctx, v, sid); p.Printed {
-					return p.asks, err
+				if rep := rd.launches(ctx, warn, sid); rep.Kind != "" {
+					return rep, nil
 				}
 			}
 
 			if id := cmp.Or(sessionTaskID(sid), here); id != "" {
-				if p, err := rd.Task(ctx, v, id, true); p.Printed {
-					return p.asks, err
+				if rep, err := rd.ReadTask(ctx, warn, id, true); rep.Kind != "" {
+					return rep, err
 				}
 			}
 		}
@@ -69,20 +78,18 @@ func BareStatus(ctx context.Context, v StatusView, dir string, scoped bool, sid 
 	case sid != "" && !all:
 		r, err := state.Load(state.Path(state.Dir(), sid))
 		if errors.Is(err, os.ErrNotExist) {
-			_, err = fmt.Fprintln(v.Out, "no f10 run in this session")
-
-			return false, err
+			return lineReport("no f10 run in this session"), nil
 		}
 
 		if err != nil {
-			return false, err
+			return Report{}, err
 		}
 
 		runs = []*state.Run{r}
 	default:
 		live, err := liveRuns(rd, now)
 		if err != nil {
-			return false, err
+			return Report{}, err
 		}
 
 		showRoot = true
@@ -93,22 +100,16 @@ func BareStatus(ctx context.Context, v StatusView, dir string, scoped bool, sid 
 			runs = InRoot(live, root)
 
 			if len(runs) == 0 {
-				_, err = fmt.Fprintf(v.Out, "no live f10 run in %s (--all lists every session)\n", root)
-
-				return false, err
+				return lineReport("no live f10 run in %s (--all lists every session)", root), nil
 			}
 		}
 
 		if len(runs) == 0 {
-			_, err = fmt.Fprintln(v.Out, "no live f10 run on this machine")
-
-			return false, err
+			return lineReport("no live f10 run on this machine"), nil
 		}
 	}
 
-	asks := slices.ContainsFunc(runs, func(r *state.Run) bool { return r.Ask != "" })
-
-	return asks, writeRuns(v, runs, make([][]gate, len(runs)), nil, showRoot, "", now)
+	return runsReport(runs, make([][]gate, len(runs)), nil, showRoot, ""), nil
 }
 
 // liveRuns is the reader's runs, else a fresh read of the state dir.

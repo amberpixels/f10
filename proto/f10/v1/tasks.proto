@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package f10.v1;
 
+import "f10/v1/caller.proto";
 import "google/protobuf/timestamp.proto";
 
 // TaskService creates and reads tracker tasks through the project's tracker.
@@ -47,10 +48,20 @@ message CreateTaskRequest {
   string parent = 7;
   // properties sets the tracker's named properties.
   map<string, string> properties = 8;
+  // markdown is the whole task, `# <title>` on its first line, as f10 task
+  // create reads it. When set it wins over title and body.
+  string markdown = 9;
+  CallerContext caller = 10;
+  // check refuses as a create would before it reads the task, where
+  // nothing here creates tasks, and creates nothing, so f10 task create
+  // leaves stdin unread for the caller to fall back on.
+  bool check = 11;
 }
 
 message CreateTaskResponse {
   TaskRef task = 1;
+  // printed is the id f10 task create prints, and its warnings.
+  Printed printed = 2;
 }
 
 message GetTaskRequest {
@@ -58,8 +69,15 @@ message GetTaskRequest {
   string id = 2;
   // skip_images leaves the images the task links unread.
   bool skip_images = 3;
+  // caller is where a local f10 task read runs: an empty id is its
+  // checkout's task, and a bundle's ids joined by + read every member.
+  CallerContext caller = 4;
 }
 
 message GetTaskResponse {
   Task task = 1;
+  // document is the task as f10 task read prints it: a bundle's members
+  // joined, and the images saved locally unless skip_images is set or
+  // the caller's output is a terminal.
+  string document = 2;
 }

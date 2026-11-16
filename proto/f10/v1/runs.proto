@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package f10.v1;
 
+import "f10/v1/caller.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 
@@ -18,6 +19,10 @@ service RunService {
   rpc Finish(FinishRequest) returns (FinishResponse);
   // Forward hands text to the agent working on a task, as f10 forward does.
   rpc Forward(ForwardRequest) returns (ForwardResponse);
+  // ListDrives lists a project's drive records, as f10 drive list does.
+  rpc ListDrives(ListDrivesRequest) returns (ListDrivesResponse);
+  // CancelDrive stops a drive from prompting further and closes its asks.
+  rpc CancelDrive(CancelDriveRequest) returns (CancelDriveResponse);
 }
 
 // PhaseStatus is where one phase of a run stands.
@@ -169,10 +174,18 @@ message GetRunStatusRequest {
   string task = 2;
   // all lists every live run on the machine, whatever the project.
   bool all = 3;
+  // caller is where a local f10 status runs; with it, an empty project
+  // reads the caller's checkout, and an empty task its session's run.
+  CallerContext caller = 4;
 }
 
 message GetRunStatusResponse {
   repeated RunStatus runs = 1;
+  // view is the status as f10 status renders it: its --json shapes, as
+  // JSON, for a client of the same release. Other clients read runs.
+  bytes view = 2;
+  // printed carries the warnings the read wrote to stderr.
+  Printed printed = 3;
 }
 
 // StartMode is what the started agent is prompted to do.
@@ -203,6 +216,11 @@ message StartRequest {
   string model = 10;
   // note is extra text the agent's prompt carries.
   string note = 11;
+  CallerContext caller = 12;
+  // token is the argument as f10 start takes it: a task id with its
+  // -suffix, a PR url or #n. When set it wins over task and pr, and task
+  // names the task a picked-up PR belongs to.
+  string token = 13;
 }
 
 message StartResponse {
@@ -211,6 +229,8 @@ message StartResponse {
   string worktree = 3;
   string workspace_id = 4;
   string agent = 5;
+  // printed is the report f10 start prints, and the waits it reported.
+  Printed printed = 6;
 }
 
 // A DriveTask is one task of a drive, with its own agent profile.
@@ -280,6 +300,14 @@ message FinishRequest {
   bool ignore_checks = 4;
   // keep keeps a spike's experiment, committed on a branch.
   bool keep = 5;
+  CallerContext caller = 6;
+  // yes closes the caller's own workspace after the report, when the
+  // caller runs inside the task's workspace, instead of refusing.
+  bool yes = 7;
+  // empty finishes a branch never pushed that adds nothing.
+  bool empty = 8;
+  // close names the bundle riders the PR delivers: ids, all or none.
+  string close = 9;
 }
 
 message FinishResponse {
@@ -290,6 +318,14 @@ message FinishResponse {
   bool removed_worktree = 4;
   bool removed_branch = 5;
   bool closed_workspace = 6;
+  // printed is the report and handoff f10 finish prints.
+  Printed printed = 7;
+  // close_workspace_id is the caller's own workspace, which the caller
+  // closes once it printed the report, after focusing focus_workspace_id.
+  // The daemon leaves both, because closing the caller's pane mid-call
+  // would end the caller before it printed anything.
+  string close_workspace_id = 8;
+  string focus_workspace_id = 9;
 }
 
 message ForwardRequest {
@@ -298,6 +334,7 @@ message ForwardRequest {
   string task = 2;
   // text is what the agent is told, such as a command or a note.
   string text = 3;
+  CallerContext caller = 4;
 }
 
 message ForwardResponse {
@@ -307,4 +344,40 @@ message ForwardResponse {
   string sent = 2;
   // note says what the delivery check saw, empty when all went well.
   string note = 3;
+  // printed is the report f10 forward prints.
+  Printed printed = 4;
+}
+
+message ListDrivesRequest {
+  string project = 1;
+  // all lists finished and cancelled drives too.
+  bool all = 2;
+  CallerContext caller = 3;
+}
+
+// A DriveRecord is one drive a project ran, by its number.
+message DriveRecord {
+  int32 number = 1;
+  // args are the drive's arguments as f10 drive took them.
+  repeated string args = 2;
+  // state is running, stopped, done or cancelled.
+  string state = 3;
+  google.protobuf.Timestamp started = 4;
+}
+
+message ListDrivesResponse {
+  repeated DriveRecord drives = 1;
+  // printed is the table f10 drive list prints.
+  Printed printed = 2;
+}
+
+message CancelDriveRequest {
+  string project = 1;
+  int32 drive = 2;
+  CallerContext caller = 3;
+}
+
+message CancelDriveResponse {
+  // printed is what f10 drive cancel prints.
+  Printed printed = 1;
 }

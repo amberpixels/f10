@@ -15,9 +15,9 @@ import (
 	"github.com/amberpixels/f10/cli/gen/f10/v1/f10v1connect"
 )
 
-// socketURL is the base every call on the socket goes to; the host is a
+// SocketURL is the base every call on the socket goes to; the host is a
 // placeholder, since the transport dials the socket whatever it names.
-const socketURL = "http://f10-daemon"
+const SocketURL = "http://f10-daemon"
 
 // A Client calls the daemon listening in a run dir.
 type Client struct {
@@ -32,8 +32,8 @@ func Dial(dir string) *Client {
 
 	return &Client{
 		Dir:    dir,
-		Daemon: f10v1connect.NewDaemonServiceClient(hc, socketURL),
-		Runs:   f10v1connect.NewRunServiceClient(hc, socketURL),
+		Daemon: f10v1connect.NewDaemonServiceClient(hc, SocketURL),
+		Runs:   f10v1connect.NewRunServiceClient(hc, SocketURL),
 	}
 }
 
@@ -259,10 +259,17 @@ func plainError(err error) error {
 // LocalEnv is the environment a request passes, honored only from the unix
 // socket; a request from any other listener runs under the daemon's session.
 func LocalEnv(req connect.AnyRequest, env []string) []string {
-	// a unix socket's peer has no network address
-	if addr := req.Peer().Addr; addr != "" && addr != "@" {
+	if !IsLocal(req) {
 		return nil
 	}
 
 	return env
+}
+
+// IsLocal reports whether req came over the unix socket, or from this
+// process: a unix socket's peer has no network address.
+func IsLocal(req connect.AnyRequest) bool {
+	addr := req.Peer().Addr
+
+	return addr == "" || addr == "@"
 }

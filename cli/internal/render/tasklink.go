@@ -55,6 +55,15 @@ func (l *TaskLinks) Known(project, id, url string) {
 	l.urls[linkKey(project, id)] = url
 }
 
+// URL is the url known for id under project, "" for none.
+func (l *TaskLinks) URL(project, id string) string {
+	if l == nil {
+		return ""
+	}
+
+	return l.urls[linkKey(project, id)]
+}
+
 // ID is id as printed for people; a bundle links each member on its own.
 func (l *TaskLinks) ID(project, id string) string {
 	if l == nil || !l.On {

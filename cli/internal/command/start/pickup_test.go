@@ -60,7 +60,7 @@ func TestPromptForAPickup(t *testing.T) {
 
 // --plan on a landed PR is refused: going on from it is a task of its own.
 func TestRefuseLandedPlan(t *testing.T) {
-	err := startcmd.RefuseLandedPlan(launch.ModePlan, testkit.PickMerged)
+	err := start.RefuseLandedPlan(launch.ModePlan, testkit.PickMerged)
 	if err == nil || !strings.Contains(err.Error(), "merged by alice") {
 		t.Errorf("--plan on a merged PR = %v, want a refusal naming its state", err)
 	}
@@ -69,19 +69,19 @@ func TestRefuseLandedPlan(t *testing.T) {
 		mode string
 		pick *hostops.Pickup
 	}{{startcmd.ModeDefault, testkit.PickMerged}, {launch.ModeDiscuss, testkit.PickMerged}, {launch.ModePlan, testkit.PickGH}, {launch.ModePlan, nil}} {
-		if err := startcmd.RefuseLandedPlan(c.mode, c.pick); err != nil {
+		if err := start.RefuseLandedPlan(c.mode, c.pick); err != nil {
 			t.Errorf("refuseLandedPlan(%q, %v) = %v, want nil", c.mode, c.pick, err)
 		}
 	}
 }
 
 func TestRefusePickupFlags(t *testing.T) {
-	if err := startcmd.RefusePickupFlags("", "", ""); err != nil {
+	if err := start.RefusePickupFlags("", "", ""); err != nil {
 		t.Errorf("a PR with no flow named was refused: %v", err)
 	}
 
 	for _, c := range [][3]string{{"local", "", ""}, {"direct", "", ""}, {"", "GH-7", ""}, {"", "", "main"}} {
-		if err := startcmd.RefusePickupFlags(c[0], c[1], c[2]); err == nil {
+		if err := start.RefusePickupFlags(c[0], c[1], c[2]); err == nil {
 			t.Errorf("refusePickupFlags%v = nil, want a refusal", c)
 		}
 	}

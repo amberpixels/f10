@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package f10.v1;
+
+// A CallerContext is where a local command runs: what f10's own CLI reads
+// from its process and the daemon cannot. The daemon honors it only on the
+// unix socket, and drops it whole from any other listener. MCP tools leave
+// it out, because a model has no checkout or session to pass.
+message CallerContext {
+  // cwd is the directory the command runs in.
+  string cwd = 1;
+  // checkout is the checkout -C names, which the command reads in place of
+  // cwd whatever the session is on; empty without -C.
+  string checkout = 2;
+  // session is the Claude session the command runs in, empty outside one.
+  string session = 3;
+  // workspace_id is the Herdr workspace the command runs in.
+  string workspace_id = 4;
+  // env is the command's environment. The daemon keeps the allowlisted
+  // part a drive passes on, and runs the call's Herdr commands in its
+  // session.
+  repeated string env = 5;
+  // terminal is true when the command's output is a terminal, so the
+  // printed text links task ids and file paths as it would there.
+  bool terminal = 6;
+}
+
+// Printed is what a command prints for a call: stdout, then stderr.
+// A failed call attaches it to its error when the command had printed
+// something before it failed.
+message Printed {
+  string stdout = 1;
+  string stderr = 2;
+}

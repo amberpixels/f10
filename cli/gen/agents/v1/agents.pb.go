@@ -592,11 +592,108 @@ func (*SendTextResponse) Descriptor() ([]byte, []int) {
 	return file_agents_v1_agents_proto_rawDescGZIP(), []int{9}
 }
 
+type CloseWorkspaceRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// focus_id is the workspace to focus before the close, empty for none.
+	FocusId       string         `protobuf:"bytes,2,opt,name=focus_id,json=focusId,proto3" json:"focus_id,omitempty"`
+	Caller        *CallerContext `protobuf:"bytes,3,opt,name=caller,proto3" json:"caller,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CloseWorkspaceRequest) Reset() {
+	*x = CloseWorkspaceRequest{}
+	mi := &file_agents_v1_agents_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CloseWorkspaceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CloseWorkspaceRequest) ProtoMessage() {}
+
+func (x *CloseWorkspaceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_agents_v1_agents_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CloseWorkspaceRequest.ProtoReflect.Descriptor instead.
+func (*CloseWorkspaceRequest) Descriptor() ([]byte, []int) {
+	return file_agents_v1_agents_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *CloseWorkspaceRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *CloseWorkspaceRequest) GetFocusId() string {
+	if x != nil {
+		return x.FocusId
+	}
+	return ""
+}
+
+func (x *CloseWorkspaceRequest) GetCaller() *CallerContext {
+	if x != nil {
+		return x.Caller
+	}
+	return nil
+}
+
+type CloseWorkspaceResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CloseWorkspaceResponse) Reset() {
+	*x = CloseWorkspaceResponse{}
+	mi := &file_agents_v1_agents_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CloseWorkspaceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CloseWorkspaceResponse) ProtoMessage() {}
+
+func (x *CloseWorkspaceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_agents_v1_agents_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CloseWorkspaceResponse.ProtoReflect.Descriptor instead.
+func (*CloseWorkspaceResponse) Descriptor() ([]byte, []int) {
+	return file_agents_v1_agents_proto_rawDescGZIP(), []int{11}
+}
+
 var File_agents_v1_agents_proto protoreflect.FileDescriptor
 
 const file_agents_v1_agents_proto_rawDesc = "" +
 	"\n" +
-	"\x16agents/v1/agents.proto\x12\tagents.v1\"\x9a\x01\n" +
+	"\x16agents/v1/agents.proto\x12\tagents.v1\x1a\x14agents/v1/asks.proto\"\x9a\x01\n" +
 	"\tWorkspace\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05label\x18\x02 \x01(\tR\x05label\x12\x12\n" +
@@ -626,19 +723,25 @@ const file_agents_v1_agents_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04text\x18\x02 \x01(\tR\x04text\x12\x16\n" +
 	"\x06submit\x18\x03 \x01(\bR\x06submit\"\x12\n" +
-	"\x10SendTextResponse*\x8d\x01\n" +
+	"\x10SendTextResponse\"t\n" +
+	"\x15CloseWorkspaceRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x19\n" +
+	"\bfocus_id\x18\x02 \x01(\tR\afocusId\x120\n" +
+	"\x06caller\x18\x03 \x01(\v2\x18.agents.v1.CallerContextR\x06caller\"\x18\n" +
+	"\x16CloseWorkspaceResponse*\x8d\x01\n" +
 	"\vAgentStatus\x12\x1c\n" +
 	"\x18AGENT_STATUS_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11AGENT_STATUS_IDLE\x10\x01\x12\x18\n" +
 	"\x14AGENT_STATUS_WORKING\x10\x02\x12\x15\n" +
 	"\x11AGENT_STATUS_DONE\x10\x03\x12\x18\n" +
-	"\x14AGENT_STATUS_UNKNOWN\x10\x042\xcc\x02\n" +
+	"\x14AGENT_STATUS_UNKNOWN\x10\x042\xa3\x03\n" +
 	"\fAgentService\x12U\n" +
 	"\x0eListWorkspaces\x12 .agents.v1.ListWorkspacesRequest\x1a!.agents.v1.ListWorkspacesResponse\x12I\n" +
 	"\n" +
 	"ListAgents\x12\x1c.agents.v1.ListAgentsRequest\x1a\x1d.agents.v1.ListAgentsResponse\x12U\n" +
 	"\x0eGetAgentStatus\x12 .agents.v1.GetAgentStatusRequest\x1a!.agents.v1.GetAgentStatusResponse\x12C\n" +
-	"\bSendText\x12\x1a.agents.v1.SendTextRequest\x1a\x1b.agents.v1.SendTextResponseB\x98\x01\n" +
+	"\bSendText\x12\x1a.agents.v1.SendTextRequest\x1a\x1b.agents.v1.SendTextResponse\x12U\n" +
+	"\x0eCloseWorkspace\x12 .agents.v1.CloseWorkspaceRequest\x1a!.agents.v1.CloseWorkspaceResponseB\x98\x01\n" +
 	"\rcom.agents.v1B\vAgentsProtoP\x01Z5github.com/amberpixels/f10/cli/gen/agents/v1;agentsv1\xa2\x02\x03AXX\xaa\x02\tAgents.V1\xca\x02\tAgents\\V1\xe2\x02\x15Agents\\V1\\GPBMetadata\xea\x02\n" +
 	"Agents::V1b\x06proto3"
 
@@ -655,7 +758,7 @@ func file_agents_v1_agents_proto_rawDescGZIP() []byte {
 }
 
 var file_agents_v1_agents_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_agents_v1_agents_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_agents_v1_agents_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_agents_v1_agents_proto_goTypes = []any{
 	(AgentStatus)(0),               // 0: agents.v1.AgentStatus
 	(*Workspace)(nil),              // 1: agents.v1.Workspace
@@ -668,6 +771,9 @@ var file_agents_v1_agents_proto_goTypes = []any{
 	(*GetAgentStatusResponse)(nil), // 8: agents.v1.GetAgentStatusResponse
 	(*SendTextRequest)(nil),        // 9: agents.v1.SendTextRequest
 	(*SendTextResponse)(nil),       // 10: agents.v1.SendTextResponse
+	(*CloseWorkspaceRequest)(nil),  // 11: agents.v1.CloseWorkspaceRequest
+	(*CloseWorkspaceResponse)(nil), // 12: agents.v1.CloseWorkspaceResponse
+	(*CallerContext)(nil),          // 13: agents.v1.CallerContext
 }
 var file_agents_v1_agents_proto_depIdxs = []int32{
 	0,  // 0: agents.v1.Workspace.agent_status:type_name -> agents.v1.AgentStatus
@@ -675,19 +781,22 @@ var file_agents_v1_agents_proto_depIdxs = []int32{
 	1,  // 2: agents.v1.ListWorkspacesResponse.workspaces:type_name -> agents.v1.Workspace
 	2,  // 3: agents.v1.ListAgentsResponse.agents:type_name -> agents.v1.Agent
 	2,  // 4: agents.v1.GetAgentStatusResponse.agent:type_name -> agents.v1.Agent
-	3,  // 5: agents.v1.AgentService.ListWorkspaces:input_type -> agents.v1.ListWorkspacesRequest
-	5,  // 6: agents.v1.AgentService.ListAgents:input_type -> agents.v1.ListAgentsRequest
-	7,  // 7: agents.v1.AgentService.GetAgentStatus:input_type -> agents.v1.GetAgentStatusRequest
-	9,  // 8: agents.v1.AgentService.SendText:input_type -> agents.v1.SendTextRequest
-	4,  // 9: agents.v1.AgentService.ListWorkspaces:output_type -> agents.v1.ListWorkspacesResponse
-	6,  // 10: agents.v1.AgentService.ListAgents:output_type -> agents.v1.ListAgentsResponse
-	8,  // 11: agents.v1.AgentService.GetAgentStatus:output_type -> agents.v1.GetAgentStatusResponse
-	10, // 12: agents.v1.AgentService.SendText:output_type -> agents.v1.SendTextResponse
-	9,  // [9:13] is the sub-list for method output_type
-	5,  // [5:9] is the sub-list for method input_type
-	5,  // [5:5] is the sub-list for extension type_name
-	5,  // [5:5] is the sub-list for extension extendee
-	0,  // [0:5] is the sub-list for field type_name
+	13, // 5: agents.v1.CloseWorkspaceRequest.caller:type_name -> agents.v1.CallerContext
+	3,  // 6: agents.v1.AgentService.ListWorkspaces:input_type -> agents.v1.ListWorkspacesRequest
+	5,  // 7: agents.v1.AgentService.ListAgents:input_type -> agents.v1.ListAgentsRequest
+	7,  // 8: agents.v1.AgentService.GetAgentStatus:input_type -> agents.v1.GetAgentStatusRequest
+	9,  // 9: agents.v1.AgentService.SendText:input_type -> agents.v1.SendTextRequest
+	11, // 10: agents.v1.AgentService.CloseWorkspace:input_type -> agents.v1.CloseWorkspaceRequest
+	4,  // 11: agents.v1.AgentService.ListWorkspaces:output_type -> agents.v1.ListWorkspacesResponse
+	6,  // 12: agents.v1.AgentService.ListAgents:output_type -> agents.v1.ListAgentsResponse
+	8,  // 13: agents.v1.AgentService.GetAgentStatus:output_type -> agents.v1.GetAgentStatusResponse
+	10, // 14: agents.v1.AgentService.SendText:output_type -> agents.v1.SendTextResponse
+	12, // 15: agents.v1.AgentService.CloseWorkspace:output_type -> agents.v1.CloseWorkspaceResponse
+	11, // [11:16] is the sub-list for method output_type
+	6,  // [6:11] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_agents_v1_agents_proto_init() }
@@ -695,13 +804,14 @@ func file_agents_v1_agents_proto_init() {
 	if File_agents_v1_agents_proto != nil {
 		return
 	}
+	file_agents_v1_asks_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agents_v1_agents_proto_rawDesc), len(file_agents_v1_agents_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   10,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

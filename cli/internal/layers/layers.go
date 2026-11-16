@@ -75,6 +75,10 @@ var Table = []Rule{
 	// the agents core and its agents.v1 handlers: the only door to Herdr
 	{Prefix: "internal/agents", Rank: 2, Peers: true},
 	{Prefix: "internal/statusview", Rank: 2, Peers: true},
+	// what a command printed, carried across the API, and the client every
+	// control-plane command calls it through
+	{Prefix: "internal/printed", Rank: 2, Peers: true},
+	{Prefix: "internal/apiclient", Rank: 2, Peers: true},
 	{Prefix: "internal/testkit", Rank: 2, Peers: true}, // the fakes, which swap seams in the services above
 	{Prefix: "internal/command", Rank: 2, Peers: true, Exact: true},
 
@@ -113,14 +117,14 @@ var Table = []Rule{
 	{Prefix: "internal/command/finish", Rank: 6},
 	{Prefix: "internal/start", Rank: 7},
 	{Prefix: "internal/command/start", Rank: 8},
-	{Prefix: "internal/api", Rank: 8}, // the f10.v1 handlers, over start, finish and the board
 	{Prefix: "internal/drive", Rank: 9},
+	{Prefix: "internal/api", Rank: 10}, // the f10.v1 handlers, over start, finish, the board and the drive records
 	{Prefix: "internal/command/drive", Rank: 10},
-	{Prefix: "internal/command/daemon", Rank: 10},
+	{Prefix: "internal/command/daemon", Rank: 11},
 
-	{Prefix: "cmd/f10", Rank: 11},
-	{Prefix: "cmd/f10eval", Rank: 11},
-	{Prefix: "cmd/protoc-gen-f10-mcp", Rank: 11}, // the buf plugin that writes gen/mcptools
+	{Prefix: "cmd/f10", Rank: 12},
+	{Prefix: "cmd/f10eval", Rank: 12},
+	{Prefix: "cmd/protoc-gen-f10-mcp", Rank: 12}, // the buf plugin that writes gen/mcptools
 }
 
 // A Violation is one import the table forbids, or a package it does not rank.

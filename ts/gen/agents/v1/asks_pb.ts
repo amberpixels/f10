@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file agents/v1/asks.proto.
  */
 export const file_agents_v1_asks: GenFile = /*@__PURE__*/
-  fileDesc("ChRhZ2VudHMvdjEvYXNrcy5wcm90bxIJYWdlbnRzLnYxIjQKCFF1ZXN0aW9uEgkKAW4YASABKAUSDAoEdGV4dBgCIAEoCRIPCgdvcHRpb25zGAMgAygJIpYDCgNBc2sSCgoCaWQYASABKAkSDQoFYWdlbnQYAiABKAkSFAoMd29ya3NwYWNlX2lkGAMgASgJEgwKBHRleHQYBCABKAkSJgoJcXVlc3Rpb25zGAUgAygLMhMuYWdlbnRzLnYxLlF1ZXN0aW9uEiwKCGFza2VkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIOCgZhbnN3ZXIYByABKAkSLAoLYW5zd2VyZWRfYnkYCCABKA4yFy5hZ2VudHMudjEuQW5zd2VyU291cmNlEi8KC2Fuc3dlcmVkX2F0GAkgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIwCgxkZWxpdmVyZWRfYXQYCiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEioKBmxhYmVscxgLIAMoCzIaLmFnZW50cy52MS5Bc2suTGFiZWxzRW50cnkaLQoLTGFiZWxzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ASIiCgZBbnN3ZXISCQoBbhgBIAEoBRINCgV2YWx1ZRgCIAEoCSJFCg9MaXN0QXNrc1JlcXVlc3QSMgoOYW5zd2VyZWRfc2luY2UYASABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIlIKEExpc3RBc2tzUmVzcG9uc2USHAoEb3BlbhgBIAMoCzIOLmFnZW50cy52MS5Bc2sSIAoIYW5zd2VyZWQYAiADKAsyDi5hZ2VudHMudjEuQXNrIkIKEEFuc3dlckFza1JlcXVlc3QSCgoCaWQYASABKAkSIgoHYW5zd2VycxgCIAMoCzIRLmFnZW50cy52MS5BbnN3ZXIiQwoRQW5zd2VyQXNrUmVzcG9uc2USGwoDYXNrGAEgASgLMg4uYWdlbnRzLnYxLkFzaxIRCglkZWxpdmVyZWQYAiABKAgiKAoJQXNrUmFpc2VkEhsKA2FzaxgBIAEoCzIOLmFnZW50cy52MS5Bc2sizQEKC0Fza0Fuc3dlcmVkEgoKAmlkGAEgASgJEg4KBmFuc3dlchgCIAEoCRIsCgthbnN3ZXJlZF9ieRgDIAEoDjIXLmFnZW50cy52MS5BbnN3ZXJTb3VyY2USEQoJZGVsaXZlcmVkGAQgASgIEjIKBmxhYmVscxgFIAMoCzIiLmFnZW50cy52MS5Bc2tBbnN3ZXJlZC5MYWJlbHNFbnRyeRotCgtMYWJlbHNFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBKsMBCgxBbnN3ZXJTb3VyY2USHQoZQU5TV0VSX1NPVVJDRV9VTlNQRUNJRklFRBAAEhYKEkFOU1dFUl9TT1VSQ0VfUEFORRABEhYKEkFOU1dFUl9TT1VSQ0VfQVNLUxACEhcKE0FOU1dFUl9TT1VSQ0VfU0tJTEwQAxIXChNBTlNXRVJfU09VUkNFX0RSSVZFEAQSGwoXQU5TV0VSX1NPVVJDRV9DQU5DRUxMRUQQBRIVChFBTlNXRVJfU09VUkNFX0FQSRAGMpkBCgpBc2tTZXJ2aWNlEkMKCExpc3RBc2tzEhouYWdlbnRzLnYxLkxpc3RBc2tzUmVxdWVzdBobLmFnZW50cy52MS5MaXN0QXNrc1Jlc3BvbnNlEkYKCUFuc3dlckFzaxIbLmFnZW50cy52MS5BbnN3ZXJBc2tSZXF1ZXN0GhwuYWdlbnRzLnYxLkFuc3dlckFza1Jlc3BvbnNlQpYBCg1jb20uYWdlbnRzLnYxQglBc2tzUHJvdG9QAVo1Z2l0aHViLmNvbS9hbWJlcnBpeGVscy9mMTAvY2xpL2dlbi9hZ2VudHMvdjE7YWdlbnRzdjGiAgNBWFiqAglBZ2VudHMuVjHKAglBZ2VudHNcVjHiAhVBZ2VudHNcVjFcR1BCTWV0YWRhdGHqAgpBZ2VudHM6OlYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
+  fileDesc("ChRhZ2VudHMvdjEvYXNrcy5wcm90bxIJYWdlbnRzLnYxIjQKCFF1ZXN0aW9uEgkKAW4YASABKAUSDAoEdGV4dBgCIAEoCRIPCgdvcHRpb25zGAMgAygJIpYDCgNBc2sSCgoCaWQYASABKAkSDQoFYWdlbnQYAiABKAkSFAoMd29ya3NwYWNlX2lkGAMgASgJEgwKBHRleHQYBCABKAkSJgoJcXVlc3Rpb25zGAUgAygLMhMuYWdlbnRzLnYxLlF1ZXN0aW9uEiwKCGFza2VkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIOCgZhbnN3ZXIYByABKAkSLAoLYW5zd2VyZWRfYnkYCCABKA4yFy5hZ2VudHMudjEuQW5zd2VyU291cmNlEi8KC2Fuc3dlcmVkX2F0GAkgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIwCgxkZWxpdmVyZWRfYXQYCiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEioKBmxhYmVscxgLIAMoCzIaLmFnZW50cy52MS5Bc2suTGFiZWxzRW50cnkaLQoLTGFiZWxzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ASIiCgZBbnN3ZXISCQoBbhgBIAEoBRINCgV2YWx1ZRgCIAEoCSJvCg9MaXN0QXNrc1JlcXVlc3QSMgoOYW5zd2VyZWRfc2luY2UYASABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEigKBmNhbGxlchgCIAEoCzIYLmFnZW50cy52MS5DYWxsZXJDb250ZXh0ImAKEExpc3RBc2tzUmVzcG9uc2USHAoEb3BlbhgBIAMoCzIOLmFnZW50cy52MS5Bc2sSIAoIYW5zd2VyZWQYAiADKAsyDi5hZ2VudHMudjEuQXNrEgwKBHZpZXcYAyABKAwioAEKEEFuc3dlckFza1JlcXVlc3QSCgoCaWQYASABKAkSIgoHYW5zd2VycxgCIAMoCzIRLmFnZW50cy52MS5BbnN3ZXISDQoFbWF0Y2gYAyABKAkSDgoGdmFsdWVzGAQgAygJEhMKC2Fuc3dlcmVkX2J5GAUgASgJEigKBmNhbGxlchgGIAEoCzIYLmFnZW50cy52MS5DYWxsZXJDb250ZXh0IlMKEUFuc3dlckFza1Jlc3BvbnNlEhsKA2FzaxgBIAEoCzIOLmFnZW50cy52MS5Bc2sSEQoJZGVsaXZlcmVkGAIgASgIEg4KBm91dHB1dBgDIAEoCSIuCg1DYWxsZXJDb250ZXh0EgsKA2VudhgBIAMoCRIQCgh0ZXJtaW5hbBgCIAEoCCIoCglBc2tSYWlzZWQSGwoDYXNrGAEgASgLMg4uYWdlbnRzLnYxLkFzayLNAQoLQXNrQW5zd2VyZWQSCgoCaWQYASABKAkSDgoGYW5zd2VyGAIgASgJEiwKC2Fuc3dlcmVkX2J5GAMgASgOMhcuYWdlbnRzLnYxLkFuc3dlclNvdXJjZRIRCglkZWxpdmVyZWQYBCABKAgSMgoGbGFiZWxzGAUgAygLMiIuYWdlbnRzLnYxLkFza0Fuc3dlcmVkLkxhYmVsc0VudHJ5Gi0KC0xhYmVsc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEqwwEKDEFuc3dlclNvdXJjZRIdChlBTlNXRVJfU09VUkNFX1VOU1BFQ0lGSUVEEAASFgoSQU5TV0VSX1NPVVJDRV9QQU5FEAESFgoSQU5TV0VSX1NPVVJDRV9BU0tTEAISFwoTQU5TV0VSX1NPVVJDRV9TS0lMTBADEhcKE0FOU1dFUl9TT1VSQ0VfRFJJVkUQBBIbChdBTlNXRVJfU09VUkNFX0NBTkNFTExFRBAFEhUKEUFOU1dFUl9TT1VSQ0VfQVBJEAYymQEKCkFza1NlcnZpY2USQwoITGlzdEFza3MSGi5hZ2VudHMudjEuTGlzdEFza3NSZXF1ZXN0GhsuYWdlbnRzLnYxLkxpc3RBc2tzUmVzcG9uc2USRgoJQW5zd2VyQXNrEhsuYWdlbnRzLnYxLkFuc3dlckFza1JlcXVlc3QaHC5hZ2VudHMudjEuQW5zd2VyQXNrUmVzcG9uc2VClgEKDWNvbS5hZ2VudHMudjFCCUFza3NQcm90b1ABWjVnaXRodWIuY29tL2FtYmVycGl4ZWxzL2YxMC9jbGkvZ2VuL2FnZW50cy92MTthZ2VudHN2MaICA0FYWKoCCUFnZW50cy5WMcoCCUFnZW50c1xWMeICFUFnZW50c1xWMVxHUEJNZXRhZGF0YeoCCkFnZW50czo6VjFiBnByb3RvMw", [file_google_protobuf_timestamp]);
 
 /**
  * A Question is one numbered question of an ask.
@@ -157,6 +157,14 @@ export type ListAsksRequest = Message<"agents.v1.ListAsksRequest"> & {
    * @generated from field: google.protobuf.Timestamp answered_since = 1;
    */
   answeredSince?: Timestamp | undefined;
+
+  /**
+   * caller is where a local asks command runs: with it, view links each
+   * ask's task when the caller's output is a terminal.
+   *
+   * @generated from field: agents.v1.CallerContext caller = 2;
+   */
+  caller?: CallerContext | undefined;
 };
 
 /**
@@ -179,6 +187,14 @@ export type ListAsksResponse = Message<"agents.v1.ListAsksResponse"> & {
    * @generated from field: repeated agents.v1.Ask answered = 2;
    */
   answered: Ask[];
+
+  /**
+   * view is the inbox as the asks command renders it, as JSON, for a
+   * client of the same release. Other clients read open and answered.
+   *
+   * @generated from field: bytes view = 3;
+   */
+  view: Uint8Array;
 };
 
 /**
@@ -203,6 +219,34 @@ export type AnswerAskRequest = Message<"agents.v1.AnswerAskRequest"> & {
    * @generated from field: repeated agents.v1.Answer answers = 2;
    */
   answers: Answer[];
+
+  /**
+   * match finds the open ask by its task, or project:task, as the asks
+   * command takes it, in place of id.
+   *
+   * @generated from field: string match = 3;
+   */
+  match: string;
+
+  /**
+   * values are the answers as the asks command takes them, N=VALUE each,
+   * in place of answers.
+   *
+   * @generated from field: repeated string values = 4;
+   */
+  values: string[];
+
+  /**
+   * answered_by is the way in to record, asks or skill; empty is the API.
+   *
+   * @generated from field: string answered_by = 5;
+   */
+  answeredBy: string;
+
+  /**
+   * @generated from field: agents.v1.CallerContext caller = 6;
+   */
+  caller?: CallerContext | undefined;
 };
 
 /**
@@ -227,6 +271,13 @@ export type AnswerAskResponse = Message<"agents.v1.AnswerAskResponse"> & {
    * @generated from field: bool delivered = 2;
    */
   delivered: boolean;
+
+  /**
+   * output is what the asks command prints for the answer.
+   *
+   * @generated from field: string output = 3;
+   */
+  output: string;
 };
 
 /**
@@ -235,6 +286,35 @@ export type AnswerAskResponse = Message<"agents.v1.AnswerAskResponse"> & {
  */
 export const AnswerAskResponseSchema: GenMessage<AnswerAskResponse> = /*@__PURE__*/
   messageDesc(file_agents_v1_asks, 6);
+
+/**
+ * A CallerContext is where a local command runs. The daemon honors it only
+ * on the unix socket, and MCP tools leave it out.
+ *
+ * @generated from message agents.v1.CallerContext
+ */
+export type CallerContext = Message<"agents.v1.CallerContext"> & {
+  /**
+   * env is the command's environment, which the agents it reaches run under.
+   *
+   * @generated from field: repeated string env = 1;
+   */
+  env: string[];
+
+  /**
+   * terminal is true when the command's output is a terminal.
+   *
+   * @generated from field: bool terminal = 2;
+   */
+  terminal: boolean;
+};
+
+/**
+ * Describes the message agents.v1.CallerContext.
+ * Use `create(CallerContextSchema)` to create a new message.
+ */
+export const CallerContextSchema: GenMessage<CallerContext> = /*@__PURE__*/
+  messageDesc(file_agents_v1_asks, 7);
 
 /**
  * AskRaised is the event of an agent stopping on an ask.
@@ -253,7 +333,7 @@ export type AskRaised = Message<"agents.v1.AskRaised"> & {
  * Use `create(AskRaisedSchema)` to create a new message.
  */
 export const AskRaisedSchema: GenMessage<AskRaised> = /*@__PURE__*/
-  messageDesc(file_agents_v1_asks, 7);
+  messageDesc(file_agents_v1_asks, 8);
 
 /**
  * AskAnswered is the event of an ask closed by its first answer.
@@ -294,7 +374,7 @@ export type AskAnswered = Message<"agents.v1.AskAnswered"> & {
  * Use `create(AskAnsweredSchema)` to create a new message.
  */
 export const AskAnsweredSchema: GenMessage<AskAnswered> = /*@__PURE__*/
-  messageDesc(file_agents_v1_asks, 8);
+  messageDesc(file_agents_v1_asks, 9);
 
 /**
  * AnswerSource is the way in an ask was answered by.

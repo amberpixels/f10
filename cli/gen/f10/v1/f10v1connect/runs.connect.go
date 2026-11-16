@@ -43,6 +43,10 @@ const (
 	RunServiceFinishProcedure = "/f10.v1.RunService/Finish"
 	// RunServiceForwardProcedure is the fully-qualified name of the RunService's Forward RPC.
 	RunServiceForwardProcedure = "/f10.v1.RunService/Forward"
+	// RunServiceListDrivesProcedure is the fully-qualified name of the RunService's ListDrives RPC.
+	RunServiceListDrivesProcedure = "/f10.v1.RunService/ListDrives"
+	// RunServiceCancelDriveProcedure is the fully-qualified name of the RunService's CancelDrive RPC.
+	RunServiceCancelDriveProcedure = "/f10.v1.RunService/CancelDrive"
 )
 
 // RunServiceClient is a client for the f10.v1.RunService service.
@@ -58,6 +62,10 @@ type RunServiceClient interface {
 	Finish(context.Context, *connect.Request[v1.FinishRequest]) (*connect.Response[v1.FinishResponse], error)
 	// Forward hands text to the agent working on a task, as f10 forward does.
 	Forward(context.Context, *connect.Request[v1.ForwardRequest]) (*connect.Response[v1.ForwardResponse], error)
+	// ListDrives lists a project's drive records, as f10 drive list does.
+	ListDrives(context.Context, *connect.Request[v1.ListDrivesRequest]) (*connect.Response[v1.ListDrivesResponse], error)
+	// CancelDrive stops a drive from prompting further and closes its asks.
+	CancelDrive(context.Context, *connect.Request[v1.CancelDriveRequest]) (*connect.Response[v1.CancelDriveResponse], error)
 }
 
 // NewRunServiceClient constructs a client for the f10.v1.RunService service. By default, it uses
@@ -101,6 +109,18 @@ func NewRunServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...
 			connect.WithSchema(runServiceMethods.ByName("Forward")),
 			connect.WithClientOptions(opts...),
 		),
+		listDrives: connect.NewClient[v1.ListDrivesRequest, v1.ListDrivesResponse](
+			httpClient,
+			baseURL+RunServiceListDrivesProcedure,
+			connect.WithSchema(runServiceMethods.ByName("ListDrives")),
+			connect.WithClientOptions(opts...),
+		),
+		cancelDrive: connect.NewClient[v1.CancelDriveRequest, v1.CancelDriveResponse](
+			httpClient,
+			baseURL+RunServiceCancelDriveProcedure,
+			connect.WithSchema(runServiceMethods.ByName("CancelDrive")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -111,6 +131,8 @@ type runServiceClient struct {
 	drive        *connect.Client[v1.DriveRequest, v1.DriveResponse]
 	finish       *connect.Client[v1.FinishRequest, v1.FinishResponse]
 	forward      *connect.Client[v1.ForwardRequest, v1.ForwardResponse]
+	listDrives   *connect.Client[v1.ListDrivesRequest, v1.ListDrivesResponse]
+	cancelDrive  *connect.Client[v1.CancelDriveRequest, v1.CancelDriveResponse]
 }
 
 // GetRunStatus calls f10.v1.RunService.GetRunStatus.
@@ -138,6 +160,16 @@ func (c *runServiceClient) Forward(ctx context.Context, req *connect.Request[v1.
 	return c.forward.CallUnary(ctx, req)
 }
 
+// ListDrives calls f10.v1.RunService.ListDrives.
+func (c *runServiceClient) ListDrives(ctx context.Context, req *connect.Request[v1.ListDrivesRequest]) (*connect.Response[v1.ListDrivesResponse], error) {
+	return c.listDrives.CallUnary(ctx, req)
+}
+
+// CancelDrive calls f10.v1.RunService.CancelDrive.
+func (c *runServiceClient) CancelDrive(ctx context.Context, req *connect.Request[v1.CancelDriveRequest]) (*connect.Response[v1.CancelDriveResponse], error) {
+	return c.cancelDrive.CallUnary(ctx, req)
+}
+
 // RunServiceHandler is an implementation of the f10.v1.RunService service.
 type RunServiceHandler interface {
 	// GetRunStatus is where f10 runs stand: one task's, a project's, or every
@@ -151,6 +183,10 @@ type RunServiceHandler interface {
 	Finish(context.Context, *connect.Request[v1.FinishRequest]) (*connect.Response[v1.FinishResponse], error)
 	// Forward hands text to the agent working on a task, as f10 forward does.
 	Forward(context.Context, *connect.Request[v1.ForwardRequest]) (*connect.Response[v1.ForwardResponse], error)
+	// ListDrives lists a project's drive records, as f10 drive list does.
+	ListDrives(context.Context, *connect.Request[v1.ListDrivesRequest]) (*connect.Response[v1.ListDrivesResponse], error)
+	// CancelDrive stops a drive from prompting further and closes its asks.
+	CancelDrive(context.Context, *connect.Request[v1.CancelDriveRequest]) (*connect.Response[v1.CancelDriveResponse], error)
 }
 
 // NewRunServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -190,6 +226,18 @@ func NewRunServiceHandler(svc RunServiceHandler, opts ...connect.HandlerOption) 
 		connect.WithSchema(runServiceMethods.ByName("Forward")),
 		connect.WithHandlerOptions(opts...),
 	)
+	runServiceListDrivesHandler := connect.NewUnaryHandler(
+		RunServiceListDrivesProcedure,
+		svc.ListDrives,
+		connect.WithSchema(runServiceMethods.ByName("ListDrives")),
+		connect.WithHandlerOptions(opts...),
+	)
+	runServiceCancelDriveHandler := connect.NewUnaryHandler(
+		RunServiceCancelDriveProcedure,
+		svc.CancelDrive,
+		connect.WithSchema(runServiceMethods.ByName("CancelDrive")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/f10.v1.RunService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case RunServiceGetRunStatusProcedure:
@@ -202,6 +250,10 @@ func NewRunServiceHandler(svc RunServiceHandler, opts ...connect.HandlerOption) 
 			runServiceFinishHandler.ServeHTTP(w, r)
 		case RunServiceForwardProcedure:
 			runServiceForwardHandler.ServeHTTP(w, r)
+		case RunServiceListDrivesProcedure:
+			runServiceListDrivesHandler.ServeHTTP(w, r)
+		case RunServiceCancelDriveProcedure:
+			runServiceCancelDriveHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -229,4 +281,12 @@ func (UnimplementedRunServiceHandler) Finish(context.Context, *connect.Request[v
 
 func (UnimplementedRunServiceHandler) Forward(context.Context, *connect.Request[v1.ForwardRequest]) (*connect.Response[v1.ForwardResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("f10.v1.RunService.Forward is not implemented"))
+}
+
+func (UnimplementedRunServiceHandler) ListDrives(context.Context, *connect.Request[v1.ListDrivesRequest]) (*connect.Response[v1.ListDrivesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("f10.v1.RunService.ListDrives is not implemented"))
+}
+
+func (UnimplementedRunServiceHandler) CancelDrive(context.Context, *connect.Request[v1.CancelDriveRequest]) (*connect.Response[v1.CancelDriveResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("f10.v1.RunService.CancelDrive is not implemented"))
 }

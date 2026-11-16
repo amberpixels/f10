@@ -922,6 +922,33 @@ func TestFinishSelfClose(t *testing.T) {
 	}
 }
 
+// A finish run for another process (the daemon's caller) leaves the
+// caller's own workspace open and names it, and main's to focus, so the
+// caller closes it once it printed the report.
+func TestFinishDefersTheSelfCloseToTheCaller(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.in.Cwd = filepath.Join(fx.wt, "cli")
+	fx.in.Flags.Yes = true
+	fx.in.DeferSelfClose = true
+	fx.openPR()
+
+	var out Finished
+
+	fx.in.Outcome = &out
+
+	if _, err := fx.run(t); err != nil {
+		t.Fatal(err)
+	}
+
+	if fx.f.Called("herdr workspace focus") || fx.f.Called("herdr workspace close") {
+		t.Errorf("the caller's workspace was focused or closed here: %v", fx.f.Calls)
+	}
+
+	if out.CloseWorkspace != "ws:9" || out.FocusWorkspace != "ws:1" {
+		t.Errorf("outcome close %q, focus %q, want ws:9 and ws:1", out.CloseWorkspace, out.FocusWorkspace)
+	}
+}
+
 // recorder notes, at the moment the report is written, whether the
 // workspace calls had already run.
 type recorder struct {

@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -72,16 +71,30 @@ func NewStatusReader(t *target.Target, now time.Time) (*statusReader, error) {
 	}, nil
 }
 
-// Task prints what `status <token>` prints, reading the task's checkout
-// first so a task with a run never waits on the host. With no run, a parent
-// lists its children and a finished task prints its block (its done row
-// under --json); a guessed token prints nothing, so the bare output stands.
+// Task prints what `status <token>` prints (ReadTask).
 func (rd *statusReader) Task(ctx context.Context, v StatusView, token string, guessed bool) (statusPrinted, error) {
+	rep, err := rd.ReadTask(ctx, v.Warn, token, guessed)
+	if rep.Kind == "" {
+		return statusPrinted{}, err
+	}
+
+	if err != nil {
+		return statusPrinted{Printed: true, asks: rep.Asks}, err
+	}
+
+	return statusPrinted{Printed: true, asks: rep.Asks}, Render(v, rep)
+}
+
+// ReadTask reads what `status <token>` shows, the task's checkout first so
+// a task with a run never waits on the host. With no run, a parent lists
+// its children and a finished task shows its block; a guessed token shows
+// nothing, so the bare answer stands.
+func (rd *statusReader) ReadTask(ctx context.Context, warn io.Writer, token string, guessed bool) (Report, error) {
 	id, suffix := ref.SplitSuffix(token)
 
 	r, err := rd.t.Reference(ctx, id)
 	if err != nil {
-		return statusPrinted{}, err
+		return Report{}, err
 	}
 
 	in, err := taskStatusFor(ctx, rd.t, r, suffix)
@@ -90,22 +103,18 @@ func (rd *statusReader) Task(ctx context.Context, v StatusView, token string, gu
 
 		switch {
 		case cerr == nil && len(rows) > 0:
-			return rd.printRows(v, rows, r.ID)
+			return rowsReport(rows, r.ID), nil
 		case cerr != nil && !errors.Is(cerr, tasksource.ErrNoParentLink):
-			ui.Warnf(v.Warn, "reading the subtasks: %v", cerr)
+			ui.Warnf(warn, "reading the subtasks: %v", cerr)
 		}
 
 		if row := rd.finishedRow(ctx, r.Head()); row != nil {
-			if v.JSON {
-				return rd.printRows(v, []TaskRow{*row}, r.ID)
-			}
-
-			return statusPrinted{Printed: true}, rd.writeFinished(ctx, v, *row)
+			return Report{Kind: ReportFinished, Finished: rd.finished(ctx, *row)}, nil
 		}
 	}
 
 	if err != nil {
-		return statusPrinted{}, err
+		return Report{}, err
 	}
 
 	runs, others := taskRuns(InRoot(rd.live, in.Root), in.ID)
@@ -114,13 +123,7 @@ func (rd *statusReader) Task(ctx context.Context, v StatusView, token string, gu
 	if len(runs) == 0 {
 		fb := taskFallback(in, others, ship)
 
-		if v.JSON {
-			return statusPrinted{Printed: true}, ui.JSON(v.Out, fb)
-		}
-
-		fb.Render(v.Out, ui.Width(v.Out), render.LinksFor(v.Out, v.Plain).On)
-
-		return statusPrinted{Printed: true}, nil
+		return Report{Kind: ReportFallback, Fallback: &fb}, nil
 	}
 
 	gates := make([][]gate, len(runs))
@@ -128,10 +131,7 @@ func (rd *statusReader) Task(ctx context.Context, v StatusView, token string, gu
 		gates[i] = rd.gatesOf(ctx, in.ID, in.Branch, in.Root, r)
 	}
 
-	asks := slices.ContainsFunc(runs, func(r *state.Run) bool { return r.Ask != "" })
-
-	return statusPrinted{Printed: true, asks: asks},
-		writeRuns(v, runs, gates, &ship, true, in.agent, rd.now)
+	return runsReport(runs, gates, &ship, true, in.agent), nil
 }
 
 // ledger is the events of every session that recorded one of ids, read
@@ -246,27 +246,21 @@ func (rd *statusReader) shipment(ctx context.Context, in taskStatusInput, runs [
 	return s
 }
 
-// launches prints the tree of what session sid started or drove that is
-// still live; with nothing live it prints nothing, so the bare answer stays
-// what it was.
-func (rd *statusReader) launches(ctx context.Context, v StatusView, sid string) (statusPrinted, error) {
-	kids := launchKids(ctx, v.Warn, rd.t, sid)
+// launches is the tree of what session sid started or drove that is still
+// live; with nothing live it shows nothing, so the bare answer stays what
+// it was.
+func (rd *statusReader) launches(ctx context.Context, warn io.Writer, sid string) Report {
+	kids := launchKids(ctx, warn, rd.t, sid)
 	if len(kids) == 0 {
-		return statusPrinted{}, nil
+		return Report{}
 	}
 
 	rows := dropRows(rd.rows(ctx).RowsFrom(ctx, kids), func(r TaskRow) bool { return r.Stage == StageDone })
 	if len(rows) == 0 {
-		return statusPrinted{}, nil
+		return Report{}
 	}
 
-	return rd.printRows(v, rows, LaunchesHead)
-}
-
-func (rd *statusReader) printRows(v StatusView, rows []TaskRow, head string) (statusPrinted, error) {
-	asks := slices.ContainsFunc(rows, func(r TaskRow) bool { return r.Stage == stageAsking })
-
-	return statusPrinted{Printed: true, asks: asks}, writeTaskRows(v, rows, head)
+	return rowsReport(rows, LaunchesHead)
 }
 
 // parentRows is `status <id>` for a parent: its children, closed ones
@@ -304,13 +298,11 @@ func (rd *statusReader) finishedRow(ctx context.Context, r ref.Ref) *TaskRow {
 	return &rows[0]
 }
 
-// writeFinished prints a finished task's block, read from the archive.
-func (rd *statusReader) writeFinished(ctx context.Context, v StatusView, row TaskRow) error {
+// finished is a finished task's row and the shipment the archive holds.
+func (rd *statusReader) finished(ctx context.Context, row TaskRow) *finished {
 	known := ledger.LookupRefs(ctx, rd.t.RefProject(ctx), []string{row.ID})[row.ID]
-	ship := finishedShipment(rd.t.Layout.StorageRoot, row, known)
-	rows := finishedFacts(ship, row.Gates, render.LinksFor(v.Out, v.Plain).On)
 
-	return render.WriteFacts(v.Out, rows, render.LabelWidth(rows), ui.Width(v.Out))
+	return &finished{Row: row, Shipment: finishedShipment(rd.t.Layout.StorageRoot, row, known)}
 }
 
 // finishedFacts is a finished task's block rows: the shipment, the PR's

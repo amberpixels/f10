@@ -12,14 +12,16 @@ import (
 	"strings"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/urfave/cli/v3"
 
+	f10v1 "github.com/amberpixels/f10/cli/gen/f10/v1"
+	"github.com/amberpixels/f10/cli/internal/apiclient"
 	"github.com/amberpixels/f10/cli/internal/board"
 	"github.com/amberpixels/f10/cli/internal/calendar"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
-	"github.com/amberpixels/f10/cli/internal/scope"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -114,46 +116,15 @@ func runBoard(ctx context.Context, cmd *cli.Command) error {
 		arg = cmd.String("since")
 	}
 
-	span, err := board.ResolveSpan(arg, stateView, now, scope.ReadWorkdays)
-	if err != nil {
-		return err
-	}
-
 	by := strings.TrimSpace(cmd.String("by"))
 	if by != "" && by != "person" {
 		return fmt.Errorf("--by %q: rows group by person only", by)
 	}
 
-	cfg, cfgPath, err := scope.ReadBoardConfig()
+	boards, err := readBoards(ctx, cmd, arg, stateView)
 	if err != nil {
 		return err
 	}
-
-	people := board.People(cfg.People)
-	remote := cmd.Bool("remote")
-
-	// one pipeline whatever the scope: this checkout is a scope of one
-	var entries []scope.ScopeEntry
-
-	if scope.Scoped(cmd) {
-		items, err := scope.ScopeItems(cmd, scope.BoardConfigFile, cfg.Repos, cfgPath)
-		if err != nil {
-			return err
-		}
-
-		if entries = scope.BindScope(ctx, items, cmd.Name); len(entries) == 0 {
-			return errors.New("the scope names no project: the groups and roots given matched none")
-		}
-	} else {
-		t, err := target.For(ctx, cmd)
-		if err != nil {
-			return err
-		}
-
-		entries = []scope.ScopeEntry{{Dir: t.Dir, Target: t}}
-	}
-
-	boards := board.Collect(ctx, entries, cmd.ErrWriter, now, span, stateView, remote, people)
 
 	// several projects (--all, --group, more than one -C) are a JSON array
 	// and a line each unless --detail; the page draws one project
@@ -197,6 +168,58 @@ func runBoard(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	return nil
+}
+
+// readBoards is every board the daemon reads for the scope cmd names: the
+// checkouts -C names, the groups and --all, else the checkout this runs in.
+func readBoards(ctx context.Context, cmd *cli.Command, window string, stateView bool) ([]lookaround.Board, error) {
+	var dirs []string
+
+	for _, sel := range target.CheckoutFlags(cmd) {
+		dir, err := target.CheckoutDir(sel)
+		if err != nil {
+			return nil, err
+		}
+
+		dirs = append(dirs, dir)
+	}
+
+	c, err := apiclient.Dial(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	caller, err := c.BareCaller(cmd)
+	if err != nil {
+		return nil, err
+	}
+
+	view := f10v1.BoardView_BOARD_VIEW_CHANGES
+	if stateView {
+		view = f10v1.BoardView_BOARD_VIEW_STATE
+	}
+
+	res, err := c.Board.GetBoard(ctx, connect.NewRequest(&f10v1.GetBoardRequest{
+		View:      view,
+		Window:    window,
+		Remote:    cmd.Bool("remote"),
+		Checkouts: dirs,
+		Groups:    cmd.StringSlice("group"),
+		All:       cmd.Bool("all"),
+		Caller:    caller,
+	}))
+	if err != nil {
+		return nil, apiclient.Err(err, cmd.Writer, cmd.ErrWriter)
+	}
+
+	apiclient.Print(cmd.Writer, cmd.ErrWriter, res.Msg.GetPrinted())
+
+	var boards []lookaround.Board
+	if err := apiclient.View(res.Msg.GetView(), &boards); err != nil {
+		return nil, err
+	}
+
+	return boards, nil
 }
 
 // boardFormat settles the format before anything is collected; --out has no

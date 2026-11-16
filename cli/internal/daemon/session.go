@@ -50,6 +50,15 @@ func (s *Server) loadSession() {
 	}
 }
 
+// Remember keeps env as the newest local session, when it comes from inside
+// one, as a watch or a drive call does.
+func (s *Server) Remember(env []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.remember(env)
+}
+
 // SessionEnv is the newest local session's environment, nil before any
 // client registered one.
 func (s *Server) SessionEnv() []string {

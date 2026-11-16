@@ -76,6 +76,7 @@ func testFile(methodDoc string, extra ...*descriptorpb.MethodDescriptorProto) *d
 			field("child", 9, tMessage, ".t.v1.Node"),
 			field("at", 10, tMessage, ".google.protobuf.Timestamp"),
 			field("every", 11, tMessage, ".google.protobuf.Duration"),
+			field("caller", 20, tMessage, ".t.v1.CallerContext"),
 			a, b,
 		},
 		NestedType: []*descriptorpb.DescriptorProto{{
@@ -95,6 +96,11 @@ func testFile(methodDoc string, extra ...*descriptorpb.MethodDescriptorProto) *d
 			field("next", 1, tMessage, ".t.v1.Node"),
 			field("value", 2, tString, ""),
 		},
+	}
+
+	caller := &descriptorpb.DescriptorProto{
+		Name:  new("CallerContext"),
+		Field: []*descriptorpb.FieldDescriptorProto{field("cwd", 1, tString, "")},
 	}
 
 	stream := &descriptorpb.MethodDescriptorProto{
@@ -125,7 +131,7 @@ func testFile(methodDoc string, extra ...*descriptorpb.MethodDescriptorProto) *d
 		Syntax:      new("proto3"),
 		Dependency:  []string{"google/protobuf/timestamp.proto", "google/protobuf/duration.proto"},
 		Options:     &descriptorpb.FileOptions{GoPackage: new("example.com/t/v1;tv1")},
-		MessageType: []*descriptorpb.DescriptorProto{req, node},
+		MessageType: []*descriptorpb.DescriptorProto{req, node, caller},
 		EnumType: []*descriptorpb.EnumDescriptorProto{{
 			Name: new("Color"),
 			Value: []*descriptorpb.EnumValueDescriptorProto{
@@ -234,6 +240,15 @@ func TestInputSchemaMapsEveryShape(t *testing.T) {
 		if string(raw) != js {
 			t.Errorf("%s:\n got %s\nwant %s", name, raw, js)
 		}
+	}
+
+	// the caller's context is the local CLI's, which a model cannot know
+	if _, ok := props["caller"]; ok {
+		t.Errorf("a CallerContext field must be left out of the tool: %v", props["caller"])
+	}
+
+	if _, ok := s["$defs"].(map[string]any)["t.v1.CallerContext"]; ok {
+		t.Error("a CallerContext must not reach $defs")
 	}
 
 	node, _ := json.Marshal(s["$defs"].(map[string]any)["t.v1.Node"])

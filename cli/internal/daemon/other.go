@@ -52,7 +52,7 @@ func (*Ensurer) Ensure(context.Context) (Info, error) { return Info{}, errUnsupp
 // FindLog finds nothing: no daemon wrote one.
 func FindLog(string, string, int) string { return "" }
 
-// Status, WatchProject, RunDrive, ResumeDrive and SessionEnv have nothing
+// Status, WatchProject, RunDrive, ResumeDrive, SessionEnv and Remember have nothing
 // to report or run on this platform.
 func (*Server) Status() Status { return Status{} }
 
@@ -65,3 +65,5 @@ func (*Server) ResumeDrive(string, string, []string, int) (Started, error) {
 }
 
 func (*Server) SessionEnv() []string { return nil }
+
+func (*Server) Remember([]string) {}

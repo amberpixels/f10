@@ -231,7 +231,7 @@ func TestACallInFlightKeepsTheDaemonUp(t *testing.T) {
 	done := serve(t, s)
 
 	go func() {
-		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, socketURL+"/stream", http.NoBody)
+		req, _ := http.NewRequestWithContext(t.Context(), http.MethodGet, SocketURL+"/stream", http.NoBody)
 		if res, err := SocketHTTP(s.Dir).Do(req); err == nil {
 			_ = res.Body.Close()
 		}

@@ -222,5 +222,32 @@ func (b Backend) Workspaces(ctx context.Context) ([]agentctl.Workspace, error) {
 	return wss, nil
 }
 
-// scope runs the calls under ctx with b's environment, when it has one.
-func (b Backend) scope(ctx context.Context) context.Context { return shell.WithEnv(ctx, b.Env) }
+// scope runs the calls under the session WithSession put on ctx, else b's
+// environment, when it has one: a call made for one client runs in that
+// client's session even while another one is the daemon's newest.
+func (b Backend) scope(ctx context.Context) context.Context {
+	if env := sessionOf(ctx); env != nil {
+		return shell.WithEnv(ctx, env)
+	}
+
+	return shell.WithEnv(ctx, b.Env)
+}
+
+// sessionKey carries the Herdr session WithSession gives a context.
+type sessionKey struct{}
+
+// WithSession runs the Herdr calls made under ctx in env's session, and no
+// other command: git and the host CLIs keep the process's environment.
+func WithSession(ctx context.Context, env []string) context.Context {
+	if len(env) == 0 {
+		return ctx
+	}
+
+	return context.WithValue(ctx, sessionKey{}, env)
+}
+
+func sessionOf(ctx context.Context) []string {
+	env, _ := ctx.Value(sessionKey{}).([]string)
+
+	return env
+}

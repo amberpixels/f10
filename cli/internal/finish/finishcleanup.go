@@ -206,6 +206,18 @@ func removeWorktree(ctx context.Context, w io.Writer, in FinishInput, d finishDe
 		return errs.done(in.Task.ID, l.ended)
 	}
 
+	// the caller closes its own workspace once it printed the report
+	if d.self && in.DeferSelfClose && d.ws != nil {
+		if in.Outcome != nil {
+			in.Outcome.CloseWorkspace = d.ws.ID
+			if d.mainWS != nil {
+				in.Outcome.FocusWorkspace = d.mainWS.ID
+			}
+		}
+
+		return errs.done(in.Task.ID, l.ended)
+	}
+
 	if d.self && d.mainWS != nil {
 		err := agents.Agents(in.Main).Focus(ctx, d.mainWS.ID)
 		if err := errs.check("focusing the main workspace", err); err != nil {

@@ -1177,7 +1177,10 @@ type GetRunStatusRequest struct {
 	// the project.
 	Task string `protobuf:"bytes,2,opt,name=task,proto3" json:"task,omitempty"`
 	// all lists every live run on the machine, whatever the project.
-	All           bool `protobuf:"varint,3,opt,name=all,proto3" json:"all,omitempty"`
+	All bool `protobuf:"varint,3,opt,name=all,proto3" json:"all,omitempty"`
+	// caller is where a local f10 status runs; with it, an empty project
+	// reads the caller's checkout, and an empty task its session's run.
+	Caller        *CallerContext `protobuf:"bytes,4,opt,name=caller,proto3" json:"caller,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1233,9 +1236,21 @@ func (x *GetRunStatusRequest) GetAll() bool {
 	return false
 }
 
+func (x *GetRunStatusRequest) GetCaller() *CallerContext {
+	if x != nil {
+		return x.Caller
+	}
+	return nil
+}
+
 type GetRunStatusResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Runs          []*RunStatus           `protobuf:"bytes,1,rep,name=runs,proto3" json:"runs,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Runs  []*RunStatus           `protobuf:"bytes,1,rep,name=runs,proto3" json:"runs,omitempty"`
+	// view is the status as f10 status renders it: its --json shapes, as
+	// JSON, for a client of the same release. Other clients read runs.
+	View []byte `protobuf:"bytes,2,opt,name=view,proto3" json:"view,omitempty"`
+	// printed carries the warnings the read wrote to stderr.
+	Printed       *Printed `protobuf:"bytes,3,opt,name=printed,proto3" json:"printed,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1277,6 +1292,20 @@ func (x *GetRunStatusResponse) GetRuns() []*RunStatus {
 	return nil
 }
 
+func (x *GetRunStatusResponse) GetView() []byte {
+	if x != nil {
+		return x.View
+	}
+	return nil
+}
+
+func (x *GetRunStatusResponse) GetPrinted() *Printed {
+	if x != nil {
+		return x.Printed
+	}
+	return nil
+}
+
 type StartRequest struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Project string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
@@ -1294,7 +1323,12 @@ type StartRequest struct {
 	Agent string `protobuf:"bytes,9,opt,name=agent,proto3" json:"agent,omitempty"`
 	Model string `protobuf:"bytes,10,opt,name=model,proto3" json:"model,omitempty"`
 	// note is extra text the agent's prompt carries.
-	Note          string `protobuf:"bytes,11,opt,name=note,proto3" json:"note,omitempty"`
+	Note   string         `protobuf:"bytes,11,opt,name=note,proto3" json:"note,omitempty"`
+	Caller *CallerContext `protobuf:"bytes,12,opt,name=caller,proto3" json:"caller,omitempty"`
+	// token is the argument as f10 start takes it: a task id with its
+	// -suffix, a PR url or #n. When set it wins over task and pr, and task
+	// names the task a picked-up PR belongs to.
+	Token         string `protobuf:"bytes,13,opt,name=token,proto3" json:"token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1406,13 +1440,29 @@ func (x *StartRequest) GetNote() string {
 	return ""
 }
 
+func (x *StartRequest) GetCaller() *CallerContext {
+	if x != nil {
+		return x.Caller
+	}
+	return nil
+}
+
+func (x *StartRequest) GetToken() string {
+	if x != nil {
+		return x.Token
+	}
+	return ""
+}
+
 type StartResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Task          string                 `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
-	Branch        string                 `protobuf:"bytes,2,opt,name=branch,proto3" json:"branch,omitempty"`
-	Worktree      string                 `protobuf:"bytes,3,opt,name=worktree,proto3" json:"worktree,omitempty"`
-	WorkspaceId   string                 `protobuf:"bytes,4,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	Agent         string                 `protobuf:"bytes,5,opt,name=agent,proto3" json:"agent,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Task        string                 `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
+	Branch      string                 `protobuf:"bytes,2,opt,name=branch,proto3" json:"branch,omitempty"`
+	Worktree    string                 `protobuf:"bytes,3,opt,name=worktree,proto3" json:"worktree,omitempty"`
+	WorkspaceId string                 `protobuf:"bytes,4,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	Agent       string                 `protobuf:"bytes,5,opt,name=agent,proto3" json:"agent,omitempty"`
+	// printed is the report f10 start prints, and the waits it reported.
+	Printed       *Printed `protobuf:"bytes,6,opt,name=printed,proto3" json:"printed,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1480,6 +1530,13 @@ func (x *StartResponse) GetAgent() string {
 		return x.Agent
 	}
 	return ""
+}
+
+func (x *StartResponse) GetPrinted() *Printed {
+	if x != nil {
+		return x.Printed
+	}
+	return nil
 }
 
 // A DriveTask is one task of a drive, with its own agent profile.
@@ -1775,7 +1832,15 @@ type FinishRequest struct {
 	Merge        MergeMode              `protobuf:"varint,3,opt,name=merge,proto3,enum=f10.v1.MergeMode" json:"merge,omitempty"`
 	IgnoreChecks bool                   `protobuf:"varint,4,opt,name=ignore_checks,json=ignoreChecks,proto3" json:"ignore_checks,omitempty"`
 	// keep keeps a spike's experiment, committed on a branch.
-	Keep          bool `protobuf:"varint,5,opt,name=keep,proto3" json:"keep,omitempty"`
+	Keep   bool           `protobuf:"varint,5,opt,name=keep,proto3" json:"keep,omitempty"`
+	Caller *CallerContext `protobuf:"bytes,6,opt,name=caller,proto3" json:"caller,omitempty"`
+	// yes closes the caller's own workspace after the report, when the
+	// caller runs inside the task's workspace, instead of refusing.
+	Yes bool `protobuf:"varint,7,opt,name=yes,proto3" json:"yes,omitempty"`
+	// empty finishes a branch never pushed that adds nothing.
+	Empty bool `protobuf:"varint,8,opt,name=empty,proto3" json:"empty,omitempty"`
+	// close names the bundle riders the PR delivers: ids, all or none.
+	Close         string `protobuf:"bytes,9,opt,name=close,proto3" json:"close,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1845,6 +1910,34 @@ func (x *FinishRequest) GetKeep() bool {
 	return false
 }
 
+func (x *FinishRequest) GetCaller() *CallerContext {
+	if x != nil {
+		return x.Caller
+	}
+	return nil
+}
+
+func (x *FinishRequest) GetYes() bool {
+	if x != nil {
+		return x.Yes
+	}
+	return false
+}
+
+func (x *FinishRequest) GetEmpty() bool {
+	if x != nil {
+		return x.Empty
+	}
+	return false
+}
+
+func (x *FinishRequest) GetClose() string {
+	if x != nil {
+		return x.Close
+	}
+	return ""
+}
+
 type FinishResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Task  string                 `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
@@ -1854,8 +1947,16 @@ type FinishResponse struct {
 	RemovedWorktree bool   `protobuf:"varint,4,opt,name=removed_worktree,json=removedWorktree,proto3" json:"removed_worktree,omitempty"`
 	RemovedBranch   bool   `protobuf:"varint,5,opt,name=removed_branch,json=removedBranch,proto3" json:"removed_branch,omitempty"`
 	ClosedWorkspace bool   `protobuf:"varint,6,opt,name=closed_workspace,json=closedWorkspace,proto3" json:"closed_workspace,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// printed is the report and handoff f10 finish prints.
+	Printed *Printed `protobuf:"bytes,7,opt,name=printed,proto3" json:"printed,omitempty"`
+	// close_workspace_id is the caller's own workspace, which the caller
+	// closes once it printed the report, after focusing focus_workspace_id.
+	// The daemon leaves both, because closing the caller's pane mid-call
+	// would end the caller before it printed anything.
+	CloseWorkspaceId string `protobuf:"bytes,8,opt,name=close_workspace_id,json=closeWorkspaceId,proto3" json:"close_workspace_id,omitempty"`
+	FocusWorkspaceId string `protobuf:"bytes,9,opt,name=focus_workspace_id,json=focusWorkspaceId,proto3" json:"focus_workspace_id,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *FinishResponse) Reset() {
@@ -1930,13 +2031,35 @@ func (x *FinishResponse) GetClosedWorkspace() bool {
 	return false
 }
 
+func (x *FinishResponse) GetPrinted() *Printed {
+	if x != nil {
+		return x.Printed
+	}
+	return nil
+}
+
+func (x *FinishResponse) GetCloseWorkspaceId() string {
+	if x != nil {
+		return x.CloseWorkspaceId
+	}
+	return ""
+}
+
+func (x *FinishResponse) GetFocusWorkspaceId() string {
+	if x != nil {
+		return x.FocusWorkspaceId
+	}
+	return ""
+}
+
 type ForwardRequest struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Project string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
 	// task is the task id, with a -suffix for one of its parallel worktrees.
 	Task string `protobuf:"bytes,2,opt,name=task,proto3" json:"task,omitempty"`
 	// text is what the agent is told, such as a command or a note.
-	Text          string `protobuf:"bytes,3,opt,name=text,proto3" json:"text,omitempty"`
+	Text          string         `protobuf:"bytes,3,opt,name=text,proto3" json:"text,omitempty"`
+	Caller        *CallerContext `protobuf:"bytes,4,opt,name=caller,proto3" json:"caller,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1992,6 +2115,13 @@ func (x *ForwardRequest) GetText() string {
 	return ""
 }
 
+func (x *ForwardRequest) GetCaller() *CallerContext {
+	if x != nil {
+		return x.Caller
+	}
+	return nil
+}
+
 type ForwardResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// workspace is the workspace the text went to.
@@ -1999,7 +2129,9 @@ type ForwardResponse struct {
 	// sent is the text as typed into the agent's pane.
 	Sent string `protobuf:"bytes,2,opt,name=sent,proto3" json:"sent,omitempty"`
 	// note says what the delivery check saw, empty when all went well.
-	Note          string `protobuf:"bytes,3,opt,name=note,proto3" json:"note,omitempty"`
+	Note string `protobuf:"bytes,3,opt,name=note,proto3" json:"note,omitempty"`
+	// printed is the report f10 forward prints.
+	Printed       *Printed `protobuf:"bytes,4,opt,name=printed,proto3" json:"printed,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2055,11 +2187,308 @@ func (x *ForwardResponse) GetNote() string {
 	return ""
 }
 
+func (x *ForwardResponse) GetPrinted() *Printed {
+	if x != nil {
+		return x.Printed
+	}
+	return nil
+}
+
+type ListDrivesRequest struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Project string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
+	// all lists finished and cancelled drives too.
+	All           bool           `protobuf:"varint,2,opt,name=all,proto3" json:"all,omitempty"`
+	Caller        *CallerContext `protobuf:"bytes,3,opt,name=caller,proto3" json:"caller,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListDrivesRequest) Reset() {
+	*x = ListDrivesRequest{}
+	mi := &file_f10_v1_runs_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDrivesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDrivesRequest) ProtoMessage() {}
+
+func (x *ListDrivesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_f10_v1_runs_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDrivesRequest.ProtoReflect.Descriptor instead.
+func (*ListDrivesRequest) Descriptor() ([]byte, []int) {
+	return file_f10_v1_runs_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *ListDrivesRequest) GetProject() string {
+	if x != nil {
+		return x.Project
+	}
+	return ""
+}
+
+func (x *ListDrivesRequest) GetAll() bool {
+	if x != nil {
+		return x.All
+	}
+	return false
+}
+
+func (x *ListDrivesRequest) GetCaller() *CallerContext {
+	if x != nil {
+		return x.Caller
+	}
+	return nil
+}
+
+// A DriveRecord is one drive a project ran, by its number.
+type DriveRecord struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Number int32                  `protobuf:"varint,1,opt,name=number,proto3" json:"number,omitempty"`
+	// args are the drive's arguments as f10 drive took them.
+	Args []string `protobuf:"bytes,2,rep,name=args,proto3" json:"args,omitempty"`
+	// state is running, stopped, done or cancelled.
+	State         string                 `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty"`
+	Started       *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=started,proto3" json:"started,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DriveRecord) Reset() {
+	*x = DriveRecord{}
+	mi := &file_f10_v1_runs_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DriveRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DriveRecord) ProtoMessage() {}
+
+func (x *DriveRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_f10_v1_runs_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DriveRecord.ProtoReflect.Descriptor instead.
+func (*DriveRecord) Descriptor() ([]byte, []int) {
+	return file_f10_v1_runs_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *DriveRecord) GetNumber() int32 {
+	if x != nil {
+		return x.Number
+	}
+	return 0
+}
+
+func (x *DriveRecord) GetArgs() []string {
+	if x != nil {
+		return x.Args
+	}
+	return nil
+}
+
+func (x *DriveRecord) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *DriveRecord) GetStarted() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Started
+	}
+	return nil
+}
+
+type ListDrivesResponse struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Drives []*DriveRecord         `protobuf:"bytes,1,rep,name=drives,proto3" json:"drives,omitempty"`
+	// printed is the table f10 drive list prints.
+	Printed       *Printed `protobuf:"bytes,2,opt,name=printed,proto3" json:"printed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListDrivesResponse) Reset() {
+	*x = ListDrivesResponse{}
+	mi := &file_f10_v1_runs_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDrivesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDrivesResponse) ProtoMessage() {}
+
+func (x *ListDrivesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_f10_v1_runs_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDrivesResponse.ProtoReflect.Descriptor instead.
+func (*ListDrivesResponse) Descriptor() ([]byte, []int) {
+	return file_f10_v1_runs_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *ListDrivesResponse) GetDrives() []*DriveRecord {
+	if x != nil {
+		return x.Drives
+	}
+	return nil
+}
+
+func (x *ListDrivesResponse) GetPrinted() *Printed {
+	if x != nil {
+		return x.Printed
+	}
+	return nil
+}
+
+type CancelDriveRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Project       string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
+	Drive         int32                  `protobuf:"varint,2,opt,name=drive,proto3" json:"drive,omitempty"`
+	Caller        *CallerContext         `protobuf:"bytes,3,opt,name=caller,proto3" json:"caller,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelDriveRequest) Reset() {
+	*x = CancelDriveRequest{}
+	mi := &file_f10_v1_runs_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelDriveRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelDriveRequest) ProtoMessage() {}
+
+func (x *CancelDriveRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_f10_v1_runs_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelDriveRequest.ProtoReflect.Descriptor instead.
+func (*CancelDriveRequest) Descriptor() ([]byte, []int) {
+	return file_f10_v1_runs_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *CancelDriveRequest) GetProject() string {
+	if x != nil {
+		return x.Project
+	}
+	return ""
+}
+
+func (x *CancelDriveRequest) GetDrive() int32 {
+	if x != nil {
+		return x.Drive
+	}
+	return 0
+}
+
+func (x *CancelDriveRequest) GetCaller() *CallerContext {
+	if x != nil {
+		return x.Caller
+	}
+	return nil
+}
+
+type CancelDriveResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// printed is what f10 drive cancel prints.
+	Printed       *Printed `protobuf:"bytes,1,opt,name=printed,proto3" json:"printed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelDriveResponse) Reset() {
+	*x = CancelDriveResponse{}
+	mi := &file_f10_v1_runs_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelDriveResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelDriveResponse) ProtoMessage() {}
+
+func (x *CancelDriveResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_f10_v1_runs_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelDriveResponse.ProtoReflect.Descriptor instead.
+func (*CancelDriveResponse) Descriptor() ([]byte, []int) {
+	return file_f10_v1_runs_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *CancelDriveResponse) GetPrinted() *Printed {
+	if x != nil {
+		return x.Printed
+	}
+	return nil
+}
+
 var File_f10_v1_runs_proto protoreflect.FileDescriptor
 
 const file_f10_v1_runs_proto_rawDesc = "" +
 	"\n" +
-	"\x11f10/v1/runs.proto\x12\x06f10.v1\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xbf\x04\n" +
+	"\x11f10/v1/runs.proto\x12\x06f10.v1\x1a\x13f10/v1/caller.proto\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xbf\x04\n" +
 	"\x03Run\x12\x18\n" +
 	"\asession\x18\x01 \x01(\tR\asession\x12\x12\n" +
 	"\x04task\x18\x02 \x01(\tR\x04task\x12\x10\n" +
@@ -2145,13 +2574,16 @@ const file_f10_v1_runs_proto_rawDesc = "" +
 	"\x03run\x18\x01 \x01(\v2\v.f10.v1.RunR\x03run\x12\x14\n" +
 	"\x05agent\x18\x02 \x01(\tR\x05agent\x12\"\n" +
 	"\x05gates\x18\x03 \x03(\v2\f.f10.v1.GateR\x05gates\x12,\n" +
-	"\bshipment\x18\x04 \x01(\v2\x10.f10.v1.ShipmentR\bshipment\"U\n" +
+	"\bshipment\x18\x04 \x01(\v2\x10.f10.v1.ShipmentR\bshipment\"\x84\x01\n" +
 	"\x13GetRunStatusRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x12\n" +
 	"\x04task\x18\x02 \x01(\tR\x04task\x12\x10\n" +
-	"\x03all\x18\x03 \x01(\bR\x03all\"=\n" +
+	"\x03all\x18\x03 \x01(\bR\x03all\x12-\n" +
+	"\x06caller\x18\x04 \x01(\v2\x15.f10.v1.CallerContextR\x06caller\"|\n" +
 	"\x14GetRunStatusResponse\x12%\n" +
-	"\x04runs\x18\x01 \x03(\v2\x11.f10.v1.RunStatusR\x04runs\"\x85\x02\n" +
+	"\x04runs\x18\x01 \x03(\v2\x11.f10.v1.RunStatusR\x04runs\x12\x12\n" +
+	"\x04view\x18\x02 \x01(\fR\x04view\x12)\n" +
+	"\aprinted\x18\x03 \x01(\v2\x0f.f10.v1.PrintedR\aprinted\"\xca\x02\n" +
 	"\fStartRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x12\n" +
 	"\x04task\x18\x02 \x01(\tR\x04task\x12\x0e\n" +
@@ -2164,13 +2596,16 @@ const file_f10_v1_runs_proto_rawDesc = "" +
 	"\x05agent\x18\t \x01(\tR\x05agent\x12\x14\n" +
 	"\x05model\x18\n" +
 	" \x01(\tR\x05model\x12\x12\n" +
-	"\x04note\x18\v \x01(\tR\x04note\"\x90\x01\n" +
+	"\x04note\x18\v \x01(\tR\x04note\x12-\n" +
+	"\x06caller\x18\f \x01(\v2\x15.f10.v1.CallerContextR\x06caller\x12\x14\n" +
+	"\x05token\x18\r \x01(\tR\x05token\"\xbb\x01\n" +
 	"\rStartResponse\x12\x12\n" +
 	"\x04task\x18\x01 \x01(\tR\x04task\x12\x16\n" +
 	"\x06branch\x18\x02 \x01(\tR\x06branch\x12\x1a\n" +
 	"\bworktree\x18\x03 \x01(\tR\bworktree\x12!\n" +
 	"\fworkspace_id\x18\x04 \x01(\tR\vworkspaceId\x12\x14\n" +
-	"\x05agent\x18\x05 \x01(\tR\x05agent\"1\n" +
+	"\x05agent\x18\x05 \x01(\tR\x05agent\x12)\n" +
+	"\aprinted\x18\x06 \x01(\v2\x0f.f10.v1.PrintedR\aprinted\"1\n" +
 	"\tDriveTask\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05agent\x18\x02 \x01(\tR\x05agent\"\x91\x03\n" +
@@ -2195,28 +2630,55 @@ const file_f10_v1_runs_proto_rawDesc = "" +
 	"\rDriveResponse\x12\x14\n" +
 	"\x05drive\x18\x01 \x01(\x05R\x05drive\x12\x10\n" +
 	"\x03log\x18\x02 \x01(\tR\x03log\x12\x1a\n" +
-	"\battached\x18\x03 \x01(\bR\battached\"\x9f\x01\n" +
+	"\battached\x18\x03 \x01(\bR\battached\"\x8c\x02\n" +
 	"\rFinishRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x12\n" +
 	"\x04task\x18\x02 \x01(\tR\x04task\x12'\n" +
 	"\x05merge\x18\x03 \x01(\x0e2\x11.f10.v1.MergeModeR\x05merge\x12#\n" +
 	"\rignore_checks\x18\x04 \x01(\bR\fignoreChecks\x12\x12\n" +
-	"\x04keep\x18\x05 \x01(\bR\x04keep\"\xc9\x01\n" +
+	"\x04keep\x18\x05 \x01(\bR\x04keep\x12-\n" +
+	"\x06caller\x18\x06 \x01(\v2\x15.f10.v1.CallerContextR\x06caller\x12\x10\n" +
+	"\x03yes\x18\a \x01(\bR\x03yes\x12\x14\n" +
+	"\x05empty\x18\b \x01(\bR\x05empty\x12\x14\n" +
+	"\x05close\x18\t \x01(\tR\x05close\"\xd0\x02\n" +
 	"\x0eFinishResponse\x12\x12\n" +
 	"\x04task\x18\x01 \x01(\tR\x04task\x12\x0e\n" +
 	"\x02pr\x18\x02 \x01(\tR\x02pr\x12\x16\n" +
 	"\x06commit\x18\x03 \x01(\tR\x06commit\x12)\n" +
 	"\x10removed_worktree\x18\x04 \x01(\bR\x0fremovedWorktree\x12%\n" +
 	"\x0eremoved_branch\x18\x05 \x01(\bR\rremovedBranch\x12)\n" +
-	"\x10closed_workspace\x18\x06 \x01(\bR\x0fclosedWorkspace\"R\n" +
+	"\x10closed_workspace\x18\x06 \x01(\bR\x0fclosedWorkspace\x12)\n" +
+	"\aprinted\x18\a \x01(\v2\x0f.f10.v1.PrintedR\aprinted\x12,\n" +
+	"\x12close_workspace_id\x18\b \x01(\tR\x10closeWorkspaceId\x12,\n" +
+	"\x12focus_workspace_id\x18\t \x01(\tR\x10focusWorkspaceId\"\x81\x01\n" +
 	"\x0eForwardRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x12\n" +
 	"\x04task\x18\x02 \x01(\tR\x04task\x12\x12\n" +
-	"\x04text\x18\x03 \x01(\tR\x04text\"W\n" +
+	"\x04text\x18\x03 \x01(\tR\x04text\x12-\n" +
+	"\x06caller\x18\x04 \x01(\v2\x15.f10.v1.CallerContextR\x06caller\"\x82\x01\n" +
 	"\x0fForwardResponse\x12\x1c\n" +
 	"\tworkspace\x18\x01 \x01(\tR\tworkspace\x12\x12\n" +
 	"\x04sent\x18\x02 \x01(\tR\x04sent\x12\x12\n" +
-	"\x04note\x18\x03 \x01(\tR\x04note*\xf6\x01\n" +
+	"\x04note\x18\x03 \x01(\tR\x04note\x12)\n" +
+	"\aprinted\x18\x04 \x01(\v2\x0f.f10.v1.PrintedR\aprinted\"n\n" +
+	"\x11ListDrivesRequest\x12\x18\n" +
+	"\aproject\x18\x01 \x01(\tR\aproject\x12\x10\n" +
+	"\x03all\x18\x02 \x01(\bR\x03all\x12-\n" +
+	"\x06caller\x18\x03 \x01(\v2\x15.f10.v1.CallerContextR\x06caller\"\x85\x01\n" +
+	"\vDriveRecord\x12\x16\n" +
+	"\x06number\x18\x01 \x01(\x05R\x06number\x12\x12\n" +
+	"\x04args\x18\x02 \x03(\tR\x04args\x12\x14\n" +
+	"\x05state\x18\x03 \x01(\tR\x05state\x124\n" +
+	"\astarted\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\astarted\"l\n" +
+	"\x12ListDrivesResponse\x12+\n" +
+	"\x06drives\x18\x01 \x03(\v2\x13.f10.v1.DriveRecordR\x06drives\x12)\n" +
+	"\aprinted\x18\x02 \x01(\v2\x0f.f10.v1.PrintedR\aprinted\"s\n" +
+	"\x12CancelDriveRequest\x12\x18\n" +
+	"\aproject\x18\x01 \x01(\tR\aproject\x12\x14\n" +
+	"\x05drive\x18\x02 \x01(\x05R\x05drive\x12-\n" +
+	"\x06caller\x18\x03 \x01(\v2\x15.f10.v1.CallerContextR\x06caller\"@\n" +
+	"\x13CancelDriveResponse\x12)\n" +
+	"\aprinted\x18\x01 \x01(\v2\x0f.f10.v1.PrintedR\aprinted*\xf6\x01\n" +
 	"\vPhaseStatus\x12\x1c\n" +
 	"\x18PHASE_STATUS_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14PHASE_STATUS_RUNNING\x10\x01\x12\x15\n" +
@@ -2237,14 +2699,17 @@ const file_f10_v1_runs_proto_rawDesc = "" +
 	"\rMERGE_MODE_PR\x10\x01\x12\x14\n" +
 	"\x10MERGE_MODE_FORCE\x10\x02\x12\x14\n" +
 	"\x10MERGE_MODE_LOCAL\x10\x03\x12\x14\n" +
-	"\x10MERGE_MODE_CLOSE\x10\x042\xb8\x02\n" +
+	"\x10MERGE_MODE_CLOSE\x10\x042\xc5\x03\n" +
 	"\n" +
 	"RunService\x12I\n" +
 	"\fGetRunStatus\x12\x1b.f10.v1.GetRunStatusRequest\x1a\x1c.f10.v1.GetRunStatusResponse\x124\n" +
 	"\x05Start\x12\x14.f10.v1.StartRequest\x1a\x15.f10.v1.StartResponse\x124\n" +
 	"\x05Drive\x12\x14.f10.v1.DriveRequest\x1a\x15.f10.v1.DriveResponse\x127\n" +
 	"\x06Finish\x12\x15.f10.v1.FinishRequest\x1a\x16.f10.v1.FinishResponse\x12:\n" +
-	"\aForward\x12\x16.f10.v1.ForwardRequest\x1a\x17.f10.v1.ForwardResponseB\x81\x01\n" +
+	"\aForward\x12\x16.f10.v1.ForwardRequest\x1a\x17.f10.v1.ForwardResponse\x12C\n" +
+	"\n" +
+	"ListDrives\x12\x19.f10.v1.ListDrivesRequest\x1a\x1a.f10.v1.ListDrivesResponse\x12F\n" +
+	"\vCancelDrive\x12\x1a.f10.v1.CancelDriveRequest\x1a\x1b.f10.v1.CancelDriveResponseB\x81\x01\n" +
 	"\n" +
 	"com.f10.v1B\tRunsProtoP\x01Z/github.com/amberpixels/f10/cli/gen/f10/v1;f10v1\xa2\x02\x03FXX\xaa\x02\x06F10.V1\xca\x02\x06F10\\V1\xe2\x02\x12F10\\V1\\GPBMetadata\xea\x02\aF10::V1b\x06proto3"
 
@@ -2261,7 +2726,7 @@ func file_f10_v1_runs_proto_rawDescGZIP() []byte {
 }
 
 var file_f10_v1_runs_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_f10_v1_runs_proto_msgTypes = make([]protoimpl.MessageInfo, 21)
+var file_f10_v1_runs_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
 var file_f10_v1_runs_proto_goTypes = []any{
 	(PhaseStatus)(0),              // 0: f10.v1.PhaseStatus
 	(StartMode)(0),                // 1: f10.v1.StartMode
@@ -2287,15 +2752,22 @@ var file_f10_v1_runs_proto_goTypes = []any{
 	(*FinishResponse)(nil),        // 21: f10.v1.FinishResponse
 	(*ForwardRequest)(nil),        // 22: f10.v1.ForwardRequest
 	(*ForwardResponse)(nil),       // 23: f10.v1.ForwardResponse
-	(*timestamppb.Timestamp)(nil), // 24: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),   // 25: google.protobuf.Duration
+	(*ListDrivesRequest)(nil),     // 24: f10.v1.ListDrivesRequest
+	(*DriveRecord)(nil),           // 25: f10.v1.DriveRecord
+	(*ListDrivesResponse)(nil),    // 26: f10.v1.ListDrivesResponse
+	(*CancelDriveRequest)(nil),    // 27: f10.v1.CancelDriveRequest
+	(*CancelDriveResponse)(nil),   // 28: f10.v1.CancelDriveResponse
+	(*timestamppb.Timestamp)(nil), // 29: google.protobuf.Timestamp
+	(*CallerContext)(nil),         // 30: f10.v1.CallerContext
+	(*Printed)(nil),               // 31: f10.v1.Printed
+	(*durationpb.Duration)(nil),   // 32: google.protobuf.Duration
 }
 var file_f10_v1_runs_proto_depIdxs = []int32{
 	0,  // 0: f10.v1.Run.capture:type_name -> f10.v1.PhaseStatus
 	0,  // 1: f10.v1.Run.plan:type_name -> f10.v1.PhaseStatus
 	0,  // 2: f10.v1.Run.ship:type_name -> f10.v1.PhaseStatus
-	24, // 3: f10.v1.Run.done_at:type_name -> google.protobuf.Timestamp
-	24, // 4: f10.v1.Run.updated:type_name -> google.protobuf.Timestamp
+	29, // 3: f10.v1.Run.done_at:type_name -> google.protobuf.Timestamp
+	29, // 4: f10.v1.Run.updated:type_name -> google.protobuf.Timestamp
 	5,  // 5: f10.v1.ReviewHalf.rounds:type_name -> f10.v1.ReviewRound
 	4,  // 6: f10.v1.Gate.outcome:type_name -> f10.v1.JudgeOutcome
 	6,  // 7: f10.v1.Gate.local:type_name -> f10.v1.ReviewHalf
@@ -2308,26 +2780,44 @@ var file_f10_v1_runs_proto_depIdxs = []int32{
 	3,  // 14: f10.v1.RunStatus.run:type_name -> f10.v1.Run
 	7,  // 15: f10.v1.RunStatus.gates:type_name -> f10.v1.Gate
 	11, // 16: f10.v1.RunStatus.shipment:type_name -> f10.v1.Shipment
-	12, // 17: f10.v1.GetRunStatusResponse.runs:type_name -> f10.v1.RunStatus
-	1,  // 18: f10.v1.StartRequest.mode:type_name -> f10.v1.StartMode
-	17, // 19: f10.v1.DriveRequest.tasks:type_name -> f10.v1.DriveTask
-	25, // 20: f10.v1.DriveRequest.every:type_name -> google.protobuf.Duration
-	2,  // 21: f10.v1.FinishRequest.merge:type_name -> f10.v1.MergeMode
-	13, // 22: f10.v1.RunService.GetRunStatus:input_type -> f10.v1.GetRunStatusRequest
-	15, // 23: f10.v1.RunService.Start:input_type -> f10.v1.StartRequest
-	18, // 24: f10.v1.RunService.Drive:input_type -> f10.v1.DriveRequest
-	20, // 25: f10.v1.RunService.Finish:input_type -> f10.v1.FinishRequest
-	22, // 26: f10.v1.RunService.Forward:input_type -> f10.v1.ForwardRequest
-	14, // 27: f10.v1.RunService.GetRunStatus:output_type -> f10.v1.GetRunStatusResponse
-	16, // 28: f10.v1.RunService.Start:output_type -> f10.v1.StartResponse
-	19, // 29: f10.v1.RunService.Drive:output_type -> f10.v1.DriveResponse
-	21, // 30: f10.v1.RunService.Finish:output_type -> f10.v1.FinishResponse
-	23, // 31: f10.v1.RunService.Forward:output_type -> f10.v1.ForwardResponse
-	27, // [27:32] is the sub-list for method output_type
-	22, // [22:27] is the sub-list for method input_type
-	22, // [22:22] is the sub-list for extension type_name
-	22, // [22:22] is the sub-list for extension extendee
-	0,  // [0:22] is the sub-list for field type_name
+	30, // 17: f10.v1.GetRunStatusRequest.caller:type_name -> f10.v1.CallerContext
+	12, // 18: f10.v1.GetRunStatusResponse.runs:type_name -> f10.v1.RunStatus
+	31, // 19: f10.v1.GetRunStatusResponse.printed:type_name -> f10.v1.Printed
+	1,  // 20: f10.v1.StartRequest.mode:type_name -> f10.v1.StartMode
+	30, // 21: f10.v1.StartRequest.caller:type_name -> f10.v1.CallerContext
+	31, // 22: f10.v1.StartResponse.printed:type_name -> f10.v1.Printed
+	17, // 23: f10.v1.DriveRequest.tasks:type_name -> f10.v1.DriveTask
+	32, // 24: f10.v1.DriveRequest.every:type_name -> google.protobuf.Duration
+	2,  // 25: f10.v1.FinishRequest.merge:type_name -> f10.v1.MergeMode
+	30, // 26: f10.v1.FinishRequest.caller:type_name -> f10.v1.CallerContext
+	31, // 27: f10.v1.FinishResponse.printed:type_name -> f10.v1.Printed
+	30, // 28: f10.v1.ForwardRequest.caller:type_name -> f10.v1.CallerContext
+	31, // 29: f10.v1.ForwardResponse.printed:type_name -> f10.v1.Printed
+	30, // 30: f10.v1.ListDrivesRequest.caller:type_name -> f10.v1.CallerContext
+	29, // 31: f10.v1.DriveRecord.started:type_name -> google.protobuf.Timestamp
+	25, // 32: f10.v1.ListDrivesResponse.drives:type_name -> f10.v1.DriveRecord
+	31, // 33: f10.v1.ListDrivesResponse.printed:type_name -> f10.v1.Printed
+	30, // 34: f10.v1.CancelDriveRequest.caller:type_name -> f10.v1.CallerContext
+	31, // 35: f10.v1.CancelDriveResponse.printed:type_name -> f10.v1.Printed
+	13, // 36: f10.v1.RunService.GetRunStatus:input_type -> f10.v1.GetRunStatusRequest
+	15, // 37: f10.v1.RunService.Start:input_type -> f10.v1.StartRequest
+	18, // 38: f10.v1.RunService.Drive:input_type -> f10.v1.DriveRequest
+	20, // 39: f10.v1.RunService.Finish:input_type -> f10.v1.FinishRequest
+	22, // 40: f10.v1.RunService.Forward:input_type -> f10.v1.ForwardRequest
+	24, // 41: f10.v1.RunService.ListDrives:input_type -> f10.v1.ListDrivesRequest
+	27, // 42: f10.v1.RunService.CancelDrive:input_type -> f10.v1.CancelDriveRequest
+	14, // 43: f10.v1.RunService.GetRunStatus:output_type -> f10.v1.GetRunStatusResponse
+	16, // 44: f10.v1.RunService.Start:output_type -> f10.v1.StartResponse
+	19, // 45: f10.v1.RunService.Drive:output_type -> f10.v1.DriveResponse
+	21, // 46: f10.v1.RunService.Finish:output_type -> f10.v1.FinishResponse
+	23, // 47: f10.v1.RunService.Forward:output_type -> f10.v1.ForwardResponse
+	26, // 48: f10.v1.RunService.ListDrives:output_type -> f10.v1.ListDrivesResponse
+	28, // 49: f10.v1.RunService.CancelDrive:output_type -> f10.v1.CancelDriveResponse
+	43, // [43:50] is the sub-list for method output_type
+	36, // [36:43] is the sub-list for method input_type
+	36, // [36:36] is the sub-list for extension type_name
+	36, // [36:36] is the sub-list for extension extendee
+	0,  // [0:36] is the sub-list for field type_name
 }
 
 func init() { file_f10_v1_runs_proto_init() }
@@ -2335,13 +2825,14 @@ func file_f10_v1_runs_proto_init() {
 	if File_f10_v1_runs_proto != nil {
 		return
 	}
+	file_f10_v1_caller_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_f10_v1_runs_proto_rawDesc), len(file_f10_v1_runs_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   21,
+			NumMessages:   26,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

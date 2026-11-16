@@ -80,6 +80,7 @@ type Server struct {
 	remoteAt RemoteState
 	session  []string        // the newest local session's environment
 	calls    int             // calls in flight, an event stream among them
+	unary    int             // calls in flight that end by themselves: a start, a finish
 	ctx      context.Context //nolint:containedctx // the serve call's, for the drives it starts
 	stop     chan stopMode
 	escalate chan struct{} // closed by a stop --now during a drain
@@ -210,6 +211,11 @@ loop:
 	// the socket stays up through the drain: status answers, and a stop
 	// --now cuts it short
 	s.shutdown(mode)
+
+	if mode.drain {
+		s.awaitCalls(callsWait)
+	}
+
 	s.closeHTTP()
 	_ = ln.Close()
 	_ = os.Remove(sock)
@@ -279,6 +285,41 @@ func (s *Server) idle() bool {
 		len(s.runs) == 0 && len(s.watches) == 0 && s.calls == 0 && time.Since(s.last) >= s.Idle
 }
 
+// callsWait bounds how long a drain waits on the calls in flight: a finish
+// waiting on checks or a start opening its agent ends the client's command if
+// it is cut, so it gets to reply first.
+const callsWait = 10 * time.Minute
+
+// awaitCalls waits until no call that ends by itself is in flight, at most
+// limit, and no longer once a stop --now escalates the drain.
+func (s *Server) awaitCalls(limit time.Duration) {
+	deadline := time.NewTimer(limit)
+	defer deadline.Stop()
+
+	tick := time.NewTicker(100 * time.Millisecond)
+	defer tick.Stop()
+
+	for {
+		s.mu.Lock()
+		n := s.unary
+		s.mu.Unlock()
+
+		if n == 0 {
+			return
+		}
+
+		select {
+		case <-deadline.C:
+			s.Log.Printf("%d calls still in flight after %s: closing them", n, limit)
+
+			return
+		case <-s.escalate:
+			return
+		case <-tick.C:
+		}
+	}
+}
+
 // closeHTTP lets the calls in flight, the stop that ended the daemon among
 // them, write their replies; a stream never ends by itself, so it is cut.
 func (s *Server) closeHTTP() {
@@ -316,13 +357,18 @@ func (s *Server) handler() http.Handler {
 // daemon serving a long call, such as an event stream, never idles out.
 func (s *Server) stamp(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		unary := 0
+		if r.URL.Path != f10v1connect.EventServiceWatchEventsProcedure {
+			unary = 1
+		}
+
 		s.mu.Lock()
-		s.last, s.calls = time.Now(), s.calls+1
+		s.last, s.calls, s.unary = time.Now(), s.calls+1, s.unary+unary
 		s.mu.Unlock()
 
 		defer func() {
 			s.mu.Lock()
-			s.last, s.calls = time.Now(), s.calls-1
+			s.last, s.calls, s.unary = time.Now(), s.calls-1, s.unary-unary
 			s.mu.Unlock()
 		}()
 

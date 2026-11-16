@@ -5,6 +5,8 @@ syntax = "proto3";
 // tasks, so it can leave f10 as a project of its own.
 package agents.v1;
 
+import "agents/v1/asks.proto";
+
 // AgentService reads the workspaces and agents of the multiplexer and types
 // into an agent's pane.
 service AgentService {
@@ -16,6 +18,9 @@ service AgentService {
   rpc GetAgentStatus(GetAgentStatusRequest) returns (GetAgentStatusResponse);
   // SendText types text into an agent's pane, as a prompt when submit is set.
   rpc SendText(SendTextRequest) returns (SendTextResponse);
+  // CloseWorkspace closes a workspace, focusing another one first when
+  // focus_id is set.
+  rpc CloseWorkspace(CloseWorkspaceRequest) returns (CloseWorkspaceResponse);
 }
 
 // AgentStatus is what the multiplexer reports an agent doing.
@@ -79,3 +84,12 @@ message SendTextRequest {
 }
 
 message SendTextResponse {}
+
+message CloseWorkspaceRequest {
+  string id = 1;
+  // focus_id is the workspace to focus before the close, empty for none.
+  string focus_id = 2;
+  CallerContext caller = 3;
+}
+
+message CloseWorkspaceResponse {}
