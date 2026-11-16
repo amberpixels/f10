@@ -405,8 +405,8 @@ func (s *runService) Finish(
 }
 
 // Forward hands text to the agent working on a task, through the same core
-// f10 forward runs, so its refusals (no worktree, no workspace, a stalled
-// agent) read the same.
+// f10 forward runs, so its refusals (no worktree, no workspace, a dialog
+// open in a stopped agent's pane) read the same.
 func (s *runService) Forward(
 	ctx context.Context,
 	req *connect.Request[f10v1.ForwardRequest],

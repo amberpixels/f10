@@ -1,9 +1,11 @@
 package start
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
@@ -28,14 +30,14 @@ type ForwardInput struct {
 	Task     ref.Ref
 	Suffix   string
 	Text     string        // what the agent is told, before the marker
-	StateDir string        // where run state lives, for the idle check
+	StateDir string        // where run state lives, for the note on where the text lands
 	Ttl      time.Duration // how long a run counts as live
 	Now      time.Time
 	Since    time.Time // runs last updated before it are not read: the agent that wrote them is gone
 }
 
 // Forwarded is where a forward went: the workspace, the text as sent, and
-// what the Enter check noted.
+// the notes: where the text lands and what the Enter check saw.
 type Forwarded struct {
 	Workspace string
 	Sent      string
@@ -88,18 +90,48 @@ func Forward(ctx context.Context, in ForwardInput) (Forwarded, error) {
 			agents.Agents(in.Main).Name(), path, name, in.Task.ID)
 	}
 
-	if err := RefuseStalled(in.stall(), ws, agentctl.AgentName(in.Task.ID, in.Suffix, path), path); err != nil {
-		return Forwarded{}, err
-	}
+	agent := agentctl.AgentName(in.Task.ID, in.Suffix, path)
 
-	text := launch.Driven(in.Text)
-
-	note, err := launch.PromptChecked(ctx, path, in.Task.ID, in.Suffix, text)
+	// an agent at rest on a running run is why the user forwards, so it is
+	// sent to, unless its screen shows a dialog the Enter would answer
+	lands, stalled, err := landing(in.stall(), ws, path)
 	if err != nil {
 		return Forwarded{}, err
 	}
 
+	if stalled != "" {
+		if err := forwardReady(ctx, in, ws, agent, path, stalled); err != nil {
+			return Forwarded{}, err
+		}
+	}
+
+	text := launch.Driven(in.Text)
+
+	enter, err := launch.PromptChecked(ctx, path, in.Task.ID, in.Suffix, text)
+	if err != nil {
+		return Forwarded{}, err
+	}
+
+	note := strings.Join(textx.AppendNote(textx.AppendNote(nil, lands), enter), "\n")
+
 	return Forwarded{Workspace: ws.ID, Sent: text, Note: note}, nil
+}
+
+// forwardReady refuses an agent whose screen shows no input box: a
+// permission dialog or a menu is up, and the typed text's Enter would answer it.
+func forwardReady(ctx context.Context, in ForwardInput, ws *agentctl.Workspace, agent, path, stalled string) error {
+	ready, err := launch.InputReady(ctx, path, in.Task.ID, in.Suffix)
+	if err != nil {
+		return fmt.Errorf("agent %s in workspace %s is idle while its run says %s, and its screen could not be read "+
+			"to rule out an open dialog: %w", agent, cmp.Or(ws.Label, ws.ID), stalled, err)
+	}
+
+	if !ready {
+		return fmt.Errorf("agent %s in workspace %s is idle while its run says %s, and its pane shows no input box: "+
+			"a dialog may be open there: answer it in that pane", agent, cmp.Or(ws.Label, ws.ID), stalled)
+	}
+
+	return nil
 }
 
 func hereReason(in ForwardInput, name, path string) string {

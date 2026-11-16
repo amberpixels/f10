@@ -2,6 +2,7 @@ package launch
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -43,6 +44,25 @@ func HoldsPrompt(screen, text string) bool {
 	key = key[:min(len(key), promptKey)]
 
 	return len(key) > 0 && strings.Contains(strings.Join(strings.Fields(box), " "), string(key))
+}
+
+// InputReady reports whether the task's agent shows Claude's input box,
+// which a permission dialog or a menu replaces while it is open.
+func InputReady(ctx context.Context, path, id, suffix string) (bool, error) {
+	b := agents.Agents(path)
+
+	screen, err := b.Screen(ctx, agentctl.AgentName(id, suffix, path))
+	if errors.Is(err, agentctl.ErrAgentNotFound) {
+		screen, err = b.Screen(ctx, agentctl.BareAgentName(id, suffix))
+	}
+
+	if err != nil {
+		return false, err
+	}
+
+	_, ok := inputBox(screen)
+
+	return ok, nil
 }
 
 // inputBox is the text between the screen's last two horizontal rules,

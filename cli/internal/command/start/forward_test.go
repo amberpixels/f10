@@ -53,11 +53,14 @@ func (fx *forwardFixture) workspaces(agent string) string {
 		`]}}`
 }
 
-func (fx *forwardFixture) run(t *testing.T, ship, leaf string) {
+func (fx *forwardFixture) run(t *testing.T, ship, leaf, ask string) {
 	t.Helper()
 
 	body := "v 1\ntask GH-1\nroot " + testkit.FwdWT + "\ncapture prior\nplan done\nship " + ship + "\nleaf " + leaf +
 		"\nupdated " + strconv.FormatInt(fx.in.Now.Unix(), 10) + "\n"
+	if ask != "" {
+		body += "ask " + ask + "\n"
+	}
 
 	if err := os.WriteFile(filepath.Join(fx.in.StateDir, "remote.state"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
@@ -217,26 +220,78 @@ func TestForwardNeedsAWorkspace(t *testing.T) {
 	}
 }
 
-// An idle agent whose run says running is waiting on something in its pane:
-// the forward names the workspace and the step and sends nothing.
-func TestForwardRefusesAnIdleAgentStillRunning(t *testing.T) {
+// What Claude draws at rest: its input box between two rules.
+const restingScreen = "● done\n" + "──────────────────────\n" + "> \n" + "──────────────────────\n"
+
+// An agent at rest whose run says running stopped mid-turn: the text is what
+// resumes it, so it is sent, and the report names the run it lands in. Done is
+// idle after a turn nobody looked at, the likely state of an unattended stop.
+func TestForwardResumesAnIdleAgentStillRunning(t *testing.T) {
+	for _, status := range []string{"idle", "done"} {
+		t.Run(status, func(t *testing.T) {
+			fx := newForwardFixture(t)
+			fx.f.Script(testkit.WsList, fx.workspaces(status))
+			fx.run(t, "running", "review", "")
+			fx.f.Script("herdr agent read "+testkit.AgentOf("GH-1")+" --source visible", restingScreen)
+			fx.f.Script("herdr agent prompt "+testkit.AgentOf("GH-1")+" "+testkit.FwdText+" --driven", "{}")
+
+			out, err := fx.forward(t)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if !fx.f.Called("herdr agent prompt") {
+				t.Error("the idle agent was not prompted")
+			}
+
+			if !strings.Contains(out, "ship running: review") {
+				t.Errorf("report lacks the stalled run:\n%s", out)
+			}
+		})
+	}
+}
+
+// A pane with no input box holds a dialog or a menu, and the typed text's
+// Enter would answer it: nothing is sent.
+func TestForwardRefusesAStalledAgentShowingADialog(t *testing.T) {
 	fx := newForwardFixture(t)
 	fx.f.Script(testkit.WsList, fx.workspaces("idle"))
-	fx.run(t, "running", "implement")
+	fx.run(t, "running", "implement", "")
+	fx.f.Script("herdr agent read "+testkit.AgentOf("GH-1")+" --source visible",
+		"Bash command\n  rm -rf build\nDo you want to proceed?\n> 1. Yes\n  2. No\n")
 
 	_, err := fx.forward(t)
 	if err == nil {
-		t.Fatal("forwarded to a stalled agent")
+		t.Fatal("forwarded into a dialog")
 	}
 
-	for _, want := range []string{"agent gh-1", "workspace GH-1", "ship running: implement", "its own pane"} {
+	for _, want := range []string{"agent gh-1", "workspace GH-1", "ship running: implement", "no input box"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("err = %v, want %q in it", err, want)
 		}
 	}
 
-	if fx.f.Called("herdr agent") {
-		t.Error("prompted the stalled agent")
+	if fx.f.Called("herdr agent prompt") {
+		t.Error("prompted the agent over its dialog")
+	}
+}
+
+// A run stopped on an ask takes the forwarded text as its answer, and the
+// report says so.
+func TestForwardNamesTheOpenAsk(t *testing.T) {
+	fx := newForwardFixture(t)
+	fx.f.Script(testkit.WsList, fx.workspaces("idle"))
+	fx.run(t, "blocked", "judge", "1. Deploy? [yes | no]")
+	fx.in.Text = "1. yes"
+	fx.f.Script("herdr agent prompt "+testkit.AgentOf("GH-1")+" 1. yes", "{}")
+
+	out, err := fx.forward(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(out, "1. Deploy? [yes | no]") {
+		t.Errorf("report lacks the open ask:\n%s", out)
 	}
 }
 
@@ -244,7 +299,7 @@ func TestForwardRefusesAnIdleAgentStillRunning(t *testing.T) {
 func TestForwardSendsToAnIdleAgentThatIsBlocked(t *testing.T) {
 	fx := newForwardFixture(t)
 	fx.f.Script(testkit.WsList, fx.workspaces("idle"))
-	fx.run(t, "blocked", "implement")
+	fx.run(t, "blocked", "implement", "")
 	fx.in.Text = "1. no"
 	fx.f.Script("herdr agent prompt "+testkit.AgentOf("GH-1")+" 1. no", "{}")
 
