@@ -153,6 +153,11 @@ func (r *Run) Save(ctx context.Context, dir string, now time.Time) error {
 		signal = [][2]string{{"done", r.Done}, {"done_at", unixText(r.DoneAt)}}
 	}
 
+	// so is a phaseless turn, written only while one is in progress
+	if r.Turn != "" {
+		signal = append(signal, [2]string{"turn", r.Turn})
+	}
+
 	// so is a wait, which only a driven ship on an empty base writes, and a
 	// stop kind, which only ship's catchup guard writes
 	if r.Stop != "" {
@@ -448,6 +453,36 @@ func (r *Run) SetDone(step string, now time.Time) error {
 	return nil
 }
 
+// TurnCatchup is a catchup's turn: it integrates the branch and writes only
+// its done signal, so a ship it runs between keeps the state it left.
+const TurnCatchup = "catchup"
+
+// ErrPhaselessTurn refuses a phase write inside a catchup's turn, where it
+// would overwrite the ship state a drive reads.
+var ErrPhaselessTurn = errors.New("a catchup turn writes no phase: `f10-state.sh done catchup` ends it")
+
+// BeginTurn records skill's turn when it is phaseless; true when it was.
+func (r *Run) BeginTurn(skill string) bool {
+	if skill != TurnCatchup {
+		return false
+	}
+
+	r.Turn = skill
+
+	return true
+}
+
+// EndTurn retires a phaseless turn as it ends; true when one was in progress.
+func (r *Run) EndTurn() bool {
+	if r.Turn == "" {
+		return false
+	}
+
+	r.Turn = ""
+
+	return true
+}
+
 // SetFinal declares the ship pipeline's last step, for the Stop backstop: a
 // turn ending on it is a dropped `set ship done`; mid-pipeline is a pause.
 func (r *Run) SetFinal(step string) error {
@@ -597,7 +632,7 @@ func (r *Run) Seed(ctx context.Context, skill, args, cwd string) bool {
 		chain = upRef == upTask || (taskid.IsNumber(ref) && strings.HasSuffix(upTask, "-"+ref))
 	}
 
-	r.Skill = skill
+	r.Skill, r.Turn = skill, ""
 	r.Leaf, r.Final, r.Note, r.Next, r.Ask, r.Wait, r.Stop = "", "", "", "", "", "", ""
 	r.Done, r.DoneAt = "", time.Time{}
 	r.Pipeline, r.Labels, r.At = nil, nil, 0

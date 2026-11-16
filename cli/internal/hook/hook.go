@@ -117,6 +117,7 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 		}
 
 		seed(ctx, env, sid, skillOf(p.CommandName), p.CommandArgs, p.Cwd, p.Transcript)
+		beginTurn(ctx, env, sid, p.CommandName)
 		notify(ctx, env, sid, p.Cwd, started(ctx, env, sid, p, p.CommandName, p.CommandArgs)...)
 	case "PreToolUse":
 		// the model calling the skill itself, which the expansion never sees
@@ -131,6 +132,7 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 
 		_ = json.Unmarshal(p.ToolInput, &in)
 		seed(ctx, env, sid, skillOf(in.Skill), in.Args, p.Cwd, p.Transcript)
+		beginTurn(ctx, env, sid, in.Skill)
 		notify(ctx, env, sid, p.Cwd, started(ctx, env, sid, p, in.Skill, in.Args)...)
 	case "PostToolUse":
 		obs := observed(ctx, env, p)
@@ -167,7 +169,11 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 				// never the done the backstop infers
 				stop = stopped(r)
 
-				backstop := r.Backstop()
+				// a catchup's turn ends with the ship it ran between untouched,
+				// so a running ship there is that ship's pause, not its end
+				backstop := r.Turn == "" && r.Backstop()
+				ended := r.EndTurn()
+
 				if stop != nil {
 					stop.Backstop = backstop
 					// a done run counts this turn, its last; failed or partial
@@ -175,7 +181,7 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 					usage = turnUsage(env.StateDir, sid, p.Transcript, stop.Status == "done" || backstop)
 				}
 
-				return backstop, nil
+				return backstop || ended, nil
 			},
 		)
 
@@ -291,6 +297,19 @@ func seed(ctx context.Context, env *Env, sid, skill, args, cwd, transcriptPath s
 		startUsage(env.StateDir, sid, transcriptPath)
 
 		return r.Seed(ctx, skill, args, cwd), nil
+	})
+}
+
+// beginTurn records a phaseless skill's turn on the session's run, so f10
+// state refuses its phase writes until the turn's Stop.
+func beginTurn(ctx context.Context, env *Env, sid, name string) {
+	skill, ok := strings.CutPrefix(name, "f10:")
+	if !ok || sid == "" {
+		return
+	}
+
+	_ = state.Update(ctx, env.StateDir, sid, hookLockWait, env.now(), func(r *state.Run, loaded bool) (bool, error) {
+		return loaded && r.BeginTurn(skill), nil
 	})
 }
 

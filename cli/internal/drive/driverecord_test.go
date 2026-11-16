@@ -3,6 +3,7 @@ package drive
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -251,6 +252,19 @@ func answerTasks(ids ...string) []DriveTask {
 	return tasks
 }
 
+// writeShipRun records GH-1's run as the given skill's turn left it: ship
+// done, with a pipeline that delivers nothing on the branch.
+func (fx *driveFixture) writeShipRun(t *testing.T, skill string) {
+	t.Helper()
+
+	body := fmt.Sprintf("v 1\ntask GH-1\nroot /code/repo.GH-1\nskill %s\ncapture prior\nplan done\nship done\n"+
+		"pipeline implement\nupdated %d\n", skill, fx.clock.Unix())
+
+	if err := os.WriteFile(filepath.Join(fx.in.StateDir, "s-GH-1.state"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // The agent got past a skill before the drive could send it, as after a
 // drive stopped mid-ship: the skill is counted done, not prompted again.
 func TestDriveSkipsAPromptTheAgentAlreadyFinished(t *testing.T) {
@@ -262,8 +276,8 @@ func TestDriveSkipsAPromptTheAgentAlreadyFinished(t *testing.T) {
 
 	fx.f.Script(testkit.WsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"),
 		listing("GH-1", "idle"))
-	// plan's turn ends with ship done too
-	fx.onTick[2] = func() { fx.writeRun(t, "done", "", "", "") }
+	// plan's turn ends with a ship turn done too, typed in its pane
+	fx.onTick[2] = func() { fx.writeShipRun(t, "ship") }
 
 	if err := fx.drive(t); err != nil {
 		t.Fatalf("%v\n%s", err, fx.out.String())
@@ -277,6 +291,35 @@ func TestDriveSkipsAPromptTheAgentAlreadyFinished(t *testing.T) {
 		if !strings.Contains(fx.out.String(), want) {
 			t.Errorf("output lacks %q:\n%s", want, fx.out.String())
 		}
+	}
+}
+
+// FT-533: a run that reads ship done though no ship turn ran (a catchup's
+// stray write in a plan session, promoted by the Stop backstop) is no proof:
+// ship is prompted.
+func TestDriveSendsAShipNoShipTurnRan(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1", "plan", "ship")
+	fx.task("GH-1", tasksource.TaskInfo{Body: "x"}, "")
+	fx.f.Script(testkit.Worktrees, testkit.Porcelain(), testkit.Porcelain("GH-1", "/code/repo.GH-1"))
+	fx.opens("GH-1", "ws:GH-1", "pane:1")
+	fx.expects("GH-1", "plan")
+	fx.expects("GH-1", "ship")
+
+	fx.f.Script(testkit.WsList, unopened, listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"),
+		listing("GH-1", "idle"), listing("GH-1", "working"), listing("GH-1", "idle"))
+	fx.onTick[2] = func() { fx.writeShipRun(t, "plan") }
+	fx.onTick[4] = func() { fx.writeShipRun(t, "ship") }
+
+	if err := fx.drive(t); err != nil {
+		t.Fatalf("%v\n%s", err, fx.out.String())
+	}
+
+	if !fx.f.Called("herdr agent prompt " + testkit.AgentOf("GH-1") + " /f10:ship") {
+		t.Errorf("ship was not prompted:\n%s", fx.out.String())
+	}
+
+	if strings.Contains(fx.out.String(), "ship: already done") {
+		t.Errorf("a ship no ship turn ran read as done:\n%s", fx.out.String())
 	}
 }
 

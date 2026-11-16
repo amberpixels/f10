@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
@@ -36,6 +37,9 @@ type taskState struct {
 	Reviews      int    // review rounds written for the change
 	ChangeJudged bool
 	Run          *state.Run
+	// shipCode is the branch's own code past its base, catchup commits left
+	// out, and spike its spike report: read only for a ship run that says done
+	shipCode, spike bool
 }
 
 // Fingerprint is the state an attempt compares: the agent's status and every
@@ -65,7 +69,7 @@ func (s taskState) Has(skill string) bool {
 	case "plan":
 		return s.plan || s.Run != nil && phaseDone(s.Run, "plan")
 	case "ship":
-		return s.Run != nil && phaseDone(s.Run, "ship") || s.Shipped()
+		return s.Shipped() || s.Run != nil && phaseDone(s.Run, "ship") && s.shipRan()
 	}
 
 	return false
@@ -119,6 +123,29 @@ func (s taskState) Shipped() bool {
 	return false
 }
 
+// shipRan reads a ship phase done as ship's own: a ship turn wrote it, since
+// only ship's seed names the run's skill, and the branch carries what the
+// flow delivers. A run another turn marked done (a catchup's stray write,
+// promoted by the Stop backstop) is not.
+func (s taskState) shipRan() bool {
+	if s.Run.Skill != "ship" {
+		return false
+	}
+
+	if s.spike {
+		return true
+	}
+
+	switch cmp.Or(s.Run.Entries().Delivered(), "pr") {
+	case "pr":
+		return s.shipCode && s.Pr != ""
+	case "push", "commit":
+		return s.shipCode
+	}
+
+	return true
+}
+
 // stopped says the current run reports phase stopped without an ask: an
 // explicit stop is a failed attempt, whatever the branch shows.
 func (s taskState) stopped(phase string) bool {
@@ -136,11 +163,17 @@ func (in *DriveInput) readState(ctx context.Context, r *DriveRun, run *state.Run
 	s.mark, _ = stack.MarkOn(ctx, in.Main, branch)
 	s.busy = stack.TreeBusy(ctx, r.O.Path)
 
-	if def, err := stack.LocalDefault(ctx, in.Main); err == nil {
+	def, defErr := stack.LocalDefault(ctx, in.Main)
+	if defErr == nil {
 		s.Code = stack.BaseHasCode(ctx, in.Main, branch, def)
 	}
 
 	lead := r.Task.Ref.Head().ID
+
+	if run != nil && run.Skill == "ship" && phaseDone(run, "ship") {
+		s.spike = finish.TaskSpike(r.O.Path, in.Storage, lead) != ""
+		s.shipCode = defErr == nil && stack.ShipCode(ctx, in.Main, branch, def)
+	}
 	s.plan = r.O.Plan != "" || fsx.Exists(in.Storage.Plan(lead))
 
 	o := statusview.ReadOutcomes(nil, in.Storage.Path(), lead)

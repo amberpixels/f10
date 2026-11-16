@@ -791,6 +791,21 @@ func TestDriveSettlesAShipGuardConflict(t *testing.T) {
 			again: func(fx *driveFixture, t *testing.T) { fx.writeRun(t, "done", "", "", "") },
 			want:  []string{"the branch is settled: resume at pr", "GH-1:    done: ship"},
 		},
+		"settled, the catchup's turn cleared the stop kind": {
+			// FT-537: the turn wrote ship running then partial, which drops the
+			// guard's kind; the drive's own record of the stop still resumes it
+			after: func(fx *driveFixture, t *testing.T) {
+				fx.writeShipStop(t, "partial", "pr", 4, "")
+				fx.reports(t, fx.clock)
+				fx.f.Meta.Script("GH-1", branchmeta.Landed, "")
+			},
+			again: func(fx *driveFixture, t *testing.T) { fx.writeRun(t, "done", "", "", "") },
+			want: []string{
+				"the catchup guard conflicted, catching up",
+				"the branch is settled: resume at pr",
+				"GH-1:    done: ship",
+			},
+		},
 		"rerun": {
 			rerun: true,
 			after: restored,
@@ -3465,12 +3480,12 @@ func TestResumeAtSteering(t *testing.T) {
 		{Ship: "partial", Leaf: "pr", At: 4, Pipeline: pipeline, Next: "run /f10:catchup --driven, then rerun"}: "",
 		{Ship: "failed", Leaf: "pr", At: 4, Pipeline: pipeline, Wait: "GH-9"}:                                   "resume at pr (entry 4)",
 	} {
-		if got := resumeAt("ship", run); got != want {
+		if got := resumeAt("ship", run, nil); got != want {
 			t.Errorf("resumeAt(%s, %q) = %q, want %q", run.Leaf, run.Next, got, want)
 		}
 	}
 
-	if got := resumeAt("plan", stop("pr", 4)); got != "" {
+	if got := resumeAt("plan", stop("pr", 4), nil); got != "" {
 		t.Errorf("a plan resumes at %q", got)
 	}
 
@@ -3885,7 +3900,7 @@ func TestDriveMarksNoParkedTask(t *testing.T) {
 		t.Errorf("a parked task was checked for a moved base: %q", fx.f.Calls)
 	}
 
-	if !heldStop(&state.Run{Ship: "blocked", Leaf: "implement", Wait: "GH-1"}) {
+	if !heldStop(&state.Run{Ship: "blocked", Leaf: "implement", Wait: "GH-1"}, nil) {
 		t.Error("a catchup does not hold a parked ship's stop")
 	}
 }
@@ -4092,7 +4107,7 @@ func TestResumeShownUsesTheLabel(t *testing.T) {
 		Pipeline: []string{"implement", "pr", "review:local", "pr"}, Labels: []string{"", "", "", "pr-polish"},
 	}
 
-	at := resumeAt("ship", run)
+	at := resumeAt("ship", run, nil)
 	if at != "resume at pr (entry 4)" {
 		t.Fatalf("resumeAt = %q", at)
 	}

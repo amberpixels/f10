@@ -64,7 +64,7 @@ func (in *DriveInput) takeInbox(tasks []DriveTask) {
 			from = fromInbox
 		}
 
-		in.Answers.Give(answer{Task: id, Text: a.Answer, From: from, At: a.AnsweredAt})
+		in.Answers.Give(answer{Task: id, Text: a.Answer, From: from, At: a.AnsweredAt, Skill: a.Skill})
 
 		in.taken(a.Key())
 	}
@@ -185,17 +185,21 @@ func answerFlags(asking []string) string {
 	return b.String()
 }
 
-// finishAnswer takes a bare answer only when it is merge or local, so one
-// meant for an agent's question stays there.
-func (in *DriveInput) finishAnswer(id string) (string, error) {
-	if a, ok := in.Answers.takeKeyed(id); ok {
-		in.took(id, "finish", a)
+// finishAnswer takes a bare answer only when it is merge or local, and a
+// keyed one only when it answers finish's own question, so one meant for an
+// agent's question stays there.
+func (in *DriveInput) finishAnswer(r *DriveRun) (string, error) {
+	id := r.Task.Ref.ID
 
-		if c := finishChoice(a); c != "" {
+	if a, ok := in.Answers.Keyed(id); ok && !in.agentsAnswer(r, a) {
+		in.Answers.takeKeyed(id)
+		in.took(id, "finish", a.Text)
+
+		if c := finishChoice(a.Text); c != "" {
 			return c, nil
 		}
 
-		return "", fmt.Errorf("the answer to finish is %q: answer %s or %s", a, finishLeaveOpen, finishMerge)
+		return "", fmt.Errorf("the answer to finish is %q: answer %s or %s", a.Text, finishLeaveOpen, finishMerge)
 	}
 
 	if c := finishChoice(in.Answers.Bare); c != "" {
@@ -206,6 +210,19 @@ func (in *DriveInput) finishAnswer(id string) (string, error) {
 	}
 
 	return "", nil
+}
+
+// agentsAnswer reports a keyed answer that belongs to the agent's question:
+// its run carries an open ask, and the answer is not to finish's own
+// question, which the drive asks itself and never writes on the run.
+func (in *DriveInput) agentsAnswer(r *DriveRun, a answer) bool {
+	if a.Skill == "finish" || r.O.Path == "" {
+		return false
+	}
+
+	run, _ := in.run(r.O.Path)
+
+	return run != nil && run.Ask != ""
 }
 
 func finishChoice(answer string) string {

@@ -259,3 +259,44 @@ func TestDriveWithoutFinishWaitsForChecksToAppear(t *testing.T) {
 		t.Errorf("no checks past the grace = %+v, want done", res)
 	}
 }
+
+// FT-537: an answer keyed to a task whose agent asked at ci goes to the
+// agent, not to finish's merge-or-local question, and nothing halts.
+func TestDriveSendsTheAgentItsAnswerAtFinish(t *testing.T) {
+	f := testkit.NewFakes(t)
+	in, _ := checksDrive()
+	in.Main, in.StateDir, in.TTL = "/code/repo", t.TempDir(), state.DefaultTTL
+	in.Finish = func(context.Context, io.Writer, DriveFinish) error {
+		t.Error("finish ran over the agent's question")
+
+		return nil
+	}
+	in.Tick = &tickView{
+		Wss: []agentctl.Workspace{{ID: "ws:GH-1", Path: "/code/repo.GH-1", Status: agentctl.StatusIdle}},
+	}
+
+	run := state.Fresh("s-GH-1")
+	run.Task, run.Root, run.Skill, run.Plan, run.Ship, run.Leaf = "GH-1", "/code/repo.GH-1", "ship", "done", "blocked", "ci"
+	run.Ask = "1. CI is red on a test main fails too: [leave it red | fix it in this PR | rerun once more]"
+
+	in.Tick.live = []*state.Run{run}
+
+	r := &DriveRun{
+		Task: DriveTask{Ref: testkit.Gh1}, O: start.OpenedTask{Path: "/code/repo.GH-1", Branch: "GH-1"}, Finishes: true,
+	}
+	r.O.Ws.ID = "ws:GH-1"
+
+	sent := "herdr agent prompt " + testkit.AgentOf("GH-1") + " 1. fix it in this PR"
+	f.Script(sent, "{}")
+
+	in.Answers.Give(answer{Task: "GH-1", Text: "1. fix it in this PR", From: fromInbox, Skill: "ci"})
+
+	if err := in.finishOrHold(t.Context(), r); err != nil || r.Skill != "ci" || !f.Called(sent) {
+		t.Fatalf("finishOrHold = %v, skill %q, calls:\n%s\nwant the answer sent to the agent",
+			err, r.Skill, strings.Join(f.Calls, "\n"))
+	}
+
+	if _, held := in.Answers.Keyed("GH-1"); held {
+		t.Error("the answer is still held after it was sent")
+	}
+}

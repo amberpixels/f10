@@ -137,6 +137,14 @@ func DriveFinishInput(t *target.Target, main string, h hostops.Host, req DriveFi
 // still running, the way a finish waits on its base, until ChecksBudget,
 // and sends a red head to the agent to triage.
 func (in *DriveInput) finishOrHold(ctx context.Context, r *DriveRun) error {
+	// an answer to the agent's own question, a ci triage's, goes back to the
+	// agent in that turn; finish takes only one to its merge-or-local question
+	if a, ok := in.Answers.Keyed(r.Task.Ref.ID); ok && in.agentsAnswer(r, a) {
+		fmt.Fprintf(in.Out, "%s finish: the answer is to the agent's question, sending it\n", in.id(r.Task.Ref.ID))
+
+		return in.send(ctx, r, "ci")
+	}
+
 	res, refused := in.runFinish(ctx, r)
 	if refused == nil {
 		return endWith(res)
@@ -180,7 +188,7 @@ type heldFinish struct {
 func (in *DriveInput) runFinish(ctx context.Context, r *DriveRun) (driveResult, *heldFinish) {
 	task, id := r.Task, r.Task.Ref.ID
 
-	pr, err := in.finishAnswer(id)
+	pr, err := in.finishAnswer(r)
 	if err != nil {
 		return halted(id, "finish", err.Error()), nil
 	}

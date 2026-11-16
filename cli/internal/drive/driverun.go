@@ -287,6 +287,10 @@ type catchupState struct {
 	catchupLeft string
 	// toldCatchup is set once the line saying why the agent verifies was printed
 	toldCatchup bool
+	// Guarded is the guard's stop the drive read before its catchup, kept on
+	// the drive record until ship is prompted again: the run file is the
+	// agent's to write, so its stop kind alone cannot be trusted
+	Guarded *drivestore.Guard
 }
 
 // runPhase is where an opened or held task stands between polls.

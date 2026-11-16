@@ -25,6 +25,9 @@ type answer struct {
 	Text string
 	From answerSource
 	At   time.Time // when an inbox answer was given
+	// Skill is the step whose ask an inbox answer answers ("finish" for the
+	// drive's own), "" for an --answer, which names none
+	Skill string
 }
 
 // An answerBook holds the drive's answers. The command line and the inbox

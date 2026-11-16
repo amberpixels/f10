@@ -141,6 +141,9 @@ type Flags struct {
 	// IgnoreChecks merges past red or pending checks; --yes never implies it,
 	// since automated finishes pass --yes
 	IgnoreChecks bool
+	// Empty closes a task whose never-pushed branch adds nothing to the
+	// default branch; --yes never implies it, since automated finishes pass --yes
+	Empty bool
 }
 
 // InputFor fills what comes from the task and the project's settings,

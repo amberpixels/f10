@@ -124,6 +124,13 @@ func landUnpushed(ctx context.Context, in FinishInput, branch, def string) (stri
 	notes := []string{fmt.Sprintf("%s was never pushed: merged into %s here, nothing pushed", branch, def)}
 
 	if tree == gitx.Out(ctx, in.Main, "rev-parse", base+"^{tree}") {
+		// a branch that adds nothing never landed anything of the task's, and
+		// closing it would report the base's tip as its merge
+		if !in.Flags.Empty && !landedBefore(ctx, in, base, tip) {
+			return "", nil, fmt.Errorf("%s adds nothing to %s: nothing of %s to land; "+
+				"pass --empty to finish it anyway", branch, def, in.Task.ID)
+		}
+
 		// a rerun after a landing: the unpushed commit may already close the task
 		note := unclosedNote(in)
 		if closing := closingLines(in); closing != "" && strings.Contains(
@@ -184,6 +191,22 @@ func landUnpushed(ctx context.Context, in FinishInput, branch, def string) (stri
 	}
 
 	return sha, append(notes, closesOnPush(in, def)), nil
+}
+
+// landedBefore reports an earlier finish of this task in base: the branch
+// tip itself (a merge or a rebase landing), or a commit naming the task the
+// way the landing names it (its subject, its Task: trailer, its closing line).
+func landedBefore(ctx context.Context, in FinishInput, base, tip string) bool {
+	if ok, err := gitx.IsAncestor(ctx, in.Main, tip, base); err == nil && ok {
+		return true
+	}
+
+	args := []string{"log", "-1", "--format=%H", "-F", "--grep=" + in.Task.Label() + ":", "--grep=Task: " + in.Task.ID}
+	if closing := closingLines(in); closing != "" {
+		args = append(args, "--grep="+closing)
+	}
+
+	return gitx.Out(ctx, in.Main, append(args, base)...) != ""
 }
 
 func closesOnPush(in FinishInput, def string) string {

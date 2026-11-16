@@ -95,6 +95,7 @@ func Drive(ctx context.Context, w io.Writer, in *DriveInput) (err error) {
 
 	for _, i := range order {
 		r := &DriveRun{Task: tasks[i], LastCatchup: in.savedCatchup(tasks[i])}
+		r.Guarded = in.savedGuard(tasks[i])
 		if r.Task.finished {
 			in.end(ctx, r, driveResult{Row: drivectl.RowAlreadyFinished})
 		}
@@ -490,6 +491,22 @@ func (in *DriveInput) markBehind(ctx context.Context, r *DriveRun) error {
 
 // savedCatchup is the catchup record an earlier run of this drive kept for
 // t, so a resumed drive leases its push as the first one would have.
+func (in *DriveInput) savedGuard(t DriveTask) *drivestore.Guard {
+	if in.Rec == nil {
+		return nil
+	}
+
+	for _, id := range []string{t.Ref.Label() + worktree.SuffixOf(t.Suffix), t.Ref.ID + worktree.SuffixOf(t.Suffix)} {
+		if rt := in.Rec.Task(id); rt != nil && rt.Guard != nil {
+			g := *rt.Guard
+
+			return &g
+		}
+	}
+
+	return nil
+}
+
 func (in *DriveInput) savedCatchup(t DriveTask) *drivestore.Catchup {
 	if in.Rec == nil {
 		return nil

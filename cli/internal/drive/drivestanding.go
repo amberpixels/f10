@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/drivectl"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
@@ -21,15 +22,22 @@ func guardStop(run *state.Run) bool {
 	return run.Stop == state.StopGuard && (run.Ship == "failed" || run.Ship == "partial")
 }
 
+// guarded reports the guard's stop by the kind the run recorded, or by the
+// drive's own record of it, which a catchup's turn cannot rewrite; a stop
+// that asks or blocks since is a decision, never the guard's.
+func guarded(run *state.Run, g *drivestore.Guard) bool {
+	return guardStop(run) || g != nil && run.Ask == "" && (run.Ship == "failed" || run.Ship == "partial")
+}
+
 // awaitsDecision is a stop a catchup must not run over: a question or a
 // blocked decision, not one a catchup leaves in place (heldStop).
-func awaitsDecision(run *state.Run) bool {
-	return run != nil && drivectl.StoppedRun(run) && !heldStop(run) && (run.Ask != "" || blockedRun(run))
+func awaitsDecision(run *state.Run, g *drivestore.Guard) bool {
+	return run != nil && drivectl.StoppedRun(run) && !heldStop(run, g) && (run.Ask != "" || blockedRun(run))
 }
 
 // heldStop is a ship stop a catchup leaves in place: the guard's, or a
 // ship parked on its base, which resumes once the catchup ends clean.
-func heldStop(run *state.Run) bool { return guardStop(run) || run.Wait != "" }
+func heldStop(run *state.Run, g *drivestore.Guard) bool { return guarded(run, g) || run.Wait != "" }
 
 // phaseRunning reports run's plan or ship phase still running: the two
 // phases a turn owns, so the turn has not reported its end.
@@ -69,17 +77,20 @@ func phaseDone(run *state.Run, skill string) bool {
 // resumeAt is the steering that resumes a ship the catchup guard stopped,
 // or one parked on its base, naming its place when the flow names the entry
 // twice; a failed catchup keeps the place of the entry it guarded, which is
-// where ship resumes.
-func resumeAt(skill string, run *state.Run) string {
+// where ship resumes. g, the drive's record of the guard's stop, outranks
+// the run's place, which a catchup's turn may have rewritten.
+func resumeAt(skill string, run *state.Run, g *drivestore.Guard) string {
 	if skill != "ship" || run.Ask != "" || !state.Stopped(run.Ship) {
 		return ""
 	}
 
-	entry := run.Leaf
+	entry, at := run.Leaf, run.At
 
 	switch {
 	case run.Wait != "":
 		// a ship parked on its base resumes at the entry that found it empty
+	case g != nil && guarded(run, g):
+		entry, at = g.Entry, g.At
 	case entry == "catchup" && run.At > 0 && run.At <= len(run.Pipeline):
 		entry = run.Pipeline[run.At-1]
 	case !guardStop(run):
@@ -93,8 +104,8 @@ func resumeAt(skill string, run *state.Run) string {
 
 	s := "resume at " + entry
 	twice := slices.Contains(run.Pipeline[slices.Index(run.Pipeline, entry)+1:], entry)
-	if run.At > 0 && twice {
-		s += fmt.Sprintf(" (entry %d)", run.At)
+	if at > 0 && twice {
+		s += fmt.Sprintf(" (entry %d)", at)
 	}
 
 	return s
