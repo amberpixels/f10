@@ -15,25 +15,14 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
-// writeRuns prints runs, each with its gates, or encodes them under --json.
-// head is the task's shipment, printed once above the runs in place of each
-// run's task and url rows; nil for runs listed without a task. agent is the
-// profile the task's branch records, "" for the kind's default.
+// writeRuns prints runs, each with its gates; --json prints the report's
+// runs instead (Render). head is the task's shipment, printed once above the
+// runs in place of each run's task and url rows; nil for runs listed without
+// a task. agent is the profile the task's branch records, "" for the kind's
+// default.
 func writeRuns(v StatusView, runs []*state.Run, gates [][]gate, head *Shipment, showRoot bool, agent string,
 	now time.Time,
 ) error {
-	if v.JSON {
-		out := make([]RunJSON, len(runs))
-		for i, r := range runs {
-			out[i] = RunJSON{Run: r, Agent: agent, Gates: gates[i], Shipment: head}
-			if head != nil {
-				out[i].Verdicts, out[i].Reviews = head.Verdicts, head.Reviews
-			}
-		}
-
-		return ui.JSON(v.Out, out)
-	}
-
 	limit := ui.Width(v.Out)
 
 	if head != nil {

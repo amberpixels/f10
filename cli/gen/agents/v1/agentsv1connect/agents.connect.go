@@ -46,6 +46,9 @@ const (
 	AgentServiceGetAgentStatusProcedure = "/agents.v1.AgentService/GetAgentStatus"
 	// AgentServiceSendTextProcedure is the fully-qualified name of the AgentService's SendText RPC.
 	AgentServiceSendTextProcedure = "/agents.v1.AgentService/SendText"
+	// AgentServiceCloseWorkspaceProcedure is the fully-qualified name of the AgentService's
+	// CloseWorkspace RPC.
+	AgentServiceCloseWorkspaceProcedure = "/agents.v1.AgentService/CloseWorkspace"
 )
 
 // AgentServiceClient is a client for the agents.v1.AgentService service.
@@ -58,6 +61,9 @@ type AgentServiceClient interface {
 	GetAgentStatus(context.Context, *connect.Request[v1.GetAgentStatusRequest]) (*connect.Response[v1.GetAgentStatusResponse], error)
 	// SendText types text into an agent's pane, as a prompt when submit is set.
 	SendText(context.Context, *connect.Request[v1.SendTextRequest]) (*connect.Response[v1.SendTextResponse], error)
+	// CloseWorkspace closes a workspace, focusing another one first when
+	// focus_id is set.
+	CloseWorkspace(context.Context, *connect.Request[v1.CloseWorkspaceRequest]) (*connect.Response[v1.CloseWorkspaceResponse], error)
 }
 
 // NewAgentServiceClient constructs a client for the agents.v1.AgentService service. By default, it
@@ -95,6 +101,12 @@ func NewAgentServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(agentServiceMethods.ByName("SendText")),
 			connect.WithClientOptions(opts...),
 		),
+		closeWorkspace: connect.NewClient[v1.CloseWorkspaceRequest, v1.CloseWorkspaceResponse](
+			httpClient,
+			baseURL+AgentServiceCloseWorkspaceProcedure,
+			connect.WithSchema(agentServiceMethods.ByName("CloseWorkspace")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -104,6 +116,7 @@ type agentServiceClient struct {
 	listAgents     *connect.Client[v1.ListAgentsRequest, v1.ListAgentsResponse]
 	getAgentStatus *connect.Client[v1.GetAgentStatusRequest, v1.GetAgentStatusResponse]
 	sendText       *connect.Client[v1.SendTextRequest, v1.SendTextResponse]
+	closeWorkspace *connect.Client[v1.CloseWorkspaceRequest, v1.CloseWorkspaceResponse]
 }
 
 // ListWorkspaces calls agents.v1.AgentService.ListWorkspaces.
@@ -126,6 +139,11 @@ func (c *agentServiceClient) SendText(ctx context.Context, req *connect.Request[
 	return c.sendText.CallUnary(ctx, req)
 }
 
+// CloseWorkspace calls agents.v1.AgentService.CloseWorkspace.
+func (c *agentServiceClient) CloseWorkspace(ctx context.Context, req *connect.Request[v1.CloseWorkspaceRequest]) (*connect.Response[v1.CloseWorkspaceResponse], error) {
+	return c.closeWorkspace.CallUnary(ctx, req)
+}
+
 // AgentServiceHandler is an implementation of the agents.v1.AgentService service.
 type AgentServiceHandler interface {
 	// ListWorkspaces lists the Herdr workspaces, each with its agents.
@@ -136,6 +154,9 @@ type AgentServiceHandler interface {
 	GetAgentStatus(context.Context, *connect.Request[v1.GetAgentStatusRequest]) (*connect.Response[v1.GetAgentStatusResponse], error)
 	// SendText types text into an agent's pane, as a prompt when submit is set.
 	SendText(context.Context, *connect.Request[v1.SendTextRequest]) (*connect.Response[v1.SendTextResponse], error)
+	// CloseWorkspace closes a workspace, focusing another one first when
+	// focus_id is set.
+	CloseWorkspace(context.Context, *connect.Request[v1.CloseWorkspaceRequest]) (*connect.Response[v1.CloseWorkspaceResponse], error)
 }
 
 // NewAgentServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -169,6 +190,12 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(agentServiceMethods.ByName("SendText")),
 		connect.WithHandlerOptions(opts...),
 	)
+	agentServiceCloseWorkspaceHandler := connect.NewUnaryHandler(
+		AgentServiceCloseWorkspaceProcedure,
+		svc.CloseWorkspace,
+		connect.WithSchema(agentServiceMethods.ByName("CloseWorkspace")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/agents.v1.AgentService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AgentServiceListWorkspacesProcedure:
@@ -179,6 +206,8 @@ func NewAgentServiceHandler(svc AgentServiceHandler, opts ...connect.HandlerOpti
 			agentServiceGetAgentStatusHandler.ServeHTTP(w, r)
 		case AgentServiceSendTextProcedure:
 			agentServiceSendTextHandler.ServeHTTP(w, r)
+		case AgentServiceCloseWorkspaceProcedure:
+			agentServiceCloseWorkspaceHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -202,4 +231,8 @@ func (UnimplementedAgentServiceHandler) GetAgentStatus(context.Context, *connect
 
 func (UnimplementedAgentServiceHandler) SendText(context.Context, *connect.Request[v1.SendTextRequest]) (*connect.Response[v1.SendTextResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agents.v1.AgentService.SendText is not implemented"))
+}
+
+func (UnimplementedAgentServiceHandler) CloseWorkspace(context.Context, *connect.Request[v1.CloseWorkspaceRequest]) (*connect.Response[v1.CloseWorkspaceResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agents.v1.AgentService.CloseWorkspace is not implemented"))
 }

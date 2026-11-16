@@ -427,14 +427,9 @@ func TestStatusJSONCarriesTheFiles(t *testing.T) {
 	var out bytes.Buffer
 
 	r := &state.Run{Task: "GH-1", Capture: "prior", Plan: "done", Ship: "done"}
-	if err := writeRuns(
+	if err := Render(
 		StatusView{Out: &out, JSON: true},
-		[]*state.Run{r},
-		[][]gate{nil},
-		&head,
-		false,
-		"",
-		time.Now(),
+		runsReport([]*state.Run{r}, [][]gate{nil}, &head, false, ""),
 	); err != nil {
 		t.Fatal(err)
 	}

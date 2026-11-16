@@ -3,11 +3,15 @@ package api
 import (
 	"context"
 	"errors"
+	"strconv"
 
 	"connectrpc.com/connect"
+	"github.com/urfave/cli/v3"
 
+	f10v1 "github.com/amberpixels/f10/cli/gen/f10/v1"
 	"github.com/amberpixels/f10/cli/internal/agents"
 	"github.com/amberpixels/f10/cli/internal/daemon"
+	"github.com/amberpixels/f10/cli/internal/printed"
 )
 
 // errorOptions maps every handler's errors onto Connect codes in one place.
@@ -23,14 +27,38 @@ func errorOptions() []connect.HandlerOption {
 	))}
 }
 
+// codeOf is err as a Connect error, with the exit code and the output a
+// command printed before it failed, when it has them.
 func codeOf(err error) error {
-	var ce *connect.Error
+	if err == nil {
+		return nil
+	}
+
+	ce := connectOf(err)
+
+	if ec, ok := errors.AsType[cli.ExitCoder](err); ok && ec.ExitCode() != 0 {
+		ce.Meta().Set(printed.ExitHeader, strconv.Itoa(ec.ExitCode()))
+	}
+
+	if agents.IsOutside(err) {
+		ce.Meta().Set(printed.KindHeader, printed.KindOutside)
+	}
+
+	if pe, ok := printed.Of(err); ok {
+		if d, derr := connect.NewErrorDetail(&f10v1.Printed{Stdout: pe.Stdout, Stderr: pe.Stderr}); derr == nil {
+			ce.AddDetail(d)
+		}
+	}
+
+	return ce
+}
+
+func connectOf(err error) *connect.Error {
+	if ce, ok := errors.AsType[*connect.Error](err); ok {
+		return ce
+	}
 
 	switch {
-	case err == nil:
-		return nil
-	case errors.As(err, &ce):
-		return err
 	case errors.Is(err, daemon.ErrStopping):
 		return connect.NewError(connect.CodeUnavailable, err)
 	case agents.IsOutside(err):

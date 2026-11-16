@@ -14,9 +14,12 @@ import (
 	"strings"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/urfave/cli/v3"
 
+	f10v1 "github.com/amberpixels/f10/cli/gen/f10/v1"
 	"github.com/amberpixels/f10/cli/internal/agents"
+	"github.com/amberpixels/f10/cli/internal/apiclient"
 	"github.com/amberpixels/f10/cli/internal/asknotify"
 	"github.com/amberpixels/f10/cli/internal/asks"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
@@ -93,30 +96,7 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if a.List || a.Cancel > 0 {
-		t, err := target.For(ctx, cmd)
-		if err != nil {
-			return err
-		}
-
-		if a.List {
-			return drive.DriveList(
-				ctx,
-				cmd.Writer,
-				render.LinksFor(cmd.Writer, false),
-				t.RefProject(ctx),
-				t.Layout.StorageRoot.Path(),
-				a.All,
-				drive.RowFinishedFor(ctx, t),
-			)
-		}
-
-		if err := drive.DriveCancel(cmd.Writer, t.Layout.StorageRoot.Path(), a.Cancel, time.Now()); err != nil {
-			return err
-		}
-
-		drive.CloseDriveAsks(asks.Dir(), t.Layout.StorageRoot.Path(), a.Cancel, time.Now())
-
-		return nil
+		return driveRecords(ctx, cmd, a)
 	}
 
 	if a.Plan != nil {
@@ -245,6 +225,43 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	return drive.Drive(ctx, cmd.Writer, in)
+}
+
+// driveRecords is drive list and drive cancel, which the daemon answers.
+func driveRecords(ctx context.Context, cmd *cli.Command, a drivectl.DriveArgs) error {
+	c, err := apiclient.Dial(ctx)
+	if err != nil {
+		return err
+	}
+
+	caller, err := c.Caller(cmd)
+	if err != nil {
+		return err
+	}
+
+	var printed *f10v1.Printed
+
+	if a.List {
+		res, err := c.Runs.ListDrives(ctx, connect.NewRequest(&f10v1.ListDrivesRequest{All: a.All, Caller: caller}))
+		if err != nil {
+			return apiclient.Err(err, cmd.Writer, cmd.ErrWriter)
+		}
+
+		printed = res.Msg.GetPrinted()
+	} else {
+		res, err := c.Runs.CancelDrive(ctx, connect.NewRequest(&f10v1.CancelDriveRequest{
+			Drive: int32(a.Cancel), Caller: caller, //nolint:gosec // a drive number
+		}))
+		if err != nil {
+			return apiclient.Err(err, cmd.Writer, cmd.ErrWriter)
+		}
+
+		printed = res.Msg.GetPrinted()
+	}
+
+	apiclient.Print(cmd.Writer, cmd.ErrWriter, printed)
+
+	return nil
 }
 
 // runDrivePlan prints a proposal and changes nothing, so the daemon, a hook

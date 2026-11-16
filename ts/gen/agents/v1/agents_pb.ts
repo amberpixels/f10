@@ -8,13 +8,15 @@
 
 import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import { enumDesc, fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
+import type { CallerContext } from "./asks_pb";
+import { file_agents_v1_asks } from "./asks_pb";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file agents/v1/agents.proto.
  */
 export const file_agents_v1_agents: GenFile = /*@__PURE__*/
-  fileDesc("ChZhZ2VudHMvdjEvYWdlbnRzLnByb3RvEglhZ2VudHMudjEicwoJV29ya3NwYWNlEgoKAmlkGAEgASgJEg0KBWxhYmVsGAIgASgJEgwKBHBhdGgYAyABKAkSDwoHZm9jdXNlZBgEIAEoCBIsCgxhZ2VudF9zdGF0dXMYBSABKA4yFi5hZ2VudHMudjEuQWdlbnRTdGF0dXMicgoFQWdlbnQSDAoEbmFtZRgBIAEoCRIUCgx3b3Jrc3BhY2VfaWQYAiABKAkSDwoHcGFuZV9pZBgDIAEoCRIMCgRraW5kGAQgASgJEiYKBnN0YXR1cxgFIAEoDjIWLmFnZW50cy52MS5BZ2VudFN0YXR1cyIXChVMaXN0V29ya3NwYWNlc1JlcXVlc3QiQgoWTGlzdFdvcmtzcGFjZXNSZXNwb25zZRIoCgp3b3Jrc3BhY2VzGAEgAygLMhQuYWdlbnRzLnYxLldvcmtzcGFjZSIpChFMaXN0QWdlbnRzUmVxdWVzdBIUCgx3b3Jrc3BhY2VfaWQYASABKAkiNgoSTGlzdEFnZW50c1Jlc3BvbnNlEiAKBmFnZW50cxgBIAMoCzIQLmFnZW50cy52MS5BZ2VudCIlChVHZXRBZ2VudFN0YXR1c1JlcXVlc3QSDAoEbmFtZRgBIAEoCSI5ChZHZXRBZ2VudFN0YXR1c1Jlc3BvbnNlEh8KBWFnZW50GAEgASgLMhAuYWdlbnRzLnYxLkFnZW50Ij0KD1NlbmRUZXh0UmVxdWVzdBIMCgRuYW1lGAEgASgJEgwKBHRleHQYAiABKAkSDgoGc3VibWl0GAMgASgIIhIKEFNlbmRUZXh0UmVzcG9uc2UqjQEKC0FnZW50U3RhdHVzEhwKGEFHRU5UX1NUQVRVU19VTlNQRUNJRklFRBAAEhUKEUFHRU5UX1NUQVRVU19JRExFEAESGAoUQUdFTlRfU1RBVFVTX1dPUktJTkcQAhIVChFBR0VOVF9TVEFUVVNfRE9ORRADEhgKFEFHRU5UX1NUQVRVU19VTktOT1dOEAQyzAIKDEFnZW50U2VydmljZRJVCg5MaXN0V29ya3NwYWNlcxIgLmFnZW50cy52MS5MaXN0V29ya3NwYWNlc1JlcXVlc3QaIS5hZ2VudHMudjEuTGlzdFdvcmtzcGFjZXNSZXNwb25zZRJJCgpMaXN0QWdlbnRzEhwuYWdlbnRzLnYxLkxpc3RBZ2VudHNSZXF1ZXN0Gh0uYWdlbnRzLnYxLkxpc3RBZ2VudHNSZXNwb25zZRJVCg5HZXRBZ2VudFN0YXR1cxIgLmFnZW50cy52MS5HZXRBZ2VudFN0YXR1c1JlcXVlc3QaIS5hZ2VudHMudjEuR2V0QWdlbnRTdGF0dXNSZXNwb25zZRJDCghTZW5kVGV4dBIaLmFnZW50cy52MS5TZW5kVGV4dFJlcXVlc3QaGy5hZ2VudHMudjEuU2VuZFRleHRSZXNwb25zZUKYAQoNY29tLmFnZW50cy52MUILQWdlbnRzUHJvdG9QAVo1Z2l0aHViLmNvbS9hbWJlcnBpeGVscy9mMTAvY2xpL2dlbi9hZ2VudHMvdjE7YWdlbnRzdjGiAgNBWFiqAglBZ2VudHMuVjHKAglBZ2VudHNcVjHiAhVBZ2VudHNcVjFcR1BCTWV0YWRhdGHqAgpBZ2VudHM6OlYxYgZwcm90bzM");
+  fileDesc("ChZhZ2VudHMvdjEvYWdlbnRzLnByb3RvEglhZ2VudHMudjEicwoJV29ya3NwYWNlEgoKAmlkGAEgASgJEg0KBWxhYmVsGAIgASgJEgwKBHBhdGgYAyABKAkSDwoHZm9jdXNlZBgEIAEoCBIsCgxhZ2VudF9zdGF0dXMYBSABKA4yFi5hZ2VudHMudjEuQWdlbnRTdGF0dXMicgoFQWdlbnQSDAoEbmFtZRgBIAEoCRIUCgx3b3Jrc3BhY2VfaWQYAiABKAkSDwoHcGFuZV9pZBgDIAEoCRIMCgRraW5kGAQgASgJEiYKBnN0YXR1cxgFIAEoDjIWLmFnZW50cy52MS5BZ2VudFN0YXR1cyIXChVMaXN0V29ya3NwYWNlc1JlcXVlc3QiQgoWTGlzdFdvcmtzcGFjZXNSZXNwb25zZRIoCgp3b3Jrc3BhY2VzGAEgAygLMhQuYWdlbnRzLnYxLldvcmtzcGFjZSIpChFMaXN0QWdlbnRzUmVxdWVzdBIUCgx3b3Jrc3BhY2VfaWQYASABKAkiNgoSTGlzdEFnZW50c1Jlc3BvbnNlEiAKBmFnZW50cxgBIAMoCzIQLmFnZW50cy52MS5BZ2VudCIlChVHZXRBZ2VudFN0YXR1c1JlcXVlc3QSDAoEbmFtZRgBIAEoCSI5ChZHZXRBZ2VudFN0YXR1c1Jlc3BvbnNlEh8KBWFnZW50GAEgASgLMhAuYWdlbnRzLnYxLkFnZW50Ij0KD1NlbmRUZXh0UmVxdWVzdBIMCgRuYW1lGAEgASgJEgwKBHRleHQYAiABKAkSDgoGc3VibWl0GAMgASgIIhIKEFNlbmRUZXh0UmVzcG9uc2UiXwoVQ2xvc2VXb3Jrc3BhY2VSZXF1ZXN0EgoKAmlkGAEgASgJEhAKCGZvY3VzX2lkGAIgASgJEigKBmNhbGxlchgDIAEoCzIYLmFnZW50cy52MS5DYWxsZXJDb250ZXh0IhgKFkNsb3NlV29ya3NwYWNlUmVzcG9uc2UqjQEKC0FnZW50U3RhdHVzEhwKGEFHRU5UX1NUQVRVU19VTlNQRUNJRklFRBAAEhUKEUFHRU5UX1NUQVRVU19JRExFEAESGAoUQUdFTlRfU1RBVFVTX1dPUktJTkcQAhIVChFBR0VOVF9TVEFUVVNfRE9ORRADEhgKFEFHRU5UX1NUQVRVU19VTktOT1dOEAQyowMKDEFnZW50U2VydmljZRJVCg5MaXN0V29ya3NwYWNlcxIgLmFnZW50cy52MS5MaXN0V29ya3NwYWNlc1JlcXVlc3QaIS5hZ2VudHMudjEuTGlzdFdvcmtzcGFjZXNSZXNwb25zZRJJCgpMaXN0QWdlbnRzEhwuYWdlbnRzLnYxLkxpc3RBZ2VudHNSZXF1ZXN0Gh0uYWdlbnRzLnYxLkxpc3RBZ2VudHNSZXNwb25zZRJVCg5HZXRBZ2VudFN0YXR1cxIgLmFnZW50cy52MS5HZXRBZ2VudFN0YXR1c1JlcXVlc3QaIS5hZ2VudHMudjEuR2V0QWdlbnRTdGF0dXNSZXNwb25zZRJDCghTZW5kVGV4dBIaLmFnZW50cy52MS5TZW5kVGV4dFJlcXVlc3QaGy5hZ2VudHMudjEuU2VuZFRleHRSZXNwb25zZRJVCg5DbG9zZVdvcmtzcGFjZRIgLmFnZW50cy52MS5DbG9zZVdvcmtzcGFjZVJlcXVlc3QaIS5hZ2VudHMudjEuQ2xvc2VXb3Jrc3BhY2VSZXNwb25zZUKYAQoNY29tLmFnZW50cy52MUILQWdlbnRzUHJvdG9QAVo1Z2l0aHViLmNvbS9hbWJlcnBpeGVscy9mMTAvY2xpL2dlbi9hZ2VudHMvdjE7YWdlbnRzdjGiAgNBWFiqAglBZ2VudHMuVjHKAglBZ2VudHNcVjHiAhVBZ2VudHNcVjFcR1BCTWV0YWRhdGHqAgpBZ2VudHM6OlYxYgZwcm90bzM", [file_agents_v1_asks]);
 
 /**
  * A Workspace is one workspace the multiplexer shows.
@@ -243,6 +245,48 @@ export const SendTextResponseSchema: GenMessage<SendTextResponse> = /*@__PURE__*
   messageDesc(file_agents_v1_agents, 9);
 
 /**
+ * @generated from message agents.v1.CloseWorkspaceRequest
+ */
+export type CloseWorkspaceRequest = Message<"agents.v1.CloseWorkspaceRequest"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * focus_id is the workspace to focus before the close, empty for none.
+   *
+   * @generated from field: string focus_id = 2;
+   */
+  focusId: string;
+
+  /**
+   * @generated from field: agents.v1.CallerContext caller = 3;
+   */
+  caller?: CallerContext | undefined;
+};
+
+/**
+ * Describes the message agents.v1.CloseWorkspaceRequest.
+ * Use `create(CloseWorkspaceRequestSchema)` to create a new message.
+ */
+export const CloseWorkspaceRequestSchema: GenMessage<CloseWorkspaceRequest> = /*@__PURE__*/
+  messageDesc(file_agents_v1_agents, 10);
+
+/**
+ * @generated from message agents.v1.CloseWorkspaceResponse
+ */
+export type CloseWorkspaceResponse = Message<"agents.v1.CloseWorkspaceResponse"> & {
+};
+
+/**
+ * Describes the message agents.v1.CloseWorkspaceResponse.
+ * Use `create(CloseWorkspaceResponseSchema)` to create a new message.
+ */
+export const CloseWorkspaceResponseSchema: GenMessage<CloseWorkspaceResponse> = /*@__PURE__*/
+  messageDesc(file_agents_v1_agents, 11);
+
+/**
  * AgentStatus is what the multiplexer reports an agent doing.
  *
  * @generated from enum agents.v1.AgentStatus
@@ -326,6 +370,17 @@ export const AgentService: GenService<{
     methodKind: "unary";
     input: typeof SendTextRequestSchema;
     output: typeof SendTextResponseSchema;
+  },
+  /**
+   * CloseWorkspace closes a workspace, focusing another one first when
+   * focus_id is set.
+   *
+   * @generated from rpc agents.v1.AgentService.CloseWorkspace
+   */
+  closeWorkspace: {
+    methodKind: "unary";
+    input: typeof CloseWorkspaceRequestSchema;
+    output: typeof CloseWorkspaceResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_agents_v1_agents, 0);

@@ -4,6 +4,8 @@
 
 import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
+import type { CallerContext, Printed } from "./caller_pb";
+import { file_f10_v1_caller } from "./caller_pb";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
 import type { Message } from "@bufbuild/protobuf";
@@ -12,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file f10/v1/tasks.proto.
  */
 export const file_f10_v1_tasks: GenFile = /*@__PURE__*/
-  fileDesc("ChJmMTAvdjEvdGFza3MucHJvdG8SBmYxMC52MSIxCgdUYXNrUmVmEgoKAmlkGAEgASgJEg0KBXRpdGxlGAIgASgJEgsKA3VybBgDIAEoCSKRAQoEVGFzaxIcCgNyZWYYASABKAsyDy5mMTAudjEuVGFza1JlZhINCgVzdGF0ZRgCIAEoCRIrCgdjcmVhdGVkGAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIQCghtYXJrZG93bhgEIAEoCRINCgVhZnRlchgFIAEoCRIOCgZsYWJlbHMYBiADKAki9QEKEUNyZWF0ZVRhc2tSZXF1ZXN0Eg8KB3Byb2plY3QYASABKAkSDQoFdGl0bGUYAiABKAkSDAoEYm9keRgDIAEoCRIOCgZzdGF0dXMYBCABKAkSEAoIcHJpb3JpdHkYBSABKAkSDgoGbGFiZWxzGAYgAygJEg4KBnBhcmVudBgHIAEoCRI9Cgpwcm9wZXJ0aWVzGAggAygLMikuZjEwLnYxLkNyZWF0ZVRhc2tSZXF1ZXN0LlByb3BlcnRpZXNFbnRyeRoxCg9Qcm9wZXJ0aWVzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ASIzChJDcmVhdGVUYXNrUmVzcG9uc2USHQoEdGFzaxgBIAEoCzIPLmYxMC52MS5UYXNrUmVmIkIKDkdldFRhc2tSZXF1ZXN0Eg8KB3Byb2plY3QYASABKAkSCgoCaWQYAiABKAkSEwoLc2tpcF9pbWFnZXMYAyABKAgiLQoPR2V0VGFza1Jlc3BvbnNlEhoKBHRhc2sYASABKAsyDC5mMTAudjEuVGFzazKOAQoLVGFza1NlcnZpY2USQwoKQ3JlYXRlVGFzaxIZLmYxMC52MS5DcmVhdGVUYXNrUmVxdWVzdBoaLmYxMC52MS5DcmVhdGVUYXNrUmVzcG9uc2USOgoHR2V0VGFzaxIWLmYxMC52MS5HZXRUYXNrUmVxdWVzdBoXLmYxMC52MS5HZXRUYXNrUmVzcG9uc2VCggEKCmNvbS5mMTAudjFCClRhc2tzUHJvdG9QAVovZ2l0aHViLmNvbS9hbWJlcnBpeGVscy9mMTAvY2xpL2dlbi9mMTAvdjE7ZjEwdjGiAgNGWFiqAgZGMTAuVjHKAgZGMTBcVjHiAhJGMTBcVjFcR1BCTWV0YWRhdGHqAgdGMTA6OlYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
+  fileDesc("ChJmMTAvdjEvdGFza3MucHJvdG8SBmYxMC52MSIxCgdUYXNrUmVmEgoKAmlkGAEgASgJEg0KBXRpdGxlGAIgASgJEgsKA3VybBgDIAEoCSKRAQoEVGFzaxIcCgNyZWYYASABKAsyDy5mMTAudjEuVGFza1JlZhINCgVzdGF0ZRgCIAEoCRIrCgdjcmVhdGVkGAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIQCghtYXJrZG93bhgEIAEoCRINCgVhZnRlchgFIAEoCRIOCgZsYWJlbHMYBiADKAkivQIKEUNyZWF0ZVRhc2tSZXF1ZXN0Eg8KB3Byb2plY3QYASABKAkSDQoFdGl0bGUYAiABKAkSDAoEYm9keRgDIAEoCRIOCgZzdGF0dXMYBCABKAkSEAoIcHJpb3JpdHkYBSABKAkSDgoGbGFiZWxzGAYgAygJEg4KBnBhcmVudBgHIAEoCRI9Cgpwcm9wZXJ0aWVzGAggAygLMikuZjEwLnYxLkNyZWF0ZVRhc2tSZXF1ZXN0LlByb3BlcnRpZXNFbnRyeRIQCghtYXJrZG93bhgJIAEoCRIlCgZjYWxsZXIYCiABKAsyFS5mMTAudjEuQ2FsbGVyQ29udGV4dBINCgVjaGVjaxgLIAEoCBoxCg9Qcm9wZXJ0aWVzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ASJVChJDcmVhdGVUYXNrUmVzcG9uc2USHQoEdGFzaxgBIAEoCzIPLmYxMC52MS5UYXNrUmVmEiAKB3ByaW50ZWQYAiABKAsyDy5mMTAudjEuUHJpbnRlZCJpCg5HZXRUYXNrUmVxdWVzdBIPCgdwcm9qZWN0GAEgASgJEgoKAmlkGAIgASgJEhMKC3NraXBfaW1hZ2VzGAMgASgIEiUKBmNhbGxlchgEIAEoCzIVLmYxMC52MS5DYWxsZXJDb250ZXh0Ij8KD0dldFRhc2tSZXNwb25zZRIaCgR0YXNrGAEgASgLMgwuZjEwLnYxLlRhc2sSEAoIZG9jdW1lbnQYAiABKAkyjgEKC1Rhc2tTZXJ2aWNlEkMKCkNyZWF0ZVRhc2sSGS5mMTAudjEuQ3JlYXRlVGFza1JlcXVlc3QaGi5mMTAudjEuQ3JlYXRlVGFza1Jlc3BvbnNlEjoKB0dldFRhc2sSFi5mMTAudjEuR2V0VGFza1JlcXVlc3QaFy5mMTAudjEuR2V0VGFza1Jlc3BvbnNlQoIBCgpjb20uZjEwLnYxQgpUYXNrc1Byb3RvUAFaL2dpdGh1Yi5jb20vYW1iZXJwaXhlbHMvZjEwL2NsaS9nZW4vZjEwL3YxO2YxMHYxogIDRlhYqgIGRjEwLlYxygIGRjEwXFYx4gISRjEwXFYxXEdQQk1ldGFkYXRh6gIHRjEwOjpWMWIGcHJvdG8z", [file_f10_v1_caller, file_google_protobuf_timestamp]);
 
 /**
  * A TaskRef names a task: its id, its title as the tracker holds it, and
@@ -146,6 +148,28 @@ export type CreateTaskRequest = Message<"f10.v1.CreateTaskRequest"> & {
    * @generated from field: map<string, string> properties = 8;
    */
   properties: { [key: string]: string };
+
+  /**
+   * markdown is the whole task, `# <title>` on its first line, as f10 task
+   * create reads it. When set it wins over title and body.
+   *
+   * @generated from field: string markdown = 9;
+   */
+  markdown: string;
+
+  /**
+   * @generated from field: f10.v1.CallerContext caller = 10;
+   */
+  caller?: CallerContext | undefined;
+
+  /**
+   * check refuses as a create would before it reads the task, where
+   * nothing here creates tasks, and creates nothing, so f10 task create
+   * leaves stdin unread for the caller to fall back on.
+   *
+   * @generated from field: bool check = 11;
+   */
+  check: boolean;
 };
 
 /**
@@ -163,6 +187,13 @@ export type CreateTaskResponse = Message<"f10.v1.CreateTaskResponse"> & {
    * @generated from field: f10.v1.TaskRef task = 1;
    */
   task?: TaskRef | undefined;
+
+  /**
+   * printed is the id f10 task create prints, and its warnings.
+   *
+   * @generated from field: f10.v1.Printed printed = 2;
+   */
+  printed?: Printed | undefined;
 };
 
 /**
@@ -192,6 +223,14 @@ export type GetTaskRequest = Message<"f10.v1.GetTaskRequest"> & {
    * @generated from field: bool skip_images = 3;
    */
   skipImages: boolean;
+
+  /**
+   * caller is where a local f10 task read runs: an empty id is its
+   * checkout's task, and a bundle's ids joined by + read every member.
+   *
+   * @generated from field: f10.v1.CallerContext caller = 4;
+   */
+  caller?: CallerContext | undefined;
 };
 
 /**
@@ -209,6 +248,15 @@ export type GetTaskResponse = Message<"f10.v1.GetTaskResponse"> & {
    * @generated from field: f10.v1.Task task = 1;
    */
   task?: Task | undefined;
+
+  /**
+   * document is the task as f10 task read prints it: a bundle's members
+   * joined, and the images saved locally unless skip_images is set or
+   * the caller's output is a terminal.
+   *
+   * @generated from field: string document = 2;
+   */
+  document: string;
 };
 
 /**

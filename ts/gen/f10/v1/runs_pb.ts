@@ -4,6 +4,8 @@
 
 import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import { enumDesc, fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
+import type { CallerContext, Printed } from "./caller_pb";
+import { file_f10_v1_caller } from "./caller_pb";
 import type { Duration, Timestamp } from "@bufbuild/protobuf/wkt";
 import { file_google_protobuf_duration, file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
 import type { Message } from "@bufbuild/protobuf";
@@ -12,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file f10/v1/runs.proto.
  */
 export const file_f10_v1_runs: GenFile = /*@__PURE__*/
-  fileDesc("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ZXh0GAMgASgJIkAKD0ZvcndhcmRSZXNwb25zZRIRCgl3b3Jrc3BhY2UYASABKAkSDAoEc2VudBgCIAEoCRIMCgRub3RlGAMgASgJKvYBCgtQaGFzZVN0YXR1cxIcChhQSEFTRV9TVEFUVVNfVU5TUEVDSUZJRUQQABIYChRQSEFTRV9TVEFUVVNfUlVOTklORxABEhUKEVBIQVNFX1NUQVRVU19ET05FEAISFwoTUEhBU0VfU1RBVFVTX0ZBSUxFRBADEhgKFFBIQVNFX1NUQVRVU19QQVJUSUFMEAQSFgoSUEhBU0VfU1RBVFVTX1BSSU9SEAUSGAoUUEhBU0VfU1RBVFVTX0JMT0NLRUQQBhIYChRQSEFTRV9TVEFUVVNfU0tJUFBFRBAHEhkKFVBIQVNFX1NUQVRVU19VUENPTUlORxAIKmkKCVN0YXJ0TW9kZRIaChZTVEFSVF9NT0RFX1VOU1BFQ0lGSUVEEAASEwoPU1RBUlRfTU9ERV9TSElQEAESEwoPU1RBUlRfTU9ERV9QTEFOEAISFgoSU1RBUlRfTU9ERV9ESVNDVVNTEAMqfAoJTWVyZ2VNb2RlEhoKFk1FUkdFX01PREVfVU5TUEVDSUZJRUQQABIRCg1NRVJHRV9NT0RFX1BSEAESFAoQTUVSR0VfTU9ERV9GT1JDRRACEhQKEE1FUkdFX01PREVfTE9DQUwQAxIUChBNRVJHRV9NT0RFX0NMT1NFEAQyuAIKClJ1blNlcnZpY2USSQoMR2V0UnVuU3RhdHVzEhsuZjEwLnYxLkdldFJ1blN0YXR1c1JlcXVlc3QaHC5mMTAudjEuR2V0UnVuU3RhdHVzUmVzcG9uc2USNAoFU3RhcnQSFC5mMTAudjEuU3RhcnRSZXF1ZXN0GhUuZjEwLnYxLlN0YXJ0UmVzcG9uc2USNAoFRHJpdmUSFC5mMTAudjEuRHJpdmVSZXF1ZXN0GhUuZjEwLnYxLkRyaXZlUmVzcG9uc2USNwoGRmluaXNoEhUuZjEwLnYxLkZpbmlzaFJlcXVlc3QaFi5mMTAudjEuRmluaXNoUmVzcG9uc2USOgoHRm9yd2FyZBIWLmYxMC52MS5Gb3J3YXJkUmVxdWVzdBoXLmYxMC52MS5Gb3J3YXJkUmVzcG9uc2VCgQEKCmNvbS5mMTAudjFCCVJ1bnNQcm90b1ABWi9naXRodWIuY29tL2FtYmVycGl4ZWxzL2YxMC9jbGkvZ2VuL2YxMC92MTtmMTB2MaICA0ZYWKoCBkYxMC5WMcoCBkYxMFxWMeICEkYxMFxWMVxHUEJNZXRhZGF0YeoCB0YxMDo6VjFiBnByb3RvMw", [file_google_protobuf_duration, file_google_protobuf_timestamp]);
+  fileDesc("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KAsyFS5mMTAudjEuQ2FsbGVyQ29udGV4dBILCgN5ZXMYByABKAgSDQoFZW1wdHkYCCABKAgSDQoFY2xvc2UYCSABKAki4AEKDkZpbmlzaFJlc3BvbnNlEgwKBHRhc2sYASABKAkSCgoCcHIYAiABKAkSDgoGY29tbWl0GAMgASgJEhgKEHJlbW92ZWRfd29ya3RyZWUYBCABKAgSFgoOcmVtb3ZlZF9icmFuY2gYBSABKAgSGAoQY2xvc2VkX3dvcmtzcGFjZRgGIAEoCBIgCgdwcmludGVkGAcgASgLMg8uZjEwLnYxLlByaW50ZWQSGgoSY2xvc2Vfd29ya3NwYWNlX2lkGAggASgJEhoKEmZvY3VzX3dvcmtzcGFjZV9pZBgJIAEoCSJkCg5Gb3J3YXJkUmVxdWVzdBIPCgdwcm9qZWN0GAEgASgJEgwKBHRhc2sYAiABKAkSDAoEdGV4dBgDIAEoCRIlCgZjYWxsZXIYBCABKAsyFS5mMTAudjEuQ2FsbGVyQ29udGV4dCJiCg9Gb3J3YXJkUmVzcG9uc2USEQoJd29ya3NwYWNlGAEgASgJEgwKBHNlbnQYAiABKAkSDAoEbm90ZRgDIAEoCRIgCgdwcmludGVkGAQgASgLMg8uZjEwLnYxLlByaW50ZWQiWAoRTGlzdERyaXZlc1JlcXVlc3QSDwoHcHJvamVjdBgBIAEoCRILCgNhbGwYAiABKAgSJQoGY2FsbGVyGAMgASgLMhUuZjEwLnYxLkNhbGxlckNvbnRleHQiZwoLRHJpdmVSZWNvcmQSDgoGbnVtYmVyGAEgASgFEgwKBGFyZ3MYAiADKAkSDQoFc3RhdGUYAyABKAkSKwoHc3RhcnRlZBgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXAiWwoSTGlzdERyaXZlc1Jlc3BvbnNlEiMKBmRyaXZlcxgBIAMoCzITLmYxMC52MS5Ecml2ZVJlY29yZBIgCgdwcmludGVkGAIgASgLMg8uZjEwLnYxLlByaW50ZWQiWwoSQ2FuY2VsRHJpdmVSZXF1ZXN0Eg8KB3Byb2plY3QYASABKAkSDQoFZHJpdmUYAiABKAUSJQoGY2FsbGVyGAMgASgLMhUuZjEwLnYxLkNhbGxlckNvbnRleHQiNwoTQ2FuY2VsRHJpdmVSZXNwb25zZRIgCgdwcmludGVkGAEgASgLMg8uZjEwLnYxLlByaW50ZWQq9gEKC1BoYXNlU3RhdHVzEhwKGFBIQVNFX1NUQVRVU19VTlNQRUNJRklFRBAAEhgKFFBIQVNFX1NUQVRVU19SVU5OSU5HEAESFQoRUEhBU0VfU1RBVFVTX0RPTkUQAhIXChNQSEFTRV9TVEFUVVNfRkFJTEVEEAMSGAoUUEhBU0VfU1RBVFVTX1BBUlRJQUwQBBIWChJQSEFTRV9TVEFUVVNfUFJJT1IQBRIYChRQSEFTRV9TVEFUVVNfQkxPQ0tFRBAGEhgKFFBIQVNFX1NUQVRVU19TS0lQUEVEEAcSGQoVUEhBU0VfU1RBVFVTX1VQQ09NSU5HEAgqaQoJU3RhcnRNb2RlEhoKFlNUQVJUX01PREVfVU5TUEVDSUZJRUQQABITCg9TVEFSVF9NT0RFX1NISVAQARITCg9TVEFSVF9NT0RFX1BMQU4QAhIWChJTVEFSVF9NT0RFX0RJU0NVU1MQAyp8CglNZXJnZU1vZGUSGgoWTUVSR0VfTU9ERV9VTlNQRUNJRklFRBAAEhEKDU1FUkdFX01PREVfUFIQARIUChBNRVJHRV9NT0RFX0ZPUkNFEAISFAoQTUVSR0VfTU9ERV9MT0NBTBADEhQKEE1FUkdFX01PREVfQ0xPU0UQBDLFAwoKUnVuU2VydmljZRJJCgxHZXRSdW5TdGF0dXMSGy5mMTAudjEuR2V0UnVuU3RhdHVzUmVxdWVzdBocLmYxMC52MS5HZXRSdW5TdGF0dXNSZXNwb25zZRI0CgVTdGFydBIULmYxMC52MS5TdGFydFJlcXVlc3QaFS5mMTAudjEuU3RhcnRSZXNwb25zZRI0CgVEcml2ZRIULmYxMC52MS5Ecml2ZVJlcXVlc3QaFS5mMTAudjEuRHJpdmVSZXNwb25zZRI3CgZGaW5pc2gSFS5mMTAudjEuRmluaXNoUmVxdWVzdBoWLmYxMC52MS5GaW5pc2hSZXNwb25zZRI6CgdGb3J3YXJkEhYuZjEwLnYxLkZvcndhcmRSZXF1ZXN0GhcuZjEwLnYxLkZvcndhcmRSZXNwb25zZRJDCgpMaXN0RHJpdmVzEhkuZjEwLnYxLkxpc3REcml2ZXNSZXF1ZXN0GhouZjEwLnYxLkxpc3REcml2ZXNSZXNwb25zZRJGCgtDYW5jZWxEcml2ZRIaLmYxMC52MS5DYW5jZWxEcml2ZVJlcXVlc3QaGy5mMTAudjEuQ2FuY2VsRHJpdmVSZXNwb25zZUKBAQoKY29tLmYxMC52MUIJUnVuc1Byb3RvUAFaL2dpdGh1Yi5jb20vYW1iZXJwaXhlbHMvZjEwL2NsaS9nZW4vZjEwL3YxO2YxMHYxogIDRlhYqgIGRjEwLlYxygIGRjEwXFYx4gISRjEwXFYxXEdQQk1ldGFkYXRh6gIHRjEwOjpWMWIGcHJvdG8z", [file_f10_v1_caller, file_google_protobuf_duration, file_google_protobuf_timestamp]);
 
 /**
  * A Run is one session's run: its three phases and the ship pipeline.
@@ -562,6 +564,14 @@ export type GetRunStatusRequest = Message<"f10.v1.GetRunStatusRequest"> & {
    * @generated from field: bool all = 3;
    */
   all: boolean;
+
+  /**
+   * caller is where a local f10 status runs; with it, an empty project
+   * reads the caller's checkout, and an empty task its session's run.
+   *
+   * @generated from field: f10.v1.CallerContext caller = 4;
+   */
+  caller?: CallerContext | undefined;
 };
 
 /**
@@ -579,6 +589,21 @@ export type GetRunStatusResponse = Message<"f10.v1.GetRunStatusResponse"> & {
    * @generated from field: repeated f10.v1.RunStatus runs = 1;
    */
   runs: RunStatus[];
+
+  /**
+   * view is the status as f10 status renders it: its --json shapes, as
+   * JSON, for a client of the same release. Other clients read runs.
+   *
+   * @generated from field: bytes view = 2;
+   */
+  view: Uint8Array;
+
+  /**
+   * printed carries the warnings the read wrote to stderr.
+   *
+   * @generated from field: f10.v1.Printed printed = 3;
+   */
+  printed?: Printed | undefined;
 };
 
 /**
@@ -656,6 +681,20 @@ export type StartRequest = Message<"f10.v1.StartRequest"> & {
    * @generated from field: string note = 11;
    */
   note: string;
+
+  /**
+   * @generated from field: f10.v1.CallerContext caller = 12;
+   */
+  caller?: CallerContext | undefined;
+
+  /**
+   * token is the argument as f10 start takes it: a task id with its
+   * -suffix, a PR url or #n. When set it wins over task and pr, and task
+   * names the task a picked-up PR belongs to.
+   *
+   * @generated from field: string token = 13;
+   */
+  token: string;
 };
 
 /**
@@ -693,6 +732,13 @@ export type StartResponse = Message<"f10.v1.StartResponse"> & {
    * @generated from field: string agent = 5;
    */
   agent: string;
+
+  /**
+   * printed is the report f10 start prints, and the waits it reported.
+   *
+   * @generated from field: f10.v1.Printed printed = 6;
+   */
+  printed?: Printed | undefined;
 };
 
 /**
@@ -898,6 +944,33 @@ export type FinishRequest = Message<"f10.v1.FinishRequest"> & {
    * @generated from field: bool keep = 5;
    */
   keep: boolean;
+
+  /**
+   * @generated from field: f10.v1.CallerContext caller = 6;
+   */
+  caller?: CallerContext | undefined;
+
+  /**
+   * yes closes the caller's own workspace after the report, when the
+   * caller runs inside the task's workspace, instead of refusing.
+   *
+   * @generated from field: bool yes = 7;
+   */
+  yes: boolean;
+
+  /**
+   * empty finishes a branch never pushed that adds nothing.
+   *
+   * @generated from field: bool empty = 8;
+   */
+  empty: boolean;
+
+  /**
+   * close names the bundle riders the PR delivers: ids, all or none.
+   *
+   * @generated from field: string close = 9;
+   */
+  close: string;
 };
 
 /**
@@ -942,6 +1015,28 @@ export type FinishResponse = Message<"f10.v1.FinishResponse"> & {
    * @generated from field: bool closed_workspace = 6;
    */
   closedWorkspace: boolean;
+
+  /**
+   * printed is the report and handoff f10 finish prints.
+   *
+   * @generated from field: f10.v1.Printed printed = 7;
+   */
+  printed?: Printed | undefined;
+
+  /**
+   * close_workspace_id is the caller's own workspace, which the caller
+   * closes once it printed the report, after focusing focus_workspace_id.
+   * The daemon leaves both, because closing the caller's pane mid-call
+   * would end the caller before it printed anything.
+   *
+   * @generated from field: string close_workspace_id = 8;
+   */
+  closeWorkspaceId: string;
+
+  /**
+   * @generated from field: string focus_workspace_id = 9;
+   */
+  focusWorkspaceId: string;
 };
 
 /**
@@ -973,6 +1068,11 @@ export type ForwardRequest = Message<"f10.v1.ForwardRequest"> & {
    * @generated from field: string text = 3;
    */
   text: string;
+
+  /**
+   * @generated from field: f10.v1.CallerContext caller = 4;
+   */
+  caller?: CallerContext | undefined;
 };
 
 /**
@@ -1006,6 +1106,13 @@ export type ForwardResponse = Message<"f10.v1.ForwardResponse"> & {
    * @generated from field: string note = 3;
    */
   note: string;
+
+  /**
+   * printed is the report f10 forward prints.
+   *
+   * @generated from field: f10.v1.Printed printed = 4;
+   */
+  printed?: Printed | undefined;
 };
 
 /**
@@ -1014,6 +1121,143 @@ export type ForwardResponse = Message<"f10.v1.ForwardResponse"> & {
  */
 export const ForwardResponseSchema: GenMessage<ForwardResponse> = /*@__PURE__*/
   messageDesc(file_f10_v1_runs, 20);
+
+/**
+ * @generated from message f10.v1.ListDrivesRequest
+ */
+export type ListDrivesRequest = Message<"f10.v1.ListDrivesRequest"> & {
+  /**
+   * @generated from field: string project = 1;
+   */
+  project: string;
+
+  /**
+   * all lists finished and cancelled drives too.
+   *
+   * @generated from field: bool all = 2;
+   */
+  all: boolean;
+
+  /**
+   * @generated from field: f10.v1.CallerContext caller = 3;
+   */
+  caller?: CallerContext | undefined;
+};
+
+/**
+ * Describes the message f10.v1.ListDrivesRequest.
+ * Use `create(ListDrivesRequestSchema)` to create a new message.
+ */
+export const ListDrivesRequestSchema: GenMessage<ListDrivesRequest> = /*@__PURE__*/
+  messageDesc(file_f10_v1_runs, 21);
+
+/**
+ * A DriveRecord is one drive a project ran, by its number.
+ *
+ * @generated from message f10.v1.DriveRecord
+ */
+export type DriveRecord = Message<"f10.v1.DriveRecord"> & {
+  /**
+   * @generated from field: int32 number = 1;
+   */
+  number: number;
+
+  /**
+   * args are the drive's arguments as f10 drive took them.
+   *
+   * @generated from field: repeated string args = 2;
+   */
+  args: string[];
+
+  /**
+   * state is running, stopped, done or cancelled.
+   *
+   * @generated from field: string state = 3;
+   */
+  state: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp started = 4;
+   */
+  started?: Timestamp | undefined;
+};
+
+/**
+ * Describes the message f10.v1.DriveRecord.
+ * Use `create(DriveRecordSchema)` to create a new message.
+ */
+export const DriveRecordSchema: GenMessage<DriveRecord> = /*@__PURE__*/
+  messageDesc(file_f10_v1_runs, 22);
+
+/**
+ * @generated from message f10.v1.ListDrivesResponse
+ */
+export type ListDrivesResponse = Message<"f10.v1.ListDrivesResponse"> & {
+  /**
+   * @generated from field: repeated f10.v1.DriveRecord drives = 1;
+   */
+  drives: DriveRecord[];
+
+  /**
+   * printed is the table f10 drive list prints.
+   *
+   * @generated from field: f10.v1.Printed printed = 2;
+   */
+  printed?: Printed | undefined;
+};
+
+/**
+ * Describes the message f10.v1.ListDrivesResponse.
+ * Use `create(ListDrivesResponseSchema)` to create a new message.
+ */
+export const ListDrivesResponseSchema: GenMessage<ListDrivesResponse> = /*@__PURE__*/
+  messageDesc(file_f10_v1_runs, 23);
+
+/**
+ * @generated from message f10.v1.CancelDriveRequest
+ */
+export type CancelDriveRequest = Message<"f10.v1.CancelDriveRequest"> & {
+  /**
+   * @generated from field: string project = 1;
+   */
+  project: string;
+
+  /**
+   * @generated from field: int32 drive = 2;
+   */
+  drive: number;
+
+  /**
+   * @generated from field: f10.v1.CallerContext caller = 3;
+   */
+  caller?: CallerContext | undefined;
+};
+
+/**
+ * Describes the message f10.v1.CancelDriveRequest.
+ * Use `create(CancelDriveRequestSchema)` to create a new message.
+ */
+export const CancelDriveRequestSchema: GenMessage<CancelDriveRequest> = /*@__PURE__*/
+  messageDesc(file_f10_v1_runs, 24);
+
+/**
+ * @generated from message f10.v1.CancelDriveResponse
+ */
+export type CancelDriveResponse = Message<"f10.v1.CancelDriveResponse"> & {
+  /**
+   * printed is what f10 drive cancel prints.
+   *
+   * @generated from field: f10.v1.Printed printed = 1;
+   */
+  printed?: Printed | undefined;
+};
+
+/**
+ * Describes the message f10.v1.CancelDriveResponse.
+ * Use `create(CancelDriveResponseSchema)` to create a new message.
+ */
+export const CancelDriveResponseSchema: GenMessage<CancelDriveResponse> = /*@__PURE__*/
+  messageDesc(file_f10_v1_runs, 25);
 
 /**
  * PhaseStatus is where one phase of a run stands.
@@ -1222,6 +1466,26 @@ export const RunService: GenService<{
     methodKind: "unary";
     input: typeof ForwardRequestSchema;
     output: typeof ForwardResponseSchema;
+  },
+  /**
+   * ListDrives lists a project's drive records, as f10 drive list does.
+   *
+   * @generated from rpc f10.v1.RunService.ListDrives
+   */
+  listDrives: {
+    methodKind: "unary";
+    input: typeof ListDrivesRequestSchema;
+    output: typeof ListDrivesResponseSchema;
+  },
+  /**
+   * CancelDrive stops a drive from prompting further and closes its asks.
+   *
+   * @generated from rpc f10.v1.RunService.CancelDrive
+   */
+  cancelDrive: {
+    methodKind: "unary";
+    input: typeof CancelDriveRequestSchema;
+    output: typeof CancelDriveResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_f10_v1_runs, 0);

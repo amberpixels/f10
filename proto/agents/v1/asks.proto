@@ -69,23 +69,49 @@ message Answer {
 message ListAsksRequest {
   // answered_since adds the asks answered after it; unset lists open asks only.
   google.protobuf.Timestamp answered_since = 1;
+  // caller is where a local asks command runs: with it, view links each
+  // ask's task when the caller's output is a terminal.
+  CallerContext caller = 2;
 }
 
 message ListAsksResponse {
   repeated Ask open = 1;
   repeated Ask answered = 2;
+  // view is the inbox as the asks command renders it, as JSON, for a
+  // client of the same release. Other clients read open and answered.
+  bytes view = 3;
 }
 
 message AnswerAskRequest {
   string id = 1;
   // answers names questions by number; a question not named takes its default.
   repeated Answer answers = 2;
+  // match finds the open ask by its task, or project:task, as the asks
+  // command takes it, in place of id.
+  string match = 3;
+  // values are the answers as the asks command takes them, N=VALUE each,
+  // in place of answers.
+  repeated string values = 4;
+  // answered_by is the way in to record, asks or skill; empty is the API.
+  string answered_by = 5;
+  CallerContext caller = 6;
 }
 
 message AnswerAskResponse {
   Ask ask = 1;
   // delivered is true when the answer reached the agent at once.
   bool delivered = 2;
+  // output is what the asks command prints for the answer.
+  string output = 3;
+}
+
+// A CallerContext is where a local command runs. The daemon honors it only
+// on the unix socket, and MCP tools leave it out.
+message CallerContext {
+  // env is the command's environment, which the agents it reaches run under.
+  repeated string env = 1;
+  // terminal is true when the command's output is a terminal.
+  bool terminal = 2;
 }
 
 // AskRaised is the event of an agent stopping on an ask.

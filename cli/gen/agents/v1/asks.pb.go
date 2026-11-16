@@ -339,6 +339,9 @@ type ListAsksRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// answered_since adds the asks answered after it; unset lists open asks only.
 	AnsweredSince *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=answered_since,json=answeredSince,proto3" json:"answered_since,omitempty"`
+	// caller is where a local asks command runs: with it, view links each
+	// ask's task when the caller's output is a terminal.
+	Caller        *CallerContext `protobuf:"bytes,2,opt,name=caller,proto3" json:"caller,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -380,10 +383,20 @@ func (x *ListAsksRequest) GetAnsweredSince() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *ListAsksRequest) GetCaller() *CallerContext {
+	if x != nil {
+		return x.Caller
+	}
+	return nil
+}
+
 type ListAsksResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Open          []*Ask                 `protobuf:"bytes,1,rep,name=open,proto3" json:"open,omitempty"`
-	Answered      []*Ask                 `protobuf:"bytes,2,rep,name=answered,proto3" json:"answered,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Open     []*Ask                 `protobuf:"bytes,1,rep,name=open,proto3" json:"open,omitempty"`
+	Answered []*Ask                 `protobuf:"bytes,2,rep,name=answered,proto3" json:"answered,omitempty"`
+	// view is the inbox as the asks command renders it, as JSON, for a
+	// client of the same release. Other clients read open and answered.
+	View          []byte `protobuf:"bytes,3,opt,name=view,proto3" json:"view,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -432,11 +445,27 @@ func (x *ListAsksResponse) GetAnswered() []*Ask {
 	return nil
 }
 
+func (x *ListAsksResponse) GetView() []byte {
+	if x != nil {
+		return x.View
+	}
+	return nil
+}
+
 type AnswerAskRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	// answers names questions by number; a question not named takes its default.
-	Answers       []*Answer `protobuf:"bytes,2,rep,name=answers,proto3" json:"answers,omitempty"`
+	Answers []*Answer `protobuf:"bytes,2,rep,name=answers,proto3" json:"answers,omitempty"`
+	// match finds the open ask by its task, or project:task, as the asks
+	// command takes it, in place of id.
+	Match string `protobuf:"bytes,3,opt,name=match,proto3" json:"match,omitempty"`
+	// values are the answers as the asks command takes them, N=VALUE each,
+	// in place of answers.
+	Values []string `protobuf:"bytes,4,rep,name=values,proto3" json:"values,omitempty"`
+	// answered_by is the way in to record, asks or skill; empty is the API.
+	AnsweredBy    string         `protobuf:"bytes,5,opt,name=answered_by,json=answeredBy,proto3" json:"answered_by,omitempty"`
+	Caller        *CallerContext `protobuf:"bytes,6,opt,name=caller,proto3" json:"caller,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -485,11 +514,41 @@ func (x *AnswerAskRequest) GetAnswers() []*Answer {
 	return nil
 }
 
+func (x *AnswerAskRequest) GetMatch() string {
+	if x != nil {
+		return x.Match
+	}
+	return ""
+}
+
+func (x *AnswerAskRequest) GetValues() []string {
+	if x != nil {
+		return x.Values
+	}
+	return nil
+}
+
+func (x *AnswerAskRequest) GetAnsweredBy() string {
+	if x != nil {
+		return x.AnsweredBy
+	}
+	return ""
+}
+
+func (x *AnswerAskRequest) GetCaller() *CallerContext {
+	if x != nil {
+		return x.Caller
+	}
+	return nil
+}
+
 type AnswerAskResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Ask   *Ask                   `protobuf:"bytes,1,opt,name=ask,proto3" json:"ask,omitempty"`
 	// delivered is true when the answer reached the agent at once.
-	Delivered     bool `protobuf:"varint,2,opt,name=delivered,proto3" json:"delivered,omitempty"`
+	Delivered bool `protobuf:"varint,2,opt,name=delivered,proto3" json:"delivered,omitempty"`
+	// output is what the asks command prints for the answer.
+	Output        string `protobuf:"bytes,3,opt,name=output,proto3" json:"output,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -538,6 +597,69 @@ func (x *AnswerAskResponse) GetDelivered() bool {
 	return false
 }
 
+func (x *AnswerAskResponse) GetOutput() string {
+	if x != nil {
+		return x.Output
+	}
+	return ""
+}
+
+// A CallerContext is where a local command runs. The daemon honors it only
+// on the unix socket, and MCP tools leave it out.
+type CallerContext struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// env is the command's environment, which the agents it reaches run under.
+	Env []string `protobuf:"bytes,1,rep,name=env,proto3" json:"env,omitempty"`
+	// terminal is true when the command's output is a terminal.
+	Terminal      bool `protobuf:"varint,2,opt,name=terminal,proto3" json:"terminal,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CallerContext) Reset() {
+	*x = CallerContext{}
+	mi := &file_agents_v1_asks_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CallerContext) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CallerContext) ProtoMessage() {}
+
+func (x *CallerContext) ProtoReflect() protoreflect.Message {
+	mi := &file_agents_v1_asks_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CallerContext.ProtoReflect.Descriptor instead.
+func (*CallerContext) Descriptor() ([]byte, []int) {
+	return file_agents_v1_asks_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *CallerContext) GetEnv() []string {
+	if x != nil {
+		return x.Env
+	}
+	return nil
+}
+
+func (x *CallerContext) GetTerminal() bool {
+	if x != nil {
+		return x.Terminal
+	}
+	return false
+}
+
 // AskRaised is the event of an agent stopping on an ask.
 type AskRaised struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -548,7 +670,7 @@ type AskRaised struct {
 
 func (x *AskRaised) Reset() {
 	*x = AskRaised{}
-	mi := &file_agents_v1_asks_proto_msgTypes[7]
+	mi := &file_agents_v1_asks_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -560,7 +682,7 @@ func (x *AskRaised) String() string {
 func (*AskRaised) ProtoMessage() {}
 
 func (x *AskRaised) ProtoReflect() protoreflect.Message {
-	mi := &file_agents_v1_asks_proto_msgTypes[7]
+	mi := &file_agents_v1_asks_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -573,7 +695,7 @@ func (x *AskRaised) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AskRaised.ProtoReflect.Descriptor instead.
 func (*AskRaised) Descriptor() ([]byte, []int) {
-	return file_agents_v1_asks_proto_rawDescGZIP(), []int{7}
+	return file_agents_v1_asks_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *AskRaised) GetAsk() *Ask {
@@ -598,7 +720,7 @@ type AskAnswered struct {
 
 func (x *AskAnswered) Reset() {
 	*x = AskAnswered{}
-	mi := &file_agents_v1_asks_proto_msgTypes[8]
+	mi := &file_agents_v1_asks_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -610,7 +732,7 @@ func (x *AskAnswered) String() string {
 func (*AskAnswered) ProtoMessage() {}
 
 func (x *AskAnswered) ProtoReflect() protoreflect.Message {
-	mi := &file_agents_v1_asks_proto_msgTypes[8]
+	mi := &file_agents_v1_asks_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -623,7 +745,7 @@ func (x *AskAnswered) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AskAnswered.ProtoReflect.Descriptor instead.
 func (*AskAnswered) Descriptor() ([]byte, []int) {
-	return file_agents_v1_asks_proto_rawDescGZIP(), []int{8}
+	return file_agents_v1_asks_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *AskAnswered) GetId() string {
@@ -690,18 +812,29 @@ const file_agents_v1_asks_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\",\n" +
 	"\x06Answer\x12\f\n" +
 	"\x01n\x18\x01 \x01(\x05R\x01n\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value\"T\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value\"\x86\x01\n" +
 	"\x0fListAsksRequest\x12A\n" +
-	"\x0eanswered_since\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\ransweredSince\"b\n" +
+	"\x0eanswered_since\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\ransweredSince\x120\n" +
+	"\x06caller\x18\x02 \x01(\v2\x18.agents.v1.CallerContextR\x06caller\"v\n" +
 	"\x10ListAsksResponse\x12\"\n" +
 	"\x04open\x18\x01 \x03(\v2\x0e.agents.v1.AskR\x04open\x12*\n" +
-	"\banswered\x18\x02 \x03(\v2\x0e.agents.v1.AskR\banswered\"O\n" +
+	"\banswered\x18\x02 \x03(\v2\x0e.agents.v1.AskR\banswered\x12\x12\n" +
+	"\x04view\x18\x03 \x01(\fR\x04view\"\xd0\x01\n" +
 	"\x10AnswerAskRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12+\n" +
-	"\aanswers\x18\x02 \x03(\v2\x11.agents.v1.AnswerR\aanswers\"S\n" +
+	"\aanswers\x18\x02 \x03(\v2\x11.agents.v1.AnswerR\aanswers\x12\x14\n" +
+	"\x05match\x18\x03 \x01(\tR\x05match\x12\x16\n" +
+	"\x06values\x18\x04 \x03(\tR\x06values\x12\x1f\n" +
+	"\vanswered_by\x18\x05 \x01(\tR\n" +
+	"answeredBy\x120\n" +
+	"\x06caller\x18\x06 \x01(\v2\x18.agents.v1.CallerContextR\x06caller\"k\n" +
 	"\x11AnswerAskResponse\x12 \n" +
 	"\x03ask\x18\x01 \x01(\v2\x0e.agents.v1.AskR\x03ask\x12\x1c\n" +
-	"\tdelivered\x18\x02 \x01(\bR\tdelivered\"-\n" +
+	"\tdelivered\x18\x02 \x01(\bR\tdelivered\x12\x16\n" +
+	"\x06output\x18\x03 \x01(\tR\x06output\"=\n" +
+	"\rCallerContext\x12\x10\n" +
+	"\x03env\x18\x01 \x03(\tR\x03env\x12\x1a\n" +
+	"\bterminal\x18\x02 \x01(\bR\bterminal\"-\n" +
 	"\tAskRaised\x12 \n" +
 	"\x03ask\x18\x01 \x01(\v2\x0e.agents.v1.AskR\x03ask\"\x84\x02\n" +
 	"\vAskAnswered\x12\x0e\n" +
@@ -742,7 +875,7 @@ func file_agents_v1_asks_proto_rawDescGZIP() []byte {
 }
 
 var file_agents_v1_asks_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_agents_v1_asks_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_agents_v1_asks_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_agents_v1_asks_proto_goTypes = []any{
 	(AnswerSource)(0),             // 0: agents.v1.AnswerSource
 	(*Question)(nil),              // 1: agents.v1.Question
@@ -752,36 +885,39 @@ var file_agents_v1_asks_proto_goTypes = []any{
 	(*ListAsksResponse)(nil),      // 5: agents.v1.ListAsksResponse
 	(*AnswerAskRequest)(nil),      // 6: agents.v1.AnswerAskRequest
 	(*AnswerAskResponse)(nil),     // 7: agents.v1.AnswerAskResponse
-	(*AskRaised)(nil),             // 8: agents.v1.AskRaised
-	(*AskAnswered)(nil),           // 9: agents.v1.AskAnswered
-	nil,                           // 10: agents.v1.Ask.LabelsEntry
-	nil,                           // 11: agents.v1.AskAnswered.LabelsEntry
-	(*timestamppb.Timestamp)(nil), // 12: google.protobuf.Timestamp
+	(*CallerContext)(nil),         // 8: agents.v1.CallerContext
+	(*AskRaised)(nil),             // 9: agents.v1.AskRaised
+	(*AskAnswered)(nil),           // 10: agents.v1.AskAnswered
+	nil,                           // 11: agents.v1.Ask.LabelsEntry
+	nil,                           // 12: agents.v1.AskAnswered.LabelsEntry
+	(*timestamppb.Timestamp)(nil), // 13: google.protobuf.Timestamp
 }
 var file_agents_v1_asks_proto_depIdxs = []int32{
 	1,  // 0: agents.v1.Ask.questions:type_name -> agents.v1.Question
-	12, // 1: agents.v1.Ask.asked_at:type_name -> google.protobuf.Timestamp
+	13, // 1: agents.v1.Ask.asked_at:type_name -> google.protobuf.Timestamp
 	0,  // 2: agents.v1.Ask.answered_by:type_name -> agents.v1.AnswerSource
-	12, // 3: agents.v1.Ask.answered_at:type_name -> google.protobuf.Timestamp
-	12, // 4: agents.v1.Ask.delivered_at:type_name -> google.protobuf.Timestamp
-	10, // 5: agents.v1.Ask.labels:type_name -> agents.v1.Ask.LabelsEntry
-	12, // 6: agents.v1.ListAsksRequest.answered_since:type_name -> google.protobuf.Timestamp
-	2,  // 7: agents.v1.ListAsksResponse.open:type_name -> agents.v1.Ask
-	2,  // 8: agents.v1.ListAsksResponse.answered:type_name -> agents.v1.Ask
-	3,  // 9: agents.v1.AnswerAskRequest.answers:type_name -> agents.v1.Answer
-	2,  // 10: agents.v1.AnswerAskResponse.ask:type_name -> agents.v1.Ask
-	2,  // 11: agents.v1.AskRaised.ask:type_name -> agents.v1.Ask
-	0,  // 12: agents.v1.AskAnswered.answered_by:type_name -> agents.v1.AnswerSource
-	11, // 13: agents.v1.AskAnswered.labels:type_name -> agents.v1.AskAnswered.LabelsEntry
-	4,  // 14: agents.v1.AskService.ListAsks:input_type -> agents.v1.ListAsksRequest
-	6,  // 15: agents.v1.AskService.AnswerAsk:input_type -> agents.v1.AnswerAskRequest
-	5,  // 16: agents.v1.AskService.ListAsks:output_type -> agents.v1.ListAsksResponse
-	7,  // 17: agents.v1.AskService.AnswerAsk:output_type -> agents.v1.AnswerAskResponse
-	16, // [16:18] is the sub-list for method output_type
-	14, // [14:16] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	13, // 3: agents.v1.Ask.answered_at:type_name -> google.protobuf.Timestamp
+	13, // 4: agents.v1.Ask.delivered_at:type_name -> google.protobuf.Timestamp
+	11, // 5: agents.v1.Ask.labels:type_name -> agents.v1.Ask.LabelsEntry
+	13, // 6: agents.v1.ListAsksRequest.answered_since:type_name -> google.protobuf.Timestamp
+	8,  // 7: agents.v1.ListAsksRequest.caller:type_name -> agents.v1.CallerContext
+	2,  // 8: agents.v1.ListAsksResponse.open:type_name -> agents.v1.Ask
+	2,  // 9: agents.v1.ListAsksResponse.answered:type_name -> agents.v1.Ask
+	3,  // 10: agents.v1.AnswerAskRequest.answers:type_name -> agents.v1.Answer
+	8,  // 11: agents.v1.AnswerAskRequest.caller:type_name -> agents.v1.CallerContext
+	2,  // 12: agents.v1.AnswerAskResponse.ask:type_name -> agents.v1.Ask
+	2,  // 13: agents.v1.AskRaised.ask:type_name -> agents.v1.Ask
+	0,  // 14: agents.v1.AskAnswered.answered_by:type_name -> agents.v1.AnswerSource
+	12, // 15: agents.v1.AskAnswered.labels:type_name -> agents.v1.AskAnswered.LabelsEntry
+	4,  // 16: agents.v1.AskService.ListAsks:input_type -> agents.v1.ListAsksRequest
+	6,  // 17: agents.v1.AskService.AnswerAsk:input_type -> agents.v1.AnswerAskRequest
+	5,  // 18: agents.v1.AskService.ListAsks:output_type -> agents.v1.ListAsksResponse
+	7,  // 19: agents.v1.AskService.AnswerAsk:output_type -> agents.v1.AnswerAskResponse
+	18, // [18:20] is the sub-list for method output_type
+	16, // [16:18] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_agents_v1_asks_proto_init() }
@@ -795,7 +931,7 @@ func file_agents_v1_asks_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agents_v1_asks_proto_rawDesc), len(file_agents_v1_asks_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   11,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

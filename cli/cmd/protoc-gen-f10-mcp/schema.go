@@ -43,6 +43,10 @@ func (b *builder) object(m *protogen.Message) schema {
 	props := schema{}
 
 	for _, f := range m.Fields {
+		if localOnly(f) {
+			continue
+		}
+
 		props[string(f.Desc.Name())] = b.field(f)
 	}
 
@@ -52,6 +56,16 @@ func (b *builder) object(m *protogen.Message) schema {
 	}
 
 	return out
+}
+
+// callerContext is the message the daemon honors only from the unix socket:
+// where a local command runs, which a model has no way to know.
+const callerContext = "CallerContext"
+
+// localOnly is a field a tool leaves out: the caller's context, which
+// additionalProperties then refuses if a model passes it anyway.
+func localOnly(f *protogen.Field) bool {
+	return f.Message != nil && f.Message.Desc.Name() == callerContext
 }
 
 func (b *builder) field(f *protogen.Field) schema {

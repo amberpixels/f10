@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
-	startcmd "github.com/amberpixels/f10/cli/internal/command/start"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -22,14 +22,14 @@ import (
 // The state dir is empty until a test writes a run into it.
 type forwardFixture struct {
 	f  *testkit.Fakes
-	in startcmd.ForwardInput
+	in start.ForwardInput
 }
 
 func newForwardFixture(t *testing.T) *forwardFixture {
 	t.Helper()
 
 	fx := &forwardFixture{f: testkit.NewFakes(t)}
-	fx.in = startcmd.ForwardInput{
+	fx.in = start.ForwardInput{
 		Main:     testkit.FwdMain,
 		Here:     testkit.FwdMain,
 		Task:     testkit.Gh1,
@@ -69,7 +69,7 @@ func (fx *forwardFixture) forward(t *testing.T) (string, error) {
 
 	var out bytes.Buffer
 
-	err := startcmd.Forward(t.Context(), &out, fx.in)
+	_, err := start.ForwardReport(t.Context(), &out, fx.in)
 
 	return out.String(), err
 }

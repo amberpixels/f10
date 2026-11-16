@@ -310,7 +310,7 @@ func TestLocalEnvOnlyFromTheSocket(t *testing.T) {
 	go func() { _ = srv.Serve(ln) }()
 	t.Cleanup(func() { _ = srv.Close() })
 
-	if got := call(SocketHTTP(dir), socketURL); got != "GIT_SSH_COMMAND=evil" {
+	if got := call(SocketHTTP(dir), SocketURL); got != "GIT_SSH_COMMAND=evil" {
 		t.Errorf("env over the socket = %q, want it kept", got)
 	}
 }

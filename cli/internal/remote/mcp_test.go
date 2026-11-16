@@ -100,7 +100,7 @@ func TestListenerServesMCPByTokenScope(t *testing.T) {
 
 	want := []string{
 		"get_agent_status", "get_artifact", "get_board", "get_daemon_status", "get_run_status",
-		"get_task", "list_agents", "list_artifacts", "list_asks", "list_projects", "list_workspaces",
+		"get_task", "list_agents", "list_artifacts", "list_asks", "list_drives", "list_projects", "list_workspaces",
 	}
 	if !slices.Equal(names, want) {
 		t.Errorf("a read token's tools = %v, want %v", names, want)

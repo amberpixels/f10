@@ -11,10 +11,13 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/api"
+	"github.com/amberpixels/f10/cli/internal/apiclient"
 	"github.com/amberpixels/f10/cli/internal/buildinfo"
 	askscmd "github.com/amberpixels/f10/cli/internal/command/asks"
 	atlascmd "github.com/amberpixels/f10/cli/internal/command/atlas"
@@ -40,6 +43,12 @@ import (
 	taskcmd "github.com/amberpixels/f10/cli/internal/command/task"
 	tracecmd "github.com/amberpixels/f10/cli/internal/command/trace"
 )
+
+// the control-plane commands serve the API in process where no daemon runs,
+// and in tests
+func init() {
+	apiclient.Local = func() http.Handler { return api.Handler(apiclient.InProcess{}) }
+}
 
 func main() {
 	if err := newApp().Run(context.Background(), os.Args); err != nil {

@@ -3,11 +3,13 @@
 package agentsrpc
 
 import (
+	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"time"
 
@@ -18,6 +20,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/agents"
 	"github.com/amberpixels/f10/cli/internal/asks"
+	"github.com/amberpixels/f10/cli/internal/printed"
 )
 
 // Options are what the owner of the core supplies: how an answer moves on
@@ -26,6 +29,12 @@ type Options struct {
 	Deliverer agents.Deliverer
 	AsksDir   func() string // the inbox; asks.Dir when nil
 	Now       func() time.Time
+	// Session runs ctx's commands in a local caller's env, its agent calls in
+	// the session that env names; nil leaves ctx as it is
+	Session func(ctx context.Context, env []string) context.Context
+	// Links are the task urls the owner knows for asks, by display project
+	// and task id, so a terminal's list links them; nil knows none
+	Links func(ctx context.Context, all []asks.Ask) map[string]map[string]string
 }
 
 // Mount adds AgentService and AskService to mux.
@@ -38,11 +47,25 @@ func Mount(mux *http.ServeMux, o Options, opts ...connect.HandlerOption) {
 		o.Now = time.Now
 	}
 
-	mux.Handle(agentsv1connect.NewAgentServiceHandler(agentService{}, opts...))
+	if o.Session == nil {
+		o.Session = func(ctx context.Context, _ []string) context.Context { return ctx }
+	}
+
+	mux.Handle(agentsv1connect.NewAgentServiceHandler(agentService{o: o}, opts...))
 	mux.Handle(agentsv1connect.NewAskServiceHandler(askService{o: o}, opts...))
 }
 
-type agentService struct{}
+type agentService struct{ o Options }
+
+// callerOf is the request's caller context, nil from any listener but the
+// unix socket or this process: a unix socket's peer has no network address.
+func callerOf(req connect.AnyRequest, c *agentsv1.CallerContext) *agentsv1.CallerContext {
+	if addr := req.Peer().Addr; c == nil || (addr != "" && addr != "@") {
+		return nil
+	}
+
+	return c
+}
 
 // backend is the agents backend, refused when it cannot be reached.
 func backend() (agentctl.Backend, error) {
@@ -157,6 +180,34 @@ func (agentService) SendText(
 	return connect.NewResponse(&agentsv1.SendTextResponse{}), nil
 }
 
+// CloseWorkspace closes the workspace a caller ran in, which f10 finish
+// leaves to the caller so the close does not end it mid-call.
+func (s agentService) CloseWorkspace(
+	ctx context.Context,
+	req *connect.Request[agentsv1.CloseWorkspaceRequest],
+) (*connect.Response[agentsv1.CloseWorkspaceResponse], error) {
+	m := req.Msg
+	if m.GetId() == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("close workspace needs its id"))
+	}
+
+	ctx = s.o.Session(ctx, callerOf(req, m.GetCaller()).GetEnv())
+
+	b := agents.Agents("")
+
+	if f := m.GetFocusId(); f != "" {
+		if err := b.Focus(ctx, f); err != nil {
+			return nil, fmt.Errorf("focusing the main workspace failed: %w", err)
+		}
+	}
+
+	if err := b.Close(ctx, m.GetId()); err != nil {
+		return nil, fmt.Errorf("closing workspace %s failed: %w", m.GetId(), err)
+	}
+
+	return connect.NewResponse(&agentsv1.CloseWorkspaceResponse{}), nil
+}
+
 func listAgents(ctx context.Context) ([]agentctl.AgentInfo, error) {
 	b, err := backend()
 	if err != nil {
@@ -199,7 +250,7 @@ func statusOf(s agentctl.Status) agentsv1.AgentStatus {
 type askService struct{ o Options }
 
 func (s askService) ListAsks(
-	_ context.Context,
+	ctx context.Context,
 	req *connect.Request[agentsv1.ListAsksRequest],
 ) (*connect.Response[agentsv1.ListAsksResponse], error) {
 	dir := s.o.AsksDir()
@@ -208,6 +259,8 @@ func (s askService) ListAsks(
 	if err != nil {
 		return nil, err
 	}
+
+	inbox := asks.Inbox{Open: open}
 
 	out := &agentsv1.ListAsksResponse{}
 	for _, a := range open {
@@ -220,9 +273,19 @@ func (s askService) ListAsks(
 			return nil, err
 		}
 
+		inbox.Answered = answered
+
 		for _, a := range answered {
 			out.Answered = append(out.Answered, asks.Message(a))
 		}
+	}
+
+	if c := callerOf(req, req.Msg.GetCaller()); c.GetTerminal() && s.o.Links != nil {
+		inbox.Links = s.o.Links(ctx, append(slices.Clone(inbox.Open), inbox.Answered...))
+	}
+
+	if out.View, err = json.Marshal(inbox); err != nil {
+		return nil, err
 	}
 
 	return connect.NewResponse(out), nil
@@ -232,6 +295,11 @@ func (s askService) AnswerAsk(
 	ctx context.Context,
 	req *connect.Request[agentsv1.AnswerAskRequest],
 ) (*connect.Response[agentsv1.AnswerAskResponse], error) {
+	// the asks command's own call: its words, its output, its refusals
+	if req.Msg.GetMatch() != "" || len(req.Msg.GetValues()) > 0 {
+		return s.answerAsCommand(ctx, req)
+	}
+
 	dir := s.o.AsksDir()
 
 	a, err := agents.FindKey(dir, req.Msg.GetId())
@@ -251,12 +319,17 @@ func (s askService) AnswerAsk(
 		}
 	}
 
-	values := make([]string, 0, len(req.Msg.GetAnswers()))
-	for _, ans := range req.Msg.GetAnswers() {
-		values = append(values, strconv.Itoa(int(ans.GetN()))+"="+ans.GetValue())
-	}
+	o := printed.New(false)
 
-	claimed, sent, err := agents.Answer(ctx, io.Discard, dir, a, values, asks.ByAPI, s.o.Deliverer)
+	claimed, sent, err := agents.Answer(
+		ctx,
+		&o.Stdout,
+		dir,
+		a,
+		valuesOf(req.Msg),
+		cmp.Or(req.Msg.GetAnsweredBy(), asks.ByAPI),
+		s.o.Deliverer,
+	)
 
 	switch {
 	case err != nil && claimed.Task != "":
@@ -266,5 +339,63 @@ func (s askService) AnswerAsk(
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
-	return connect.NewResponse(&agentsv1.AnswerAskResponse{Ask: asks.Message(claimed), Delivered: sent}), nil
+	return connect.NewResponse(&agentsv1.AnswerAskResponse{
+		Ask: asks.Message(claimed), Delivered: sent, Output: o.Stdout.String(),
+	}), nil
+}
+
+// answerAsCommand answers the open ask match finds, else the one id keys,
+// as the asks command does: its refusals and what it prints read the same
+// as in process.
+func (s askService) answerAsCommand(
+	ctx context.Context,
+	req *connect.Request[agentsv1.AnswerAskRequest],
+) (*connect.Response[agentsv1.AnswerAskResponse], error) {
+	m := req.Msg
+	c := callerOf(req, m.GetCaller())
+	dir := s.o.AsksDir()
+
+	find := func() (asks.Ask, error) { return agents.FindKey(dir, m.GetId()) }
+	if m.GetMatch() != "" {
+		find = func() (asks.Ask, error) { return agents.FindOpen(dir, m.GetMatch()) }
+	}
+
+	a, err := find()
+	if err != nil {
+		return nil, err
+	}
+
+	ctx = s.o.Session(ctx, c.GetEnv())
+	o := printed.New(c.GetTerminal())
+
+	claimed, sent, err := agents.Answer(
+		ctx,
+		&o.Stdout,
+		dir,
+		a,
+		valuesOf(m),
+		cmp.Or(m.GetAnsweredBy(), asks.ByAPI),
+		s.o.Deliverer,
+	)
+	if err != nil {
+		return nil, o.Wrap(err)
+	}
+
+	return connect.NewResponse(&agentsv1.AnswerAskResponse{
+		Ask: asks.Message(claimed), Delivered: sent, Output: o.Stdout.String(),
+	}), nil
+}
+
+// valuesOf is the request's answers as N=VALUE, as the asks command takes them.
+func valuesOf(m *agentsv1.AnswerAskRequest) []string {
+	if len(m.GetValues()) > 0 {
+		return m.GetValues()
+	}
+
+	values := make([]string, 0, len(m.GetAnswers()))
+	for _, ans := range m.GetAnswers() {
+		values = append(values, strconv.Itoa(int(ans.GetN()))+"="+ans.GetValue())
+	}
+
+	return values
 }

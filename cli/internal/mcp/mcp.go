@@ -14,6 +14,7 @@ import (
 	"connectrpc.com/connect"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/reflect/protoreflect"
 
 	"github.com/amberpixels/f10/cli/gen/mcptools"
 )
@@ -69,6 +70,8 @@ func (o Options) handler(t mcptools.Tool) sdk.ToolHandler {
 			return failed(fmt.Errorf("the arguments do not fit %s: %w", t.Name, err)), nil
 		}
 
+		dropCaller(in.ProtoReflect())
+
 		if o.Before != nil {
 			if err := o.Before(ctx); err != nil {
 				return failed(err), nil
@@ -89,6 +92,18 @@ func (o Options) handler(t mcptools.Tool) sdk.ToolHandler {
 			Content:           []sdk.Content{&sdk.TextContent{Text: string(raw)}},
 			StructuredContent: json.RawMessage(raw),
 		}, nil
+	}
+}
+
+// dropCaller clears the caller's context a model passed anyway: the tool's
+// schema leaves it out, and its calls reach the unix socket, which would
+// otherwise honor a checkout and an environment the model made up.
+func dropCaller(m protoreflect.Message) {
+	fields := m.Descriptor().Fields()
+	for i := range fields.Len() {
+		if f := fields.Get(i); f.Message() != nil && f.Message().Name() == "CallerContext" {
+			m.Clear(f)
+		}
 	}
 }
 

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
-	startcmd "github.com/amberpixels/f10/cli/internal/command/start"
 	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 )
@@ -43,7 +42,7 @@ func TestStartAndForwardThroughAnotherBackend(t *testing.T) {
 
 	var out bytes.Buffer
 
-	fwd := startcmd.ForwardInput{
+	fwd := start.ForwardInput{
 		Main:     testkit.FwdMain,
 		Here:     testkit.FwdMain,
 		Task:     testkit.Gh1,
@@ -51,7 +50,7 @@ func TestStartAndForwardThroughAnotherBackend(t *testing.T) {
 		StateDir: t.TempDir(),
 		Now:      time.Now(),
 	}
-	if err := startcmd.Forward(t.Context(), &out, fwd); err != nil {
+	if _, err := start.ForwardReport(t.Context(), &out, fwd); err != nil {
 		t.Fatal(err)
 	}
 

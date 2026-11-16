@@ -24,6 +24,8 @@ type Request struct {
 	// Cwd and Workspace are where the caller runs; a finish from inside the
 	// task's own workspace closes it last
 	Cwd, Workspace string
+	// DeferSelfClose leaves that close to the caller (FinishInput)
+	DeferSelfClose bool
 }
 
 // Run finishes the task req names in t's project, writing the report to w
@@ -77,7 +79,7 @@ func Run(ctx context.Context, w, progress io.Writer, t *target.Target, req Reque
 	defer lease.Release()
 
 	in := InputFor(t, cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot), h, r)
-	in.Cwd, in.Workspace = req.Cwd, req.Workspace
+	in.Cwd, in.Workspace, in.DeferSelfClose = req.Cwd, req.Workspace, req.DeferSelfClose
 	in.Suffix, in.Branch = suffix, branch
 	in.Flags = f
 	in.ChecksWait = ChecksBudget

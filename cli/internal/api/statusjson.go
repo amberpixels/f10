@@ -120,7 +120,8 @@ func phaseOf(s string) string {
 }
 
 func decodeRunStatus(shaped map[string]any) (*f10v1.RunStatus, error) {
-	if ship, ok := shaped["shipment"].(map[string]any); ok {
+	// a run listed without a task has a nil shipment, stored typed
+	if ship, ok := shaped["shipment"].(map[string]any); ok && ship != nil {
 		ship["verdicts"] = fileRefs(ship["verdicts"], "subject")
 		ship["reviews"] = fileRefs(ship["reviews"], "round")
 	}

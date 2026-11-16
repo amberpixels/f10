@@ -186,7 +186,15 @@ type CreateTaskRequest struct {
 	// parent is the id of the task this one is a subtask of.
 	Parent string `protobuf:"bytes,7,opt,name=parent,proto3" json:"parent,omitempty"`
 	// properties sets the tracker's named properties.
-	Properties    map[string]string `protobuf:"bytes,8,rep,name=properties,proto3" json:"properties,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Properties map[string]string `protobuf:"bytes,8,rep,name=properties,proto3" json:"properties,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// markdown is the whole task, `# <title>` on its first line, as f10 task
+	// create reads it. When set it wins over title and body.
+	Markdown string         `protobuf:"bytes,9,opt,name=markdown,proto3" json:"markdown,omitempty"`
+	Caller   *CallerContext `protobuf:"bytes,10,opt,name=caller,proto3" json:"caller,omitempty"`
+	// check refuses as a create would before it reads the task, where
+	// nothing here creates tasks, and creates nothing, so f10 task create
+	// leaves stdin unread for the caller to fall back on.
+	Check         bool `protobuf:"varint,11,opt,name=check,proto3" json:"check,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -277,9 +285,32 @@ func (x *CreateTaskRequest) GetProperties() map[string]string {
 	return nil
 }
 
+func (x *CreateTaskRequest) GetMarkdown() string {
+	if x != nil {
+		return x.Markdown
+	}
+	return ""
+}
+
+func (x *CreateTaskRequest) GetCaller() *CallerContext {
+	if x != nil {
+		return x.Caller
+	}
+	return nil
+}
+
+func (x *CreateTaskRequest) GetCheck() bool {
+	if x != nil {
+		return x.Check
+	}
+	return false
+}
+
 type CreateTaskResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Task          *TaskRef               `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Task  *TaskRef               `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
+	// printed is the id f10 task create prints, and its warnings.
+	Printed       *Printed `protobuf:"bytes,2,opt,name=printed,proto3" json:"printed,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -321,12 +352,22 @@ func (x *CreateTaskResponse) GetTask() *TaskRef {
 	return nil
 }
 
+func (x *CreateTaskResponse) GetPrinted() *Printed {
+	if x != nil {
+		return x.Printed
+	}
+	return nil
+}
+
 type GetTaskRequest struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Project string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
 	Id      string                 `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
 	// skip_images leaves the images the task links unread.
-	SkipImages    bool `protobuf:"varint,3,opt,name=skip_images,json=skipImages,proto3" json:"skip_images,omitempty"`
+	SkipImages bool `protobuf:"varint,3,opt,name=skip_images,json=skipImages,proto3" json:"skip_images,omitempty"`
+	// caller is where a local f10 task read runs: an empty id is its
+	// checkout's task, and a bundle's ids joined by + read every member.
+	Caller        *CallerContext `protobuf:"bytes,4,opt,name=caller,proto3" json:"caller,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -382,9 +423,20 @@ func (x *GetTaskRequest) GetSkipImages() bool {
 	return false
 }
 
+func (x *GetTaskRequest) GetCaller() *CallerContext {
+	if x != nil {
+		return x.Caller
+	}
+	return nil
+}
+
 type GetTaskResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Task          *Task                  `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Task  *Task                  `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
+	// document is the task as f10 task read prints it: a bundle's members
+	// joined, and the images saved locally unless skip_images is set or
+	// the caller's output is a terminal.
+	Document      string `protobuf:"bytes,2,opt,name=document,proto3" json:"document,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -426,11 +478,18 @@ func (x *GetTaskResponse) GetTask() *Task {
 	return nil
 }
 
+func (x *GetTaskResponse) GetDocument() string {
+	if x != nil {
+		return x.Document
+	}
+	return ""
+}
+
 var File_f10_v1_tasks_proto protoreflect.FileDescriptor
 
 const file_f10_v1_tasks_proto_rawDesc = "" +
 	"\n" +
-	"\x12f10/v1/tasks.proto\x12\x06f10.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"A\n" +
+	"\x12f10/v1/tasks.proto\x12\x06f10.v1\x1a\x13f10/v1/caller.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"A\n" +
 	"\aTaskRef\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x10\n" +
@@ -441,7 +500,7 @@ const file_f10_v1_tasks_proto_rawDesc = "" +
 	"\acreated\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\acreated\x12\x1a\n" +
 	"\bmarkdown\x18\x04 \x01(\tR\bmarkdown\x12\x14\n" +
 	"\x05after\x18\x05 \x01(\tR\x05after\x12\x16\n" +
-	"\x06labels\x18\x06 \x03(\tR\x06labels\"\xc5\x02\n" +
+	"\x06labels\x18\x06 \x03(\tR\x06labels\"\xa6\x03\n" +
 	"\x11CreateTaskRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x12\n" +
@@ -452,19 +511,26 @@ const file_f10_v1_tasks_proto_rawDesc = "" +
 	"\x06parent\x18\a \x01(\tR\x06parent\x12I\n" +
 	"\n" +
 	"properties\x18\b \x03(\v2).f10.v1.CreateTaskRequest.PropertiesEntryR\n" +
-	"properties\x1a=\n" +
+	"properties\x12\x1a\n" +
+	"\bmarkdown\x18\t \x01(\tR\bmarkdown\x12-\n" +
+	"\x06caller\x18\n" +
+	" \x01(\v2\x15.f10.v1.CallerContextR\x06caller\x12\x14\n" +
+	"\x05check\x18\v \x01(\bR\x05check\x1a=\n" +
 	"\x0fPropertiesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"9\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"d\n" +
 	"\x12CreateTaskResponse\x12#\n" +
-	"\x04task\x18\x01 \x01(\v2\x0f.f10.v1.TaskRefR\x04task\"[\n" +
+	"\x04task\x18\x01 \x01(\v2\x0f.f10.v1.TaskRefR\x04task\x12)\n" +
+	"\aprinted\x18\x02 \x01(\v2\x0f.f10.v1.PrintedR\aprinted\"\x8a\x01\n" +
 	"\x0eGetTaskRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\tR\x02id\x12\x1f\n" +
 	"\vskip_images\x18\x03 \x01(\bR\n" +
-	"skipImages\"3\n" +
+	"skipImages\x12-\n" +
+	"\x06caller\x18\x04 \x01(\v2\x15.f10.v1.CallerContextR\x06caller\"O\n" +
 	"\x0fGetTaskResponse\x12 \n" +
-	"\x04task\x18\x01 \x01(\v2\f.f10.v1.TaskR\x04task2\x8e\x01\n" +
+	"\x04task\x18\x01 \x01(\v2\f.f10.v1.TaskR\x04task\x12\x1a\n" +
+	"\bdocument\x18\x02 \x01(\tR\bdocument2\x8e\x01\n" +
 	"\vTaskService\x12C\n" +
 	"\n" +
 	"CreateTask\x12\x19.f10.v1.CreateTaskRequest\x1a\x1a.f10.v1.CreateTaskResponse\x12:\n" +
@@ -495,22 +561,27 @@ var file_f10_v1_tasks_proto_goTypes = []any{
 	(*GetTaskResponse)(nil),       // 5: f10.v1.GetTaskResponse
 	nil,                           // 6: f10.v1.CreateTaskRequest.PropertiesEntry
 	(*timestamppb.Timestamp)(nil), // 7: google.protobuf.Timestamp
+	(*CallerContext)(nil),         // 8: f10.v1.CallerContext
+	(*Printed)(nil),               // 9: f10.v1.Printed
 }
 var file_f10_v1_tasks_proto_depIdxs = []int32{
-	0, // 0: f10.v1.Task.ref:type_name -> f10.v1.TaskRef
-	7, // 1: f10.v1.Task.created:type_name -> google.protobuf.Timestamp
-	6, // 2: f10.v1.CreateTaskRequest.properties:type_name -> f10.v1.CreateTaskRequest.PropertiesEntry
-	0, // 3: f10.v1.CreateTaskResponse.task:type_name -> f10.v1.TaskRef
-	1, // 4: f10.v1.GetTaskResponse.task:type_name -> f10.v1.Task
-	2, // 5: f10.v1.TaskService.CreateTask:input_type -> f10.v1.CreateTaskRequest
-	4, // 6: f10.v1.TaskService.GetTask:input_type -> f10.v1.GetTaskRequest
-	3, // 7: f10.v1.TaskService.CreateTask:output_type -> f10.v1.CreateTaskResponse
-	5, // 8: f10.v1.TaskService.GetTask:output_type -> f10.v1.GetTaskResponse
-	7, // [7:9] is the sub-list for method output_type
-	5, // [5:7] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	0,  // 0: f10.v1.Task.ref:type_name -> f10.v1.TaskRef
+	7,  // 1: f10.v1.Task.created:type_name -> google.protobuf.Timestamp
+	6,  // 2: f10.v1.CreateTaskRequest.properties:type_name -> f10.v1.CreateTaskRequest.PropertiesEntry
+	8,  // 3: f10.v1.CreateTaskRequest.caller:type_name -> f10.v1.CallerContext
+	0,  // 4: f10.v1.CreateTaskResponse.task:type_name -> f10.v1.TaskRef
+	9,  // 5: f10.v1.CreateTaskResponse.printed:type_name -> f10.v1.Printed
+	8,  // 6: f10.v1.GetTaskRequest.caller:type_name -> f10.v1.CallerContext
+	1,  // 7: f10.v1.GetTaskResponse.task:type_name -> f10.v1.Task
+	2,  // 8: f10.v1.TaskService.CreateTask:input_type -> f10.v1.CreateTaskRequest
+	4,  // 9: f10.v1.TaskService.GetTask:input_type -> f10.v1.GetTaskRequest
+	3,  // 10: f10.v1.TaskService.CreateTask:output_type -> f10.v1.CreateTaskResponse
+	5,  // 11: f10.v1.TaskService.GetTask:output_type -> f10.v1.GetTaskResponse
+	10, // [10:12] is the sub-list for method output_type
+	8,  // [8:10] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_f10_v1_tasks_proto_init() }
@@ -518,6 +589,7 @@ func file_f10_v1_tasks_proto_init() {
 	if File_f10_v1_tasks_proto != nil {
 		return
 	}
+	file_f10_v1_caller_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

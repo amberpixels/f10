@@ -65,6 +65,11 @@ func Start(ctx context.Context, w io.Writer, in StartInput) error {
 		return err
 	}
 
+	return WriteLaunched(ctx, w, in, l)
+}
+
+// WriteLaunched is start's report on l.
+func WriteLaunched(ctx context.Context, w io.Writer, in StartInput, l Launched) error {
 	rows := []render.Fact{render.TaskFact(ctx, w, in.Main, l.Task.Label())}
 	if in.Pick != nil {
 		rows = append(rows, render.Fact{Label: "pr", Value: in.Pick.URL, URL: true})

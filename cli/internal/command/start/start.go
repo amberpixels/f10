@@ -1,30 +1,20 @@
 // Package start is the f10 start and f10 forward commands: it parses their
-// arguments and hands the work to the start service.
+// arguments, calls the daemon's API and prints the reply.
 package start
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"path/filepath"
 	"strings"
-	"time"
 
+	"connectrpc.com/connect"
 	"github.com/urfave/cli/v3"
 
-	"github.com/amberpixels/f10/cli/internal/agents"
+	f10v1 "github.com/amberpixels/f10/cli/gen/f10/v1"
+	"github.com/amberpixels/f10/cli/internal/apiclient"
 	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
-	"github.com/amberpixels/f10/cli/internal/drivectl"
-	"github.com/amberpixels/f10/cli/internal/finish"
-	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/launch"
-	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/runplan"
-	"github.com/amberpixels/f10/cli/internal/start"
-	"github.com/amberpixels/f10/cli/internal/state"
-	"github.com/amberpixels/f10/cli/internal/target"
-	"github.com/amberpixels/f10/cli/internal/ui"
-	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
 // Command is the start verb, which replaces three hand-offs across three tools, each a place
@@ -79,101 +69,53 @@ const (
 )
 
 func runStart(ctx context.Context, cmd *cli.Command) error {
-	mode, flowName, after, base, err := startFlags(cmd)
-	if err != nil {
-		return err
-	}
-
-	if err := agents.RequireAgents(); err != nil {
-		return err
-	}
-
-	if strings.TrimSpace(cmd.Args().First()) == "" {
-		return errors.New("start needs a task id")
-	}
-
-	t, err := target.For(ctx, cmd)
-	if err != nil {
-		return err
-	}
-
-	in, err := start.Prepare(ctx, t, start.Request{
-		Token: cmd.Args().First(),
-		Mode:  mode,
-		Flow:  flowName,
-		Pace:  cmd.String("pace"),
-		After: after,
-		Base:  base,
-		Task:  cmd.String("task"),
-		Agent: cmd.String("agent"),
-		Model: cmd.String("model"),
-		Note:  strings.Join(cmd.Args().Tail(), " "),
-	})
-	if err != nil {
-		return err
-	}
-
-	in.Progress = cmd.ErrWriter
-
-	if err := start.Start(ctx, cmd.Writer, in); err != nil {
-		return err
-	}
-
-	afterStart(ctx, cmd, t, in.Task, in.Suffix)
-
-	return nil
-}
-
-// startFlags settles the mode and refuses the exclusive flag pairs before
-// anything is looked up.
-func startFlags(cmd *cli.Command) (string, string, string, string, error) {
 	mode, err := startMode(cmd)
 	if err != nil {
-		return "", "", "", "", err
+		return err
 	}
 
 	flowName, err := configcmd.FlowFlags(cmd)
 	if err != nil {
-		return "", "", "", "", err
+		return err
 	}
 
-	after, base := strings.TrimSpace(cmd.String("after")), strings.TrimSpace(cmd.String("base"))
-	if err := start.RefuseFlags(start.Request{Mode: mode, Flow: flowName, After: after, Base: base}); err != nil {
-		return "", "", "", "", err
+	c, err := apiclient.Dial(ctx)
+	if err != nil {
+		return err
 	}
 
-	return mode, flowName, after, base, nil
-}
-
-// afterStart records the launch for status, then runs start's upkeep: the
-// watcher and the due janitor sweep.
-func afterStart(ctx context.Context, cmd *cli.Command, t *target.Target, r ref.Ref, suffix string) {
-	// the task is already open, so a failed launch record is a line, not a
-	// failed start
-	launched := state.Launch{Kind: state.LaunchStart, Value: r.Label() + worktree.SuffixOf(suffix)}
-	if err := state.AppendLaunch(state.Dir(), state.Session(), launched); err != nil {
-		ui.Warnf(cmd.ErrWriter, "recording the launch: %v", err)
+	caller, err := c.Caller(cmd)
+	if err != nil {
+		return err
 	}
 
-	drivectl.WatchProject(ctx, cmd.ErrWriter, t)
+	res, err := c.Runs.Start(ctx, connect.NewRequest(&f10v1.StartRequest{
+		Token:  cmd.Args().First(),
+		Task:   cmd.String("task"),
+		Mode:   modes[mode],
+		Flow:   flowName,
+		Pace:   cmd.String("pace"),
+		After:  strings.TrimSpace(cmd.String("after")),
+		Base:   strings.TrimSpace(cmd.String("base")),
+		Agent:  cmd.String("agent"),
+		Model:  cmd.String("model"),
+		Note:   strings.Join(cmd.Args().Tail(), " "),
+		Caller: caller,
+	}))
+	if err != nil {
+		return apiclient.Err(err, cmd.Writer, cmd.ErrWriter)
+	}
 
-	finish.SweepIfDue(ctx, cmd.ErrWriter, filepath.Join(t.Layout.StorageRoot.Path(), finish.JanitorStamp), time.Now(),
-		func(ctx context.Context) ([]string, error) { return finish.Janitor(ctx, finish.JanitorFor(t)) })
+	apiclient.Print(cmd.Writer, cmd.ErrWriter, res.Msg.GetPrinted())
+
+	return nil
 }
 
-// RefuseNote is start.RefuseNote.
-func RefuseNote(mode string, pick *hostops.Pickup, note string) error {
-	return start.RefuseNote(mode, pick, note)
-}
-
-// RefuseLandedPlan is start.RefuseLandedPlan.
-func RefuseLandedPlan(mode string, pick *hostops.Pickup) error {
-	return start.RefuseLandedPlan(mode, pick)
-}
-
-// RefusePickupFlags is start.RefusePickupFlags.
-func RefusePickupFlags(flow, after, base string) error {
-	return start.RefusePickupFlags(flow, after, base)
+// modes are the start modes by the flag that names them.
+var modes = map[string]f10v1.StartMode{
+	ModeDefault:        f10v1.StartMode_START_MODE_SHIP,
+	launch.ModePlan:    f10v1.StartMode_START_MODE_PLAN,
+	launch.ModeDiscuss: f10v1.StartMode_START_MODE_DISCUSS,
 }
 
 func startMode(cmd *cli.Command) (string, error) {
