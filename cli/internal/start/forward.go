@@ -3,14 +3,15 @@ package start
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
-	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/agents"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/textx"
 	"github.com/amberpixels/f10/cli/internal/trackerdriver"
 	"github.com/amberpixels/f10/cli/internal/ui"
 	"github.com/amberpixels/f10/cli/internal/worktree"
@@ -25,14 +26,14 @@ type ForwardInput struct {
 	Task     ref.Ref
 	Suffix   string
 	Text     string        // what the agent is told, before the marker
-	StateDir string        // where run state lives, for the idle check
+	StateDir string        // where run state lives, for the note on where the text lands
 	Ttl      time.Duration // how long a run counts as live
 	Now      time.Time
 	Since    time.Time // runs last updated before it are not read: the agent that wrote them is gone
 }
 
 // Forwarded is where a forward went: the workspace, the text as sent, and
-// what the Enter check noted.
+// the notes: where the text lands and what the Enter check saw.
 type Forwarded struct {
 	Workspace string
 	Sent      string
@@ -70,16 +71,20 @@ func Forward(ctx context.Context, in ForwardInput) (Forwarded, error) {
 			agents.Agents(in.Main).Name(), path, name, in.Task.ID)
 	}
 
-	if err := RefuseStalled(in.stall(), ws, agentctl.AgentName(in.Task.ID, in.Suffix, path), path); err != nil {
+	// an idle agent on a running run is why the user forwards: it is sent to
+	landing, err := stalledNote(in.stall(), ws, path)
+	if err != nil {
 		return Forwarded{}, err
 	}
 
 	text := launch.Driven(in.Text)
 
-	note, err := launch.PromptChecked(ctx, path, in.Task.ID, in.Suffix, text)
+	enter, err := launch.PromptChecked(ctx, path, in.Task.ID, in.Suffix, text)
 	if err != nil {
 		return Forwarded{}, err
 	}
+
+	note := strings.Join(textx.AppendNote(textx.AppendNote(nil, landing), enter), "\n")
 
 	return Forwarded{Workspace: ws.ID, Sent: text, Note: note}, nil
 }
