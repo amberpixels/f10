@@ -93,7 +93,7 @@ f10 drive <id | id+id>[:profile]... | <id> -- <id> [--flow <name> | --local] [--
 f10 drive plan <parent | id | id+id>[:profile]... [--flow | --local | --pace | --agent | --parallel] [--facts F] [--json | --hint]   # propose what to bundle, run in parallel and order; changes nothing
 f10 daemon status | stop [--now] | logs [<drive>] [-f]   # the per-user process drives run in
 f10 remote on [--port N] [--mcp] | off | token add <name> --scope <scopes> | token list | token revoke <name> | install | uninstall   # serve the daemon's API to your other devices on the tailnet
-f10 mcp [--scope <scopes> | --token <token>]   # the daemon's API as MCP tools over stdio, for Claude Desktop and other MCP clients
+f10 mcp [--scope <scopes> | --token <name>]   # the daemon's API as MCP tools over stdio, for Claude Desktop and other MCP clients
 f10 asks [list [--json] | answer <task> [N=VALUE ...]]   # the questions driven agents wait on, across projects; bare walks them in a terminal
 f10 finish [<id>[-suffix]] [--yes] [--ignore-checks] [--close <ids|all|none>] [--keep]   # no id: the branch's task; merge the PR (a branch never pushed: here), pull main, archive the plan, close the workspace, remove the worktree; a spike with no PR closes without a merge; a parent whose subtasks are done closes
 f10 janitor [--dry-run]  # remove task branches whose PR merged or closed outside finish, locally and on origin; start and finish run it every 6 hours
@@ -892,14 +892,14 @@ Its socket serves the control-plane API over Connect: `f10.v1.DaemonService` for
 
 ### MCP
 
-`f10 mcp` serves the daemon's API as MCP tools over stdio, for Claude Desktop and local agents, with no network involved. Claude Desktop runs it from its config:
+`f10 mcp` serves the daemon's API as MCP tools over stdio, for Claude Desktop and local agents, with no network involved. Claude Desktop runs it from its config, by the absolute path `command -v f10` prints, because Desktop does not start servers with your login shell's PATH:
 
 ```json
-{ "mcpServers": { "f10": { "command": "f10", "args": ["mcp", "--scope", "read,answer"] } } }
+{ "mcpServers": { "f10": { "command": "/Users/you/.local/bin/f10", "args": ["mcp", "--scope", "read,answer"] } } }
 ```
 
 - **One tool per method.** Every unary method of `f10.v1` and `agents.v1` is a tool named after the method in snake case (`list_asks`, `answer_ask`, `get_run_status`). Its description is the rpc's comment and its input schema the request message, in proto field names. Both are generated from the proto schema by `protoc-gen-f10-mcp` into `cli/gen/mcptools`, so `just proto::gen` after a new method is all it takes to add its tool, and the plugin refuses an rpc with no comment.
-- **Scopes.** The tools offered are the methods the **Remote** scope table places under the scopes given: `--scope` names them, `--token` takes a device token's (refused once the token is revoked), and with neither, `read` and `answer`. `Hello`, `StopDaemon` and `WatchProject` are never tools, and neither is `WatchEvents`, because it streams and a tool call returns once: poll `get_run_status` instead.
+- **Scopes.** The tools offered are the methods the **Remote** scope table places under the scopes given: `--scope` names them, `--token <name>` takes the scopes of the device token with that name (refused once it is revoked; the socket checks no token, so its secret is never needed here), and with neither, `read` and `answer`. `Hello`, `StopDaemon` and `WatchProject` are never tools, and neither is `WatchEvents`, because it streams and a tool call returns once: poll `get_run_status` instead.
 - **Calls.** Each call starts the daemon when none listens, so a client that stays connected past the daemon's idle exit keeps working. A result is the response as JSON; a refused call, such as an ask already answered or a misspelled field, is a tool error naming why.
 
 ## Asks

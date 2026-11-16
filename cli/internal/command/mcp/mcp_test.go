@@ -49,11 +49,15 @@ func TestResolveToken(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, _, err := resolve(nil, "f10_unknown"); err == nil || !strings.Contains(err.Error(), "unknown or revoked") {
-		t.Errorf("an unknown token = %v, want refused", err)
+	if _, _, err := resolve(nil, "laptop"); err == nil || !strings.Contains(err.Error(), "no device token is named") {
+		t.Errorf("an unknown token name = %v, want refused", err)
 	}
 
-	scopes, check, err := resolve(nil, secret)
+	if _, _, err := resolve(nil, secret); err == nil {
+		t.Error("a token's secret was taken for its name")
+	}
+
+	scopes, check, err := resolve(nil, "desktop")
 	if err != nil || !slices.Equal(scopes, []remote.Scope{remote.ScopeRead, remote.ScopeSteer}) || check() != nil {
 		t.Fatalf("a token = %v %v, want its scopes", scopes, err)
 	}

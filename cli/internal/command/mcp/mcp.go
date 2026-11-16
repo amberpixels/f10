@@ -37,7 +37,7 @@ func Command() *cli.Command {
 			},
 			&cli.StringFlag{
 				Name:  "token",
-				Usage: "offer the tools a device token's scopes allow (f10 remote token add)",
+				Usage: "offer the tools a device token's scopes allow, by the token's name (f10 remote token list)",
 			},
 		},
 		Action: run,
@@ -80,7 +80,9 @@ func run(ctx context.Context, cmd *cli.Command) error {
 }
 
 // resolve is the scopes the flags name, and a check run before each call:
-// a token's check fails once it is revoked.
+// a token's check fails once it is revoked. A token is named, never given
+// as its secret: the socket checks no token, so the secret would grant
+// nothing here and would only sit in argv and in the client's config.
 func resolve(scopeFlags []string, token string) ([]remote.Scope, func() error, error) {
 	none := func() error { return nil }
 
@@ -102,13 +104,13 @@ func resolve(scopeFlags []string, token string) ([]remote.Scope, func() error, e
 
 	store := remote.NewStore(dir)
 
-	tok, ok := store.Verify(token)
-	if !ok {
-		return nil, nil, errors.New("this device token is unknown or revoked: f10 remote token list")
+	tok, err := named(store, token)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	check := func() error {
-		if _, ok := store.Verify(token); !ok {
+		if _, err := named(store, token); err != nil {
 			return fmt.Errorf("the device token %q was revoked", tok.Name)
 		}
 
@@ -116,4 +118,20 @@ func resolve(scopeFlags []string, token string) ([]remote.Scope, func() error, e
 	}
 
 	return tok.Scopes, check, nil
+}
+
+// named is the token called name in store.
+func named(store *remote.Store, name string) (remote.Token, error) {
+	list, err := store.List()
+	if err != nil {
+		return remote.Token{}, err
+	}
+
+	for _, t := range list {
+		if t.Name == name {
+			return t, nil
+		}
+	}
+
+	return remote.Token{}, fmt.Errorf("no device token is named %q: f10 remote token list", name)
 }
