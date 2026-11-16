@@ -15,9 +15,13 @@ Running `/f10:review ci` authorizes the `f10 review ack` and `f10 review trigger
 - `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything, and stop.
   It reports which steps the rest of the argument would run.
 - `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`; everything below still runs.
-- `ci`: strip it and run the step's remote review; standalone, it reads the latest CI review in, triggers a new one, or hands it to `/f10:resolve <id> ci`.
-- `host`: strip it and run the local review on the step's **host engine**, the host's own code review; it does not combine with `ci`.
-- `since [<ref>]`: invoke `/f10:audit` with the Skill tool, passing `since <ref>` when a ref was given and nothing otherwise, then stop; nothing below applies.
+- `ci`: strip it and run the step's remote review.
+  Standalone, the remote review reads the latest CI review in, triggers a new one, or hands it to `/f10:resolve <id> ci`.
+- `host`: strip it and run the local review on the step's **host engine**, the host's own code review.
+  It does not combine with `ci`.
+- `since [<ref>]`: invoke `/f10:audit` with the Skill tool, then stop.
+  Pass `since <ref>` when a ref was given, and nothing otherwise.
+  Nothing below applies.
 - `<subject>`: a task id, PR or branch; the step's **Only the change checked out here** paragraph reads it.
 - No argument: the current branch against its base.
   Say in one line which branch and base you took, then start.

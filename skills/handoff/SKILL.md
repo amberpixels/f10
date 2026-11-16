@@ -8,10 +8,12 @@ argument-hint: "[<task-id | PR | this branch>]"
 # f10 · handoff
 
 **Arguments**
-- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
+- `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop.
+  Nothing below applies.
 - `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything, and stop.
   It reports which steps the rest of the argument would run.
-- `<subject>`: a task id, a PR / MR, or "this branch"; the step reads it.
+- `<subject>`: a task id, a PR / MR, or "this branch".
+  The step reads it.
 - No argument: the current branch against its base.
   Say in one line which branch and base you took, then start.
 

@@ -5,14 +5,18 @@ The daemon serves it on its unix socket (`docs/cli.md`, **Daemon**).
 
 ## Packages
 
-- **`agents.v1`** is the generic agent core: workspaces, agents, text sent to an agent, and the asks agents wait on.
+- **`agents.v1`** is the generic agent core.
+  It covers workspaces, agents, text sent to an agent, and the asks agents wait on.
   It knows nothing about tasks, so it can become a project of its own.
   An owner's context, such as the task f10 maps to an agent, goes in `Ask.labels`, never in a new field.
-- **`f10.v1`** is the task flow: tasks, runs, start, drive, finish, the board, and the event stream, plus `DaemonService`, the daemon's own hello, status, stop and project watch.
+- **`f10.v1`** is the task flow.
+  It covers tasks and runs, start, drive and finish, the board and the event stream.
+  It also carries `DaemonService`, the daemon's own hello, status, stop and project watch.
   It imports `agents.v1`, and `agents.v1` never imports it.
 
 `f10.v1` also carries `ArtifactService`, which reads a task's files from the storage root by kind and name, and `ProjectService`, which lists the projects the daemon knows.
-The web client in `ts/web` is built on the TypeScript code; `ts/` is the TypeScript root, so `ts/gen` resolves its imports from `ts/node_modules`.
+The web client in `ts/web` is built on the TypeScript code.
+`ts/` is the TypeScript root, so `ts/gen` resolves its imports from `ts/node_modules`.
 
 Each package lives in the directory its name gives (`agents/v1/`, `f10/v1/`), because buf's lint requires it.
 
@@ -20,13 +24,19 @@ Each package lives in the directory its name gives (`agents/v1/`, `f10/v1/`), be
 
 f10's own CLI is a client of this API, and needs what only its process knows: where it runs.
 
-- **`CallerContext`** (`f10.v1`, and a smaller one in `agents.v1`) carries the command's directory and `-C` checkout, its Claude session, its Herdr workspace, its environment, and whether its output is a terminal.
+- **`CallerContext`** is in `f10.v1`, and a smaller one is in `agents.v1`.
+  It carries the command's directory and `-C` checkout, its Claude session and its Herdr workspace.
+  It also carries the command's environment and whether its output is a terminal.
   The daemon honors it only on the unix socket, and drops it whole from any other listener.
   MCP tools leave any field of this type out of their schemas, because a model has no checkout or session to pass.
 - **`Printed`** is what a write command prints for a call, stdout then stderr, linked for the caller's terminal when it is one.
   The CLI prints it as is, so a command over the API prints the bytes it printed in process.
-- **`view`** on a read reply (`GetRunStatus`, `GetBoard`, `ListAsks`) is the model the command renders, as its own JSON, for a client of the same release; the typed fields beside it are for every other client.
-- **A failed call** carries the command's exit code in the `F10-Exit` metadata key, a `Printed` error detail when it printed something before failing, and `F10-Error: outside-herdr` when it refused a caller outside Herdr.
+- **`view`** on a read reply is the model the command renders, as its own JSON.
+  The read replies are `GetRunStatus`, `GetBoard` and `ListAsks`.
+  `view` is for a client of the same release, and the typed fields beside it are for every other client.
+- **A failed call** carries the command's exit code in the `F10-Exit` metadata key.
+  If the command printed something before failing, the call also carries a `Printed` error detail.
+  If the command refused a caller outside Herdr, the call carries `F10-Error: outside-herdr`.
 
 ## Generated code
 
@@ -56,7 +66,8 @@ The generators are pinned: buf and the Go plugins in `tools/go.mod`, `protoc-gen
 
 Clients built against `v1` keep working only if `v1` changes only by adding, so:
 
-- **Within `v1`, a field is only added.** It is never renumbered, renamed or removed, and neither is a message, an enum value, a service or a method.
+- **Within `v1`, a field is only added.** It is never renumbered, renamed or removed.
+  The same holds for a message, an enum value, a service and a method.
   `buf breaking` refuses each of these.
 - **A field that must go is deprecated**, with `[deprecated = true]`, and stays.
   The `FILE` breaking rules refuse a deleted field even when its number and name are `reserved`, so removal waits for a new message or a `v2` package.
@@ -70,12 +81,19 @@ Clients built against `v1` keep working only if `v1` changes only by adding, so:
 
 `f10.v1.Event` is one ledger row, with a `oneof payload` case named after each ledger kind.
 The nine `state_*` kinds share the `claim` case, so a client tells them apart by `Event.kind`, and applies them to the `Run` whose session `Event.session` names.
-`WatchEvents` resumes from the `cursor` each response carries, never from `Event.id`, because rows land in the ledger out of id order: a spooled row is inserted after its id is minted, and other machines mint ids on their own clocks.
-A stream opened with `tail` and no cursor starts at the newest row, and its first response has no event, only the cursor of that row; without `tail` an empty cursor starts at the first row.
-A client that drops before any event resumes from that cursor, and takes the state before it from the read methods (`ListAsks`, `GetBoard`, `GetRunStatus`), not from the stream.
+`WatchEvents` resumes from the `cursor` each response carries, never from `Event.id`.
+`Event.id` does not work, because rows land in the ledger out of id order.
+A spooled row is inserted after its id is minted, and other machines mint ids on their own clocks.
+Without `tail`, a stream with an empty cursor starts at the first row.
+A stream opened with `tail` and no cursor starts at the newest row.
+Its first response has no event, only the cursor of that row.
+A client that drops before any event resumes from that cursor.
+It takes the state before that cursor from the read methods, not from the stream.
+The read methods are `ListAsks`, `GetBoard` and `GetRunStatus`.
 `kinds` narrows the stream to the ledger kinds named, each `state_*` kind by its own name, and an unknown kind is refused, because a misspelt one would otherwise stream nothing.
 `ask_raised` and `ask_answered` are the asks inbox's, which records them in the ledger as asks are raised and answered.
-Their rows carry no project, because asks are raised from hooks that must not run git, so a stream narrowed to a project matches them by the project of the ask's `main` label.
+Their rows carry no project, because asks are raised from hooks that must not run git.
+So a stream narrowed to a project matches them by the project of the ask's `main` label.
 `ask_answered` rows written before `AskAnswered.labels` existed match only a stream with no project.
 `watch_reported` is a report the watcher told, once, with its kind in `report` and its text as the watch log shows it.
 

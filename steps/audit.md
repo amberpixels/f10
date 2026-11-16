@@ -1,7 +1,7 @@
 # Step · audit - how the work over a window fits together
 
 Role: a **senior software architect** auditing a codebase they did not write.
-Input: a window: `since <ref>`, `since <date>`, `all`, or none.
+Input: an optional window, one of `since <ref>`, `since <date>` or `all`.
 Output: the **audit report** at `<storage root>/audits/<YYYY-MM-DD-HHMM>-<sha7>.md`, and nothing else.
 The name is the local time the audit ran and HEAD's short sha, so a plain name sort is time order.
 Context: `project.md → Review`, for its **Never flag** list, and the project's guardrails.
@@ -38,26 +38,30 @@ Judging the process itself is not the audit's job.
    - `f10 audit map <range>` (`all` under `all`) prints three parts in one call (`docs/cli.md` → Audit):
      - the **churn** per area (a file's parent directory) over the range
      - the **task map**: each task with its commits and areas, and the commits naming no task in an upkeep bucket
-     - the **pain map**: one line per area that was costlier to change than the project, by review rounds, halts, replans, findings fixed again and again, later regressions and implement time, each line citing its task ids
+     - the **pain map**: one line per area that was costlier to change than the project, each line citing its task ids.
+       Cost is measured by review rounds, halts and replans, and by findings fixed again and again, later regressions and implement time.
    - For each task, one call gathers its files (`git show --stat` over its commits), its plan and `f10 lore show <id>`.
      The plan is `<storage root>/plans/<id>.md`, else the newest of `plans/archive/<id>.md` and `<id>.<N>.md`.
      Read `<id>.spike.md` or `<id>.spike.<N>.md` beside it too.
      Never use a wider glob, because it matches other ids.
      A task with neither a plan nor lore is reviewed on its diff alone.
-   - Probes the stack offers, when they are installed (`go vet`, `deadcode`, the linter the repo configures).
+   - Probes the stack offers, such as `go vet`, `deadcode` and the linter the repo configures.
+     Run a probe when it is installed.
      A missing probe is one line in the report, never a failure.
 
    Under `all`, the map covers the newest 300 commits, because the full history would crowd out the code.
 3. **The partition.**
    Split the code into areas from the map, each holding a similar amount of code and churn, and give each area one reviewer.
-   An area high on both churn and pain gets a reviewer of its own, or more of the paths, because churn alone shows where code changed and not where changing it hurt.
+   An area high on both churn and pain gets a reviewer of its own, or more of the paths.
+   Pain counts too, because churn alone shows where code changed and not where changing it hurt.
    Add two reviewers that every audit has:
    - **cross-cutting**: repeated patterns, copied helpers, layering and tests, across every area.
    - **history**: feature lineages read from commits and release notes, and compatibility shims checked against what is still on disk.
 
    Keep the total at about eight, because more reviewers repeat each other and cost more than they find.
    Print the partition: one line per reviewer with its area and the paths it holds, naming the pain line that set an area apart.
-   Then confirm the scale once with `AskUserQuestion`: go, go with fewer reviewers (the smaller partition named), or stop.
+   Then confirm the scale once with `AskUserQuestion`.
+   The options are go, go with fewer reviewers (naming the smaller partition), or stop.
    The reason is cost: each reviewer is a full agent run, which no other f10 step spends at this scale.
    A stop ends normally.
 4. **The reviewers.**
@@ -101,7 +105,9 @@ Judging the process itself is not the audit's job.
    - Findings that several reviewers raised about the same code merge into one, keeping the best-cited evidence.
    - Findings that share a target design group into a **theme**.
    - Re-read every claimed bug and every `high` finding at its `where:`, and mark it `verified` when the code shows it, or `reported` when one link could not be traced.
-   - Drop a finding with no `file:line`, one whose only evidence is a process metric (rounds, halts, minutes), or one the code at HEAD already settles.
+   - Drop a finding with no `file:line`.
+     Drop one whose only evidence is a process metric, such as rounds, halts or minutes.
+     Drop one the code at HEAD already settles.
      List each of these drops with the finding's id and the reason.
    - Order the themes into **phases**: a theme goes after the themes its findings depend on, and within a phase the cheaper or riskier-to-postpone theme goes first.
    - No findings is a valid result, so never pad the report to fill it.
@@ -119,7 +125,8 @@ Judging the process itself is not the audit's job.
    - `## Pain map`: the pain map's lines as `f10 audit map` printed them, so a reader sees why the partition looks as it does.
    - `## Phases`: one `### Phase <n>` per phase, its themes beneath, and each theme's findings with every field from point 5.
    - `## Dropped as deliberate`: one line per drop, with its `file:line` and the plan or lore citation.
-   - `## Dropped at merge`: one line per finding point 6 dropped, with its id and the reason (no `file:line`, a metric only, settled at HEAD).
+   - `## Dropped at merge`: one line per finding point 6 dropped, with its id and the reason.
+     The reason is one of no `file:line`, a metric only, or settled at HEAD.
    - `## Not recommended`: changes a reader might expect that the audit advises against, each with its reason.
    - `## Probes`: one line per probe, run or missing.
 
@@ -157,7 +164,8 @@ Run the **capture** step with this body as its description, as one task, never s
   `After:` holds one id, so a theme that depends on several names the one created last and lists the others in its body.
 - Create the subtasks in phase order, so every `After:` names a task that already exists.
 
-`/f10:drive` starts a subtask once the task its `After:` names has a commit, so the lines order the work but do not hold a phase until the one before it has finished.
+`/f10:drive` starts a subtask once the task its `After:` names has a commit.
+So the `After:` lines order the work, but they do not hold a phase until the one before it has finished.
 The parent's body says so, under the phase list.
 
 The report's path stays off the tracker under stealth, so the task or the parent describes the audit without naming it.

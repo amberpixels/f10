@@ -7,7 +7,15 @@ argument-hint: "[<task-id | plan.md | description>] [--pace <name>]"
 
 # f10 · ship
 
-Running this skill **is** the user's explicit authorization to push and open or refresh this task's PR (the **pr** step), satisfying the global "never push / open a PR unless asked" rule for that PR only, and to post resolve's `+reply`, push resolve's fixes to that PR, post review's `f10 review ack`, and for a CI review in the flow its `f10 review trigger` (when the Review section declares a manual how it can read) and resolve's `f10 review settle`, for a judge entry after `pr`, push the catchup guard's integration and its own changes to that PR and post its status and comment, and post the run's report-back comment and status on the task (**Report back**).
+Running this skill **is** the user's explicit authorization for the writes below.
+It satisfies the global "never push / open a PR unless asked" rule for this task's PR only.
+- Push and open or refresh this task's PR (the **pr** step).
+- Post resolve's `+reply`, and push resolve's fixes to that PR.
+- Post review's `f10 review ack`.
+- For a CI review in the flow, post its `f10 review trigger` (when the Review section declares a manual how it can read) and resolve's `f10 review settle`.
+- For a judge entry after `pr`, push the catchup guard's integration and its own changes to that PR, and post its status and comment.
+- Post the run's report-back comment and status on the task (**Report back**).
+
 Deploy has its own confirmation (the **deploy** step).
 
 **Arguments**
@@ -20,7 +28,8 @@ Deploy has its own confirmation (the **deploy** step).
   Two areas mapping to different flows: the deliverable's area wins, as for Roles, and the brief names the other.
   The area map is the project's choice, not yours: never self-select another flow, though for tiny work you may suggest one.
   Name the flow an area chose, and the area, in one line before the first step.
-- `--pace <name>`: run the flow at that pace for this run alone (**Paces**, below); without it, the pace the branch records, else the project's or the user's `pace:`.
+- `--pace <name>`: run the flow at that pace for this run alone (**Paces**, below).
+  Without it, the run takes the pace the branch records, else the project's or the user's `pace:`.
 - `<plan.md>`: a plan file; run the flow with it.
 - `<task-id>` (project id format / id / url), or a bundle joined by `+` (`ABC-1+ABC-2`, keyed on the lead): follow `${CLAUDE_PLUGIN_ROOT}/modes/forward.md` first, before loading anything; stop if it forwards the task.
   Otherwise run the **fetch** step, then look for **`<storage root>/plans/<TASK-ID>.md`** (a bundle's lead) (glob the plans dir if the exact name misses).
@@ -32,7 +41,8 @@ Deploy has its own confirmation (the **deploy** step).
   Say in one line which task you took and where from, then run it as a `<task-id>`, forward mode included, so a saved plan is reused.
   `f10 task current` exiting non-zero: ask for a task in one line and wait (driven: an ask, per `modes/driven.md`).
 - Extra text beside the subject is steering.
-  For a bug, `no repro` skips the reproduction, `with repro` runs it in full, and `as a feature` plans the task as a feature, with no debug pass (`steps/debug.md`).
+  For a bug, `no repro` skips the reproduction, and `with repro` runs it in full.
+  `as a feature` plans the task as a feature, with no debug pass (`steps/debug.md`).
   `resume at <entry>` (sent by `f10 drive` once a catchup settled the stop) starts the flow at that entry and counts the ones before it done; `(entry <n>)` picks the `n`th entry of the badge's pipeline where the flow names it twice.
   The badge walks to that place: after `pipeline`, one call runs `set ship running` on each entry before it, in order, then on the entry itself.
 
@@ -41,7 +51,9 @@ Deploy has its own confirmation (the **deploy** step).
    The flow is declared in the `project.md` it prints; a planless one loads `plan` but never runs it.
 2. Follow those steps in the order the Arguments item gives.
 3. Load each flow entry just before it runs, in one call with its badge: `f10-state.sh set ship running <entry>; f10-load-project.sh <step>`, and follow the step from that load.
-   A `review` entry loads `review resolve`, and a `pr` entry loads `pr handoff` unless its `handoff off` dial is set, because the pr step runs the handoff; the catchup guard (below) adds `catchup` to the load of each entry it guards.
+   A `review` entry loads `review resolve`.
+   A `pr` entry loads `pr handoff` unless its `handoff off` dial is set, because the pr step runs the handoff.
+   The catchup guard (below) adds `catchup` to the load of each entry it guards.
 4. **Read the checks at each boundary** once the branch has an open PR (after the first `pr` entry), in the same call as the load: `f10-state.sh set ship running <entry>; f10 pr checks --brief; f10-load-project.sh <step>`.
    It costs no turn, because the line comes back with the step.
    - `checks: red`: run `f10-load-project.sh ci catchup` and the **ci** step before the entry, under the entry's badge.
@@ -53,27 +65,51 @@ Deploy has its own confirmation (the **deploy** step).
 `f10 flow` lists them and what selects each.
 
 **Paces** tune the chosen flow (`docs/project-setup.md` → Paces).
-Once the flow is chosen, run `f10 flow <name> [--pace <name>]`, passing `--pace` only when the argument gave one, and run the entries it prints in its order, never the frontmatter's list.
+Once the flow is chosen, run `f10 flow <name> [--pace <name>]`.
+Pass `--pace` only when the argument gave one.
+Run the entries it prints in its order, never the frontmatter's list.
 It prints one entry per line.
 An entry marked `skipped` does not run: say so in one line, and leave it out of the badge's `pipeline`.
-Dials after an entry go to its step with the entry: `rounds` and `depth` to **review**, `marker` and `handoff` to **pr**. A pace's judge effort is never an entry dial: it reaches only a judge that spawns an agent (`--blind`), whose profile comes from `f10 agents judge`, with `--pace <name>` when the argument gave one; an inline judge runs on the task agent's profile.
+Dials after an entry go to its step with the entry: `rounds` and `depth` to **review**, `marker` and `handoff` to **pr**.
+A pace's judge effort is never an entry dial.
+It reaches only a judge that spawns an agent (`--blind`), whose profile comes from `f10 agents judge`.
+That call takes `--pace <name>` when the argument gave one.
+An inline judge runs on the task agent's profile.
 A leading `plan` the pace skips makes the run planless, as a flow with no `plan` is.
-A `finish` line means the run ends at an open PR the pace would have merged: ship never merges it, and the report's `Next:` names `/f10:finish <id> --merge`, unless drive finishes the task (`modes/driven.md`).
+A `finish` line means the run ends at an open PR the pace would have merged.
+Ship never merges it.
+The report's `Next:` names `/f10:finish <id> --merge`, unless drive finishes the task (`modes/driven.md`).
 With no pace, the list is the declared flow, with an optional CI review (`ci?`) already settled.
 An `f10 flow` too old to take a name fails on it: run the declared flow, and say in one line that the pace was not applied.
 
-An entry is a step, or `step:arg`: a generic step plus its overlay, or a project-defined one, the argument passed to it (`review:local` or `review:ci` sets the review's `by` (who reviews), `review:host` runs the local review on the host's own code review, `review:local+ci` runs both into one round and one resolve, `review:local+ci?` runs the CI review only where it can run, and `f10 flow <name>` settles the `?` before ship sees the entry, `cleanup:<targets>` the cleanup targets, which always get the full pass where bare `cleanup` runs a light one on a diff under 200 added lines, `deploy:<env>` the environment).
+An entry is a step, or `step:arg`.
+The step is a generic step plus its overlay, or a project-defined one, and the argument is passed to it.
+`review:local` or `review:ci` sets the review's `by` (who reviews).
+`review:host` runs the local review on the host's own code review.
+`review:local+ci` runs both into one round and one resolve.
+`review:local+ci?` runs the CI review only where it can run, and `f10 flow <name>` settles the `?` before ship sees the entry.
+Bare `cleanup` runs a light pass on a diff under 200 added lines.
+`cleanup:<targets>` names the cleanup targets, which always get the full pass.
+`deploy:<env>` names the environment.
 The run starts at the entry after a leading `plan`, which runs only for a task with no plan file.
-An entry may end in a `[label]` (`pr[pr-polish]`), a display name only: run the step before the bracket, as if the label were absent.
+An entry may end in a `[label]` (`pr[pr-polish]`), which is a display name only.
+Run the step before the bracket, as if the label were absent.
 `resolve` is never named: a `review` entry runs it.
-A `judge` entry judges by position: before `implement` the **plan judge** (subject `plan <id>`), whose yellow verdict revises the plan file in place and writes no code; after it the **change judge**, which builds a yellow verdict's changes itself, routed as the **judge** step says before and after `pr`.
+A `judge` entry judges by position.
+Before `implement` it is the **plan judge** (subject `plan <id>`), whose yellow verdict revises the plan file in place and writes no code.
+After `implement` it is the **change judge**, which builds a yellow verdict's changes itself.
+Those changes are routed as the **judge** step says before and after `pr`.
 A `pr` entry opens the branch's PR, or refreshes it when one is open, so a flow may name `pr` again after review or judge to bring the description up to date.
 A flow with no leading `plan` is **planless**: it writes no plan file, and a brief inline plan in chat stands in for it unless a saved one exists.
 Free-text input also skips capture and fetch, so the run has no task id.
 A task id runs fetch and keeps the run tied to the id (badge, report, branch, review directory), and marks `f10-state.sh set plan skipped` once fetched, unless it reuses a saved plan (`prior`, below).
 Its inline plan states the kind fetch settled, with a bug's reproduction and root cause, a refactor's invariant or a spike's question in a line each, and lists any gaps on their defaults.
-With a task id, the inline plan also writes the change's intent as the plan step does (`f10 lore add intent --change <change> -m <what and why>`, `docs/lore.md`); a standing intent, or a failing add, is one line in the report, never a failed step.
-The **shipment** is the last delivering entry's (`conventions/context.md` → shipment): its rows are the ones that step declares, a project-defined step's on its overlay's `Shipment:` line; a `judge`, `demo` or `handoff` after it adds rows, never replaces them.
+With a task id, the inline plan also writes the change's intent as the plan step does (`f10 lore add intent --change <change> -m <what and why>`, `docs/lore.md`).
+A standing intent or a failing add is one line in the report, never a failed step.
+The **shipment** is the last delivering entry's (`conventions/context.md` → shipment).
+Its rows are the ones that step declares.
+A project-defined step declares them on its overlay's `Shipment:` line.
+A `judge`, `demo` or `handoff` after it adds rows, never replaces them.
 A `demo` entry with nothing to show skips in one line (the **demo** step), a normal end that adds no rows.
 
 **A spike ends after implement**, whatever the flow: a `Kind: spike` plan answers a question, and its code never leaves the machine.
@@ -104,24 +140,32 @@ Catchup is never a flow entry.
 The guard runs under the entry it guards, in that entry's load (`catchup pr`) and badge.
 A failure is `set ship failed <entry>`, or `partial` once the run left something durable, the guard's own commit or an open PR (`conventions/failure.md` rule 7), its `state` row naming that commit and its `note` naming catchup and `/f10:catchup`.
 In the same call, after that `set`, run `f10-state.sh stop guard`, because `f10 drive` tells the guard's stop from any other failure by that kind alone.
-The guard marks the branch before failing (the **catchup** step), and `f10 drive` catches a marked branch up by itself, again each time the base moves, then prompts ship again at this entry; it halts, naming the files, when three catchups in a row meet the same conflict with the same base.
+The guard marks the branch before failing (the **catchup** step).
+`f10 drive` catches a marked branch up by itself, again each time the base moves, then prompts ship again at this entry.
+It halts, naming the files, when three catchups in a row meet the same conflict with the same base.
 A driven run's `next` is `run /f10:catchup --driven in the worktree, then rerun the drive`: the rerun prompts ship again at this entry.
 The `next` is for a person, and the drive never reads it.
 
 Run the flow's entries **in the declared order**, each from its own load.
 A plan written this run needs no re-confirming.
-A `judge` entry routes the run by its verdict: the plan judge as the judge step's before-`pr` route says, its changes folded into the plan file for `implement` to build; the change judge differently before and after a `pr` entry (the **judge** step).
-A change judge's changes, before or after `pr`, are folded into the plan and built by the judge step's own route (**Building the changes**), never by a rerun of `implement`.
+A `judge` entry routes the run by its verdict.
+The plan judge routes it as the judge step's before-`pr` route says, and its changes are folded into the plan file for `implement` to build.
+The change judge routes it differently before and after a `pr` entry (the **judge** step).
+A change judge's changes are folded into the plan, before or after `pr`.
+They are built by the judge step's own route (**Building the changes**), never by a rerun of `implement`.
 
 **Badge** (`conventions/report.md`): `f10-state.sh pipeline <entry>...` once the flow is selected, every entry after `plan` as the flow names it, one argument each (`pipeline judge implement cleanup pr review:local judge pr`), which also declares the last as final; `f10-state.sh set ship running <entry>` before each entry, named as the flow names it, in the call that loads it; `f10-state.sh set ship done` after the last.
-Pass each entry as `f10 flow` prints it, a label included, and single-quote a labelled one (`'pr[pr-polish]'`), because zsh reads an unquoted bracket as a glob and fails with `no matches found` before the command runs.
+Pass each entry as `f10 flow` prints it, a label included.
+Single-quote a labelled one (`'pr[pr-polish]'`), because zsh reads an unquoted bracket as a glob and fails with `no matches found` before the command runs.
 A plan from an earlier run (plan file, or reuse) adds `f10-state.sh set plan prior`.
 Stopping mid-way with durable artifacts is `set ship partial <step>` with a `note` (`conventions/failure.md` rule 7).
 
 **Lore** (`docs/lore.md`), after the flow's last entry and before the report back, when the run has a task id and is not a spike (a spike's knowledge is its report): the change's decisions and lessons, written now because every anchor names HEAD, the pushed commit after the last `pr` or the committed one after `commit`, so cleanup and the commit no longer move its lines.
 A flow ending at `implement` anchors the base commit and the tree's lines, and the report says so.
 `<change>` here and below is what `f10 lore change` prints: the task id for the task's first PR, `<id>.<n>` for a later one.
-**Decisions**: each fork implement's hand-off noted becomes `f10 lore add decision --change <change> --anchor <path:line[-end][#symbol]> --chosen <option> --rejected 'option: reason' -m <why>`, `--rejected` once per option, anchored to the code as it is now committed; the final report says `decisions: none`, or the count.
+**Decisions**: each fork implement's hand-off noted becomes `f10 lore add decision --change <change> --anchor <path:line[-end][#symbol]> --chosen <option> --rejected 'option: reason' -m <why>`.
+Pass `--rejected` once per option, and anchor to the code as it is now committed.
+The final report says `decisions: none`, or the count.
 **Lessons**: read this run's findings under `<storage root>/reviews/<id>/`, their resolve verdicts and fixes, the judge's verdicts, and what the run itself hit.
 A lesson is knowledge about a file a reader of the code alone would not get: a trap (an ordering, shared state, a silent default), an invariant two places depend on, why the simpler shape fails.
 Not a lesson: a bug this change fixed, a style finding, what a comment at the line already says, a restatement of the intent.
@@ -148,4 +192,17 @@ Any other failure leaves the shipment standing: `f10-state.sh set ship partial <
 A driven run reports back too; nothing is asked.
 
 **Exit**
-- Stop after the flow's last entry (a spike's: implement) and the report back, with the final report: the facts block with the **shipment** rows the last delivering entry declares, plus a judge's, demo's or handoff's when they ran (branch, PR/MR url, sha, deploy url, a spike report's path, a project-defined step's rows, a demo report, a handoff file from a `handoff` entry or a `pr` entry, printed once) and a `comment` row with the url report back got, a `checks` row when the shipment is a PR (the state `f10 pr checks` prints, read once and never waited on, with the failed jobs named in the prose beneath; a red read runs the **ci** step with its push first, then reads once more for the row), then review status ("stopped at PR" is a normal end), deploy status, a bug's or refactor's proof or a spike's answer (implement's line) and its close, what changed, the decisions and lessons lines, and a one-line reminder of gaps left on their defaults; a driven ship that drive finishes ends with the `Next:` line `modes/driven.md` gives.
+- Stop after the flow's last entry (a spike's: implement) and the report back, with the final report.
+  The final report starts with the facts block.
+  The facts block holds the **shipment** rows the last delivering entry declares, plus a judge's, demo's or handoff's when they ran.
+  Those rows include the branch, the PR/MR url, the sha and the deploy url.
+  They also include a spike report's path, a project-defined step's rows and a demo report.
+  A handoff file from a `handoff` entry or a `pr` entry is printed once.
+  The facts block also has a `comment` row with the url report back got.
+  When the shipment is a PR, it has a `checks` row with the state `f10 pr checks` prints.
+  That state is read once and never waited on, and the prose beneath names the failed jobs.
+  A red read runs the **ci** step with its push first, then reads once more for the row.
+  After the facts block comes review status ("stopped at PR" is a normal end), then deploy status.
+  Then comes a bug's or refactor's proof, or a spike's answer (implement's line) and its close.
+  Then come what changed, the decisions and lessons lines, and a one-line reminder of gaps left on their defaults.
+  A driven ship that drive finishes ends with the `Next:` line `modes/driven.md` gives.

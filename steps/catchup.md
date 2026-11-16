@@ -29,12 +29,14 @@ f10 records what a catchup needs as git config keys on the branch, `branch.<bran
 `f10-landed` and `f10-base-moved` stay set until a catchup clears the marks.
 
 To **clear the marks**, `git config --unset` each of `branch.<branch>.f10-landed` and `.f10-base-moved` that is set, where `<branch>` is the `branch` row `f10 pr catchup` printed.
-A run that skipped point 2 has no such row, so it reads the branch with `git branch --show-current`, and only once the merge or rebase has concluded, because HEAD is back on the branch then.
+A run that skipped point 2 has no such row, so it reads the branch with `git branch --show-current`.
+It reads it only once the merge or rebase has concluded, because HEAD is back on the branch then.
 Then set `.f10-base-tip` to the `sha` row when `found` is `f10-after-branch`.
 Otherwise unset `.f10-base-tip`, because the base is now the default branch.
 
 1. **Check the preconditions.**
-   An **operation already in progress** is a merge or a rebase the user started by hand, or one `f10 drive` started and stopped on a conflict, and this step settles it in place.
+   An **operation already in progress** is a merge or a rebase the user started by hand, or one `f10 drive` started and stopped on a conflict.
+   This step settles it in place.
    The loader prints an `in progress:` line above this step when there is one.
    Without that line, look under `git rev-parse --git-dir`: a `MERGE_HEAD` there is a merge, and a `rebase-merge/` directory or a `rebase-apply/rebasing` file is a rebase.
    The operation's other side is the base, and ours and theirs follow point 4's rule for that operation.
@@ -126,7 +128,8 @@ Otherwise unset `.f10-base-tip`, because the base is now the default branch.
    Any other mark stays set, because the drive reads a cleared mark as that base brought in, and the report names it.
 
    The `done catchup` signal is how `f10 drive` knows the turn ended.
-   Git then tells the drive whether the turn settled (**Sent by `f10 drive` or the watcher**, below): nothing in progress, no conflict marker, the base in the branch, and verify green.
+   Git then tells the drive whether the turn settled (see **Sent by `f10 drive` or the watcher**).
+   A settled turn has nothing in progress, no conflict marker, the base in the branch and verify green.
    Verify is green when the drive's own run of it passes, or, where the turn ran verify itself, when the marks are cleared.
    Every run writes the signal, a run by hand included.
 
@@ -184,10 +187,12 @@ The steering says which of four cases it is:
   Point 1's operation-in-progress path settles it in place, and a rebase continues through its remaining commits.
 - **The base came in cleanly and verify is red**, with the failing command and a log of its output named.
   Skip points 1 to 4, and fix it as point 5's semantic conflict.
-- **The last turn left it unsettled**, naming what is left: conflict markers, uncommitted paths, or the base missing from the branch.
+- **The last turn left it unsettled**, naming what is left.
+  That is conflict markers, uncommitted paths or the base missing from the branch.
   Settle that in place and commit it.
 - **The base came in cleanly and the sender cannot run verify**: the project's Verify heading is prose, or the watcher sent it, since a watcher pass stays short.
-  Skip points 1 to 4, and run point 5 whole, its marks included: verify, fix a red by the branch's intent, and clear the marks once green.
+  Skip points 1 to 4, and run point 5 whole, its marks included.
+  That means verify, fix a red by the branch's intent, and clear the marks once green.
 
 When the steering also says to run verify and clear the catchup marks (the sender cannot run verify), do so after settling, as point 5 says.
 Otherwise leave the marks as they are, because the drive clears them once its own verify is green.
@@ -196,7 +201,8 @@ After the turn, the drive checks the branch from git, runs verify itself where i
 A mark still set after a turn that was told to clear it reads as verify not green.
 The run never asks: no `AskUserQuestion` and no `f10-state.sh ask`.
 Verify runs in the foreground, or is waited on in the same turn, and the turn ends only at the report (`modes/driven.md`).
-`f10 drive` reads point 5's `done catchup` signal as the run's end, while the watcher reads only git: the mark, the tree, the base in the branch and no conflict marker.
+`f10 drive` reads point 5's `done catchup` signal as the run's end.
+The watcher reads only git: the mark, the tree, the base in the branch and no conflict marker.
 
 Every question point 4 would put to the user is decided instead by the task's intent.
 Read that intent once, from the plan file (`<storage root>/plans/<id>.md`, the id from `f10 task current`) and from the task body (`f10 task read <id>`).
@@ -221,7 +227,8 @@ Any failure is `f10-state.sh note "<what failed>" "<what is left>"` and then `f1
 The signal ends the turn, and git tells the drive that it did not settle.
 That covers the **On failure** cases below and a conflict the step cannot settle at all, such as a binary file both sides changed or a regenerate that fails.
 
-**Sent by the watcher** (the prompt says so, naming the sha the branch stood at before the watcher integrated): a failure puts the branch back at that sha, with its marks kept, because nobody follows up in this pane.
+**Sent by the watcher**: the prompt says so, and names the sha the branch stood at before the watcher integrated.
+A failure then puts the branch back at that sha, with its marks kept, because nobody follows up in this pane.
 For an operation still in progress, run `git merge --abort` or `git rebase --abort`, whatever was settled.
 Otherwise, when verify is red after the integration concluded, run `git reset --hard <that sha>`.
 The report says which of the two ran.

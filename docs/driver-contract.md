@@ -93,12 +93,14 @@ The task's properties arrive as flags, and only the ones the caller set:
 - `--parent` is the task to link the new one under as a subtask, and `--after` the task it waits for, read from the body's `After:` line, which stays in the body.
   Both are numbers, as every other verb's argument is.
   f10 rewrites that line into a link to the base task before the body reaches you (`After: [FT-12: <title>](<url>)`), using your `read` and `url` for a base it has not read yet; a driver that reads the line itself takes the id from the link text.
-- `--set` repeats, once per property, as for `update` (below): a property the project's driver config knows, and the value to give it.
+- `--set` repeats, once per property, as for `update`.
+  Each one names a property the project's driver config knows, and the value to give it.
 
 A property the tracker has no field for is dropped with a warning on stderr; f10 shows a successful `create`'s stderr to the user.
 Print the new task's id alone on stdout, the number or the prefixed id: f10 prints it back in the project's id format.
 Exit `4` when `create` fails before any write, because then no task exists and running it again is safe ([Exit codes](#exit-codes)).
-That covers a call you reject yourself (an option the property does not have, a missing title, a config error) and one the tracker rejected before acting (a validation error, a 429).
+That covers a call you reject yourself, such as an option the property does not have, a missing title or a config error.
+It also covers one the tracker rejected before acting, such as a validation error or a 429.
 With `tracker.title` declared, f10 takes a leading id off the titles in your `list`, `search` and `children` rows, and collapses a doubled id in your `read` document's `# ` heading to one; on the host's issues, it writes the template onto the title after your `create` and `update`, since a driver has no title verb.
 
 ## Commenting on and updating a task
@@ -121,7 +123,8 @@ Print the comment's url if the tracker gives one; f10 prints it back.
 - `--set` names a property the project's driver config knows (a Notion property, a Jira field) and the value to give it.
 - `--parent` arrives in an update of its own, after the other flags' update, as a number like `create`'s.
   It links the task under that parent, moving it from a parent it already has, and `--parent ""` takes the task out from under its parent.
-  A driver whose tracker has no parent link exits `3` on it, rather than dropping it with a warning, because a dropped link leaves the caller no way to tell it did nothing.
+  A driver whose tracker has no parent link exits `3` on it, rather than dropping it with a warning.
+  The reason is that a dropped link leaves the caller no way to tell it did nothing.
 - `--after` also arrives in an update of its own: rewrite the body's `After:` line to name task `<m>`, or drop it for `--after ""`.
   A driver that cannot edit the body exits `3`, for the same reason.
 
@@ -129,7 +132,8 @@ Every value is absolute: running the same update twice leaves the task as once.
 A property the tracker has no field for is dropped with a warning on stderr, as for `create`.
 
 Where the tracker is the host's issues, a driver that declines either verb (or no driver) leaves it to the host: `gh issue comment` / `glab issue note`, labels and assignee through `issue edit` / `issue update`, and `--status` as close or reopen, the only two states an issue has.
-`--parent` there is a GitHub sub-issue link; GitLab nests no issue under an issue, so `f10 task update --parent` exits 3.
+`--parent` there is a GitHub sub-issue link.
+GitLab nests no issue under an issue, so `f10 task update --parent` exits 3.
 A priority there is the label `tracker.priority` maps the level to.
 
 ## Exit codes
@@ -147,7 +151,8 @@ On a tracker that is not the host's issues (Notion, Jira), a declined `read`, `u
 A declined `branch` there names the branch by the bare id, and a declined `children` reads as no parent link.
 A declined `create` falls back to the host's issues where the tracker is the host's; elsewhere `f10 task create` exits 3, and the capture step creates the task through the Create adapter in `project.md`, as it does for a project with no driver.
 A declined `comment` or `update` falls back to the host's issues where the tracker is the host's; elsewhere `f10 task comment` and `f10 task update` exit 3, and a ship run puts its shipment in the final report alone.
-Code `4` tells f10 that a failed `create` made no task, so its error carries your stderr without the warning that the task may exist, and the caller fixes the input and runs it again.
+Code `4` tells f10 that a failed `create` made no task.
+So its error carries your stderr without the warning that the task may exist, and the caller fixes the input and runs it again.
 On any other verb, `4` is an ordinary failure.
 Exit `4` only on purpose, because f10 trusts it to mean nothing was written.
 Once the create request was sent, never let a subcommand's exit code pass through (`jq -e` exits 4 on an empty result): map any failure from then on to `1`.
@@ -167,7 +172,8 @@ A read can be retried after a 5xx; a `create` or `comment` retried after a 5xx o
 Retry those only after a failure the tracker reports as rejected before acting, such as a 429.
 Treat any other failure as an unknown outcome and say so on stderr, so the user checks the tracker before running it again.
 `update` sets absolute values, so a driver may retry it after a transient 5xx.
-f10 itself never retries a write verb, and its own error after a failed `create` or `comment` says the task or comment may exist, except after a `create` that exited `4`.
+f10 itself never retries a write verb.
+Its own error after a failed `create` or `comment` says the task or comment may exist, except after a `create` that exited `4`.
 
 **Answer within the limit.**
 f10 kills a verb that has not exited within `driver_timeout` (30 seconds unless project.md declares otherwise) and fails the command with `<driver> <verb>: no answer within <limit>`; after a write verb the error adds that the write may still have reached the tracker.

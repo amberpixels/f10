@@ -35,7 +35,8 @@ A project's overlay is loaded only for a project in the report, and only from th
 
 **`f10 standup` builds the report, and this step only renders it.**
 The grouping, the states, the split between work and upkeep, and the days all come from `f10 standup --json`, whose schema is in `docs/cli.md` § Standup.
-So do the ledger's additions: what a task is blocked on, the steps that left no commit, its precise stage, its drive and its active minutes.
+So do the ledger's additions.
+They are what a task is blocked on, the steps that left no commit, its precise stage, its drive and its active minutes.
 Never re-read git, the host or the ledger to second-guess them.
 Never re-read them as a fallback when the command fails either.
 
@@ -72,7 +73,8 @@ Never re-read them as a fallback when the command fails either.
      A section holds these lines for the tasks whose `days` carry its date:
      - **A task whose class that day is `work`** gets one line: its id linked to the tracker, its title, then its PRs linked in the JSON's order, which is chain order.
        A task with `riders` is a bundle, and its riders follow the title as `with FT-12, FT-13`, each linked.
-       Its `stage` goes only on the line of its last work day, else its `state` when it has no `stage`, because either one is where the task ended the period, not where it stood each day.
+       Its `stage` goes only on the line of its last work day, else its `state` when it has no `stage`.
+       They go there only, because either one is where the task ended the period, not where it stood each day.
        Its `activity` entries for that day follow on the same line, in a short phrase each (`plan saved`, `review round 2: 3 fixed, 1 skipped`).
        A task with `driven` names its drive (`drive 12`) on its last work day.
      - **Every task whose class that day is `upkeep`** shares one line, such as `kept up to date: FT-12, FT-14 (in review)`.

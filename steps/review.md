@@ -113,7 +113,9 @@ The sections follow the header:
 - **`## Categories`** lists the core categories first, then the project's, each with a count or `none found`.
 - **`## Findings`** holds one block per finding.
   Its heading is `<round>.<n>` (`1.3`, `2.1`) and a title.
-  Next come `summary:` in one line, `where:` as `path/to/file.go:123`, `category:`, `failure:`, `confidence:`, and `lore:` once the lore entry exists.
+  Next come `summary:` in one line and `where:` as `path/to/file.go:123`.
+  Then come `category:`, `failure:` and `confidence:`.
+  A `lore:` line follows once the lore entry exists.
   `failure:` is one line: a concrete input or state, and the wrong output, crash or cost it leads to.
   `confidence:` is `confirmed` when the reviewer traced that failure through the code, and `plausible` when the scenario is concrete but one link in it could not be traced.
   The body then says what is wrong, why it matters, and a concrete fix.
@@ -149,10 +151,12 @@ The main agent first gathers these facts:
 
 - the checkout root, the base ref and its sha, and the diff command
 - the task id and its text (`f10 task read <id>`)
-- the round number, the prior round's path and the output path (`f10 review round`: `round:`, `latest:`, `path:`), and the `pr:` value for the header
+- the round number, the prior round's path and the output path.
+  `f10 review round` prints them as `round:`, `latest:` and `path:`.
+- the `pr:` value for the header
 - each lesson that implement's hand-off in this run said it overrode, with the lesson id, its path and the reason (none when the hand-off noted none, or when the review runs standalone)
 - the review roles: the base role, where Roles replaces it, and the added roles, from the sources `conventions/context.md` → Roles ranks, the plan's `Roles` line first
-- the depth: `light` when the flow entry carries a `depth light` dial from the run's pace (**Depth**, below), else `full`
+- the depth: `full`, or `light` when the flow entry carries a `depth light` dial from the run's pace (see **Depth** below)
 
 It then spawns **one fresh `general-purpose` agent** and hands it those facts.
 Never use `fork`, because a fork inherits the whole conversation.
@@ -264,12 +268,17 @@ The host is the agent running the session: in Claude Code, its built-in `code-re
 It takes the blind reviewer's place in rounds, resolve, lore and the state block, and does not combine with `ci`.
 
 1. **Facts**: the main agent gathers the facts **The blind reviewer** lists.
-2. **Invoke** the host's `code-review` skill with the Skill tool, from the main agent, because the skill's higher levels spawn reviewer agents of their own, and a spawned agent may not be allowed to.
+2. **Invoke** the host's `code-review` skill with the Skill tool, from the main agent.
+   The main agent runs it because the skill's higher levels spawn reviewer agents of their own, and a spawned agent may not be allowed to.
    Hand it nothing beyond its arguments, no plan and no facts, so it reviews the diff exactly as it would when the user runs it.
-   It is still not blind the way the blind reviewer is: whatever part of the review the skill runs inline shares the main agent's context, which in a ship flow holds the plan and the implementation.
+   It is still not blind the way the blind reviewer is.
+   Whatever part of the review the skill runs inline shares the main agent's context.
+   In a ship flow, that context holds the plan and the implementation.
    So a project that wants a reviewer that never saw the session keeps `review:local`, and `review:host` buys the host's verification and levels instead.
    Its arguments are a level, a findings bound and a target:
-   - **Level**: `project.md → Review`'s `Host level:` line, one of `low`, `medium`, `high`, `xhigh` or `max`, else `high`.
+   - **Level**: `high` by default.
+     A `Host level:` line in `project.md → Review` overrides it.
+     Its value is one of `low`, `medium`, `high`, `xhigh` or `max`.
      Always pass it, because with none the skill reuses the level the user typed last.
      Never pass `ultra`, because that is a billed cloud review only the user launches.
    - **Findings bound**: always `--max-findings all`, because the skill otherwise keeps the cap the user chose last, and this step applies its own cap of three per category when it shapes the findings.
@@ -280,18 +289,25 @@ It takes the blind reviewer's place in rounds, resolve, lore and the state block
 
    Never pass `--fix` or `--comment`: resolve makes the fixes, and a comment would leave the machine before resolve read it.
 3. **Shape** each finding the skill reports through `ReportFindings` into one block:
-   - the title is its short summary, else its summary; `summary:` is its summary
+   - the title is its short summary, else its summary
+   - `summary:` is its summary
    - `where:` is its `file:line`
    - `failure:` is its failure scenario
    - `confidence:` is `confirmed` for `CONFIRMED`, and `plausible` for `PLAUSIBLE` or no verdict
-   - `category:` maps its category onto the core categories: security and performance findings to **security and performance**, tests and docs to **tests and docs**, simplification and reuse to **architecture and guidelines**, efficiency to **security and performance** when it names a runtime cost and to **architecture and guidelines** otherwise, and the rest to **correctness and logic**.
-     A finding on a project category's subject goes to that category.
+   - `category:` maps its category onto the core categories:
+     - security and performance findings go to **security and performance**
+     - tests and docs go to **tests and docs**
+     - simplification and reuse go to **architecture and guidelines**
+     - efficiency goes to **security and performance** when it names a runtime cost, and to **architecture and guidelines** otherwise
+     - the rest go to **correctness and logic**
+     - a finding on a project category's subject goes to that category, whatever the skill called it
 
    The skill ranks findings most severe first, so the cap of three per category keeps the first three.
    **Never flag** items are dropped.
    A run that reports no findings is recorded as a `clean` round.
    The header says `reviewer: local`, because the findings parser reads any other name as a remote reviewer, and adds the line `engine: host <level>` after it.
-   In round two, `## Prior round` is written before the skill runs, by one fresh `general-purpose` agent following point 5 of the blind reviewer's brief, so the agent that made the fixes does not judge them.
+   In round two, `## Prior round` is written before the skill runs.
+   One fresh `general-purpose` agent writes it, following point 5 of the blind reviewer's brief, so the agent that made the fixes does not judge them.
 4. **Lore and the state block** are written as for the blind reviewer, with `--source local`, and the main agent picks each severity.
 
 **On failure:** no `code-review` skill in the session, or a run that ends without `ReportFindings`, fails the entry (`conventions/failure.md`).
@@ -300,7 +316,9 @@ It never falls back to the blind reviewer, because the flow declared the host.
 ## Rounds
 
 **One round is the default.**
-A `rounds` dial on the flow entry, from the run's pace, comes first: `rounds 1` means one round, whatever round one's resolve fixed, and `rounds 2` means round two whenever round one's resolve fixed something.
+A `rounds` dial on the flow entry, from the run's pace, comes first.
+`rounds 1` means one round, whatever round one's resolve fixed.
+`rounds 2` means round two whenever round one's resolve fixed something.
 Without the dial, round two runs only when round one was heavy: its resolve fixed six or more findings.
 
 Otherwise, never run, suggest or offer a second round.

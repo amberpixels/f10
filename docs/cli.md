@@ -133,7 +133,8 @@ It changes nothing, so it is always safe to run; `-C` points it at another check
 Inside a session the plugin judged is the one on the session's PATH (a directory marketplace or `--plugin-dir` included); outside one, the install `installed_plugins.json` records.
 
 It exits 1 when any check that every command needs has a problem.
-A scoped problem (`herdr`, `statusline`, `remote`) is printed but affects only what it names, and `not needed here` never fails.
+A scoped problem (`herdr`, `statusline`, `remote`) is printed but affects only what it names.
+`not needed here` never fails.
 
 `--json` emits an array, one object per check:
 
@@ -148,15 +149,18 @@ A scoped problem (`herdr`, `statusline`, `remote`) is printed but affects only w
 ## Agents
 
 `f10 agents` prints the merged agents map, `~/.f10/agents.md` under the project's `agents:`, one key per line with its value and origin.
-The run's pace (`--pace`, else the branch's record, else the project's or the user's `pace:`) lays a `judge: { effort }` dial over the `judge` key, its origin `pace <name>` ([Paces](project-setup.md#paces)).
+The run's pace lays a `judge: { effort }` dial over the `judge` key, and that key's origin reads `pace <name>` ([Paces](project-setup.md#paces)).
+The pace is `--pace`, else the branch's record, else the project's or the user's `pace:`.
 `f10 agents <step>...` prints each step's resolved profile: `review: claude:opus:high  (model: default (declared (user, ~/.f10/agents.md)), effort: review (declared (main, frontmatter)))  Agent tool: model opus, effort high  - the blind reviewer, a subagent`.
 A step scoped by task kind (`plan.bug`) prints a line per kind unless `--kind` picks one.
 `--agent <profile>` lays a run's profile over `default` as `f10 start --agent` does, and `--json` emits the same lines.
 `f10-load-project.sh <step>...` prints this for the steps it loads, which is where a spawning step reads the Agent tool form.
-A key or a profile the vocabulary refuses is a problem naming the file, as a `project.md` fact is: it stops every command that acts on facts but `f10 config`, `f10 init` and `f10 doctor`, which report it.
+A key or a profile the vocabulary refuses is a problem naming the file, as a `project.md` fact is.
+It stops every command that acts on facts, except `f10 config`, `f10 init` and `f10 doctor`, which report it.
 
 **Your file**, `~/.f10/agents.md`, YAML frontmatter then free prose, holds the `agents:` map every project starts from (`docs/project-setup.md` → Agents).
-`F10_USER_DIR` names another directory than `~/.f10` for it, the other user files, the ledger and out-of-tree project roots, which the eval runner uses to keep a measured run off your own map.
+`F10_USER_DIR` names another directory than `~/.f10` for it, the other user files, the ledger and out-of-tree project roots.
+The eval runner uses it to keep a measured run off your own map.
 It moves the daemon's run dir too, unless `F10_RUN_DIR` or `XDG_RUNTIME_DIR` names one (**Daemon** below).
 
 ## Start
@@ -165,7 +169,15 @@ It moves the daemon's run dir too, unless `F10_RUN_DIR` or `XDG_RUNTIME_DIR` nam
 It derives the branch name (the driver's `branch` verb, else `<ID>/<slug>` with the slug cut from the task's title, else the bare id with a note when the host returns no title), creates the worktree beside the main checkout - through `wt switch` when [worktrunk](https://github.com/max-sixty/worktrunk) is on `PATH`, so the project's hooks keep firing, else with `git worktree add` at the same sibling path - opens it as a Herdr workspace, starts a claude agent in its root pane and prompts it.
 The command returns as soon as the prompt is submitted; the work happens in the new workspace.
 
-- the prompt is `/f10:plan <id> && /f10:ship <id>` with every gap on its default, closed by `--driven`, the marker that tells the agent it is prompted from outside and routes every question through run state ([driven mode](../modes/driven.md)); `--plan` prompts the plan alone; `--flow <name>` ships through that declared flow, `/f10:ship <name>: <id>`, and `--local` is `--flow local`, so nothing is pushed; a flow with no leading `plan` sends ship alone, and so does a pace that skips `plan`; `--pace <name>` is recorded on the branch, where ship's `f10 flow` reads it, so the prompt does not carry it; `--discuss` prompts only the fetch: the agent summarises the task and waits for you in its own pane, so the prompt is plain text with no `--driven` marker.
+- the prompt is `/f10:plan <id> && /f10:ship <id>` with every gap on its default.
+  It is closed by `--driven`, the marker that tells the agent it is prompted from outside and routes every question through run state ([driven mode](../modes/driven.md)).
+  `--plan` prompts the plan alone.
+  `--flow <name>` ships through that declared flow, as `/f10:ship <name>: <id>`.
+  `--local` is `--flow local`, so nothing is pushed.
+  A flow with no leading `plan` sends ship alone, and so does a pace that skips `plan`.
+  `--pace <name>` is recorded on the branch, where ship's `f10 flow` reads it, so the prompt does not carry it.
+  `--discuss` prompts only the fetch.
+  The agent summarises the task and waits for you in its own pane, so the prompt is plain text with no `--driven` marker.
   Words after the id are a note the agent acts on after the summary and before it waits (`f10 start 42 --discuss "/f10:judge it first"`); a note goes only with `--discuss` or a PR pickup, and any other mode refuses one, since a driven run takes its instructions from the task.
   The three are exclusive, and `--flow` or `--local` with `--plan` or `--discuss` is refused, since both stop before ship
 - the flow is recorded on the branch as `branch.<name>.f10-flow` in local git config, for `f10 status` and a rerun of `f10 drive`; with `flow_by_area` declared and no flow named, nothing is recorded and the prompt is `/f10:ship <id>` alone, since ship picks the flow from the task's area
@@ -173,7 +185,9 @@ The command returns as soon as the prompt is submitted; the work happens in the 
   The agent ships it: the prompt is `/f10:ship <id>`, or `/f10:ship <name>: <id>` with `--flow` or `--local`; `--plan` still plans, and the plan step archives the saved one; `--discuss` names the plan's path.
   The report gains a `plan` row.
   `f10 drive` reads main's plan the same way, when it starts the task's agent.
-- the agent is started with an `--add-dir` for each dir of the storage root an agent writes to (the task-file dirs and `audits`, created if missing) whenever that root lies outside the worktree, so its writes there ask no permission; `instructions/` and `driver/` are left out, so a worktree's agent cannot change what every checkout loads.
+- the agent is started with an `--add-dir` for each dir of the storage root an agent writes to: the task-file dirs and `audits`, created if missing.
+  This happens whenever that root lies outside the worktree, so its writes there ask no permission.
+  `instructions/` and `driver/` are left out, so a worktree's agent cannot change what every checkout loads.
 - `--after <id>` bases the branch on that task's existing branch, local or on origin, and records the dependency on the new branch in local git config (`branch.<name>.f10-after`, the task; `branch.<name>.f10-after-branch`, its branch), so it never leaves the machine.
   The prompt names the base task and the path of its plan as the contract to design against, not the checkout, with no fallback for its absence.
   The path is in the shared storage root, and a note beneath the report says when the plan is not written yet.
@@ -246,7 +260,9 @@ A bundle's PR title names the riders after the lead id, up to two and then a cou
 `f10 pr create` and `f10 pr edit` add that tag to the drafted title, and replace one already there.
 The board shows such a PR under its lead with the lead's title.
 Drive's finish and the watcher ask no riders question, since a resume carries only the latest answer.
-They follow the PR body instead: a rider under `Closes #n` closes, and one under `Part of #n`, or not named at all, stays open.
+They follow the PR body instead.
+A rider under `Closes #n` closes.
+A rider under `Part of #n`, or not named at all, stays open.
 The report names the riders left open.
 A bundle merged without a PR has no body, so its riders stay open.
 
@@ -282,12 +298,14 @@ A drive's finish does not wait itself.
 Instead the drive holds the task as `waiting on checks` and tries again each poll, for up to 20 minutes per head.
 On red it sends `/f10:ci` to the task's agent and shows the task as `triaging checks` (**Checks triage** below).
 A drive whose pace does not finish holds a shipped PR the same way before it ends the task, so a head that turns red is triaged first.
-The watcher finishes only merged PRs, so its finish never waits on checks; its own read of an open PR's checks is under **Watch** (**red**).
+The watcher finishes only merged PRs, so its finish never waits on checks.
+Its own read of an open PR's checks is under **Watch** (**red**).
 
 ### Checks triage
 
 A red head is triaged by the `ci` step, which `/f10:ci` runs on its own and ship runs before its next entry.
-It reads the first failed job that was not cancelled (`f10 pr checks --log`), runs verify locally, and reads how the same job last ended on the default branch (`f10 pr checks --triage`).
+It reads the first failed job that was not cancelled (`f10 pr checks --log`) and runs verify locally.
+It also reads how the same job last ended on the default branch (`f10 pr checks --triage`).
 Red verify is the change's own failure, so it gets one fix round.
 Green verify with the job green on the default branch is a flake, so the failed jobs are rerun once (`f10 pr checks --rerun`).
 Green verify with the job red on the default branch is always a question, because the default branch needs its own fix.
@@ -300,14 +318,17 @@ A drive sends the step to the agent when finish meets red, and halts when a tria
 For a bundle, finish needs `--close`: the riders the PR delivers, comma-separated, `all` or `none`.
 Without it, finish exits **7** before changing anything, naming the riders the PR body closes as the default, and the finish skill asks.
 `--close` overrides the body.
-Before an open PR merges, each rider left open has its closing keyword in the PR body turned into `Part of #n`, and each rider chosen to close has its `Part of #n` turned back into `Closes #n`.
+Before an open PR merges, each rider left open has its closing keyword in the PR body turned into `Part of #n`.
+Each rider chosen to close has its `Part of #n` turned back into `Closes #n`.
 After a merge that already happened, each rider left open that the body closed is reopened instead, and each rider chosen to close that the body left open is closed.
 A tracker that is not the host closes nothing on merge, so the notes name the riders to close there.
 The notes also carry one line on the change's lore (`docs/lore.md`): its intent, decisions and lessons counted, each named when missing, so a change that reached finish without a ship run shows it left none.
 That checkout is a worktree start created, or the main checkout itself for a task shipped from main with no worktree.
 A finish that stopped halfway is finished by a rerun: a task with no branch whose plan is in the archive reports `already finished` and exits 0, and a branch whose worktree is gone but whose PR merged is cleaned up without one (dependents released, default branch pulled, plan archived, only the branch deleted, no workspace closed).
 A branch with no worktree and no merged PR is still refused.
-A parent task delivered through its subtasks has no branch or plan of its own, so finish checks its subtasks instead: once every one is closed with no branch left, here or on origin, it closes the parent on the host's issues and names the subtasks in the report.
+A parent task delivered through its subtasks has no branch or plan of its own, so finish checks its subtasks instead.
+Once every one is closed with no branch left, here or on origin, it closes the parent on the host's issues.
+It names the subtasks in the report.
 On any other tracker it only checks them, and the note says to close the parent there.
 A subtask still open or still holding a branch is named in the refusal, and the parent stays open.
 Once a finish succeeds, it marks the task finished in every stopped drive record that lists it, so `f10 drive list` needs no rerun of the drive.
@@ -327,7 +348,10 @@ There finish merges as usual, brings the default branch up to the merge, switche
    Open: merged through `gh pr merge` / `glab mr merge`, never with `--admin`; when the host refuses (red CI, a required review, conflicts) its reason is the error and nothing has changed.
    Already merged: confirmed.
    Closed without a merge: a refusal.
-   Right before an open request merges, or a branch never pushed lands (below), `f10 lore check` runs on the change the merge closes (`<id>`, or `<id>.<n>` for the task's `n`-th PR): under `lore_gate: warn`, the default, its reasons are a note under the report and the merge goes on; under `block` they are the error, with nothing changed.
+   `f10 lore check` runs on the change the merge closes (`<id>`, or `<id>.<n>` for the task's `n`-th PR).
+   It runs right before an open request merges, or before a branch never pushed lands (below).
+   Under `lore_gate: warn`, the default, its reasons are a note under the report and the merge goes on.
+   Under `block` they are the error, with nothing changed.
    A passing check needs the intent, a judge verdict of proceed and no open blocker or major finding, so a flow with no `judge` entry stays on `warn`.
    A request already merged, `--local` and a spike's close merge nothing and are not checked; a lore root this clone lacks reads as `no entries`, which `block` refuses too.
    A PR whose base is not the default branch is a refusal too: finish the task that base belongs to first, and its finish retargets this PR.
@@ -341,10 +365,12 @@ There finish merges as usual, brings the default branch up to the merge, switche
    No PR, no `origin/<branch>` and no upstream recorded for the branch: the branch merges into the local default branch instead, by the merge method below, built in memory (`git merge-tree`, `git commit-tree`) so no checkout is touched.
    The merge is built on the local default branch, or on `origin/<default>` when the local one only lags it, so origin's commits never fold into the merge; the two diverged is a refusal.
    A squash's subject is the task and its title, its body the branch's commit subjects and, with traces on, the `Task:` trailers; a merge writes a two-parent commit; a rebase lands only a fast-forward.
-   On a host-issues tracker (GitHub, GitLab), the squash or merge commit also carries a `Closes #<n>` line for the task and each rider `--close` names, whatever `traces` says, so the issue closes when the commit reaches origin's default branch and never before.
+   On a host-issues tracker such as GitHub or GitLab, the squash or merge commit also carries a `Closes #<n>` line for the task and each rider `--close` names.
+   It carries them whatever `traces` says, so the issue closes when the commit reaches origin's default branch and never before.
    The default branch then moves: `git merge --ff-only` when the main checkout is on it, else `git update-ref`.
    A conflict, or a rebase behind the default branch, is refused with nothing changed and `/f10:catchup` named; a branch already in the default branch lands nothing.
-   A branch whose changes are all in the default branch is a rerun only when a commit there names the task the way a landing does: its subject, its `Task:` trailer, its closing line or the merge's own subject.
+   A branch whose changes are all in the default branch is a rerun only when a commit there names the task the way a landing does.
+   A landing names it in the commit's subject, its `Task:` trailer, its closing line or the merge's own subject.
    The branch's tip being in the default branch proves nothing, because a branch with no commits of its own is there too.
    Any other branch that adds nothing is refused with nothing changed (`<branch> adds nothing to <default>`), because closing it would report the default branch's tip as the task's merge.
    `--empty` finishes it anyway.
@@ -352,7 +378,8 @@ There finish merges as usual, brings the default branch up to the merge, switche
    Nothing is pushed, pulled or deleted on origin, and no PR closes the task, so the notes say who does.
    When the commit carries the closing lines, the task closes once the default branch reaches origin.
    A rerun that finds the branch already in the default branch says the same when an unpushed commit there carries those lines.
-   Otherwise (another tracker, one a driver reads, a rebase, or a branch that landed without the lines) the task stays open until it is closed on the tracker.
+   Otherwise the task stays open until it is closed on the tracker.
+   That covers another tracker, one a driver reads, a rebase, and a branch that landed without the lines.
    A pushed branch with no PR is a refusal: open one, or delete origin's copy to merge here.
    So is a branch with an upstream origin lacks (a request the host merged may no longer be listed by branch), and `--local`, which merges nothing.
 3. **The merge method** comes from `project.md → Hosting & PR` when it carries `merge method: squash` (or `merge`, `rebase`, in any case).
@@ -369,9 +396,14 @@ There finish merges as usual, brings the default branch up to the merge, switche
    A pull or fetch that loses a ref's lock to another git retries for a few seconds, because the ref is busy only while that git runs.
    A stale remote-tracking ref in the way of a new one says the same words but is not retried, because only a prune clears it.
    A pull that still fails does not stop the finish, because the merge is already on origin.
-   It becomes a note naming the cause and the command that settles it: a local default branch with commits origin lacks (`git -C <main> switch <default> && git -C <main> rebase origin/<default>`, or push them), a stale origin ref in the way (`git -C <main> remote prune origin`), a ref lock or a busy pull, or git's own error.
+   It becomes a note naming the cause and the command that settles it.
+   A local default branch with commits origin lacks is settled by `git -C <main> switch <default> && git -C <main> rebase origin/<default>`, or by pushing them.
+   A stale origin ref in the way is settled by `git -C <main> remote prune origin`.
+   The other causes it names are a ref lock, a busy pull, or git's own error.
    Finish never rebases or resets the default branch.
-   The deferred pull is recorded in `<storage root>/pending-pull`, and a later finish, each tick of an `f10 drive` that ran a finish, and each pass of the watcher under `watch: finish` retry it until the merge commit is in the default branch.
+   The deferred pull is recorded in `<storage root>/pending-pull`.
+   A later finish retries it until the merge commit is in the default branch.
+   So does each tick of an `f10 drive` that ran a finish, and each pass of the watcher under `watch: finish`.
    A pending pull keeps the project watched until it lands.
 6. **Dependents are released.**
    A branch another task started with `--after` on this one has `branch.<name>.f10-after` and `.f10-after-branch` in local config.
@@ -384,7 +416,10 @@ There finish merges as usual, brings the default branch up to the merge, switche
    A plan that cannot be moved keeps the worktree and its branch, since a rerun finds the task by its branch.
    **The handoff is archived** the same way: `<storage root>/handoffs/<ID>.md` moves to `handoffs/archive/` with the plan's numbering, so the task's next PR writes its own.
    A merge reports the archived path as a `handoff` row.
-   On a terminal, the `plan`, `handoff` and `spike` rows link their path to its `file://` url (OSC 8), as `f10 start`'s `plan` row, the `plan`, `handoff`, `judge` and `review` rows of `f10 status <id>` and the `wrote` row of `f10 init` do, and a drive's copy of the report links when the drive writes to a terminal.
+   On a terminal, the `plan`, `handoff` and `spike` rows link their path to its `file://` url (OSC 8).
+   `f10 start`'s `plan` row and the `wrote` row of `f10 init` link the same way.
+   So do the `plan`, `handoff`, `judge` and `review` rows of `f10 status <id>`.
+   A drive's copy of the report links when the drive writes to a terminal.
 8. **The report**, then the worktree and its local branch are removed - through `wt remove` when worktrunk is on `PATH`, else `git worktree remove` and `git branch -D` - then the Herdr workspace closes (the agent goes with it).
    With `--yes` from inside the worktree, main's workspace is focused before the close so the user lands at home; the close ends the process, which is why it comes last.
    With the branch checked out in main, main is switched to the default branch (`git switch`) and only the local branch is deleted (`git branch -D`, worktrunk or not), and no workspace closes.
@@ -397,10 +432,14 @@ There finish merges as usual, brings the default branch up to the merge, switche
 
 Once the merge has landed, a failing step does not stop the ones after it.
 Releasing dependents and archiving the plan, the reviews and the handoff each run, and finish then exits non-zero naming every step that failed.
-A rerun finds the task by its branch, so a failure in any of these steps keeps the worktree and branch, leaves the workspace open and leaves stopped drive records unmarked, and the error ends in `rerun f10 finish <id>`.
+A rerun finds the task by its branch.
+So a failure in any of these steps keeps the worktree and branch, leaves the workspace open and leaves stopped drive records unmarked.
+The error ends in `rerun f10 finish <id>`.
 Each step finds its own work done on that rerun, so it completes the rest.
 Archiving the plan and copying a spike report out matter twice over, because the worktree may hold the only copy.
-Once the worktree and branch are removed, a rerun reads the task as finished, so a failure after that (archiving a spike report kept outside the worktree, focusing or closing a workspace) ends in "settle what failed by hand" instead.
+Once the worktree and branch are removed, a rerun reads the task as finished.
+So a failure after that ends in "settle what failed by hand" instead.
+Such a failure is archiving a spike report kept outside the worktree, or focusing or closing a workspace.
 A finish closing its own workspace (`--yes` from inside it) leaves it open when a step failed, so the error stays on screen.
 
 Before the merge lands, finish also measures the branch for `f10 stats`: lines added plus deleted against the base it forked from (its `--after` base branch, else `origin/<default>`, else the local default branch for a branch never pushed), lockfiles, generated code and snapshots left out, with the markdown share.
@@ -444,7 +483,8 @@ A branch with no request, or any branch when the checkout has no host CLI, goes 
 A host that fails to answer for a branch keeps it, with a line.
 
 Removal, per branch: a merged request's dependents are released as finish releases them; origin's copy is deleted through the host's API with its local tracking ref, but only for a request the signed-in user opened (someone else's keeps its origin branch, with a line, and one only on origin is not touched); then the local branch (`git branch -D`).
-Once every branch of a task is gone, a bundle's riders included, its plan moves from `plans/<id>.md` to `plans/archive/` with finish's numbering, its handoff to `handoffs/archive/` the same way, and its images are dropped.
+Once every branch of a task is gone, a bundle's riders included, its plan moves from `plans/<id>.md` to `plans/archive/` with finish's numbering.
+Its handoff moves to `handoffs/archive/` the same way, and its images are dropped.
 A task with another branch left, such as a second attempt still in a worktree, keeps both, with a line; so does a plan written after the request merged or closed (for a branch never pushed, after its last commit), since the task was planned again.
 A step failing keeps that branch, with a line, and the run goes on to the next.
 
@@ -465,10 +505,16 @@ The plan and ship skills run it first whenever their argument is a task id, beca
    A task started with a suffix is forwarded to with the same suffix.
 2. **Three outcomes.**
    Exit 0: the command was submitted, and the report has three rows - `task`, `workspace`, `sent`.
-   A note under them says where the text landed: the open ask it answers, or, for an agent idle (or done) while its run says running, that run, since the text resumes its turn.
+   A note under them says where the text landed.
+   It names the open ask the text answers.
+   For an agent idle (or done) while its run says running, it names that run instead, since the text resumes its turn.
    The command returns at submission, since Herdr's prompt call does, and the outcome lands in that tab; nothing here waits or tails.
    Exit 3: the task is in this checkout (its branch is checked out here, or nowhere, or it has no branch) and the command runs locally; a one-line reason says which.
-   Anything else is a failure: outside Herdr, with start's own refusal; no workspace shows the worktree; an agent idle while its run says running whose pane shows no input box, because a permission dialog there would take the text's Enter as its answer; Herdr refused the prompt.
+   Anything else is a failure.
+   Outside Herdr, it fails with start's own refusal.
+   It also fails when no workspace shows the worktree, or when Herdr refused the prompt.
+   It fails for an agent idle while its run says running whose pane shows no input box.
+   That is because a permission dialog there would take the text's Enter as its answer.
 3. **The marker.**
    Text that begins with `/f10:` and does not already carry `--driven` gets it appended, so the agent knows from its first turn that it is driven ([driven mode](../modes/driven.md)).
    Plain text, an answer or a steering note, is sent as it is.
@@ -529,7 +575,8 @@ It applies only to the tree; a run's block prints as without it.
 
 Color is off when stdout is not a terminal or `NO_COLOR` is set.
 
-A task's run block, and the `run none for` block of a task whose checkout's agent is on something else, opens with the ship report's facts block, so a shipped task's facts can be printed again after the conversation moves on:
+A task's run block opens with the ship report's facts block, so a shipped task's facts can be printed again after the conversation moves on.
+So does the `run none for` block of a task whose checkout's agent is on something else:
 
 ```
 task:          FT-414
@@ -544,26 +591,45 @@ review 1:      /home/me/code/f10/.f10/reviews/FT-414/1.md
 ```
 
 A row with no value is left out.
-Every row but one is read locally: the title and the url from the task refs f10 already read (a run that lost its url gets it back from there, in `--json` too), the head's short sha once the branch has a commit of its own, and the plan, the handoff and the demo report (`demo/<id>/report.html`) when their files exist.
+Every row but one is read locally.
+The title and the url come from the task refs f10 already read, so a run that lost its url gets it back from there, in `--json` too.
+The head's short sha shows once the branch has a commit of its own.
+The plan, the handoff and the demo report (`demo/<id>/report.html`) show when their files exist.
 The PR comes from the ledger's `pr_opened` event.
-A project whose PR adapter runs a script around `gh` leaves no such event, so for a task the ledger saw pushed, status asks the host for the PR by branch.
-Each judge verdict and each review findings file gets a row of its own after `plan` and `handoff`: `judge <subject>` (task, plan or change), with the file's number added when a subject was judged twice, and `review <round>`.
+A project whose PR adapter runs a script around `gh` leaves no such event.
+So for a task the ledger saw pushed, status asks the host for the PR by branch.
+Each judge verdict and each review findings file gets a row of its own after `plan` and `handoff`.
+A verdict's row is `judge <subject>` (task, plan or change), with the file's number added when a subject was judged twice.
+A findings file's row is `review <round>`.
 Verdicts from before the open series are an earlier PR's and stay out, as the judge gate drops them.
-`--json` carries the same files as `verdicts` (`subject`, `path`) and `reviews` (`round`, `path`).
-`--json` also carries the whole block as a `shipment` object, on each run entry (repeated per run, as `agent` is) and on the no-run block: `task`, `title`, `url`, `branch`, `pr`, `pr_state` (only when the host was asked), `checks` (an open PR's head checks, as `f10 pr checks --json` prints them, when the host answered), `commit`, `plan`, `handoff`, `demo`, `verdicts` and `reviews`, each left out when empty except `task`.
-The flat keys a reader written before the object relies on stay beside it: `verdicts` and `reviews` on a run entry, and those plus `plan`, `pr` and `pr_state` on the no-run block.
+`--json` carries the same files as `verdicts`, each with `subject` and `path`, and `reviews`, each with `round` and `path`.
+`--json` also carries the whole block as a `shipment` object.
+It sits on each run entry, repeated per run as `agent` is, and on the no-run block.
+Its keys are `task`, `title`, `url`, `branch`, `pr`, `pr_state`, `checks`, `commit`, `plan`, `handoff`, `demo`, `verdicts` and `reviews`.
+Each is left out when empty, except `task`.
+`pr_state` is there only when the host was asked.
+`checks` holds an open PR's head checks, as `f10 pr checks --json` prints them, when the host answered.
+The flat keys a reader written before the object relies on stay beside it.
+A run entry keeps `verdicts` and `reviews`, and the no-run block keeps those plus `plan`, `pr` and `pr_state`.
 A run entry's own `plan` key is the plan phase's status, not the plan file.
 The run's step rows go on under it as `label: value`, in the same value column, so the whole block reads as one table, and `--plain` prints the same block.
 With a run under it, the plan file's row is `plan file`, because the run's `plan` row holds the plan phase.
 
-A finished task, its branch gone, prints the same block, read from what `f10 finish` archived: the newest archived plan and handoff, a `review <round>` row per findings file of the series its last PR closed (`reviews/archive/<id>.<n>/`), a `judge` row per verdict written since the series before it closed, and the demo report.
+A finished task, its branch gone, prints the same block, read from what `f10 finish` archived.
+It shows the newest archived plan and handoff.
+It then shows a `review <round>` row per findings file of the series its last PR closed (`reviews/archive/<id>.<n>/`).
+It then shows a `judge` row per verdict written since the series before it closed, and the demo report.
 `pr state` and the gates as step rows follow, and `--json` still prints its one `done` row.
 
-The `pr state` row shows whenever the host was asked about the branch's PR, a live run included: the PR number and its state, and for an open PR its head's checks as `f10 pr checks` reads them, `#128 open · checks red (lint)`.
+The `pr state` row shows whenever the host was asked about the branch's PR, a live run included.
+It holds the PR number and its state.
+For an open PR it adds its head's checks as `f10 pr checks` reads them, such as `#128 open · checks red (lint)`.
 The failed jobs are named in parentheses, or the running ones while the checks are pending, and `--json` carries the whole read as `checks` on the shipment.
-The host reads stop half a second short of a caller's deadline, such as the status hook's, so a slow host leaves the row without its checks, or leaves the row out, and the rest of the block still prints.
+The host reads stop half a second short of a caller's deadline, such as the status hook's.
+So a slow host leaves the row without its checks, or leaves the row out, and the rest of the block still prints.
 
-`f10 status <id>` lists the task's **gates** under the `ship` row, while the run is going and after it finished, and the block of a task with no branch left prints them as step rows under `pr state`:
+`f10 status <id>` lists the task's **gates** under the `ship` row, while the run is going and after it finished.
+The block of a task with no branch left prints them as step rows under `pr state`:
 
 ```
 ship:           running: review:local
@@ -575,34 +641,86 @@ ship:           running: review:local
   pr:           upcoming
 ```
 
-- **The flow** is ship's entries as `f10 state pipeline` recorded them, else the entries after `plan` of the flow the branch records (`branch.<name>.f10-flow`), else the flow of the newest drive record holding the task that is neither cancelled nor done (a stopped drive's only while the task has no branch), else `default`, followed by `finish` when the branch carries the finish record `f10 drive` writes (`branch.<name>.f10-finish`, below).
-  The flow is read at the pace the branch records (`branch.<name>.f10-pace`), else the pace of the drive record holding the task, else the default, so an entry that pace skips is no row.
+- **The flow** is ship's entries as `f10 state pipeline` recorded them.
+  Without those, it is the entries after `plan` of the flow the branch records (`branch.<name>.f10-flow`).
+  Without that, it is the flow of the newest drive record holding the task that is neither cancelled nor done.
+  A stopped drive's record counts only while the task has no branch.
+  Else the flow is `default`.
+  It is followed by `finish` when the branch carries the finish record `f10 drive` writes (`branch.<name>.f10-finish`, below).
+  The flow is read at the pace the branch records (`branch.<name>.f10-pace`), else the pace of the drive record holding the task, else the default.
+  An entry that pace skips is no row.
   A `judge` before `implement` is the **plan** judge, any later one the **change** judge, and `plan` and `resolve` are no rows of their own.
-- **A plain step** is `done` before the step ship is on, that step takes the run's status (`running`, `blocked`, ...), the rest are `upcoming` (in this run's flow, not reached, nothing running or waiting); once ship is done, a step it never entered is `skipped`.
+- **A plain step** is `done` before the step ship is on.
+  The step ship is on takes the run's status, such as `running` or `blocked`.
+  The rest are `upcoming`: in this run's flow, not reached, and nothing running or waiting.
+  Once ship is done, a step it never entered is `skipped`.
   A driven ship parked on its base (`f10 state wait`) reads `waiting on <id>` at that step, and the parent's row `waiting` with step `on <id>`.
-- **Review** has a local and a remote review, each `upcoming`, `running` (its round, and `in ship`, `driven` or `manual`; `resolve running` while a resolve settles it, and in `review:local+ci` `round N in, waiting for the other review` once its own findings landed), `open` (`N open of M found`, or `open (not handled)` on the host), `settled` (`3 found (2 fixed, 1 skipped)`, `clean`), or `unknown`.
-  A review, resolve or judge started outside ship counts from its `run_started` on the task's branch or checkout until its outcome lands, its session stops or starts another skill, or the state TTL passes; `ci` in its arguments makes it the remote review's, and inside ship that review reads `resolve running` once a round lands after ship entered the review.
-  The remote review is in the flow when an entry names it (`review:ci`, or both in one `review:local+ci`, which shows both on the one review row; a `ci?` only where it would run), or when Review declares a reviewer and the flow opens a PR; its host is asked under a 5 second timeout, past which it reads `unknown (timed out)` and the rest still prints.
-- **Finish**, on a branch `f10 drive` finishes, reads `upcoming` until ship is done, then `queued (drive)`, then `running (drive): <action>` while the driver's finish works (`merging #204`, `pulling main`, `removing worktree`), and `done`; a finish held for its base reads `queued (drive): waiting for <id>`.
-  A finish whose pull was deferred is `done` and the task `finished`, with the note under it in the drive's report; a drive that ran a finish retries the pull each tick and prints a cause once.
+- **Review** has a local and a remote review.
+  Each reads `upcoming`, `running`, `open`, `settled` or `unknown`.
+  `running` shows its round, and `in ship`, `driven` or `manual`.
+  It reads `resolve running` while a resolve settles it.
+  In `review:local+ci` it reads `round N in, waiting for the other review` once its own findings landed.
+  `open` reads `N open of M found`, or `open (not handled)` on the host.
+  `settled` reads `3 found (2 fixed, 1 skipped)` or `clean`.
+  A review, resolve or judge started outside ship counts from its `run_started` on the task's branch or checkout.
+  It counts until its outcome lands, its session stops or starts another skill, or the state TTL passes.
+  `ci` in its arguments makes it the remote review's.
+  Inside ship, that review reads `resolve running` once a round lands after ship entered the review.
+  The remote review is in the flow when an entry names it, or when Review declares a reviewer and the flow opens a PR.
+  An entry names it as `review:ci`, or as both in one `review:local+ci`, which shows both on the one review row.
+  A `ci?` entry names it only where it would run.
+  Its host is asked under a 5 second timeout.
+  Past that it reads `unknown (timed out)` and the rest still prints.
+- **Finish**, on a branch `f10 drive` finishes, reads `upcoming` until ship is done, then `queued (drive)`.
+  It reads `running (drive): <action>` while the driver's finish works, such as `merging #204`, `pulling main` or `removing worktree`, and then `done`.
+  A finish held for its base reads `queued (drive): waiting for <id>`.
+  A finish whose pull was deferred is `done` and the task `finished`, with the note under it in the drive's report.
+  A drive that ran a finish retries the pull each tick and prints a cause once.
   The driver records this on the branch as `branch.<name>.f10-finish`: `queued` or `running: <action>`.
   The record's presence is what puts the finish row there, so a drive that stops short of finish sets it back to `queued` rather than removing it.
-  Whether the driver still runs is the task's lease (**Drive**, below), never the record: without the lease only the record's presence counts, so a halted or killed driver leaves the row `upcoming`.
+  Whether the driver still runs is read from the task's lease (**Drive**, below), never from the record.
+  Without the lease only the record's presence counts, so a halted or killed driver leaves the row `upcoming`.
   A parent's row puts the same text in its step column while the task is `shipped`, and `f10 board --state`, once the task's ship run is done, names it as the next move (`drive: merging #204`, `drive finishes it`) in place of `f10 finish`.
-- **Judge** reads `upcoming`, `running`, or its outcome and reason, with what the ship run did with it in parentheses, read from the verdict file's `decision:` line: `proceed with changes (2 built) - <reason>`, `(folded into plan)`, `(refactor built)`, `(blocked)`, `(waiting on an answer)`; `continue`, or a file with no `decision:` line, adds nothing, and `--json` carries the `decision` and the `changes` count; a judge, or a local or CI review, the flow does not declare shows once one ran, and otherwise the row reads `not in this flow`.
+- **Judge** reads `upcoming`, `running`, or its outcome and reason.
+  After the outcome, in parentheses, comes what the ship run did with it, read from the verdict file's `decision:` line.
+  Examples are `proceed with changes (2 built) - <reason>`, `(folded into plan)`, `(refactor built)`, `(blocked)` and `(waiting on an answer)`.
+  `continue`, or a file with no `decision:` line, adds nothing.
+  `--json` carries the `decision` and the `changes` count.
+  A judge, or a local or CI review, that the flow does not declare shows once one ran.
+  Otherwise its row reads `not in this flow`.
   The **task** judge, the one fetch runs on a task older than `stale_after` (and any verdict whose subject is the task), is in no flow: it leads the gates once it ran or while the plan phase is on it (`running`, `blocked`), and shows nowhere before that.
-- **Outcomes** come from lore (`docs/lore.md`): findings by `source`, verdicts by `judged`, when lore is at least as new as the files and holds the latest round's findings. Otherwise, a missed lore write or a run from before lore, the files answer: each `reviews/<id>/<round>.md` counted by its verdict lines (`fix`, `skip`, and open for one still waiting), each block for the review its `source:` names, else the header's: remote when `reviewer:` names only a remote identity, so a file naming both (`local, claude[bot]`) counts once for each review; the newest `verdicts/<id>/<n>.md`, the task or plan judge's when its `subject:` is the task or a plan. A task with a branch reads its open series only: lore's `<id>.<n>` change, and the verdict files written since its previous PR's series closed. A task with no branch left reads the newest change lore holds.
+- **Outcomes** come from lore (`docs/lore.md`), when lore is at least as new as the files and holds the latest round's findings.
+  Lore gives findings by `source` and verdicts by `judged`.
+  Otherwise the files answer, as after a missed lore write or for a run from before lore.
+  Each `reviews/<id>/<round>.md` is counted by its verdict lines: `fix`, `skip`, and open for one still waiting.
+  Each block counts for the review its `source:` names, else for the header's.
+  The header's is remote when `reviewer:` names only a remote identity, so a file naming both (`local, claude[bot]`) counts once for each review.
+  The newest `verdicts/<id>/<n>.md` gives the judge's outcome.
+  It counts as the task or plan judge's when its `subject:` is the task or a plan.
+  A task with a branch reads its open series only: lore's `<id>.<n>` change, and the verdict files written since its previous PR's series closed.
+  A task with no branch left reads the newest change lore holds.
 
-A parent's rows carry the same gates as one column after the step (a `gates` line under `--plain`), `󰚔 L 3/4 · R open · 󰊛 J proceed`: `L` and `R` the local and CI reviews (fixed of found, `N open`, `clean`, `ok`), `TJ`, `PJ` and `J` the task, plan and change judges, `-` a review the flow does not run, `…` running, `?` unknown; a review or judge the flow leaves out is left out of the column.
-The icons are Nerd Font `md-*` glyphs, the only range Claude Code's output keeps one cell wide: `󰚔` before the reviews, `󰊛` before each judge, and in the PR column `󰓂` before an open PR, `󰘭` before a merged one.
+A parent's rows carry the same gates as one column after the step (a `gates` line under `--plain`), such as `󰚔 L 3/4 · R open · 󰊛 J proceed`.
+`L` and `R` are the local and CI reviews, each as fixed of found, `N open`, `clean` or `ok`.
+`TJ`, `PJ` and `J` are the task, plan and change judges.
+`-` is a review the flow does not run, `…` is running, and `?` is unknown.
+A review or judge the flow leaves out is left out of the column.
+The icons are Nerd Font `md-*` glyphs, the only range Claude Code's output keeps one cell wide.
+`󰚔` goes before the reviews and `󰊛` before each judge.
+In the PR column, `󰓂` goes before an open PR and `󰘭` before a merged one.
 An open PR whose head is red reads `checks red` beside its number, from the rollup state the request search already returns, so the column costs no extra host call.
 That rollup counts every check, while finish counts only the required ones where the target branch declares any, so finish may still merge a PR the column marks.
 `F10_STATUS_GLYPHS` replaces all four, in that order (open PR, merged PR, review, judge), for a terminal without the font: `F10_STATUS_GLYPHS='PR MR rv jd'`.
 `--json` holds them in a `gates` array, on a run and on a row.
-`--json` prints the rows as an array: `id`, `title`, `url`, `depth`, `after`, `stage`, `step`, `pr`, `pr_state`, and `checks` (an open PR's head rollup: `green`, `red` or `pending`), `note`, `next`, `ask` where set.
+`--json` prints the rows as an array.
+Each row has `id`, `title`, `url`, `depth`, `after`, `stage`, `step`, `pr` and `pr_state`, and `checks`, `note`, `next` and `ask` where set.
+`checks` is an open PR's head rollup: `green`, `red` or `pending`.
 
 A task with no children reports as before: its live run, else its plan and PR.
-A task with no branch left (`f10 finish` removed it) prints its facts block (**Status**, above) when the ledger, the tracker or the plan archive says it finished, and `--json` prints a one-row array; otherwise it fails as before, with `no run to read`.
+A task with no branch left (`f10 finish` removed it) prints its facts block (**Status**, above) once it finished.
+It counts as finished when the ledger, the tracker or the plan archive says so.
+Then `--json` prints a one-row array.
+Otherwise it fails as before, with `no run to read`.
 A task whose checkout has its branch is read from there first, so only a task with no run to read asks the host for children.
 
 ## Drive
@@ -615,12 +733,17 @@ Ctrl+C stops only the printing, naming `f10 daemon logs <n> -f` to follow it aga
 `--foreground` runs the driver in this process, as the daemon itself runs each drive; it is for tests and debugging, and on a platform without unix sockets it is how every drive runs.
 
 **The record.**
-Every drive writes `<storage root>/drives/<n>.yaml` and prints `drive <n>` first: the command line (without `--answer`, `--every`, `--parallel`, `--resume` and `--foreground`), the tasks with their `:profile`, the flow, the run-wide profile, the cap (`parallel`), the answers given and not yet taken, each answer taken (task, skill, text, time), and per task the skill in flight and its outcome (its report row and exit code).
+Every drive writes `<storage root>/drives/<n>.yaml` and prints `drive <n>` first.
+The record holds the command line without `--answer`, `--every`, `--parallel`, `--resume` and `--foreground`.
+It holds the tasks with their `:profile`, the flow, the run-wide profile and the cap (`parallel`).
+It holds the answers given and not yet taken, and each answer taken with its task, skill, text and time.
+Per task, it holds the skill in flight and its outcome: its report row and exit code.
 Rerunning the same command line picks up the newest record started with it that is neither cancelled nor done (every task through with code 0); `f10 drive --resume <n>` picks up record `n` by number and takes only `--answer`, `--every` and `--parallel` beside it.
 A rerun and a `--resume` keep the record's cap, unless they pass `--parallel`, which rewrites it.
 A driver still running reads the new cap at its next poll.
 An answer kept in the record, because the drive stopped before an agent took it, is given again on the resume, unless the resume gives that task another.
-The branch's `f10-drive` and `f10-flow` keys stay what position and flow are read from; the record keeps what a branch cannot.
+The branch's `f10-drive` and `f10-flow` keys stay what position and flow are read from.
+The record keeps what a branch cannot.
 
 **The lease.**
 Before anything opens, the driver takes an exclusive, non-blocking `flock` on `<storage root>/drives/locks/<id>.lock` for every task not already finished, its pid and drive number written into it, and one for itself (`drive-<n>.lock`).
@@ -634,7 +757,9 @@ Lock files are never deleted.
 
 **List and cancel.**
 `f10 drive list` prints the newest 20 drives (`--all` for every one), each with its time, `running (pid …)`, `stopped`, `done` or `cancelled`, its command line, and a row per task: its outcome, else `queued` or `running <skill>` while its driver runs, else `stopped at <skill>` or `not reached`.
-A drive that is not running, a cancelled one included, has each row not yet finished checked against its task by the rule drive and status use: a task with no branch here or on origin, no live plan, and either its plan archived or its issue closed reads `finished`.
+A drive that is not running, a cancelled one included, has each row not yet finished checked against its task.
+The check is the rule drive and status use.
+A task with no branch here or on origin, no live plan, and either its plan archived or its issue closed reads `finished`.
 The tracker is asked only when the plans dir leaves it open.
 Finish's own `already finished` is narrower, because it asks whether finish got as far as archiving the plan.
 The corrected row is saved when the drive's lease is free, and only shown when another process holds it.
@@ -645,8 +770,12 @@ A cancelled record is never picked up again: the same command line starts a new 
 1. **The arguments.**
    Task ids first, or a range `42 -- 47` (every id between, inclusive, at most 50).
    The flow is `default`, or the one `--flow <name>` or `--local` names; an undeclared name fails with the `f10 flow` list.
-   It gives the skills the driver prompts, which are never typed and never stored: `plan` when the flow leads with it, then `ship`, which runs every other entry, then `finish` unless the run's pace says `finish: off` or the project's ceiling forbids it. A pace that sets no `finish` finishes.
-   A task whose ship ended as a spike (its spike report written) is closed right after ship whatever the pace's `finish` says, since the close merges nothing, and its branch gains the finish record; a dependent then starts on the default branch.
+   It gives the skills the driver prompts, which are never typed and never stored.
+   They are `plan` when the flow leads with it, then `ship`, which runs every other entry.
+   Then comes `finish`, unless the run's pace says `finish: off` or the project's ceiling forbids it.
+   A pace that sets no `finish` finishes.
+   A task whose ship ended as a spike (its spike report written) is closed right after ship, whatever the pace's `finish` says, since the close merges nothing.
+   Its branch gains the finish record, and a dependent then starts on the default branch.
    `--flow`, `--local`, `--agent`, `--model`, `--parallel`, `--answer`, `--every`, `--resume` and `--foreground` go anywhere.
    The command parses its own arguments, so the range's `--` survives.
    `--agent` starts every agent on that profile, read as start reads it, and `--model` is its model-only form; `<id>:<profile>` starts one task's agent on its own, which wins (`42:sonnet:low 43 --agent opus`).
@@ -668,7 +797,8 @@ A cancelled record is never picked up again: the same command line starts a new 
    A base outside the list that is not finished is refused, and so are tasks that wait on each other in a circle, both before anything is created.
    Within the list the graph sets the order: a base runs first wherever it is listed, and among tasks ready at once the one listed first goes first.
 4. **Per task.**
-   A task starts once its base releases it: the base's branch has a commit of its own, or the base is through (finished, or every one of its skills run).
+   A task starts once its base releases it.
+   That happens when the base's branch has a commit of its own, or when the base is through: finished, or every one of its skills run.
    Its own commits are what its branch has beyond the default branch, `origin/<default>`, its own base's branch, and the commit it was created at (its oldest reflog entry), merges left out, so a lagging local default branch, a squash-merged grandparent or a catchup merge never releases it early.
    `f10 pr catchup` prints the same answer as its `code:` line, so ship's guard and the driver agree.
    Implement never commits, so a first commit means a commit or pr step ran with verify green; the driver reads it from local refs on each poll, so a branch never pushed counts.
@@ -690,19 +820,29 @@ A cancelled record is never picked up again: the same command line starts a new 
    Run state recorded before the driver started that new agent was written by one that is gone, and halts nothing.
    From then on the task's workspace is the one opened, by id, whatever else shows the same checkout.
    Nothing is prompted at open.
-   The skills run from the task's position: the last skill the driver saw finish, recorded on the branch as `branch.<name>.f10-drive` in local git config, else what the task's run state proves (plan done, ship done).
+   The skills run from the task's position.
+   The position is the last skill the driver saw finish, recorded on the branch as `branch.<name>.f10-drive` in local git config.
+   Else it is what the task's run state proves, such as plan done or ship done.
    Ship counts as done only when a ship turn wrote the run (its `skill` is `ship`) and the branch carries what the flow delivers.
    That is commits of the branch's own past its base, not counting merges and `Step: catchup` commits, and an open PR when the flow has `pr`.
    A spike's report counts in place of both.
    Anything less sends ship.
    A plan the worktree reads when the driver starts its agent counts as plan done, so the task goes straight to ship rather than planning again.
    A task whose branch already records a flow (`branch.<name>.f10-flow`) keeps it, with a note when the run named another; a recorded flow `project.md` no longer declares gives way to the run's.
-   `finish` runs in the driver, exactly as `f10 finish` would from the main checkout, and records what it is doing on the branch as `branch.<name>.f10-finish` for `f10 status` (above); on any other end, an interrupt included, the driver sets it back to `queued`.
+   `finish` runs in the driver, exactly as `f10 finish` would from the main checkout.
+   It records what it is doing on the branch as `branch.<name>.f10-finish` for `f10 status` (above).
+   On any other end, an interrupt included, the driver sets it back to `queued`.
    A PR someone else opened is the driver's own ask at finish, `[local | merge]`, answered with `--answer` like any other.
    Finish takes a keyed answer only for that question.
-   An answer to the agent's own question (its run carries an ask, as a ci triage's does) goes to the agent as its `ci` turn, and finish runs again once the triage reports.
-   Each finished task's handoff, the body finish printed under its report, repeats beneath the drive's report as `<id> handoff:` with the body indented, so the driving session relays every merged task's list at once.
-   Every other skill is prompted to the agent, marked `--driven` (which takes every gap on its default and reuses a saved plan): a dependent task's plan and ship name the base task and its plan, ship names its flow unless it is `default`, and with `finish` among the skills ship's prompt says the driver finishes the task after it and removes the worktree, so the agent's report ends with that next step.
+   An answer to the agent's own question goes to the agent as its `ci` turn, and finish runs again once the triage reports.
+   The agent's own question is one its run carries as an ask, as a ci triage's does.
+   Each finished task's handoff, the body finish printed under its report, repeats beneath the drive's report as `<id> handoff:` with the body indented.
+   So the driving session relays every merged task's list at once.
+   Every other skill is prompted to the agent, marked `--driven`, which takes every gap on its default and reuses a saved plan.
+   A dependent task's plan and ship name the base task and its plan.
+   Ship names its flow unless it is `default`.
+   With `finish` among the skills, ship's prompt says the driver finishes the task after it and removes the worktree.
+   So the agent's report ends with that next step.
 5. **Catchup when the base or the target moves, after finish, and before it.**
    On each poll, a running dependent whose branch lacks its base branch's head, read while the base agent is not working, is marked `branch.<name>.f10-base-moved` with that head; a dependent mid-catchup is not marked.
    Before a task's next skill, when its branch is on origin, the driver fetches once and marks the branch if its pull request's target moved past it, so an open PR never sits behind.
@@ -715,16 +855,23 @@ A cancelled record is never picked up again: the same command line starts a new 
    With nothing saved, a rewritten branch is never force-pushed, and the task halts instead.
    A catchup that brought in commits origin does not hold yet, a base merged from its local branch, is not pushed: the next `pr` entry or finish pushes it, so another task's unpushed work never rides into this PR.
    `finish` marks each branch that depended on the finished task `f10-landed`.
-   Before a marked task's next skill, the driver catches the branch up itself, never interrupting a turn: it fetches, merges or rebases by the method `f10 pr catchup` prints, runs verify, clears the marks and pushes as above, with no agent turn.
+   Before a marked task's next skill, the driver catches the branch up itself, never interrupting a turn.
+   It fetches, merges or rebases by the method `f10 pr catchup` prints.
+   Then it runs verify, clears the marks and pushes as above, with no agent turn.
    It runs verify when the frontmatter declares a `verify` list, when verify is detected, or when the Verify heading is backticked commands joined by ` / `, as `f10 init` writes it.
    With a heading in any other prose, the driver still integrates, and verify becomes the agent's turn.
-   The driver prompts `/f10:catchup --driven`, saying the base came in cleanly and asking it to run verify, fix a red by the branch's intent, and clear the marks once verify is green.
+   The driver prompts `/f10:catchup --driven` and says the base came in cleanly.
+   It asks the agent to run verify, fix a red by the branch's intent, and clear the marks once verify is green.
    The drive says once why the agent verifies.
    It reads the cleared marks as verify green.
-   A PR whose base on the host is not the base the task was started on (retargeted by hand) is never caught up: the task halts naming the PR and its base.
+   A PR whose base on the host is not the base the task was started on (retargeted by hand) is never caught up.
+   The task halts naming the PR and its base.
    A PR whose base cannot be read on a poll, because the host did not answer, is not marked on that poll.
-   A conflict leaves the merge or rebase in progress and prompts `/f10:catchup --driven` naming the base and the conflicted files; a red verify after a clean integration prompts it naming the failing command and a log of its output.
-   After that turn git decides: no merge or rebase in progress, no conflict marker in a path the branch changes, the branch holding its base, and verify green when the driver runs it again.
+   A conflict leaves the merge or rebase in progress and prompts `/f10:catchup --driven` naming the base and the conflicted files.
+   A red verify after a clean integration prompts it naming the failing command and a log of its output.
+   After that turn git decides whether the catchup settled.
+   It settled when no merge or rebase is in progress and no conflict marker is in a path the branch changes.
+   The branch must also hold its base, and verify must be green when the driver runs it again.
    Anything left is a failed attempt, so the next prompt names what is left, such as a rebase still at commit 2 of 3.
    Before a task's own `finish`, the driver fetches and tries origin's copy of the branch against `origin/<default>` in memory (`git merge-tree`), as the host will; a branch origin does not have is tried against the local default branch, where finish merges it.
    A conflict, as a sibling that merged first leaves one, marks the branch `f10-landed` with the default branch's name and sends the same catchup.
@@ -735,49 +882,76 @@ A cancelled record is never picked up again: the same command line starts a new 
    If the target moved or other files conflict, the fingerprint differs, so the count starts over and the drive catches up again.
    The third catchup in a row with the same fingerprint halts the task.
    After a catchup the caught-up local branch is what is tried, since origin's copy is the tree before it.
-   A ship stopped by its catchup guard, which marks the branch and records the stop as the guard's (`f10-state.sh stop guard`), gets the same catchup, then ship is prompted again at the entry it stopped on (`resume at <entry>`); its dependents wait, and a second guard conflict counts by the same fingerprint.
-   The driver keeps its own copy of that stop's entry and place on the task's record (`guard:`) until ship is prompted again, so it resumes there even when the run file no longer carries the guard's kind.
+   A ship stopped by its catchup guard gets the same catchup.
+   The guard marks the branch and records the stop as the guard's (`f10-state.sh stop guard`).
+   Then ship is prompted again at the entry it stopped on (`resume at <entry>`).
+   Its dependents wait, and a second guard conflict counts by the same fingerprint.
+   The driver keeps its own copy of that stop's entry and place on the task's record (`guard:`) until ship is prompted again.
+   So it resumes there even when the run file no longer carries the guard's kind.
    The copy counts only while the run is still stopped at that entry and place, so a later stop elsewhere is not read as the guard's.
    A ship that failed for another reason under a mark is not the guard's stop, and halts.
-   The catchup's end is the `done catchup` signal its report writes into run state (`f10-state.sh done catchup`), dated after the prompt, and git, not the signal, says whether it settled.
+   The catchup's end is the `done catchup` signal its report writes into run state (`f10-state.sh done catchup`), dated after the prompt.
+   Git, not the signal, says whether it settled.
    A catchup writes no phase.
    From its skill's start to its turn's end, the hooks record the turn on the run (`turn catchup`).
    In that window `f10 state` refuses `set` and `stop` with exit 1, and the Stop hook promotes no running phase.
-   An idle agent without it is a stall after the same grace a ship or plan turn gets, never read as done: a catchup git shows settled goes on to verify, and any other halts, as a stalled ship or plan turn does.
-   The drive's own catchup resumes the task once git shows it settled and the driver's verify is green; the driver clears the marks then.
+   An idle agent without it is a stall after the same grace a ship or plan turn gets, and is never read as done.
+   A catchup git shows settled goes on to verify.
+   Any other catchup halts, as a stalled ship or plan turn does.
+   The drive's own catchup resumes the task once git shows it settled and the driver's verify is green.
+   The driver clears the marks then.
    A red verify the agent's turns do not fix counts as a failed attempt, so the same command red against the same target three times halts.
-   When the agent verifies (a prose Verify heading), the task resumes only on a clean end: the signal there, the mark cleared (catchup clears it once verify is green), no merge or rebase in progress, and a clean tree.
-   A driven catchup never asks: it settles an ambiguous conflict by the task's intent and records each choice as a lore decision and a line under a Catchup heading in the PR body; a catchup that fails, or makes no progress, counts as a failed attempt.
+   When the agent verifies (a prose Verify heading), the task resumes only on a clean end.
+   A clean end has the signal there and the mark cleared, which catchup does once verify is green.
+   It also has no merge or rebase in progress, and a clean tree.
+   A driven catchup never asks.
+   It settles an ambiguous conflict by the task's intent.
+   It records each choice as a lore decision and as a line under a Catchup heading in the PR body.
+   A catchup that fails, or makes no progress, counts as a failed attempt.
 6. **Waiting.**
    It looks once a run file, prompt mark or open wait about one of its worktrees is written (a step boundary, a turn's end, a prompt taken), or its record is (a cancel), checked every second; other sessions' writes to the shared state dir do not wake it. It also looks and every `--every` (30s by default) regardless; each look reads two signals once for every task in flight: Herdr's workspace list, and the live runs, the newest one recorded against each worktree.
    A turn has begun once Herdr shows the agent working, the run reports after the prompt, or the agent's session left a prompt mark after it: the `UserPromptSubmit` hook writes `<session>.prompted` beside the run file, naming the checkout and the time, so a turn that began and ended between two looks still counts as taken once the mark is five seconds old.
    Herdr's `done` lasts from the previous turn until someone looks, so it proves nothing.
-   No sign within two minutes halts the task, because a prompt never taken may sit under a startup dialog that typing it again could answer; so does a workspace that still shows no agent status by then.
+   No sign within two minutes halts the task, because a prompt never taken may sit under a startup dialog that typing it again could answer.
+   A workspace that still shows no agent status by then halts it too.
    Once the agent is idle again, the run says how the turn ended:
    - **blocked with an ask** - the question is printed with its options and kept in the asks inbox (**Asks** below), naming this drive.
      The driver keeps driving every other task: a guard stop still gets its catchup, a base still releases its dependents.
      Once nothing else can move (every other task ended, asking, or held on its base), it prints every task's ask and the command that answers them all, and exits **4**;
-   - **blocked waiting on its base** (`f10 state wait`: a driven ship that found its base without code before `implement`, or not on origin before `pr`) - the task parks, with no ask and no halt, and its row reads `waiting on <id>`.
-     A wait for code ends once the base is released and its branch head has moved past the one the ship found, and ship is sent again with `resume at implement`; the same head never sends it twice.
+   - **blocked waiting on its base** - the task parks, with no ask and no halt, and its row reads `waiting on <id>`.
+     This is `f10 state wait`: a driven ship that found its base without code before `implement`, or not on origin before `pr`.
+     A wait for code ends once the base is released and its branch head has moved past the one the ship found.
+     Then ship is sent again with `resume at implement`, and the same head never sends it twice.
      A wait at `pr` ends once the base's branch is on origin or the base has finished, and ship is sent again with `resume at pr`.
      A wait on a base this drive does not run, or one already through, halts the task with the run's note;
-   - **blocked without one** (a judge stop, a stale task's verdict) - a decision, not breakage: the task halts with the run's note and next, since sending the skill again would only roll the decision again;
-   - **failed** or **partial** - the driver reads the branch, since the turn may not be the one it sent (a ship typed by hand while it followed plan): each skill the branch shows done is recorded and passed, so a ship stopped by its guard gets its catchup.
+   - **blocked without one** - a decision, not breakage, such as a judge stop or a stale task's verdict.
+     The task halts with the run's note and next, since sending the skill again would only roll the decision again;
+   - **failed** or **partial** - the driver reads the branch, since the turn may not be the one it sent (a ship typed by hand while it followed plan).
+     Each skill the branch shows done is recorded and passed, so a ship stopped by its guard gets its catchup.
      A stop the branch does not get past is a failed attempt of the skill in flight;
    - **still running** under plan or ship, or a catchup with no `done catchup` signal since its prompt, a minute after the agent went idle - the agent stopped without reporting.
-     An agent whose session launched background work its hooks still count as pending (a background command, a Monitor, a subagent) is not idle: it reads as working for up to 30 minutes from that launch, so a long verify or a wait on a subagent is no stall.
-     Past that, or with no background work, the driver reads the branch the same way, so a branch with its plan, commits of its own, a settled tree and an open PR carrying them counts as shipped.
+     An agent whose session launched background work its hooks still count as pending is not idle.
+     Such work is a background command, a Monitor or a subagent.
+     The agent reads as working for up to 30 minutes from that launch, so a long verify or a wait on a subagent is no stall.
+     Past that, or with no background work, the driver reads the branch the same way.
+     A branch with its plan, commits of its own, a settled tree and an open PR carrying them counts as shipped.
      Anything less halts the task naming the workspace, because the agent is usually waiting on a permission dialog in its pane, and typing the skill again could answer it.
-     Found at prompt time, a run still running halts the same way and says how to leave a cancelled run: quit that agent and rerun, and a new one is started in its place;
+     Found at prompt time, a run still running halts the same way and says how to leave a cancelled run.
+     Quit that agent and rerun, and a new one is started in its place;
    - anything else - the skill is done, recorded on the branch, and the next one is sent.
 
    **When a turn fails.**
    A failed attempt sends the same action again at the next look.
-   Three failures in a row of one action, with nothing changed between them (the branch, origin's copy, the marks, a merge or rebase in progress, the plan file, the PR, the review rounds and change verdicts, the run's phases), halt the task with the last reason and a line per attempt; the halt and its attempts go to the ledger.
+   Three failures in a row of one action, with nothing changed between them, halt the task with the last reason and a line per attempt.
+   The things compared are the branch, origin's copy, the marks, a merge or rebase in progress, the plan file, the PR, the review rounds and change verdicts, and the run's phases.
+   The halt and its attempts go to the ledger.
    A failure after which any of those moved starts the count over, and so does a step that goes through.
-   A catchup's attempts compare the conflict it leaves instead, because a catchup that merges moves the branch every time; a clean catchup does not clear them, only the entry it guarded going through does.
-   A catchup turn that leaves the tree unsettled is counted apart from them, so a red verify and an unsettled turn that take turns do not start each other's count over.
-   A halted task halts every task that waits on it: one not started yet never starts, and one already running halts before its next skill, its work left on its branch.
+   A catchup's attempts compare the conflict it leaves instead, because a catchup that merges moves the branch every time.
+   Only the entry it guarded going through clears them, not a clean catchup.
+   A catchup turn that leaves the tree unsettled is counted apart from them.
+   So a red verify and an unsettled turn that take turns do not start each other's count over.
+   A halted task halts every task that waits on it.
+   One not started yet never starts, and one already running halts before its next skill, its work left on its branch.
    Every other task runs on, and the driver exits **5** once nothing can move.
    The count lives in the running drive only, so a rerun or a resumed drive starts it over.
 
@@ -788,17 +962,26 @@ A cancelled record is never picked up again: the same command line starts a new 
    Progress lines as it goes, an end included: a halt or an ask is printed the moment the driver sees it, not only beneath the report.
    Then one row per task in graph order: `already finished`, `finished`, `done: <skills>`, `waiting on <id>` (parked for its base's code, or for its branch on origin), `waiting for <id>` (its finish waits on its base), `asked at <skill>`, `halted at <skill>`, `halted: base <id> halted`, `owned by drive <n> (pid …)`, `cancelled`, `not reached`.
    Exit 0 when every task went through its skills, 4 when any task asks, else 5 when any halted.
-   Exit 6 is a drive stopped for a daemon upgrade, and exit 8 a drive asking its daemon to start it again; only the daemon and the command following it see them.
+   Exit 6 is a drive stopped for a daemon upgrade, and exit 8 a drive asking its daemon to start it again.
+   Only the daemon and the command following it see them.
 
 Rerunning the same command, or `f10 drive --resume <n>`, is the resume: the record is picked up, and each task's position is read from its own branch and run state.
 With `--answer "1. … 2. …"`, the first task stopped on a question gets the text as its agent's next prompt, plain, the way `f10 forward` sends an answer, and the driver polls that turn as it would any other.
 Several asking tasks take one answer each, keyed by id: `--answer "42=1. proceed" --answer "45=1. no"`, each sent to its own task's agent.
 An answer sent closes the task's ask in the inbox. An answer the inbox already holds for a task goes first: one typed in the agent's pane is followed as the turn it started, with nothing sent; any other is sent as an `--answer` would be, and an `--answer` for the same task goes unused with a note.
-A drive whose task was answered after it last looked, while it still held its lease, runs again once it has stopped: in the daemon it exits 8 and the daemon runs `--resume <n>` in its place; outside the daemon, or under a daemon too old to restart it, it prints `f10 drive --resume <n>` for the answer.
+A drive whose task was answered after it last looked, while it still held its lease, runs again once it has stopped.
+In the daemon it exits 8, and the daemon runs `--resume <n>` in its place.
+Outside the daemon, or under a daemon too old to restart it, it prints `f10 drive --resume <n>` for the answer.
 `f10 drive cancel <n>` closes the drive's open asks.
 An agent found mid-turn is attached to rather than prompted again.
 The turn is read by what it reports: one that turns out to be a catchup is followed like a catchup the drive sent, so a clean one resumes ship at the entry its stop names.
-A ship the catchup guard stopped before `implement`, `pr` or a `judge` (told by the `stop guard` kind its run records, never by the wording of its next), or a driven catchup left `failed`, is prompted again on a rerun once a catchup settled the branch, by the same checks as point 5 (no mark, no merge or rebase in progress, a clean tree), with `resume at <entry>` so ship starts where it stopped; a branch still marked gets the catchup first.
+Two kinds of task are prompted again on a rerun once a catchup settled the branch.
+One is a ship the catchup guard stopped before `implement`, `pr` or a `judge`.
+That stop is told by the `stop guard` kind its run records, never by the wording of its next.
+The other is a driven catchup left `failed`.
+The branch counts as settled by the same checks as point 5: no mark, no merge or rebase in progress, and a clean tree.
+The prompt carries `resume at <entry>`, so ship starts where it stopped.
+A branch still marked gets the catchup first.
 A task halted for another reason stays halted until its run changes: settle it in that workspace, or send steering through `--answer`.
 
 `/f10:drive` runs the command in the background, answers an exit 4 through `/f10:asks` (the questions in one questionnaire, the answers written to the inbox, the drive resumed), and prints the final report.
@@ -807,28 +990,51 @@ Out of scope: more than one base per task, and ordering tasks by anything but th
 
 ### Plan
 
-`f10 drive plan <parent | id>...` proposes how to drive the tasks and prints it; it opens nothing, writes no record, takes no lease, starts no daemon and changes no task, so the daemon, a hook or a status line may call it.
-A parent expands into its open subtasks in `f10 task children` order, a `draft` child left out with a line naming it; a closed task is left out the same way; a typed bundle stays bundled.
+`f10 drive plan <parent | id>...` proposes how to drive the tasks and prints it.
+It opens nothing, writes no record, takes no lease, starts no daemon and changes no task.
+So the daemon, a hook or a status line may call it.
+A parent expands into its open subtasks in `f10 task children` order, a `draft` child left out with a line naming it.
+A closed task is left out the same way.
+A typed bundle stays bundled.
 
-What it reads for each task, cheapest first: the `After:` line and the labels from the tracker, a saved plan's `Kind:`, `Areas:` and `Size:` header lines (a small plan counts as a quarter of `bundle_max_lines`, marked estimated, because it is one change in one area), the flow `flow_by_area` maps the first mapped area to (all tasks share the flow `--flow` or `--local` names), its `:profile`, and the facts sheet `--facts` names.
-A label's kind wins over a plan's, and a plan's over the sheet's, as fetch settles it; `bug`, `defect` and `regression` read as a bug, `refactor` and `tech-debt` as a refactor, `spike`, `research` and `investigation` as a spike.
+For each task it reads, cheapest first, the `After:` line and the labels from the tracker.
+Next it reads a saved plan's `Kind:`, `Areas:` and `Size:` header lines.
+A small plan counts as a quarter of `bundle_max_lines`, marked estimated, because it is one change in one area.
+Next it reads the flow `flow_by_area` maps the first mapped area to.
+If `--flow` or `--local` names a flow, all tasks share that one.
+Last it reads the task's `:profile` and the facts sheet `--facts` names.
+A label's kind wins over a plan's, and a plan's over the sheet's, as fetch settles it.
+The labels `bug`, `defect` and `regression` read as a bug, and `refactor` and `tech-debt` as a refactor.
+`spike`, `research` and `investigation` read as a spike.
 The labels `migration` and `risky` mark a task risky.
 
 The rules, in order, each leaving a one-line reason on every task and bundle:
 
-1. **Alone**: a spike (it merges nothing), a risky task, a task with no size (`alone: not sized`), a task over `bundle_max_lines`, and a task the user kept alone.
+1. **Alone**: a task stays alone when it is a spike, because a spike merges nothing.
+   A risky task stays alone, and so does a task with no size (`alone: not sized`).
+   A task over `bundle_max_lines` stays alone, and so does a task the user kept alone.
 2. **Bundle**: tasks of the same flow, the same agent profile and the same kind class share a bundle when they share a file or an area.
    The kind classes are bugs, and features with refactors, so a regression fix keeps its own PR.
    A bundle carries at most one `After:` outside itself, so a task joins only a bundle with its base, or with its base inside.
 3. **Cap**: a bundle stops at `bundle_max_lines` changed lines, in the parent's order, and the task left out says `split: N lines with <id>'s group, over the cap of M`.
-4. **Order**: a task the sheet says builds on another, with no `After:` saying so, gets a proposed `After:` edit; so do two entries that share a file but cannot bundle (a bug and a feature), the later after the earlier, since side by side they would conflict.
-5. **Stages** are each entry's depth in the `After:` graph, the way drive releases them; `--parallel` is the widest stage, capped by `--parallel` given, else drive's default.
+4. **Order**: a task the sheet says builds on another, with no `After:` saying so, gets a proposed `After:` edit.
+   So do two entries that share a file but cannot bundle, such as a bug and a feature.
+   The later goes after the earlier, since side by side they would conflict.
+5. **Stages** are each entry's depth in the `After:` graph, the way drive releases them.
+   `--parallel` is the widest stage, capped by the `--parallel` given, else by drive's default.
 
-It prints the stages, the drive command with the drive flags given carried onto it, `saves about N CI waits and M finishes against driving them one by one`, the `After:` edits waiting on a yes (`f10 task update <id> --after <base>` applies one), and, when anything is bundled, once: a bundle is one PR, one revert and one review over a mixed diff, and a later bug is traced to its lead with the riders named.
+It prints the stages, and the drive command with the drive flags given carried onto it.
+It prints `saves about N CI waits and M finishes against driving them one by one`.
+It prints the `After:` edits waiting on a yes, and `f10 task update <id> --after <base>` applies one.
+When anything is bundled, it prints once that a bundle is one PR, one revert and one review over a mixed diff.
+It adds that a later bug is traced to its lead with the riders named.
 `--json` prints the same for the drive skill, the tasks' gathered facts included.
-`--hint` prints one line when the rules alone save at least one CI wait, a bundle the user typed or named with `with` not counted, and nothing otherwise; a plain `/f10:drive` prints it under the tree.
+`--hint` prints one line when the rules alone save at least one CI wait, and nothing otherwise.
+A bundle the user typed or named with `with` is not counted.
+A plain `/f10:drive` prints the line under the tree.
 
-**The facts sheet** is a JSON object keyed by task id, written by `/f10:drive --plan` from a short read of each task against the code; an unknown field is refused, so a misspelt one never reads as not sized:
+**The facts sheet** is a JSON object keyed by task id, written by `/f10:drive --plan` from a short read of each task against the code.
+An unknown field is refused, so a misspelt one never reads as not sized:
 
 ```json
 {
@@ -841,36 +1047,49 @@ It prints the stages, the drive command with the drive flags given carried onto 
 }
 ```
 
-`kind`, `areas`, `files`, `lines` (marked estimated in the reasons), `buildsOn` and `risky` are what a read of the task found; `alone`, `with` (bundle with that task, whatever the rules say) and `after` (an id, or `none` to drop the line) are the user's edits to the proposal.
+`kind`, `areas`, `files`, `lines`, `buildsOn` and `risky` are what a read of the task found.
+`lines` is marked estimated in the reasons.
+`alone`, `with` and `after` are the user's edits to the proposal.
+`with` bundles with that task, whatever the rules say.
+`after` is an id, or `none` to drop the line.
 
 **The agreed command.**
 `/f10:drive <args> --plan` runs the command it agreed with `--planned "<args>"`, which the record keeps beside the command line and the match ignores.
-`f10 drive plan <args>` then finds that drive, while it is neither cancelled nor done, and prints `agreed in drive <n>: f10 drive …` in place of a fresh proposal (`agreed` in `--json`, nothing with `--hint`), so a rerun follows what was agreed.
+`f10 drive plan <args>` then finds that drive, while it is neither cancelled nor done.
+It prints `agreed in drive <n>: f10 drive …` in place of a fresh proposal, so a rerun follows what was agreed.
+`--json` carries it as `agreed`, and `--hint` prints nothing.
 
 ## Daemon
 
 `f10 daemon` is one process per user that runs drives, so a drive outlives the session that typed it, and watches the projects tasks were started in (**Watch** below).
-Nothing registers it as a service: every control-plane command below starts it when none listens, and it exits after ten minutes with no drive running, no project watched and no call.
-Its socket serves the control-plane API over Connect: `f10.v1.DaemonService` for its own lifecycle, the rest of `f10.v1` and `agents.v1` for tasks, runs, the board, events and agents ([proto/README.md](../proto/README.md)).
+Nothing registers it as a service.
+Every control-plane command below starts it when none listens.
+It exits after ten minutes with no drive running, no project watched and no call.
+Its socket serves the control-plane API over Connect ([proto/README.md](../proto/README.md)).
+`f10.v1.DaemonService` serves its own lifecycle.
+The rest of `f10.v1` and `agents.v1` serve tasks, runs, the board, events and agents.
 `WatchEvents` opened with `tail` and no cursor starts at the ledger's newest row, and its first response carries only the cursor to resume from.
 
-- **Where.** `F10_RUN_DIR`, else `$XDG_RUNTIME_DIR/f10`, else `run` in the user's f10 dir (`~/.f10`, or `F10_USER_DIR`), kept `0700` and refused when another user owns it: the socket `daemon.sock`, the daemon's own `daemon.log`, a log per drive run under `logs/` (with its `.exit` file and an `index`, finished ones pruned after seven days), the locks under `drives/locks/`, `drained.json` between an upgrade's two daemons, and `watch.json` (`0600`), the watched projects with the environment their passes run with, tokens such as `GH_TOKEN` included, for as long as each project is watched, with a `logs/watch-<hash>.log` per project.
+- **Where.** The run dir is `F10_RUN_DIR`, else `$XDG_RUNTIME_DIR/f10`, else `run` in the user's f10 dir. The user's f10 dir is `~/.f10`, or `F10_USER_DIR`. The run dir is kept `0700` and refused when another user owns it. It holds the socket `daemon.sock` and the daemon's own `daemon.log`. It holds a log per drive run under `logs/`, with its `.exit` file and an `index`, and finished ones are pruned after seven days. It holds the locks under `drives/locks/`, and `drained.json` between an upgrade's two daemons. It holds `watch.json` (`0600`) for as long as each project is watched: the watched projects with the environment their passes run with, tokens such as `GH_TOKEN` included. Each watched project gets a `logs/watch-<hash>.log`.
 - **Starting one.** A client dials the socket; with nothing listening it takes the `start` lock, dials again (another client may have started one), else starts `f10 daemon` detached in its own session and waits up to 5s for it to listen. The daemon holds its own `daemon` lock for life and exits at once if another holds it, so two clients at once get one daemon.
-- **A drive.** The client sends the command line, its directory and an allowlisted copy of its environment: `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TMPDIR`, `LANG`, `LC_*`, `TERM`, `SSH_AUTH_SOCK`, `XDG_*`, `GH_*`, `GITHUB_TOKEN`, `GLAB_*`, `GITLAB_TOKEN`, `HERDR_*`, `F10_*`, `CLAUDE_*`, and the keys the frontmatter's `drive_env` lists. The daemon reads the storage root from that directory and runs `f10 drive --foreground <command line>` in it with exactly that environment, its output to the drive's log and `F10_DRIVE_FILE` naming a file the drive writes its record number to once the record is open, and writes `<log>.exit` when it ends: the exit code, the drive's number, and for exit 6 or 8 the reason: `upgrade` (the next daemon resumes it), `stopped` (it waits for `--resume`) or `resumed` (exit 8, run again by this daemon). A request for a drive already running in the same storage root (the same command line, or `--resume` of its number) with no `--answer` follows that drive's log instead.
-- **Upgrades.** A client says hello first and reads the daemon's version and API version from the reply. A daemon kept by the rule below whose API version differs from the client's is an error naming both versions, never a decode error. Only a client of a strictly newer release (`0.46.0` over `0.45.2`) replaces the daemon; an older client, or a development build, uses the daemon running and says which version it runs, and `f10 daemon stop` is how to replace one by hand. A client following a drive never starts a daemon while another drains: the replacing client starts the next one, and a follower starts one only when none has listened for 5s after the old one is gone. A replacing client asks the old daemon to drain: each drive stops at its next tick, after any finish it is in the middle of, ends no task, releases its leases and exits 6; the old daemon writes those drives (storage root, directory, number and environment) to `drained.json`, `0600`, and exits. The client then starts its own binary's daemon, which runs each drained drive again as `--resume <n>`, and every client that was following one follows it into the new daemon, whatever its version. A drive that has not stopped after ten minutes is stopped outright and not resumed; rerunning its command resumes it.
+- **A drive.** The client sends the command line, its directory and an allowlisted copy of its environment. The copy holds `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TMPDIR`, `LANG`, `LC_*`, `TERM`, `SSH_AUTH_SOCK`, `XDG_*`, `GH_*`, `GITHUB_TOKEN`, `GLAB_*`, `GITLAB_TOKEN`, `HERDR_*`, `F10_*`, `CLAUDE_*`, and the keys the frontmatter's `drive_env` lists. The daemon reads the storage root from that directory. It runs `f10 drive --foreground <command line>` in it with exactly that environment, its output going to the drive's log. `F10_DRIVE_FILE` names a file the drive writes its record number to once the record is open. When the drive ends, the daemon writes `<log>.exit` with the exit code and the drive's number. For exit 6 or 8 it also writes the reason. The reason `upgrade` means the next daemon resumes it. `stopped` means it waits for `--resume`. `resumed` goes with exit 8 and means this daemon runs it again. A request for a drive already running in the same storage root (the same command line, or `--resume` of its number) with no `--answer` follows that drive's log instead.
+- **Upgrades.** A client says hello first and reads the daemon's version and API version from the reply. A daemon kept by the rule below whose API version differs from the client's is an error naming both versions, never a decode error. Only a client of a strictly newer release (`0.46.0` over `0.45.2`) replaces the daemon. An older client, or a development build, uses the daemon running and says which version it runs. `f10 daemon stop` is how to replace one by hand. A client following a drive never starts a daemon while another drains. The replacing client starts the next one. A follower starts one only when none has listened for 5s after the old one is gone. A replacing client asks the old daemon to drain. Each drive stops at its next tick, after any finish it is in the middle of, ends no task, releases its leases and exits 6. The old daemon writes those drives to `drained.json` (`0600`) and exits. Each entry holds the drive's storage root, directory, number and environment. The client then starts its own binary's daemon, which runs each drained drive again as `--resume <n>`. Every client that was following one follows it into the new daemon, whatever its version. A drive that has not stopped after ten minutes is stopped outright and not resumed. Rerunning its command resumes it.
 - **Releases before the Connect API** spoke JSON on the same socket. A new client that finds such a daemon drains and replaces it through that protocol, and the new daemon resumes its drives from `drained.json` as above. A new daemon answers an old client's hello, so the older client keeps it by the rule above, and answers its `run`, `status` and `watch` with "update f10".
-- **The CLI as a client.** `start`, `forward`, `status`, `asks` (its list, `answer` and the terminal walk), `drive list`, `drive cancel`, `finish`, `board`, `task create` and `task read` parse their flags, call the API and print the reply. So a remote client gets what the terminal gets, from one implementation; `f10 drive` itself already ran its drives in the daemon.
+- **The CLI as a client.** `start`, `forward`, `status`, `asks` (its list, `answer` and the terminal walk), `drive list`, `drive cancel`, `finish`, `board`, `task create` and `task read` parse their flags, call the API and print the reply. So a remote client gets what the terminal gets, from one implementation. `f10 drive` itself already ran its drives in the daemon.
   Their output, `--json` shapes and exit codes are what they were in process, with one difference in timing. A write prints what the daemon wrote for it: its stdout, then its stderr. So the lines a command reports while it works, such as `f10 finish` waiting on checks, print once the call returns, not as they happen. A read renders the model the daemon read, with the command's own renderer. A refusal carries its exit code and what the command printed before it failed.
-  Each call passes where it runs: its directory and `-C` checkout, its Claude session, its Herdr workspace, its environment, and whether its output is a terminal, for links. The daemon honors that only on the socket.
+  Each call passes where it runs: its directory and `-C` checkout, its Claude session and its Herdr workspace. It also passes its environment, and whether its output is a terminal, for links. The daemon honors that only on the socket.
   When the daemon cannot start, the command fails with the daemon's error. Off unix, where no daemon runs, the commands serve the same API in their own process.
   `f10 finish` run from the task's own workspace closes that workspace itself, after it printed the report, because a close inside the daemon would end the command before it printed anything.
-- **Left in process.** The step plumbing that runs inside an agent's worktree (`trace`, `lore`, `pr create`, `pr edit`, `review round`, `task ref` and the like) stays local, because routing it through the daemon adds a failure point to every step.
+- **Left in process.** The step plumbing that runs inside an agent's worktree stays local, because routing it through the daemon adds a failure point to every step. That plumbing is `trace`, `lore`, `pr create`, `pr edit`, `review round`, `task ref` and the like.
   `f10 asks hook` and the status the Stop hook prints stay local, because a daemon start would break their time budget.
   `f10 drive --foreground` is the drive the daemon runs, so it cannot call the daemon. `f10 drive plan` and `f10 janitor` stay local too.
-- **Herdr from the daemon.** A call from a local command runs its `herdr` commands in that command's own session, so two sessions calling at once never cross, and keeps that session as the newest. The other handlers that reach agents run `herdr` with the environment of the newest local call, drive or watch registration made inside Herdr, kept in `session.json` (`0600`) across restarts; with none, they answer that no Herdr session has registered.
+- **Herdr from the daemon.** A call from a local command runs its `herdr` commands in that command's own session, so two sessions calling at once never cross, and keeps that session as the newest. The other handlers that reach agents run `herdr` with the environment of the newest local call, drive or watch registration made inside Herdr. That environment is kept in `session.json` (`0600`) across restarts. With none kept, they answer that no Herdr session has registered.
 - **A crash or a reboot** leaves running drives stopped, their records intact: rerunning the drive's command resumes it.
 
-`f10 daemon status` prints the pid, version and start time, the tailnet listener's address (or why it is not listening) when **Remote** below turned it on, then each drive: its project, number, pid, log, and each task's standing from its record; then each watched project: its last pass, that pass's exit, and its log.
+`f10 daemon status` prints the pid, version and start time.
+When **Remote** below turned the tailnet listener on, it prints the listener's address, or why it is not listening.
+Then it prints each drive with its project, number, pid and log, and each task's standing from its record.
+Then it prints each watched project: its last pass, that pass's exit, and its log.
 `f10 daemon stop` drains the daemon the same way but keeps no drained list: each drive stops at its next tick, a client following one ends with `f10 drive --resume <n> goes on`, and nothing resumes until someone runs that. `--now` stops each drive at once, and cuts a drain in progress short: the daemon keeps answering `status` and `stop` until its drives are gone.
 `f10 daemon logs` prints the daemon's log, `f10 daemon logs <n>` drive `n`'s newest log in this project, `-f` following it until the drive exits.
 
@@ -878,9 +1097,9 @@ Its socket serves the control-plane API over Connect: `f10.v1.DaemonService` for
 
 `f10 remote` serves the daemon's API to your other devices on the tailnet, through the same handlers as the socket.
 
-- **The listener.** `f10 remote on [--port N]` turns it on (port 7410 by default) and starts the daemon; `f10 remote off` turns it off. The setting is `remote/config.json` in the user's f10 dir. The daemon binds only this machine's Tailscale IPv4 address: an address in 100.64.0.0/10 on `tailscale0` (Linux), or on a `utun` interface that also holds a Tailscale IPv6 address in fd7a:115c:a1e0::/48 (macOS). The range alone is not enough, because it is also carrier-grade NAT space that a Wi-Fi interface or another VPN's `utun` can hold. Nothing listens on any other interface. It closes any connection whose peer is outside that range before reading a byte, because macOS accepts a packet for a local address on any interface. It checks the setting and the address when it starts and every minute after, so it binds once Tailscale comes up after login, rebinds when the address changes, and closes when the setting goes off. A connection idle for a minute is closed.
-- **HTTPS.** The listener serves HTTPS with this machine's Tailscale certificate, because a browser installs a web app, runs its service worker and shows notifications only over HTTPS; WireGuard already encrypts the traffic either way. The daemon finds the `tailscale` CLI (on PATH, else inside `/Applications/Tailscale.app`), reads the machine's MagicDNS name from `tailscale status --json`, and runs `tailscale cert --cert-file - --key-file -`, writing the pair it prints to `remote/tls/` (`0600`); the pair comes on stdout because the App Store build's sandboxed CLI cannot write outside its own container. It renews the certificate 30 days before it expires without rebinding, and retries a failed fetch at most once an hour. Until a certificate exists, or when the tailnet has HTTPS certificates turned off (the admin console's DNS page turns them on), it serves plain HTTP, and `f10 daemon status`, `f10 remote on` and `f10 doctor` say why.
-- **Device tokens.** `f10 remote token add <name> --scope read,answer` prints a token once; `remote/tokens.json` (`0600`) keeps only its SHA-256 hash, its scopes and when it was made. `f10 remote token list` shows names and scopes, and `f10 remote token revoke <name>` deletes one, which refuses that device's next call without a restart. Every call on the tailnet carries `Authorization: Bearer <token>`: a missing or unknown token is refused `unauthenticated`, and a token without the method's scope `permission_denied`, naming the scope.
+- **The listener.** `f10 remote on [--port N]` turns it on (port 7410 by default) and starts the daemon. `f10 remote off` turns it off. The setting is `remote/config.json` in the user's f10 dir. The daemon binds only this machine's Tailscale IPv4 address. On Linux that is an address in 100.64.0.0/10 on `tailscale0`. On macOS it is an address in that range on a `utun` interface that also holds a Tailscale IPv6 address in `fd7a:115c:a1e0::/48`. The range alone is not enough, because it is also carrier-grade NAT space that a Wi-Fi interface or another VPN's `utun` can hold. Nothing listens on any other interface. It closes any connection whose peer is outside that range before reading a byte, because macOS accepts a packet for a local address on any interface. It checks the setting and the address when it starts and every minute after. So it binds once Tailscale comes up after login, rebinds when the address changes, and closes when the setting goes off. A connection idle for a minute is closed.
+- **HTTPS.** The listener serves HTTPS with this machine's Tailscale certificate, because a browser installs a web app, runs its service worker and shows notifications only over HTTPS. WireGuard already encrypts the traffic either way. The daemon finds the `tailscale` CLI on PATH, else inside `/Applications/Tailscale.app`. It reads the machine's MagicDNS name from `tailscale status --json`. It runs `tailscale cert --cert-file - --key-file -` and writes the pair it prints to `remote/tls/` (`0600`). The pair comes on stdout because the App Store build's sandboxed CLI cannot write outside its own container. It renews the certificate 30 days before it expires without rebinding, and retries a failed fetch at most once an hour. Until a certificate exists, or when the tailnet has HTTPS certificates turned off, it serves plain HTTP. The admin console's DNS page turns them on. `f10 daemon status`, `f10 remote on` and `f10 doctor` say why.
+- **Device tokens.** `f10 remote token add <name> --scope read,answer` prints a token once. `remote/tokens.json` (`0600`) keeps only its SHA-256 hash, its scopes and when it was made. `f10 remote token list` shows names and scopes, and `f10 remote token revoke <name>` deletes one, which refuses that device's next call without a restart. Every call on the tailnet carries `Authorization: Bearer <token>`: a missing or unknown token is refused `unauthenticated`, and a token without the method's scope `permission_denied`, naming the scope.
 - **Scopes.** A method missing from this table is refused on the tailnet. The socket keeps full access, because only the local user can open it.
 
   | scope | methods |
@@ -902,7 +1121,7 @@ Its socket serves the control-plane API over Connect: `f10.v1.DaemonService` for
   The app has these screens:
   - **Runs**: every live run, grouped by project, with why a run stopped and its PR's checks.
   - **Asks**: the open asks, answered in place by tapping an option.
-  - **A task**: its flow, a box that sends a command or a note to its agent (`Forward`, as `f10 forward` does), and its plan, spike report, handoff, verdicts, findings and demo report. The files are read through `ListArtifacts` and `GetArtifact`, by kind and name, never by path.
+  - **A task**: its flow and a box that sends a command or a note to its agent, as `f10 forward` does (`Forward`). It also shows the plan, the spike report and the handoff. It shows the verdicts, the findings and the demo report. The files are read through `ListArtifacts` and `GetArtifact`, by kind and name, never by path.
   - **Board**, **Start** (start or drive tasks) and **Capture** (create a task).
 
   A screen or button that the token's scopes do not allow is hidden.
@@ -910,10 +1129,10 @@ Its socket serves the control-plane API over Connect: `f10.v1.DaemonService` for
   Once you allow notifications (**Notify me**), a new ask shows a notification while the page or the installed app runs. Nothing is pushed to a closed app.
   Over HTTPS, add the page to the home screen to install it.
   The app's source is `ts/web`. `just web::build` rebuilds `cli/internal/webui/dist`, which the binary embeds.
-- **MCP.** `f10 remote on --mcp` also serves the API as MCP tools at `/mcp` on the listener's address, beside the web client (**MCP** below); a bare `f10 remote on` turns that off again. Each request carries a device token as above, and the tools it lists are the ones that token's scopes reach, read again on every request, so a revoke or a narrower token applies at once. With the setting off, `/mcp` is not served.
-- **Always on.** With the listener on, the daemon does not exit when idle. `f10 remote install` writes and loads a launchd agent (`~/Library/LaunchAgents/io.github.amberpixels.f10.daemon.plist`) on macOS, or a systemd user unit (`~/.config/systemd/user/f10-daemon.service`) on Linux, that runs `f10 daemon --service` at login and restarts it whenever it exits, `f10 daemon stop` included: with the service installed, a stopped daemon comes back within seconds. `f10 remote uninstall` stops the service and removes it; like `f10 daemon stop`, each drive stops at its next tick and `f10 drive --resume <n>` goes on with one, and the service manager waits up to 11 minutes for that before killing what is left.
-  The service runs the `f10` the installing shell's PATH finds, the plugin's shim in a session, else the running binary, and carries that shell's `PATH`, `HOME`, `F10_RUN_DIR`, `XDG_RUNTIME_DIR` and `F10_USER_DIR`, so it uses the same run dir and finds the same tools. A shim under a versioned plugin directory stays on that release after an upgrade, and `f10 doctor` flags it as older than the binary running doctor; run `install` again after an upgrade like that, or after any of the others moves. Installing drains the running daemon as an upgrade does before the service restarts, so the restarted daemon resumes its drives.
-  A `--service` daemon never idles out, and while another daemon holds the lease it waits and takes over when that one exits. A client that replaces an older daemon writes its version to `newest` in the run dir first, and again once the old daemon has drained; for two minutes after that a service older than it keeps waiting, so the service manager restarting an old binary cannot take the drained drives from the daemon that client starts. Past those two minutes an old service serves again, and the next newer client replaces it as usual.
+- **MCP.** `f10 remote on --mcp` also serves the API as MCP tools at `/mcp` on the listener's address, beside the web client (**MCP** below). A bare `f10 remote on` turns that off again. Each request carries a device token as above. The tools it lists are the ones that token's scopes reach, read again on every request. So a revoke or a narrower token applies at once. With the setting off, `/mcp` is not served.
+- **Always on.** With the listener on, the daemon does not exit when idle. `f10 remote install` writes and loads a launchd agent (`~/Library/LaunchAgents/io.github.amberpixels.f10.daemon.plist`) on macOS, or a systemd user unit (`~/.config/systemd/user/f10-daemon.service`) on Linux. That service runs `f10 daemon --service` at login and restarts it whenever it exits, `f10 daemon stop` included. So with the service installed, a stopped daemon comes back within seconds. `f10 remote uninstall` stops the service and removes it. Like `f10 daemon stop`, each drive stops at its next tick, and `f10 drive --resume <n>` goes on with one. The service manager waits up to 11 minutes for that before killing what is left.
+  The service runs the `f10` the installing shell's PATH finds, which is the plugin's shim in a session, else the running binary. It carries that shell's `PATH`, `HOME`, `F10_RUN_DIR`, `XDG_RUNTIME_DIR` and `F10_USER_DIR`. So it uses the same run dir and finds the same tools. A shim under a versioned plugin directory stays on that release after an upgrade, and `f10 doctor` flags it as older than the binary running doctor. Run `install` again after an upgrade like that, or after any of the others moves. Installing drains the running daemon as an upgrade does before the service restarts, so the restarted daemon resumes its drives.
+  A `--service` daemon never idles out, and while another daemon holds the lease it waits and takes over when that one exits. A client that replaces an older daemon writes its version to `newest` in the run dir first, and again once the old daemon has drained. For two minutes after that, a service older than it keeps waiting. So the service manager restarting an old binary cannot take the drained drives from the daemon that client starts. Past those two minutes an old service serves again, and the next newer client replaces it as usual.
 
 ### MCP
 
@@ -923,9 +1142,9 @@ Its socket serves the control-plane API over Connect: `f10.v1.DaemonService` for
 { "mcpServers": { "f10": { "command": "/Users/you/.local/bin/f10", "args": ["mcp", "--scope", "read,answer"] } } }
 ```
 
-- **One tool per method.** Every unary method of `f10.v1` and `agents.v1` is a tool named after the method in snake case (`list_asks`, `answer_ask`, `get_run_status`). Its description is the rpc's comment and its input schema the request message, in proto field names. Both are generated from the proto schema by `protoc-gen-f10-mcp` into `cli/gen/mcptools`, so `just proto::gen` after a new method is all it takes to add its tool, and the plugin refuses an rpc with no comment.
-- **Scopes.** The tools offered are the methods the **Remote** scope table places under the scopes given: `--scope` names them, `--token <name>` takes the scopes of the device token with that name (refused once it is revoked; the socket checks no token, so its secret is never needed here), and with neither, `read` and `answer`. `Hello`, `StopDaemon` and `WatchProject` are never tools, and neither is `WatchEvents`, because it streams and a tool call returns once: poll `get_run_status` instead.
-- **Calls.** Each call starts the daemon when none listens, so a client that stays connected past the daemon's idle exit keeps working. A result is the response as JSON; a refused call, such as an ask already answered or a misspelled field, is a tool error naming why.
+- **One tool per method.** Every unary method of `f10.v1` and `agents.v1` is a tool named after the method in snake case (`list_asks`, `answer_ask`, `get_run_status`). Its description is the rpc's comment and its input schema the request message, in proto field names. Both are generated from the proto schema by `protoc-gen-f10-mcp` into `cli/gen/mcptools`. So `just proto::gen` after a new method is all it takes to add its tool. The plugin refuses an rpc with no comment.
+- **Scopes.** The tools offered are the methods the **Remote** scope table places under the scopes given. `--scope` names the scopes. `--token <name>` takes the scopes of the device token with that name, and is refused once that token is revoked. The socket checks no token, so its secret is never needed here. With neither flag, the scopes are `read` and `answer`. `Hello`, `StopDaemon` and `WatchProject` are never tools. Neither is `WatchEvents`, because it streams and a tool call returns once, so poll `get_run_status` instead.
+- **Calls.** Each call starts the daemon when none listens, so a client that stays connected past the daemon's idle exit keeps working. A result is the response as JSON. A refused call, such as an ask already answered or a misspelled field, is a tool error naming why.
 
 ## Asks
 
@@ -942,22 +1161,25 @@ A driven agent's ask (`f10-state.sh ask`, `modes/driven.md`), and a drive's own 
 ## Watch
 
 The daemon watches every project `f10 start` or `f10 drive` ran in, for the tasks no drive owns: a task started by hand whose PR merged on the host, an agent left idle, a run that stopped with nobody looking.
-`watch: finish` is the default: a pass also finishes a task whose PR merged; `watch: report` only reports, and `watch: off` watches nothing; `watch_catchup: on` lets a pass also catch an open PR up with its target when it needs it (**catchup**, **left** and **behind** below), and `watch_ci: on` lets it send a red PR to its agent (**red** below).
+`watch: finish` is the default, and under it a pass also finishes a task whose PR merged.
+`watch: report` only reports, and `watch: off` watches nothing.
+`watch_catchup: on` lets a pass also catch an open PR up with its target when it needs it (**catchup**, **left** and **behind** below).
+`watch_ci: on` lets it send a red PR to its agent (**red** below).
 Owning is the task's lease (**Drive**): a task a drive or a finish holds is never looked at, and the watcher's own finish takes the lease first, so a drive started later is refused with `owned by the f10 watcher`.
 
 - **Registering.** After its report, `f10 start` hands the daemon the project's storage root, its main checkout and the same allowlisted environment a drive gets; `f10 drive` does the same before it follows its drive. It never replaces or waits on a running daemon: a daemon of another version is used as it is, and one that is stopping is skipped with one line, so the next `f10 start` or `f10 drive` hands the project over. A failure is one `watch: warning:` line, never a failed command. The project stays watched across daemon restarts and upgrades (`watch.json` in the run dir, which keeps the newest registration's environment, tokens included), and leaves the list once a pass finds no task worktree left (under `watch: finish`, no local task branch either, since its janitor still has work), once its main checkout is gone, or after ten passes in a row fail. A registration that arrives while a pass runs gets one more pass after it, so a task started meanwhile is seen. `watch: off` in the frontmatter registers nothing.
 - **A pass.** Every 3 minutes, and at once on registering, the daemon runs `f10 watch --pass` in the main checkout with that environment, its output appended to the project's watch log. For each task worktree whose lease nobody holds and that `f10 watch off` did not hand back, it reads the PR (`gh pr list --head`, one call per branch), the newest run reported from the worktree and the agent's status, and says at most one thing, in this order:
-  - **merged**: the PR merged on the host. Under `watch: finish`, with the branch's tip equal to the PR's head and the agent not working, the pass takes the task's lease, reads the agent's status and the branch's tip again, and finishes the task as `f10 finish` would (the worktree removed, the workspace closed, the plan archived, main pulled), with a finish that refuses anything but a merged PR, so the watcher never merges. A refusal (a dirty worktree, someone else's PR) is reported with `f10 finish <id>` to run by hand; a bundle's riders are closed as the PR body says (**Bundles**). A branch with commits the PR lacks is only reported.
+  - **merged**: the PR merged on the host. Under `watch: finish` it is finished when the branch's tip equals the PR's head and the agent is not working. The pass takes the task's lease, then reads the agent's status and the branch's tip again. It finishes the task as `f10 finish` would: the worktree removed, the workspace closed, the plan archived and main pulled. Its finish refuses anything but a merged PR, so the watcher never merges. A refusal, such as a dirty worktree or someone else's PR, is reported with `f10 finish <id>` to run by hand. A bundle's riders are closed as the PR body says (**Bundles**). A branch with commits the PR lacks is only reported.
   - **closed**: the PR closed without a merge; reported, never cleaned up.
   - **stalled**: the agent idle while its run says plan or ship is running and the run has not changed for 10 minutes: the test a drive halts on, with a longer grace, measured from the run's last write since a pass keeps no memory between runs.
   - **stopped**: the run ended `blocked` (with its question), `failed`, `partial`, or ship `done`.
-  - **red**: the open PR's head checks failed, told once per head with the first failed job that was not cancelled. A head that read green is not read again until it moves, so a quiet PR costs no call. Under `watch_ci: on`, an idle agent with a clean tree and no background work gets `/f10:ci --driven` once per head, under the task's lease; a task handed back with `f10 watch off`, or one a drive holds, is never sent one. Off by default, because an unattended agent would commit and push a fix.
-  - **catchup**, **left** and **behind**, under `watch_catchup: on` only. When any undriven task has an open PR and an idle agent, or a catchup in flight, the pass fetches origin once and reads what each such branch targets as the catchup step does (the branch it was started after, else the default branch), cross-checked against the PR's base. A target that moved past a branch whose tip is origin's is caught up only when the move matters to the branch, because a catchup's push restarts the PR's CI. It matters when the branch conflicts with the target (an in-memory `git merge-tree`, which touches neither the worktree nor the index), when a catchup is already owed (an `f10-landed` or `f10-base-moved` mark on the branch, or a failed catchup on record), or when the host will not merge the PR while it is behind (GitHub's `mergeStateStatus: BEHIND` under a require-up-to-date branch protection, GitLab's `need_rebase` under a fast-forward merge method). **left** is any other behind PR: it merges into its target clean, so it is left alone and told once per pushed head: another clean move of the target is silent, and a leave after a catchup is told again. A branch that needs a catchup, with an idle agent and a clean tree, is marked (`f10-landed` or `f10-base-moved`, the drive's marks; one already there, left by a finish, a ship guard or a failed catchup, is set again) and integrated by the same engine the drive uses, under the task's lease. The agent is then prompted with a driven catchup for what is left: the conflicts git stopped on, then verify. The watcher always leaves verify to the agent, so a pass stays short. A prompt that cannot go out puts the branch back where it was. A later pass reads the end from git (the mark gone, no merge or rebase open, the target held, no conflict marker, a clean tree) and pushes the branch under the lease, plain after a merge and `--force-with-lease` after a rebase, against the origin tip the catchup started from: a commit pushed to the PR meanwhile is never overwritten, and such a catchup is told once as not pushed. One that did not end clean is told with `/f10:catchup` to run in the worktree, the branch left as it is, and is sent again only once its fingerprint moves (the target, or what the branch conflicts on). **behind** is a PR the watcher will not catch up: no agent in its workspace, a PR retargeted to a branch the task was not started on, or a branch whose tip is not origin's. A working agent or a dirty tree waits for a later pass, and so does an idle agent whose last turn launched background work, for up to 30 minutes from the launch: no catchup is sent to it, and a catchup in flight that did not end clean is not failed, while one git shows clean is still pushed. A task a drive holds, or one handed back, is never touched.
+  - **red**: the open PR's head checks failed, told once per head with the first failed job that was not cancelled. A head that read green is not read again until it moves, so a quiet PR costs no call. Under `watch_ci: on`, an idle agent with a clean tree and no background work gets `/f10:ci --driven` once per head, under the task's lease. A task handed back with `f10 watch off`, or one a drive holds, is never sent one. Off by default, because an unattended agent would commit and push a fix.
+  - **catchup**, **left** and **behind**, under `watch_catchup: on` only. When any undriven task has an open PR and an idle agent, or a catchup in flight, the pass fetches origin once. It reads what each such branch targets as the catchup step does: the branch it was started after, else the default branch. It cross-checks that against the PR's base. A target that moved past a branch whose tip is origin's is caught up only when the move matters to the branch, because a catchup's push restarts the PR's CI. It matters in three cases. The branch conflicts with the target, checked by an in-memory `git merge-tree`, which touches neither the worktree nor the index. A catchup is already owed: an `f10-landed` or `f10-base-moved` mark is on the branch, or a failed catchup is on record. The host will not merge the PR while it is behind: GitHub's `mergeStateStatus: BEHIND` under a require-up-to-date branch protection, or GitLab's `need_rebase` under a fast-forward merge method. **left** is any other behind PR. It merges into its target clean, so it is left alone and told once per pushed head. Another clean move of the target is silent, and a leave after a catchup is told again. A branch that needs a catchup, with an idle agent and a clean tree, is marked with the drive's marks, `f10-landed` or `f10-base-moved`. A mark already there, left by a finish, a ship guard or a failed catchup, is set again. The branch is then integrated by the same engine the drive uses, under the task's lease. The agent is then prompted with a driven catchup for what is left: the conflicts git stopped on, then verify. The watcher always leaves verify to the agent, so a pass stays short. A prompt that cannot go out puts the branch back where it was. A later pass reads the end from git. The end is clean when the mark is gone, no merge or rebase is open and the target is held. There must also be no conflict marker and a clean tree. The pass then pushes the branch under the lease, plain after a merge and `--force-with-lease` after a rebase. The push is against the origin tip the catchup started from. So a commit pushed to the PR meanwhile is never overwritten, and such a catchup is told once as not pushed. One that did not end clean is told with `/f10:catchup` to run in the worktree, and the branch is left as it is. It is sent again only once its fingerprint moves: the target, or what the branch conflicts on. **behind** is a PR the watcher will not catch up. It has no agent in its workspace, was retargeted to a branch the task was not started on, or has a tip that is not origin's. A working agent or a dirty tree waits for a later pass. So does an idle agent whose last turn launched background work, for up to 30 minutes from the launch. No catchup is sent to it then. During that wait, a catchup in flight that did not end clean is not failed, while one git shows clean is still pushed. A task a drive holds, or one handed back, is never touched.
 
   A pass lists only this checkout's branches, so it asks the network nothing before the host, except the one fetch `watch_catchup: on` needs. An agent whose status cannot be read (no listing from Herdr) is never finished. A host that does not answer for a task's PR leaves the task out of the pass, and the pass says so in one line naming the error and the tasks left out, every pass until the host answers; `f10 watch` shows it under `host`.
   Each fact is told once: `watch.yaml` in the storage root keeps the last report per task and every fact told for it (the PR's state, the run's update time), so a fact is never repeated, even after another, and a newer one is told. Under `watch: finish` the janitor then runs if it is due; under `report` it never runs from a pass, since it deletes branches.
   A pass exits 7 when nothing is left to watch, which drops the project from the daemon's list.
-- **Telling.** A pass reports through its own output, one line per report, into the project's watch log; `f10 watch` prints the last report per task. Each report is also recorded once, when first told, as a `watch_reported` ledger row, which `WatchEvents` streams; the host trouble a pass repeats every pass is recorded only when it starts.
+- **Telling.** A pass reports through its own output, one line per report, into the project's watch log. `f10 watch` prints the last report per task. Each report is also recorded once, when first told, as a `watch_reported` ledger row, which `WatchEvents` streams. The host trouble a pass repeats every pass is recorded only when it starts.
 - **Handing a task back.** `f10 watch off <id>` sets `branch.<branch>.f10-watch` to `false`: no pass reports on the task, finishes it or catches it up. A mark git cannot read (a lock, a broken config) counts as handed back for that pass, with a line naming the branch and the error. `f10 watch on <id>` removes it. `f10 start` on a merged or closed PR sets the same mark on the branch it creates, since the PR landed before the branch existed. Typing in the task's own pane needs nothing: a working agent is never stalled.
 
 ## PR catchup
@@ -978,9 +1200,13 @@ It fetches origin first (`--no-fetch` reads the refs at hand) and prints `key: v
 | `code` | for an `f10-after-branch` base: `yes`, or `none` when it has no commit of its own, merges not counted |
 
 `--guard <entry>` decides as ship's guard before `implement`, `pr` or `judge`: before `pr` and `judge` every base is read from origin, a branch already on origin is merged so its push never forces, and `catchup: off`, the default branch itself, no recorded base before implement or a base not on origin yet before `pr` print `method: skip`.
-`--mark '<key> <value>'` writes the `mark` row on the branch and prints the branch and the mark; it decides nothing, fetches nothing and takes no `--guard`.
-The branch is the one checked out, or the one a stopped rebase is rebasing, since a rebase detaches HEAD; with neither it fails, and it refuses a key that is not `f10-landed` or `f10-base-moved`, and an `f10-base-moved` value that names no commit.
-A guard that stops on a conflict marks the branch this way, never with `git config` by hand, which under a stopped rebase writes the key under an empty branch name that git then refuses to read.
+`--mark '<key> <value>'` writes the `mark` row on the branch and prints the branch and the mark.
+It decides nothing, fetches nothing and takes no `--guard`.
+The branch is the one checked out, or the one a stopped rebase is rebasing, since a rebase detaches HEAD.
+With neither it fails.
+It refuses a key that is not `f10-landed` or `f10-base-moved`, and an `f10-base-moved` value that names no commit.
+A guard that stops on a conflict marks the branch this way, never with `git config` by hand.
+Under a stopped rebase, `git config` writes the key under an empty branch name that git then refuses to read.
 `f10-base-moved` overrides the local-first order of an `f10-after-branch` base because the drive's and the watcher's push gates check that sha against origin, so a newer local tip would carry commits neither checked; a marked sha the base branch no longer holds fails, naming the key to unset.
 A base is rewritten when the branch holds the recorded `f10-base-tip` and the base does not, as after a squash merge or a rebase of the base.
 `onto` then replays only the branch's own commits, whatever `catchup:` or `catchup_stacked:` says; the guard still merges a branch on origin.
@@ -1027,10 +1253,15 @@ A round that names no PR ends its series when HEAD cannot reach its `reviewed:` 
 An ended series moves to `reviews/archive/<id>.<N>/`, and the next round is 1.
 `f10 finish` and the janitor archive the directory the same way.
 A merge they see ends the series even when it had no rounds: it leaves an empty `reviews/archive/<id>.<N>/`, because the archive counts a task's PRs for its lore change (`docs/lore.md`).
-Each archived series holds a `closed` file naming its PR, its head and when it closed, so finishing the same PR again, or the janitor after it, closes nothing more.
-A series that ended only because a rebase left its `pr: none` rounds unreachable is marked `restart: yes`: those rounds belong to the PR still to come, so it counts as no PR for the lore change.
+Each archived series holds a `closed` file naming its PR, its head and when it closed.
+So finishing the same PR again, or the janitor after it, closes nothing more.
+A series that ended only because a rebase left its `pr: none` rounds unreachable is marked `restart: yes`.
+Those rounds belong to the PR still to come, so it counts as no PR for the lore change.
 A host that cannot be read keeps the series going, with a line on stderr, because archiving by mistake would hide findings that `/f10:resolve` still needs.
-It prints `dir:`, `archive:` when a series moved, `latest:` (the highest round's file, absent with none), `pr:` (the branch's open PR for the next header, `none` without one), and the next round's `round:` and `path:`.
+It prints `dir:`, and `archive:` when a series moved.
+It prints `latest:`, the highest round's file, absent with none.
+It prints `pr:`, the branch's open PR for the next header, `none` without one.
+Last it prints the next round's `round:` and `path:`.
 Three cases decline, exit 3, with a `decline:` line and the findings behind it instead of the next round:
 
 - A branch whose work its base already holds by content, as after a squash merge ("already merged, nothing to review").
@@ -1158,8 +1389,11 @@ Your own PR is also reported when its only activity in the period is a force-pus
 The ledger (`~/.f10/f10.db`, [ledger.md](ledger.md)) adds the work that leaves no commit, and what each task waits on.
 It is read once per repository: the project's sessions active in the period, by the scoped read.
 
-- **Whose work**: a row counts when it was recorded in one of the repository's checkouts (the main checkout or a worktree of it), or in the worktree `f10 start` makes for the row's branch (still matched after `f10 finish` removed it). A row no checkout recorded counts when its task is one your commits or PRs already name.
-  A drive counts, because its agents run in your worktrees; a teammate's clone elsewhere on the machine does not.
+- **Whose work**: a row counts when it was recorded in one of the repository's checkouts (the main checkout or a worktree of it).
+  It also counts when it was recorded in the worktree `f10 start` makes for the row's branch, still matched after `f10 finish` removed it.
+  A row no checkout recorded counts when its task is one your commits or PRs already name.
+  A drive counts, because its agents run in your worktrees.
+  A teammate's clone elsewhere on the machine does not.
 - **Period**: a row counts by its time, in the same period as commits, so `--since`, `--week` and the stored standup apply unchanged.
   A task with ledger rows in the period but no commit or PR is reported too, its state `started`.
 - **Per machine**: the ledger is local, while git and the host are not, so on a second machine the ledger half is partial and `ledger.scope` says so.
@@ -1328,33 +1562,48 @@ Inside a session, `/f10:board` runs the command with the same flags and prints i
 
 ## Atlas
 
-`f10 atlas` prints what each of your public projects is, how it has moved and how they connect, with each aliased private project as an anonymous node: what `~/.f10/atlas.md` declares (role, status, tagline, links) and what its checkout says (language, first and last commit, commits per month, latest tag, dependencies).
+`f10 atlas` prints what each of your public projects is, how it has moved and how they connect.
+Each aliased private project shows as an anonymous node.
+For each project it prints what `~/.f10/atlas.md` declares: role, status, tagline and links.
+It also prints what the project's checkout says: language, first and last commit, and commits per month.
+It adds the latest tag and the dependencies.
 `docs/atlas.md` specifies the Atlas JSON and the declared file, and `docs/atlas.schema.json` is its schema.
 
-**The scope** is the board's: this checkout, or the union of `-C <path | name>` (repeatable), `--group <name>` (repeatable, a group in `~/.f10/board.md`) and `--all` (every checkout under `F10_ROOTS`, with it unset an error).
+**The scope** is the board's: this checkout, or the union of `-C <path | name>`, `--group <name>` and `--all`.
+`-C` and `--group` are repeatable, and a group is one in `~/.f10/board.md`.
+`--all` is every checkout under `F10_ROOTS`, and with it unset it is an error.
 A linked worktree counts as its main checkout, and a group entry naming a repository with no checkout is skipped, because the atlas reads local history only.
 
 **What is printed** follows the privacy rule in `docs/atlas.md`:
 - A project whose entry says `public: true` is printed in full.
 - A private project whose entry gives an `alias` is printed as an anonymous node: its alias, its kind and its edges, nothing else.
-  Only its manifests are read, never its history, so nothing of its name, remote, path or rhythm reaches the document.
+  Only its manifests are read, never its history.
+  So nothing of its name, remote, path or rhythm reaches the document.
 - A project with no entry, or a private one with no alias, is dropped and never read.
-The declared file is checked whole on every run, so an unknown key or status, a bad or repeated alias, or a key matching two checkouts fails the run naming the entry.
-With `F10_ROOTS` set, a key or a link that names no checkout under any root fails too, because it is a typo; one naming a checkout outside this run's scope is skipped.
+The declared file is checked whole on every run.
+An unknown key or status, a bad or repeated alias, or a key matching two checkouts fails the run naming the entry.
+With `F10_ROOTS` set, a key or a link that names no checkout under any root fails too, because it is a typo.
+One naming a checkout outside this run's scope is skipped.
 Two public checkouts with one id, such as two clones of one remote, fail the run naming both, because an edge could not tell them apart.
 
 **Edges** join two printed projects in scope, never two anonymous ones.
-A `depends` edge comes from the root `go.mod` (direct requirements and `replace` targets), `package.json`, gemspec or `Gemfile`, matched by the name the other project's own manifest declares, never its directory name.
+A `depends` edge comes from the root `go.mod` (direct requirements and `replace` targets), `package.json`, gemspec or `Gemfile`.
+It is matched by the name the other project's own manifest declares, never its directory name.
 A `link` edge is an entry's `links` item, with its relation in your words.
 An edge from an anonymous node carries no `manifest` and no `dev`, because the file would name the private project's language.
 An edge to a dropped project, or to one outside the scope, is left out.
 
 **The history** is the default branch's: origin's `HEAD`, else a local `main` or `master`, else `HEAD`.
 A checkout whose history does not read gets an `error` on its node, with its path removed, and every other project still prints.
-An anonymous node has no `error` field, so a malformed manifest there prints a fixed `warning:` line on stderr under its alias, naming neither the manifest nor a path, and the node keeps its declared links but draws no `depends` edge of its own.
+An anonymous node has no `error` field.
+So a malformed manifest there prints a fixed `warning:` line on stderr under its alias, naming neither the manifest nor a path.
+The node keeps its declared links but draws no `depends` edge of its own.
 
-- With no flag, a line per project: name, status, language, last commit date and tagline, or the error; anonymous nodes follow, each as its alias and `anonymous`.
-- `--json` prints the document; over several projects it is still one document.
+- With no flag, it prints a line per project, or the project's error.
+  The line holds the name, status, language, last commit date and tagline.
+  Anonymous nodes follow, each as its alias and `anonymous`.
+- `--json` prints the document.
+  Over several projects it is still one document.
 - A project with edges gets a second line: `depends on:` lists what it requires or links to, and `used by:` lists what requires or links to it.
   A link shows its relation in parentheses, and a development-only dependency shows `(dev)`.
 - `--out <path>` writes `--json` to a file, such as a site's data directory.
@@ -1367,7 +1616,7 @@ It asks no host and reads no ledger, so a run over forty checkouts takes about a
 
 - **plan**: active minutes. A `/f10:plan` run counts from its start to the plan it saves; inside `/f10:ship`, the plan step counts from entering it to entering the next step.
 - **implement**: active minutes of the `implement` step, summed over its stretches (a driven run blocked on an ask and resumed is two).
-- **review**: the review loop, review, resolve and judge together. A `review` entry runs both review and resolve under one claim: review ends when the round's findings file is first written, and the rest of the entry is resolve, a second round and a resolve resumed after an ask included. Under `review:local+ci` the file is first written by the local review, so the wait for the CI review counts as resolve. Every `judge` flow entry counts here, the one before implement as well; the judge fetch runs on a stale task counts as plan.
+- **review**: the review loop, review, resolve and judge together. A `review` entry runs both review and resolve under one claim. Review ends when the round's findings file is first written. The rest of the entry is resolve, a second round and a resolve resumed after an ask included. Under `review:local+ci` the file is first written by the local review, so the wait for the CI review counts as resolve. Every `judge` flow entry counts here, the one before implement as well. The judge fetch runs on a stale task counts as plan.
 - **deliver**: every other step the flow names: `pr`, `cleanup`, `commit`, `push`, `deploy`, `demo` and project-defined steps.
 - **glue**: the time a plan or ship run spends outside every step: loading, the fetch of a run that reuses a plan, the gaps between steps, and the work after the last step. A run's stretch ends at the first turn end after its last row (the saved plan, or `ship done`, `failed`, `partial` or `blocked`), else at the next run; a driven run resumed on an answer opens a new stretch. A stretch that never ends counts nothing.
 - **size**: lines added plus deleted, with the markdown share, as `f10 finish` measured it.
@@ -1390,23 +1639,35 @@ It is a lookup over git, the ledger and lore, so the same history prints the sam
 
 1. **Neighbors** are the tasks whose commits touched the paths since `--since` (default `180d`), read in one `git log` at `HEAD`.
    A directory stands for the files `HEAD` holds under it.
-   A commit's task is its `Task:` trailer (a bundle counts once, under its lead), else its `Change:` trailer, else what `f10 task regression` would attribute it to (the closest unmerged branch, then a subject opening with an id).
+   A commit's task is its `Task:` trailer, where a bundle counts once, under its lead.
+   Else it is its `Change:` trailer, else what `f10 task regression` would attribute it to.
+   That is the closest unmerged branch, then a subject opening with an id.
    `--task`, else the branch's task, is left out, because a task is not its own history.
-2. **Stale** neighbors are dropped and counted: one whose added lines in these paths stand under 30% at `HEAD`, by `git blame`, was mostly rewritten since, so its record no longer applies.
+2. **Stale** neighbors are dropped and counted.
+   A neighbor is stale when its added lines in these paths stand under 30% at `HEAD`, by `git blame`.
+   It was mostly rewritten since, so its record no longer applies.
    Only the files a neighbor added lines to are blamed.
    A neighbor that only deleted lines has nothing to measure and stays.
-3. **Per neighbor**, from the ledger: its kind (the `Kind:` line of its live or newest archived plan), size, implement minutes (as `f10 stats` counts them), review rounds, finding categories raised and the fixed and skipped counts resolve recorded, plans superseded, halts, judge verdicts, and the bugs later traced to it.
+3. **Per neighbor**, the ledger gives its kind, size and implement minutes.
+   The kind is the `Kind:` line of its live or newest archived plan, and minutes count as `f10 stats` counts them.
+   It also gives the review rounds, the finding categories raised and the fixed and skipped counts resolve recorded.
+   Last come plans superseded, halts, judge verdicts, and the bugs later traced to it.
 4. **Regressions**: the `regression_found` rows in the window whose lines are on these paths or whose origin is a neighbor.
 5. **Lore**: the effective lessons and decisions anchored to the paths, a decision with its rejected options.
    A catchup's decision (its body opens `catchup:`) is left out, because which side a merge kept says nothing about the design.
-6. **Statistics** print only over 3 reviewed neighbors or more, the live ones the ledger holds a review round for, because work from before the ledger has none to count: the median review rounds, and each category raised in at least half the reviewed neighbors.
+6. **Statistics** print only over 3 reviewed neighbors or more, the live ones the ledger holds a review round for.
+   That is because work from before the ledger has none to count.
+   The statistics are the median review rounds, and each category raised in at least half the reviewed neighbors.
    A review round is a round label at one reviewed sha, so a follow-up PR's rounds add to the first PR's.
    Under 3, the neighbors are listed and no statistic is printed.
 
 Counts and outcomes come from the ledger and reasons from lore, so a finding written to both (`finding_verdict` and a lore `finding`) counts once.
 The ledger reads are the scoped ones: the sessions of the neighbors and the project's `regression_found` rows, both indexed.
 
-The text is at most 15 lines, each citing task or lore ids, most decision-relevant first: the neighbors by id with the stale count, regressions, recurring findings, the median, decisions, lessons, then a line per neighbor; lines past 15 drop from the bottom.
+The text is at most 15 lines, each citing task or lore ids, most decision-relevant first.
+First come the neighbors by id with the stale count, then regressions and recurring findings.
+Then come the median, decisions and lessons, and last a line per neighbor.
+Lines past 15 drop from the bottom.
 Every line is cut at 160 characters.
 Nothing found prints `No history for these files.`
 
@@ -1431,22 +1692,25 @@ A value never recorded is absent, never `0`.
 1. **Areas** are each changed file's parent directory, repo-relative.
 2. **Churn** is the lines added and deleted per area, and the commits that touched it, from one `git log --numstat`, merges left out.
 3. **Tasks** are the range's commits by task, each with its commits and its areas.
-   A commit's task is found as `f10 history` finds it: its `Task:` trailer (a bundle under its lead), else its `Change:` trailer, else what `f10 task regression` would attribute it to.
+   A commit's task is found as `f10 history` finds it.
+   It is its `Task:` trailer (a bundle under its lead), else its `Change:` trailer, else what `f10 task regression` would attribute it to.
    A commit with no task goes to `upkeep`.
 4. **The pain map** compares each area's tasks with every task of the range (the project), using the same per-task counts as `f10 history`:
    - review rounds, the median and the max, over the tasks a round was recorded for
    - halts, each with its task and reason
    - plans superseded
-   - recurring categories: a finding category with a **fixed** verdict in at least 3 tasks of the area; a category only skipped never counts
+   - recurring categories: a finding category with a **fixed** verdict in at least 3 tasks of the area, and never one only skipped
    - regressions: the bugs traced to the area's tasks, with their class
    - implement minutes per 100 lines, over the tasks with both a size and implement time
 
-   Medians need at least 3 tasks recording them, in the area and in the project; halts, replans and regressions are compared per task.
+   Medians need at least 3 tasks recording them, in the area and in the project.
+   Halts, replans and regressions are compared per task.
    An area is listed only when it is over the project on at least one signal, with only the signals that put it there.
    The ledger reads are the scoped ones: the sessions of the range's tasks and the project's `regression_found` rows.
 
 The text is one block per part, and the pain block holds one line per area, each citing task ids.
-With no ledger rows for the range it is `No ledger history for this range.`; with rows and no area over the project, `No area over the project median.`
+With no ledger rows for the range it is `No ledger history for this range.`
+With rows and no area over the project, it is `No area over the project median.`
 
 `--json` prints the whole map:
 
@@ -1519,7 +1783,8 @@ A bundle is checked on its lead.
 
 ## Regression
 
-`f10 task regression 72` records where the bug task 72 came from, as a `regression_found` row on the ledger, and prints one line for the plan's `Regression of:` header: `<origin> (<class>, <confidence>)`, or `none (<why>)`.
+`f10 task regression 72` records where the bug task 72 came from, as a `regression_found` row on the ledger.
+It prints one line for the plan's `Regression of:` header: `<origin> (<class>, <confidence>)`, or `none (<why>)`.
 The debug step calls it once the root cause is known.
 
 The agent passes what only reading the code settles:
@@ -1536,7 +1801,8 @@ The agent passes what only reading the code settles:
 The command settles the rest.
 The origin task is the commit's `Task:` trailer, else its `Change:` trailer, else the closest unmerged branch holding the commit, else a subject that opens with a task id.
 A commit with none of them is `pre-f10` when it is older than the repo's first `Task:` commit, else `outside-f10`.
-The class reads the origin task's findings, live and archived, and its verdicts, first match winning:
+The class reads the origin task's findings, live and archived, and its verdicts.
+The first matching row wins:
 
 | class | when |
 |---|---|
@@ -1576,8 +1842,12 @@ Exit 3 means the tracker has no parent link: a driver that declines the verb on 
 `f10 task create` creates a task through the driver's `create` verb ([driver contract](driver-contract.md#creating-a-task)), else, on a tracker that is the host's issues, as a GitHub or GitLab issue.
 It reads the task as markdown on stdin, `# <title>` on the first line, and prints the new id in the project's id format.
 The body's `After: <id>` line reaches the driver as a link to the base task, `After: [<id>: <title>](<url>)`, titled as `f10 task ref` would; a base it cannot title stays bare.
-`--status`, `--priority` (one of `urgent`, `high`, `medium`, `low`), `--label` (repeatable), `--parent` and `--set key=value` (repeatable, a property the driver knows) go to the driver as flags, with the body's `After:` line as `--after`; an unset property passes no flag.
-On the host, `--status` takes only open, `--priority` becomes the label `tracker.priority` maps to it, and `--parent` links the new issue as a GitHub sub-issue; a link that fails is a warning, and the id still prints. An issue has no named properties, so `--set` there is refused before anything is created. GitLab nests tasks, not issues, under an issue, so there `--parent` always warns and the parent's body lists its subtasks.
+The flags `--status`, `--priority`, `--label`, `--parent` and `--set key=value` go to the driver.
+The body's `After:` line goes as `--after`.
+`--priority` is one of `urgent`, `high`, `medium` or `low`.
+`--label` is repeatable, and so is `--set`, which sets a property the driver knows.
+An unset property passes no flag.
+On the host, `--status` takes only open, and `--priority` becomes the label `tracker.priority` maps to it. `--parent` links the new issue as a GitHub sub-issue. A link that fails is a warning, and the id still prints. An issue has no named properties, so `--set` there is refused before anything is created. GitLab nests tasks, not issues, under an issue, so there `--parent` always warns and the parent's body lists its subtasks.
 It exits **3** when neither creates tasks here (no driver, or one declining `create`, on a tracker that is not the host's): the capture step then uses the project's Create adapter.
 A failed create is never retried, and its error says the task may exist already, unless the driver exited 4 to say it failed before writing ([driver contract](driver-contract.md#exit-codes)).
 With `tracker.title` declared on the host's issues, the new issue's title is then written through it; a failure there is a warning naming `f10 task retitle`, since the task exists.
@@ -1613,17 +1883,21 @@ It shows no run stages or gates, which a task just captured cannot have.
 `f10 task comment` posts markdown on stdin as a comment on the task, through the driver's `comment` verb, else the host's issues (`gh issue comment`, `glab issue note`), and prints the comment's url when one comes back.
 It refuses a closed task, exiting 1 with `<id> is closed; pass --closed to comment on it anyway` and posting nothing, because a comment there is usually meant for open work.
 It reads the tracker's state, which wins over the ledger because a reopen never clears a finish.
-Where the tracker gives no state, as a driver does, or fails to answer, a standing finish in the ledger refuses the comment, and with none the comment goes through.
+Where the tracker gives no state, as a driver does, or fails to answer, a standing finish in the ledger refuses the comment.
+With no standing finish, the comment goes through.
 `--closed` skips the check.
 `f10 task update` sets the task's `--status`, `--priority`, `--label` (repeatable, adds), `--assignee` (replaces) and `--set key=value` (a property the driver knows), through the driver's `update` verb, else the host's issues, where a status is `open` or `closed`, a priority is the label `tracker.priority` maps it to, and `--set` is refused ([driver contract](driver-contract.md#commenting-on-and-updating-a-task)).
 Both exit **3** on a tracker that is not the host's when no driver takes the verb, and a ship run then reports its shipment locally only.
 A failed comment is never retried, and its error says it may have posted.
 On the host's issues with `tracker.title` declared, an update also puts the prefix back on a title renamed by hand.
-`--after <id>` writes the body's `After:` line, replacing the first one or adding one at the end, and `--after none` drops it; `f10 drive plan` proposes these edits.
-It goes to the driver as an update of its own (`update <n> --after <m>`, an empty number to drop it), else the host's issues rewrite the body, and a tracker that edits no body exits **3**.
+`--after <id>` writes the body's `After:` line, replacing the first one or adding one at the end, and `--after none` drops it.
+`f10 drive plan` proposes these edits.
+It goes to the driver as an update of its own (`update <n> --after <m>`, an empty number to drop it).
+Else the host's issues rewrite the body, and a tracker that edits no body exits **3**.
 `--parent <id>` links the task under that parent, moving it from a parent it already has, and `--parent ""` takes it out from under its parent.
 It goes to the driver as an update of its own, after the other properties, so a tracker without parent links declines only the link.
-On GitHub issues it is a sub-issue link; GitLab nests no issue under an issue, so there, as on a tracker whose driver declines it, update exits **3**.
+On GitHub issues it is a sub-issue link.
+GitLab nests no issue under an issue, so there update exits **3**, as it does on a tracker whose driver declines it.
 
 ## Retitle
 

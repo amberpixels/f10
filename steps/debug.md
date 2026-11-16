@@ -1,16 +1,17 @@
 # Step · debug - from a bug report to a confirmed cause
 
 Role: a **senior engineer** debugging a bug before anyone plans its fix.
-Input: an error, a stack trace, or a description of wrong behavior, with no task yet (`/f10:debug`), or a bug that already is a task, run from the fetch step (**A bug that is a task**, below).
+Input: one of two things. From `/f10:debug`, it is an error, a stack trace or a description of wrong behavior, with no task yet. From the fetch step, it is a bug that already is a task (see **A bug that is a task**).
 Output: a debug brief for the capture step (point 6) or for the plan's `## Reproduction`, or a report of what was tried and what to collect next.
 Context: the loader's `verify:` line, which names the commands that run the code, and the frontmatter's `debug_costly`.
-Badge: `f10-state.sh set capture running debug` on entry from `/f10:debug`; from fetch, `f10-state.sh set plan running debug`.
+Badge: `f10-state.sh set capture running debug` on entry from `/f10:debug`. From fetch, it is `f10-state.sh set plan running debug`.
 
 **This step never fixes the bug.**
 The fix goes through plan and ship, so that the task and the plan both carry the reproduction.
 The step leaves the working tree as it found it.
 A reproduction script goes in the session's scratch directory.
-A reproduction test written into the tree is removed once it has failed, before capture or the plan, and the brief names its file, its name and its assertion so the implement step writes it first.
+A reproduction test written into the tree is removed once it has failed, before capture or the plan.
+The brief names its file, its name and its assertion, so the implement step writes it first.
 
 1. **Read the report.**
    Note the symptom, the input, where it happened (environment, version, commit) and what the reporter expected.
@@ -56,15 +57,20 @@ Write the depth and its reason as one line of the brief.
   If the test does not fail as expected, the depth becomes **full**.
 - **full** - the cause is not visible, the task says it used to work, or the failure depends on input the test must find.
   Points 1 to 4 run as written, bisect included.
-- **costly** - reproducing needs what the project cannot run cheaply: an external service, production data, a race, UI timing, hardware or a long setup.
+- **costly** - reproducing needs what the project cannot run cheaply.
+  Examples are an external service, production data, a race, UI timing, hardware and a long setup.
   Ask before spending it.
   Interactively, ask one `AskUserQuestion` with three options:
-  - **reproduce anyway**, with an estimate of what it needs ("a local Postgres with the prod schema, about 20 min");
-  - **fix from the code**: diagnose from reading the code, the outcome `skipped`, with a regression test written after the fix where one is possible;
+  - **reproduce anyway**, with an estimate of what it needs, such as "a local Postgres with the prod schema, about 20 min".
+  - **fix from the code**: diagnose from reading the code, with the outcome `skipped`.
+    Write a regression test after the fix where one is possible.
   - **I'll give you a reproduction**: the user pastes steps, logs or data, and the step goes on from them.
 
   A driven run never asks this, because the question would stall the drive.
-  The frontmatter's `debug_costly` decides instead: `skip` (the default) is **fix from the code**, `reproduce` is **reproduce anyway**, and `ask` puts the same three options in one ask (`modes/driven.md`).
+  The frontmatter's `debug_costly` decides instead.
+  Its default, `skip`, means **fix from the code**.
+  `reproduce` means **reproduce anyway**.
+  `ask` puts the same three options in one ask (`modes/driven.md`).
 
 The steering word `no repro` sets the outcome to `skipped` for this run, and `with repro` sets the depth to **full**, whatever triage would say.
 

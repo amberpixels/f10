@@ -85,7 +85,7 @@ Each skill is an **entry point** into the chain:
 | `/f10:capture <desc>` | capture | the task created, with its id and url |
 | `/f10:plan [<id \| desc>]` | (capture,) fetch, plan | the plan file saved, before any code, or the call handed to the task's own agent |
 | `/f10:ship [<id \| plan.md \| desc>]` | whatever is missing, then the flow | the end of the declared flow (an open PR by default), or the call handed to the task's own agent |
-| `/f10:cleanup [comments\|prose\|code] [<path>]` | cleanup | comments cut to the why, prose rewritten for clarity, leftovers taken out of the code, each diff proven in scope (a small one gets a light pass without proofs), verify green, nothing committed |
+| `/f10:cleanup [comments\|prose\|code] [<path>]` | cleanup | comments cut to the why, prose rewritten for clarity, leftovers taken out of the code, each diff proven in scope (a small one gets a light pass without scope proofs), verify green, nothing committed |
 | `/f10:review <id \| PR \| this branch> [host \| ci] \| since [<ref>]` | review | a findings file from a reviewer that never saw your session, from the host's own code review with `host`, or one read in from the CI review. With `since`, it runs `/f10:audit` |
 | `/f10:audit [since <ref \| date> \| all]` | audit, then capture if you accept | a report of how the work since the last audit (else the last tag) fits together: reviewers split by area plus cross-cutting and history lenses, every claimed bug checked in the code, and the findings grouped into phases. It offers to capture the report: one task with a short checklist when the findings are minor, a parent with subtasks only for heavy themes, nothing when it found nothing |
 | `/f10:resolve <id \| PR \| this branch>` | resolve | fix, skip or ask per finding, the fixes verified, every ask in one questionnaire |
@@ -174,7 +174,10 @@ These are the terms the skills, and the rest of this README, use.
   With none declared, the flow is `plan implement pr`.
   `plan` leads a flow, and it runs only for a task with no plan file.
   `/f10:ship` runs the entries after it.
-  An entry can take an argument after a colon: `review:local`, `review:host` (the host's own code review, shaped into the same findings), `review:ci`, `review:local+ci` (both, one resolve; `local+ci?` runs the CI review only where a remote reviewer is declared), `cleanup:comments,prose`, `deploy:staging`.
+  An entry can take an argument after a colon, such as `review:local`, `review:ci`, `cleanup:comments,prose` or `deploy:staging`.
+  `review:host` runs the host's own code review, shaped into the same findings.
+  `review:local+ci` runs both reviews, with one resolve.
+  `local+ci?` runs the CI review only where a remote reviewer is declared.
   A `judge` entry before `implement` judges the plan, and one after `implement` judges the change.
   A name with no generic step, such as `e2e`, is project-defined: its `.f10/instructions/<name>.md` *is* the step.
   `f10 start` and `f10 drive` run the `default` flow, `--local` runs `local`, and `--flow <name>` runs any other.
@@ -418,7 +421,11 @@ When a task is named, `--json` takes the shape that `f10 status <id>` prints: a 
 
 Inside a session, `! f10 status` already has the session id.
 `/f10:status` and `/f10:status <id>` are answered by the plugin's hook before a model runs, so they cost no tokens.
-Three cases go to the model instead: a status that prints a question a driven agent waits on, an argument that names no task, and a task whose read takes longer than 3 seconds.
+Three cases go to the model instead:
+- a status that prints a question a driven agent waits on
+- an argument that names no task
+- a task whose read takes longer than 3 seconds
+
 The model puts the question to you and sends your answer.
 
 `f10 status 1042` reads another run, the one in the worktree that has the task's branch.
@@ -498,7 +505,8 @@ The last two in the default hold the real U+F015A and U+F073A characters.
   A ship step loaded sets that step running.
   The issue capture creates names the task.
   `Stop` closes out whatever is still running.
-  `PreToolUse` on `Bash`, `Monitor` and `Agent`, run async, records background work a turn launches, and the turn's `Stop` keeps the record.
+  `PreToolUse` on `Bash`, `Monitor` and `Agent` runs async and records background work a turn launches.
+  The turn's `Stop` keeps the record.
   A drive reads an agent whose turn ended on that work as working, not stalled, until a later turn clears the record.
   `SessionStart` prunes dead state and refreshes the symlink.
 - **Steps** - each step makes one `f10-state.sh set` call as each phase opens and closes.
@@ -775,7 +783,9 @@ The optional shellcheck checks that are turned on are listed in `.shellcheckrc`.
 
 Go is checked with [standardgo](https://github.com/amberpixels/standardgo), pinned in `cli/justfile`, and the repo has no lint config file.
 
-`proto/` holds the control-plane API, loaded as the `proto` module: `just gen` regenerates its checked-in Go and TypeScript code, and `just lint` fails when that code is stale ([proto/README.md](proto/README.md)).
+`proto/` holds the control-plane API, loaded as the `proto` module ([proto/README.md](proto/README.md)).
+`just gen` regenerates its checked-in Go and TypeScript code.
+`just lint` fails when that code is stale.
 
 The justfile started from [justx](https://github.com/amberpixels/just-x), but every recipe is maintained by hand now.
 

@@ -18,7 +18,13 @@ Every commit a step makes ends in git trailers, one `Key: value` per line, as th
 Rendered in that order: every `Task:`, then `Step:`, then `Review:`.
 
 **`Step:` values.**
-`implement` for the pipeline's code, whichever delivery step (`commit`, `push`, `pr`) made the commit, since those steps carry implement's work and have none of their own; `resolve` for a review's fixes; `judge` for a change judge's changes when it commits them itself; `catchup` for a merge commit or a fix-up that brings the base in; a project-defined step's own name for its commits.
+`implement` is for the pipeline's code, whichever delivery step made the commit.
+The delivery steps are `commit`, `push` and `pr`.
+They carry implement's work and have none of their own.
+`resolve` is for a review's fixes.
+`judge` is for a change judge's changes when it commits them itself.
+`catchup` is for a merge commit or a fix-up that brings the base in.
+A project-defined step uses its own name for its commits.
 A step name is a lowercase token (`[a-z][a-z0-9-]*`).
 
 A commit with no task (free-text planless work) carries `Step:` alone; no id is ever invented.
