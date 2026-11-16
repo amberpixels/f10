@@ -288,6 +288,8 @@ export const AgentStatusSchema: GenEnum<AgentStatus> = /*@__PURE__*/
  */
 export const AgentService: GenService<{
   /**
+   * ListWorkspaces lists the Herdr workspaces, each with its agents.
+   *
    * @generated from rpc agents.v1.AgentService.ListWorkspaces
    */
   listWorkspaces: {
@@ -296,6 +298,8 @@ export const AgentService: GenService<{
     output: typeof ListWorkspacesResponseSchema;
   },
   /**
+   * ListAgents lists the agents, in one workspace or in all of them.
+   *
    * @generated from rpc agents.v1.AgentService.ListAgents
    */
   listAgents: {
@@ -304,6 +308,8 @@ export const AgentService: GenService<{
     output: typeof ListAgentsResponseSchema;
   },
   /**
+   * GetAgentStatus is one agent's state, found by name.
+   *
    * @generated from rpc agents.v1.AgentService.GetAgentStatus
    */
   getAgentStatus: {

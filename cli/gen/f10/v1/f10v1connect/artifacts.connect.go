@@ -43,7 +43,11 @@ const (
 
 // ArtifactServiceClient is a client for the f10.v1.ArtifactService service.
 type ArtifactServiceClient interface {
+	// ListArtifacts lists a task's files: its plan, spike report, handoff,
+	// verdicts, review findings and demo files, each by kind and name.
 	ListArtifacts(context.Context, *connect.Request[v1.ListArtifactsRequest]) (*connect.Response[v1.ListArtifactsResponse], error)
+	// GetArtifact reads one of a task's files, by the kind and name
+	// ListArtifacts gave it.
 	GetArtifact(context.Context, *connect.Request[v1.GetArtifactRequest]) (*connect.Response[v1.GetArtifactResponse], error)
 }
 
@@ -91,7 +95,11 @@ func (c *artifactServiceClient) GetArtifact(ctx context.Context, req *connect.Re
 
 // ArtifactServiceHandler is an implementation of the f10.v1.ArtifactService service.
 type ArtifactServiceHandler interface {
+	// ListArtifacts lists a task's files: its plan, spike report, handoff,
+	// verdicts, review findings and demo files, each by kind and name.
 	ListArtifacts(context.Context, *connect.Request[v1.ListArtifactsRequest]) (*connect.Response[v1.ListArtifactsResponse], error)
+	// GetArtifact reads one of a task's files, by the kind and name
+	// ListArtifacts gave it.
 	GetArtifact(context.Context, *connect.Request[v1.GetArtifactRequest]) (*connect.Response[v1.GetArtifactResponse], error)
 }
 

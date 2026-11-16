@@ -50,8 +50,11 @@ const (
 
 // AgentServiceClient is a client for the agents.v1.AgentService service.
 type AgentServiceClient interface {
+	// ListWorkspaces lists the Herdr workspaces, each with its agents.
 	ListWorkspaces(context.Context, *connect.Request[v1.ListWorkspacesRequest]) (*connect.Response[v1.ListWorkspacesResponse], error)
+	// ListAgents lists the agents, in one workspace or in all of them.
 	ListAgents(context.Context, *connect.Request[v1.ListAgentsRequest]) (*connect.Response[v1.ListAgentsResponse], error)
+	// GetAgentStatus is one agent's state, found by name.
 	GetAgentStatus(context.Context, *connect.Request[v1.GetAgentStatusRequest]) (*connect.Response[v1.GetAgentStatusResponse], error)
 	// SendText types text into an agent's pane, as a prompt when submit is set.
 	SendText(context.Context, *connect.Request[v1.SendTextRequest]) (*connect.Response[v1.SendTextResponse], error)
@@ -125,8 +128,11 @@ func (c *agentServiceClient) SendText(ctx context.Context, req *connect.Request[
 
 // AgentServiceHandler is an implementation of the agents.v1.AgentService service.
 type AgentServiceHandler interface {
+	// ListWorkspaces lists the Herdr workspaces, each with its agents.
 	ListWorkspaces(context.Context, *connect.Request[v1.ListWorkspacesRequest]) (*connect.Response[v1.ListWorkspacesResponse], error)
+	// ListAgents lists the agents, in one workspace or in all of them.
 	ListAgents(context.Context, *connect.Request[v1.ListAgentsRequest]) (*connect.Response[v1.ListAgentsResponse], error)
+	// GetAgentStatus is one agent's state, found by name.
 	GetAgentStatus(context.Context, *connect.Request[v1.GetAgentStatusRequest]) (*connect.Response[v1.GetAgentStatusResponse], error)
 	// SendText types text into an agent's pane, as a prompt when submit is set.
 	SendText(context.Context, *connect.Request[v1.SendTextRequest]) (*connect.Response[v1.SendTextResponse], error)

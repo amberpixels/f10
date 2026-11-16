@@ -39,6 +39,10 @@ func Command() *cli.Command {
 						Name:  "port",
 						Usage: fmt.Sprintf("the port to listen on (default %d)", remote.DefaultPort),
 					},
+					&cli.BoolFlag{
+						Name:  "mcp",
+						Usage: "also serve the API as MCP tools at " + remote.MCPPath + "; on without it turns MCP off",
+					},
 				},
 				Action: runOn,
 			},
@@ -89,6 +93,9 @@ func runOn(ctx context.Context, cmd *cli.Command) error {
 	if p := cmd.Int("port"); p > 0 {
 		c.Port = p
 	}
+
+	// the setting follows the last command, so a bare on turns MCP off
+	c.MCP = cmd.Bool("mcp")
 
 	if err := remote.WriteConfig(dir, c); err != nil {
 		return err
@@ -154,10 +161,15 @@ func writeListener(ctx context.Context, w io.Writer, run string, c remote.Config
 		fmt.Fprintf(w, "tailnet listener on, port %d; the daemon did not report it: %v\n", c.ListenPort(), err)
 	case st.Remote.Addr != "":
 		fmt.Fprintf(w, "tailnet listener on %s\n", st.Remote.Addr)
-		fmt.Fprintf(w, "web client at %s\n", cmp.Or(st.Remote.URL, "http://"+st.Remote.Addr+"/"))
+		web := cmp.Or(st.Remote.URL, "http://"+st.Remote.Addr+"/")
+		fmt.Fprintf(w, "web client at %s\n", web)
 
 		if st.Remote.HTTPSReason != "" {
 			fmt.Fprintf(w, "no HTTPS, so the page does not install or notify: %s\n", st.Remote.HTTPSReason)
+		}
+
+		if c.MCP {
+			fmt.Fprintf(w, "MCP tools at %s%s\n", strings.TrimSuffix(web, "/"), remote.MCPPath)
 		}
 	default:
 		fmt.Fprintf(w, "tailnet listener on, port %d, not listening yet: %s\n", c.ListenPort(), st.Remote.Reason)

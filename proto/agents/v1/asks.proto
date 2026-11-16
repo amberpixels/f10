@@ -7,7 +7,11 @@ import "google/protobuf/timestamp.proto";
 // AskService is the inbox of questions agents stop on. The first answer from
 // any way in closes an ask.
 service AskService {
+  // ListAsks lists the questions agents are waiting on, and with
+  // answered_since also the ones answered since then.
   rpc ListAsks(ListAsksRequest) returns (ListAsksResponse);
+  // AnswerAsk answers an open ask by its id, one value per numbered
+  // question, and delivers the answer to the agent that asked.
   rpc AnswerAsk(AnswerAskRequest) returns (AnswerAskResponse);
 }
 

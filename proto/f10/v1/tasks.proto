@@ -6,7 +6,9 @@ import "google/protobuf/timestamp.proto";
 
 // TaskService creates and reads tracker tasks through the project's tracker.
 service TaskService {
+  // CreateTask creates a task in a project's tracker and returns its id.
   rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);
+  // GetTask reads a task from a project's tracker, comments included.
   rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
 }
 

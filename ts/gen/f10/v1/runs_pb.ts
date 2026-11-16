@@ -1173,6 +1173,9 @@ export const MergeModeSchema: GenEnum<MergeMode> = /*@__PURE__*/
  */
 export const RunService: GenService<{
   /**
+   * GetRunStatus is where f10 runs stand: one task's, a project's, or every
+   * live run on the machine, with the question a stopped run waits on.
+   *
    * @generated from rpc f10.v1.RunService.GetRunStatus
    */
   getRunStatus: {

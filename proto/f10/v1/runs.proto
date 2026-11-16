@@ -7,6 +7,8 @@ import "google/protobuf/timestamp.proto";
 
 // RunService starts, drives and finishes tasks, and reports where each run is.
 service RunService {
+  // GetRunStatus is where f10 runs stand: one task's, a project's, or every
+  // live run on the machine, with the question a stopped run waits on.
   rpc GetRunStatus(GetRunStatusRequest) returns (GetRunStatusResponse);
   // Start opens a task's worktree, workspace and agent, already prompted.
   rpc Start(StartRequest) returns (StartResponse);

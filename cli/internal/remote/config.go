@@ -18,6 +18,8 @@ const DefaultPort = 7410
 type Config struct {
 	Enabled bool `json:"enabled"`
 	Port    int  `json:"port,omitempty"`
+	// MCP serves the API as MCP tools at MCPPath on the listener.
+	MCP bool `json:"mcp,omitempty"`
 }
 
 // ListenPort is the port the listener binds.

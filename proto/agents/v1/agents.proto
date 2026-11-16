@@ -8,8 +8,11 @@ package agents.v1;
 // AgentService reads the workspaces and agents of the multiplexer and types
 // into an agent's pane.
 service AgentService {
+  // ListWorkspaces lists the Herdr workspaces, each with its agents.
   rpc ListWorkspaces(ListWorkspacesRequest) returns (ListWorkspacesResponse);
+  // ListAgents lists the agents, in one workspace or in all of them.
   rpc ListAgents(ListAgentsRequest) returns (ListAgentsResponse);
+  // GetAgentStatus is one agent's state, found by name.
   rpc GetAgentStatus(GetAgentStatusRequest) returns (GetAgentStatusResponse);
   // SendText types text into an agent's pane, as a prompt when submit is set.
   rpc SendText(SendTextRequest) returns (SendTextResponse);

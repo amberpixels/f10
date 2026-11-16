@@ -85,9 +85,10 @@ func runDaemon(ctx context.Context, cmd *cli.Command) error {
 
 	if dir, err := remote.Dir(); err == nil {
 		s.Remote = &remote.Listener{
-			Dir:   dir,
-			App:   webui.Handler(),
-			Certs: &remote.Certs{Dir: filepath.Join(dir, "tls")},
+			Dir:     dir,
+			App:     webui.Handler(),
+			Certs:   &remote.Certs{Dir: filepath.Join(dir, "tls")},
+			Version: buildinfo.Version(),
 		}
 	} else {
 		logger.Printf("no tailnet listener: %v", err)

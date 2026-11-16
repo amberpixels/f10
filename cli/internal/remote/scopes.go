@@ -76,6 +76,17 @@ func Procedures(tok Token) []string {
 	return out
 }
 
+// Allows reports whether scopes reach a procedure as an operation: placed
+// in the table under one of them. Socket-only procedures and those any token
+// may call (Hello) are plumbing, so never allowed here.
+func Allows(scopes []Scope) func(procedure string) bool {
+	return func(procedure string) bool {
+		scope, ok := procedures[procedure]
+
+		return ok && scope != anyToken && slices.Contains(scopes, scope)
+	}
+}
+
 // ParseScopes reads `--scope` values, each one name or a comma list.
 func ParseScopes(values []string) ([]Scope, error) {
 	var out []Scope

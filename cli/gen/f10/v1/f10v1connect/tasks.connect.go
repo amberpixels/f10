@@ -41,7 +41,9 @@ const (
 
 // TaskServiceClient is a client for the f10.v1.TaskService service.
 type TaskServiceClient interface {
+	// CreateTask creates a task in a project's tracker and returns its id.
 	CreateTask(context.Context, *connect.Request[v1.CreateTaskRequest]) (*connect.Response[v1.CreateTaskResponse], error)
+	// GetTask reads a task from a project's tracker, comments included.
 	GetTask(context.Context, *connect.Request[v1.GetTaskRequest]) (*connect.Response[v1.GetTaskResponse], error)
 }
 
@@ -89,7 +91,9 @@ func (c *taskServiceClient) GetTask(ctx context.Context, req *connect.Request[v1
 
 // TaskServiceHandler is an implementation of the f10.v1.TaskService service.
 type TaskServiceHandler interface {
+	// CreateTask creates a task in a project's tracker and returns its id.
 	CreateTask(context.Context, *connect.Request[v1.CreateTaskRequest]) (*connect.Response[v1.CreateTaskResponse], error)
+	// GetTask reads a task from a project's tracker, comments included.
 	GetTask(context.Context, *connect.Request[v1.GetTaskRequest]) (*connect.Response[v1.GetTaskResponse], error)
 }
 

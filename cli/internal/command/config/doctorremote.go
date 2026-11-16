@@ -22,7 +22,7 @@ func remoteState(ctx context.Context, home string) *doctor.RemoteState {
 	} else if c, err := remote.ReadConfig(dir); err != nil {
 		st.ConfigErr = err.Error()
 	} else {
-		st.Enabled, st.Port = c.Enabled, c.ListenPort()
+		st.Enabled, st.Port, st.MCP = c.Enabled, c.ListenPort(), c.MCP
 	}
 
 	if ip, ok := remote.TailnetAddr(remote.Interfaces); ok {

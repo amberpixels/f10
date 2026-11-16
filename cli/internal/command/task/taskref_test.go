@@ -149,7 +149,7 @@ func finishedRefTarget(t *testing.T) (*testkit.Fakes, *target.Target) {
 	ledger.RememberRefs(t.Context(), "github.com/o/r",
 		ledger.TaskRef{ID: "FT-109", Title: "Base task", URL: "https://github.com/o/r/issues/109"})
 
-	e := ledger.MustEvent(ledger.TaskFinished, ledger.TaskFinishedPayload{Args: []string{"109"}})
+	e := ledger.MustEvent(ledger.TaskFinished, &ledger.TaskFinishedPayload{Args: []string{"109"}})
 	e.Project = "github.com/o/r"
 	ledger.Record(e)
 
@@ -268,7 +268,7 @@ func TestTaskRefsSkipEmptyFinish(t *testing.T) {
 	ledger.RememberRefs(t.Context(), "github.com/o/r",
 		ledger.TaskRef{ID: "FT-5", Title: "Here", URL: "https://github.com/o/r/issues/5"})
 
-	e := ledger.MustEvent(ledger.TaskFinished, ledger.TaskFinishedPayload{})
+	e := ledger.MustEvent(ledger.TaskFinished, &ledger.TaskFinishedPayload{})
 	e.Project = "github.com/o/r"
 	ledger.Record(e)
 

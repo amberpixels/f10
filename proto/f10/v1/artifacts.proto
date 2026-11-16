@@ -9,7 +9,11 @@ import "google/protobuf/timestamp.proto";
 // review findings. A file is named by kind and name, never by path, so a
 // client reads only what the listing offers.
 service ArtifactService {
+  // ListArtifacts lists a task's files: its plan, spike report, handoff,
+  // verdicts, review findings and demo files, each by kind and name.
   rpc ListArtifacts(ListArtifactsRequest) returns (ListArtifactsResponse);
+  // GetArtifact reads one of a task's files, by the kind and name
+  // ListArtifacts gave it.
   rpc GetArtifact(GetArtifactRequest) returns (GetArtifactResponse);
 }
 

@@ -364,6 +364,9 @@ export const AnswerSourceSchema: GenEnum<AnswerSource> = /*@__PURE__*/
  */
 export const AskService: GenService<{
   /**
+   * ListAsks lists the questions agents are waiting on, and with
+   * answered_since also the ones answered since then.
+   *
    * @generated from rpc agents.v1.AskService.ListAsks
    */
   listAsks: {
@@ -372,6 +375,9 @@ export const AskService: GenService<{
     output: typeof ListAsksResponseSchema;
   },
   /**
+   * AnswerAsk answers an open ask by its id, one value per numbered
+   * question, and delivers the answer to the agent that asked.
+   *
    * @generated from rpc agents.v1.AskService.AnswerAsk
    */
   answerAsk: {

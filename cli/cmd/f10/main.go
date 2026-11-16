@@ -28,6 +28,7 @@ import (
 	hookcmd "github.com/amberpixels/f10/cli/internal/command/hook"
 	ledgercmd "github.com/amberpixels/f10/cli/internal/command/ledger"
 	lorecmd "github.com/amberpixels/f10/cli/internal/command/lore"
+	mcpcmd "github.com/amberpixels/f10/cli/internal/command/mcp"
 	prcmd "github.com/amberpixels/f10/cli/internal/command/pr"
 	remotecmd "github.com/amberpixels/f10/cli/internal/command/remote"
 	reviewcmd "github.com/amberpixels/f10/cli/internal/command/review"
@@ -86,6 +87,7 @@ func newApp() *cli.Command {
 			drivecmd.Command(),
 			daemoncmd.Command(),
 			remotecmd.Command(),
+			mcpcmd.Command(),
 			askscmd.Command(),
 			drivecmd.WatchCommand(),
 			finishcmd.Command(),

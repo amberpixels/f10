@@ -8,7 +8,8 @@ base := "refs/remotes/origin/main"
 default: gen
 
 # install the pinned buf, Go plugins and protoc-gen-es, only where a pin
-# moved since the last install, so lint stays offline once they are in
+# moved since the last install, so lint stays offline once they are in, and
+# build the MCP tool plugin from cli/
 tools:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -17,6 +18,9 @@ tools:
       GOBIN="$PWD/.bin" go -C tools install tool
       touch "$stamp"
     fi
+    # the MCP plugin is this repo's own source, not a pin: build it every
+    # time, which Go's build cache makes cheap
+    go -C ../cli build -o "$PWD/.bin/protoc-gen-f10-mcp" ./cmd/protoc-gen-f10-mcp
     if [ ! -f node_modules/.package-lock.json ] || [ package-lock.json -nt node_modules/.package-lock.json ]; then
       npm ci --no-audit --no-fund --silent
     fi

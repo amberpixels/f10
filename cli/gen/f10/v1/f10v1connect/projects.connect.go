@@ -40,6 +40,8 @@ const (
 
 // ProjectServiceClient is a client for the f10.v1.ProjectService service.
 type ProjectServiceClient interface {
+	// ListProjects lists the projects the daemon watches or runs a drive in,
+	// with the id every other request's project field takes.
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
 }
 
@@ -75,6 +77,8 @@ func (c *projectServiceClient) ListProjects(ctx context.Context, req *connect.Re
 
 // ProjectServiceHandler is an implementation of the f10.v1.ProjectService service.
 type ProjectServiceHandler interface {
+	// ListProjects lists the projects the daemon watches or runs a drive in,
+	// with the id every other request's project field takes.
 	ListProjects(context.Context, *connect.Request[v1.ListProjectsRequest]) (*connect.Response[v1.ListProjectsResponse], error)
 }
 

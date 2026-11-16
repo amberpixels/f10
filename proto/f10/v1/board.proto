@@ -7,6 +7,8 @@ import "f10/v1/tasks.proto";
 
 // BoardService reports what changed in a project, or where every task stands.
 service BoardService {
+  // GetBoard is what changed in a project over a window, or with the
+  // state view, where every task stands and who owes the next move.
   rpc GetBoard(GetBoardRequest) returns (GetBoardResponse);
 }
 

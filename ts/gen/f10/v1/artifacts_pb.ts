@@ -221,6 +221,9 @@ export const ArtifactKindSchema: GenEnum<ArtifactKind> = /*@__PURE__*/
  */
 export const ArtifactService: GenService<{
   /**
+   * ListArtifacts lists a task's files: its plan, spike report, handoff,
+   * verdicts, review findings and demo files, each by kind and name.
+   *
    * @generated from rpc f10.v1.ArtifactService.ListArtifacts
    */
   listArtifacts: {
@@ -229,6 +232,9 @@ export const ArtifactService: GenService<{
     output: typeof ListArtifactsResponseSchema;
   },
   /**
+   * GetArtifact reads one of a task's files, by the kind and name
+   * ListArtifacts gave it.
+   *
    * @generated from rpc f10.v1.ArtifactService.GetArtifact
    */
   getArtifact: {

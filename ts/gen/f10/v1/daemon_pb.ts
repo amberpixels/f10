@@ -429,6 +429,9 @@ export const DaemonService: GenService<{
     output: typeof HelloResponseSchema;
   },
   /**
+   * GetDaemonStatus is who the daemon is, the drives it runs, the
+   * projects it watches and its tailnet listener.
+   *
    * @generated from rpc f10.v1.DaemonService.GetDaemonStatus
    */
   getDaemonStatus: {
