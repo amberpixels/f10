@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -126,7 +127,7 @@ func landUnpushed(ctx context.Context, in FinishInput, branch, def string) (stri
 	if tree == gitx.Out(ctx, in.Main, "rev-parse", base+"^{tree}") {
 		// a branch that adds nothing never landed anything of the task's, and
 		// closing it would report the base's tip as its merge
-		if !in.Flags.Empty && !landedBefore(ctx, in, base, tip) {
+		if !in.Flags.Empty && !landedBefore(ctx, in, base, branch) {
 			return "", nil, fmt.Errorf("%s adds nothing to %s: nothing of %s to land; "+
 				"pass --empty to finish it anyway", branch, def, in.Task.ID)
 		}
@@ -193,17 +194,26 @@ func landUnpushed(ctx context.Context, in FinishInput, branch, def string) (stri
 	return sha, append(notes, closesOnPush(in, def)), nil
 }
 
-// landedBefore reports an earlier finish of this task in base: the branch
-// tip itself (a merge or a rebase landing), or a commit naming the task the
-// way the landing names it (its subject, its Task: trailer, its closing line).
-func landedBefore(ctx context.Context, in FinishInput, base, tip string) bool {
-	if ok, err := gitx.IsAncestor(ctx, in.Main, tip, base); err == nil && ok {
-		return true
+// landedBefore reports an earlier finish of this task in base, by a commit
+// naming it the way a landing does: its subject, its Task: trailer, its
+// closing line or the merge's own subject. The branch tip being in base
+// proves nothing, since a branch with no commits of its own is there too.
+func landedBefore(ctx context.Context, in FinishInput, base, branch string) bool {
+	lines := []string{
+		"^" + regexp.QuoteMeta(in.Task.Label()+":") + " ",
+		"^Task: " + regexp.QuoteMeta(in.Task.ID) + "$",
+		"^" + regexp.QuoteMeta("Merge branch '"+branch+"'") + "$",
 	}
 
-	args := []string{"log", "-1", "--format=%H", "-F", "--grep=" + in.Task.Label() + ":", "--grep=Task: " + in.Task.ID}
-	if closing := closingLines(in); closing != "" {
-		args = append(args, "--grep="+closing)
+	for line := range strings.SplitSeq(closingLines(in), "\n") {
+		if line != "" {
+			lines = append(lines, "^"+regexp.QuoteMeta(line)+"$")
+		}
+	}
+
+	args := []string{"log", "-1", "--format=%H", "-E"}
+	for _, l := range lines {
+		args = append(args, "--grep="+l)
 	}
 
 	return gitx.Out(ctx, in.Main, append(args, base)...) != ""

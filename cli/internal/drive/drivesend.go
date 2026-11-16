@@ -70,8 +70,8 @@ func (in *DriveInput) send(ctx context.Context, r *DriveRun, skill string) error
 	case run != nil && drivectl.StoppedRun(run):
 		answer := in.takeAnswer(id)
 		if answer == "" {
-			// a catchup clears a mark but restores the ship stop it noted, so
-			// git, not the note, says whether that stop still holds
+			// a catchup clears a mark and writes no phase, so git, not the
+			// run, says whether the stop still holds
 			if at := resumeAt(skill, run, r.Guarded); at != "" &&
 				stack.BranchUnsettled(ctx, in.Main, r.O.Path, r.O.Branch) == "" {
 				why := "stopped for a catchup, the branch is settled"

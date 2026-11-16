@@ -344,7 +344,8 @@ There finish merges as usual, brings the default branch up to the merge, switche
    On a host-issues tracker (GitHub, GitLab), the squash or merge commit also carries a `Closes #<n>` line for the task and each rider `--close` names, whatever `traces` says, so the issue closes when the commit reaches origin's default branch and never before.
    The default branch then moves: `git merge --ff-only` when the main checkout is on it, else `git update-ref`.
    A conflict, or a rebase behind the default branch, is refused with nothing changed and `/f10:catchup` named; a branch already in the default branch lands nothing.
-   A branch whose changes are all in the default branch is a rerun only when the task landed there before: the branch's tip is in it, or a commit there names the task (its subject, its `Task:` trailer or its closing line).
+   A branch whose changes are all in the default branch is a rerun only when a commit there names the task the way a landing does: its subject, its `Task:` trailer, its closing line or the merge's own subject.
+   The branch's tip being in the default branch proves nothing, because a branch with no commits of its own is there too.
    Any other branch that adds nothing is refused with nothing changed (`<branch> adds nothing to <default>`), because closing it would report the default branch's tip as the task's merge.
    `--empty` finishes it anyway.
    `--yes` never implies `--empty`, because automated finishes pass `--yes`.
@@ -735,6 +736,7 @@ A cancelled record is never picked up again: the same command line starts a new 
    After a catchup the caught-up local branch is what is tried, since origin's copy is the tree before it.
    A ship stopped by its catchup guard, which marks the branch and records the stop as the guard's (`f10-state.sh stop guard`), gets the same catchup, then ship is prompted again at the entry it stopped on (`resume at <entry>`); its dependents wait, and a second guard conflict counts by the same fingerprint.
    The driver keeps its own copy of that stop's entry and place on the task's record (`guard:`) until ship is prompted again, so it resumes there even when the run file no longer carries the guard's kind.
+   The copy counts only while the run is still stopped at that entry and place, so a later stop elsewhere is not read as the guard's.
    A ship that failed for another reason under a mark is not the guard's stop, and halts.
    The catchup's end is the `done catchup` signal its report writes into run state (`f10-state.sh done catchup`), dated after the prompt, and git, not the signal, says whether it settled.
    A catchup writes no phase.

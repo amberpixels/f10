@@ -23,10 +23,11 @@ func guardStop(run *state.Run) bool {
 }
 
 // guarded reports the guard's stop by the kind the run recorded, or by the
-// drive's own record of it, which a catchup's turn cannot rewrite; a stop
-// that asks or blocks since is a decision, never the guard's.
+// drive's own record of it while the run still stops where the guard did; a
+// stop that asks or blocks since, or one elsewhere, is never the guard's.
 func guarded(run *state.Run, g *drivestore.Guard) bool {
-	return guardStop(run) || g != nil && run.Ask == "" && (run.Ship == "failed" || run.Ship == "partial")
+	return guardStop(run) || g != nil && run.Ask == "" && (run.Ship == "failed" || run.Ship == "partial") &&
+		run.Leaf == g.Entry && run.At == g.At
 }
 
 // awaitsDecision is a stop a catchup must not run over: a question or a

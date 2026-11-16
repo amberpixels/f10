@@ -129,12 +129,15 @@ func (fx *finishFixture) openPR() {
 	fx.f.Script(testkit.GhMerge, "")
 }
 
-// landedBefore scripts an earlier landing of GH-1 in main: its tip is not
-// in main, a squash commit naming the task is.
+// landedBefore scripts an earlier landing of GH-1 in main: a squash commit
+// naming the task.
 func (fx *finishFixture) landedBefore() {
-	fx.f.Fail("git merge-base --is-ancestor t1 m0", shell.Result{Code: 1})
-	fx.f.Defaults["git log -1 --format=%H -F --grep=GH-1: --grep=Task: GH-1"] = "sq1"
+	fx.f.Defaults[landedLog] = "sq1"
 }
+
+// landedLog is the search for an earlier landing, each pattern a whole line
+// or a subject prefix, so GH-12's commits never match GH-1's.
+const landedLog = "git log -1 --format=%H -E --grep=^GH-1:  --grep=^Task: GH-1$ --grep=^Merge branch 'GH-1'$"
 
 func (fx *finishFixture) run(t *testing.T) (string, error) {
 	t.Helper()
@@ -2019,8 +2022,9 @@ func TestFinishRefusesANeverPushedBranchItCannotLand(t *testing.T) {
 }
 
 // FT-533: a branch never pushed that adds nothing to main, and never landed
-// before, has nothing of the task's to land: finish refuses, naming it,
-// rather than report main's tip as the task's merge; --empty closes it.
+// before, has nothing of the task's to land, even with its tip in main (a
+// catchup fast-forwarded it): finish refuses, naming it, rather than report
+// main's tip as the task's merge; --empty closes it.
 func TestFinishRefusesABranchThatAddsNothing(t *testing.T) {
 	empty := func(t *testing.T) *finishFixture {
 		t.Helper()
@@ -2028,8 +2032,7 @@ func TestFinishRefusesABranchThatAddsNothing(t *testing.T) {
 		fx := newFinishFixture(t)
 		fx.noPull()
 		fx.f.Script("git rev-parse m0^{tree}", "tr33")
-		fx.f.Fail("git merge-base --is-ancestor t1 m0", shell.Result{Code: 1})
-		fx.f.Defaults["git log -1 --format=%H -F --grep=GH-1: --grep=Task: GH-1"] = ""
+		fx.f.Defaults[landedLog] = ""
 
 		return fx
 	}

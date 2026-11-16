@@ -4162,3 +4162,21 @@ func TestLeaveRunsHaltsAVerifyBeforeReturning(t *testing.T) {
 		t.Fatal("leaveRuns returned with the verify still running")
 	}
 }
+
+// The drive's record of a guard stop holds only while the run stops where
+// the guard did: a later stop elsewhere (a ship typed by hand after a halt)
+// is not the guard's, and resumes nothing.
+func TestGuardRecordHoldsOnlyAtItsPlace(t *testing.T) {
+	g := &drivestore.Guard{Entry: "pr", At: 4}
+	pipeline := []string{"judge", "implement", "cleanup", "pr", "review:local", "judge", "pr"}
+
+	at := &state.Run{Ship: "partial", Leaf: "pr", At: 4, Pipeline: pipeline}
+	if got := resumeAt("ship", at, g); got != "resume at pr (entry 4)" {
+		t.Errorf("at the guard's place: %q, want resume at pr (entry 4)", got)
+	}
+
+	elsewhere := &state.Run{Ship: "partial", Leaf: "review", At: 5, Pipeline: pipeline}
+	if got := resumeAt("ship", elsewhere, g); got != "" || heldStop(elsewhere, g) {
+		t.Errorf("a stop at review read as the guard's: %q", got)
+	}
+}
