@@ -426,9 +426,10 @@ func (s HostSource) Ref(ctx context.Context, r ref.Ref) (ledger.TaskRef, error) 
 	}
 
 	return ledger.TaskRef{
-		ID:    r.ID,
-		Title: tasktitle.Clean(s.h.StripTitle(iss.Title, r.Number), r.ID),
-		URL:   iss.URL,
+		ID:     r.ID,
+		Title:  tasktitle.Clean(s.h.StripTitle(iss.Title, r.Number), r.ID),
+		URL:    iss.URL,
+		Closed: strings.EqualFold(iss.State, "closed"),
 	}, nil
 }
 
@@ -443,6 +444,7 @@ func (s HostSource) Info(ctx context.Context, r ref.Ref) (TaskInfo, error) {
 	return TaskInfo{
 		Body:   iss.Body,
 		Closed: strings.EqualFold(iss.State, "closed"),
+		Stated: true,
 		Pull:   iss.Pull,
 		Labels: iss.Labels,
 	}, nil

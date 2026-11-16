@@ -137,7 +137,8 @@ A spike's answer is the exception: it carries no code, so it is posted.
 1. Compose one comment from the shipment rows (each url, the PR/MR, commits by sha) and two or three lines on what changed.
    It leaves the machine: no f10, plan or findings mention under stealth (`conventions/context.md`), and other tasks named by title.
    A bundle comments on the lead and names the riders.
-2. `f10 task comment <id>` with it on stdin, in a call of its own.
+2. `f10 task comment <id> --closed` with it on stdin, in a call of its own.
+   `--closed` lets the comment through when the task already closed, because a report on the task this run shipped is always intended.
 3. With `tracker.status.shipped` declared, `f10 task update <id> --status <that word>`, for every bundle member.
 
 When the tracker is the host's issues and the shipment is a PR/MR carrying the task's closing keyword, skip points 2 and 3: the host links the two, and closes the issue on merge, not when the PR opens.

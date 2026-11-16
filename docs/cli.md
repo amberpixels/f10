@@ -42,7 +42,7 @@ f10 doctor [--json]      # check the plugin, the binary and the environment; cha
 
 f10 task read [id]       # the task as markdown; a bundle (id+id) reads every member
 f10 task current         # the id a bare skill call stands for: the branch's task, else this session's (exit 1: none)
-f10 task ref <id>... [--md] [--fresh]   # `<id> (<title>)` per task, a markdown link with --md; from what f10 already read
+f10 task ref <id>... [--md] [--fresh]   # `<id> (<title>)` per task, a markdown link with --md, `[closed]` after a closed one; from what f10 already read
 f10 task report <id>... [--children]  # a report's facts block: one task's rows, else a row per task, a parent's subtasks under it
 f10 task stale [id] [--created YYYY-MM-DD]   # fetch's stale check: fresh, judged <verdict file>, needs judge or undated
 f10 task regression [id] --repro R --confidence C [--commit SHA --lines PATH:A-B ...]   # record a bug task's origin task and how review let it through
@@ -51,7 +51,7 @@ f10 task open [id]       # in the browser, no id the task list (--link writes th
 f10 task search <query>  # rows, not a picker
 f10 task children [id] [--json | --plain] [--open]   # the task's open subtasks, in After: order
 f10 task create [--status s] [--priority p] [--label l]... [--parent id] [--set k=v]... < task.md   # through the driver, else as a host issue; prints the new id
-f10 task comment [id] < comment.md   # a comment on the task; prints its url when the tracker gives one
+f10 task comment [id] [--closed] < comment.md   # a comment on the task; prints its url when the tracker gives one; a closed task needs --closed
 f10 task update [id] [--status s] [--priority p] [--label l]... [--assignee a] [--parent id] [--after id | none] [--set k=v]...   # absolute values
 f10 task retitle [id | --all] [--dry-run]   # write tracker.title onto the host's issue titles
 f10 plan read [id]       # the plan saved for that task
@@ -1552,6 +1552,12 @@ A task not there costs one tracker call (the host's issue, or the driver's `read
 `--fresh` asks the tracker for every task and rewrites what is kept.
 A title renamed on the tracker stays stale until f10 reads that task again.
 An id the tracker does not know, or a tracker that fails, prints bare with a note on stderr, and the exit is 0.
+A closed task's line ends in ` [closed]`, in both forms.
+A tracker read this call made decides, so `--fresh` shows a task reopened after its finish as open.
+Otherwise it is closed when the ledger records an `f10 finish` of it that still stands (no live plan re-planned it since), which costs no tracker call.
+The state is never kept, so a task closed outside f10 shows closed only once f10 reads it again (`--fresh`).
+Text that leaves the machine never carries the marker.
+`task create` warns on stderr when the body's `After:` line names a closed task, and links it anyway.
 
 ## Report
 
@@ -1566,6 +1572,10 @@ It shows no run stages or gates, which a task just captured cannot have.
 ## Comment and update
 
 `f10 task comment` posts markdown on stdin as a comment on the task, through the driver's `comment` verb, else the host's issues (`gh issue comment`, `glab issue note`), and prints the comment's url when one comes back.
+It refuses a closed task, exiting 1 with `<id> is closed; pass --closed to comment on it anyway` and posting nothing, because a comment there is usually meant for open work.
+It reads the tracker's state, which wins over the ledger because a reopen never clears a finish.
+Where the tracker gives no state, as a driver does, or fails to answer, a standing finish in the ledger refuses the comment, and with none the comment goes through.
+`--closed` skips the check.
 `f10 task update` sets the task's `--status`, `--priority`, `--label` (repeatable, adds), `--assignee` (replaces) and `--set key=value` (a property the driver knows), through the driver's `update` verb, else the host's issues, where a status is `open` or `closed`, a priority is the label `tracker.priority` maps it to, and `--set` is refused ([driver contract](driver-contract.md#commenting-on-and-updating-a-task)).
 Both exit **3** on a tracker that is not the host's when no driver takes the verb, and a ship run then reports its shipment locally only.
 A failed comment is never retried, and its error says it may have posted.

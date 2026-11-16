@@ -17,6 +17,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // A New is a task to create: its markdown, `# <title>` first, the
@@ -124,6 +125,10 @@ func LinkBodyAfter(ctx context.Context, t *target.Target, doc string, warn io.Wr
 	}
 
 	k := statusview.TaskRefsFor(t, ctx, []ref.Ref{r}, true, false, warn)[r.ID]
+	if k.Closed {
+		ui.Warnf(warn, "the After: line names a closed task; build on it as shipped work, not as a dependency")
+	}
+
 	if k.Title == "" || k.URL == "" {
 		return doc
 	}

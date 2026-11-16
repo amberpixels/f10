@@ -4,8 +4,11 @@ import (
 	"context"
 	"io"
 	"maps"
+	"slices"
+	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/ledger"
+	"github.com/amberpixels/f10/cli/internal/lookaround"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasksource"
@@ -59,7 +62,68 @@ func TaskRefsFor(t *target.Target,
 		ledger.RememberRefs(ctx, project, read...)
 	}
 
+	// a tracker read made in this call knows better than a finish, which a
+	// reopen never clears
+	var cached []ref.Ref
+
+	for _, r := range refs {
+		if r.ID != "" && !slices.ContainsFunc(read, func(k ledger.TaskRef) bool { return k.ID == r.ID }) {
+			cached = append(cached, r)
+		}
+	}
+
+	for id := range FinishedIn(ctx, t, cached) {
+		if k, ok := known[id]; ok {
+			k.Closed = true
+			known[id] = k
+		}
+	}
+
 	return known
+}
+
+// FinishedIn is which of refs the ledger records a standing finish for: a
+// local read, so a closed task is marked with no tracker call. A ledger that
+// cannot be read finishes nothing.
+func FinishedIn(ctx context.Context, t *target.Target, refs []ref.Ref) map[string]bool {
+	project := t.RefProject(ctx)
+	if project == "" || len(refs) == 0 {
+		return nil
+	}
+
+	events, err := ledger.ReadEvents(ctx, ledger.Path(), ledger.Filter{Project: project, Kind: ledger.TaskFinished})
+	if err != nil || len(events) == 0 {
+		return nil
+	}
+
+	var resolve func(string) string
+
+	out := map[string]bool{}
+
+	for _, e := range events {
+		token := strings.TrimPrefix(e.FinishedTask(), "#")
+		if token == "" {
+			continue // an empty token would resolve to this checkout's own task
+		}
+
+		for _, r := range refs {
+			hit := strings.EqualFold(token, r.ID) || token == r.Number
+			if !hit && strings.Contains(token, "://") {
+				// only a url needs the target to name its task
+				if resolve == nil {
+					resolve = t.IDOf(ctx)
+				}
+
+				hit = strings.EqualFold(resolve(token), r.ID)
+			}
+
+			if hit && lookaround.LedgerFinishStands(true, t.Layout.StorageRoot.PlanLive(r.ID)) {
+				out[r.ID] = true
+			}
+		}
+	}
+
+	return out
 }
 
 //nolint:lostfield // a lookup through the target, not a conversion of it

@@ -19,6 +19,10 @@ type TaskRef struct {
 	Title   string    `db:"title"             json:"title"`
 	URL     string    `db:"url"               json:"url"`
 	SeenAt  time.Time `db:"seen_at"           json:"seen_at"`
+
+	// Closed is read fresh on every lookup, never stored: a cached state
+	// would keep a reopened task closed until the next tracker read.
+	Closed bool `db:"-" json:"closed,omitempty"`
 }
 
 func (TaskRef) TableName() string { return "task_refs" }

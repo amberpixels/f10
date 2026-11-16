@@ -104,6 +104,7 @@ With `tracker.title` declared, f10 takes a leading id off the titles in your `li
 ## Commenting on and updating a task
 
 `f10 task comment <id>` runs `comment <n>` with markdown on stdin; a ship run posts what it shipped this way (a report link, a deploy url, a PR, commits).
+The contract gives no task state, so only a finish the ledger records stops a comment on a closed task here.
 Print the comment's url if the tracker gives one; f10 prints it back.
 
 `f10 task update <id>` runs `update <n>` with only the flags the caller set:

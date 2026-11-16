@@ -204,7 +204,7 @@ The reason: `FT-70` does not autolink on GitHub, and a Jira, Linear or Notion id
 - **First mention in each text**: every body, reply, comment and commit message is read on its own, so each names the task in full once.
   Later mentions in the same text may use the bare id.
 - **Title and url** come from one `f10 task ref <id>... --md` for every task a text names, and without `--md` it prints `<ID> (<title>)` lines.
-  It answers from what f10 already read, asking the tracker only on a miss.
+  A trailing `[closed]` marks a closed task for you, and never goes into the text.
   Pass `--fresh` only where `steps/pr.md` says.
 - **An id the tracker does not know**, or a read that fails, stays bare, with no invented title.
   That does not fail the step.

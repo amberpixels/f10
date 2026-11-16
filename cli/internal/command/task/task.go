@@ -142,9 +142,12 @@ func Command() *cli.Command {
 			{
 				Name: "comment",
 				Usage: "add markdown on stdin to the task as a comment, and print its url when the tracker gives one " +
-					"(exit 3: this tracker takes no comments here)",
+					"(exit 3: this tracker takes no comments here); a closed task is refused without --closed",
 				ArgsUsage: "[task-id]",
-				Action:    runTaskComment,
+				Flags: []cli.Flag{
+					&cli.BoolFlag{Name: "closed", Usage: "comment even though the task is closed"},
+				},
+				Action: runTaskComment,
 			},
 			{
 				Name: "retitle",
