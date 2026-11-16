@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -351,7 +352,7 @@ func walk(
 				break
 			}
 
-			values = append(values, strconv.Itoa(q.N)+"="+value)
+			values = append(values, strconv.Itoa(q.N)+"="+wireValue(q, value))
 		}
 
 		if skip {
@@ -373,6 +374,19 @@ func walk(
 	}
 
 	return nil
+}
+
+// wireValue is a resolved answer as the daemon resolves it again: an option
+// by its letter, which no option's own text can shadow, as the text "1"
+// would among options 2 and 1; free text as typed.
+func wireValue(q asks.Question, resolved string) string {
+	const letters = "abcdefghijklmnopqrstuvwxyz"
+
+	if i := slices.Index(q.Options, resolved); i >= 0 && i < len(letters) {
+		return letters[i : i+1]
+	}
+
+	return resolved
 }
 
 // askLine reads one question's answer until it resolves: Enter is the

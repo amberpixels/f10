@@ -10,6 +10,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agents"
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/printed"
+	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/target"
 )
 
@@ -21,6 +22,18 @@ func callerOf(req connect.AnyRequest, c *f10v1.CallerContext) *f10v1.CallerConte
 	}
 
 	return c
+}
+
+// withCaller is the request's caller context, and ctx running every command
+// the call starts (git, the host and tracker CLIs, Herdr) in the caller's
+// own environment, as the command did in process; a remote call keeps the
+// daemon's.
+func withCaller(
+	ctx context.Context, req connect.AnyRequest, c *f10v1.CallerContext,
+) (context.Context, *f10v1.CallerContext) {
+	c = callerOf(req, c)
+
+	return shell.WithEnv(ctx, c.GetEnv()), c
 }
 
 // callerTarget is the checkout a local command runs in when the request
@@ -36,8 +49,9 @@ func callerTarget(
 	return projectTarget(ctx, sup, project, verb)
 }
 
-// inSession runs the call's Herdr commands in the caller's session, and
-// keeps that session as the newest for the calls the daemon makes alone.
+// inSession runs the call's Herdr commands in the caller's session, its
+// allowlisted environment, and keeps that session as the newest for the
+// calls the daemon makes alone.
 func inSession(ctx context.Context, sup Supervisor, c *f10v1.CallerContext, t *target.Target) context.Context {
 	if len(c.GetEnv()) == 0 {
 		return ctx

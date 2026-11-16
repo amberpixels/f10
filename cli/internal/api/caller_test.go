@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -11,6 +12,7 @@ import (
 	f10v1 "github.com/amberpixels/f10/cli/gen/f10/v1"
 	"github.com/amberpixels/f10/cli/gen/f10/v1/f10v1connect"
 	"github.com/amberpixels/f10/cli/internal/printed"
+	"github.com/amberpixels/f10/cli/internal/shell"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
@@ -63,5 +65,18 @@ func TestCallerContextIsDroppedOffTheSocket(t *testing.T) {
 	}))
 	if connect.CodeOf(err) != connect.CodeInvalidArgument || !strings.Contains(err.Error(), "names no project") {
 		t.Errorf("err = %v, want the request refused for naming no project", err)
+	}
+}
+
+// A local call runs its commands in the caller's environment, its gh token
+// and tracker settings included, as the command did in process.
+func TestALocalCallRunsInTheCallersEnvironment(t *testing.T) {
+	t.Parallel()
+
+	env := []string{"GH_TOKEN=caller", "PATH=/usr/bin"}
+
+	ctx, c := withCaller(t.Context(), connect.NewRequest(&f10v1.GetRunStatusRequest{}), &f10v1.CallerContext{Env: env})
+	if !slices.Equal(shell.EnvOf(ctx), env) || c == nil {
+		t.Errorf("env = %v, want the caller's %v", shell.EnvOf(ctx), env)
 	}
 }

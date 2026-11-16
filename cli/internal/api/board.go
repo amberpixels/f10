@@ -22,7 +22,7 @@ func (s *boardService) GetBoard(
 	req *connect.Request[f10v1.GetBoardRequest],
 ) (*connect.Response[f10v1.GetBoardResponse], error) {
 	m := req.Msg
-	c := callerOf(req, m.GetCaller())
+	ctx, c := withCaller(ctx, req, m.GetCaller())
 	stateView := m.GetView() == f10v1.BoardView_BOARD_VIEW_STATE
 	now := time.Now()
 

@@ -29,8 +29,8 @@ type Options struct {
 	Deliverer agents.Deliverer
 	AsksDir   func() string // the inbox; asks.Dir when nil
 	Now       func() time.Time
-	// Session runs ctx's agent calls in the session a local caller's env
-	// names; nil leaves ctx as it is
+	// Session runs ctx's commands in a local caller's env, its agent calls in
+	// the session that env names; nil leaves ctx as it is
 	Session func(ctx context.Context, env []string) context.Context
 	// Links are the task urls the owner knows for asks, by display project
 	// and task id, so a terminal's list links them; nil knows none

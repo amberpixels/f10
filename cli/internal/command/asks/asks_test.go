@@ -158,6 +158,23 @@ func TestWalkAsks(t *testing.T) {
 	}
 }
 
+// The walk sends the option picked, never another one whose text a letter
+// or a number would name: options 2 and 1, picked by b, record 1.
+func TestWalkAsksKeepsANumericOption(t *testing.T) {
+	dir := t.TempDir()
+	testkit.Raised(t, dir, asks.Ask{Task: "FT-1", Root: "/r", Text: "1. Port? [2 | 1]"})
+	f := &fakeDeliver{}
+
+	in := bufio.NewReader(strings.NewReader("b\n"))
+	if err := askscmd.WalkAsks(context.Background(), io.Discard, in, dir, f.deliverer()); err != nil {
+		t.Fatal(err)
+	}
+
+	if !slices.Equal(f.prompted, []string{"FT-1: 1. 1"}) {
+		t.Errorf("prompted %v, want option b, 1", f.prompted)
+	}
+}
+
 func TestListAsksJSON(t *testing.T) {
 	dir := t.TempDir()
 	a := testkit.Raised(t, dir, asks.Ask{Task: "FT-1", Root: "/r"})

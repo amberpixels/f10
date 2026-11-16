@@ -25,7 +25,7 @@ func (s *taskService) CreateTask(
 	req *connect.Request[f10v1.CreateTaskRequest],
 ) (*connect.Response[f10v1.CreateTaskResponse], error) {
 	m := req.Msg
-	c := callerOf(req, m.GetCaller())
+	ctx, c := withCaller(ctx, req, m.GetCaller())
 
 	t, err := callerTarget(ctx, s.sup, m.GetProject(), c, "task")
 	if err != nil {
@@ -82,7 +82,7 @@ func (s *taskService) GetTask(
 	req *connect.Request[f10v1.GetTaskRequest],
 ) (*connect.Response[f10v1.GetTaskResponse], error) {
 	m := req.Msg
-	c := callerOf(req, m.GetCaller())
+	ctx, c := withCaller(ctx, req, m.GetCaller())
 
 	t, err := callerTarget(ctx, s.sup, m.GetProject(), c, "task")
 	if err != nil {

@@ -43,7 +43,7 @@ func (s *runService) GetRunStatus(
 	req *connect.Request[f10v1.GetRunStatusRequest],
 ) (*connect.Response[f10v1.GetRunStatusResponse], error) {
 	m := req.Msg
-	c := callerOf(req, m.GetCaller())
+	ctx, c := withCaller(ctx, req, m.GetCaller())
 	o := output(c)
 
 	rep, err := s.statusReport(ctx, m, c, &o.Stderr)
@@ -78,7 +78,7 @@ func (s *runService) Start(
 	req *connect.Request[f10v1.StartRequest],
 ) (*connect.Response[f10v1.StartResponse], error) {
 	m := req.Msg
-	c := callerOf(req, m.GetCaller())
+	ctx, c := withCaller(ctx, req, m.GetCaller())
 
 	mode, err := startMode(m.GetMode())
 	if err != nil {
@@ -343,7 +343,7 @@ func (s *runService) Finish(
 	req *connect.Request[f10v1.FinishRequest],
 ) (*connect.Response[f10v1.FinishResponse], error) {
 	m := req.Msg
-	c := callerOf(req, m.GetCaller())
+	ctx, c := withCaller(ctx, req, m.GetCaller())
 
 	if err := requireAgents(c); err != nil {
 		return nil, err
@@ -412,7 +412,7 @@ func (s *runService) Forward(
 	req *connect.Request[f10v1.ForwardRequest],
 ) (*connect.Response[f10v1.ForwardResponse], error) {
 	m := req.Msg
-	c := callerOf(req, m.GetCaller())
+	ctx, c := withCaller(ctx, req, m.GetCaller())
 
 	text := strings.TrimSpace(m.GetText())
 	if text == "" {
@@ -481,7 +481,7 @@ func (s *runService) ListDrives(
 	req *connect.Request[f10v1.ListDrivesRequest],
 ) (*connect.Response[f10v1.ListDrivesResponse], error) {
 	m := req.Msg
-	c := callerOf(req, m.GetCaller())
+	ctx, c := withCaller(ctx, req, m.GetCaller())
 
 	t, err := callerTarget(ctx, s.sup, m.GetProject(), c, "drive")
 	if err != nil {
@@ -546,7 +546,7 @@ func (s *runService) CancelDrive(
 	req *connect.Request[f10v1.CancelDriveRequest],
 ) (*connect.Response[f10v1.CancelDriveResponse], error) {
 	m := req.Msg
-	c := callerOf(req, m.GetCaller())
+	ctx, c := withCaller(ctx, req, m.GetCaller())
 
 	if m.GetDrive() <= 0 {
 		return nil, invalid("cancel needs a drive number")

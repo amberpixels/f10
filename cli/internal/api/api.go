@@ -11,6 +11,7 @@ import (
 	"github.com/amberpixels/f10/cli/gen/f10/v1/f10v1connect"
 	"github.com/amberpixels/f10/cli/internal/agents/agentsrpc"
 	"github.com/amberpixels/f10/cli/internal/daemon"
+	"github.com/amberpixels/f10/cli/internal/shell"
 )
 
 // Supervisor is what the handlers need of the daemon: who it is, the drives
@@ -40,7 +41,7 @@ func Handler(sup Supervisor) http.Handler {
 	agentsrpc.Mount(mux, agentsrpc.Options{
 		Deliverer: deliverer(sup),
 		Session: func(ctx context.Context, env []string) context.Context {
-			return inSession(ctx, sup, &f10v1.CallerContext{Env: env}, nil)
+			return inSession(shell.WithEnv(ctx, env), sup, &f10v1.CallerContext{Env: env}, nil)
 		},
 		Links: askLinks,
 	}, opts...)
