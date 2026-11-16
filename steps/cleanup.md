@@ -55,15 +55,18 @@ Fenced code blocks and verbatim quotes keep their dashes.
 3. **Fix the dashes.**
    Grep the changed files for em and en dashes, and fix those on the added or changed lines.
    In a source file, fix only those inside comments, because a dash in code stays.
-4. **Skip the proofs.**
-   The light pass takes no snapshot or baseline, reads no file in full, and runs no `f10-cleanup-check.sh`, inventory or rules subagent.
+4. **Skip the proofs, but check density.**
+   The light pass takes no snapshot or baseline, and it reads no file in full.
+   It runs no `comments` or `literals` check, no inventory and no rules subagent.
    A target's Baseline and Check belong to the full pass only.
+   The one exception is the density check (**Density**, below), which the `prose` and `comments` targets run in both passes.
    The `code` target still splits certain fixes from uncertain ones, and asks about the uncertain ones.
 5. **Verify** as point 5 of the Procedure says.
 6. **Report** in two lines.
    The first says what changed, or that nothing needed it.
    The second says the proofs were skipped for size, with the line count.
    Then add one line per `code` fix with its category, and one line per problem noticed and left alone, with its `file:line`.
+   Each density flag left standing also gets a line, with its `file:line` and the reason it stays.
 
 ## Procedure
 
@@ -99,6 +102,30 @@ The full pass runs whenever the light pass does not.
    - Every exception the check allowed, and why.
    - Each problem noticed and left alone, with its `file:line`, because each one is a candidate task.
    - The output of the checks.
+
+## Density
+
+A dense sentence is hard to read, so the `prose` and `comments` targets measure density as well as judging it by `conventions/voice.md`.
+The check is `f10-cleanup-check.sh prose <ref | --all> <files>`.
+With the default scope, the ref is the merge base from `git merge-base HEAD "$(f10 pr base)"`, so only the lines the branch changed count.
+With a scope given by path, `--all` checks every line.
+
+It flags a sentence that has a semicolon, more than 3 joints or more than 30 words.
+A joint is any of `, ; : (` or a spaced hyphen or dash.
+A parenthetical counts once.
+These limits match the prose that `conventions/voice.md` set, which runs about 1 joint and 11 to 14 words a sentence.
+It prints `<file>:<line>: <reason>` for each flag, and exits 1 when anything is flagged.
+
+In markdown, it skips frontmatter, fenced code and tables.
+It also skips headings and code spans.
+Frontmatter is skipped because skill descriptions are trigger lists, dense on purpose.
+A leading bold label such as `**Name** - ` is the house style for naming a rule, so it is not a joint.
+In a source file, it reads only the comments.
+
+Run it after the rewrite, on every changed file.
+Fix a flag by splitting the sentence, never by dropping a reason or a rule.
+A flag may stay where splitting would hurt, such as a list the reader takes as one unit or a rule quoted verbatim.
+The report names each flag that stays, with its reason.
 
 ## comments
 
@@ -145,6 +172,7 @@ It prints three kinds of line:
 Read the diff of each flagged or unchecked file by eye, and revert the change to code.
 A `DASH IN CODE` swap is reverted too, by default.
 Keep it only where no test, parser or separator matches on the old text, and name it in the report.
+Then run the density check (**Density**, above) over the same files.
 
 ## prose
 
@@ -193,7 +221,8 @@ If you are unsure about any of them, the plan is normal.
 **Inventory as you go.**
 After each file, append its rules to `<scratchpad>/cleanup/inventory.md` under the file's path: one line per must, never, only, exception and default, quoted from the snapshot, noting where a moved rule went.
 
-**Check**, both every time:
+**Check**, all three every time:
+- **Density:** the check under **Density**, above.
 - **Literals:** `f10-cleanup-check.sh literals "$SNAP" <every changed file>`.
   Every backtick span, fenced code line, path, `--flag` and multi-digit number in the snapshot must appear somewhere in the changed files (searched as a union, so a rule moved to its canonical home passes).
   Tokens dropped on purpose (a stale example, a duplicate) go in `$SNAP/.dropped`, one per line, and in the report; restore anything else.

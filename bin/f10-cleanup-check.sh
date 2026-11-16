@@ -13,8 +13,13 @@
 #           appears somewhere in the current files. The union is searched, not the matching file,
 #           since a rule may have moved to its canonical home. Tokens listed in
 #           <snapshot-dir>/.dropped, one per line, are dropped on purpose and only echoed.
+# prose     No snapshot. Flags each dense sentence in markdown prose or code comments, on the
+#           lines changed against <ref> (working tree included) or on every line with --all.
+#           Dense means a semicolon, more than 3 joints or more than 30 words. Prints
+#           `<file>:<line>: <reason>` per flag.
 #
 # Usage:  f10-cleanup-check.sh comments|literals <snapshot-dir> <file>...
+#         f10-cleanup-check.sh prose <ref | --all> <file>...
 #   Exit 1 when anything is flagged or missing, 2 on bad usage.
 
 # shellcheck disable=SC2016 # literal backticks and $ in the patterns
@@ -22,6 +27,7 @@ set -uo pipefail
 
 usage() {
   echo "usage: f10-cleanup-check.sh comments|literals <snapshot-dir> <file>..." >&2
+  echo "       f10-cleanup-check.sh prose <ref | --all> <file>..." >&2
   exit 2
 }
 
@@ -149,8 +155,169 @@ check_literals() {
   return "$missing"
 }
 
+markdown_text() { # markdown_text <file>: a `<line>\t<prose>` row per line, the prose empty at a break.
+  # Frontmatter, fences and tables are not sentences, so they are skipped, as are headings and HTML
+  # comments.
+  # Skill descriptions in frontmatter are trigger lists, dense on purpose.
+  awk '
+    NR == 1 && $0 == "---" { fm = 1; print NR "\t"; next }
+    fm { if ($0 == "---") fm = 0; print NR "\t"; next }
+    /^[[:space:]]*(```|~~~)/ { fence = !fence; print NR "\t"; next }
+    fence || html { if (html && index($0, "-->")) html = 0; print NR "\t"; next }
+    /^[[:space:]]*<!--/ { if (!index($0, "-->")) html = 1; print NR "\t"; next }
+    /^[[:space:]]*$/ || /^[[:space:]]*\|/ || /^#/ { print NR "\t"; next }
+    {
+      line = $0
+      sub(/^[[:space:]]*(>[[:space:]]*)*/, "", line)
+      # A list item starts a new paragraph.
+      if (line ~ /^([-*+]|[0-9]+\.)[[:space:]]/) {
+        print NR "\t"
+        sub(/^([-*+]|[0-9]+\.)[[:space:]]+/, "", line)
+      }
+      # A leading bold label (`**Name** - `, `**Name:**`) names a rule in the house style, so it is not a joint.
+      if (!sub(/^\*\*[^*]+\*\*( -|:)[[:space:]]+/, "", line)) sub(/^\*\*[^*]+:\*\*[[:space:]]+/, "", line)
+      print NR "\t" line
+    }' "$1"
+}
+
+comment_text() { # comment_text <style> <file>: like markdown_text, for the comments code_lines drops
+  local lc="" bopen="" bclose="" quotes=""
+  case "$1" in
+    hash) lc='#' quotes="\"'\`" ;;
+    slash) lc='//' bopen='/*' bclose='*/' quotes="\"'\`" ;;
+    dash) lc='--' bopen='/*' bclose='*/' quotes="\"'" ;;
+    erb) bopen='<%#' bclose='%>' ;;
+  esac
+  # The code_lines lexer, keeping the comment instead of the code.
+  awk -v lc="$lc" -v bopen="$bopen" -v bclose="$bclose" -v quotes="$quotes" -v hash="$([ "$1" = hash ] && echo 1)" '
+    {
+      line = $0; n = length(line); com = ""; i = 1
+      while (i <= n) {
+        c = substr(line, i, 1)
+        if (state == "block") {
+          if (substr(line, i, length(bclose)) == bclose) { state = ""; i += length(bclose); com = com " "; continue }
+          com = com c; i++
+          continue
+        }
+        if (state == "str") {
+          if (c == "\\" && q != "`" && i < n) { i += 2; continue }
+          if (c == q) state = ""
+          i++
+          continue
+        }
+        if (lc != "" && substr(line, i, length(lc)) == lc && (!hash || i == 1 || substr(line, i - 1, 1) ~ /[ \t]/)) {
+          com = com " " substr(line, i + length(lc)); break
+        }
+        if (bopen != "" && substr(line, i, length(bopen)) == bopen) { state = "block"; i += length(bopen); continue }
+        if (quotes != "" && index(quotes, c)) { state = "str"; q = c }
+        i++
+      }
+      sub(/^[ \t*\/#-]+/, "", com); sub(/[ \t]+$/, "", com)
+      # Directives, shebangs and empty comment lines end a paragraph.
+      if (com == "" || com ~ /^(!|go:|nolint|shellcheck |\+build)/) print NR "\t"
+      else print NR "\t" com
+    }' "$2"
+}
+
+changed_lines() { # changed_lines <ref> <file>: the line numbers of <file> that differ from <ref>
+  if ! git ls-files --error-unmatch -- "$2" >/dev/null 2>&1; then
+    echo all
+    return
+  fi
+  git diff -U0 --no-color "$1" -- "$2" | awk '
+    /^@@/ {
+      split($3, a, ","); start = substr(a[1], 2) + 0; len = (2 in a) ? a[2] + 0 : 1
+      for (k = 0; k < len; k++) printf "%d ", start + k
+    }'
+}
+
+dense() { # dense <file> <changed> < text stream: `<file>:<line>: <reason>` per dense sentence touching a changed line
+  local em=$'\xe2\x80\x94' en=$'\xe2\x80\x93'
+  # A sentence ends at . ! or ? before a space, closing markup or a quote allowed in between.
+  awk -F'\t' -v f="$1" -v changed="$2" -v dashes=" (-|$em|$en) " -v ends="[.!?]+[*_)\"'\`]*([[:space:]]|\$)" '
+    BEGIN {
+      if (changed == "all") all = 1
+      else { n = split(changed, c, " "); for (k = 1; k <= n; k++) if (c[k] != "") hit[c[k]] = 1 }
+    }
+    function check(   t, joints, semis, words, w, k, nw, reason) {
+      if (sent ~ /^[[:space:]]*$/ || !touched) { sent = ""; touched = 0; return }
+      t = sent
+      # A comma or colon between digits (1,000 or 10:30) is a number, not a joint.
+      while (gsub(/[0-9][,:][0-9]/, "000", t)) {}
+      semis = gsub(/;/, ";", t)
+      # A parenthetical is one insertion, so only its opening paren counts.
+      joints = gsub(/[,;:(]/, "&", t) + gsub(dashes, "&", t)
+      nw = split(t, w, /[[:space:]]+/); words = 0
+      for (k = 1; k <= nw; k++) if (w[k] ~ /[[:alnum:]]/) words++
+      reason = ""
+      if (semis) reason = "semicolon"
+      if (joints > 3) reason = reason (reason ? ", " : "") joints " joints"
+      if (words > 30) reason = reason (reason ? ", " : "") words " words"
+      if (reason != "") { print f ":" start ": " reason; flagged = 1 }
+      sent = ""; touched = 0
+    }
+    function clean(s,   out) {
+      gsub(/`[^`]*`/, "X", s)
+      # A link counts as its text, so the url adds no colon.
+      while (match(s, /\[[^]]*\]\([^)]*\)/)) {
+        out = substr(s, RSTART, RLENGTH); sub(/\]\(.*$/, "", out)
+        s = substr(s, 1, RSTART - 1) substr(out, 2) substr(s, RSTART + RLENGTH)
+      }
+      gsub(/[a-z]+:\/\/[^[:space:])]+/, "X", s)
+      return s
+    }
+    {
+      if ($2 == "") { check(); next }
+      t = clean($2)
+      while (t != "") {
+        if (sent == "") start = $1
+        if (all || ($1 in hit)) touched = 1
+        if (match(t, ends)) {
+          sent = sent " " substr(t, 1, RSTART + RLENGTH - 1)
+          t = substr(t, RSTART + RLENGTH)
+          sub(/^[[:space:]]+/, "", t)
+          check()
+        } else {
+          sent = sent " " t
+          t = ""
+        }
+      }
+    }
+    END { check(); exit flagged }'
+}
+
+check_prose() {
+  local ref=$1 flagged=0 f style changed
+  shift
+  if [ "$ref" != --all ] && ! git rev-parse --verify -q "$ref^{commit}" >/dev/null; then
+    echo "prose: unknown ref $ref" >&2
+    exit 2
+  fi
+  for f in "$@"; do
+    [ -f "$f" ] || continue
+    changed=all
+    [ "$ref" = --all ] || changed=$(changed_lines "$ref" "$f")
+    [ -n "${changed// /}" ] || continue
+    case "$f" in
+      *.md | *.markdown) markdown_text "$f" | dense "$f" "$changed" || flagged=1 ;;
+      *)
+        style=$(style_of "$f")
+        if [ -z "$style" ]; then
+          echo "UNCHECKED: $f"
+          flagged=1
+          continue
+        fi
+        comment_text "$style" "$f" | dense "$f" "$changed" || flagged=1
+        ;;
+    esac
+  done
+  [ "$flagged" -eq 0 ] && echo "prose: no dense sentences"
+  return "$flagged"
+}
+
 case "$mode" in
   comments) check_comments "$@" ;;
   literals) check_literals "$@" ;;
+  prose) check_prose "$snap" "$@" ;;
   *) usage ;;
 esac
