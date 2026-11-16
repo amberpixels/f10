@@ -95,7 +95,7 @@ f10 daemon status | stop [--now] | logs [<drive>] [-f]   # the per-user process 
 f10 remote on [--port N] [--mcp] | off | token add <name> --scope <scopes> | token list | token revoke <name> | install | uninstall   # serve the daemon's API to your other devices on the tailnet
 f10 mcp [--scope <scopes> | --token <name>]   # the daemon's API as MCP tools over stdio, for Claude Desktop and other MCP clients
 f10 asks [list [--json] | answer <task> [N=VALUE ...]]   # the questions driven agents wait on, across projects; bare walks them in a terminal
-f10 finish [<id>[-suffix]] [--yes] [--ignore-checks] [--close <ids|all|none>] [--keep]   # no id: the branch's task; merge the PR (a branch never pushed: here), pull main, archive the plan, close the workspace, remove the worktree; a spike with no PR closes without a merge; a parent whose subtasks are done closes
+f10 finish [<id>[-suffix]] [--yes] [--ignore-checks] [--empty] [--close <ids|all|none>] [--keep]   # no id: the branch's task; merge the PR (a branch never pushed: here), pull main, archive the plan, close the workspace, remove the worktree; a spike with no PR closes without a merge; a parent whose subtasks are done closes
 f10 janitor [--dry-run]  # remove task branches whose PR merged or closed outside finish, locally and on origin; start and finish run it every 6 hours
 
 f10 lore add <kind> --change <id> [--anchor path:line[-end][@commit][#symbol]]... [--supersedes <id>] [kind flags] [-m <text> | -F <file> | stdin]   # write one lore entry, print its id
@@ -344,6 +344,11 @@ There finish merges as usual, brings the default branch up to the merge, switche
    On a host-issues tracker (GitHub, GitLab), the squash or merge commit also carries a `Closes #<n>` line for the task and each rider `--close` names, whatever `traces` says, so the issue closes when the commit reaches origin's default branch and never before.
    The default branch then moves: `git merge --ff-only` when the main checkout is on it, else `git update-ref`.
    A conflict, or a rebase behind the default branch, is refused with nothing changed and `/f10:catchup` named; a branch already in the default branch lands nothing.
+   A branch whose changes are all in the default branch is a rerun only when a commit there names the task the way a landing does: its subject, its `Task:` trailer, its closing line or the merge's own subject.
+   The branch's tip being in the default branch proves nothing, because a branch with no commits of its own is there too.
+   Any other branch that adds nothing is refused with nothing changed (`<branch> adds nothing to <default>`), because closing it would report the default branch's tip as the task's merge.
+   `--empty` finishes it anyway.
+   `--yes` never implies `--empty`, because automated finishes pass `--yes`.
    Nothing is pushed, pulled or deleted on origin, and no PR closes the task, so the notes say who does.
    When the commit carries the closing lines, the task closes once the default branch reaches origin.
    A rerun that finds the branch already in the default branch says the same when an unpushed commit there carries those lines.
@@ -685,10 +690,16 @@ A cancelled record is never picked up again: the same command line starts a new 
    From then on the task's workspace is the one opened, by id, whatever else shows the same checkout.
    Nothing is prompted at open.
    The skills run from the task's position: the last skill the driver saw finish, recorded on the branch as `branch.<name>.f10-drive` in local git config, else what the task's run state proves (plan done, ship done).
+   Ship counts as done only when a ship turn wrote the run (its `skill` is `ship`) and the branch carries what the flow delivers.
+   That is commits of the branch's own past its base, not counting merges and `Step: catchup` commits, and an open PR when the flow has `pr`.
+   A spike's report counts in place of both.
+   Anything less sends ship.
    A plan the worktree reads when the driver starts its agent counts as plan done, so the task goes straight to ship rather than planning again.
    A task whose branch already records a flow (`branch.<name>.f10-flow`) keeps it, with a note when the run named another; a recorded flow `project.md` no longer declares gives way to the run's.
    `finish` runs in the driver, exactly as `f10 finish` would from the main checkout, and records what it is doing on the branch as `branch.<name>.f10-finish` for `f10 status` (above); on any other end, an interrupt included, the driver sets it back to `queued`.
    A PR someone else opened is the driver's own ask at finish, `[local | merge]`, answered with `--answer` like any other.
+   Finish takes a keyed answer only for that question.
+   An answer to the agent's own question (its run carries an ask, as a ci triage's does) goes to the agent as its `ci` turn, and finish runs again once the triage reports.
    Each finished task's handoff, the body finish printed under its report, repeats beneath the drive's report as `<id> handoff:` with the body indented, so the driving session relays every merged task's list at once.
    Every other skill is prompted to the agent, marked `--driven` (which takes every gap on its default and reuses a saved plan): a dependent task's plan and ship name the base task and its plan, ship names its flow unless it is `default`, and with `finish` among the skills ship's prompt says the driver finishes the task after it and removes the worktree, so the agent's report ends with that next step.
 5. **Catchup when the base or the target moves, after finish, and before it.**
@@ -724,8 +735,13 @@ A cancelled record is never picked up again: the same command line starts a new 
    The third catchup in a row with the same fingerprint halts the task.
    After a catchup the caught-up local branch is what is tried, since origin's copy is the tree before it.
    A ship stopped by its catchup guard, which marks the branch and records the stop as the guard's (`f10-state.sh stop guard`), gets the same catchup, then ship is prompted again at the entry it stopped on (`resume at <entry>`); its dependents wait, and a second guard conflict counts by the same fingerprint.
+   The driver keeps its own copy of that stop's entry and place on the task's record (`guard:`) until ship is prompted again, so it resumes there even when the run file no longer carries the guard's kind.
+   The copy counts only while the run is still stopped at that entry and place, so a later stop elsewhere is not read as the guard's.
    A ship that failed for another reason under a mark is not the guard's stop, and halts.
    The catchup's end is the `done catchup` signal its report writes into run state (`f10-state.sh done catchup`), dated after the prompt, and git, not the signal, says whether it settled.
+   A catchup writes no phase.
+   From its skill's start to its turn's end, the hooks record the turn on the run (`turn catchup`).
+   In that window `f10 state` refuses `set` and `stop` with exit 1, and the Stop hook promotes no running phase.
    An idle agent without it is a stall after the same grace a ship or plan turn gets, never read as done: a catchup git shows settled goes on to verify, and any other halts, as a stalled ship or plan turn does.
    The drive's own catchup resumes the task once git shows it settled and the driver's verify is green; the driver clears the marks then.
    A red verify the agent's turns do not fix counts as a failed attempt, so the same command red against the same target three times halts.

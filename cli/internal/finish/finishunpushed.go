@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -124,6 +125,13 @@ func landUnpushed(ctx context.Context, in FinishInput, branch, def string) (stri
 	notes := []string{fmt.Sprintf("%s was never pushed: merged into %s here, nothing pushed", branch, def)}
 
 	if tree == gitx.Out(ctx, in.Main, "rev-parse", base+"^{tree}") {
+		// a branch that adds nothing never landed anything of the task's, and
+		// closing it would report the base's tip as its merge
+		if !in.Flags.Empty && !landedBefore(ctx, in, base, branch) {
+			return "", nil, fmt.Errorf("%s adds nothing to %s: nothing of %s to land; "+
+				"pass --empty to finish it anyway", branch, def, in.Task.ID)
+		}
+
 		// a rerun after a landing: the unpushed commit may already close the task
 		note := unclosedNote(in)
 		if closing := closingLines(in); closing != "" && strings.Contains(
@@ -184,6 +192,31 @@ func landUnpushed(ctx context.Context, in FinishInput, branch, def string) (stri
 	}
 
 	return sha, append(notes, closesOnPush(in, def)), nil
+}
+
+// landedBefore reports an earlier finish of this task in base, by a commit
+// naming it the way a landing does: its subject, its Task: trailer, its
+// closing line or the merge's own subject. The branch tip being in base
+// proves nothing, since a branch with no commits of its own is there too.
+func landedBefore(ctx context.Context, in FinishInput, base, branch string) bool {
+	lines := []string{
+		"^" + regexp.QuoteMeta(in.Task.Label()+":") + " ",
+		"^Task: " + regexp.QuoteMeta(in.Task.ID) + "$",
+		"^" + regexp.QuoteMeta("Merge branch '"+branch+"'") + "$",
+	}
+
+	for line := range strings.SplitSeq(closingLines(in), "\n") {
+		if line != "" {
+			lines = append(lines, "^"+regexp.QuoteMeta(line)+"$")
+		}
+	}
+
+	args := []string{"log", "-1", "--format=%H", "-E"}
+	for _, l := range lines {
+		args = append(args, "--grep="+l)
+	}
+
+	return gitx.Out(ctx, in.Main, append(args, base)...) != ""
 }
 
 func closesOnPush(in FinishInput, def string) string {

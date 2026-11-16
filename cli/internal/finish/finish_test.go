@@ -129,6 +129,16 @@ func (fx *finishFixture) openPR() {
 	fx.f.Script(testkit.GhMerge, "")
 }
 
+// landedBefore scripts an earlier landing of GH-1 in main: a squash commit
+// naming the task.
+func (fx *finishFixture) landedBefore() {
+	fx.f.Defaults[landedLog] = "sq1"
+}
+
+// landedLog is the search for an earlier landing, each pattern a whole line
+// or a subject prefix, so GH-12's commits never match GH-1's.
+const landedLog = "git log -1 --format=%H -E --grep=^GH-1:  --grep=^Task: GH-1$ --grep=^Merge branch 'GH-1'$"
+
 func (fx *finishFixture) run(t *testing.T) (string, error) {
 	t.Helper()
 
@@ -1926,6 +1936,7 @@ func TestFinishLocalRerunKeepsTheClosingNote(t *testing.T) {
 		fx.noPull()
 		fx.in.HostCloses = true
 		fx.f.Script("git rev-parse m0^{tree}", "tr33")
+		fx.landedBefore()
 		fx.f.Script("git log --format=%B refs/remotes/origin/main..refs/heads/main", landed)
 
 		out, err := fx.run(t)
@@ -2002,10 +2013,48 @@ func TestFinishRefusesANeverPushedBranchItCannotLand(t *testing.T) {
 	fx = newFinishFixture(t)
 	fx.noPull()
 	fx.f.Script("git rev-parse m0^{tree}", "tr33")
+	fx.landedBefore()
 
 	out, err := fx.run(t)
 	if err != nil || !strings.Contains(out, "GH-1 was already in main") || fx.f.Called("git commit-tree") {
 		t.Fatalf("rerun: %v\n%s", err, out)
+	}
+}
+
+// FT-533: a branch never pushed that adds nothing to main, and never landed
+// before, has nothing of the task's to land, even with its tip in main (a
+// catchup fast-forwarded it): finish refuses, naming it, rather than report
+// main's tip as the task's merge; --empty closes it.
+func TestFinishRefusesABranchThatAddsNothing(t *testing.T) {
+	empty := func(t *testing.T) *finishFixture {
+		t.Helper()
+
+		fx := newFinishFixture(t)
+		fx.noPull()
+		fx.f.Script("git rev-parse m0^{tree}", "tr33")
+		fx.f.Defaults[landedLog] = ""
+
+		return fx
+	}
+
+	fx := empty(t)
+
+	_, err := fx.run(t)
+	if err == nil || !strings.Contains(err.Error(), "GH-1 adds nothing to main: nothing of GH-1 to land") {
+		t.Fatalf("err = %v, want the refusal naming the empty branch", err)
+	}
+
+	for _, never := range []string{"git update-ref refs/heads/main", "git worktree remove"} {
+		if fx.f.Called(never) {
+			t.Errorf("%q ran on a refusal", never)
+		}
+	}
+
+	fx = empty(t)
+	fx.in.Flags.Empty = true
+
+	if out, err := fx.run(t); err != nil || !strings.Contains(out, "GH-1 was already in main") {
+		t.Fatalf("--empty: %v\n%s", err, out)
 	}
 }
 
@@ -2171,6 +2220,7 @@ func TestFinishRecordsTheBranchSize(t *testing.T) {
 			setup: func(fx *finishFixture) {
 				fx.noPull()
 				fx.f.Script("git rev-parse m0^{tree}", "tr33")
+				fx.landedBefore()
 			},
 		},
 		{

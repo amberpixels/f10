@@ -73,8 +73,11 @@ type Run struct {
 	Stop string `json:"stop,omitempty"`
 	// Done is the phaseless step (catchup) whose report is out, DoneAt when;
 	// a reader compares DoneAt, since any later write moves Updated alone
-	Done    string    `json:"done,omitempty"`
-	DoneAt  time.Time `json:"done_at,omitzero"`
+	Done   string    `json:"done,omitempty"`
+	DoneAt time.Time `json:"done_at,omitzero"`
+	// Turn is a phaseless skill whose turn is in progress (catchup), which
+	// may write no phase: the ship it runs between is not its own
+	Turn    string    `json:"turn,omitempty"`
 	Updated time.Time `json:"updated"`
 }
 
@@ -274,6 +277,8 @@ func Load(path string) (*Run, error) {
 			r.Stop = value
 		case "done":
 			r.Done = value
+		case "turn":
+			r.Turn = value
 		case "done_at":
 			if n, err := strconv.ParseInt(value, 10, 64); err == nil && n > 0 {
 				r.DoneAt = time.Unix(n, 0)

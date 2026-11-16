@@ -1,8 +1,8 @@
 ---
 name: finish
-description: "f10 finish skill - close a task without leaving this session: merge its PR or MR (a branch never pushed merges into the local default branch), archive the plan, close the Herdr workspace, remove the worktree and its branch, pull main; a spike with no PR closes without a merge, its report archived and its experiment discarded or, with --keep, kept on a branch. Use when the user says \"/f10:finish [<task-id>] [--yes] [--merge | --local | --keep] [--ignore-checks]\" or asks to finish, close out or clean up a merged task, or to clean up after reviewing someone else's PR."
+description: "f10 finish skill - close a task without leaving this session: merge its PR or MR (a branch never pushed merges into the local default branch), archive the plan, close the Herdr workspace, remove the worktree and its branch, pull main; a spike with no PR closes without a merge, its report archived and its experiment discarded or, with --keep, kept on a branch. Use when the user says \"/f10:finish [<task-id>] [--yes] [--merge | --local | --keep] [--ignore-checks] [--empty]\" or asks to finish, close out or clean up a merged task, or to clean up after reviewing someone else's PR."
 allowed-tools: Bash, Monitor, AskUserQuestion
-argument-hint: "[<task-id>] [--merge | --local | --keep] [--ignore-checks]"
+argument-hint: "[<task-id>] [--merge | --local | --keep] [--ignore-checks] [--empty]"
 ---
 
 # f10 · finish
@@ -18,6 +18,8 @@ This skill only runs the command and relays its output (`${CLAUDE_PLUGIN_ROOT}/m
 - `--keep`: keep a spike's experiment, committed on a `kept/` branch, instead of discarding it.
 - `--ignore-checks`: merge even when the PR head's checks failed or are still running.
   Pass it only when the user asks for it, never to get past a refusal on their behalf.
+- `--empty`: finish a branch never pushed that adds nothing to the default branch.
+  Pass it only when the user asks for it, as for `--ignore-checks`.
 - Everything else goes to `f10 finish` verbatim.
 
 ```

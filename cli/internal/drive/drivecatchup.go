@@ -468,3 +468,10 @@ func pushHalted(id, skill string, err error) driveResult {
 
 	return res
 }
+
+// keepGuard records the guard's stop the drive read, or clears it with nil,
+// on the run and the drive record, so a resumed drive still resumes ship.
+func (in *DriveInput) keepGuard(r *DriveRun, g *drivestore.Guard) {
+	r.Guarded = g
+	in.saveTask(r, func(t *drivestore.Task) { t.Guard = g })
+}

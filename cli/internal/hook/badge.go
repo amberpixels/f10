@@ -48,8 +48,10 @@ func (b badge) apply(o observe.Observation, issueID string, r *state.Run, loaded
 		// done unreported
 		r.PlanWritten(o.Task)
 	case *observe.StepStarted:
-		// ship loads each pipeline step alone, right before it runs
-		if !loaded || r.Skill != "ship" || len(o.Steps) != 1 || slices.Contains(planningSteps, o.Steps[0]) ||
+		// ship loads each pipeline step alone, right before it runs; a
+		// catchup's turn loads its step inside ship's run, never as an entry
+		if !loaded || r.Skill != "ship" || r.Turn != "" || len(o.Steps) != 1 ||
+			slices.Contains(planningSteps, o.Steps[0]) ||
 			(r.Ship != state.Upcoming && r.Ship != "running") {
 			return false, nil
 		}

@@ -60,7 +60,7 @@ func (in *DriveInput) send(ctx context.Context, r *DriveRun, skill string) error
 		r.SentAt = answeredAt.Add(-time.Second).Truncate(time.Second)
 
 		fmt.Fprintf(in.Out, "%s %s: answered outside this drive, following the turn\n", in.id(id), skill)
-	case skill == "catchup" && !awaitsDecision(run):
+	case skill == "catchup" && !awaitsDecision(run, r.Guarded):
 		// git integrates and verify runs here; the agent gets only what they
 		// could not settle, a resend included
 		return in.catchupHere(ctx, r, ws, run)
@@ -70,9 +70,10 @@ func (in *DriveInput) send(ctx context.Context, r *DriveRun, skill string) error
 	case run != nil && drivectl.StoppedRun(run):
 		answer := in.takeAnswer(id)
 		if answer == "" {
-			// a catchup clears a mark but restores the ship stop it noted, so
-			// git, not the note, says whether that stop still holds
-			if at := resumeAt(skill, run); at != "" && stack.BranchUnsettled(ctx, in.Main, r.O.Path, r.O.Branch) == "" {
+			// a catchup clears a mark and writes no phase, so git, not the
+			// run, says whether the stop still holds
+			if at := resumeAt(skill, run, r.Guarded); at != "" &&
+				stack.BranchUnsettled(ctx, in.Main, r.O.Path, r.O.Branch) == "" {
 				why := "stopped for a catchup, the branch is settled"
 				switch {
 				case originWait(run):
@@ -99,8 +100,9 @@ func (in *DriveInput) send(ctx context.Context, r *DriveRun, skill string) error
 
 		in.took(id, skill, answer)
 		fmt.Fprintf(in.Out, "%s %s: answer sent\n", in.id(id), skill)
-	case run != nil && phaseDone(run, skill):
-		// the agent got there before a drive that stopped could see it
+	case run != nil && phaseDone(run, skill) && (skill != "ship" || in.readState(ctx, r, run).Has(skill)):
+		// the agent got there before a drive that stopped could see it; a
+		// ship needs the branch to say so too, since the run is the agent's
 		fmt.Fprintf(in.Out, "%s %s: already done\n", in.id(id), skill)
 
 		if err := in.advance(ctx, r, skill); err != nil {
@@ -141,6 +143,11 @@ func (in *DriveInput) prompt(
 	p := steered(skillPrompt(skill, r.Task.Ref.Label(), r.O.Dep, r.Flow, r.Finishes), steering)
 	if err := in.deliver(ctx, r, p); err != nil {
 		return err
+	}
+
+	// the prompt resumes ship past the guard's stop, so the record is spent
+	if skill == "ship" && r.Guarded != nil {
+		in.keepGuard(r, nil)
 	}
 
 	fmt.Fprintf(in.Out, "%s %s: sent\n", in.id(id), skill)

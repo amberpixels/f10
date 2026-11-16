@@ -45,7 +45,9 @@ func Command() *cli.Command {
 		Hidden: true,
 		Commands: []*cli.Command{
 			verb("set", "<capture|plan|ship> <status> [<leaf>]", "record a phase's status",
-				func(r *state.Run, a cli.Args) error { return r.Set(a.Get(0), a.Get(1), a.Get(2)) }),
+				func(r *state.Run, a cli.Args) error {
+					return phased(r, func() error { return r.Set(a.Get(0), a.Get(1), a.Get(2)) })
+				}),
 			verb("task", "<id> [<url>]", "record the task this run is about",
 				func(r *state.Run, a cli.Args) error { return r.SetTask(a.Get(0), a.Get(1)) }),
 			verb("note", "<reason> [<next>]", "why a run stopped, and what unblocks it",
@@ -55,7 +57,7 @@ func Command() *cli.Command {
 			verb("wait", "<base-task>", "the base task a driven ship stopped for, its branch without code yet",
 				func(r *state.Run, a cli.Args) error { return r.SetWait(a.Get(0)) }),
 			verb("stop", "guard", "the kind of stop ship left: guard for its catchup guard",
-				func(r *state.Run, a cli.Args) error { return r.SetStop(a.Get(0)) }),
+				func(r *state.Run, a cli.Args) error { return phased(r, func() error { return r.SetStop(a.Get(0)) }) }),
 			verb("done", "<step>", "record that a step with no phase of its own (catchup) reported",
 				func(r *state.Run, a cli.Args) error { return r.SetDone(a.Get(0), time.Now()) }),
 			verb("final", "<step>", "declare the ship pipeline's last step",
@@ -111,6 +113,16 @@ func Command() *cli.Command {
 			},
 		},
 	}
+}
+
+// phased applies a write to ship's phase, which a catchup's turn never makes:
+// the drive reads that phase to decide what to send next.
+func phased(r *state.Run, apply func() error) error {
+	if r.Turn != "" {
+		return state.ErrPhaselessTurn
+	}
+
+	return apply()
 }
 
 // stateLockWait is how long f10 state waits on a hook's write of the same

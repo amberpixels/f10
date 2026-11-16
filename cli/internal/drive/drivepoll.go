@@ -8,6 +8,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/drivectl"
+	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/ui"
@@ -153,15 +154,17 @@ func (in *DriveInput) poll(
 		switch {
 		case skill == "ship" && run.Wait != "":
 			return in.park(ctx, r, run)
-		case skill == "catchup" && heldStop(run):
-			// a catchup that stopped and then ended clean restores the stop it
-			// found, so git says how it ended
-		case skill == "ship" && guardStop(run) && resumeAt(skill, run) != "" && in.marked(ctx, r):
+		case skill == "catchup" && heldStop(run, r.Guarded):
+			// a catchup writes no phase, so the stop it found is still there and
+			// git says how it ended
+		case skill == "ship" && guardStop(run) && resumeAt(skill, run, nil) != "" && in.marked(ctx, r):
 			// the stop the guard leaves names the catchup ship resumes from; a
 			// mark on a ship that failed elsewhere is the watcher's, not the guard's
 			if err := in.guardAgain(ctx, r); err != nil {
 				return err
 			}
+
+			in.keepGuard(r, &drivestore.Guard{Entry: run.Leaf, At: run.At})
 
 			fmt.Fprintf(in.Out, "%s ship: the catchup guard conflicted, catching up\n", in.id(id))
 

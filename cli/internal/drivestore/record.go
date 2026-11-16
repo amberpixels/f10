@@ -57,6 +57,16 @@ type Task struct {
 	// Checks is the head sha a waiting finish holds for, its checks still
 	// running; "" while the phase waits on a base
 	Checks string `yaml:"checks,omitempty"`
+	// Guard is the stop ship's catchup guard left, as the drive read it, so
+	// a catchup's turn that rewrites the run still resumes ship there
+	Guard *Guard `yaml:"guard,omitempty"`
+}
+
+// A Guard is where ship's catchup guard stopped: the pipeline entry and its
+// place from 1.
+type Guard struct {
+	Entry string `yaml:"entry"`
+	At    int    `yaml:"at,omitempty"`
 }
 
 // The phases a drive record names a task's standing by.

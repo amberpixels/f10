@@ -610,3 +610,50 @@ func TestPromptSubmitTellsPromptTyped(t *testing.T) {
 		t.Errorf("PromptTyped got %q", got)
 	}
 }
+
+// A catchup's turn runs between a ship's entries, or after a plan: the hook
+// records it so f10 state refuses its phase writes, the step it loads is no
+// ship entry, and its Stop promotes no running ship to done (FT-533).
+func TestACatchupTurnLeavesTheShipAlone(t *testing.T) {
+	expand := func(t *testing.T, name string) []byte {
+		t.Helper()
+
+		raw, err := json.Marshal(map[string]any{
+			"session_id": "s1", "cwd": "/work/acme", "hook_event_name": "UserPromptExpansion",
+			"command_name": name, "command_args": "settle it --driven",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return raw
+	}
+
+	env := testEnv(t)
+	startState(t, env, &state.Run{Skill: "ship", Capture: "prior", Plan: "done", Ship: "running", Leaf: "catchup"})
+
+	Dispatch(t.Context(), expand(t, "f10:catchup"), env)
+
+	if r := loadS1(t, env); r.Turn != state.TurnCatchup || r.Skill != "ship" {
+		t.Fatalf("turn %q skill %q, want the catchup's turn on the ship's run", r.Turn, r.Skill)
+	}
+
+	Dispatch(t.Context(), payload(t, "bash-load-step"), env)
+	Dispatch(t.Context(), event(t, "s1", "Stop", ""), env)
+
+	r := loadS1(t, env)
+	if r.Ship != "running" || r.Leaf != "catchup" {
+		t.Errorf("ship %s leaf %q, want the run as the catchup found it", r.Ship, r.Leaf)
+	}
+
+	if r.Turn != "" {
+		t.Errorf("turn %q outlived its Stop", r.Turn)
+	}
+
+	// a phase skill's own turn is not phaseless
+	Dispatch(t.Context(), expand(t, "f10:ship"), env)
+
+	if r := loadS1(t, env); r.Turn != "" {
+		t.Errorf("ship's turn recorded as %q", r.Turn)
+	}
+}

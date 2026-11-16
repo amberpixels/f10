@@ -2,6 +2,7 @@ package stack
 
 import (
 	"context"
+	"slices"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/gitx"
@@ -22,8 +23,19 @@ func OriginBaseHasCode(ctx context.Context, main, branch, def string) bool {
 	return hasCodeAt(ctx, main, "refs/remotes/origin/"+branch, branch, def, "")
 }
 
-func hasCodeAt(ctx context.Context, main, tip, branch, def, created string) bool {
-	args := []string{"rev-list", "--count", "--no-merges", tip, "--not", "refs/heads/" + def}
+// ShipCode is BaseHasCode for the task's own branch, less the commits a
+// catchup made: its fix for a red verify is not the task's work.
+func ShipCode(ctx context.Context, main, branch, def string) bool {
+	return hasCodeAt(ctx, main, "refs/heads/"+branch, branch, def, createdAt(ctx, main, branch),
+		"--invert-grep", "--grep=^Step: catchup$")
+}
+
+func hasCodeAt(ctx context.Context, main, tip, branch, def, created string, filter ...string) bool {
+	args := slices.Concat(
+		[]string{"rev-list", "--count", "--no-merges"},
+		filter,
+		[]string{tip, "--not", "refs/heads/" + def},
+	)
 
 	// a ref git cannot read would drop out of the --not list and count the
 	// base's own base as its commits, so it releases nobody this poll

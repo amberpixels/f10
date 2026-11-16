@@ -6,7 +6,8 @@ Output: the branch rebased onto its base or merged with it, every conflict settl
 This step pushes nothing, and it writes no task, no plan and no tracker comment.
 Context: the `catchup` and `catchup_stacked` frontmatter keys, which set the strategy, and the loader's `verify:` line.
 Badge: none.
-This step never retires or overwrites a badge that a ship run left.
+This step never writes a phase, because the ship run it may run between owns that state, and `f10 drive` reads it to decide what to send next.
+`f10 state` refuses `set` and `stop` during a catchup's turn.
 Its `f10-state.sh done catchup` call (point 5) is not a badge: it is the end signal that `f10 drive` reads.
 
 A run that meets no conflict, or finds nothing to bring in, is a **correct run**.
@@ -173,7 +174,6 @@ The guard differs from the run above in these ways:
   A merge commit carries the `--step catchup` trailers, as point 3 says.
 
 **Driven** (`modes/driven.md`): a driven run is one sent by `f10 drive`, or by the watcher under `watch_catchup: on`.
-On entry, note the ship status with `f10-state.sh show`.
 The method is point 3's.
 The sender pushes the branch itself once this run ends clean.
 
@@ -217,7 +217,8 @@ Each choice is written down, one per file, so the reviewer and the change judge 
   Write it with `f10 pr edit --body-file <file>`, with the draft in a temp file outside the repo.
   With no PR, no line is written: lore and the report carry the choice, and the pr step renders the heading from lore when it opens the PR.
 
-Any failure is `f10-state.sh set ship failed catchup` with a `note`, never an ask.
+Any failure is `f10-state.sh note "<what failed>" "<what is left>"` and then `f10-state.sh done catchup`, never an ask.
+The signal ends the turn, and git tells the drive that it did not settle.
 That covers the **On failure** cases below and a conflict the step cannot settle at all, such as a binary file both sides changed or a regenerate that fails.
 
 **Sent by the watcher** (the prompt says so, naming the sha the branch stood at before the watcher integrated): a failure puts the branch back at that sha, with its marks kept, because nobody follows up in this pane.
@@ -225,11 +226,6 @@ For an operation still in progress, run `git merge --abort` or `git rebase --abo
 Otherwise, when verify is red after the integration concluded, run `git reset --hard <that sha>`.
 The report says which of the two ran.
 The watcher reads a mark that is still set as a catchup that did not end, and it reports it once.
-
-A clean end after a failure restores the noted ship status beside the signal, in either order.
-The restore keeps the guard's `stop guard` kind, because only a `running` set clears it, so no second `stop guard` call is needed.
-A stop status keeps the signal.
-A clean end that never stopped writes the signal alone.
 
 Run by hand, without `--driven`, point 4 asks exactly as written.
 
