@@ -1,8 +1,12 @@
 # The atlas, version 1
 
-What each of your projects is and how they connect: one node per project, with what it is, whether it is active or parked, how long it has lived and how often it changes, and one edge per dependency or declared link between two of them.
+The atlas says what each of your projects is and how they connect.
+It has one node per project, with what the project is and whether it is active or parked.
+A node also says how long the project has lived and how often it changes.
+The atlas has one edge per dependency or declared link between two projects.
 `f10 atlas --json` prints the **Atlas JSON** this file specifies, `docs/atlas.schema.json` is its JSON Schema, and `~/.f10/atlas.md` is the **declared file** where you write what no checkout can say.
-A renderer, such as a personal website, draws the document; f10 draws nothing.
+A renderer, such as a personal website, draws the document.
+f10 draws nothing.
 Version 1 reads local checkouts only, with no host call, so a run takes about a second and a logged-out host CLI cannot fail it.
 The command prints public nodes, anonymous nodes and the edges between them.
 
@@ -69,13 +73,15 @@ The command prints public nodes, anonymous nodes and the edges between them.
 - An anonymous node takes `anon/<alias>`, built from its alias alone, so its id carries nothing of the project's remote or path.
 
 A linked worktree is never a node of its own: it is its main checkout.
-Two exported nodes with the same id, such as two public clones of one remote or two public remote-less checkouts with one basename, are an error naming both checkouts, because an edge could not tell them apart.
+Two exported nodes with the same id are an error naming both checkouts, because an edge could not tell them apart.
+That happens with two public clones of one remote, or two public remote-less checkouts with one basename.
 Checkouts that are dropped never collide.
 Renaming one checkout, or giving it a remote, settles the error, because neither a project key nor an id can tell the two apart in the declared file.
 
 **A public node** is a project whose declared entry says `public: true`.
 Each field comes from the declared file or from the checkout.
-Only `id`, `kind` and `name` are always present; every other field is absent where its row says.
+Only `id`, `kind` and `name` are always present.
+Every other field is absent where its row says.
 
 | field | from | meaning |
 |---|---|---|
@@ -93,8 +99,11 @@ Only `id`, `kind` and `name` are always present; every other field is absent whe
 
 **An anonymous node** is a private project whose declared entry gives an `alias`.
 It carries exactly `id`, `kind` (`anonymous`) and `alias`, and its edges.
-It has no name, role, tagline, language, date, commit count or tag, because a commit rhythm, a start date or a language can identify a private project to someone who knows its author.
-It has no `error` field either, so when one of its manifests does not read, it draws no `depends` edge of its own, and the run says so on stderr under its alias alone.
+It has no name or role, no tagline or language, and no date, commit count or tag.
+These are left out because a commit rhythm, a start date or a language can identify a private project to someone who knows its author.
+It has no `error` field either.
+So when one of its manifests does not read, it draws no `depends` edge of its own.
+The run says so on stderr under its alias alone.
 The names its manifests that did read still declare are kept, so a public project's dependency on it is still an edge.
 
 **An edge** says that `from` depends on, or relates to, `to`.
@@ -112,13 +121,17 @@ The edge rules:
 - A depended-on project is matched by the name its own manifest declares, never by its directory name, because the two can differ: the checkout `jsonish` may be the module `github.com/acme/json`.
 - Manifests are read at the checkout root only, the files `language` comes from, so a project whose manifest sits in a subdirectory declares no name and has no `depends` edge.
   An anonymous node's manifests are read the same way, because its edges come from them, and its history never is.
-- A name several nodes declare, such as an upstream and a fork that kept its module path, matches the node whose `id` is that name, and otherwise none, because a guess would draw a wrong edge.
+- A name several nodes declare matches the node whose `id` is that name.
+  If no node has that `id`, the name matches none, because a guess would draw a wrong edge.
+  An upstream and a fork that kept its module path are one such case.
 - An indirect Go requirement (`// indirect`) is not an edge, because the direct requirement that pulls it in is an edge of its own when both ends are in scope.
 - A go.mod `replace` whose target is a project in scope, a fork or a local path, is an edge to that project.
 - One manifest naming the same project twice is one edge, with `dev` only when every mention is development-only.
 - A `depends` edge from an anonymous node carries no `manifest` and no `dev`, because the manifest's file names the private project's language.
   Several manifests of one anonymous node naming the same project are then one edge.
-  The project it depends on still suggests its stack (a node depending on a Go library is likely Go), which is the cost of keeping its edges at all, since showing a library in use is what an anonymous node is for.
+  The project it depends on still suggests its stack, because a node depending on a Go library is likely Go.
+  That is the cost of keeping its edges at all.
+  The edges stay anyway, because showing a library in use is what an anonymous node is for.
 - A `depends` edge and a `link` edge between the same two nodes are two edges.
 - An edge is printed only when both its ends are nodes, so an edge to a dropped project, or to one outside the run's scope, is left out.
 - An edge between two anonymous nodes is dropped, because it describes nothing public.
@@ -160,7 +173,8 @@ The rules:
   A key that matches two checkouts is an error naming both, and the `id` form tells them apart.
 - A project in scope with no entry is private with no alias, so it is dropped.
 - An entry naming no project in this run's scope is skipped, so one file written for `--all` also serves a run over one checkout.
-  With `F10_ROOTS` set, a key or a link's `to` that matches no checkout under any root is an error naming the entry, because it is a typo rather than a project out of scope.
+  With `F10_ROOTS` set, a key or a link's `to` that matches no checkout under any root is an error naming the entry.
+  It is an error because it is a typo rather than a project out of scope.
 - An unknown status is an error naming the entry.
 - Two entries with the same alias are an error naming both.
 - An alias on a public entry is an error, because the entry asks both to name the project and to hide it.
@@ -174,18 +188,22 @@ Every later change keeps this rule:
 3. A private project with no alias is dropped, with every edge that touches it.
 4. f10 never assigns an alias, because an assigned one would change when a project is added.
 
-Nothing in an anonymous node, its id included, comes from the project's name, remote, path or history.
+Nothing in an anonymous node comes from the project's name, remote, path or history.
+This holds for its id too.
 Nothing in the atlas names a checkout path, a plan or a storage path.
 
 ## Conformance
 
 The JSON example under **Shape** fits the schema, and the YAML example under **The declared file** fits its `Declared` definition.
 `cli/internal/atlas/testdata/<name>.atlas.json` are documents that fit the schema, and `<name>.declared.md` are declared files whose frontmatter fits `Declared`.
-`cli/internal/atlas/schema_test.go` checks all of them against the schema, and checks the rules the schema cannot express on the JSON example and the documents: the node and edge order, and no `manifest` or `dev` on an edge from an anonymous node.
+`cli/internal/atlas/schema_test.go` checks all of them against the schema.
+On the JSON example and the documents, it also checks the rules the schema cannot express.
+Those rules are the node and edge order, and no `manifest` or `dev` on an edge from an anonymous node.
 It also checks that the schema rejects an anonymous node carrying any field beyond its three.
 
 ## Changing this spec
 
 A field's meaning, an edge rule or the privacy rule changes here and in the fixtures first, with a version bump at the top, then in the implementation.
 An optional field added with its meaning is written here and in the schema, the version kept.
-Host facts (stars, open requests, releases) and delivery facts from the ledger join later as optional fields of a public node, and never of an anonymous one.
+Host facts and delivery facts from the ledger join later as optional fields of a public node, and never of an anonymous one.
+Host facts are stars, open requests and releases.

@@ -2,8 +2,8 @@
 
 Role: a **senior architect, thinking as the CTO**, with the burden of proof on the idea.
 Input: a raw idea, a task, a saved plan, or a diff.
-Output: a verdict in chat, the argument under it, and the **verdict file** (point 8). A change judge in a ship run also builds a yellow verdict's changes, and after `pr` pushes them and leaves a status and a comment on the PR.
-Context: for a change judge, the loader's `verify:` line; after `pr`, also `project.md → Hosting & PR` and the frontmatter's `traces`.
+Output: a verdict in chat with the argument under it, and the **verdict file** (point 8). A change judge in a ship run also builds a yellow verdict's changes, and after `pr` pushes them and leaves a status and a comment on the PR.
+Context: for a change judge, the loader's `verify:` line. After `pr`, the change judge also reads `project.md → Hosting & PR` and the frontmatter's `traces`.
 
 **The judge writes only its verdict file.**
 The one exception is a change judge in a ship run (a `judge` entry after `implement`), under the ship skill's authorization.
@@ -36,7 +36,8 @@ However, never agree because agreeing is cheaper.
 2. **Restate the problem, then find it in the code**, with a few targeted `Read` and `Grep` calls sent in one message.
    If the stated problem and the real one differ, build the judgment on the real one.
    On a plan or a change, send `f10 history --task <id> <path>...` in the same message, over the files the plan's stages name or the ones `f10 pr diff --name-only` lists.
-   It prints what the tasks that touched those files went through: review rounds, recurring findings, regressions, and the lessons and decisions anchored there.
+   It prints what the tasks that touched those files went through.
+   That covers review rounds, recurring findings and regressions, plus the lessons and decisions anchored there.
    An idea or a bare task names no files yet, so it runs none.
 3. **Symptom or cause.**
    If the subject treats a symptom, name where the cause lives and what fixing it takes.
@@ -47,7 +48,8 @@ However, never agree because agreeing is cheaper.
    Weigh its cost now against the cost of reaching it later.
    A quick hack counts as a hack only if a better shape is reachable now.
    Weigh the history from point 2 under the same rules, as evidence about these files rather than a rule of its own:
-   - A regression hotspot, two or more regressions in the window on these files or shipped by the tasks that touched them, is a cost the subject must address, or the verdict names it.
+   - Two or more regressions in the window, on these files or shipped by the tasks that touched them, make a regression hotspot.
+     A hotspot is a cost the subject must address, or the verdict names it.
    - A subject that takes an option a decision rejected, with no reason given, is at best **proceed with changes**.
    - A plan's `## History` section says what the plan did with each fact, so judge the reasons it gives, not only whether the section exists.
 6. **For code: keep, reshape or discard**, and say which parts.
@@ -118,11 +120,20 @@ However, never agree because agreeing is cheaper.
    - `run:` `standalone`, `before plan`, `ship before pr` or `ship after pr`.
    - `blind:` `yes` on a `--blind` run, omitted otherwise.
    - `decision:` what a ship run did with the verdict, in the words the routes below give, because `f10 status` shows it beside the verdict.
-     The words are `continue`, `folded` (folded into the plan for `implement` to build), `built` (a change judge built the changes), `refactor as agreed`, `asked`, `block`, `stop`, and fetch's `overridden`.
      A standalone run omits it.
+     The words are:
+     - `continue`
+     - `folded`, which means folded into the plan for `implement` to build
+     - `built`, which means a change judge built the changes
+     - `refactor as agreed`
+     - `asked`
+     - `block`
+     - `stop`
+     - `overridden`, which fetch writes
 
    Two sections follow the header.
-   `## Changes`, on a yellow verdict, has one line per change, numbered as in the reply, each line opening `<n>. ` at its start, because `f10 status` counts those lines as the changes a `built` decision built.
+   `## Changes`, on a yellow verdict, has one line per change, numbered as in the reply.
+   Each line opens with `<n>. ` at its start, because `f10 status` counts those lines as the changes a `built` decision built.
    In a ship run it lists only the changes the run takes, so a change the user declined at the gaps question is left out.
    `## Argument` holds the reply under the banner, and nothing parses it.
    It cites the history from point 2, by the ids its lines printed, only when the history changed the verdict.
@@ -184,7 +195,8 @@ With uncommitted work in the tree, the guard is skipped, and the verdict is on t
   Then print the verdict as the report, naming any durable work, such as commits or an open PR.
 - **rethink** or **proceed with changes** - discuss it (**Discussion**, above).
   Then turn each change or objection into a gap, all in one `AskUserQuestion` (`conventions/gaps.md`), with the judge's answer first and **block the run** as a real option.
-  On **continue**, the ship skill folds the answers into the plan file (stages, Consequences and Gaps), and then the two judges differ:
+  On **continue**, the ship skill folds the answers into the plan file (stages, Consequences and Gaps).
+  Then the two judges differ:
   - The plan judge runs the next step, and `implement` builds the revised plan (`decision: folded`).
   - The change judge builds the changes first, through **Building the changes** below, and then runs the next step (`decision: built`).
     An agreed rethink's refactor is built the same way (`decision: refactor as agreed`).
@@ -201,14 +213,18 @@ With uncommitted work in the tree, the guard is skipped, and the verdict is on t
   The answer rewrites the `decision:` line, and a change judge told to go on builds the agreed refactor before the next step.
 - **stop** ends blocked.
 
-**Building the changes** is how a change judge turns a yellow verdict, or an agreed rethink's refactor, into code, before or after `pr`:
+**Building the changes** is how a change judge turns a yellow verdict, or an agreed rethink's refactor, into code.
+It works the same before or after `pr`:
 
 1. The ship skill folds the changes into the plan file, as for the plan judge.
    A planless flow has no plan file, so the changes fold into its inline plan, and no plan file is created for them.
 2. Make the changes in the project's house style, following its CLAUDE.md rules and the `project.md` guardrails.
 3. Run the load's `verify:` line (`conventions/context.md` → Verify).
-   Red verify fails the step (`conventions/failure.md`, badge `partial` on `judge` when the run left anything durable, else `failed`): the changes stay uncommitted, and nothing is posted.
-4. Commit only when the tree was clean before point 2, because an earlier entry (`commit`, `push`, `pr`) already committed implement's work.
+   Red verify fails the step (`conventions/failure.md`).
+   The badge is `partial` on `judge` when the run left anything durable, else `failed`.
+   The changes stay uncommitted, and nothing is posted.
+4. Commit only when the tree was clean before point 2.
+   The tree is clean then because an earlier entry (`commit`, `push`, `pr`) already committed implement's work.
    Commit as `conventions/context.md` → Commits says, with `--step judge`.
    With `traces: on`, the commit body names each change in plain words for a reader of the PR.
    When the tree held implement's uncommitted work, leave the changes in the tree, because a commit would sweep that work into a judge commit.

@@ -1,11 +1,13 @@
 # Step · ci - triage a red CI run on the task's PR
 
-Role: a **senior engineer on call for the change's CI**, deciding whether the change broke the build, the host flaked, or the default branch is broken.
+Role: a **senior engineer on call for the change's CI**. They decide whether the change broke the build, the host flaked or the default branch is broken.
 Input: the open PR of the branch checked out here, whose head reads red.
 Output: one of a fix round pushed, the failed jobs rerun, or an ask.
-Context: the loader's `verify:` line, `project.md → Hosting & PR`, and the optional `ci` overlay (below).
+Context: the loader's `verify:` line, `project.md → Hosting & PR` and the optional **`ci` overlay**.
 Badge: none, because inside ship the step runs under the badge of the entry it runs before.
-Sent on its own by `/f10:ci`, it ends with `f10-state.sh done ci`, which is not a badge: it is the end signal `f10 drive` reads, as catchup's is.
+Sent on its own by `/f10:ci`, the step ends with `f10-state.sh done ci`.
+That line is not a badge.
+It is the end signal that `f10 drive` reads, like catchup's.
 
 No flow names `ci`.
 The step runs when one of three callers reads red checks on the PR:
@@ -30,7 +32,10 @@ A `left` entry counts for its head, and marks a head the user chose to leave red
 1. **Read what the decision needs**, in one call: `f10 pr checks --triage`.
    - Green or pending means the head moved on since the caller looked.
      Say so in one line and end the step, because pending waits for no one but finish.
-   - Red prints `first` (the first failed job that was not cancelled, and its run), `default` (how that job last ended on the default branch), and `tried` (this red spell's record).
+   - Red prints three fields:
+     - `first`: the first failed job that was not cancelled, and its run
+     - `default`: how that job last ended on the default branch
+     - `tried`: this red spell's record
    - A `tried` line `left at <this head>` means the user, or ship's note on a red default branch, already chose to leave this head red.
      Say so in one line and end the step, so a later boundary or tick does not ask again.
 2. **Bring the base in first** when the branch is behind or conflicts with it.
@@ -59,19 +64,24 @@ A `left` entry counts for its head, and marks a head the user chose to leave red
      When ship runs this step before a `pr` or `push` entry, leave the push to that entry, so the fix goes out with it.
      Every other entry pushes only on some outcomes, as a judge after `pr` does on yellow alone, so before one of those the step pushes its fix itself.
    - Red verify that cannot be fixed fails the step (`conventions/failure.md`), with the work left uncommitted.
-5. **Ask** when the table says so, or when the action it picks is already in `tried`: red after a fix round, or red again after a rerun of the same head.
-   The question names the job, its log url, the local verify result, the default branch's result, and what was tried.
+5. **Ask** when the table says so, or when the action it picks is already in `tried`.
+   That is red after a fix round, or red again after a rerun of the same head.
+   The question names the job and its log url.
+   It also gives the local verify result, the default branch's result and what was tried.
    The options, recommended first, are:
    - after a spent fix or rerun: **fix again**, **rerun once more**, or **leave it red**.
-   - with the default branch red: **leave it red** (the default branch needs its own fix), **fix it in this PR**, or **rerun once more**.
+   - with the default branch red: **leave it red**, **fix it in this PR** or **rerun once more**.
+     **Leave it red** comes first because the default branch needs its own fix.
 
    Interactive, it is one `AskUserQuestion`.
-   Driven, it is one ask, `f10-state.sh ask "<text>"; f10-state.sh set ship blocked ci` (`modes/driven.md`), with no `done ci`, because the run waits on the answer.
+   Driven, it is one ask: `f10-state.sh ask "<text>"; f10-state.sh set ship blocked ci` (`modes/driven.md`).
+   It runs no `done ci`, because the run waits on the answer.
    Ship mid-flow takes the default branch's case differently: it runs `f10 pr checks --record left`, notes it with `f10-state.sh note` and goes on, and the question is asked at the end of the run.
    **Leave it red** is recorded the same way, `f10 pr checks --record left`, so no later read of this head asks again.
    **Fix again** and **rerun once more** are the user's override of the record: the step runs `git config --unset branch.<branch>.f10-ci`, then the point the answer names.
 
-**Report**: one line, the outcome and the job: `ci: lint failed on the change - fixed in 3f2a1c9, pushed`, `ci: test flaked - reran run 77`, or the ask.
+**Report**: one line with the outcome and the job, or the ask.
+For example, `ci: lint failed on the change - fixed in 3f2a1c9, pushed` or `ci: test flaked - reran run 77`.
 A facts block carries a `commit` row when the step committed.
 
 **On failure:** an `f10 pr checks` error, a rejected push, or red verify that cannot be fixed (`conventions/failure.md`).

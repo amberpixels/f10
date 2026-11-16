@@ -15,7 +15,8 @@ The package imports nothing else from f10, so it can be copied out as a standalo
 ## Glossary
 
 - **Change**: the unit of work, one PR.
-  Its id is the task id (`FT-138`) for the task's first PR, and `<id>.<n>` for its `n`-th (`FT-138.2`), because each PR is reviewed, judged and checked on its own.
+  Its id is the task id (`FT-138`) for the task's first PR, and `<id>.<n>` for its `n`-th (`FT-138.2`).
+  Each PR gets its own id because each PR is reviewed, judged and checked on its own.
   f10 counts a task's PRs from the review series `f10 finish` archives, and `f10 lore change` prints the id the current one writes to.
   It is a directory holding every entry for that change.
 - **Entry kinds**, following the life of a change:
@@ -108,8 +109,11 @@ Decisions and lessons come from a ship run: a change that reaches `f10 finish` a
 - The **review** step reads `lessons` over every file in the diff and `why` at the base for a line it doubts; a hunk that breaks a lesson is a finding naming the lesson's id.
   It also reads `findings` over every file in the diff, and does not raise a repeat of a settled finding unless the earlier reason no longer holds.
   A repeat it does raise opens with the settled finding's id and reason.
-- The **resolve** step reads `findings` over the files its findings name; a verdict on a repeat cites the settled finding, and one that goes the other way says why.
-- The **plan** step reads lessons and decisions through `f10 history` over the files its stages name, and says in its `## History` section what it did with each; a plan that departs from one writes a `decision` naming its id.
+- The **resolve** step reads `findings` over the files its findings name.
+  A verdict on a repeat cites the settled finding, and one that goes the other way says why.
+- The **plan** step reads lessons and decisions through `f10 history` over the files its stages name.
+  Its `## History` section says what it did with each.
+  A plan that departs from one writes a `decision` naming its id.
 - The **judge** step reads the same brief over a plan's files or a diff's, and weighs a decision's rejected options against the subject.
 - `f10 finish` runs `check` right before a merge, under `project.md`'s `lore_gate`: `warn` notes the reasons, `block` refuses.
 - `f10 status` reads lore first and the review and verdict files for runs from before lore; lore is the one meant to last.
@@ -134,11 +138,20 @@ Every verb takes `--root <dir>`.
   A repeatable flag takes one value per occurrence, commas included: `--rejected 'fixed window: edge bursts, twice the limit'` is one option, and several anchors are several `--anchor` flags.
   An anchor without `@commit` takes `HEAD`'s, and fails before the first commit.
   `human` is `git config user.email`.
-  Agent fields come from `--agent-model`, `--agent-via` and `--agent-session`, else `F10_AGENT_MODEL`, `F10_AGENT_VIA` and `F10_AGENT_SESSION`, else the Claude Code session: its id, and the model its SessionStart hook recorded (the model it started on, kept current by the status line when it is f10's, which sees a `/model` switch); a subagent shares its parent's session, so a subagent that writes lore passes `--agent-model`; `via` is `claude-code` inside Claude Code; `agent` is written only when a model or a session is known.
+  Agent fields come from `--agent-model`, `--agent-via` and `--agent-session`.
+  Without those flags, they come from `F10_AGENT_MODEL`, `F10_AGENT_VIA` and `F10_AGENT_SESSION`.
+  Without those variables, they come from the Claude Code session: its id, and the model its SessionStart hook recorded.
+  That model is the one the session started on.
+  When the status line is f10's, it sees a `/model` switch and keeps the recorded model current.
+  A subagent shares its parent's session, so a subagent that writes lore passes `--agent-model`.
+  `via` is `claude-code` inside Claude Code.
+  `agent` is written only when a model or a session is known.
 - **`change`** prints the change the task's current PR writes to: the task id, or `<id>.<n>` once `n - 1` of its PRs have finished.
   A series whose PR merged without `f10 finish` is archived first, as `f10 review round` does.
 - **`show`** prints the change's effective entries, the intent first, then by time.
-  A bare task id prints each of its PRs' changes, newest first, and `--json` flattens them into one array in that order; `show <id>.<n>` prints that one change.
+  A bare task id prints each of its PRs' changes, newest first.
+  With a bare task id, `--json` flattens them into one array in that order.
+  `show <id>.<n>` prints that one change.
 - **`why`** blames the line, reads the commit's `Change:` trailers (else its `Task:` trailers), loads each change, and prints the intent, the latest verdict, and the effective decisions, findings and lessons with an anchor on the same path that covers the line, or that share a symbol with such an anchor.
   A commit with no trailer, or whose changes hold no entries, falls back to every change's entries with an anchor on the same path whose `commit` is the blamed one, or with an anchor on the line whose `commit` is an ancestor of it (an anchor written before its code was committed); the output says the link came from an anchor, a weaker one than a trailer.
   `why` and `lessons` skip a file that does not parse; `validate` reports it.
@@ -147,11 +160,16 @@ Every verb takes `--root <dir>`.
   `path:line@<rev>` reads the line as that revision has it, the base sha for a reviewer asking about a line a diff rewrote, so the answer is the earlier change; a path absent at the revision is `no record`.
 - **`lessons`** prints the effective, non-retired lessons anchored to the path, across every change.
   An agent reads it before editing a file.
-- **`findings`** prints the effective findings with status `wontfix` or `duplicate` anchored to the paths, across every change, newest first, each once, under the first path it is anchored to.
+- **`findings`** prints the effective findings with status `wontfix` or `duplicate` anchored to the paths, across every change.
+  They print newest first, and each prints once, under the first path it is anchored to.
   A `fixed` finding is left out, because the code it pointed at has changed.
-  Each anchor on the paths is followed from its commit to `HEAD` through `git diff --unified=0`, and printed as a `now:` line: its lines at `HEAD`, and how many of them changed since.
+  Each anchor on the paths is followed from its commit to `HEAD` through `git diff --unified=0`.
+  It is printed as a `now:` line, giving its lines at `HEAD` and how many of them changed since.
   An anchor whose lines all changed, or whose file is gone at `HEAD`, is dropped, and a finding with no anchor left is not listed.
-  An anchor whose commit this clone lacks (a branch commit squashed away and pruned), or whose commit does not hold the file (an anchor written before its file was committed), is kept as written, its `now:` line giving the recorded lines and saying they were not checked.
+  Some anchors cannot be followed, so they are kept as written.
+  One is an anchor whose commit this clone lacks, such as a branch commit squashed away and pruned.
+  Another is an anchor whose commit does not hold the file, because the anchor was written before its file was committed.
+  The `now:` line of such an anchor gives the recorded lines and says they were not checked.
   A path whose findings all printed under an earlier path still counts them in its headline, as `shown above`.
   Renames are not followed, so a finding on a moved file stops showing, as a lesson does.
 - **`check`** exits 1, naming each reason, when the intent is missing, no verdict exists, the latest verdict is `rethink` or `stop`, or a `blocker` or `major` finding is still effectively `open`.

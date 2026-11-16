@@ -85,7 +85,8 @@ The step ends in an **investigation brief** (point 6): a short write-up of what 
 
    Each kind adds what the investigation must prove:
    - **bug** - run the debug step's sections **A bug that is a task** and **Attribute**: `f10-state.sh set plan running debug; f10-load-project.sh debug`.
-     They triage, reproduce, confirm the root cause at a `file:line`, record the task that introduced the bug, and give the brief its reproduction and its `Regression of:` line.
+     They triage, reproduce and confirm the root cause at a `file:line`.
+     They record the task that introduced the bug, and give the brief its reproduction and its `Regression of:` line.
      Three cases skip the pass:
      - The frontmatter declares `debug: off`.
        Trace the root cause from the code instead, and say in the brief that the pass was off.

@@ -126,7 +126,9 @@ A file `.f10/instructions/<step>.md` extends the generic step of that name.
 A name with no generic step, `e2e` say, *is* the step: the overlay is its whole definition.
 That is how a flow gets project-specific steps.
 
-`ci.md` is the overlay the `ci` step reads when it triages a red PR: jobs known to flake, which are always rerun and never fixed, and jobs never to fix, such as a deploy preview, which are always a question.
+`ci.md` is the overlay the `ci` step reads when it triages a red PR.
+It lists jobs known to flake, which are always rerun and never fixed.
+It also lists jobs never to fix, such as a deploy preview, which are always a question.
 
 `standup.md` is the overlay `/f10:standup` reads: the report's wording, sections and audience, in prose, and optionally an **Assigned** adapter, the command listing your open tasks for the Next questionnaire where `f10 task search "is:open assignee:@me"` does not (GitLab, most drivers).
 It may also name a **Deliver** adapter, a skill, an MCP tool or a command that turns the report into a draft (a Gmail draft to your lead, say): f10 creates drafts and never sends, and an adapter that fails leaves the printed report to send by hand.
@@ -139,7 +141,8 @@ Cleanup replaces em and en dashes by default; a project that keeps them says so 
 
 `handoff.md` says where the project keeps what a handoff lists: data changes, jobs to run by hand, settings.
 Without it, the step looks where the stack usually keeps them, which misses anything a project keeps elsewhere.
-It may also add a category, with where it goes among the built-in groups (Data, Run by hand, Config, Deploy order, Breaks for consumers, Debt in prod), else after them.
+It may also add a category, with where it goes among the built-in groups, else after them.
+The built-in groups are Data, Run by hand and Config, then Deploy order, Breaks for consumers and Debt in prod.
 For a Rails app:
 
 ```markdown
@@ -269,20 +272,34 @@ flows:
 `f10 start` and `f10 drive` run `default`; `--local` runs `local`, the run ending in commits with nothing leaving the machine; `--flow <name>` runs any other, and an unknown name fails with the list; `f10 start --plan` stops after `plan`.
 `plan` leads a flow or is absent: it runs only for a task with no plan file, so a planned task never plans again, and `/f10:ship` runs the entries after it.
 A flow with no `plan` writes no plan file: free-text input also skips capture and fetch, and a task id is fetched but not planned.
-An entry takes an argument after a colon, so each is one shell word: `review:local` and `review:ci` set the review's `by` (who reviews), `review:host` runs the local review on the host's own code review (Claude Code's built-in `code-review`) shaped into the same findings file, `review:local+ci` runs both (the CI review fired or awaited first, the local one read while it is pending, one findings file and one resolve for both), `review:local+ci?` or `review:ci?` the CI review only where it can run, `cleanup:comments,prose` the cleanup targets, `deploy:staging` the environment; bare `cleanup` runs the targets that apply, as a light pass with no scope proofs when the diff is under 200 added lines; named targets always get the full pass.
+An entry takes an argument after a colon, so each is one shell word.
+`review:local` and `review:ci` set the review's `by` (who reviews).
+`review:host` runs the local review on the host's own code review (Claude Code's built-in `code-review`), shaped into the same findings file.
+`review:local+ci` runs both into one findings file and one resolve.
+It fires or awaits the CI review first, and reads the local one while the CI review is pending.
+`review:local+ci?` or `review:ci?` runs the CI review only where it can run.
+`cleanup:comments,prose` names the cleanup targets, and `deploy:staging` names the environment.
+Bare `cleanup` runs the targets that apply.
+It runs them as a light pass with no scope proofs when the diff is under 200 added lines.
+Named targets always get the full pass.
 Every `review` entry runs its resolve.
-A review argument other than `local`, `host`, `ci`, `local+ci` or one with an optional CI review is an error; a CI review with no remote reviewer declared, or with no `pr` or `push` before it, is a warning, since it would fail at run time.
+A review argument other than `local`, `host`, `ci`, `local+ci` or one with an optional CI review is an error.
+A CI review with no remote reviewer declared is a warning, since it would fail at run time.
+So is a CI review with no `pr` or `push` before it.
 A `?` after `ci` makes the CI review optional, so one flow or pace serves projects with and without a remote reviewer.
-It runs when Review declares a remote reviewer and a `pr` or `push` comes before the entry, and is dropped without a warning otherwise: `review:local+ci?` then runs as `review:local`, and a `review:ci?` entry is skipped.
+It runs when Review declares a remote reviewer and a `pr` or `push` comes before the entry.
+Otherwise it is dropped without a warning: `review:local+ci?` then runs as `review:local`, and a `review:ci?` entry is skipped.
 `f10 flow <name>` prints the entry as it runs, with the reason when the CI review was dropped.
 Inside a `{ }` map YAML refuses a bare `?`, so quote it there: `{ review: "local+ci?" }`.
 `judge` reads by position: before `implement` it judges the plan, a yellow verdict revising the plan file in place; after it, the change.
 A judge before `implement` needs a leading `plan`, since a planless flow has no plan file to judge.
 A `pr` entry opens the PR, or refreshes its title and description when one is open, so `judged` ends with a PR describing the reviewed code.
 An entry may end in a label in brackets, a display name for an entry the flow repeats: `judged: plan implement pr review:local judge pr[pr-polish]`.
-`f10 status`, the parent tree, `f10 flow`, the drive's `resume at` line and `f10 stats <id>` show `pr-polish` where they would show `pr`, and `--json` keeps `step` as the bare step beside a `label`.
+`f10 status`, the parent tree, `f10 flow`, the drive's `resume at` line and `f10 stats <id>` show `pr-polish` where they would show `pr`.
+`--json` keeps `step` as the bare step beside a `label`.
 The label changes nothing that runs: the entry is still `pr`, and every claim and match uses the bare entry.
-A label is lower kebab-case, unique within its flow, never the name of a step (a generic one, `finish`, or any step a declared flow names).
+A label is lower kebab-case and unique within its flow.
+It is never the name of a step: a generic one, `finish`, or any step a declared flow names.
 A shell reads `[...]` as a pattern, so quote a labelled entry on a command line: `f10-state.sh pipeline implement pr 'pr[pr-polish]'`.
 The last entry names what a run ships: an open PR, a pushed branch, a running deploy.
 A project-defined last step declares its own shipment on a `Shipment:` line in its overlay, and the final report prints that row in place of branch, PR or sha rows.
@@ -292,7 +309,9 @@ A `handoff` entry writes the handoff file, which lists what the change leaves fo
 Every `pr` entry runs the handoff too and puts its body in the PR under `## Handoff`, so only a flow with no `pr` lists the entry to get that file.
 The entry adds a `handoff` row to the report and never changes the shipment.
 
-`f10 drive` runs each task through `/f10:plan` when the flow leads with `plan` and the task has no plan file, then `/f10:ship`, then `finish` unless the run's pace, under the project's ceiling, says `finish: off` (**Paces**).
+`f10 drive` runs each task through `/f10:plan` when the flow leads with `plan` and the task has no plan file.
+Then it runs `/f10:ship`, then `finish` unless the run's pace says `finish: off` (**Paces**).
+The pace is read under the project's ceiling.
 A spike is closed after ship either way: `f10 finish` merges nothing for it, and a spike left open would hold its dependents on an empty base.
 A rerun keeps the flow a task's branch recorded when it started.
 A project whose only merges are a human's declares `ceiling: { finish: off }`, so no pace merges there.
@@ -324,17 +343,20 @@ pace: brisk
 The dials are:
 
 - `review: { by, rounds, depth }`.
-  `by` is who reviews in a bare `review` entry: `local`, `host`, `ci`, `local+ci`, `ci?` or `local+ci?`.
+  `by` is who reviews in a bare `review` entry.
+  It is `local`, `host`, `ci` or `local+ci`, or one of the optional forms `ci?` and `local+ci?`.
   `rounds` is `1` (never a second round, even after a heavy resolve) or `2` (a second round once round one's resolve fixed something).
   `depth` is `full` or `light`, which gives the blind reviewer a short brief (`steps/review.md`).
 - `judge: { effort }`, an effort word, laid over the `judge` key of the agents map, so `f10 agents judge` reports it and `f10 flow` does not list it on the judge entry.
-  It reaches a judge that spawns an agent (`--blind`); a judge running inline stays on the task agent's profile.
+  It reaches a judge that spawns an agent (`--blind`).
+  A judge running inline stays on the task agent's profile.
 - `pr: { marker }`, a word the project's `pr` overlay gives a meaning, such as a title tag that makes CI run a short pipeline.
 - `finish: on | off`, whether `f10 drive` finishes a task whose run ends at an open PR.
 - `<step>: off` skips that entry, `handoff: off` among them.
   `handoff: off` also reaches every `pr` entry as a dial, so the PR carries no `## Handoff` section.
 
-A scalar is shorthand: `judge: off`, `review: local` (the `by`), `finish: on`.
+A scalar is shorthand, such as `judge: off`, `review: local` or `finish: on`.
+In `review: local`, the scalar is the `by`.
 `implement: off` is refused, because a flow without it does no work.
 
 A pace tunes or skips the entries a flow already has, and never adds one, because adding work is the flow's job.
@@ -348,12 +370,15 @@ Paces come in three layers, merged per pace and per key, a later layer winning:
    `medium` sets only `finish: on`, so naming it runs every flow as declared.
    `slow` reviews in two rounds, locally and also by CI where a remote reviewer is declared (`local+ci?`), and never finishes.
    `fast` reviews locally in one round, sets the judge's effort low and finishes.
-   `ultra` skips plan, judge, cleanup and demo, reviews light, marks the PR `fast`, and finishes.
+   `ultra` skips plan, judge, cleanup and demo.
+   It reviews light, marks the PR `fast`, and finishes.
    Every built-in keeps `handoff` on, `ultra` included, because an auto-merged run is where the list of what to do after merge matters most.
 2. `~/.f10/paces.md`, a frontmatter of `paces:` and `pace:`, the same keys, for a pace that follows you across projects.
 3. The project's `paces:`, main's then the worktree's.
 
-The run's pace is, first to last: `--pace <name>` on `f10 start`, `f10 drive` or `/f10:ship`, the pace the task's branch records, the project's `pace:`, the user's `pace:`.
+The run's pace comes from the first of these that is set.
+First comes `--pace <name>` on `f10 start`, `f10 drive` or `/f10:ship`.
+Then comes the pace the task's branch records, then the project's `pace:`, then the user's `pace:`.
 `f10 status` draws a task's gates from its flow under that pace, so an entry the pace skips shows no gate.
 A `~/.f10/paces.md` the vocabulary refuses is a problem naming the file, which stops every command that acts on facts but `f10 config`, `f10 init` and `f10 doctor`.
 With none of them, the run takes `medium`.
@@ -382,15 +407,20 @@ A pace's value that is faster than the ceiling's is replaced by the ceiling's:
 - `finish: off` stops every pace from finishing, a pace that sets no `finish` included.
 - `review: { rounds: 2 }` gives every review a second round once round one fixed something, a pace silent on rounds included.
 - `review: { depth: full }` turns a `light` review back into a full one.
-- `judge: { effort: high }` raises a pace's lower judge effort; a pace silent on effort keeps the agents map, because that map is the project's own.
+- `judge: { effort: high }` raises a pace's lower judge effort.
+  A pace silent on effort keeps the agents map, because that map is the project's own.
 - `<step>: on` keeps that entry running under a pace that turns it off.
 
 A ceiling refuses `<step>: off`, because a cap never skips work, and `by` and `marker`, because they have no order.
 `except:` names the paces the ceiling leaves alone, whichever way the run picked them, so `--pace ultra` still merges where a human asks for it.
 A name in `except:` that no layer declares is an error listing the paces.
-The ceiling is the project's alone: it layers main then the worktree, key by key, a later `except:` replacing the list whole, and `~/.f10/paces.md` refuses it.
+The ceiling is the project's alone, and `~/.f10/paces.md` refuses it.
+It layers main then the worktree, key by key.
+A later `except:` replaces the list whole.
 
-`f10 flow` prints each flow under the run's pace, and `f10 flow <name>` prints one flow an entry per line, skipped entries marked and each dial with its origin; `/f10:ship` runs that list.
+`f10 flow` prints each flow under the run's pace.
+`f10 flow <name>` prints one flow an entry per line, skipped entries marked and each dial with its origin.
+`/f10:ship` runs that list.
 Both name the ceiling, and a capped dial shows the ceiling behind it and what the pace had: `finish off (ceiling (declared (main, frontmatter)); pace fast said on)`.
 `f10 config` lists every pace key and every ceiling key with its origin.
 
@@ -419,17 +449,22 @@ agents:
 Two layers of the same map merge **key by key**, the later winning: your defaults in `~/.f10/agents.md` (YAML frontmatter with an `agents:` map, as `~/.f10/standup.md`), then the project's `agents:` (main's and a worktree's layers merged key by key too).
 A step's profile is then `default`, overlaid segment by segment by a run's flag (`f10 start --agent`, `f10 drive --agent`, a task's own `<id>:<profile>`), then by `<step>`, then by `<step>.<kind>`, the kind fetch settled (`feature`, `bug`, `refactor`, `spike`).
 So `--agent low` over `default: opus:high` runs on `opus:low`, and the flag is recorded on the branch, where `f10 agents` reads it back for a spawning step's line.
-A key is `default`, a step some declared flow names (the default flow included), or a step that spawns a subagent (`audit`, `cleanup`, `judge`, `review`), since each also runs as a skill outside any flow; a misspelt step is refused, as is a profile the kind refuses.
+A key is `default`, a step some declared flow names (the default flow included), or a step that spawns a subagent.
+The steps that spawn a subagent are `audit`, `cleanup`, `judge` and `review`, and each is a key because it also runs as a skill outside any flow.
+A misspelt step is refused, as is a profile the kind refuses.
 `f10 agents` prints the merged map with each value's origin, and `f10 agents <step>...` each step's resolved profile with the key and layer behind each segment.
 `f10 config` lists the map as `agents.<key>` rows.
 
 What reaches where is explicit, and `f10 agents` prints it per step:
 
 - the task's agent (`f10 start`, `f10 drive`) starts on `default`, its model and effort as flags on the command line; the profile is recorded on the branch, so a rerun keeps it unless a flag names another, and `f10 start`'s report, the drive's open line and `f10 status` name it when it is not the kind's default;
-- a step that spawns a subagent passes its own key's profile to the Agent tool: the **review** step's blind reviewer, `judge --blind`'s judge, **cleanup**'s rules check, the **audit** step's reviewers.
+- a step that spawns a subagent passes its own key's profile to the Agent tool.
+  Those subagents are the **review** step's blind reviewer, `judge --blind`'s judge, **cleanup**'s rules check and the **audit** step's reviewers.
   The project load (`f10-load-project.sh <step>`) prints each requested step's line, with the model family and effort word in the form the Agent tool takes;
 - every other step runs inline, on the task agent's profile.
-  Its key is accepted so a map can be written once, and `f10 agents` says no lever reaches it yet: `implement`, `plan`, `commit`, `pr`, a judge in a flow, the resolve of a local or a CI review.
+  Its key is accepted so a map can be written once, and `f10 agents` says no lever reaches it yet.
+  The inline steps are `implement`, `plan`, `commit` and `pr`.
+  A judge in a flow and the resolve of a local or a CI review also run inline.
 
 An agent never types `/effort` or `/model`: in a session those save the choice as your own default in Claude Code's user settings.
 The eval runner takes `-agent <profile>` and a scenario lists the profiles it measures ([docs/evals.md](evals.md)).
@@ -519,7 +554,9 @@ The never-flag list holds whatever no category may report.
 The human reviewer is who answers an `ask` on a remote review; a local round's asks always go to you, in one questionnaire at the end of resolve.
 One round is the default, and a second runs only when round one's resolve fixed six or more findings.
 A pace's `review: { rounds: 2 }` makes a second round the rule once round one's resolve fixed something (**Paces**).
-`Host level:` is the level `review:host` passes the host's code review: `low`, `medium`, `high`, `xhigh` or `max`, `high` when absent; the cloud `ultra` is never passed, since only the user launches it.
+`Host level:` is the level `review:host` passes the host's code review, and it is `high` when absent.
+It takes `low`, `medium`, `high`, `xhigh` or `max`.
+The cloud `ultra` is never passed, since only the user launches it.
 The blind reviewer's depth is its agent profile: the `review` line under **Agents** sets its model and effort.
 
 A **remote review** - a bot in CI, a human, a check - is four frontmatter keys and an optional fifth, with a fixed vocabulary, so `f10 init` can write them and `f10 review` can act on them:
@@ -535,8 +572,8 @@ review:
 
 Reviewer is `bot`, `human` or `check` plus the login or check name.
 Arrives as is `issue comment`, `inline review` or `check run`.
-Trigger is `automatic`, `manual` or both, followed by how a human fires it; naming both, the manual how follows the word `manual` (`automatic, on open and on push; manual, comment \`@claude\` on the PR for a re-review`). `f10 review trigger` performs a manual how written as a comment with its text in a code span (`comment \`@claude review\` on the PR`) or as a review request with the login in a code span (`request a review from \`octocat\``); any other how stays a human's step. The Trigger decides what a flow's CI review does when no review is done: automatic waits, both waits once and then fires, manual fires. Declaring a manual how `f10 review trigger` can read is what lets a flow post it, a round two's re-review comment included; there is no flow syntax for it.
-Done is what signals the review is done (`posted`, `marker "<text>"`, `submitted`, `concluded`), then what marks it handled (`reaction \`<emoji>\``, `marker "<text>"`, `checkbox`, `thread resolved` for an inline review). The handled checkbox is the first one in the review's text; the rest are the reviewer's own. On GitHub a `bot` login keeps its `[bot]` suffix, and a declared suffix matches only an app's login. On GitLab the username alone names a bot. Settled is the mark `/f10:resolve <id> ci`, or the resolve of a flow's CI review, leaves once every finding has a verdict (`reaction \`<emoji>\`` or `marker "<text>"`; not resolved threads, which a human may resolve by hand); handled only means the review was read into a findings file. It is optional: without it `resolve ci` leaves no mark. `f10 review` refuses a value outside that vocabulary and a settled mark identical to the handled one, naming `settled`. `f10 init` writes these from a workflow under `.github/workflows` that runs the Claude Code action, preferring one that fires on `pull_request` over an `@claude` assistant and reading its `on:` block for the trigger, with `settled: reaction \`rocket\`` (spelled the same on GitHub and GitLab); a checkout without one declares no remote review, and a flow naming `review:ci` fails rather than waiting, where `review:ci?` is dropped. The model reads the same vocabulary in `steps/review.md`.
+Trigger is `automatic`, `manual` or both, followed by how a human fires it. When it names both, the manual how follows the word `manual` (`automatic, on open and on push; manual, comment \`@claude\` on the PR for a re-review`). `f10 review trigger` performs a manual how written in one of two forms. The first is a comment with its text in a code span (`comment \`@claude review\` on the PR`). The second is a review request with the login in a code span (`request a review from \`octocat\``). Any other how stays a human's step. The Trigger decides what a flow's CI review does when no review is done: automatic waits, both waits once and then fires, manual fires. Declaring a manual how `f10 review trigger` can read is what lets a flow post it, a round two's re-review comment included. There is no flow syntax for it.
+Done has two parts. The first is what signals the review is done: `posted`, `marker "<text>"`, `submitted` or `concluded`. The second is what marks it handled: `reaction \`<emoji>\``, `marker "<text>"`, `checkbox` or `thread resolved` for an inline review. The handled checkbox is the first one in the review's text. The rest are the reviewer's own. On GitHub a `bot` login keeps its `[bot]` suffix, and a declared suffix matches only an app's login. On GitLab the username alone names a bot. Settled is the mark `/f10:resolve <id> ci`, or the resolve of a flow's CI review, leaves once every finding has a verdict. The mark is `reaction \`<emoji>\`` or `marker "<text>"`. Resolved threads are not a settled mark, because a human may resolve them by hand. Handled only means the review was read into a findings file. It is optional: without it `resolve ci` leaves no mark. `f10 review` refuses a value outside that vocabulary and a settled mark identical to the handled one, naming `settled`. `f10 init` writes these from a workflow under `.github/workflows` that runs the Claude Code action. It prefers one that fires on `pull_request` over an `@claude` assistant, and reads its `on:` block for the trigger. It writes `settled: reaction \`rocket\``, which is spelled the same on GitHub and GitLab. A checkout without such a workflow declares no remote review. There, a flow naming `review:ci` fails rather than waiting, and `review:ci?` is dropped. The model reads the same vocabulary in `steps/review.md`.
 
 `traces: on` makes what f10 does visible on the host, in words that never name f10.
 Every commit a step makes ends in `Task: <id>` and `Step: <step>` trailers, a resolve's fix commit also in `Review: round=<n> fixed=<n> skipped=<n>`.
@@ -544,7 +581,9 @@ The squash commit `f10 finish` lands on the default branch keeps `Task: <id>` un
 The PR body holds one hidden comment, `<!-- state {...} -->`, saying which step last ran, the review round, what is still open and what waits on someone, rewritten by `pr`, `review`, `resolve`, `judge` and `f10 finish` through `f10 trace state`.
 `docs/traces.md` is the spec, with the fixtures a reader of the history conforms to.
 A local review or a judge of a branch with an open PR or MR is visible on it too.
-The reviewed commit gets a `review (local)` status, success or failure with counts like "3 found, 2 fixed, 1 skipped"; after `review:local+ci` the counts are the local review's, the CI review answered on its own thread.
+The reviewed commit gets a `review (local)` status, success or failure with counts like "3 found, 2 fixed, 1 skipped".
+After `review:local+ci` the counts are the local review's.
+The CI review answered on its own thread.
 A round that found anything also gets a PR comment listing the findings by title, each with its verdict and each skip's reason.
 The fix commit's message names what it fixed and what it skipped.
 A judge after the PR leaves a `judge` status and a comment with its verdict; a proceed with changes pushes its changes first and lists them, and a stop marks the PR "do not merge" with its reason, leaving it open.
@@ -557,7 +596,8 @@ In stealth mode every trace reads as your own.
 `stealth` keeps `.f10/` untracked and every trace of f10 out of commits, PRs and tickets.
 It is the default.
 `in-repo` storage keeps the task files (plans, findings, verdicts, spike reports, lore) in the main checkout's `.f10/`, shared by every worktree and keyed by task id, so removing a worktree by any means loses none of them; a worktree's own `.f10/` holds only its optional instructions layer.
-The storage root also holds `images/<ID>/`, the images `f10 task read` downloaded for a task, until `f10 finish` removes them, and `audits/`, one report per `/f10:audit`.
+The storage root also holds `images/<ID>/`, the images `f10 task read` downloaded for a task, until `f10 finish` removes them.
+It also holds `audits/`, one report per `/f10:audit`.
 `out-of-tree` moves instructions and plans to `~/.f10/<project>/` (or under `F10_USER_DIR` when set), shared by every worktree, for when even an untracked directory is too visible.
 Out-of-tree declares itself by location: create the directory and f10 finds it.
 
@@ -582,7 +622,8 @@ A tracker that classifies tasks with named properties (a `Kind`, `Scope` or `Are
 Each entry names the key the driver knows, its allowed values, and how to choose one.
 The capture step reads it and passes each value to `f10 task create` as `--set <key>=<value>`, so the task is created classified in one write.
 A capture overlay (`.f10/instructions/capture.md`) can add or override entries, because overlays layer on top of `project.md`.
-The driver must take `--set` on `create`, which f10-drivers does from v0.4.0; an older one drops the property with a warning, and capture sets it with `f10 task update` instead.
+The driver must take `--set` on `create`, which f10-drivers does from v0.4.0.
+An older one drops the property with a warning, and capture sets it with `f10 task update` instead.
 `f10 doctor` flags an older one and names the command that upgrades it.
 
 ```markdown

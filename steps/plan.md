@@ -33,8 +33,11 @@ Badge: `f10-state.sh set plan running` on entry, unless `fetch` already opened t
      How to choose the size comes after the full plan shape, below.
 
    A bug, a refactor and a spike each open with a section of their own, after the header lines and before the stages:
-   - **bug** - `## Reproduction` opens with the debug pass's outcome, `Reproduction: full`, `obvious`, `unconfirmed`, `skipped (costly)` or `skipped (no repro)`, or `Reproduction: not run (debug off)`.
-     Then it holds the steps or input, the expected behavior, the actual behavior, the root cause at `file:line`, and the test that will fail before the fix.
+   - **bug** - `## Reproduction` opens with the debug pass's outcome.
+     That line is one of `Reproduction: full`, `obvious`, `unconfirmed`, `skipped (costly)` or `skipped (no repro)`.
+     With debug off, it is `Reproduction: not run (debug off)`.
+     Then it holds the steps or input, and the expected behavior against the actual one.
+     It also names the root cause at `file:line` and the test that will fail before the fix.
      An `unconfirmed` or `skipped` one also says what was tried, so the reviewer and the judge see what is unproven.
      The first stage writes that test.
      Sometimes no automated test can reproduce the bug, as with a race, a third-party outage or UI timing.
@@ -58,12 +61,16 @@ Badge: `f10-state.sh set plan running` on entry, unless `fetch` already opened t
    `--task` leaves this task's own commits out, which the branch alone would not do when the plan runs from another checkout.
    The command lists the tasks whose commits touched those files lately, their review rounds and recurring findings, the regressions they shipped, and the lessons and decisions anchored there.
    It drops a task whose lines were mostly rewritten since, so the record it prints still applies to the code.
-   It prints a median or a rate only over three reviewed tasks or more, because two tasks are an anecdote, and work from before the ledger has no review to count.
+   It prints a median or a rate only over three reviewed tasks or more, because two tasks are an anecdote.
+   Only reviewed tasks count, because work from before the ledger has no review to count.
    - **Each bullet says what the plan did with one fact**, `kept as is, because ...` included, and cites the ids the line printed.
      A plan that ignores a recurring finding, or contradicts a decision, says why in that bullet.
    - **The history is evidence for the design, not a rule over it.**
-     The history may change only one header line, the size: a `small` plan in files whose tasks needed a median of 2 review rounds or more, meaning most of them needed a second round, is raised to `normal`, or its bullet says why this one differs.
-   - **A plan that departs from a lesson or a decision records it as a decision of its own**, so whoever reads the file's lore later sees the override and its reason.
+     The history may change only one header line, the size.
+     A `small` plan is raised to `normal` when its files' tasks needed a median of 2 review rounds or more, which means most of them needed a second round.
+     If it stays `small`, its bullet says why this one differs.
+   - **A plan that departs from a lesson or a decision records it as a decision of its own.**
+     This lets whoever reads the file's lore later see the override and its reason.
      The entry's anchor is one of the `anchors` that `f10 history --json` lists for it.
      Once the file is on disk, write `f10 lore add decision --change <change> --anchor <the entry's anchor> --chosen <the plan's approach> --rejected '<what the entry holds>: <why it no longer holds>' -m "<why, naming the entry's id>"`.
    - **With nothing found**, the section is the one line `No history for these files.`, which the command prints.
@@ -107,7 +114,9 @@ Badge: `f10-state.sh set plan running` on entry, unless `fetch` already opened t
    A spike is never small, because its `## Question` has to spell out the decision and the evidence.
    Neither is a refactor without test coverage, because writing the characterization tests is a stage of its own.
 
-   A small plan keeps the header lines and cuts the rest down to the brief in a few lines, one stage that names the change, its files and its test, then `## History`, `## Consequences - none` and `## Gaps - none`.
+   A small plan keeps the header lines and cuts the rest down to a few parts.
+   First comes the brief in a few lines, then one stage that names the change, its files and its test.
+   Then come `## History`, `## Consequences - none` and `## Gaps - none`.
    For a bug, the `## Reproduction` section shrinks to the root cause at `file:line`, the expected behavior against the actual one, and the failing test.
    A refactor's `## Invariant` stays as written.
 
@@ -148,7 +157,9 @@ Badge: `f10-state.sh set plan running` on entry, unless `fetch` already opened t
      Call `ExitPlanMode` to present the plan and get the go-ahead, or ask the user to leave plan mode with shift+tab.
      Then write the file.
    - **Lore** (`docs/lore.md`): once the file is on disk, a plan with a task id records its intent with `f10 lore add intent --change <change> -m "<text>"`.
-     `<change>` is what `f10 lore change` prints: the task id (a bundle's lead) for the task's first PR, and `<id>.<n>` for its `n`-th, so a follow-up PR's intent never replaces the first PR's.
+     `<change>` is what `f10 lore change` prints.
+     That is the task id (a bundle's lead) for the task's first PR, and `<id>.<n>` for its `n`-th.
+     So a follow-up PR's intent never replaces the first PR's.
      A plan with no task id writes no intent.
      The body is two to four sentences on what the change does and why, for someone reading it beside the code later.
      It gives the domain reason, with no plan, stage or f10 vocabulary.

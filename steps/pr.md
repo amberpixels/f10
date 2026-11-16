@@ -2,7 +2,8 @@
 
 Role: a **senior engineer** opening a PR someone else will have to review.
 Input: verified changes (`implement` and any earlier review steps done), and the branch's PR if one is open.
-Context: `project.md → Hosting & PR` (the PR adapter), and the `handoff` overlay, because this step runs the **handoff** step.
+Context: `project.md → Hosting & PR` for the PR adapter, and the `handoff` overlay.
+This step reads the `handoff` overlay because it runs the **handoff** step.
 
 The **PR adapter** is how the project opens and edits PRs.
 It is a skill when `project.md → Hosting & PR` names one.
@@ -54,7 +55,9 @@ Any commit this step makes follows `conventions/context.md` → Commits, with `-
      A rider the PR delivers only in part gets `Part of #12`, judged against that rider's criteria in the plan's `## Riders` section.
      A drive's or the watcher's finish follows these lines unasked: a rider under `Closes` closes on merge, and one under `Part of` stays open.
      An interactive `f10 finish` offers the same choice as its default and asks for it with `--close` (exit 7 without it).
-   - **A regression.** When the plan has a `Regression of:` line, the body carries one line saying the same for a reader: the origin task as a link carrying its title, how its review let the fault through, and how sure the attribution is ("Regression of [FT-414: Retry failed uploads](url): missed in review, confirmed").
+   - **A regression.** When the plan has a `Regression of:` line, the body carries one line saying the same for a reader.
+     The line gives the origin task as a link carrying its title, how its review let the fault through, and how sure the attribution is.
+     An example is "Regression of [FT-414: Retry failed uploads](url): missed in review, confirmed".
    - A **marker** is a word the run's pace hands this entry as a `marker <word>` dial (`f10 flow <name>`), such as `fast`.
      The project's `pr` overlay says what it means, for example a title tag that makes CI run a short pipeline, and the draft applies it.
      When no overlay gives the marker a meaning, the PR opens without it, and the report says so in one line.
@@ -71,7 +74,9 @@ Any commit this step makes follows `conventions/context.md` → Commits, with `-
      On a refresh, the old body's section is copied instead (point 7).
 6. **Open it** through the PR adapter.
    A skill adapter opens the PR itself.
-   With the plain commands, commit, run the **handoff** step and put its body into the draft, run `git push -u origin <branch>`, then run `f10 pr create --title … --body-file <file>`.
+   With the plain commands, commit first.
+   Then run the **handoff** step and put its body into the draft.
+   Then run `git push -u origin <branch>`, and last run `f10 pr create --title … --body-file <file>`.
    The handoff runs after the commit, so its file records the commit that ships.
    It runs before the push, so a failed handoff leaves nothing on origin.
    With a skill adapter, run the handoff before calling the skill, and pass the section with the draft.

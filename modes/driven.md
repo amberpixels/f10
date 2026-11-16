@@ -48,7 +48,8 @@ Five kinds of open question never become an ask:
 - **A gap.** A driven run takes every gap on its default and lists the open ones in its report (`conventions/gaps.md`).
 - **A conflict.** A driven catchup settles every conflict by the task's intent and writes each choice down (the **catchup** step's Driven paragraph).
 - **A base with no code, or not on origin before `pr`.** Ship stops with `f10-state.sh wait <base-id>` and asks nothing.
-  `f10 drive` sends ship again once the base commits, or for a stop at `pr`, once the base's branch is on origin or the base has finished (`skills/ship/SKILL.md` → the catchup guard, `steps/pr.md` point 4).
+  `f10 drive` sends ship again once the base commits.
+  For a stop at `pr`, it sends ship again once the base's branch is on origin or the base has finished (`skills/ship/SKILL.md` → the catchup guard, `steps/pr.md` point 4).
 - **A stale task's verdict** (`steps/fetch.md` point 1).
   The run ends blocked and names the verdict file.
   The user decides either by sending `anyway`, as `f10 drive --answer <id> anyway` or typed in this pane, or by closing the task.
@@ -72,7 +73,8 @@ Otherwise the task halts, because an idle agent on a running run may be waiting 
   Raise the `timeout` where the default is too short.
 - If a command must run in the background, wait for it in the same turn with a Monitor until-loop on its exit.
   Never end the turn expecting to be woken when it reports.
-  The drive reads an agent whose turn ended on a background Bash command, a Monitor or a subagent as working for up to 30 minutes, so a turn that breaks this rule is not halted at once.
+  If a turn ended on a background Bash command, a Monitor or a subagent, the drive reads the agent as working for up to 30 minutes.
+  So a turn that breaks this rule is not halted at once.
   The rule still holds, because a turn that waits reports sooner than one the drive waits out.
   A background job that never notifies leaves the drive waiting the full 30 minutes before it treats the agent as stalled.
 - A driven turn ends in only three ways: the step's report, an ask or a failure.
@@ -88,13 +90,15 @@ The task halts only in these cases:
   The halt names the action and lists every attempt with its reason.
   A failure after which the state moved starts the count over.
 - **A decision.** A run stopped `blocked` without an ask, such as a judge's stop or a stale task's verdict, halts at once, because sending the step again would roll the decision again.
-- **A stall the branch does not explain** (**A turn ends at its report**, above), or a prompt the agent never took, because typing into a pane that may hold a dialog could answer it.
+- **A stall the branch does not explain** (**A turn ends at its report**, above), or a prompt the agent never took.
+  The task halts, because typing into a pane that may hold a dialog could answer it.
 - **Checks at finish.** A head whose checks failed is sent to the task's agent as `/f10:ci`, shown as `triaging checks`, and finish reads the checks again once the triage reports.
   It halts when the step asks, or when a triage leaves the same red head with no new fix or rerun recorded, naming the failed jobs.
   A head whose checks are still running holds the task as `waiting on checks`, and finish runs again each poll.
   It halts once the same head has been pending for 20 minutes.
   A push starts the wait over, because the new head has checks of its own.
-- **The drive's own environment fails**, because sending the step again cannot fix it: a git read that fails, a workspace that is gone, a base task that halted, or a task another drive holds.
+- **The drive's own environment fails**, because sending the step again cannot fix it.
+  It covers a git read that fails, a workspace that is gone, a base task that halted, or a task another drive holds.
 
 ## The answer
 

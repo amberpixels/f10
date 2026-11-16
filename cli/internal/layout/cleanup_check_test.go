@@ -163,3 +163,189 @@ func TestCleanupCheckLiterals(t *testing.T) {
 		})
 	}
 }
+
+// proseCheck runs the prose mode in a git repo where name is committed as
+// before and holds after in the working tree. With ref empty it passes --all.
+// Untracked files are written but never committed.
+func proseCheck(t *testing.T, ref, name, before, after string, untracked map[string]string) (string, int) {
+	t.Helper()
+
+	dir := t.TempDir()
+	run := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(
+			os.Environ(),
+			"GIT_AUTHOR_NAME=t",
+			"GIT_AUTHOR_EMAIL=t@t",
+			"GIT_COMMITTER_NAME=t",
+			"GIT_COMMITTER_EMAIL=t@t",
+		)
+
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	write := func(path, body string) {
+		if err := os.WriteFile(filepath.Join(dir, path), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	run("init", "-q")
+	write(name, before)
+	run("add", name)
+	run("commit", "-q", "-m", "before")
+	write(name, after)
+
+	files := []string{name}
+	for path, body := range untracked {
+		write(path, body)
+		files = append(files, path)
+	}
+
+	if ref == "" {
+		ref = "--all"
+	}
+
+	script := filepath.Join(filepath.Dir(scriptPath(t)), "f10-cleanup-check.sh")
+	cmd := exec.Command(script, append([]string{"prose", ref}, files...)...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+
+	code := 0
+
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
+		code = exitErr.ExitCode()
+	} else if err != nil {
+		t.Fatalf("f10-cleanup-check.sh: %v", err)
+	}
+
+	return string(out), code
+}
+
+func TestCleanupCheckProse(t *testing.T) {
+	const (
+		plain = "Keep this line short.\n"
+		dense = "Run it here, there, again, later, then stop.\n"
+		long  = "one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twenty-one twenty-two twenty-three twenty-four twenty-five twenty-six twenty-seven twenty-eight twenty-nine thirty thirty-one.\n"
+	)
+
+	cases := []struct {
+		name, ref, file, before, after string
+		untracked                      map[string]string
+		want                           string
+		code                           int
+	}{
+		{"semicolon", "HEAD", "p.md", plain, plain + "Do one thing; then another.\n", nil, "p.md:2: semicolon", 1},
+		{"four joints", "HEAD", "p.md", plain, plain + dense, nil, "p.md:2: 4 joints", 1},
+		{"31 words", "HEAD", "p.md", plain, plain + long, nil, "p.md:2: 31 words", 1},
+		{
+			"at the limits",
+			"HEAD",
+			"p.md",
+			plain,
+			plain + "Run it here, then there, and stop (once) with one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen.\n",
+			nil,
+			"no dense sentences",
+			0,
+		},
+		{"unchanged dense line passes", "HEAD", "p.md", dense, dense + plain, nil, "no dense sentences", 0},
+		{"--all checks every line", "", "p.md", dense, dense + plain, nil, "p.md:1: 4 joints", 1},
+		{
+			"wrapped sentence flags at its first line", "HEAD", "p.md", "Run it here,\nthen there.\n",
+			"Run it here,\nthere, again, later, then stop.\n", nil, "p.md:1: 4 joints", 1,
+		},
+		{
+			"skipped markdown",
+			"HEAD",
+			"p.md",
+			plain,
+			"---\ndescription: a, b, c, d, e; f\n---\n" + plain + "```\na, b, c, d; e\n```\n| a, b | c, d, e; |\n# A, b, c, d, e\n" +
+				"Run `a, b, c; d` and see [the docs](https://x.io/a:b) now.\n",
+			nil,
+			"no dense sentences",
+			0,
+		},
+		{
+			"list label",
+			"HEAD",
+			"p.md",
+			plain,
+			plain + "- **name** - run it here, then there, and stop.\n",
+			nil,
+			"no dense sentences",
+			0,
+		},
+		{
+			"key label",
+			"HEAD",
+			"p.md",
+			plain,
+			plain + "- `a`, `b` and `c`: run it here, then there, and stop.\n",
+			nil,
+			"no dense sentences",
+			0,
+		},
+		{
+			"bold sentence ends",
+			"HEAD",
+			"p.md",
+			plain,
+			plain + "**Stop here.** Then a, b, c, d.\n",
+			nil,
+			"no dense sentences",
+			0,
+		},
+		{
+			"go comments",
+			"HEAD",
+			"a.go",
+			"package x\n",
+			"package x\n\n// Run it here, there, again, later, then stop.\nvar s = \"a, b, c, d; e\"\n\nvar n = 1 // a, b; c\n",
+			nil,
+			"a.go:3: 4 joints",
+			1,
+		},
+		{
+			"trailing comment",
+			"HEAD",
+			"a.go",
+			"package x\n",
+			"package x\n\nvar n = 1 // a, b; c\n",
+			nil,
+			"a.go:3: semicolon",
+			1,
+		},
+		{
+			"unclosed quote hides no comment",
+			"HEAD",
+			"b.sh",
+			"x=1\n",
+			"x=1\ncat <<EOF\nit's\nEOF\n# a, b; c\n",
+			nil,
+			"b.sh:5: semicolon",
+			1,
+		},
+		{
+			"untracked file in full",
+			"HEAD",
+			"p.md",
+			plain,
+			plain,
+			map[string]string{"new.md": dense},
+			"new.md:1: 4 joints",
+			1,
+		},
+		{"unknown syntax", "HEAD", "p.md", plain, plain, map[string]string{"c.txt": "a\n"}, "UNCHECKED: c.txt", 1},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			out, code := proseCheck(t, c.ref, c.file, c.before, c.after, c.untracked)
+			if code != c.code || !strings.Contains(out, c.want) {
+				t.Errorf("exit %d, output %q; want exit %d and %q", code, out, c.code, c.want)
+			}
+		})
+	}
+}

@@ -2,7 +2,8 @@
 
 Role: a **senior engineer** capturing a well-scoped task.
 Input: a free-text description of a feature or a bug, possibly terse, or a debug brief.
-Context: `project.md → Tracker`, for the task **id format**, the **create adapter**, which creates the task when `f10 task create` exits 3, and the **Properties** a new task carries.
+Context: `project.md → Tracker`, for the task **id format**, the **create adapter** and the **Properties** a new task carries.
+The create adapter creates the task when `f10 task create` exits 3.
 
 1. **Check the scope.**
    Infer the scope yourself.
@@ -61,7 +62,9 @@ Context: `project.md → Tracker`, for the task **id format**, the **create adap
      - **Unknown** - plain paragraphs, with no markup that reads as noise when it is not rendered.
 3. **Create the task**, through `f10 task create` first.
    Pass the draft on stdin, `# <title>` on the first line and the body after it.
-   Pass its properties as flags: `--status`, `--priority`, `--label` once per label, `--parent <id>` for a subtask, and `--set <key>=<value>` once per declared property (below).
+   Pass its properties as flags: `--status` and `--priority`.
+   Pass `--label` once per label, and `--parent <id>` for a subtask.
+   Pass `--set <key>=<value>` once per declared property (below).
    Apply the project's declared default status and labels.
    `f10 task create` creates the task through the project's driver, else as an issue on GitHub or GitLab, and prints the new id.
    `f10 task open <id> --link` then prints the url for the report.
@@ -72,7 +75,9 @@ Context: `project.md → Tracker`, for the task **id format**, the **create adap
      If the retitle fails, report it, but never create the task again, because it already exists.
    - **A failure whose error says the task may exist** is never re-run, whatever `conventions/failure.md` rule 3 allows.
      Report the failure, and let the user check the tracker.
-   - **Any other failure** happened before anything was written: f10 rejected the input (a missing title, an unknown priority or id) before the driver ran, or the driver rejected it before calling the tracker (a label that is not one of the tracker's options).
+   - **Any other failure** happened before anything was written.
+     Either f10 rejected the input before the driver ran, such as a missing title or an unknown priority or id.
+     Or the driver rejected it before calling the tracker, such as a label that is not one of the tracker's options.
      Fix the input and run the command again.
    - **Kind labels.**
      A description that reads as a bug or a refactor gets the tracker's label for that kind, where one exists (`f10 task create --label bug`), so that the fetch step settles the same kind later.
@@ -88,7 +93,9 @@ Context: `project.md → Tracker`, for the task **id format**, the **create adap
      On an exit 3, the create adapter sets the same properties by its own means.
      A split sets them on the parent and on every subtask.
    - **A claimed regression.**
-     When the description says the bug is a regression of another task, as in "regression of FT-414" or "a bug in FT-414's retry loop", record that claim once the task exists: `f10 task regression <new-id> --claimed <that id> --text "<the phrase that names it>"`.
+     When the description says the bug is a regression of another task, record that claim once the task exists.
+     Such a description says, for example, "regression of FT-414" or "a bug in FT-414's retry loop".
+     Record it with `f10 task regression <new-id> --claimed <that id> --text "<the phrase that names it>"`.
      It is the user's word, kept apart from what the debug step later finds, and the two may disagree.
      A failing call is one line in the report, never a failed step.
    - **A split** creates the parent first, then links each subtask to it.
