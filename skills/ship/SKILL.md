@@ -61,7 +61,8 @@ Deploy has its own confirmation (the **deploy** step).
    - `checks: pending`, `green` or `none`: go on, because only finish waits on checks.
    - A default branch that is red too does not stop the run: the step notes it, and the run asks once at its end, interactive or driven.
 
-**Flows** are the frontmatter's `flows:`, a name to its ordered entries, a list or one string split on spaces or arrows (`plan judge implement cleanup:comments,prose pr review:ci deploy:staging`); none declared is `default: plan implement pr`.
+**Flows** are the frontmatter's `flows:`, a name to its ordered entries, a list or one string split on spaces or arrows (`plan judge implement cleanup:comments,prose pr review:ci deploy:staging`).
+With none declared, the flow is `default: plan implement pr finish`.
 `f10 flow` lists them and what selects each.
 
 **Paces** tune the chosen flow (`docs/project-setup.md` → Paces).
@@ -76,9 +77,9 @@ It reaches only a judge that spawns an agent (`--blind`), whose profile comes fr
 That call takes `--pace <name>` when the argument gave one.
 An inline judge runs on the task agent's profile.
 A leading `plan` the pace skips makes the run planless, as a flow with no `plan` is.
-A `finish` line means the run ends at an open PR the pace would have merged.
-Ship never merges it.
-The report's `Next:` names `/f10:finish <id> --merge`, unless drive finishes the task (`modes/driven.md`).
+A trailing `finish` entry belongs to `f10 drive`, so ship never runs it and leaves it out of the badge's `pipeline`.
+With it in the flow, the report's `Next:` names `/f10:finish <id> --merge`, unless drive finishes the task (`modes/driven.md`).
+A `finish` the pace skips adds no `Next:` line.
 With no pace, the list is the declared flow, with an optional CI review (`ci?`) already settled.
 An `f10 flow` too old to take a name fails on it: run the declared flow, and say in one line that the pace was not applied.
 
@@ -192,7 +193,7 @@ Any other failure leaves the shipment standing: `f10-state.sh set ship partial <
 A driven run reports back too; nothing is asked.
 
 **Exit**
-- Stop after the flow's last entry (a spike's: implement) and the report back, with the final report.
+- Stop after the flow's last entry before a trailing `finish` (a spike's: implement) and the report back, with the final report.
   The final report starts with the facts block.
   The facts block holds the **shipment** rows the last delivering entry declares, plus a judge's, demo's or handoff's when they ran.
   Those rows include the branch, the PR/MR url, the sha and the deploy url.

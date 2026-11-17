@@ -130,8 +130,16 @@ func (f Flow) Labels() []string {
 // only the entries after it.
 func (f Flow) Plans() bool { return len(f) > 0 && f[0].String() == "plan" }
 
-// Ship is what /f10:ship runs: the flow after a leading `plan`.
+// Finishes reports a flow ending in `finish`, which drive runs after ship.
+func (f Flow) Finishes() bool { return len(f) > 0 && f[len(f)-1].Step == "finish" }
+
+// Ship is what /f10:ship runs: the flow after a leading `plan`, without
+// the trailing `finish` drive runs itself.
 func (f Flow) Ship() Flow {
+	if f.Finishes() {
+		f = f[:len(f)-1]
+	}
+
 	if f.Plans() {
 		return f[1:]
 	}
@@ -174,8 +182,8 @@ var Delivering = []string{"implement", "commit", "push", "pr", "deploy"}
 // Guarded are the entries ship's catchup guard runs before.
 var Guarded = []string{"implement", "pr", "judge"}
 
-// GenericSteps is every generic step a flow entry may name, plus finish,
-// which drive runs. A label never takes one of these names, so status and
+// GenericSteps is every generic step a flow entry may name, finish
+// included, which drive runs rather than ship. A label never takes one of these names, so status and
 // stats never show a step that did not run.
 var GenericSteps = []string{
 	"audit", "brainstorm", "capture", "catchup", "ci", "cleanup", "commit", "debug", "demo", "deploy", "explain",

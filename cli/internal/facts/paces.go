@@ -18,9 +18,9 @@ import (
 // whichever flow runs. A pace tunes or skips the entries a flow has and
 // never adds one, since adding work is the flow's job.
 
-// PaceFinishKey is the key, written beside the step keys, that names no
-// flow entry: whether a run that would stop at an open PR goes on to finish.
-const PaceFinishKey = "finish"
+// finishStep is the flow entry drive runs after ship: the one step a
+// ceiling may turn off, since merging is a hand-off, not work a cap skips.
+const finishStep = "finish"
 
 // PaceOriginBuiltin is the origin of a dial f10 ships.
 var PaceOriginBuiltin = OriginOf(OriginBuiltin)
@@ -36,8 +36,7 @@ type Dials struct {
 	Effort string `yaml:"effort,omitempty"`
 	Marker string `yaml:"marker,omitempty"`
 
-	word   string // a scalar shorthand no rule read, refused by the checks
-	mapped bool   // written as a map, which the finish key refuses
+	word string // a scalar shorthand no rule read, refused by the checks
 }
 
 // A dialSpec is everything one dial means, so reading, checking, capping
@@ -166,7 +165,6 @@ func (d *Dials) UnmarshalYAML(node *yaml.Node) error {
 	}
 
 	*d = Dials(p)
-	d.mapped = true
 
 	return nil
 }
@@ -205,16 +203,13 @@ func (d Dials) Shown() string {
 	return strings.Join(parts, ", ")
 }
 
-// Pace is one pace: dials by step, and the finish word beside them.
+// Pace is one pace: dials by step.
 type Pace struct {
-	Steps  map[string]Dials
-	Finish string // on or off; "" says nothing
-
-	finishBad bool // finish was written as something other than on or off
+	Steps map[string]Dials
 }
 
-// UnmarshalYAML reads each key's shorthand: off for any step, a half for
-// review (`review: local`), and on or off for finish.
+// UnmarshalYAML reads each key's shorthand: off for any step, and a half
+// for review (`review: local`).
 func (p *Pace) UnmarshalYAML(node *yaml.Node) error {
 	var raw map[string]Dials
 	if err := node.Decode(&raw); err != nil {
@@ -225,16 +220,6 @@ func (p *Pace) UnmarshalYAML(node *yaml.Node) error {
 
 	for key, d := range raw {
 		key = strings.ToLower(strings.TrimSpace(key))
-
-		if key == PaceFinishKey {
-			if d.mapped || (d.word != "on" && d.word != "off") {
-				p.finishBad = true
-			} else {
-				p.Finish = d.word
-			}
-
-			continue
-		}
 
 		switch {
 		case d.word == "":
@@ -252,46 +237,24 @@ func (p *Pace) UnmarshalYAML(node *yaml.Node) error {
 	return nil
 }
 
-// MarshalYAML writes the steps and finish side by side, as they are read.
+// MarshalYAML writes the steps as they are read.
 func (p Pace) MarshalYAML() (any, error) {
 	out := map[string]any{}
 	for key, d := range p.Steps {
 		out[key] = d
 	}
 
-	if p.Finish != "" {
-		out[PaceFinishKey] = p.Finish
-	}
-
 	return out, nil
 }
 
-// Keys is every key the pace sets, finish among the steps, sorted.
-func (p Pace) Keys() []string {
-	keys := slices.Collect(maps.Keys(p.Steps))
-	if p.written() {
-		keys = append(keys, PaceFinishKey)
-	}
-
-	slices.Sort(keys)
-
-	return keys
-}
+// Keys is every key the pace sets, sorted.
+func (p Pace) Keys() []string { return slices.Sorted(maps.Keys(p.Steps)) }
 
 // Shown is one key's value as the pace states it.
-func (p Pace) Shown(key string) string {
-	if key == PaceFinishKey {
-		return p.Finish
-	}
-
-	return p.Steps[key].Shown()
-}
+func (p Pace) Shown(key string) string { return p.Steps[key].Shown() }
 
 // Empty reports a pace that sets nothing.
-func (p Pace) Empty() bool { return len(p.Steps) == 0 && !p.written() }
-
-// written reports a finish key the pace was given, well formed or not.
-func (p Pace) written() bool { return p.Finish != "" || p.finishBad }
+func (p Pace) Empty() bool { return len(p.Steps) == 0 }
 
 func (p Pace) clone() Pace {
 	c := p
@@ -320,15 +283,6 @@ func checkKeys(p Pace, r keyRules) []string {
 
 	for _, key := range p.Keys() {
 		at := r.location + key
-
-		if key == PaceFinishKey {
-			if p.finishBad || (p.Finish != "on" && p.Finish != "off") {
-				bad = append(bad, at+": finish is on or off")
-			}
-
-			continue
-		}
-
 		d := p.Steps[key]
 
 		switch {
@@ -394,6 +348,8 @@ func CheckPace(name string, p Pace) []string {
 		word:     "write off, or a map of dials",
 		refuse: func(key string, d Dials) string {
 			switch {
+			case d.On && key == finishStep:
+				return "finish: on is gone; add finish to the flow, which is where a run says it merges"
 			case d.On:
 				return "on is a ceiling's word; a pace runs every entry it does not turn off"
 			case d.Off && key == "implement":
@@ -451,10 +407,6 @@ func (c Ceiling) MarshalYAML() (any, error) {
 		out[key] = d
 	}
 
-	if c.Pace.Finish != "" {
-		out[PaceFinishKey] = c.Pace.Finish
-	}
-
 	if len(c.Except) > 0 {
 		out["except"] = c.Except
 	}
@@ -470,9 +422,9 @@ func CheckCeiling(c Ceiling) []string {
 		location: "ceiling.",
 		catchup:  "catchup is never a flow entry",
 		word:     "write on, or a map of dials",
-		refuse: func(_ string, d Dials) string {
-			if d.Off {
-				return "a ceiling never skips a step; write on to keep it running under every pace"
+		refuse: func(key string, d Dials) string {
+			if d.Off && key != finishStep {
+				return "a ceiling never skips a step but finish; write on to keep it running under every pace"
 			}
 
 			return ""
@@ -489,24 +441,21 @@ func CheckCeiling(c Ceiling) []string {
 	return bad
 }
 
-// BuiltinPaces are the paces f10 ships. medium only finishes: naming it
-// runs every flow as declared, the way to switch a faster default off.
+// BuiltinPaces are the paces f10 ships. medium sets nothing: naming it runs
+// every flow as declared, the way to switch a faster default off.
 func BuiltinPaces() map[string]Pace {
 	return map[string]Pace{
 		"slow": {
-			Steps:  map[string]Dials{"review": {By: "local+ci?", Rounds: 2}},
-			Finish: "off",
+			Steps: map[string]Dials{"review": {By: "local+ci?", Rounds: 2}},
 		},
 		"medium": {
-			Steps:  map[string]Dials{},
-			Finish: "on",
+			Steps: map[string]Dials{},
 		},
 		"fast": {
 			Steps: map[string]Dials{
 				"review": {By: "local", Rounds: 1},
 				"judge":  {Effort: "low"},
 			},
-			Finish: "on",
 		},
 		"ultra": {
 			Steps: map[string]Dials{
@@ -517,7 +466,6 @@ func BuiltinPaces() map[string]Pace {
 				"review":  {By: "local", Depth: "light"},
 				"pr":      {Marker: "fast"},
 			},
-			Finish: "on",
 		},
 	}
 }
@@ -562,11 +510,6 @@ func (s *PaceSet) Over(paces map[string]Pace, origin func(name, key string) Orig
 			s.Origins[name+"."+key] = origin(name, key)
 		}
 
-		if p.Finish != "" {
-			cur.Finish = p.Finish
-			s.Origins[name+"."+PaceFinishKey] = origin(name, PaceFinishKey)
-		}
-
 		s.Paces[name] = cur
 	}
 }
@@ -584,8 +527,9 @@ func (s *PaceSet) CeilingOrigin(key string) string {
 }
 
 // Capped is the pace with the ceiling laid on, and each replaced dial keyed
-// `<step>.<dial>` (bare finish). Silence on finish or rounds is the faster
-// default, so it is capped; silence on effort leaves the agents map alone.
+// `<step>.<dial>`. A step the ceiling turns on or off is keyed `<step>.run`.
+// Silence on rounds is the faster default, so it is capped. Silence on
+// effort leaves the agents map alone.
 func (s *PaceSet) Capped(name string) (Pace, map[string]Dial) {
 	src := s.Paces[name]
 	if s.Exempt(name) {
@@ -607,10 +551,9 @@ func (s *PaceSet) Capped(name string) (Pace, map[string]Dial) {
 		return who + " said " + v
 	}
 
-	if s.Ceiling.Finish == "off" && p.Finish != "off" {
-		origin := s.CeilingOrigin(PaceFinishKey)
-		caps[PaceFinishKey] = Dial{Name: PaceFinishKey, Value: "off", Origin: origin, Capped: said(p.Finish)}
-		p.Finish = "off"
+	if s.Ceiling.Steps[finishStep].Off && !p.Steps[finishStep].Off {
+		caps[finishStep+".run"] = Dial{Name: "run", Value: "off", Origin: s.CeilingOrigin(finishStep), Capped: said("")}
+		p.Steps[finishStep] = Dials{Off: true}
 	}
 
 	for key, c := range s.Ceiling.Steps {
@@ -682,7 +625,6 @@ type Resolved struct {
 	Flow    string          `json:"flow"`
 	Pace    string          `json:"pace,omitempty"`
 	Entries []ResolvedEntry `json:"entries"`
-	Finish  *Dial           `json:"finish,omitempty"` // set only when the pace says and the run ends at a PR
 }
 
 // Changed reports a resolution that differs from the declared flow.
@@ -761,12 +703,15 @@ func (s *PaceSet) ResolveFlow(flowName string, declared flow.Flow, pace string) 
 		e := ResolvedEntry{Entry: entry.String(), Declared: entry.String(), Step: step, Label: entry.Label}
 		d, ok := p.Steps[step]
 
-		if c, unskipped := caps[step+".run"]; unskipped {
+		c, capped := caps[step+".run"]
+		if capped && c.Value == "on" {
 			e.Dials = append(e.Dials, c)
 		}
 
 		switch {
 		case !ok:
+		case d.Off && capped:
+			e.Skipped = "off in " + c.Origin + "; " + c.Capped
 		case d.Off:
 			e.Skipped = "off in " + from(step)
 		default:
@@ -812,15 +757,6 @@ func (s *PaceSet) ResolveFlow(flowName string, declared flow.Flow, pace string) 
 
 	if bad := checkFlow(flowName, run); len(bad) > 0 {
 		return r, fmt.Errorf("pace %s on the %s flow: %s", pace, flowName, strings.Join(bad, "; "))
-	}
-
-	if p.Finish != "" && flow.Of(run).Delivered() == "pr" {
-		fin := Dial{Name: PaceFinishKey, Value: p.Finish, Origin: from(PaceFinishKey)}
-		if c, ok := caps[PaceFinishKey]; ok {
-			fin = c
-		}
-
-		r.Finish = &fin
 	}
 
 	return r, nil

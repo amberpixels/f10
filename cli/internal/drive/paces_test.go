@@ -12,17 +12,24 @@ import (
 	"github.com/amberpixels/f10/cli/internal/testkit"
 )
 
-// A pace that skips plan drops /f10:plan from drive's skills, and its
-// finish word decides whether they end in finish.
+// A pace that skips plan drops /f10:plan from drive's skills, and the
+// flow's finish entry decides whether they end in finish.
 func TestPaceShapesTheDriveSkills(t *testing.T) {
-	eff := &facts.Effective{Flows: map[string]flow.Flow{"default": flow.Of(strings.Fields("plan judge implement pr"))}}
+	eff := &facts.Effective{Flows: map[string]flow.Flow{
+		"default": flow.Of(strings.Fields("plan judge implement pr finish")),
+		"open":    flow.Of(strings.Fields("plan judge implement pr")),
+	}}
 	set := facts.NewPaceSet()
+
+	if fl, err := testkit.PacedFlowIn(eff, set, "fast", "open"); err != nil || len(DriveSkills(fl)) != 2 {
+		t.Errorf("a flow with no finish: %+v, %v", fl, err)
+	}
 
 	for pace, want := range map[string]string{
 		"":       "plan ship finish",
 		"medium": "plan ship finish",
 		"fast":   "plan ship finish",
-		"slow":   "plan ship",
+		"slow":   "plan ship finish",
 		"ultra":  "ship finish",
 	} {
 		fl, err := testkit.PacedFlowIn(eff, set, pace, "")
@@ -75,9 +82,11 @@ func TestDriveKeepsTheRecordedPace(t *testing.T) {
 // A ceiling's finish off keeps finish out of drive's skills under a pace
 // that finishes, unless that pace is excepted.
 func TestCeilingShapesTheDriveChain(t *testing.T) {
-	eff := &facts.Effective{Flows: map[string]flow.Flow{"default": flow.Of(strings.Fields("plan judge implement pr"))}}
+	eff := &facts.Effective{
+		Flows: map[string]flow.Flow{"default": flow.Of(strings.Fields("plan judge implement pr finish"))},
+	}
 	set := facts.NewPaceSet()
-	set.Ceiling = facts.Pace{Finish: "off"}
+	set.Ceiling = facts.Pace{Steps: map[string]facts.Dials{"finish": {Off: true}}}
 
 	for _, pace := range []string{"medium", "fast"} {
 		fl, err := testkit.PacedFlowIn(eff, set, pace, "")

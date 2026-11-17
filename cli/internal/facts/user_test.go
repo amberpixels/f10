@@ -56,17 +56,13 @@ func TestUserLayerUnderTheProject(t *testing.T) {
 		"paces.brisk.judge":   "effort high @ declared (main, frontmatter)",
 		"paces.brisk.review":  "rounds 1 @ declared (user, " + paces + ")",
 		"paces.brisk.finish":  "off @ declared (user, " + paces + ")",
-		"paces.fast.finish":   "on @ built-in",
 		"pace":                "brisk @ declared (user, " + paces + ")",
-		"paces.medium.finish": "on @ built-in",
 		"paces.ultra.plan":    "off @ built-in",
 		"paces.slow.review":   "by local+ci?, rounds 2 @ built-in",
 		"paces.fast.judge":    "effort low @ built-in",
 		"paces.ultra.pr":      "marker fast @ built-in",
 		"paces.ultra.review":  "by local, depth light @ built-in",
 		"paces.fast.review":   "by local, rounds 1 @ built-in",
-		"paces.slow.finish":   "off @ built-in",
-		"paces.ultra.finish":  "on @ built-in",
 		"paces.ultra.cleanup": "off @ built-in",
 		"paces.ultra.judge":   "off @ built-in",
 		"paces.ultra.demo":    "off @ built-in",
@@ -158,7 +154,7 @@ func TestDefaultPaceUnknown(t *testing.T) {
 	}
 }
 
-// A pace reads back as it was written, finish beside the step dials.
+// A pace reads back as it was written.
 func TestPaceRoundTrip(t *testing.T) {
 	t.Parallel()
 
@@ -177,8 +173,8 @@ func TestPaceRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if back.Finish != "off" || !back.Steps["plan"].Off || back.Steps["review"].Rounds != 2 ||
-		back.Steps["review"].By != "local" || len(back.Steps) != 2 {
+	if !back.Steps["finish"].Off || !back.Steps["plan"].Off || back.Steps["review"].Rounds != 2 ||
+		back.Steps["review"].By != "local" || len(back.Steps) != 3 {
 		t.Errorf("round trip = %+v from %s", back, out)
 	}
 }

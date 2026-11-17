@@ -18,7 +18,7 @@ func TestResolveShipFlow(t *testing.T) {
 	}}
 
 	for name, want := range map[string]runplan.ShipFlow{
-		"":       {},
+		"":       {NoFinish: true},
 		"Local":  {Name: "local"},
 		"direct": {Name: "direct", Planless: true},
 	} {

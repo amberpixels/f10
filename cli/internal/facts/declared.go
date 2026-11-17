@@ -150,7 +150,7 @@ var retiredKeys = map[string]string{
 	"pipelines":        "declare each pipeline under `flows`, led by `plan` unless it was planless",
 	"planless":         "drop `plan` from those `flows`",
 	"pipeline_by_area": "rename it to `flow_by_area`",
-	"drive_chain":      "fold its steps into `flows.default`; a pace's `finish` says whether drive merges",
+	"drive_chain":      "fold its steps into `flows.default`, ending in `finish` if drive should merge",
 }
 
 // decodeDeclared reads one frontmatter block with unknown keys refused, and
@@ -551,11 +551,6 @@ func (l *layered) mergePace(into, p Pace, prefix, label string) Pace {
 	for key, dials := range p.Steps {
 		into.Steps[key] = dials
 		l.origin[prefix+key] = label
-	}
-
-	if p.written() {
-		into.Finish, into.finishBad = p.Finish, p.finishBad
-		l.origin[prefix+PaceFinishKey] = label
 	}
 
 	return into

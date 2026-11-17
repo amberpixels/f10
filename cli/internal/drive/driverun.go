@@ -32,7 +32,7 @@ type DriveInput struct {
 	driveState
 }
 
-// Skills is what drive prompts r through, in order; a spike its pace does
+// Skills is what drive prompts r through, in order. A spike whose flow does
 // not finish gets finish once it closes.
 func (in *DriveInput) Skills(r *DriveRun) []string {
 	skills := in.sequenceOf(r.Flow)
@@ -330,7 +330,7 @@ const (
 )
 
 // DriveSkills reads the skills off the flow: plan when the flow leads with
-// it, ship, then finish when the pace finishes.
+// it, ship, then finish when the flow ends in it and the pace runs it.
 func DriveSkills(fl runplan.ShipFlow) []string {
 	var skills []string
 	if fl.Plans() {
@@ -338,7 +338,7 @@ func DriveSkills(fl runplan.ShipFlow) []string {
 	}
 
 	skills = append(skills, "ship")
-	if fl.Finishes() {
+	if fl.Finishes {
 		skills = append(skills, "finish")
 	}
 

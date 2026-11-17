@@ -54,6 +54,10 @@ func TestCheckFlow(t *testing.T) {
 		"planless judge":    {flow: Flow{"judge", "implement", "pr"}, want: "lead with plan"},
 		"review typo":       {flow: Flow{"plan", "implement", "pr", "review:loacl"}, want: "names no reviewer"},
 		"catchup entry":     {flow: Flow{"plan", "implement", "catchup", "pr"}, want: "never an entry"},
+		"finish not last":   {flow: Flow{"implement", "pr", "finish", "review:local"}, want: "finish comes last"},
+		"finish twice":      {flow: Flow{"implement", "pr", "finish", "finish"}, want: "finish comes last"},
+		"finish with arg":   {flow: Flow{"implement", "pr", "finish:now"}, want: "takes no argument"},
+		"finish without pr": {flow: Flow{"implement", "push", "finish"}, want: "a pr entry comes before it"},
 	} {
 		bad := Declared{Flows: map[string]Flow{"default": tc.flow}}.check()
 		if !slices.ContainsFunc(bad, func(b string) bool { return strings.Contains(b, tc.want) }) {
@@ -62,7 +66,7 @@ func TestCheckFlow(t *testing.T) {
 	}
 
 	ok := Declared{Flows: map[string]Flow{
-		"default": {"plan", "judge", "implement", "judge", "pr"},
+		"default": {"plan", "judge", "implement", "judge", "pr", "finish"},
 		"direct":  {"implement", "judge", "push"},
 		"both":    {"plan", "implement", "pr", "review:local+ci", "review", "review:ci", "review:host"},
 	}}.check()

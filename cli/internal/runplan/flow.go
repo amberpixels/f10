@@ -3,6 +3,7 @@ package runplan
 import (
 	"fmt"
 	"io"
+	"maps"
 	"slices"
 	"strings"
 
@@ -129,15 +130,6 @@ func WriteFlows(w io.Writer, v FlowView) error {
 		if f.Broken != "" {
 			fmt.Fprintf(&b, "%-*s  does not run at this pace: %s\n", width, "", f.Broken)
 		}
-
-		if f.Resolved != nil && f.Resolved.Finish != nil {
-			from := "the pace"
-			if f.Resolved.Finish.Capped != "" {
-				from = "the ceiling; " + f.Resolved.Finish.Capped
-			}
-
-			fmt.Fprintf(&b, "%-*s  finish %s, from %s\n", width, "", f.Resolved.Finish.Value, from)
-		}
 	}
 
 	for _, area := range sortedKeys(v.FlowByArea) {
@@ -168,13 +160,9 @@ type ShipFlow struct {
 	Planless bool
 	ByArea   bool
 	Pace     string // the pace it runs at, "" for none
-	Finish   string // the pace's finish for a run ending at a PR: on, off, or "" for none
-}
-
-// Finishes says whether drive ends the task with finish: the pace's word
-// when it has one, else on, so a drive merges what it ships.
-func (f ShipFlow) Finishes() bool {
-	return f.Finish != "off"
+	Finishes bool   // drive ends the task with finish: the flow ends in it and the pace runs it
+	Mixed    bool   // ByArea only: some flows the map can pick finish and some do not
+	NoFinish bool   // the declared flow ends at a PR with no finish entry, so drive stops at ship
 }
 
 func (f ShipFlow) Word() string {
@@ -216,15 +204,7 @@ func PacedFlow(eff *facts.Effective, pace, name string) (ShipFlow, error) {
 	}
 
 	if name == "" && len(eff.FlowByArea) > 0 {
-		// ship picks the flow, so whether it ends at a PR, and so whether
-		// the pace's finish applies, is unknown: drive finishes, unless the
-		// ceiling forbids finishing, which holds whatever the flow
-		fl := ShipFlow{ByArea: true, Pace: pace}
-		if _, caps := set.Capped(pace); caps[facts.PaceFinishKey].Value == "off" {
-			fl.Finish = "off"
-		}
-
-		return fl, nil
+		return byAreaFlow(eff, set, pace), nil
 	}
 
 	lookup := strings.ToLower(name)
@@ -246,14 +226,39 @@ func PacedFlow(eff *facts.Effective, pace, name string) (ShipFlow, error) {
 		return ShipFlow{}, err
 	}
 
-	fl := ShipFlow{Planless: !flow.Of(r.Run()).Plans(), Pace: pace}
-	if r.Finish != nil {
-		fl.Finish = r.Finish.Value
-	}
+	run := flow.Of(r.Run())
+	fl := ShipFlow{Planless: !run.Plans(), Pace: pace, Finishes: run.Finishes()}
+	fl.NoFinish = !declared.Finishes() && declared.Delivered() == "pr"
 
 	if lookup != "default" {
 		fl.Name = lookup
 	}
 
 	return fl, nil
+}
+
+// byAreaFlow is the flow ship picks from the task's area, which drive cannot
+// know. It finishes only when every flow the map can pick runs finish under
+// the pace, default included, so a mixed map never merges a task unasked.
+// A flow the pace breaks counts as not finishing, because it fails only the
+// ship that picks it, never the whole drive.
+func byAreaFlow(eff *facts.Effective, set *facts.PaceSet, pace string) ShipFlow {
+	fl := ShipFlow{ByArea: true, Pace: pace}
+	some, all := false, true
+
+	names := append(slices.Collect(maps.Values(eff.FlowByArea)), "default")
+	for _, name := range names {
+		declared, ok := eff.Flow(name)
+		if !ok {
+			continue
+		}
+
+		r, err := set.ResolveFlow(name, declared, pace)
+		finishes := err == nil && flow.Of(r.Run()).Finishes()
+		some, all = some || finishes, all && finishes
+	}
+
+	fl.Finishes, fl.Mixed = all, some && !all
+
+	return fl
 }

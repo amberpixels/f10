@@ -23,10 +23,11 @@ func decodePaces(t *testing.T, yml string) Declared {
 func TestPaceShorthands(t *testing.T) {
 	t.Parallel()
 
-	d := decodePaces(t, "paces:\n  quick: { judge: off, review: ci, finish: on, pr: { marker: fast } }\npace: quick\n")
+	d := decodePaces(t, "paces:\n  quick: { judge: off, review: ci, finish: off, pr: { marker: fast } }\npace: quick\n")
 	p := d.Paces["quick"]
 
-	if !p.Steps["judge"].Off || p.Steps["review"].By != "ci" || p.Finish != "on" || p.Steps["pr"].Marker != "fast" {
+	if !p.Steps["judge"].Off || p.Steps["review"].By != "ci" || !p.Steps["finish"].Off ||
+		p.Steps["pr"].Marker != "fast" {
 		t.Errorf("quick = %+v", p)
 	}
 
@@ -49,8 +50,8 @@ func TestPaceRefusals(t *testing.T) {
 		"paces:\n  x: { review: { rounds: 3 } }\n":   "rounds 3 is not 1 or 2",
 		"paces:\n  x: { review: { depth: deep } }\n": "depth deep is not full or light",
 		"paces:\n  x: { judge: { effort: opus } }\n": "not an effort word",
-		"paces:\n  x: { finish: yes }\n":             "finish is on or off",
-		"paces:\n  x: { finish: { by: local } }\n":   "finish is on or off",
+		"paces:\n  x: { finish: on }\n":              "finish: on is gone; add finish to the flow",
+		"paces:\n  x: { finish: { by: local } }\n":   "by is a review dial",
 		"paces:\n  x: { catchup: off }\n":            "catchup is never a flow entry",
 		"paces:\n  x: { judge: low }\n":              `"low" is not a shorthand`,
 		"paces:\n  Fast: { judge: off }\n":           "not a lowercase name",
@@ -102,38 +103,33 @@ func TestPacesMergeKeyByKey(t *testing.T) {
 	s := NewPaceSet()
 	s.Over(e.Paces, func(name, key string) Origin { return e.PacesOrigin[name+"."+key] })
 
-	if s.Paces["fast"].Finish != "on" || s.Origins["fast.finish"] != PaceOriginBuiltin {
-		t.Errorf("the built-in finish under the project's fast = %+v, %q", s.Paces["fast"], s.Origins["fast.finish"])
+	if s.Paces["fast"].Steps["review"].Depth != "light" || s.Origins["slow.review"] != PaceOriginBuiltin {
+		t.Errorf("the project's fast = %+v, the built-in slow's origin %q", s.Paces["fast"], s.Origins["slow.review"])
 	}
 }
 
 func TestResolveFlow(t *testing.T) {
 	t.Parallel()
 
-	written := strings.Fields("plan judge implement cleanup pr review:local judge pr")
+	written := strings.Fields("plan judge implement cleanup pr review:local judge pr finish")
 	s := NewPaceSet()
 
 	for _, tc := range []struct {
-		pace, run, finish string
+		pace, run string
 	}{
-		{"", "plan judge implement cleanup pr review:local judge pr", ""},
-		{"medium", "plan judge implement cleanup pr review:local judge pr", "on"},
-		{"slow", "plan judge implement cleanup pr review:local judge pr", "off"}, // the argument keeps local
-		{"fast", "plan judge implement cleanup pr review:local judge pr", "on"},
-		{"ultra", "implement pr review:local pr", "on"},
+		{"", "plan judge implement cleanup pr review:local judge pr finish"},
+		{"medium", "plan judge implement cleanup pr review:local judge pr finish"},
+		{"slow", "plan judge implement cleanup pr review:local judge pr finish"}, // the argument keeps local
+		{"fast", "plan judge implement cleanup pr review:local judge pr finish"},
+		{"ultra", "implement pr review:local pr finish"},
 	} {
 		r, err := s.ResolveFlow("default", flowOf(written), tc.pace)
 		if err != nil {
 			t.Fatalf("%s: %v", tc.pace, err)
 		}
 
-		finish := ""
-		if r.Finish != nil {
-			finish = r.Finish.Value
-		}
-
-		if got := strings.Join(r.Run(), " "); got != tc.run || finish != tc.finish {
-			t.Errorf("%s: run %q finish %q, want %q %q", tc.pace, got, finish, tc.run, tc.finish)
+		if got := strings.Join(r.Run(), " "); got != tc.run {
+			t.Errorf("%s: run %q, want %q", tc.pace, got, tc.run)
 		}
 	}
 
@@ -240,27 +236,33 @@ func TestPaceHandoffOff(t *testing.T) {
 	}
 }
 
-// finish applies only where the run would stop at an open PR.
-func TestPaceFinishOnlyAtAPR(t *testing.T) {
+// A pace skips the finish entry as it skips any step, and refuses the old
+// finish: on dial with the fix.
+func TestPaceSkipsFinish(t *testing.T) {
 	t.Parallel()
 
 	s := NewPaceSet()
+	s.Over(
+		map[string]Pace{"held": {Steps: map[string]Dials{"finish": {Off: true}}}},
+		func(string, string) Origin { return DeclaredIn("test") },
+	)
 
-	for flow, want := range map[string]bool{
-		"implement pr":            true,
-		"implement pr review:ci":  true,
-		"implement":               false,
-		"implement commit":        false,
-		"implement pr deploy:stg": false,
-	} {
-		r, err := s.ResolveFlow("x", flowOf(strings.Fields(flow)), "fast")
-		if err != nil {
-			t.Fatal(err)
-		}
+	r, err := s.ResolveFlow("default", flowOf(strings.Fields("implement pr finish")), "held")
+	if err != nil {
+		t.Fatal(err)
+	}
 
-		if (r.Finish != nil) != want {
-			t.Errorf("%q: finish %+v, want %v", flow, r.Finish, want)
-		}
+	if got := strings.Join(
+		r.Run(),
+		" ",
+	); got != "implement pr" ||
+		!strings.Contains(r.Entries[2].Skipped, "pace held") {
+		t.Errorf("run %q, finish entry %+v", got, r.Entries[2])
+	}
+
+	bad := strings.Join(decodePaces(t, "paces:\n  x: { finish: on }\n").check(), "\n")
+	if !strings.Contains(bad, "finish: on is gone; add finish to the flow") {
+		t.Errorf("finish: on = %q", bad)
 	}
 }
 
@@ -299,7 +301,7 @@ func TestCeilingDecode(t *testing.T) {
 	d := decodePaces(t, "ceiling: { finish: off, judge: on, review: { rounds: 2 }, except: [ultra] }\n")
 
 	c := d.Ceiling
-	if c == nil || c.Pace.Finish != "off" || !c.Pace.Steps["judge"].On || c.Pace.Steps["review"].Rounds != 2 ||
+	if c == nil || !c.Pace.Steps["finish"].Off || !c.Pace.Steps["judge"].On || c.Pace.Steps["review"].Rounds != 2 ||
 		strings.Join(c.Except, ",") != "ultra" {
 		t.Fatalf("ceiling = %+v", c)
 	}
@@ -327,7 +329,7 @@ func TestCeilingRefusals(t *testing.T) {
 		"ceiling: { review: { by: local } }\n":       "by has no order",
 		"ceiling: { pr: { marker: fast } }\n":        "marker has no order",
 		"ceiling: { judge: { rounds: 2 } }\n":        "rounds is a review dial",
-		"ceiling: { finish: maybe }\n":               "finish is on or off",
+		"ceiling: { finish: maybe }\n":               "\"maybe\" is not a shorthand",
 		"ceiling: { catchup: on }\n":                 "catchup is never a flow entry",
 		"ceiling: { finish: off, except: [Fast] }\n": "not a lowercase name",
 		"paces:\n  x: { judge: on }\n":               "on is a ceiling's word",
@@ -352,7 +354,7 @@ func TestCeilingMergeKeyByKey(t *testing.T) {
 	e := &Effective{Flows: map[string]flow.Flow{"default": flowOf(strings.Fields(DefaultFlow))}}
 	e.resolvePaces(&fm)
 
-	if e.Ceiling.Finish != "off" || e.Ceiling.Steps["judge"].Effort != "high" ||
+	if !e.Ceiling.Steps["finish"].Off || e.Ceiling.Steps["judge"].Effort != "high" ||
 		strings.Join(e.CeilingExcept, ",") != "fast" {
 		t.Errorf("ceiling = %+v, except %v", e.Ceiling, e.CeilingExcept)
 	}
@@ -369,17 +371,17 @@ func TestCeilingMergeKeyByKey(t *testing.T) {
 func TestCeilingCaps(t *testing.T) {
 	t.Parallel()
 
-	written := strings.Fields("plan judge implement cleanup pr review judge pr")
+	written := strings.Fields("plan judge implement cleanup pr review judge pr finish")
 	set := NewPaceSet()
 	set.Ceiling = Pace{
 		Steps: map[string]Dials{
 			"cleanup": {On: true},
 			"review":  {Rounds: 2, Depth: "full"},
+			"finish":  {Off: true},
 		},
-		Finish: "off",
 	}
 	main := DeclaredFrontmatter("main")
-	set.CeilingOrigins = map[string]Origin{PaceFinishKey: main, "cleanup": main, "review": main}
+	set.CeilingOrigins = map[string]Origin{"finish": main, "cleanup": main, "review": main}
 
 	for pace, want := range map[string]string{
 		"medium": "plan judge implement cleanup pr review judge pr",
@@ -395,9 +397,9 @@ func TestCeilingCaps(t *testing.T) {
 			t.Errorf("%s: run %q, want %q", pace, got, want)
 		}
 
-		if r.Finish == nil || r.Finish.Value != "off" || r.Finish.Origin != "ceiling (declared (main, frontmatter))" ||
-			r.Finish.Capped == "" {
-			t.Errorf("%s: finish %+v", pace, r.Finish)
+		fin := r.Entries[len(r.Entries)-1]
+		if fin.Skipped != "off in ceiling (declared (main, frontmatter)); pace "+pace+" left it unset" {
+			t.Errorf("%s: finish %+v", pace, fin)
 		}
 
 		for _, e := range r.Entries {
@@ -418,14 +420,12 @@ func TestCeilingCaps(t *testing.T) {
 	set.Except = []string{"ultra"}
 
 	r, err := set.ResolveFlow("default", flowOf(written), "ultra")
-	if err != nil || r.Finish == nil || r.Finish.Value != "on" || strings.Contains(strings.Join(r.Run(), " "), "plan") {
+	if run := strings.Join(
+		r.Run(),
+		" ",
+	); err != nil || !strings.HasSuffix(run, " finish") ||
+		strings.Contains(run, "plan") {
 		t.Errorf("an excepted pace = %+v, %v", r, err)
-	}
-
-	// a flow ending at implement takes no finish, capped or not
-	local, err := set.ResolveFlow("local", flowOf(strings.Fields("implement commit")), "fast")
-	if err != nil || local.Finish != nil {
-		t.Errorf("local = %+v, %v", local.Finish, err)
 	}
 }
 

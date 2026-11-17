@@ -56,7 +56,7 @@ func TestDriveKeepsTheRecordedFlow(t *testing.T) {
 // A task runs the skills of the flow it keeps from its branch: a planless
 // run still plans a task whose recorded flow leads with plan.
 func TestSkillsOfAKeptFlow(t *testing.T) {
-	direct := runplan.ShipFlow{Name: "direct", Planless: true}
+	direct := runplan.ShipFlow{Name: "direct", Planless: true, Finishes: true}
 	in := &drive.DriveInput{
 		Flow: direct,
 	}
@@ -65,13 +65,16 @@ func TestSkillsOfAKeptFlow(t *testing.T) {
 		t.Errorf("the run's own flow = %q", got)
 	}
 
-	if got := strings.Join(in.Skills(&drive.DriveRun{Flow: runplan.ShipFlow{}}), " "); got != "plan ship finish" {
+	if got := strings.Join(
+		in.Skills(&drive.DriveRun{Flow: runplan.ShipFlow{Finishes: true}}),
+		" ",
+	); got != "plan ship finish" {
 		t.Errorf("a kept default flow = %q, want plan first and finish kept", got)
 	}
 
-	spike := &drive.DriveRun{Flow: runplan.ShipFlow{Finish: "off"}, Finishes: true}
+	spike := &drive.DriveRun{Flow: runplan.ShipFlow{}, Finishes: true}
 	if got := strings.Join(in.Skills(spike), " "); got != "plan ship finish" {
-		t.Errorf("a spike closing on a pace without finish = %q, want finish added", got)
+		t.Errorf("a spike closing on a flow without finish = %q, want finish added", got)
 	}
 }
 
@@ -80,7 +83,10 @@ func TestSkillsOfAKeptFlow(t *testing.T) {
 func TestFlowByArea(t *testing.T) {
 	eff := &facts.Effective{
 		Flows: map[string]flow.Flow{
-			"default": flow.Of([]string{"plan", "implement", "pr"}), "direct": flow.Of([]string{"implement", "push"}),
+			"default": flow.Of(
+				[]string{"plan", "implement", "pr", "finish"},
+			),
+			"direct": flow.Of([]string{"implement", "push"}),
 		},
 		FlowByArea: map[string]string{"ui": "direct"},
 	}
@@ -98,8 +104,32 @@ func TestFlowByArea(t *testing.T) {
 		t.Errorf("prompt = %q, want ship alone", got)
 	}
 
-	if got := strings.Join(drive.DriveSkills(fl), " "); got != "ship finish" {
-		t.Errorf("drive skills = %q, want ship plans as the area's flow says", got)
+	if got := strings.Join(drive.DriveSkills(fl), " "); got != "ship" || !fl.Mixed {
+		t.Errorf("drive skills = %q (mixed %v), want no finish when only some flows finish", got, fl.Mixed)
+	}
+
+	eff.Flows["direct"] = flow.Of([]string{"implement", "pr", "finish"})
+	if all, _ := testkit.PacedFlowIn(eff, nil, "", ""); !all.Finishes || all.Mixed {
+		t.Errorf("every flow finishing = %+v, want finish", all)
+	}
+
+	// a pace that breaks one area's flow fails only the ship that picks it
+	set := facts.NewPaceSet()
+	set.Over(
+		map[string]facts.Pace{"noplan": {Steps: map[string]facts.Dials{"plan": {Off: true}}}},
+		func(string, string) facts.Origin { return facts.DeclaredIn("test") },
+	)
+	eff.Flows["direct"] = flow.Of([]string{"plan", "judge", "implement", "pr", "finish"})
+
+	broken, err := testkit.PacedFlowIn(eff, set, "noplan", "")
+	if err != nil || broken.Finishes || !broken.Mixed {
+		t.Errorf("one area flow broken by the pace = %+v, %v; want no error and no finish", broken, err)
+	}
+
+	// a named flow ending at a PR with no finish says drive stops at ship
+	eff.Flows["open"] = flow.Of([]string{"implement", "pr"})
+	if open, _ := testkit.PacedFlowIn(eff, nil, "", "open"); !open.NoFinish || open.Finishes {
+		t.Errorf("a flow without finish = %+v, want NoFinish", open)
 	}
 
 	f := testkit.NewFakes(t)

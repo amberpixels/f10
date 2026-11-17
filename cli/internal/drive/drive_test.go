@@ -122,6 +122,10 @@ func newDriveFixture(t *testing.T, args ...string) *driveFixture {
 		},
 		Now: func() time.Time { return fx.clock },
 		Sleep: func(_ context.Context, d time.Duration) error {
+			// A real tick sleeps long past a fake verify, so a job in flight
+			// lands before the clock moves, however slow the machine.
+			fx.awaitJobs(t)
+
 			fx.sleeps++
 			fx.clock = fx.clock.Add(d)
 
@@ -302,6 +306,24 @@ func (fx *driveFixture) writeShipStop(t *testing.T, status, leaf string, at int,
 
 	if err := os.WriteFile(filepath.Join(fx.in.StateDir, "s-GH-1.state"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// awaitJobs waits for every verify job the drive's runs hold. It is bounded,
+// so a job that never ends fails the test instead of hanging it.
+func (fx *driveFixture) awaitJobs(t *testing.T) {
+	t.Helper()
+
+	for _, r := range fx.in.Runs {
+		if r.Job == nil {
+			continue
+		}
+
+		select {
+		case <-r.Job.Done:
+		case <-time.After(10 * time.Second):
+			t.Fatalf("%s: the verify job did not finish", r.Task.Ref.ID)
+		}
 	}
 }
 
@@ -1777,17 +1799,16 @@ func TestDriveRefusesAParent(t *testing.T) {
 	})
 }
 
-// A flow with no pace finish word finishes; only finish off stops at ship.
+// Drive finishes only a flow that ends in finish, its pace running it.
 func TestDriveChain(t *testing.T) {
 	for _, c := range []struct {
 		fl   runplan.ShipFlow
 		want string
 	}{
-		{runplan.ShipFlow{}, "plan ship finish"},
-		{runplan.ShipFlow{Finish: "on"}, "plan ship finish"},
-		{runplan.ShipFlow{Finish: "off"}, "plan ship"},
-		{runplan.ShipFlow{Name: "direct", Planless: true}, "ship finish"},
-		{runplan.ShipFlow{Name: "direct", Planless: true, Finish: "off"}, "ship"},
+		{runplan.ShipFlow{}, "plan ship"},
+		{runplan.ShipFlow{Finishes: true}, "plan ship finish"},
+		{runplan.ShipFlow{Name: "direct", Planless: true, Finishes: true}, "ship finish"},
+		{runplan.ShipFlow{Name: "direct", Planless: true}, "ship"},
 	} {
 		if got := strings.Join(DriveSkills(c.fl), " "); got != c.want {
 			t.Errorf("%+v = %q, want %q", c.fl, got, c.want)
@@ -1795,19 +1816,22 @@ func TestDriveChain(t *testing.T) {
 	}
 }
 
-// Medium and a user pace with no finish dial end in finish; slow does not.
+// A flow ending in finish finishes under every pace but one that turns it
+// off. The built-in slow pace no longer turns it off.
 func TestDriveSkillsFinishByDefault(t *testing.T) {
-	eff := &facts.Effective{Flows: map[string]flow.Flow{"default": flow.Of(strings.Fields("plan judge implement pr"))}}
+	eff := &facts.Effective{
+		Flows: map[string]flow.Flow{"default": flow.Of(strings.Fields("plan judge implement pr finish"))},
+	}
 	set := facts.NewPaceSet()
 	set.Over(
-		map[string]facts.Pace{"mine": {Steps: map[string]facts.Dials{"judge": {Off: true}}}},
+		map[string]facts.Pace{"mine": {Steps: map[string]facts.Dials{"finish": {Off: true}}}},
 		func(string, string) facts.Origin { return facts.DeclaredIn("test") },
 	)
 
 	for pace, want := range map[string]string{
 		"medium": "plan ship finish",
-		"mine":   "plan ship finish",
-		"slow":   "plan ship",
+		"mine":   "plan ship",
+		"slow":   "plan ship finish",
 	} {
 		fl, err := testkit.PacedFlowIn(eff, set, pace, "")
 		if err != nil {
