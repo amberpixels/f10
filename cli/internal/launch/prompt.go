@@ -135,7 +135,7 @@ func noteClause(note string) string {
 
 // DependencyClause names the base task and where its plan is. What to do
 // with that (design against the plan, not this checkout, with no fallback
-// for its absence) is the fetch step's rule, so the prompt does not repeat it.
+// for its absence) is the plan step's rule, so the prompt does not repeat it.
 func DependencyClause(id string, dep *Dependency) string {
 	switch {
 	case dep.Planned:

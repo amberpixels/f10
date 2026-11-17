@@ -12,7 +12,7 @@ Every success report opens with one aligned block, fenced and tagged `yaml` so t
 task:    GH-2
 title:   Add rate limiting to the public API
 url:   ↗ https://github.com/amberpixels/f10/issues/2
-plan:    .f10/plans/GH-2.md
+plan:    /work/app/.f10/plans/GH-2.md
 ```
 
 - The **label**, left-aligned and padded to the widest label in *this* block, **colon included**.
@@ -24,13 +24,14 @@ If a value would break the highlighting, print it untagged.
 
 1. **Urls are bare.**
    Never `[text](url)`, `<url>`, backticks, or a trailing comma or period.
+   **Paths are absolute**, as the storage root gives them, because a terminal opens only an absolute path on click.
 2. **Facts in the block, prose beneath it.**
    Rows carry addressable values only: task id, url, plan path, branch, commit sha, environment.
    The one exception is a `title` row right under `task`: the task's title as the tracker holds it, so the reader recognises the id without opening it.
    What changed, how far the pipeline got and what the user does next are sentences under the block.
 3. **Only rows the run produced.**
    No placeholders, no `n/a`, no empty values.
-   A ship run prints the shipment rows its last step declares (`conventions/context.md` → shipment).
+   A ship run prints the shipment rows its last step declares (`skills/ship/SKILL.md`).
    A pipeline ending in a project-defined `publish`, for example, prints its `report` url and no branch, PR or sha rows.
 4. **Most identifying rows first**: the task, its title, its url, then this step's artifacts.
 5. **The marker means "a url a browser opens"**, so it never marks a path, a sha or a branch.
@@ -88,24 +89,16 @@ f10-state.sh note <reason> [<next>]
 f10-state.sh pipeline <step>...
 ```
 
-The bare name is the whole command, because `bin/` is on the Bash tool's `PATH`.
-Each step's `Badge:` line says what it reports.
-A step without one opens no phase.
-Entering a phase retires the phases before it.
-Inside a pipeline, `/f10:ship` declares every step with `pipeline`, the last one final, so `f10 status` lists the steps not reached yet.
-It also passes the current step as `<leaf>`.
+`bin/` is on the Bash tool's `PATH`, so the bare name is the command.
+Each step's `Badge:` line says what it reports, and a step without one opens no phase.
+Inside a pipeline, `/f10:ship` declares every step with `pipeline` and passes the current one as `<leaf>`.
 
-- `prior`: the work exists from an earlier run.
-  `task <id>` marks capture `prior` by itself.
-  The ship skill marks a reused plan.
-- `partial`: the run stopped after producing something durable (commits, an open PR, a deploy; `conventions/failure.md` rule 7).
-- `blocked`: a decision ended the run, not breakage: a judge verdict (`steps/judge.md`) or a driven ask (`modes/driven.md`).
+- `prior`: the work exists from an earlier run, such as a reused plan.
+- `partial`: the run stopped after producing something durable (`conventions/failure.md` rule 7).
+- `blocked`: a decision ended the run, not breakage: a judge verdict or a driven ask.
 
-A phase that stops keeps its leaf.
-`note` records why and what unblocks it, one line each, for `f10 status` (`/f10:status` in a session).
+`note` records why a run stopped and what unblocks it, for `f10 status`.
 
-**Badge calls are best-effort, but never skipped.**
-The run never reads the badge state back, but the ledger records every call, and `f10 stats` times each step from its `set ship running <entry>` call.
-A skipped call counts that step's time to the step before it.
-If a badge call fails, ignore it: never treat it as a step failure, retry it, mention it, or let it change the run.
-Send it in the same message as the step's first real call, joined with `;` or beside a `Read` (`conventions/latency.md`).
+**Never skip a badge call**, because `f10 stats` times each step from it.
+A call that fails is ignored: never retry it, mention it or let it change the run.
+Send it with the step's first real call (`conventions/latency.md`).

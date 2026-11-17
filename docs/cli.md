@@ -49,7 +49,7 @@ f10 task read [id]       # the task as markdown; a bundle (id+id) reads every me
 f10 task current         # the id a bare skill call stands for: the branch's task, else this session's (exit 1: none)
 f10 task ref <id>... [--md] [--fresh]   # `<id> (<title>)` per task, a markdown link with --md, `[closed]` after a closed one; from what f10 already read
 f10 task report <id>... [--children]  # a report's facts block: one task's rows, else a row per task, a parent's subtasks under it
-f10 task stale [id] [--created YYYY-MM-DD]   # fetch's stale check: fresh, judged <verdict file>, needs judge or undated
+f10 task stale [id] [--created YYYY-MM-DD]   # the stale step's check: fresh, judged <verdict file>, needs judge or undated
 f10 task regression [id] --repro R --confidence C [--commit SHA --lines PATH:A-B ...]   # record a bug task's origin task and how review let it through
 f10 task regression [id] --claimed ORIGIN [--text PHRASE]   # record the origin a task's own text names
 f10 task open [id]       # in the browser, no id the task list (--link writes the url, --print the item or the list's first page, ranked by priority)
@@ -731,7 +731,9 @@ ship:           running: review:local
   `--json` carries the `decision` and the `changes` count.
   A judge, or a local or CI review, that the flow does not declare shows once one ran.
   Otherwise its row reads `not in this flow`.
-  The **task** judge, the one fetch runs on a task older than `stale_after` (and any verdict whose subject is the task), is in no flow: it leads the gates once it ran or while the plan phase is on it (`running`, `blocked`), and shows nowhere before that.
+  The **task** judge is the one the stale step runs on a task older than `stale_after`, and any verdict whose subject is the task.
+  It is in no flow, and shows nowhere until it runs.
+  It leads the gates once it has run, or while the plan phase is on it (`running`, `blocked`).
 - **Outcomes** come from lore (`docs/lore.md`), when lore is at least as new as the files and holds the latest round's findings.
   Lore gives findings by `source` and verdicts by `judged`.
   Otherwise the files answer, as after a missed lore write or for a run from before lore.
@@ -1051,7 +1053,7 @@ A small plan counts as a quarter of `bundle_max_lines`, marked estimated, becaus
 Next it reads the flow `flow_by_area` maps the first mapped area to.
 If `--flow` or `--local` names a flow, all tasks share that one.
 Last it reads the task's `:profile` and the facts sheet `--facts` names.
-A label's kind wins over a plan's, and a plan's over the sheet's, as fetch settles it.
+A label's kind wins over a plan's, and a plan's over the sheet's, as investigate settles it.
 The labels `bug`, `defect` and `regression` read as a bug, and `refactor` and `tech-debt` as a refactor.
 `spike`, `research` and `investigation` read as a spike.
 The labels `migration` and `risky` mark a task risky.
@@ -1664,7 +1666,7 @@ It asks no host and reads no ledger, so a run over forty checkouts takes about a
 
 - **plan**: active minutes. A `/f10:plan` run counts from its start to the plan it saves; inside `/f10:ship`, the plan step counts from entering it to entering the next step.
 - **implement**: active minutes of the `implement` step, summed over its stretches (a driven run blocked on an ask and resumed is two).
-- **review**: the review loop, review, resolve and judge together. A `review` entry runs both review and resolve under one claim. Review ends when the round's findings file is first written. The rest of the entry is resolve, a second round and a resolve resumed after an ask included. Under `review:local+ci` the file is first written by the local review, so the wait for the CI review counts as resolve. Every `judge` flow entry counts here, the one before implement as well. The judge fetch runs on a stale task counts as plan.
+- **review**: the review loop, review, resolve and judge together. A `review` entry runs both review and resolve under one claim. Review ends when the round's findings file is first written. The rest of the entry is resolve, a second round and a resolve resumed after an ask included. Under `review:local+ci` the file is first written by the local review, so the wait for the CI review counts as resolve. Every `judge` flow entry counts here, the one before implement as well. The judge the stale step runs counts as plan.
 - **deliver**: every other step the flow names: `pr`, `cleanup`, `commit`, `push`, `deploy`, `demo` and project-defined steps.
 - **glue**: the time a plan or ship run spends outside every step: loading, the fetch of a run that reuses a plan, the gaps between steps, and the work after the last step. A run's stretch ends at the first turn end after its last row (the saved plan, or `ship done`, `failed`, `partial` or `blocked`), else at the next run; a driven run resumed on an answer opens a new stretch. A stretch that never ends counts nothing.
 - **size**: lines added plus deleted, with the markdown share, as `f10 finish` measured it.
@@ -1816,7 +1818,7 @@ On GitHub, requests to GitHub's own hosts carry the `gh` token, so a private rep
 
 ## Stale
 
-`f10 task stale 71` answers the fetch step's check under `stale_after`, one line on stdout:
+`f10 task stale 71` answers the stale step's check under `stale_after`, one line on stdout:
 
 | line | meaning |
 |---|---|

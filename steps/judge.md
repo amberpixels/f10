@@ -129,7 +129,7 @@ However, never agree because agreeing is cheaper.
      - `asked`
      - `block`
      - `stop`
-     - `overridden`, which fetch writes
+     - `overridden`, which the stale step writes
 
    Two sections follow the header.
    `## Changes`, on a yellow verdict, has one line per change, numbered as in the reply.
@@ -166,11 +166,11 @@ Keep "don't change it" a live option, with its own cost.
 Offer at least one shape the author did not.
 Close each turn with what is now settled and the one question still open.
 
-**Before planning**: the fetch step runs this step on a task older than the frontmatter's `stale_after`, with the subject `task <id>`.
+**Before planning**: the stale step runs this step on a task older than the frontmatter's `stale_after`, with the subject `task <id>`.
 The question is whether the task, as written, is still worth doing against today's code.
 It may be already solved or overtaken by another task, or its premise may be gone.
 Only **proceed** lets the run go on.
-Every other verdict stops the run blocked, and the fetch step routes it, because there is no plan yet to fold changes into.
+Every other verdict stops the run blocked, and the stale step routes it, because there is no plan yet to fold changes into.
 The verdict file says `run: before plan`, and `decision: continue` or `decision: block`.
 
 **In a ship flow**, the verdict routes the run, and no verdict is a failure.

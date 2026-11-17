@@ -12,13 +12,19 @@ argument-hint: "[<task-id | free-text description>]"
 - `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything, and stop.
   It reports which steps the rest of the argument would run.
 - `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`; everything below still runs.
-- `<task-id>` (the project's id format, e.g. `ABC-1234`, `#123`, or an id/url), or a bundle joined by `+` (`ABC-1+ABC-2`, one plan in the lead's file): follow `${CLAUDE_PLUGIN_ROOT}/modes/forward.md` first, before loading anything; stop if it forwards the task, otherwise run the **fetch** and **plan** steps.
-  Under `stale_after`, fetch judges an old task first and may end the run blocked before any plan; `anyway` in the steering skips that judge.
-- `<description>`: free text; run the **capture** step (create the task), then **fetch** and **plan**.
+- `<task-id>`, such as `ABC-1234`, `#123` or a url.
+  A bundle joins ids with `+` (`ABC-1+ABC-2`), and its plan goes in the lead's file.
+  Follow `${CLAUDE_PLUGIN_ROOT}/modes/forward.md` first, before loading anything, and stop if it forwards the task.
+  Otherwise run the **fetch**, **investigate** and **plan** steps.
+  Under `stale_after`, investigate judges an old task first and may end the run blocked before any plan.
+  `anyway` in the steering skips that judge.
+- `<description>`: free text, which the **capture** step makes a task.
+  Then run **fetch**, **investigate** and **plan**.
 - No argument (an argument that names no task, like "let's plan something", counts as none):
   - A task already in this conversation (e.g. the user just fetched and discussed it): the task and the design agreed in chat are settled.
-    Skip `capture` and the `fetch` investigation; go to the **plan** step with at most a few targeted reads of the code you'll mirror or touch.
-    Fetch's kind rules still run: settle the kind, and confirm a bug's cause or ask.
+    Skip `capture` and the **investigate** step's reading.
+    Go to the **plan** step with at most a few targeted reads of the code you'll mirror or touch.
+    The **investigate** step's points 1 and 2 still run for the kind: settle it, and for a bug confirm the cause or ask.
   - No task in the conversation, and `f10 task current` prints an id (the branch's task): run it as a `<task-id>`.
     Say in one line which task you took and where from.
   - `f10 task current` exits non-zero: ask for a task in one line and wait.
@@ -27,7 +33,8 @@ argument-hint: "[<task-id | free-text description>]"
   `as a feature` plans the task as a feature, with no debug pass (`steps/debug.md`).
 
 **Run**
-1. Run `f10-load-project.sh fetch plan` first, on every call of this skill; with a free-text argument, `f10-load-project.sh capture fetch plan`.
+1. Run `f10-load-project.sh fetch investigate plan` first, on every call of this skill.
+   With a free-text argument, run `f10-load-project.sh capture fetch investigate plan` instead.
 2. Follow each step it prints, in the order the Arguments item gives.
 
 **Exit**

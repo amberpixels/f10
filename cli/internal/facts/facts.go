@@ -77,7 +77,7 @@ type Effective struct {
 	WatchCatchup   bool                 `json:"watchCatchup"`          // watch_catchup: on; a watch pass also catches an undriven open PR up with its target and pushes it
 	WatchCI        bool                 `json:"watchCI"`               // watch_ci: on; a watch pass also sends a red undriven PR to its agent to triage
 	ReportBack     bool                 `json:"reportBack"`            // report_back: a ship run posts its shipment on the task; on unless declared off
-	Debug          bool                 `json:"debug"`                 // debug: off skips fetch's debug pass on a bug task; on unless declared
+	Debug          bool                 `json:"debug"`                 // debug: off skips investigate's debug pass on a bug task; on unless declared
 	DebugCostly    string               `json:"debugCostly"`           // debug_costly: ask, skip or reproduce, a driven run's call on a costly reproduction; skip unless declared
 	UpkeepPaths    []string             `json:"upkeepPaths,omitempty"` // standup.upkeep: globs on top of the defaults
 	// Verify is the frontmatter's verify list, which f10 config verify

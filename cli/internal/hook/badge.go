@@ -18,7 +18,7 @@ type badge struct {
 }
 
 // planningSteps are loaded before a pipeline runs, never as a pipeline step.
-var planningSteps = []string{"capture", "fetch", "plan"}
+var planningSteps = []string{"capture", "capture-adapter", "fetch", "investigate", "stale", "debug", "plan"}
 
 func (b badge) Observe(ctx context.Context, o observe.Observation) error {
 	if b.session == "" {

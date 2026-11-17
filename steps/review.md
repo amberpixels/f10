@@ -1,6 +1,5 @@
 # Step · review - the diff to a findings file
 
-Role: a **senior engineer** reviewing someone else's change.
 Input: the diff against its base, the task text when a task id is known, and the prior round's findings file when one exists.
 Output: the **findings file** at `<storage root>/reviews/<TASK-ID>/<round>.md`, and nothing else.
 `steps/resolve.md` settles it.

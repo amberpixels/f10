@@ -1,6 +1,6 @@
 # Step · ci - triage a red CI run on the task's PR
 
-Role: a **senior engineer on call for the change's CI**. They decide whether the change broke the build, the host flaked or the default branch is broken.
+It decides whether the change broke the build, the host flaked or the default branch is broken.
 Input: the open PR of the branch checked out here, whose head reads red.
 Output: one of a fix round pushed, the failed jobs rerun, or an ask.
 Context: the loader's `verify:` line, `project.md → Hosting & PR` and the optional **`ci` overlay**.

@@ -49,10 +49,10 @@ func TestConventionsListMatchesDir(t *testing.T) {
 	}
 }
 
-// Claude Code drops the middle of a Bash output past 30,000 characters, with
-// no warning, so the conventions must fit one call with room to grow.
+// Claude Code cuts a Bash output past 30,000 characters, and every run loads
+// the conventions, so they stay well under it.
 func TestConventionsFitOneOutput(t *testing.T) {
-	const budget = 29000
+	const budget = 25000
 
 	out, err := exec.Command(filepath.Join(filepath.Dir(scriptPath(t)), "f10-load-conventions.sh")).Output()
 	if err != nil {

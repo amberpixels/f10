@@ -1,6 +1,5 @@
 # Step · handoff - what a change leaves for whoever ships it
 
-Role: a **senior engineer** who will ship this change and was not there when it was written.
 Input: a change, usually the current branch or an open PR, with its saved findings and verdicts.
 Output: the **handoff file**, `<storage root>/handoffs/<key>.md`: what the code cannot do for itself once merged.
 Context: the `handoff` overlay (`.f10/instructions/handoff.md`). It says where the project keeps its data changes, jobs and settings.

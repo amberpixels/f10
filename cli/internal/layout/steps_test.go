@@ -32,12 +32,21 @@ var (
 		"catchup", "cleanup", "commit", "demo", "deploy", "handoff", "implement", "judge", "pr", "push", "resolve",
 		"review",
 	}
-	nonFlowSteps = []string{"audit", "brainstorm", "capture", "ci", "debug", "explain", "fetch", "plan", "standup"}
+	nonFlowSteps = []string{
+		"audit", "brainstorm", "capture", "capture-adapter", "ci", "debug", "explain",
+		"fetch", "investigate", "plan", "stale", "standup",
+	}
 	guardedSteps = flow.Guarded
 )
 
 func shipLoads() [][]string {
-	loads := [][]string{{"capture", "fetch", "plan"}, {"fetch", "plan"}, {"review", "resolve"}}
+	loads := [][]string{
+		{"capture", "fetch", "investigate", "plan"},
+		{"fetch"},
+		{"investigate", "plan"},
+		{"investigate"},
+		{"review", "resolve"},
+	}
 	for _, s := range flowSteps {
 		// a review entry loads both, and resolve is never named
 		if s != "review" && s != "resolve" {

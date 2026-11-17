@@ -1,6 +1,5 @@
 # Step · commit - verified code, committed locally (nothing pushed)
 
-Role: a **senior engineer** committing work that stays on this machine.
 Input: verified changes (the `implement` step is done).
 Context: commit conventions in `project.md`.
 

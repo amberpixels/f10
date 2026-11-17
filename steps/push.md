@@ -1,6 +1,5 @@
 # Step · push - verified code, committed and pushed directly (no PR)
 
-Role: a **senior engineer** committing directly to a shared branch.
 Input: verified changes (the `implement` step is done).
 Context: branch and commit conventions in `project.md`.
 

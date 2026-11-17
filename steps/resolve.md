@@ -1,6 +1,5 @@
 # Step · resolve - a verdict for each finding, fixes verified
 
-Role: a **senior engineer** triaging review findings.
 Input: the latest findings file under `<storage root>/reviews/<TASK-ID>/` that still has unsettled findings (its shape is in `steps/review.md`), plus the task text and the plan.
 Output: a verdict under every finding, with verify green. The fixes are committed and pushed when the branch has an open PR or MR, and left in the working tree otherwise.
 Resolve never edits the plan. It writes no new file, except the findings file the **CI review** section reads in.

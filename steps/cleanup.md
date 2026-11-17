@@ -1,6 +1,5 @@
 # Step · cleanup - comments cut to the why, prose rewritten for clarity, code leftovers removed, scope proven on a full pass
 
-Role: a **senior engineer** preparing a change for someone who reads it cold.
 Input: targets and a scope (below).
 Output: the cleaned files in the working tree, verify green and nothing committed. The pipeline's next step, or the user, decides where they go.
 Context: the loader's `verify:` line and `project.md → Guardrails`. The `cleanup.md` overlay adds the project's own rules, such as its comment conventions, what never to remove, more artifact patterns, typography, or keeping long dashes.
@@ -201,7 +200,7 @@ A worked example, from the plan step's rule for a small plan.
 Before, one packed sentence:
 
 ```
-- **small** - every condition holds: the cause or the one place to change is already named (a feature's in its task; a bug's or a refactor's in the task's _Root cause_, this run's debug brief, or one `file:line` the fetch brief traced); one area; no decision another competent engineer would take the other way; no gap.
+- **small** - every condition holds: the cause or the one place to change is already named (a feature's in its task; a bug's or a refactor's in the task's _Root cause_, this run's debug brief, or one `file:line` the investigation brief traced); one area; no decision another competent engineer would take the other way; no gap.
 ```
 
 After, one rule per sentence, the default first:

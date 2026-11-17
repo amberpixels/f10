@@ -24,7 +24,7 @@ Deploy has its own confirmation (the **deploy** step).
   It reports which steps the rest of the argument would run.
 - `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`; everything below still runs.
 - A flow name as a word (`/f10:ship direct: fix typo …`; `f10 start --local` sends `/f10:ship local: <id>`, `--flow <name>` sends `<name>:`), or named in the user's own words: run that flow.
-  Otherwise the flow the frontmatter's `flow_by_area` maps the task's area to (the fetch brief's areas, else the plan's `Areas` line), else `default`.
+  Otherwise the flow the frontmatter's `flow_by_area` maps the task's area to (the investigation brief's areas, else the plan's `Areas` line), else `default`.
   Two areas mapping to different flows: the deliverable's area wins, as for Roles, and the brief names the other.
   The area map is the project's choice, not yours: never self-select another flow, though for tiny work you may suggest one.
   Name the flow an area chose, and the area, in one line before the first step.
@@ -34,9 +34,14 @@ Deploy has its own confirmation (the **deploy** step).
 - `<task-id>` (project id format / id / url), or a bundle joined by `+` (`ABC-1+ABC-2`, keyed on the lead): follow `${CLAUDE_PLUGIN_ROOT}/modes/forward.md` first, before loading anything; stop if it forwards the task.
   Otherwise run the **fetch** step, then look for **`<storage root>/plans/<TASK-ID>.md`** (a bundle's lead) (glob the plans dir if the exact name misses).
   Found: reuse it, never asking; a task with a plan file never plans again, and replanning is `/f10:plan <id>` by hand.
-  Missing: under `stale_after`, fetch judges an old task first and may end the run blocked before any plan or flow entry (`anyway` in the steering skips it); then run the **plan** step when the flow leads with `plan` (with `flow_by_area`, start and drive leave planning to ship); a **planless** flow (below) never runs it, and the fetch brief becomes the inline plan.
+  Missing: load `f10-load-project.sh investigate plan`, or `investigate` alone on a planless flow, then run the **investigate** step.
+  Under `stale_after` it judges an old task first and may end the run blocked, which `anyway` in the steering skips.
+  Then run the **plan** step when the flow leads with `plan`.
+  With `flow_by_area`, start and drive leave planning to ship.
+  A **planless** flow (below) never runs it, and the investigation brief becomes the inline plan.
   Then the flow.
-- `<description>`: free text; the **capture**, **fetch** and **plan** steps, then the flow.
+- `<description>`: free text, which the **capture** step makes a task.
+  Then **fetch**, **investigate**, **plan** and the flow run.
 - No argument (flags or a flow word alone count as none; a description is free text, above): a task already in this conversation (a plan just saved, a task fetched), else the branch's task, the id `f10 task current` prints.
   Say in one line which task you took and where from, then run it as a `<task-id>`, forward mode included, so a saved plan is reused.
   `f10 task current` exiting non-zero: ask for a task in one line and wait (driven: an ask, per `modes/driven.md`).
@@ -47,8 +52,12 @@ Deploy has its own confirmation (the **deploy** step).
   The badge walks to that place: after `pipeline`, one call runs `set ship running` on each entry before it, in order, then on the entry itself.
 
 **Run**
-1. Run `f10-load-project.sh` first, on every call of this skill, naming the steps the input needs: `capture fetch plan` for a description, `fetch plan` for a task id, none for a plan file.
-   The flow is declared in the `project.md` it prints; a planless one loads `plan` but never runs it.
+1. Run `f10-load-project.sh` first, on every call of this skill, naming the steps the input needs:
+   - `capture fetch investigate plan` for a description
+   - `fetch` for a task id, because a saved plan needs nothing more, and the Arguments item loads the rest when it is missing
+   - none for a plan file
+
+   The flow is declared in the `project.md` it prints.
 2. Follow those steps in the order the Arguments item gives.
 3. Load each flow entry just before it runs, in one call with its badge: `f10-state.sh set ship running <entry>; f10-load-project.sh <step>`, and follow the step from that load.
    A `review` entry loads `review resolve`.
@@ -102,12 +111,23 @@ After `implement` it is the **change judge**, which builds a yellow verdict's ch
 Those changes are routed as the **judge** step says before and after `pr`.
 A `pr` entry opens the branch's PR, or refreshes it when one is open, so a flow may name `pr` again after review or judge to bring the description up to date.
 A flow with no leading `plan` is **planless**: it writes no plan file, and a brief inline plan in chat stands in for it unless a saved one exists.
-Free-text input also skips capture and fetch, so the run has no task id.
-A task id runs fetch and keeps the run tied to the id (badge, report, branch, review directory), and marks `f10-state.sh set plan skipped` once fetched, unless it reuses a saved plan (`prior`, below).
-Its inline plan states the kind fetch settled, with a bug's reproduction and root cause, a refactor's invariant or a spike's question in a line each, and lists any gaps on their defaults.
+Free-text input also skips capture, fetch and investigate, so the run has no task id.
+A task id runs fetch and investigate, and ties the run to the id.
+The id names its badge, report, branch and review directory.
+Once fetched, it marks `f10-state.sh set plan skipped`.
+A reused saved plan marks `prior` instead (below).
+Its inline plan states the kind and its one line: a bug's reproduction and root cause, a refactor's invariant or a spike's question.
+It lists any gaps on their defaults.
 With a task id, the inline plan also writes the change's intent as the plan step does (`f10 lore add intent --change <change> -m <what and why>`, `docs/lore.md`).
 A standing intent or a failing add is one line in the report, never a failed step.
-The **shipment** is the last delivering entry's (`conventions/context.md` → shipment).
+The **shipment** is what the flow leaves, decided by its last delivering entry:
+- `implement`: verified code
+- `commit`: a sha
+- `push`: a branch and a sha
+- `pr`: the PR's url
+- `deploy`: the environment's url
+
+A spike's shipment is its spike report, whatever the flow.
 Its rows are the ones that step declares.
 A project-defined step declares them on its overlay's `Shipment:` line.
 A `judge`, `demo` or `handoff` after it adds rows, never replaces them.

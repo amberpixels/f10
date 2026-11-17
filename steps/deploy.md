@@ -1,6 +1,5 @@
 # Step · deploy - shipped code to a running environment
 
-Role: a **senior engineer** putting a change in front of real users.
 Input: code that passed every earlier pipeline step.
 Context: the pipeline entry and the `deploy` overlay (Heroku, Hetzner, …) give the target and the exact commands.
 

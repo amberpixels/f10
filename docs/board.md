@@ -109,7 +109,7 @@ A request merged before the window, or closed unmerged, is no request.
 5. **In review**: a live ship run at `review`, `resolve` or a `judge` after `implement` (`local`), but `planned` at a `judge` before `implement`, the plan judge (`local`); the latest findings file has open findings and the request is open (`local`); the block's step is one of those with `open` above zero (`trace`); a review submitted, a reviewer requested, changes requested, or the declared remote reviewer's review unhandled (`guessed`).
 6. **Open**: an open request, not a draft: `trace` with a state block, `guessed` without.
 7. **Implementing**: a live run in `ship` (`local`); a draft request (`guessed`); a worktree with commits past the default branch, for a task the tracker lists as open (`local`).
-8. **Planning**: a live run in `plan`, the judge fetch runs on a stale task included (`local`).
+8. **Planning**: a live run in `plan`, the judge the stale step runs included (`local`).
 9. **Planned**: a plan file or a worktree with no commits past the default branch, for a task the tracker lists as open (`local`).
 10. **Next**: a task the tracker lists as open (`tracker`).
 11. Nothing above: not a row.

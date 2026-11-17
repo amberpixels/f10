@@ -1,6 +1,5 @@
 # Step · demo - what a shipment does, and evidence of it
 
-Role: a **senior engineer** showing a change to someone who did not write it.
 Input: a shipment (the task, its plan, the diff), usually an open PR or a branch.
 Output: **what the change does**, in plain words, and a **demo script** that confirms it.
 When the script is executed, the output also holds the evidence: screenshots and a `report.html` under `<storage root>/demo/<TASK-ID>/`.

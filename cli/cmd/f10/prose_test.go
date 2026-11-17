@@ -31,15 +31,10 @@ var allowNotCommand = map[string]string{
 	"steps/review.md: f10 never performs it": "prose: what a manual pick name means",
 }
 
-const adapterExample = "an example of a project adapter, which stays"
-
 // hostCLIAllowlist is every raw gh or glab call the prose may make, keyed
 // `file: gh pr diff`. An entry whose call left the prose fails too, so the
 // list only shrinks as the calls move into the binary.
-var hostCLIAllowlist = map[string]string{
-	"conventions/context.md: gh issue create": adapterExample,
-	"conventions/context.md: gh issue view":   adapterExample,
-}
+var hostCLIAllowlist = map[string]string{}
 
 type codeText struct {
 	file string // relative to the plugin root

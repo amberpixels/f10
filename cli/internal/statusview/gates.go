@@ -511,7 +511,7 @@ func (in gateInput) judge(g *gate, judged string, entries flow.Flow, steps []str
 	}
 }
 
-// taskJudge is the judge fetch runs on a task older than stale_after, shown
+// taskJudge is the judge the stale step runs on a task older than stale_after, shown
 // only once it ran or the plan phase is on it.
 func (in gateInput) taskJudge() (gate, bool) {
 	g := gate{Step: "judge", Judged: "task"}

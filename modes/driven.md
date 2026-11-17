@@ -50,7 +50,7 @@ Six kinds of open question never become an ask:
 - **A base with no code, or not on origin before `pr`.** Ship stops with `f10-state.sh wait <base-id>` and asks nothing.
   The drive sends ship again once the base commits.
   For a stop at `pr`, it sends ship again once the base's branch is on origin or the base has finished (`skills/ship/SKILL.md` → the catchup guard, `steps/pr.md` point 4).
-- **A stale task's verdict** (`steps/fetch.md` point 1).
+- **A stale task's verdict** (`steps/stale.md`).
   The run ends blocked and names the verdict file.
   The user decides either by sending `anyway`, as `f10 start <id> --answer anyway` or typed in this pane, or by closing the task.
 - **A bug task that carries its own investigation** (`steps/debug.md`).

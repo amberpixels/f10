@@ -82,7 +82,7 @@ func Command() *cli.Command {
 				Name:     "stale",
 				Hidden:   true,
 				Category: command.Plumbing,
-				Usage: "print fetch's stale check against stale_after: fresh, judged <verdict file>, needs judge, " +
+				Usage: "print the stale step's check against stale_after: fresh, judged <verdict file>, needs judge, " +
 					"or undated",
 				ArgsUsage: "[task-id]",
 				Flags: []cli.Flag{&cli.StringFlag{

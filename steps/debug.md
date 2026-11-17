@@ -1,10 +1,11 @@
 # Step · debug - from a report to a confirmed cause
 
-Role: a **senior engineer** investigating a problem.
-Input: a raw report from `/f10:debug` (an error, logs, a screenshot or a complaint), or a bug task from fetch.
+Input: a raw report from `/f10:debug`, or a bug task from the investigate step.
+A raw report is an error, logs, a screenshot or a complaint.
 A task is the same report in a tracker, and runs the same investigation.
 Output: a debug brief per bug, or an investigation report.
-Badge: leaf `debug`, in the capture phase (`f10-state.sh set capture running debug`), or in the plan phase when fetch runs it.
+Badge: leaf `debug`, in the capture phase (`f10-state.sh set capture running debug`).
+When investigate runs it, the leaf is in the plan phase.
 
 **This step investigates and never fixes.**
 It finds the real cause and proves it exists, and the fix goes through plan and ship.
@@ -48,7 +49,7 @@ A driven run trusts it when the cited code still reads as the task says, and ver
    - the root cause at `file:line`, since when, and whom it affects
    - the test that fails before the fix, else a manual check
 6. **The path**, from `/f10:debug`.
-   The usual path is capture, fetch and plan.
+   The usual path is capture, fetch, investigate and plan.
    For a bug that hurts users now with a one-place fix, offer a quicker flow the project declares.
    Run it only when the user picks it, and never in a driven run.
    A planless flow skips the task and the plan, and a flow ending in `push` skips the PR.

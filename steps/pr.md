@@ -1,6 +1,5 @@
 # Step · pr - verified code to an open PR/MR, opened or refreshed
 
-Role: a **senior engineer** opening a PR someone else will have to review.
 Input: verified changes (`implement` and any earlier review steps done), and the branch's PR if one is open.
 Context: `project.md → Hosting & PR` for the PR adapter, and the `handoff` overlay.
 This step reads the `handoff` overlay because it runs the **handoff** step.

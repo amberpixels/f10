@@ -300,6 +300,7 @@ func TestStepStartedFillsInTheShipLeaf(t *testing.T) {
 		{"never over done", state.Run{Skill: "ship", Capture: "prior", Plan: "done", Ship: "done"}, "bash-load-step", "done", "", false},
 		{"not under plan", state.Run{Skill: "plan", Capture: "skipped", Plan: "running", Ship: "upcoming"}, "bash-load-step", "upcoming", "", false},
 		{"several steps name none", state.Run{Skill: "ship", Capture: "prior", Plan: "done", Ship: "running", Leaf: "pr"}, "bash-load-planning", "running", "pr", false},
+		{"a planning step alone names none", state.Run{Skill: "ship", Capture: "prior", Plan: "running", Ship: "upcoming"}, "bash-load-stale", "upcoming", "", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			env := testEnv(t)

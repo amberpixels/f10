@@ -67,7 +67,7 @@ GitHub issues need no adapter: f10 reads and creates them.
 | `catchup` | `rebase`, `merge` or `off`: how a branch is brought up to date with its base; `off` stops ship integrating before implement, `pr` and a change judge (it still asks about a base with no code), and leaves `/f10:catchup` and the drive running | `rebase` |
 | `catchup_stacked` | `merge` or `rebase`: how a branch is brought up to date with a base that is another task's branch, the stacked PR's target. `rebase` replays that base's old commits into the branch if the base later rebases or squash-merges; `merge` never does. Once the base is rewritten, a branch holding its recorded tip catches up by `onto` instead, whichever is declared | `merge` |
 | `traces` | `on` or `off`: what f10 leaves on the host. `Task:`, `Step:` and `Review:` trailers on every commit a step makes, `Task:` on the squash commit `f10 finish` lands, a hidden state block in the PR body rewritten by each step after the PR, and a local review's or a judge's commit status and PR comment after the PR; off, nothing | `off` |
-| `stale_after` | a number of days or weeks (`10d`, `3w`): fetch judges a task created longer ago than this before it is planned, from the created date the tracker shows; anything but proceed stops the run blocked | off |
+| `stale_after` | a number of days or weeks (`10d`, `3w`): the stale step judges a task created longer ago than this before it is planned, from the created date the tracker shows; anything but proceed stops the run blocked | off |
 | `bundle_max_lines` | a positive number of changed lines: the most a bundle `f10 drive plan` proposes may hold, because review quality falls as a diff grows and a bad rider holds the whole PR ([docs/cli.md](cli.md#plan)) | `300` |
 | `driver_timeout` | a positive Go duration (`45s`, `2m`): how long f10 waits on one verb of the project's [driver](driver-contract.md) before it kills the driver and fails the command with `no answer within <limit>` | `30s` |
 | `lore` | `local` or `committed`: where `f10 lore` keeps its entries, `lore/` under the main checkout's storage root on this machine, shared by its worktrees, or `.lore/` at the checkout root, committed with the code ([docs/lore.md](lore.md)) | `local` |
@@ -79,7 +79,7 @@ GitHub issues need no adapter: f10 reads and creates them.
 | `watch_ci` | `on` or `off`: with `on`, a watch pass sends an undriven task whose open PR reads red to its agent as `/f10:ci --driven`, once per head, with an idle agent and a clean tree; a task handed back with `f10 watch off` is never touched. With `off` the red PR is only reported, once per head. Off by default, because an unattended agent would commit and push a fix ([docs/cli.md](cli.md#watch)) | `off` |
 | `watch_catchup` | `on` or `off`: with `on`, a pass under `watch: report` or `finish` also catches an undriven task's open PR up with its target when it needs it: the branch conflicts with the target, a catchup is already owed (a landed stacked base), or the host will not merge it while behind. Any other PR behind its target is left alone and told once per pushed head, so its CI is not restarted. A PR that needs a catchup is integrated by the watcher with an idle agent and a clean tree, the task's own agent settling any conflict and running verify as a driven catchup, and pushed a pass later once it ended clean, with a lease after a rebase; a task handed back with `f10 watch off` is never touched. A catchup that does not end clean leaves the branch as it was and is told once. Off by default: an unattended agent settling conflicts and force-pushing them is the riskiest thing the watcher does ([docs/cli.md](cli.md#watch)) | `off` |
 | `report_back` | `on` or `off`: a ship run posts its shipment on the task and moves it to its `shipped` status | `on` |
-| `debug` | `on` or `off`: with `on`, fetch runs the debug step on a bug task before it is planned: it triages how much reproduction the bug deserves, confirms the root cause from a reproduction or other evidence, and records the task that introduced it. `off` skips that pass, and the plan's reproduction is read from the code | `on` |
+| `debug` | `on` or `off`: with `on`, investigate runs the debug step on a bug task before it is planned: it triages how much reproduction the bug deserves, confirms the root cause from a reproduction or other evidence, and records the task that introduced it. `off` skips that pass, and the plan's reproduction is read from the code | `on` |
 | `debug_costly` | `ask`, `skip` or `reproduce`: what a driven run does with a bug that is costly to reproduce (an external service, production data, a race, a long setup). `skip` plans from a code-read diagnosis marked `Reproduction: skipped (costly)`, `reproduce` spends the cost, and `ask` stops the run with one ask. An interactive run always asks | `skip` |
 | `review` | a remote review's four facts: `reviewer`, `arrives`, `trigger`, `done`, and an optional `settled` | from a Claude Code review workflow, else none |
 | `standup` | `upkeep`: path globs that, alone in a commit, make it upkeep for `f10 standup` (schema dumps, a project's own codegen output); they add to the built-in lockfiles, generated files and snapshots | none |
@@ -99,7 +99,14 @@ An unknown key or a value outside its vocabulary stops every `f10` command excep
 | Guardrails | domain rules a plan and its code must honour | none |
 
 An adapter is a binding, not a suggestion: a fetch command that errors fails the step, and f10 never substitutes another tool.
-The model reads the universal part in `conventions/context.md`; each remaining fact is described where it is acted on (`/f10:ship` for flows, the area map and reporting back, the review step for the remote review, the catchup step for `catchup` and `catchup_stacked`, the fetch step for `stale_after`, the commit, resolve, judge and catchup steps for `traces`).
+The model reads the universal part in `conventions/context.md`.
+Every other fact is described where it is acted on:
+
+- flows, the area map and reporting back: `/f10:ship`
+- the remote review: the review step
+- `catchup` and `catchup_stacked`: the catchup step
+- `stale_after`: the stale step
+- `traces`: the commit, resolve, judge and catchup steps
 
 ## Verify by path
 
@@ -187,12 +194,20 @@ An area is named in plain words, the way a task's _Areas_ note names it, with th
 ```
 
 The base role for a step is, highest first: an applicable Conditional `=`, the step overlay's own `Role:` line (`.f10/instructions/<step>.md`), an Always `=`, then the step's built-in role.
+The built-in role is the step's `Role:` line, else a senior engineer in the project's stack.
 At the same rank a step-scoped `=` wins over an unscoped one, and a linked worktree's statement over main's; two still tied are a contradiction, which the run names rather than picks.
 A role named per step in prose ("plan as a **senior software architect**") adds, like `+`; only `=` replaces.
-A step takes its roles from the plan's `Roles` line, else the fetch brief, else the areas in the task's _Areas_ note (capture, brainstorm), else no area applies.
+A step takes its roles from the first of these that exists, else no area applies:
+
+1. the plan's `Roles` line
+2. the investigation brief
+3. the task's _Areas_ note, which capture and brainstorm read
+
 Every applicable `+` is added on top of whichever base won.
-A task that touches two areas that both replace the base role runs under the role of the area its deliverable belongs to; the other area's role is added, and the fetch brief says so.
-Fetch settles the areas and the base role, and the plan's first line, `Roles:`, records the result, which `/f10:ship` inherits.
+A task touching two areas that both replace the base role runs under its deliverable's area.
+The other area's role is added, and the investigation brief says so.
+The investigate step settles the areas and the base role.
+The plan's `Roles:` line records the result, and `/f10:ship` inherits it.
 A project with no `=` bullet sees every step run under its own role.
 
 ### Worked example: a non-code deliverable
@@ -229,7 +244,7 @@ A `.f10/instructions/capture.md` overlay says how a report task reads:
 
 ```markdown
 A report task names its audience, the question it answers, the period and sources, and the date it is needed by.
-The _Areas_ note says report work or framework work, so fetch can settle the role.
+The _Areas_ note says report work or framework work, so investigate can settle the role.
 ```
 
 Report work ships as a link on the deployed site; framework work ships as a merge request.
@@ -278,7 +293,7 @@ flows:
 `f10 flow` lists them with what selects each.
 `f10 start` runs `default`; `--local` runs `local`, the run ending in commits with nothing leaving the machine; `--flow <name>` runs any other, and an unknown name fails with the list; `f10 start --plan` plans every task and implements none.
 `plan` leads a flow or is absent: it runs only for a task with no plan file, so a planned task never plans again, and `/f10:ship` runs the entries after it.
-A flow with no `plan` writes no plan file: free-text input also skips capture and fetch, and a task id is fetched but not planned.
+A flow with no `plan` writes no plan file: free-text input also skips capture, fetch and investigate, and a task id is fetched and investigated but not planned.
 An entry takes an argument after a colon, so each is one shell word.
 `review:local` and `review:ci` set the review's `by` (who reviews).
 `review:host` runs the local review on the host's own code review (Claude Code's built-in `code-review`), shaped into the same findings file.
@@ -460,7 +475,12 @@ agents:
 ```
 
 Two layers of the same map merge **key by key**, the later winning: your defaults in `~/.f10/agents.md` (YAML frontmatter with an `agents:` map, as `~/.f10/standup.md`), then the project's `agents:` (main's and a worktree's layers merged key by key too).
-A step's profile is then `default`, overlaid segment by segment by a run's flag (`f10 start --agent`, a task's own `<id>:<profile>`), then by `<step>`, then by `<step>.<kind>`, the kind fetch settled (`feature`, `bug`, `refactor`, `spike`).
+A step's profile starts from `default`, and each of these overrides it segment by segment, in order:
+
+1. a run's flag: `f10 start --agent`, or a task's own `<id>:<profile>`
+2. `<step>`
+3. `<step>.<kind>`, for the task's kind
+
 So `--agent low` over `default: opus:high` runs on `opus:low`, and the flag is recorded on the branch, where `f10 agents` reads it back for a spawning step's line.
 A key is `default`, a step some declared flow names (the default flow included), or a step that spawns a subagent.
 The steps that spawn a subagent are `audit`, `cleanup`, `judge` and `review`, and each is a key because it also runs as a skill outside any flow.
@@ -517,7 +537,7 @@ tracker:
 ```
 
 The placeholders are `{id}` (`FT-132`), `{n}` (`132`) and `{title}`, which must appear once.
-`f10 task create` and the capture step's Create adapter write the title through it once the issue has a number, and `f10 task update` puts the prefix back on a title renamed by hand.
+`f10 task create` and the capture-adapter step write the title through it once the issue has a number, and `f10 task update` puts the prefix back on a title renamed by hand.
 Every read (`task read`, `search`, `children`, the board, status, a default branch name) takes a leading id and the punctuation after it back off, so f10 shows the id once.
 Only a template that opens with `{id}`, `{n}` or `#{n}` is stripped; one like `x--{id}--{title}` is written but read as is.
 `f10 task retitle --all` backfills the existing issues (`--dry-run` lists them first); a second run changes nothing.

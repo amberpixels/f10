@@ -186,8 +186,9 @@ var Guarded = []string{"implement", "pr", "judge"}
 // included, which drive runs rather than ship. A label never takes one of these names, so status and
 // stats never show a step that did not run.
 var GenericSteps = []string{
-	"audit", "brainstorm", "capture", "catchup", "ci", "cleanup", "commit", "debug", "demo", "deploy", "explain",
-	"fetch", "finish", "handoff", "implement", "judge", "plan", "pr", "push", "resolve", "review", "standup",
+	"audit", "brainstorm", "capture", "capture-adapter", "catchup", "ci", "cleanup", "commit", "debug",
+	"demo", "deploy", "explain", "fetch", "finish", "handoff", "implement", "investigate", "judge",
+	"plan", "pr", "push", "resolve", "review", "stale", "standup",
 }
 
 // MarshalJSON writes the flow as its written entries, labels in brackets.

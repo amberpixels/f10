@@ -1,6 +1,5 @@
 # Step · brainstorm - from an idea to a decision about what to build
 
-Role: a **senior engineer** thinking with a peer, before there is a task.
 Input: an idea, a problem, a proposed solution, or the question of whether to build anything at all.
 Output: a conclusion you and the user reach together, in chat.
 

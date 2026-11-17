@@ -1,7 +1,7 @@
 # Step · plan - from investigation to an architect-grade plan
 
-Role: a **senior software architect** in the project's stack, unless the fetch brief settled another base role, plus the conditional roles the fetch brief's areas trigger.
-Input: the fetch step's investigation brief.
+Role: a **senior software architect** in the project's stack, unless the investigation brief settled another base role, plus the conditional roles its areas trigger.
+Input: the investigate step's brief.
 Context: `project.md` guardrails and house style.
 Badge: `f10-state.sh set plan running` on entry, unless `fetch` already opened the phase. `f10-state.sh set plan done` once the plan file is on disk.
 
@@ -18,12 +18,14 @@ Badge: `f10-state.sh set plan running` on entry, unless `fetch` already opened t
    - **Kind** follows, but only for a `bug`, a `refactor` or a `spike` (`Kind: bug`).
      A plan with no Kind line is a feature.
    - **Areas** follows when the frontmatter declares `flow_by_area`.
-     It lists the areas the fetch brief settled, in the words the map uses.
+     It lists the areas the investigation brief settled, in the words the map uses.
      `/f10:ship` picks the flow from it when it runs on the plan alone.
    - **Regression of** follows for a bug whose attribution named the task that introduced it (`steps/debug.md` → Attribute).
      It holds the line `f10 task regression` printed, such as `Regression of: FT-414 (missed, confirmed)`.
    - **Depends on** follows when the task has a base task, which is when the steering names one (`f10 start --after`) or the task body ends in an `After:` line.
      It holds the base task's id and the path of its plan.
+     The plan designs against the base task's plan, or the base task itself when that plan is not written yet, never against this checkout.
+     There is no fallback when the base task is absent.
    - **Bundle** follows when the plan covers several tasks (`Bundle: ABC-1+ABC-2`).
      The first task is the lead, and the others are its riders.
      A bundled plan also has a `## Riders` section, which lists each rider's acceptance criteria under the rider's id.
@@ -105,7 +107,7 @@ Badge: `f10-state.sh set plan running` on entry, unless `fetch` already opened t
    A plan is small when the work is already decided, which means all of these are true:
    - You know where the change goes.
      For a feature, the task says so.
-     For a bug or a refactor, the task's _Root cause_, this run's debug brief, or a single `file:line` from the fetch brief names it.
+     For a bug or a refactor, the task's _Root cause_, this run's debug brief, or a single `file:line` from the investigation brief names it.
    - It touches one area.
    - No other competent engineer would make a different call on it.
    - There are no gaps.

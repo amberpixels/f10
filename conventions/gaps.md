@@ -1,7 +1,7 @@
 # Convention · gaps - open decisions that need the user
 
 A **gap** is a fork the user decides, because it changes scope or is hard to reverse.
-Settle everything else yourself, about 90% of the questions (`steps/fetch.md`).
+Settle everything else yourself, about 90% of the questions (`steps/investigate.md`).
 A gap never blocks the work, because the plan ships on its defaults.
 Filling gaps is optional at any stage.
 

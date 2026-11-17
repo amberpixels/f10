@@ -258,7 +258,7 @@ They go to the storage root, which by default is the main checkout's `.f10/`, so
 Each step runs under a base role.
 A project can replace the base role, always or by area (`= senior marketing analyst` on report work).
 It can also add roles, always or by area (`+ senior UI/UX engineer` when the task touches user-facing UI).
-Fetch settles the areas and the base role, and the plan file records the roles for ship ([Roles](project-setup.md#roles)).
+The investigate step settles the areas and the base role, and the plan file records the roles for ship ([Roles](project-setup.md#roles)).
 
 ### Adapter
 

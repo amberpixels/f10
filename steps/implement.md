@@ -1,6 +1,5 @@
 # Step · implement - from a plan to working, verified code
 
-Role: a **senior engineer** in the project's stack implementing an approved plan, unless the plan's `Roles` line records another base role.
 Input: a plan, from the plan step just run, a saved `<storage root>/plans/<task>.md`, or a file the user passed.
 Output: verified code in the working tree, and the later pipeline steps (`pr`, `push`, `review`, `deploy`) decide where it goes.
 A spike is the exception: its output is its spike report, its code stays uncommitted, and no later step runs.
