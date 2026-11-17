@@ -15,6 +15,9 @@ import (
 // as `start --foreground` after the hand-off, runs the drive and never
 // meets the hand-off again; a --foreground typed by hand is refused.
 func TestHandOverInADiscussionWorktree(t *testing.T) {
+	// verify may itself run under a daemon drive, which sets the variable
+	t.Setenv(daemon.ResumeEnv, "")
+
 	tg := testkit.ChildTarget(t, "")
 	testkit.InitRepo(t, tg.Layout.CheckoutRoot, "GH-1/talk")
 	testkit.Git(t, tg.Layout.CheckoutRoot, "commit", "-q", "--allow-empty", "-m", "first")
