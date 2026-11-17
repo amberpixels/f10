@@ -307,7 +307,7 @@ A host that cannot answer the read refuses too.
 A drive's finish does not wait itself.
 Instead the drive holds the task as `waiting on checks` and tries again each poll, for up to 20 minutes per head.
 On red it sends `/f10:ci` to the task's agent and shows the task as `triaging checks` (**Checks triage** below).
-A drive whose pace does not finish holds a shipped PR the same way before it ends the task, so a head that turns red is triaged first.
+A drive that runs no `finish` holds a shipped PR the same way before it ends the task, so a head that turns red is triaged first.
 The watcher finishes only merged PRs, so its finish never waits on checks.
 Its own read of an open PR's checks is under **Watch** (**red**).
 
@@ -784,9 +784,8 @@ A cancelled record is never picked up again: the same command line starts a new 
    The flow is `default`, or the one `--flow <name>` or `--local` names; an undeclared name fails with the `f10 flow` list.
    It gives the skills the driver prompts, which are never typed and never stored.
    They are `plan` when the flow leads with it, then `ship`, which runs every other entry.
-   Then comes `finish`, unless the run's pace says `finish: off` or the project's ceiling forbids it.
-   A pace that sets no `finish` finishes.
-   A task whose ship ended as a spike (its spike report written) is closed right after ship, whatever the pace's `finish` says, since the close merges nothing.
+   Then comes `finish`, when the flow ends in a `finish` entry that neither the run's pace nor the project's ceiling turns off.
+   A task whose ship ended as a spike (its spike report written) is closed right after ship, whatever the flow says, since the close merges nothing.
    Its branch gains the finish record, and a dependent then starts on the default branch.
    `--flow`, `--local`, `--agent`, `--model`, `--parallel`, `--answer`, `--every`, `--resume` and `--foreground` go anywhere.
    The command parses its own arguments, so the range's `--` survives.
@@ -822,7 +821,7 @@ A cancelled record is never picked up again: the same command line starts a new 
    Open agents are capped too, at twice the cap, because an idle session still holds its memory.
    The agent limit counts the tasks under way and the tasks asking, including agents an earlier run of the drive left open.
    A done or halted task's agent does not count, because the drive is finished with it.
-   Counting it would also stall a drive at a pace with `finish: off`, whose done tasks keep their agents open, so no task past the limit would ever start.
+   Counting it would also stall a drive that runs no `finish`, whose done tasks keep their agents open, so no task past the limit would ever start.
    A task past either limit shows as `queued` in the report, `f10 drive list` and `f10 status`, and starts in the drive's order as slots free.
    A task whose agent an earlier run left open goes first, because it adds no session.
    A turn already running when the driver reaches the task is tracked and counted even past the cap, because the driver cannot stop it.

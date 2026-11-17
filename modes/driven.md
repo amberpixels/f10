@@ -124,7 +124,7 @@ A dialog you cannot avoid is answered in this pane.
 
 ## When drive finishes the task
 
-Sometimes the ship prompt says that drive finishes the task after ship, which `f10 drive` does when the run's pace, under the project's ceiling, says `finish: on`.
+Sometimes the ship prompt says that drive finishes the task after ship, which `f10 drive` does when the run's flow ends in a `finish` entry that the pace, under the project's ceiling, does not turn off.
 In that case, end the report with one line that says so.
 Name the PR by number where there is one, and say that nothing is owed in this pane: `Next: f10 drive merges #204 and removes this worktree; nothing to do here.`
 For a spike the line is `Next: f10 drive closes the spike and removes this worktree; nothing to do here.`

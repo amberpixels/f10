@@ -553,11 +553,6 @@ func (l *layered) mergePace(into, p Pace, prefix, label string) Pace {
 		l.origin[prefix+key] = label
 	}
 
-	if p.written() {
-		into.Finish, into.finishBad = p.Finish, p.finishBad
-		l.origin[prefix+PaceFinishKey] = label
-	}
-
 	return into
 }
 

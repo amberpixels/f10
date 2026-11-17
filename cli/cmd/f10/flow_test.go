@@ -81,9 +81,8 @@ func TestFlowPrintsEntryLabels(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// medium's finish line follows the last entry
 	lines := strings.Split(strings.TrimSpace(runApp(t, "-C", repo, "flow", "default").must(t)), "\n")
-	if last := lines[len(lines)-2]; last != "pr[pr-polish]" {
+	if last := lines[len(lines)-1]; last != "pr[pr-polish]" {
 		t.Errorf("f10 flow default's last entry is %q, want pr[pr-polish]:\n%s", last, strings.Join(lines, "\n"))
 	}
 

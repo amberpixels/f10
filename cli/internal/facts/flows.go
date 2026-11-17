@@ -17,7 +17,7 @@ import (
 // is a step or `step:arg`, one shell word each.
 
 // DefaultFlow is the flow a project that declares none runs.
-const DefaultFlow = "plan implement pr"
+const DefaultFlow = "plan implement pr finish"
 
 // Flow is one declared flow's entries as written, before flow.Of parses
 // them: a list, or one string split on whitespace and arrows, never on
@@ -175,6 +175,12 @@ func checkFlow(name string, written []string, others ...string) []string {
 		case step == "plan" && i > 0:
 			bad = append(bad, fmt.Sprintf("flows.%s: plan comes first, since ship runs only the entries after it; "+
 				"stale_after judges a task before planning it", name))
+		case step == "finish" && arg != "":
+			bad = append(bad, fmt.Sprintf("flows.%s: %q: finish takes no argument", name, e))
+		case step == "finish" && i < len(parsed)-1:
+			bad = append(bad, fmt.Sprintf("flows.%s: finish comes last, since drive runs it once ship is done", name))
+		case step == "finish" && !slices.ContainsFunc(parsed[:i], func(e flow.Entry) bool { return e.Step == "pr" }):
+			bad = append(bad, fmt.Sprintf("flows.%s: finish merges an open PR, so a pr entry comes before it", name))
 		case step == "judge" && !parsed.Plans() && parsed.JudgeKind(i) == "plan":
 			bad = append(bad, fmt.Sprintf("flows.%s: a judge before implement judges the plan, "+
 				"and the flow writes none; lead with plan", name))

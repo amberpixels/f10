@@ -59,9 +59,9 @@ func TestFlowSettlesOptionalCI(t *testing.T) {
 }
 
 // f10 flow <name> is the list ship runs: skipped entries marked, each dial
-// with its origin, and the pace's finish where the run ends at a PR.
+// with its origin, and a trailing finish as its own entry.
 func TestFlowUnderAPace(t *testing.T) {
-	repo := paceRepo(t, "flows:\n  default: plan judge implement cleanup pr review:local judge pr\n", "")
+	repo := paceRepo(t, "flows:\n  default: plan judge implement cleanup pr review:local judge pr finish\n", "")
 
 	out := runApp(t, "-C", repo, "flow", "default", "--pace", "ultra").must(t)
 	for _, want := range []string{
@@ -69,18 +69,17 @@ func TestFlowUnderAPace(t *testing.T) {
 		"plan          skipped: off in pace ultra (built-in)",
 		"review:local  by local (entry argument), depth light (pace ultra (built-in))",
 		"pr            marker fast (pace ultra (built-in))",
-		"finish        on (pace ultra (built-in))",
+		"\nfinish\n",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q:\n%s", want, out)
 		}
 	}
 
-	// no pace named: medium, which only finishes, so the flow as declared,
-	// an entry per line, then its finish
+	// no pace named: medium, which sets nothing, so the flow as declared,
+	// an entry per line
 	want := "pace: medium (default)\n" +
-		strings.ReplaceAll("plan judge implement cleanup pr review:local judge pr", " ", "\n") +
-		"\nfinish        on (pace medium (built-in))\n"
+		strings.ReplaceAll("plan judge implement cleanup pr review:local judge pr finish", " ", "\n") + "\n"
 	if out := runApp(t, "-C", repo, "flow", "default").must(t); out != want {
 		t.Errorf("no pace:\n%s", out)
 	}
@@ -131,13 +130,13 @@ func TestPaceUserFileRefused(t *testing.T) {
 // f10 flow shows the ceiling and each capped dial with what the pace had;
 // an excepted pace runs uncapped and says why.
 func TestFlowUnderACeiling(t *testing.T) {
-	repo := paceRepo(t, "flows:\n  default: plan judge implement cleanup pr review:local judge pr\n"+
+	repo := paceRepo(t, "flows:\n  default: plan judge implement cleanup pr review:local judge pr finish\n"+
 		"ceiling: { finish: off, judge: { effort: high }, except: [ultra] }\n", "")
 
 	out := runApp(t, "-C", repo, "flow", "default", "--pace", "fast").must(t)
 	for _, want := range []string{
 		"ceiling: finish off (declared (main, frontmatter)), judge effort high (declared (main, frontmatter))",
-		"finish        off (ceiling (declared (main, frontmatter)); pace fast said on)",
+		"finish        skipped: off in ceiling (declared (main, frontmatter)); pace fast left it unset",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q:\n%s", want, out)
@@ -148,11 +147,20 @@ func TestFlowUnderACeiling(t *testing.T) {
 		out,
 		"ceiling: not applied: pace ultra is in except",
 	) ||
-		!strings.Contains(out, "finish        on (pace ultra") {
+		!strings.HasSuffix(out, "\nfinish\n") {
 		t.Errorf("ultra:\n%s", out)
 	}
 
-	if out := runApp(t, "-C", repo, "flow", "default").must(t); !strings.Contains(out, "finish        off (ceiling") {
+	if out := runApp(
+		t,
+		"-C",
+		repo,
+		"flow",
+		"default",
+	).must(t); !strings.Contains(
+		out,
+		"finish        skipped: off in ceiling",
+	) {
 		t.Errorf("no pace named:\n%s", out)
 	}
 

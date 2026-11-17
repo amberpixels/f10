@@ -54,7 +54,7 @@ func Command() *cli.Command {
 		ArgsUsage: drive.DriveUsage(),
 		Description: "Each task runs the default flow, or the one --flow or --local names (f10 flow lists them): " +
 			"plan when the flow has a plan entry and the task no plan file, then ship, " +
-			"then finish unless the pace's finish is off. A rerun keeps the flow a task's branch records.\n" +
+			"then finish when the flow ends in it and the pace does not turn it off. A rerun keeps the flow a task's branch records.\n" +
 			"--pace NAME runs every task at that pace (f10 config lists them), recorded on each branch so a rerun keeps it; " +
 			"a pace skips or tunes the flow's entries and never adds one.\n" +
 			"A task's base is its branch's recorded --after, else its body's After: line; " +
@@ -157,8 +157,8 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	drv := t.Driver()
 	h, hostErr := hostops.HostOf(t)
 
-	if fl.Finishes() && hostErr != nil {
-		return fmt.Errorf("finish is on (the pace's finish), and finish merges through the host: %w", hostErr)
+	if fl.Finishes && hostErr != nil {
+		return fmt.Errorf("the flow ends in finish, and finish merges through the host: %w", hostErr)
 	}
 
 	var (

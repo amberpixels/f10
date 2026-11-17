@@ -125,8 +125,12 @@ func (in *DriveInput) open(ctx context.Context, r *DriveRun) error {
 		o.Notes = append(o.Notes, paceNote)
 	}
 
+	if fl.Mixed {
+		o.Notes = append(o.Notes, "no finish: only some of the flows flow_by_area can pick end in finish")
+	}
+
 	// status reads the finish record as drive finishing the branch; a rerun
-	// at a pace without finish takes it off
+	// whose flow or pace runs no finish takes it off
 	skills := in.sequenceOf(fl)
 
 	finishes := slices.Contains(skills, "finish")
@@ -370,8 +374,8 @@ func (in *DriveInput) spikeDone(ctx context.Context, r *DriveRun) (bool, error) 
 	return pushed == "", nil
 }
 
-// closeAfterShip has drive finish a spike its pace does not finish: a spike
-// close merges nothing, which the pace's finish gates, and a spike left open
+// closeAfterShip has drive finish a spike its flow does not finish: a spike
+// close merges nothing, which the flow's finish entry gates, and a spike left open
 // keeps its dependents on an empty base. status reads the finish record.
 func (in *DriveInput) closeAfterShip(ctx context.Context, r *DriveRun) {
 	r.Finishes = true

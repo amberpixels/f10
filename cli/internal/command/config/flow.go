@@ -85,8 +85,8 @@ func runFlow(ctx context.Context, cmd *cli.Command) error {
 	return runplan.WriteFlows(cmd.Writer, v)
 }
 
-// writeFlowEntries is one flow, an entry per line with its dials, then the
-// pace's finish; the list /f10:ship runs.
+// writeFlowEntries is one flow, an entry per line with its dials; the list
+// /f10:ship runs, but for a trailing finish, which drive runs.
 func writeFlowEntries(w io.Writer, v runplan.FlowView) error {
 	f := v.Flows[0]
 
@@ -110,7 +110,7 @@ func writeFlowEntries(w io.Writer, v runplan.FlowView) error {
 		return err
 	}
 
-	width := len(facts.PaceFinishKey)
+	width := 0
 	for _, e := range f.Resolved.Entries {
 		width = max(width, len(e.Parsed().Written()))
 	}
@@ -126,10 +126,6 @@ func writeFlowEntries(w io.Writer, v runplan.FlowView) error {
 		default:
 			fmt.Fprintln(&b, entry)
 		}
-	}
-
-	if fin := f.Resolved.Finish; fin != nil {
-		fmt.Fprintf(&b, "%-*s  %s %s\n", width, facts.PaceFinishKey, fin.Value, dialSource(*fin))
 	}
 
 	_, err := io.WriteString(w, b.String())

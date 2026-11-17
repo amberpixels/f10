@@ -15,7 +15,7 @@ Skills are thin routers over steps.
 
 A flow is the list of steps a task runs through, in order.
 A project declares its flows under `flows:` in `project.md`, and `f10 flow` lists them.
-With none declared, the flow is `plan implement pr`.
+With none declared, the flow is `plan implement pr finish`.
 
 `plan` leads a flow, and it runs only for a task with no plan file.
 `/f10:ship` runs the entries after it.

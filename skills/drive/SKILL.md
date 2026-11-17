@@ -12,8 +12,8 @@ Run tasks through a flow from here.
 A dependent opens once its base branch has a commit, and its finish waits for the base's.
 The first skill is `/f10:plan` when the flow leads with a `plan` the pace keeps and the task has no plan file.
 Then comes `/f10:ship`, which runs every other entry.
-Then comes finish, unless the pace's `finish` is off.
-The project's `ceiling` caps the pace's `finish`.
+Then comes finish, when the flow ends in a `finish` entry.
+The pace can skip that entry as it skips any step, and the project's `ceiling: { finish: off }` skips it under every pace.
 A spike is closed after ship either way, because `f10 finish` closes it without a merge.
 This skill expands parents, runs the command (`${CLAUDE_PLUGIN_ROOT}/modes/binary.md`), relays its questions and prints its report; it runs no step.
 

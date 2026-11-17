@@ -126,7 +126,7 @@ Each term has a section in [docs/concepts.md](docs/concepts.md).
 - **Step**: the unit of work, one file in `steps/*.md`.
   Skills are thin routers over steps.
 - **Flow**: the steps a task runs through, declared under `flows:` in `project.md`.
-  With none declared, it is `plan implement pr`.
+  With none declared, it is `plan implement pr finish`.
 - **Brainstorm**: the conversation before capture, which writes nothing.
 - **Judge**: a verdict on an idea, a task, a plan or a change, weighing cause against symptom.
 - **Review**: the bug hunt, a blind reviewer's findings and resolve's verdict on each.

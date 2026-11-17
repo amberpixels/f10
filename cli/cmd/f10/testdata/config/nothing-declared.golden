@@ -72,7 +72,8 @@
     "default": [
       "plan",
       "implement",
-      "pr"
+      "pr",
+      "finish"
     ]
   },
   "watch": "finish",
@@ -82,11 +83,6 @@
   "debug": true,
   "debugCostly": "skip",
   "paces": [
-    {
-      "key": "paces.fast.finish",
-      "value": "on",
-      "origin": "built-in"
-    },
     {
       "key": "paces.fast.judge",
       "value": "effort low",
@@ -98,13 +94,8 @@
       "origin": "built-in"
     },
     {
-      "key": "paces.medium.finish",
-      "value": "on",
-      "origin": "built-in"
-    },
-    {
-      "key": "paces.slow.finish",
-      "value": "off",
+      "key": "paces.medium",
+      "value": "(no dials: flows run as declared)",
       "origin": "built-in"
     },
     {
@@ -120,11 +111,6 @@
     {
       "key": "paces.ultra.demo",
       "value": "off",
-      "origin": "built-in"
-    },
-    {
-      "key": "paces.ultra.finish",
-      "value": "on",
       "origin": "built-in"
     },
     {
@@ -236,13 +222,8 @@
     },
     {
       "key": "flows",
-      "value": "default: plan implement pr",
+      "value": "default: plan implement pr finish",
       "origin": "default"
-    },
-    {
-      "key": "paces.fast.finish",
-      "value": "on",
-      "origin": "built-in"
     },
     {
       "key": "paces.fast.judge",
@@ -255,13 +236,8 @@
       "origin": "built-in"
     },
     {
-      "key": "paces.medium.finish",
-      "value": "on",
-      "origin": "built-in"
-    },
-    {
-      "key": "paces.slow.finish",
-      "value": "off",
+      "key": "paces.medium",
+      "value": "(no dials: flows run as declared)",
       "origin": "built-in"
     },
     {
@@ -277,11 +253,6 @@
     {
       "key": "paces.ultra.demo",
       "value": "off",
-      "origin": "built-in"
-    },
-    {
-      "key": "paces.ultra.finish",
-      "value": "on",
       "origin": "built-in"
     },
     {

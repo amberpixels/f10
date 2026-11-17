@@ -48,6 +48,11 @@ func TestFlowPredicates(t *testing.T) {
 		t.Errorf("ship = %v", got)
 	}
 
+	fin := Of([]string{"plan", "implement", "pr", "finish"})
+	if got := fin.Ship(); !fin.Finishes() || f.Finishes() || len(got) != 2 || got[1].Step != "pr" {
+		t.Errorf("a trailing finish is drive's: ship = %v", got)
+	}
+
 	if f.JudgeKind(1) != "plan" || f.JudgeKind(4) != "change" {
 		t.Error("judge kind is read by position against implement")
 	}
