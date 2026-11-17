@@ -28,7 +28,7 @@ const (
 )
 
 func resumeCommand(argv []string) string {
-	parts := []string{"f10", "drive"}
+	parts := []string{"f10", "start"}
 
 	for i := 0; i < len(argv); i++ {
 		tok := argv[i]

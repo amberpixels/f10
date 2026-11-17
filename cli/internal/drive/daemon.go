@@ -230,7 +230,7 @@ func followDrive(
 		case !resumed || exit.Drive == 0:
 			fmt.Fprintf(
 				w,
-				"drive %d stopped with the f10 daemon: f10 drive --resume %d goes on\n",
+				"drive %d stopped with the f10 daemon: f10 start --resume %d goes on\n",
 				exit.Drive,
 				exit.Drive,
 			)

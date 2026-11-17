@@ -38,7 +38,7 @@ func Command() *cli.Command {
 		Name:  "asks",
 		Usage: "the questions driven agents wait on, across projects: list, answer, or walk them in a terminal",
 		Description: "A driven agent's ask, or a drive's finish question, waits here until the first answer from " +
-			"any way in: its own pane, f10 asks, /f10:asks or f10 drive --answer. An answer to a drive's task " +
+			"any way in: its own pane, f10 asks, /f10:asks or f10 start --answer. An answer to a drive's task " +
 			"resumes the drive; one to an agent no drive watches is sent to it. Bare f10 asks walks the open asks " +
 			"in a terminal and lists them otherwise. ~/.f10/asks.md sets notify, the command run for each new ask.",
 		Action: runAsks,

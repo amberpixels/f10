@@ -180,7 +180,7 @@ func Create(root string, rec *Record) error {
 func Read(root string, n int) (*Record, error) {
 	b, err := os.ReadFile(recordPath(root, n))
 	if errors.Is(err, fs.ErrNotExist) {
-		return nil, fmt.Errorf("no drive %d: f10 drive list shows them", n)
+		return nil, fmt.Errorf("no drive %d: f10 status --drives shows them", n)
 	}
 
 	if err != nil {

@@ -554,7 +554,7 @@ func TestDriveExitsOnAnAsk(t *testing.T) {
 	for _, want := range []string{
 		"GH-1:    asked at judge",
 		"GH-1 asks at judge: 1. Rethink: [proceed | stop]",
-		`answer with: f10 drive GH-1 judge --answer "1. … 2. …"`,
+		`answer with: f10 start GH-1 judge --answer "1. … 2. …"`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output lacks %q:\n%s", want, out)
@@ -1686,18 +1686,55 @@ func TestDriveGraph(t *testing.T) {
 		}
 	})
 
-	t.Run("base outside the list, not finished", func(t *testing.T) {
+	t.Run("base outside the list, not started", func(t *testing.T) {
 		fx := newDriveFixture(t, "GH-2")
 		fx.task("GH-2", tasksource.TaskInfo{Body: "After: GH-9"}, "")
 		fx.task("GH-9", tasksource.TaskInfo{Body: "open"}, "")
 
 		err := fx.drive(t)
-		if err == nil || !strings.Contains(err.Error(), "not in the list and not finished") {
+		if err == nil || !strings.Contains(err.Error(), "not in the list, not started and not finished") {
 			t.Fatalf("err = %v", err)
 		}
 
 		if fx.f.Called("wt") || fx.f.Called("herdr") {
 			t.Error("something was created before the refusal")
+		}
+	})
+
+	// one task stacked on a task in progress, from its body or --after
+	for name, args := range map[string][]string{
+		"base outside the list, started": {"GH-2"},
+		"--after a started base":         {"GH-2", "--after", "GH-9"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			fx := newDriveFixture(t, args...)
+			fx.task("GH-2", tasksource.TaskInfo{Body: "After: GH-9"}, "")
+			fx.task("GH-9", tasksource.TaskInfo{Body: "open"}, testkit.Heads("GH-9/base"))
+
+			tasks, _, err := fx.in.resolveTasks(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if _, _, err := fx.in.graph(t.Context(), tasks); err != nil || tasks[0].Base != "GH-9" {
+				t.Errorf("base = %q, %v; want GH-9 stacked on", tasks[0].Base, err)
+			}
+		})
+	}
+
+	// --base names a branch, so the body's unstarted base is never read
+	t.Run("--base over an unstarted After:", func(t *testing.T) {
+		fx := newDriveFixture(t, "GH-2", "--base", "main")
+		fx.task("GH-2", tasksource.TaskInfo{Body: "After: GH-9"}, "")
+		fx.task("GH-9", tasksource.TaskInfo{Body: "open"}, "")
+
+		tasks, _, err := fx.in.resolveTasks(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if _, _, err := fx.in.graph(t.Context(), tasks); err != nil || tasks[0].Base != "" {
+			t.Errorf("base = %q, %v; want none", tasks[0].Base, err)
 		}
 	})
 
@@ -1714,7 +1751,7 @@ func TestDriveGraph(t *testing.T) {
 
 // A listed parent with unfinished subtasks is refused before anything is
 // created; a task with none, a started one and a range member pass.
-func TestDriveRefusesAParent(t *testing.T) {
+func TestDriveExpandsAParent(t *testing.T) {
 	withChildren := func(fx *driveFixture, kids map[string][]stack.ChildRow) {
 		fx.in.Tracker.Children = func(_ context.Context, r ref.Ref) ([]stack.ChildRow, error) {
 			k, ok := kids[r.ID]
@@ -1726,38 +1763,76 @@ func TestDriveRefusesAParent(t *testing.T) {
 		}
 	}
 
-	t.Run("a parent with open subtasks", func(t *testing.T) {
-		fx := newDriveFixture(t, "GH-1")
-		fx.task("GH-1", tasksource.TaskInfo{Body: "the parent"}, "")
-		withChildren(
-			fx,
-			map[string][]stack.ChildRow{"GH-1": {{ID: "GH-2"}, {ID: "GH-3", Finished: true}, {ID: "GH-4"}}},
-		)
-
-		err := fx.drive(t)
-		if err == nil || !strings.Contains(err.Error(), "GH-1 is a parent of GH-2, GH-4") {
-			t.Fatalf("err = %v", err)
+	ids := func(tasks []DriveTask) string {
+		out := make([]string, 0, len(tasks))
+		for _, t := range tasks {
+			out = append(out, t.Ref.ID)
 		}
 
-		if fx.f.Called("wt") || fx.f.Called("herdr") {
-			t.Error("something was created before the refusal")
+		return strings.Join(out, " ")
+	}
+
+	// subtasks run in the tracker's order, an open draft left out with a
+	// note and a finished one kept, so a rerun reports it as finished
+	t.Run("a parent with subtasks", func(t *testing.T) {
+		fx := newDriveFixture(t, "GH-1")
+		fx.task("GH-1", tasksource.TaskInfo{Body: "the parent"}, "")
+
+		for _, id := range []string{"GH-2", "GH-3", "GH-5"} {
+			fx.task(id, tasksource.TaskInfo{Body: "a subtask"}, "")
+		}
+
+		withChildren(fx, map[string][]stack.ChildRow{"GH-1": {
+			{ID: "GH-2"}, {ID: "GH-3", Finished: true}, {ID: "GH-4", Labels: []string{"draft"}}, {ID: "GH-5"},
+		}})
+
+		tasks, notes, err := fx.in.resolveTasks(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if got := ids(tasks); got != "GH-2 GH-3 GH-5" {
+			t.Errorf("tasks = %q, want the subtasks in order without the draft", got)
+		}
+
+		if !slices.ContainsFunc(notes, func(n string) bool { return strings.HasPrefix(n, "GH-4 left out: a draft") }) {
+			t.Errorf("notes = %q, want the draft named", notes)
 		}
 	})
 
-	for name, kids := range map[string][]stack.ChildRow{
-		"every subtask finished": {{ID: "GH-2", Finished: true}},
-		"no subtasks":            {},
-	} {
-		t.Run(name, func(t *testing.T) {
-			fx := newDriveFixture(t, "GH-1")
-			fx.task("GH-1", tasksource.TaskInfo{Body: "free"}, "")
-			withChildren(fx, map[string][]stack.ChildRow{"GH-1": kids})
+	t.Run("only drafts", func(t *testing.T) {
+		fx := newDriveFixture(t, "GH-1")
+		fx.task("GH-1", tasksource.TaskInfo{Body: "the parent"}, "")
+		withChildren(fx, map[string][]stack.ChildRow{"GH-1": {{ID: "GH-2", Labels: []string{"Draft"}}}})
 
-			if _, _, err := fx.in.resolveTasks(t.Context()); err != nil {
-				t.Errorf("refused: %v", err)
-			}
-		})
-	}
+		if _, _, err := fx.in.resolveTasks(t.Context()); err == nil || !strings.Contains(err.Error(), "all drafts") {
+			t.Errorf("err = %v, want the drafts refused", err)
+		}
+	})
+
+	t.Run("no subtasks", func(t *testing.T) {
+		fx := newDriveFixture(t, "GH-1")
+		fx.task("GH-1", tasksource.TaskInfo{Body: "free"}, "")
+		withChildren(fx, map[string][]stack.ChildRow{"GH-1": {}})
+
+		tasks, _, err := fx.in.resolveTasks(t.Context())
+		if err != nil || ids(tasks) != "GH-1" {
+			t.Errorf("tasks = %q, %v; want GH-1 itself", ids(tasks), err)
+		}
+	})
+
+	// --after sets one task's base, so a parent that expands is refused
+	t.Run("--after on a parent", func(t *testing.T) {
+		fx := newDriveFixture(t, "GH-1", "--after", "GH-9")
+		fx.task("GH-1", tasksource.TaskInfo{Body: "the parent"}, "")
+		fx.task("GH-2", tasksource.TaskInfo{Body: "a subtask"}, "")
+		fx.task("GH-3", tasksource.TaskInfo{Body: "a subtask"}, "")
+		withChildren(fx, map[string][]stack.ChildRow{"GH-1": {{ID: "GH-2"}, {ID: "GH-3"}}})
+
+		if _, _, err := fx.in.resolveTasks(t.Context()); err == nil || !strings.Contains(err.Error(), "runs 2 tasks") {
+			t.Errorf("err = %v, want --after refused on two tasks", err)
+		}
+	})
 
 	t.Run("no parent link", func(t *testing.T) {
 		fx := newDriveFixture(t, "GH-1")
@@ -1877,7 +1952,7 @@ func TestSkillPrompt(t *testing.T) {
 
 func TestResumeCommand(t *testing.T) {
 	got := resumeCommand([]string{"GH-1", "--", "GH-3", "judge", "--answer", "1. old", "--every=5s"})
-	if want := "f10 drive GH-1 -- GH-3 judge --every=5s"; got != want {
+	if want := "f10 start GH-1 -- GH-3 judge --every=5s"; got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
@@ -2617,7 +2692,7 @@ func TestDriveCollectsEveryAskAndTakesKeyedAnswers(t *testing.T) {
 		for _, want := range []string{
 			"GH-1 asks at judge: 1. Rethink: [proceed | stop]",
 			"GH-2 asks at judge: 1. Split it? [yes | no]",
-			`answer with: f10 drive GH-1 GH-2 judge --answer "GH-1=1. … 2. …" --answer "GH-2=1. … 2. …"`,
+			`answer with: f10 start GH-1 GH-2 judge --answer "GH-1=1. … 2. …" --answer "GH-2=1. … 2. …"`,
 		} {
 			if !strings.Contains(fx.out.String(), want) {
 				t.Errorf("output lacks %q:\n%s", want, fx.out.String())

@@ -101,7 +101,7 @@ func TestFixtureParent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, want := range []string{"stage 1", "stage 2", "f10 drive FT-41+FT-42+FT-43", "saves about 3 CI waits and 3 finishes", driveplan.Tradeoff} {
+	for _, want := range []string{"stage 1", "stage 2", "f10 start FT-41+FT-42+FT-43", "saves about 3 CI waits and 3 finishes", driveplan.Tradeoff} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("output lacks %q:\n%s", want, out.String())
 		}
@@ -242,7 +242,7 @@ func TestNotSizedStaysAlone(t *testing.T) {
 	t.Parallel()
 
 	p := propose(t, small("FT-1", "ui", 0), small("FT-2", "ui", 0))
-	if r := entries(p)["FT-1"].Reason; r != "alone: not sized" || p.Saving() != "" || p.Hint("FT-1 FT-2") != "" {
+	if r := entries(p)["FT-1"].Reason; r != "alone: not sized" || p.Saving() != "" || p.Hint() != "" {
 		t.Errorf("reason %q, saving %q", r, p.Saving())
 	}
 }
@@ -290,7 +290,7 @@ func TestNamedPairKeepsTheCapForOthers(t *testing.T) {
 	}
 
 	// the user's own bundle is no saving a hint may offer
-	if p.Formed.Waits != 0 || p.Hint("FT-1 FT-2 FT-3") != "" {
-		t.Errorf("formed %+v, hint %q", p.Formed, p.Hint("FT-1 FT-2 FT-3"))
+	if p.Formed.Waits != 0 || p.Hint() != "" {
+		t.Errorf("formed %+v, hint %q", p.Formed, p.Hint())
 	}
 }

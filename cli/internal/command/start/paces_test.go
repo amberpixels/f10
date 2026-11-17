@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
-	startcmd "github.com/amberpixels/f10/cli/internal/command/start"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/launch"
@@ -14,18 +13,13 @@ import (
 	"github.com/amberpixels/f10/cli/internal/testkit"
 )
 
-// f10 start --pace records the pace on the new branch, and a pace that
-// skips plan sends ship alone.
+// f10 start --pace records the pace on the new branch.
 func TestStartRecordsThePace(t *testing.T) {
 	eff := &facts.Effective{Flows: map[string]flow.Flow{"default": flow.Of(strings.Fields("plan judge implement pr"))}}
 
 	ultra, err := testkit.PacedFlowIn(eff, facts.NewPaceSet(), "ultra", "")
 	if err != nil {
 		t.Fatal(err)
-	}
-
-	if got := launch.Prompt(startcmd.ModeDefault, ultra, "GH-1", nil, "", nil, ""); strings.Contains(got, "/f10:plan") {
-		t.Errorf("ultra's prompt = %q, want ship alone", got)
 	}
 
 	f := testkit.NewFakes(t)
@@ -46,8 +40,7 @@ func TestStartRecordsThePace(t *testing.T) {
 		"herdr agent prompt "+testkit.AgentOf(
 			"GH-1",
 		)+" "+launch.Prompt(
-			startcmd.ModeDefault,
-			ultra,
+			launch.ModeDiscuss,
 			"GH-1",
 			dep,
 			"",

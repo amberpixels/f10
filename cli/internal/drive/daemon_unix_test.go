@@ -186,7 +186,7 @@ func TestFollowDriveStopsWithAStop(t *testing.T) {
 		t.Fatal("the follower did not end on a stop")
 	}
 
-	if !strings.Contains(out.String(), "f10 drive --resume 5 goes on") {
+	if !strings.Contains(out.String(), "f10 start --resume 5 goes on") {
 		t.Errorf("output = %q", out.String())
 	}
 

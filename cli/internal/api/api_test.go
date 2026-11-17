@@ -19,6 +19,7 @@ import (
 	f10v1 "github.com/amberpixels/f10/cli/gen/f10/v1"
 	"github.com/amberpixels/f10/cli/gen/f10/v1/f10v1connect"
 	"github.com/amberpixels/f10/cli/internal/daemon"
+	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
 	"github.com/amberpixels/f10/cli/internal/seam"
@@ -420,5 +421,36 @@ func TestForwardNeedsText(t *testing.T) {
 		Forward(t.Context(), connect.NewRequest(&f10v1.ForwardRequest{Project: "/x", Task: "FT-1", Text: "  "}))
 	if connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Errorf("empty text = %v, want InvalidArgument", err)
+	}
+}
+
+// A start of a task by its id runs as a drive with the start's flags. A
+// discussion and a PR named by --task stay one-shot.
+func TestFlowStartArgv(t *testing.T) {
+	m := &f10v1.StartRequest{Flow: "local", Pace: "fast", Agent: "opus", After: "GH-7"}
+
+	argv, flow, err := flowStart(t.Context(), nil, m, "GH-1", "", "")
+	if err != nil || !flow {
+		t.Fatalf("flow = %v, %v", flow, err)
+	}
+
+	if got := strings.Join(argv, " "); got != "GH-1 --flow local --pace fast --after GH-7 --agent opus" {
+		t.Errorf("argv = %q", got)
+	}
+
+	planned, _, _ := flowStart(t.Context(), nil, &f10v1.StartRequest{}, "GH-1", "", launch.ModePlan)
+	if argv := strings.Join(planned, " "); argv != "GH-1 --plan" {
+		t.Errorf("plan argv = %q", argv)
+	}
+
+	for _, c := range []struct{ task, mode string }{{"", launch.ModeDiscuss}, {"GH-3", ""}} {
+		_, flow, err := flowStart(t.Context(), nil, &f10v1.StartRequest{}, "GH-1", c.task, c.mode)
+		if flow || err != nil {
+			t.Errorf("task %q mode %q: flow = %v, %v; want one-shot", c.task, c.mode, flow, err)
+		}
+	}
+
+	if _, _, err := flowStart(t.Context(), nil, &f10v1.StartRequest{Note: "hi"}, "GH-1", "", ""); err == nil {
+		t.Error("a note on a flow start was taken")
 	}
 }

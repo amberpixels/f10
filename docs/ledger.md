@@ -78,7 +78,7 @@ The column becomes a `COALESCE` over the old and the new name, so rows of both v
 
 `run_started` carries the run context in four keys: `f10_version`, `model`, `agent` and `profile`.
 `agent` is the agent kind, `claude` unless a profile names another.
-`profile` is the `kind`, `model` and `effort` that `f10 start` or `f10 drive` recorded on the branch.
+`profile` is the `kind`, `model` and `effort` that `f10 start` recorded on the branch.
 A key the hook could not learn is empty, and an interactive session has no `profile`.
 `session_stopped` fills the same keys only when the context changed since the session's last row that carried one, such as after a `/model` switch.
 On every other stop row they are present and empty.

@@ -8,18 +8,27 @@ import (
 	"github.com/amberpixels/f10/cli/internal/drivectl"
 )
 
-func TestParseDriveSubcommands(t *testing.T) {
+func TestParseDriveResumeAndBase(t *testing.T) {
 	cases := []struct {
 		args []string
 		want drivectl.DriveArgs
 		err  string
 	}{
-		{args: []string{"list"}, want: drivectl.DriveArgs{List: true}},
-		{args: []string{"list", "--all"}, want: drivectl.DriveArgs{List: true, All: true}},
-		{args: []string{"list", "GH-1"}, err: "only --all"},
-		{args: []string{"cancel", "3"}, want: drivectl.DriveArgs{Cancel: 3}},
-		{args: []string{"cancel"}, err: "one drive number"},
-		{args: []string{"cancel", "x"}, err: "not a drive number"},
+		{args: []string{"list"}, want: drivectl.DriveArgs{Tasks: []string{"list"}, Every: drivectl.DefaultEvery}},
+		{args: []string{"GH-1", "--plan"}, want: drivectl.DriveArgs{
+			Tasks: []string{"GH-1"}, PlanOnly: true, Every: drivectl.DefaultEvery,
+		}},
+		{args: []string{"GH-1", "--after", "GH-2"}, want: drivectl.DriveArgs{
+			Tasks: []string{"GH-1"}, After: "GH-2", Every: drivectl.DefaultEvery,
+		}},
+		{args: []string{"GH-1", "--base=release"}, want: drivectl.DriveArgs{
+			Tasks: []string{"GH-1"}, Base: "release", Every: drivectl.DefaultEvery,
+		}},
+		{args: []string{"GH-1", "--after", "GH-2", "--base", "main"}, err: "exclusive"},
+		{args: []string{"GH-1", "--plan", "--local"}, err: "exclusive"},
+		{args: []string{"GH-1", "GH-3", "--after", "GH-2"}, err: "start that task alone"},
+		{args: []string{"GH-1", "--", "GH-3", "--base", "main"}, err: "start that task alone"},
+		{args: []string{"--resume", "2", "--plan"}, err: "takes only"},
 		{args: []string{"--resume", "2", "--answer", "1. yes"}, want: drivectl.DriveArgs{
 			Resume: 2, Answers: []string{"1. yes"}, Every: drivectl.DefaultEvery,
 		}},
@@ -40,7 +49,8 @@ func TestParseDriveSubcommands(t *testing.T) {
 			}
 		case err != nil:
 			t.Errorf("%q: %v", c.args, err)
-		case got.List != c.want.List || got.All != c.want.All || got.Cancel != c.want.Cancel ||
+		case !slices.Equal(got.Tasks, c.want.Tasks) || got.PlanOnly != c.want.PlanOnly ||
+			got.After != c.want.After || got.Base != c.want.Base ||
 			got.Resume != c.want.Resume || got.Parallel != c.want.Parallel || !slices.Equal(got.Answers, c.want.Answers):
 			t.Errorf("%q = %+v, want %+v", c.args, got, c.want)
 		}

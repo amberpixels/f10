@@ -8,7 +8,7 @@ Every f10 run starts by loading it.
 
 - **skill** - an entry point the user invokes (`/f10:*`).
   A skill runs one or more steps.
-  `/f10:start`, `/f10:drive`, `/f10:finish`, `/f10:status`, `/f10:board`, `/f10:read` and `/f10:asks` run the binary and no step.
+  `/f10:start`, `/f10:finish`, `/f10:status`, `/f10:board`, `/f10:read` and `/f10:asks` run the binary and no step.
 - **step** - a unit of work in `steps/*.md`: `brainstorm`, `debug`, `capture`, `fetch`, `plan`, `judge`, `explain`, `catchup`, `implement`, `cleanup`, `commit`, `pr`, `push`, `review`, `resolve`, `ci`, `demo`, `handoff`, `deploy`, `standup`, `audit`.
   The skill owns the invocation: argument, modes, authorization and where the session stops.
   The step owns the work.
@@ -20,6 +20,7 @@ Every f10 run starts by loading it.
 - **project-defined step** - a flow entry with no generic step, such as `e2e`.
   Its overlay is the whole step.
 - **stage** - one ordered unit inside a plan, never a step or a skill.
+- **drive** - the daemon loop prompting started tasks per skill.
 - **task id** - the tracker's id, in the project's format.
   It names the plan file, the branch and the report's rows.
   A planless run from free text has none, and no step may invent one.
@@ -103,11 +104,11 @@ The full reference for humans is `docs/project-setup.md`.
 A fact belongs to whatever acts on it, which says what it means:
 
 - `flows`, `flow_by_area`, `report_back`, `tracker.status`: `/f10:ship`.
-  `flows` and `tracker.status`'s `started` also go to `f10 start` and `f10 drive`.
-- `ceiling`: `f10 drive`, `f10 flow` and every reader of a pace.
+  `flows` and `tracker.status`'s `started` also go to `f10 start`.
+- `ceiling`: `f10 start`, `f10 flow` and every reader of a pace.
 - `review`, `catchup`, `stale_after`: the **review**, **catchup** and **fetch** steps.
 - `traces`: the **commit**, **resolve**, **judge** and **catchup** steps, and `f10 finish`.
-- `agents`: `f10 start` and `f10 drive` (the task agent's `default`), and each step that spawns a subagent (point 6 above).
+- `agents`: `f10 start` (the task agent's `default`), and each step that spawns a subagent (point 6 above).
 
 Every heading is optional, and only **Tracker** matters for the pipeline's contracts.
 
@@ -210,5 +211,5 @@ The reason: `FT-70` does not autolink on GitHub, and a Jira, Linear or Notion id
 - **An id the tracker does not know**, or a read that fails, stays bare, with no invented title.
   That does not fail the step.
 - **Fixed-shape lines keep their shape**: `After:` holds one id, bare or as the markdown link `f10 task ref <id> --md` prints, never a tracker's native link.
-  The binary parses it (`f10 start`, `f10 drive`, `f10 task children`) and ignores a line with anything else after the id or the link.
+  The binary parses it (`f10 start`, `f10 task children`) and ignores a line with anything else after the id or the link.
 - The task the work belongs to keeps the form its host needs (a closing keyword such as `Closes #83`).

@@ -11,17 +11,21 @@ service RunService {
   // GetRunStatus is where f10 runs stand: one task's, a project's, or every
   // live run on the machine, with the question a stopped run waits on.
   rpc GetRunStatus(GetRunStatusRequest) returns (GetRunStatusResponse);
-  // Start opens a task's worktree, workspace and agent, already prompted.
+  // Start runs a task through its flow in a drive, as f10 start does. A
+  // discussion or a picked-up PR opens the worktree, workspace and agent,
+  // prompted once, since nothing steers an agent that waits for a person.
   rpc Start(StartRequest) returns (StartResponse);
-  // Drive runs a list of tasks through a flow, each once its base has a commit.
+  // Drive runs a list of tasks through a flow, each once its base has a
+  // commit, as f10 start does with several tasks.
   rpc Drive(DriveRequest) returns (DriveResponse);
   // Finish merges a task's PR and removes its worktree, branch and workspace.
   rpc Finish(FinishRequest) returns (FinishResponse);
   // Forward hands text to the agent working on a task, as f10 forward does.
   rpc Forward(ForwardRequest) returns (ForwardResponse);
-  // ListDrives lists a project's drive records, as f10 drive list does.
+  // ListDrives lists a project's drive records, as f10 status --drives does.
   rpc ListDrives(ListDrivesRequest) returns (ListDrivesResponse);
-  // CancelDrive stops a drive from prompting further and closes its asks.
+  // CancelDrive stops a drive from prompting further and closes its asks,
+  // as f10 stop does.
   rpc CancelDrive(CancelDriveRequest) returns (CancelDriveResponse);
 }
 
@@ -224,6 +228,8 @@ message StartRequest {
 }
 
 message StartResponse {
+  // task, branch, worktree, workspace_id and agent are a discussion's or a
+  // pickup's; a drive opens its task after the call returns.
   string task = 1;
   string branch = 2;
   string worktree = 3;
@@ -231,6 +237,10 @@ message StartResponse {
   string agent = 5;
   // printed is the report f10 start prints, and the waits it reported.
   Printed printed = 6;
+  // drive is the drive a flow start runs in, 0 for a discussion or a pickup.
+  int32 drive = 7;
+  // log is that drive's log file, which grows until the drive exits.
+  string log = 8;
 }
 
 // A DriveTask is one task of a drive, with its own agent profile.
@@ -251,7 +261,7 @@ message DriveRequest {
   int32 parallel = 8;
   // plan_first plans every task before any ships.
   bool plan_first = 9;
-  // args are the drive's arguments as `f10 drive` takes them. When set they
+  // args are the drive's arguments as `f10 start` takes them. When set they
   // win over the fields above, so a rerun of a typed command line keys to
   // the record it opened.
   repeated string args = 10;
@@ -358,7 +368,7 @@ message ListDrivesRequest {
 // A DriveRecord is one drive a project ran, by its number.
 message DriveRecord {
   int32 number = 1;
-  // args are the drive's arguments as f10 drive took them.
+  // args are the drive's arguments as f10 start took them.
   repeated string args = 2;
   // state is running, stopped, done or cancelled.
   string state = 3;
@@ -367,17 +377,20 @@ message DriveRecord {
 
 message ListDrivesResponse {
   repeated DriveRecord drives = 1;
-  // printed is the table f10 drive list prints.
+  // printed is the table f10 status --drives prints.
   Printed printed = 2;
 }
 
 message CancelDriveRequest {
   string project = 1;
+  // drive is the drive's number; task, when set instead, is a task id whose
+  // drive is stopped.
   int32 drive = 2;
   CallerContext caller = 3;
+  string task = 4;
 }
 
 message CancelDriveResponse {
-  // printed is what f10 drive cancel prints.
+  // printed is what f10 stop prints.
   Printed printed = 1;
 }

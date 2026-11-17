@@ -66,9 +66,14 @@ func (in *DriveInput) KeepFlow(ctx context.Context, branch string) (runplan.Ship
 func (in *DriveInput) open(ctx context.Context, r *DriveRun) error {
 	task := r.Task
 
-	after, note, err := stack.BodyAfter(ctx, in.Tracker, in.Main, task.Ref, task.info.Body)
-	if err != nil {
-		return err
+	// a typed --after or --base wins over the body, which is then not read,
+	// because its base may be a task not started
+	after, note := task.after, ""
+	if in.Args.After == "" && in.Args.Base == "" {
+		var err error
+		if after, note, err = stack.BodyAfter(ctx, in.Tracker, in.Main, task.Ref, task.info.Body); err != nil {
+			return err
+		}
 	}
 
 	var title func(context.Context) (string, error)
@@ -82,6 +87,7 @@ func (in *DriveInput) open(ctx context.Context, r *DriveRun) error {
 		Task:           task.Ref,
 		Suffix:         task.Suffix,
 		After:          after,
+		Base:           in.Args.Base,
 		Storage:        in.Storage,
 		Title:          title,
 		Profile:        task.profile,
@@ -156,6 +162,10 @@ func (in *DriveInput) open(ctx context.Context, r *DriveRun) error {
 	pos, err := in.position(ctx, o, skills)
 	if err != nil {
 		return err
+	}
+
+	if in.Args.PlanOnly && o.Plan != "" {
+		fmt.Fprintf(in.Out, "  planned already: /f10:plan %s in its pane plans it again\n", task.Ref.Head().ID)
 	}
 
 	r.O, r.Pos, r.Flow, r.Finishes = o, pos, fl, finishes

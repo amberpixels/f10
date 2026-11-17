@@ -44,7 +44,7 @@ The step ends in an **investigation brief** (point 6): a short write-up of what 
 
      A non-zero exit counts as `undated`, and its one line also gives the error.
    - **Anyway**: the steering word `anyway` is the user's override of the check.
-     It arrives as `/f10:plan <id> anyway`, `/f10:ship <id> anyway`, or `f10 drive --answer <id> anyway` sent to a blocked driven run.
+     It arrives as `/f10:plan <id> anyway`, `/f10:ship <id> anyway`, or `f10 start <id> --answer anyway` sent to a blocked driven run.
      Write it as a verdict file like any other: `subject: task <id>`, `verdict: proceed`, `reason: planned anyway by the user`, `run: before plan`, `decision: overridden`.
      Later runs then skip the judge, by the `judged <path>` rule above.
      Say in one line in the brief that the user overrode the check.

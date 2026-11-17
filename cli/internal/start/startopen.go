@@ -48,9 +48,6 @@ type StartInput struct {
 	Progress       io.Writer       // where a wait in progress is reported, or nil for nowhere
 	Pick           *hostops.Pickup // the PR picked up, or nil for a task started by its id
 	Note           string          // the user's words after the id, for the agent before it waits, or ""
-	// Children is the task's subtasks, read to refuse a parent; nil skips the
-	// check (see ChecksParent)
-	Children func(ctx context.Context, task ref.Ref) ([]stack.ChildRow, error)
 	// Started moves a task to tracker.status's started word; nil when none
 	// is declared, or for a PR picked up, whose task someone else started
 	Started func(ctx context.Context, task ref.Ref) error
@@ -113,7 +110,7 @@ func Launch(ctx context.Context, in StartInput) (Launched, error) {
 	l := Launched{OpenedTask: o, Agent: agentctl.AgentName(in.Task.ID, in.Suffix, o.Path)}
 
 	if o.Fresh {
-		text := launch.Prompt(in.Mode, in.Flow, o.Task.Label(), o.Dep, o.Plan, in.Pick, in.Note)
+		text := launch.Prompt(in.Mode, o.Task.Label(), o.Dep, o.Plan, in.Pick, in.Note)
 
 		sent := time.Now()
 

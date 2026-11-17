@@ -10,12 +10,10 @@ import (
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
-	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/storage"
-	"github.com/amberpixels/f10/cli/internal/ui"
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
@@ -42,41 +40,6 @@ type baseRef struct {
 	ref  string
 	flag string
 	sha  string
-}
-
-// ChecksParent reports whether start refuses a parent: a PR pickup is
-// someone else's branch, and talking an umbrella task through before
-// splitting it is what --discuss is for.
-func ChecksParent(mode string, pick *hostops.Pickup) bool {
-	return pick == nil && mode != launch.ModeDiscuss
-}
-
-// RefuseStartParent stops a parent with unfinished subtasks before anything
-// is created, since its agent would ship the whole umbrella on one branch.
-// A task with a branch was started already and reopens.
-func RefuseStartParent(ctx context.Context, in StartInput) error {
-	if in.Children == nil {
-		return nil
-	}
-
-	branched, err := stack.HasTaskBranch(ctx, in.Main, in.Task.ID)
-	if err != nil || branched {
-		return err
-	}
-
-	for _, m := range in.Task.MemberRefs() {
-		open, err := stack.OpenSubtasks(ctx, stack.Tracker{Children: in.Children}, m)
-		if err != nil {
-			return err
-		}
-
-		if len(open) > 0 {
-			return ui.Exit(ui.ExitParent, "%s is a parent of %s: run /f10:drive %s to drive them, "+
-				"or start one subtask (f10 start %s)", m.ID, strings.Join(open, ", "), m.ID, open[0])
-		}
-	}
-
-	return nil
 }
 
 // settleBundle refuses what would split a task across two branches, a rider

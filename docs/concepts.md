@@ -31,7 +31,7 @@ An entry can take an argument after a colon, such as `review:local`, `review:ci`
 
 Brainstorm, debug, judge, demo, explain, handoff, catchup and audit also run on their own, whenever you ask for them.
 
-`f10 start` and `f10 drive` run the `default` flow.
+`f10 start` runs the `default` flow.
 `--local` runs `local`, and `--flow <name>` runs any other.
 [Flows](project-setup.md#flows) and [Paces](project-setup.md#paces) cover declaring them.
 

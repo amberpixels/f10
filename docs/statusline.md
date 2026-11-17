@@ -124,7 +124,7 @@ Steps report precisely, and hooks report reliably.
 A phase left `upcoming` means that nobody reported on it.
 
 Both writers also append to a local [ledger](ledger.md), `~/.f10/f10.db`, a SQLite file outside every repo.
-It records what the hooks observed, what the artifacts hold, every badge call as the model claimed it, and every halt and finish `f10 drive` made itself.
+It records what the hooks observed, what the artifacts hold, every badge call as the model claimed it, and every halt and finish a drive made itself.
 Each row is tagged with its source.
 A write that fails goes to `~/.f10/ledger.spool`, and the next write replays it.
 `f10 ledger dump` prints the rows.

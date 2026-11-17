@@ -5,9 +5,7 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
-	startcmd "github.com/amberpixels/f10/cli/internal/command/start"
 	"github.com/amberpixels/f10/cli/internal/launch"
-	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 )
@@ -23,7 +21,7 @@ func TestStartLaunchesWithTheFirstPrompt(t *testing.T) {
 	f.Script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", testkit.Opened)
 
 	launched := "herdr agent start " + testkit.AgentOf("GH-1") + " --kind claude --pane pane:7 -- " +
-		launch.Prompt(startcmd.ModeDefault, runplan.ShipFlow{}, "GH-1", nil, "", nil, "") + " --effort high"
+		launch.Prompt(launch.ModeDiscuss, "GH-1", nil, "", nil, "") + " --effort high"
 	f.Script(launched, "{}")
 
 	in := start.StartInput{

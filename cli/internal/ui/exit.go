@@ -7,7 +7,7 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-// The exit codes skills, f10 drive and docs/cli.md read. A code's meaning
+// The exit codes skills, f10 start and docs/cli.md read. A code's meaning
 // is per command, so 6 and 7 also mean "drained" and "nothing watched" for
 // drive and watch (internal/daemon owns those, as its protocol writes them).
 const (
@@ -23,9 +23,6 @@ const (
 	ExitAsk = 4
 	// ExitHalted is a drive stopped by any other halt.
 	ExitHalted = 5
-	// ExitParent is start on a parent with unfinished subtasks: the start
-	// skill turns it into "drive them, or start one".
-	ExitParent = 6
 	// ExitRiders is finish of a bundle whose riders have no --close answer
 	// yet: the finish skill asks which the PR delivers and reruns.
 	ExitRiders = 7

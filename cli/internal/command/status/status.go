@@ -25,7 +25,14 @@ func Command() *cli.Command {
 		Usage:     "where this session's f10 run is, what it started or drove, a task's run in its own worktree, or every live run in this repo",
 		ArgsUsage: "[task-id]",
 		Flags: []cli.Flag{
-			&cli.BoolFlag{Name: "all", Usage: "every live run on this machine, not only this repo's"},
+			&cli.BoolFlag{
+				Name:  "all",
+				Usage: "every live run on this machine, not only this repo's; with --drives, the done and cancelled drives too",
+			},
+			&cli.BoolFlag{
+				Name:  "drives",
+				Usage: "this project's drives, the records f10 start keeps: running and stopped ones",
+			},
 			ui.JSONFlag("emit the same runs as JSON"),
 			&cli.BoolFlag{
 				Name: "plain",
@@ -40,6 +47,14 @@ func Command() *cli.Command {
 func runStatus(ctx context.Context, cmd *cli.Command) error {
 	all := cmd.Bool("all")
 	token := strings.TrimSpace(cmd.Args().First())
+
+	if cmd.Bool("drives") {
+		if token != "" {
+			return errors.New("status --drives lists every drive: it takes no task id")
+		}
+
+		return listDrives(ctx, cmd, all)
+	}
 
 	if token != "" && all {
 		return errors.New("status takes a task id or --all, not both: the id already picks a checkout")
@@ -73,4 +88,27 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 		statusview.StatusView{Out: cmd.Writer, Warn: cmd.ErrWriter, JSON: cmd.Bool("json"), Plain: cmd.Bool("plain")},
 		rep,
 	)
+}
+
+// listDrives is status --drives: the project's drive records, as the daemon
+// lists them.
+func listDrives(ctx context.Context, cmd *cli.Command, all bool) error {
+	c, err := apiclient.Dial(ctx)
+	if err != nil {
+		return err
+	}
+
+	caller, err := c.Caller(cmd)
+	if err != nil {
+		return err
+	}
+
+	res, err := c.Runs.ListDrives(ctx, connect.NewRequest(&f10v1.ListDrivesRequest{All: all, Caller: caller}))
+	if err != nil {
+		return apiclient.Err(err, cmd.Writer, cmd.ErrWriter)
+	}
+
+	apiclient.Print(cmd.Writer, cmd.ErrWriter, res.Msg.GetPrinted())
+
+	return nil
 }

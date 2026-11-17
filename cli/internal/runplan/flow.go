@@ -91,7 +91,7 @@ const LocalFlow = "local"
 func selectors(name string) []string {
 	switch name {
 	case "default":
-		return []string{"f10 start", "f10 drive"}
+		return []string{"f10 start"}
 	case LocalFlow:
 		return []string{"--local", "--flow " + LocalFlow}
 	default:

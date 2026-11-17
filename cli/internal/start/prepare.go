@@ -89,17 +89,8 @@ func Prepare(ctx context.Context, t *target.Target, req Request) (StartInput, er
 		Note:    note,
 	}
 
-	if ChecksParent(req.Mode, pick) {
-		in.Children = stack.TrackerFor(t).Children
-	}
-
 	if pick == nil {
 		in.Started = StartedMove(t)
-	}
-
-	// before the body's After: line, whose own refusal would hide this one
-	if err := RefuseStartParent(ctx, in); err != nil {
-		return StartInput{}, err
 	}
 
 	if err := startDependency(ctx, t, &in, r, pick, req.After, req.Base); err != nil {

@@ -1,4 +1,4 @@
-// Package drivestore keeps `f10 drive` durable: a record per drive under the
-// storage root, and a lease per task, so two drives, or a drive and
-// `f10 finish`, never act on one task at once.
+// Package drivestore keeps a drive durable: a record per drive under the
+// storage root, and a lease per task. The lease keeps two drives, or a
+// drive and `f10 finish`, from acting on one task at once.
 package drivestore

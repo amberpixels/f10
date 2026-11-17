@@ -2,14 +2,12 @@ package start
 
 import (
 	"bytes"
-	"context"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
-	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 )
@@ -45,7 +43,11 @@ func TestStartABundle(t *testing.T) {
 
 	agent := agentctl.AgentName("GH-1", "", path)
 	f.Script("herdr agent start "+agent+" --kind claude --pane pane:7", "{}")
-	f.Script("herdr agent prompt "+agent+" /f10:plan GH-1+GH-2 && /f10:ship GH-1+GH-2 --driven", "{}")
+	f.Script(
+		"herdr agent prompt "+agent+" Run `f10 task read GH-1+GH-2` and summarise what it asks in a few lines. "+
+			"Then stop and wait.",
+		"{}",
+	)
 
 	var out bytes.Buffer
 
@@ -155,26 +157,4 @@ func TestSettleBundle(t *testing.T) {
 			t.Errorf("settleBundle = %+v, %v for a single task", got, err)
 		}
 	})
-}
-
-// A parent anywhere in the bundle stops it, named by the member.
-func TestStartRefusesABundleWithAParent(t *testing.T) {
-	f := testkit.NewFakes(t)
-	f.Script(testkit.RefsLocal, "")
-
-	kids := func(_ context.Context, r ref.Ref) ([]stack.ChildRow, error) {
-		if r.ID == "GH-2" {
-			return []stack.ChildRow{{ID: "GH-5"}}, nil
-		}
-
-		return nil, nil
-	}
-
-	err := RefuseStartParent(
-		t.Context(),
-		StartInput{Main: "/code/repo", Storage: testkit.Storage, Task: testkit.Bundle12, Children: kids},
-	)
-	if err == nil || !strings.Contains(err.Error(), "GH-2 is a parent of GH-5") {
-		t.Errorf("err = %v, want GH-2 named as the parent", err)
-	}
 }

@@ -1,6 +1,6 @@
 # Mode · binary - a skill that only runs the f10 binary
 
-Some skills do all their work through one `f10` command: asks, board, drive, finish, read, start and status.
+Some skills do all their work through one `f10` command: asks, board, finish, read, start and status.
 The procedure of each is to run that command and relay its output.
 Such a skill runs no step and loads no conventions.
 Its `--help` runs the command's own help (`modes/help.md`).

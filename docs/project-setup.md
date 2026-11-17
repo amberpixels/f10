@@ -64,7 +64,7 @@ GitHub issues need no adapter: f10 reads and creates them.
 | `layering` | `extends` or `replaces`, in a linked worktree only | `extends` |
 | `tracker` | `kind` (`github`, `gitlab`, `notion`, `jira`), `id`, the task id format, an optional `priority` map from the four levels to the host labels that carry them, and an optional `status` map from `started` and `shipped` to the tracker's own words ([Reporting back](#reporting-back)) | host issues via `gh` or `glab`; ids prefixed from the project's name; no priority; no status moved |
 | `merge_method` | `squash`, `merge` or `rebase`, for `f10 finish` | the merge method the repo allows, else squash |
-| `catchup` | `rebase`, `merge` or `off`: how a branch is brought up to date with its base; `off` stops ship integrating before implement, `pr` and a change judge (it still asks about a base with no code), and leaves `/f10:catchup` and `f10 drive` running | `rebase` |
+| `catchup` | `rebase`, `merge` or `off`: how a branch is brought up to date with its base; `off` stops ship integrating before implement, `pr` and a change judge (it still asks about a base with no code), and leaves `/f10:catchup` and the drive running | `rebase` |
 | `catchup_stacked` | `merge` or `rebase`: how a branch is brought up to date with a base that is another task's branch, the stacked PR's target. `rebase` replays that base's old commits into the branch if the base later rebases or squash-merges; `merge` never does. Once the base is rewritten, a branch holding its recorded tip catches up by `onto` instead, whichever is declared | `merge` |
 | `traces` | `on` or `off`: what f10 leaves on the host. `Task:`, `Step:` and `Review:` trailers on every commit a step makes, `Task:` on the squash commit `f10 finish` lands, a hidden state block in the PR body rewritten by each step after the PR, and a local review's or a judge's commit status and PR comment after the PR; off, nothing | `off` |
 | `stale_after` | a number of days or weeks (`10d`, `3w`): fetch judges a task created longer ago than this before it is planned, from the created date the tracker shows; anything but proceed stops the run blocked | off |
@@ -276,7 +276,7 @@ flows:
 ```
 
 `f10 flow` lists them with what selects each.
-`f10 start` and `f10 drive` run `default`; `--local` runs `local`, the run ending in commits with nothing leaving the machine; `--flow <name>` runs any other, and an unknown name fails with the list; `f10 start --plan` stops after `plan`.
+`f10 start` runs `default`; `--local` runs `local`, the run ending in commits with nothing leaving the machine; `--flow <name>` runs any other, and an unknown name fails with the list; `f10 start --plan` plans every task and implements none.
 `plan` leads a flow or is absent: it runs only for a task with no plan file, so a planned task never plans again, and `/f10:ship` runs the entries after it.
 A flow with no `plan` writes no plan file: free-text input also skips capture and fetch, and a task id is fetched but not planned.
 An entry takes an argument after a colon, so each is one shell word.
@@ -316,7 +316,7 @@ A `handoff` entry writes the handoff file, which lists what the change leaves fo
 Every `pr` entry runs the handoff too and puts its body in the PR under `## Handoff`, so only a flow with no `pr` lists the entry to get that file.
 The entry adds a `handoff` row to the report and never changes the shipment.
 
-`f10 drive` runs each task through `/f10:plan` when the flow leads with `plan` and the task has no plan file.
+`f10 start` runs each task through `/f10:plan` when the flow leads with `plan` and the task has no plan file.
 Then it runs `/f10:ship`, then `finish` when the flow ends in a `finish` entry that the run's pace does not turn off (**Paces**).
 The pace is read under the project's ceiling.
 `finish` comes last in a flow, after a `pr` entry, because it merges that PR.
@@ -339,7 +339,7 @@ flow_by_area:
 A flow the user names still wins; a task whose areas map to nothing ships through `default`.
 Each value must name a declared flow.
 Never map an area to a flow with `push`: `push` runs only in a flow the user picked.
-With the map declared and no flow named, `f10 start` and `f10 drive` send `/f10:ship <id>` alone and record no flow on the branch: ship picks the flow from the task's area and plans as that flow says.
+With the map declared and no flow named, `f10 start` sends `/f10:ship <id>` alone and record no flow on the branch: ship picks the flow from the task's area and plans as that flow says.
 
 ## Paces
 
@@ -392,14 +392,14 @@ Paces come in three layers, merged per pace and per key, a later layer winning:
 3. The project's `paces:`, main's then the worktree's.
 
 The run's pace comes from the first of these that is set.
-First comes `--pace <name>` on `f10 start`, `f10 drive` or `/f10:ship`.
+First comes `--pace <name>` on `f10 start` or `/f10:ship`.
 Then comes the pace the task's branch records, then the project's `pace:`, then the user's `pace:`.
 `f10 status` draws a task's gates from its flow under that pace, so an entry the pace skips shows no gate.
 A `~/.f10/paces.md` the vocabulary refuses is a problem naming the file, which stops every command that acts on facts but `f10 config`, `f10 init` and `f10 doctor`.
 With none of them, the run takes `medium`.
 It has no built-in dials, so a project's `paces.medium` holds only its own.
 Untuned, it runs every flow as declared, an optional CI review (`ci?`) still settled.
-`f10 start --pace` and `f10 drive --pace` record the pace on the branch, replacing any earlier one, so a rerun that names none keeps it.
+`f10 start --pace` records the pace on the branch, replacing any earlier one, so a rerun that names none keeps it.
 Only a typed `--pace` is recorded, so a later `pace:` in `project.md` still reaches an existing task.
 `/f10:ship --pace` applies to that run alone.
 An unknown name fails with the list of paces.
@@ -460,7 +460,7 @@ agents:
 ```
 
 Two layers of the same map merge **key by key**, the later winning: your defaults in `~/.f10/agents.md` (YAML frontmatter with an `agents:` map, as `~/.f10/standup.md`), then the project's `agents:` (main's and a worktree's layers merged key by key too).
-A step's profile is then `default`, overlaid segment by segment by a run's flag (`f10 start --agent`, `f10 drive --agent`, a task's own `<id>:<profile>`), then by `<step>`, then by `<step>.<kind>`, the kind fetch settled (`feature`, `bug`, `refactor`, `spike`).
+A step's profile is then `default`, overlaid segment by segment by a run's flag (`f10 start --agent`, a task's own `<id>:<profile>`), then by `<step>`, then by `<step>.<kind>`, the kind fetch settled (`feature`, `bug`, `refactor`, `spike`).
 So `--agent low` over `default: opus:high` runs on `opus:low`, and the flag is recorded on the branch, where `f10 agents` reads it back for a spawning step's line.
 A key is `default`, a step some declared flow names (the default flow included), or a step that spawns a subagent.
 The steps that spawn a subagent are `audit`, `cleanup`, `judge` and `review`, and each is a key because it also runs as a skill outside any flow.
@@ -470,7 +470,7 @@ A misspelt step is refused, as is a profile the kind refuses.
 
 What reaches where is explicit, and `f10 agents` prints it per step:
 
-- the task's agent (`f10 start`, `f10 drive`) starts on `default`, its model and effort as flags on the command line; the profile is recorded on the branch, so a rerun keeps it unless a flag names another, and `f10 start`'s report, the drive's open line and `f10 status` name it when it is not the kind's default;
+- the task's agent (`f10 start`) starts on `default`, its model and effort as flags on the command line; the profile is recorded on the branch, so a rerun keeps it unless a flag names another, and `f10 start`'s report, the drive's open line and `f10 status` name it when it is not the kind's default;
 - a step that spawns a subagent passes its own key's profile to the Agent tool.
   Those subagents are the **review** step's blind reviewer, `judge --blind`'s judge, **cleanup**'s rules check and the **audit** step's reviewers.
   The project load (`f10-load-project.sh <step>`) prints each requested step's line, with the model family and effort word in the form the Agent tool takes;
@@ -534,7 +534,7 @@ Where the tracker is the host's issues and the shipment is a PR carrying the tas
 ```yaml
 tracker:
   status:
-    started: In progress   # f10 start or f10 drive, once the worktree exists
+    started: In progress   # f10 start, once the worktree exists
     shipped: Done          # a ship run, after its last step
 ```
 

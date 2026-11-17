@@ -35,7 +35,7 @@ func RefuseStalled(in StallCheck, ws *agentctl.Workspace, agent, root string) er
 		if p := runningPhase(r); p != "" {
 			return fmt.Errorf("agent %s in workspace %s is idle while its run says %s %s: "+
 				"it is waiting on something in its own pane: answer it there, or if that run was cancelled, "+
-				"quit that agent and rerun f10 start or f10 drive, which start a new one in its place",
+				"quit that agent and rerun f10 start, which starts a new one in its place",
 				agent, cmp.Or(ws.Label, ws.ID), p, r.PhaseText(p))
 		}
 	}

@@ -35,7 +35,7 @@ func deliverer(sup Supervisor) agents.Deliverer {
 			if !daemon.Supported {
 				fmt.Fprintf(
 					w,
-					"drive %d is stopped: f10 drive --resume %d in %s takes the answer\n",
+					"drive %d is stopped: f10 start --resume %d in %s takes the answer\n",
 					a.Drive,
 					a.Drive,
 					a.Main,
