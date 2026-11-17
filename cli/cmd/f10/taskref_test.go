@@ -132,10 +132,14 @@ esac
 		t.Fatalf("report: %v", err)
 	}
 
-	want := "FT-71        Parent  ↗ https://tracker.example/71\n" +
-		"├─ FT-72     one     ↗ https://tracker.example/72\n" +
-		"│  └─ FT-73  two     ↗ https://tracker.example/73\n" +
-		"└─ FT-74     three   ↗ https://tracker.example/74\n"
+	want := "FT-71        Parent\n" +
+		"│            ↗ https://tracker.example/71\n" +
+		"├─ FT-72     one\n" +
+		"│  │         ↗ https://tracker.example/72\n" +
+		"│  └─ FT-73  two\n" +
+		"│            ↗ https://tracker.example/73\n" +
+		"└─ FT-74     three\n" +
+		"             ↗ https://tracker.example/74\n"
 	if out != want {
 		t.Errorf("children =\n%s\nwant\n%s", out, want)
 	}

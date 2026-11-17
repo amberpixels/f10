@@ -13,7 +13,7 @@ import (
 )
 
 // `task report --children` draws the parent, then its open subtasks nested
-// by After:, each with its title and url.
+// by After:, each with its title and its url on the line under it.
 func TestTaskReportChildrenTree(t *testing.T) {
 	f := testkit.NewFakes(t)
 	tg := testkit.ChildTarget(t, "gh")
@@ -35,9 +35,12 @@ func TestTaskReportChildrenTree(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := "FT-71        Rate limits  ↗ https://x/71\n" +
-		"└─ FT-72     base         ↗ https://x/72\n" +
-		"   └─ FT-73  later        ↗ https://x/73\n"
+	want := "FT-71        Rate limits\n" +
+		"│            ↗ https://x/71\n" +
+		"└─ FT-72     base\n" +
+		"   │         ↗ https://x/72\n" +
+		"   └─ FT-73  later\n" +
+		"             ↗ https://x/73\n"
 	if out.String() != want {
 		t.Errorf("tree =\n%s\nwant\n%s", out.String(), want)
 	}
