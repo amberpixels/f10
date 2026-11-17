@@ -20,10 +20,7 @@ Every f10 run starts by loading it.
 - **project-defined step** - a flow entry with no generic step, such as `e2e`.
   Its overlay is the whole step.
 - **stage** - one ordered unit inside a plan, never a step or a skill.
-- **drive** - the loop `f10 start` hands its tasks to, run by the per-user f10 daemon.
-  It opens each task and prompts its agent one skill at a time: plan, ship, then finish when the flow ends in it.
-  It keeps a record under `<storage root>/drives/`.
-  A discussion and a picked-up PR get no drive, because their agent waits for a person.
+- **drive** - the daemon loop prompting started tasks per skill.
 - **task id** - the tracker's id, in the project's format.
   It names the plan file, the branch and the report's rows.
   A planless run from free text has none, and no step may invent one.
