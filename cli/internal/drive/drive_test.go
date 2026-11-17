@@ -4320,60 +4320,23 @@ func TestDriveReleasedOnTheBasesPlanUnderPlanOnly(t *testing.T) {
 	}
 }
 
-// Under --plan a base outside the list is accepted once its plan is saved,
-// and refused with "plan it first" while it has none.
-func TestDriveGraphTakesAPlannedBaseUnderPlanOnly(t *testing.T) {
-	setup := func(t *testing.T, args ...string) *driveFixture {
-		t.Helper()
+// Under --plan a base outside the list with a plan but no branch is refused
+// before anything opens, since start stacks the dependent on the base's branch.
+func TestDrivePlanOnlyRefusesAnUnstartedPlannedBase(t *testing.T) {
+	fx := newDriveFixture(t, "GH-2", "--plan")
+	fx.in.Storage = storage.Root(t.TempDir())
+	fx.task("GH-2", tasksource.TaskInfo{Body: "After: GH-9"}, "")
+	fx.task("GH-9", tasksource.TaskInfo{Body: "open"}, "")
+	testkit.WritePlan(t, fx.in.Storage.Plan("GH-9"))
 
-		fx := newDriveFixture(t, args...)
-		fx.in.Storage = storage.Root(t.TempDir())
-		fx.task("GH-2", tasksource.TaskInfo{Body: "After: GH-9"}, "")
-		fx.task("GH-9", tasksource.TaskInfo{Body: "open"}, "")
-
-		return fx
+	err := fx.drive(t)
+	if err == nil || !strings.Contains(err.Error(), "not started and not finished") {
+		t.Fatalf("err = %v", err)
 	}
 
-	graph := func(t *testing.T, fx *driveFixture) error {
-		t.Helper()
-
-		tasks, _, err := fx.in.resolveTasks(t.Context())
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		_, _, err = fx.in.graph(t.Context(), tasks)
-
-		return err
+	if fx.f.Called("wt") || fx.f.Called("herdr") {
+		t.Error("something was created before the refusal")
 	}
-
-	t.Run("planned", func(t *testing.T) {
-		fx := setup(t, "GH-2", "--plan")
-		testkit.WritePlan(t, fx.in.Storage.Plan("GH-9"))
-
-		if err := graph(t, fx); err != nil {
-			t.Errorf("a planned base was refused: %v", err)
-		}
-	})
-
-	t.Run("not planned", func(t *testing.T) {
-		fx := setup(t, "GH-2", "--plan")
-
-		err := graph(t, fx)
-		if err == nil || !strings.Contains(err.Error(), "add GH-9 to the list, or plan it first") {
-			t.Errorf("err = %v", err)
-		}
-	})
-
-	t.Run("planned, without --plan", func(t *testing.T) {
-		fx := setup(t, "GH-2")
-		testkit.WritePlan(t, fx.in.Storage.Plan("GH-9"))
-
-		err := graph(t, fx)
-		if err == nil || !strings.Contains(err.Error(), "or finish it first") {
-			t.Errorf("err = %v", err)
-		}
-	})
 }
 
 // Under --plan a dependent opens once its base's plan is saved, while the

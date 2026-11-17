@@ -831,7 +831,6 @@ A cancelled record is never picked up again: the same command line starts a new 
    Where the two disagree, the branch wins, with a note.
    The map is rebuilt on every run, and nothing about it is stored.
    A base outside the list that is not finished is refused, and so are tasks that wait on each other in a circle, both before anything is created.
-   Under `--plan` a base outside the list with a saved plan is accepted, because the dependent's plan designs against that plan.
    Within the list the graph sets the order: a base runs first wherever it is listed, and among tasks ready at once the one listed first goes first.
 4. **Per task.**
    A task starts once its base releases it.
