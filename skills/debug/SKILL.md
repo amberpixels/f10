@@ -25,8 +25,8 @@ argument-hint: "<error | trace | logs | screenshot | description>"
 
 **Run**
 1. Run `f10-load-project.sh debug capture fetch` and `f10-load-project.sh investigate plan` first, on every call of this skill, as two calls in the same message.
-   Together they pass the 25,000 characters a load keeps under the Bash output cap.
-2. Follow the **debug** step it prints.
+   Loaded in one call they pass the Bash output cap.
+2. Follow the **debug** step the first load prints.
    For each bug with a confirmed cause, run the path it chose.
    The usual path runs **capture**, then **fetch**, **investigate** and **plan**.
    The other is the quicker flow the user picked.
