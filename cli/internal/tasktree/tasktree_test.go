@@ -153,3 +153,48 @@ func TestFillAndColumns(t *testing.T) {
 		t.Errorf("got:\n%q\nwant:\n%q", b.String(), want)
 	}
 }
+
+// A Column note starts under the second cell on every row, the guides
+// beside it, while an unaligned tree keeps the per-row column.
+func TestColumnNote(t *testing.T) {
+	t.Parallel()
+
+	url := func(s string) []Note { return []Note{{Text: "↗ " + s, Whole: true, Column: true}} }
+	nodes := []Node{
+		{Cells: cells("FT-1", "parent"), Notes: url("u1")},
+		{Depth: 1, Cells: cells("FT-2", "child"), Notes: url("u2")},
+		{Depth: 2, Cells: cells("FT-3", "grandchild"), Notes: url("u3")},
+		{Depth: 1, Cells: cells("FT-4", "last"), Notes: url("u4")},
+	}
+
+	for _, tc := range []struct {
+		tree Tree
+		want string
+	}{
+		{Tree{Align: true, Width: 20}, "FT-1        parent\n" +
+			"│           ↗ u1\n" +
+			"├─ FT-2     child\n" +
+			"│  │        ↗ u2\n" +
+			"│  └─ FT-3  grandchild\n" +
+			"│           ↗ u3\n" +
+			"└─ FT-4     last\n" +
+			"            ↗ u4\n"},
+		{Tree{}, "FT-1  parent\n" +
+			"│     ↗ u1\n" +
+			"├─ FT-2  child\n" +
+			"│  │     ↗ u2\n" +
+			"│  └─ FT-3  grandchild\n" +
+			"│           ↗ u3\n" +
+			"└─ FT-4  last\n" +
+			"         ↗ u4\n"},
+	} {
+		var b strings.Builder
+		if err := tc.tree.Write(&b, nodes); err != nil {
+			t.Fatal(err)
+		}
+
+		if b.String() != tc.want {
+			t.Errorf("got:\n%s\nwant:\n%s", b.String(), tc.want)
+		}
+	}
+}

@@ -22,12 +22,15 @@ type Cell struct {
 	Fill bool
 }
 
-// A Note is a labelled line under a row: an ask, a halt, a gate. Whole
+// A Note is a labelled line under a row, such as an ask, a halt or a url. Whole
 // keeps it uncut, for text a reader acts on (a url, a question).
 type Note struct {
 	Label string
 	Text  string
 	Whole bool
+	// Column starts the note under the row's second cell when the tree
+	// aligns, so it reads as part of that column rather than per row.
+	Column bool
 }
 
 // A Node is one task. Depth 0 is the top level; a node one deeper than the
@@ -94,10 +97,15 @@ func (t Tree) Write(w io.Writer, nodes []Node) error {
 				label = t.Label(label)
 			}
 
-			gap := strings.Repeat(" ", text-2-width(note.Label)-width(conts[i]))
+			at := text
+			if note.Column && len(widths) > 0 {
+				at = max(widths[0]+2, width(conts[i])+1+width(note.Label)+2)
+			}
+
+			gap := strings.Repeat(" ", at-2-width(note.Label)-width(conts[i]))
 			value := note.Text
 			if !note.Whole {
-				value = t.cut(value, text)
+				value = t.cut(value, at)
 			}
 
 			b.WriteString(t.Indent + conts[i] + gap + label + "  " + value + "\n")

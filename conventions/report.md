@@ -44,12 +44,15 @@ Ids go in `After:` order, a task outside the chain last.
 Titles go in the prose beneath.
 
 A parent and its subtasks take one block, from `f10 task report --children <parent>`.
-It draws the parent, then its open subtasks nested by `After:`, each with title and url:
+It draws the parent, then its open subtasks nested by `After:`, each url under its title:
 
 ```
-FT-71        Rate limits    ↗ https://tracker.example/71
-├─ FT-72     Count per key  ↗ https://tracker.example/72
-│  └─ FT-73  Reject excess  ↗ https://tracker.example/73
+FT-71        Rate limits
+│            ↗ https://x/71
+└─ FT-72     Count per key
+   │         ↗ https://x/72
+   └─ FT-73  Reject excess
+             ↗ https://x/73
 ```
 
 Titles break the highlighting, so it prints untagged.
