@@ -44,6 +44,9 @@ Any commit this step makes follows `conventions/context.md` → Commits, with `-
    - Write the draft to a temp file outside the repo.
    - In stealth mode, the branch name, the commits and the PR text carry no f10 traces.
    - Another task named in the PR text is a link carrying its title, from `f10 task ref <id>... --md` (`conventions/context.md` → Task references).
+   - **The title opens with the task id**, in the `tracker.title` form, else as `<id>: <title>`.
+     With the plain commands, draft the task's title alone, because `f10 pr create` and `f10 pr edit` write the id onto any title that does not open with it.
+     A skill adapter opens and refreshes the PR itself, so its draft carries the id in that form.
    - A **bundle** is several tasks shipped in one PR, and the `task:` line of `f10 pr view` names it as `<lead>+<riders>`.
      Draft a bundle's title from the lead's, and its body links every member with its title.
      The riders go after the lead id, up to two and then a count (`ABC-1 (+ABC-2, ABC-3, 2 more): <lead title>`).
@@ -98,7 +101,7 @@ Any commit this step makes follows `conventions/context.md` → Commits, with `-
      Draft the title and body as point 5 says, and never patch the old body ("also adds…").
      Draft from the task, the plan and `f10 pr diff`, which shows the change against the PR's own base as just pushed.
      `## Handoff` comes from the handoff just run, never from the old body.
-     The title keeps its task id.
+     The title opens with its task id, as point 5 says.
      Links to other tasks come from `f10 task ref <id>... --fresh --md`, so the PR merges with their current titles and urls.
    - **Owned sections** are sections the overlay names as maintained elsewhere, such as a screenshots section a script regenerates.
      Copy each one verbatim from the old body into its place in the new one.

@@ -12,6 +12,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/seam"
 	"github.com/amberpixels/f10/cli/internal/shell"
+	"github.com/amberpixels/f10/cli/internal/tasktitle"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 )
 
@@ -218,23 +219,39 @@ func TestRequireOpen(t *testing.T) {
 	}
 }
 
-// pr create and pr edit name a bundle's riders after the lead id, whatever
-// the draft said; a task alone, no task and a body-only edit keep the title.
+// pr create and pr edit open every title with the lead's id, through
+// tracker.title, and name a bundle's riders after it, whatever the draft said.
 func TestPullTitle(t *testing.T) {
+	lone := &ref.Ref{ID: "GH-1", Number: "1"}
 	bundle := &ref.Ref{ID: "GH-1", Number: "1", Bundle: []string{"GH-1", "GH-2", "GH-3"}}
+	rider := &ref.Ref{ID: "GH-2", Number: "2", Bundle: []string{"GH-1", "GH-2"}}
 
 	for _, tc := range []struct {
+		name  string
 		title string
 		task  *ref.Ref
+		tmpl  tasktitle.Template
 		want  string
 	}{
-		{"GH-1: Lead", bundle, "GH-1 (+GH-2, GH-3): Lead"},
-		{"GH-1: Lead", &ref.Ref{ID: "GH-1", Number: "1"}, "GH-1: Lead"},
-		{"GH-1: Lead", nil, "GH-1: Lead"},
-		{"", bundle, ""},
+		{"a title with the id stays", "GH-1: Lead", lone, "{id}: {title}", "GH-1: Lead"},
+		{"a title without the id gets it", "Lead", lone, "{id}: {title}", "GH-1: Lead"},
+		{"a lowercase id counts", "gh-1 Lead", lone, "{id}: {title}", "gh-1 Lead"},
+		{"GH-1 is not the start of GH-12", "GH-12 Lead", lone, "{id}: {title}", "GH-1: GH-12 Lead"},
+		{"an id further in gets the prefix", "Lead for GH-1", lone, "{id}: {title}", "GH-1: Lead for GH-1"},
+		{"no template prefixes the id and a colon", "Lead", lone, "", "GH-1: Lead"},
+		{"the template's shape is kept", "Lead", lone, "[{id}] {title}", "[GH-1] Lead"},
+		{"a template with the id at the end", "Lead", lone, "{title} ({id})", "Lead (GH-1)"},
+		{"a title already through the template stays", "Lead (GH-1)", lone, "{title} ({id})", "Lead (GH-1)"},
+		{"a bundle with the id names its riders", "GH-1: Lead", bundle, "{id}: {title}", "GH-1 (+GH-2, GH-3): Lead"},
+		{"a bundle without the id gets both", "Lead", bundle, "{id}: {title}", "GH-1 (+GH-2, GH-3): Lead"},
+		{"a rider's ref prefixes the lead", "Lead", rider, "{id}: {title}", "GH-1 (+GH-2): Lead"},
+		{"no task keeps the title", "Lead", nil, "{id}: {title}", "Lead"},
+		{"a body-only edit keeps no title", "", bundle, "{id}: {title}", ""},
 	} {
-		if got := prcmd.PullTitle(tc.title, tc.task); got != tc.want {
-			t.Errorf("PullTitle(%q) = %q, want %q", tc.title, got, tc.want)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			if got := prcmd.PullTitle(tc.title, tc.task, tc.tmpl); got != tc.want {
+				t.Errorf("PullTitle(%q) = %q, want %q", tc.title, got, tc.want)
+			}
+		})
 	}
 }
