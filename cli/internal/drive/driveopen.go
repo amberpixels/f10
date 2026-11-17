@@ -609,10 +609,9 @@ func onProfile(o start.OpenedTask) string {
 	return " on " + o.Profile.Short()
 }
 
-// discussionTurn says whether the task's worktree was handed over from a
-// discussion whose agent is still working: the agent ran f10 start in the
-// turn that has not ended, and a skill attached to that turn would be read
-// as one that stopped without reporting. Once the agent rests, the mark goes.
+// discussionTurn holds a handed-over task's first skill while the
+// discussion's agent works: that turn ran f10 start, and a skill attached
+// to it would read as a stop with no report. At rest, the mark goes.
 func (in *DriveInput) discussionTurn(ctx context.Context, r *DriveRun) (bool, error) {
 	marked, err := branchmeta.Get(ctx, in.Main, r.O.Branch, branchmeta.Discuss)
 	if err != nil || marked == "" {

@@ -511,9 +511,8 @@ func runWatchPass(ctx context.Context, cmd *cli.Command, t *target.Target) error
 }
 
 // handOver gives a discussion's worktree to the start's first group and
-// hands the drive to the daemon, when the start runs in one. It never
-// follows the drive, because the drive prompts this worktree's agent, whose
-// turn is the one running this command.
+// hands the drive to the daemon. It never follows the drive, because the
+// drive prompts this worktree's agent, whose turn runs this command.
 func handOver(ctx context.Context, w io.Writer, t *target.Target, argv []string, a drivectl.DriveArgs) (bool, error) {
 	// the daemon's own drive process runs in this worktree after the hand-off
 	if a.Resume > 0 || len(a.Tasks) == 0 || os.Getenv(daemon.ResumeEnv) != "" {

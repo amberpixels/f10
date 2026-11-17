@@ -114,10 +114,9 @@ func PrepareHandOver(ctx context.Context, t *target.Target, branch, first string
 	return h, nil
 }
 
-// Run renames the agent and the workspace, then the branch, and records
-// the group's lead and riders over the discussed task's facts. A failure
-// puts back what it changed; on success, the returned func undoes the
-// whole hand-off, for a drive the daemon then refuses.
+// Run renames the agent, the workspace and then the branch, and records the
+// group's lead. A failure puts back what it changed; the returned func
+// undoes the whole hand-off, for a drive the daemon refuses.
 func (h HandOver) Run(ctx context.Context) ([]string, func(context.Context) error, error) {
 	b := agents.Agents(h.Path)
 
@@ -197,10 +196,9 @@ var leadKeys = []branchmeta.Key{
 	branchmeta.Moved, branchmeta.Landed, branchmeta.Agent, branchmeta.Flow, branchmeta.Pace, branchmeta.Drive,
 }
 
-// moveBranch renames the branch, which moves its recorded facts with it,
-// then writes the group's lead and riders in place of the discussed task's.
-// It returns what puts the name and the facts back; a failure midway puts
-// them back itself.
+// moveBranch renames the branch, its facts moving with it, and records the
+// group's lead. It returns what puts both back, and undoes itself when it
+// fails midway.
 func (h HandOver) moveBranch(ctx context.Context) (func(context.Context) error, error) {
 	kept := map[branchmeta.Key]string{}
 
