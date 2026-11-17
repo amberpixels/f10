@@ -1886,7 +1886,7 @@ Text that leaves the machine never carries the marker.
 One id prints its `task`, `title` and `url` rows.
 Several ids print a row each, in the order given: the id as the label, `↗ <url>` as the value.
 A task with no url known prints bare, and the exit is 0.
-`--children` takes one parent and hangs its open subtasks under it, nested by `After:` as `f10 task children` orders them, each row with its title and url.
+`--children` takes one parent and hangs its open subtasks under it, nested by `After:` as `f10 task children` orders them, each with its title and, on the line under the title, its url.
 A tracker with no parent link prints the parent's facts with a note on stderr, and the exit is 0 either way.
 It shows no run stages or gates, which a task just captured cannot have.
 

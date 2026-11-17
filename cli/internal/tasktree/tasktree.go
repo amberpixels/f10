@@ -22,7 +22,7 @@ type Cell struct {
 	Fill bool
 }
 
-// A Note is a labelled line under a row: an ask, a halt, a gate. Whole
+// A Note is a labelled line under a row: an ask, a halt, a gate, a url. Whole
 // keeps it uncut, for text a reader acts on (a url, a question).
 type Note struct {
 	Label string
