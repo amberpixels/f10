@@ -62,7 +62,7 @@ Deploy has its own confirmation (the **deploy** step).
 3. Load each flow entry just before it runs, in one call with its badge: `f10-state.sh set ship running <entry>; f10-load-project.sh <step>`, and follow the step from that load.
    A `review` entry loads `review` and `resolve` as two calls in the same message, because together they pass the Bash output cap.
    A `pr` entry loads `pr handoff` unless its `handoff off` dial is set, because the pr step runs the handoff.
-   The catchup guard (below) adds `catchup` to the load of each entry it guards.
+   The catchup guard (below) loads `catchup` in a call of its own, in the same message as the load of the entry it guards, because together they pass the Bash output cap.
 4. **Read the checks at each boundary** once the branch has an open PR (after the first `pr` entry), in the same call as the load: `f10-state.sh set ship running <entry>; f10 pr checks --brief; f10-load-project.sh <step>`.
    It costs no turn, because the line comes back with the step.
    - `checks: red`: run `f10-load-project.sh ci catchup` and the **ci** step before the entry, under the entry's badge.
@@ -141,7 +141,7 @@ In the main checkout, discard the experiment code by the paths the report names 
 Its report back (below) carries the question, the answer and the recommendation; it names the spike report's path only under `visibility: public`, since stealth keeps `.f10/` paths off the tracker.
 The kind is known from the plan, or a planless run's inline plan, before the flow starts, so the badge declares `f10-state.sh pipeline implement`, and a dry run prints the path cut at implement.
 
-**The catchup guard** brings the base in before three kinds of entry, as the **catchup** step's **As a guard** says; under `catchup: off` it never integrates and its load leaves `catchup` out, but the question below for a base with no code still runs.
+**The catchup guard** brings the base in before three kinds of entry, as the **catchup** step's **As a guard** says; under `catchup: off` it never integrates and `catchup` is not loaded, but the question below for a base with no code still runs.
 Catchup is never a flow entry.
 
 - **Before implement**, only where `f10 start --after` or `f10 finish` recorded a base on the branch (`f10-after-branch` or `f10-landed`); `f10 pr catchup --guard implement` prints `method: skip` otherwise.
@@ -158,7 +158,7 @@ Catchup is never a flow entry.
 - **Before a change judge** (a `judge` after `implement`; the plan judge has no code): with uncommitted work in the tree (implement leaves its work uncommitted, so `implement judge pr` always has some), skip it in one line: that judge sees the branch on its old base, and a later `pr` entry's guard, when the flow has one, brings the base in before the code leaves.
   After a `pr` entry, push the integration, never forcing, so the PR head is the code judged and the judge's status lands on it.
 
-The guard runs under the entry it guards, in that entry's load (`catchup pr`) and badge.
+The guard runs under the badge of the entry it guards, from its own `catchup` load.
 A failure is `set ship failed <entry>`, or `partial` once the run left something durable, the guard's own commit or an open PR (`conventions/failure.md` rule 7), its `state` row naming that commit and its `note` naming catchup and `/f10:catchup`.
 In the same call, after that `set`, run `f10-state.sh stop guard`, because the drive tells the guard's stop from any other failure by that kind alone.
 The guard marks the branch before failing (the **catchup** step).

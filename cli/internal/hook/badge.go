@@ -20,8 +20,9 @@ type badge struct {
 // planningSteps are loaded before a pipeline runs, never as a pipeline step.
 var planningSteps = []string{"capture", "capture-adapter", "fetch", "investigate", "stale", "debug", "plan"}
 
-// entryParts are loaded inside a review entry, so they never name the leaf.
-var entryParts = []string{"resolve", "review-ci", "review-host", "review-local"}
+// entryParts are loaded inside an entry (a review's parts, the catchup
+// guard's step), so they never name the leaf.
+var entryParts = []string{"catchup", "resolve", "review-ci", "review-host", "review-local"}
 
 func (b badge) Observe(ctx context.Context, o observe.Observation) error {
 	if b.session == "" {

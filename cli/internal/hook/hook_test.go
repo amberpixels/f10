@@ -302,6 +302,7 @@ func TestStepStartedFillsInTheShipLeaf(t *testing.T) {
 		{"several steps name none", state.Run{Skill: "ship", Capture: "prior", Plan: "done", Ship: "running", Leaf: "pr"}, "bash-load-planning", "running", "pr", false},
 		{"a planning step alone names none", state.Run{Skill: "ship", Capture: "prior", Plan: "running", Ship: "upcoming"}, "bash-load-stale", "upcoming", "", false},
 		{"a review part keeps the review leaf", state.Run{Skill: "ship", Capture: "prior", Plan: "done", Ship: "running", Leaf: "review"}, "bash-load-review-ci", "running", "review", false},
+		{"the catchup guard keeps its entry's leaf", state.Run{Skill: "ship", Capture: "prior", Plan: "done", Ship: "running", Leaf: "pr"}, "bash-load-catchup", "running", "pr", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			env := testEnv(t)

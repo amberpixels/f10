@@ -8,8 +8,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-
-	"github.com/amberpixels/f10/cli/internal/flow"
 )
 
 // A run reads only the steps f10-load-project.sh prints, so a step a skill
@@ -36,7 +34,6 @@ var (
 		"audit", "brainstorm", "capture", "capture-adapter", "ci", "debug", "explain",
 		"fetch", "investigate", "plan", "review-ci", "review-host", "review-local", "stale", "standup",
 	}
-	guardedSteps = flow.Guarded
 )
 
 func shipLoads() [][]string {
@@ -45,18 +42,36 @@ func shipLoads() [][]string {
 		{"fetch"},
 		{"investigate", "plan"},
 		{"investigate"},
+		{"pr", "handoff"},
 	}
-	// a review entry loads resolve in a call of its own, and resolve is never named
+	// a review entry and the catchup guard load resolve and catchup in calls of
+	// their own, so each flow step is one load
 	for _, s := range flowSteps {
 		loads = append(loads, []string{s})
 	}
 
-	// the catchup guard joins the load of each entry it guards
-	for _, s := range guardedSteps {
-		loads = append(loads, []string{"catchup", s})
+	return loads
+}
+
+const ship = "skills/ship/SKILL.md"
+
+// loadSites returns every load a run makes: ship's flow entry loads, then each
+// f10-load-project.sh call written in files.
+func loadSites(files map[string][]mdLine) []loadSite {
+	var sites []loadSite
+	for _, s := range shipLoads() {
+		sites = append(sites, loadSite{where: ship + " (flow entry load)", steps: s})
 	}
 
-	return loads
+	for _, lines := range files {
+		for _, l := range lines {
+			for _, call := range loadCalls(l.text) {
+				sites = append(sites, loadSite{where: l.where, steps: call})
+			}
+		}
+	}
+
+	return sites
 }
 
 type loadSite struct {
@@ -165,20 +180,16 @@ func TestStepReferences(t *testing.T) {
 		skillLoads[rel] = nil
 	}
 
-	const ship = "skills/ship/SKILL.md"
-
-	var sites []loadSite
-	for _, s := range shipLoads() {
-		sites = append(sites, loadSite{where: ship + " (flow entry load)", steps: s})
-	}
+	sites := loadSites(files)
 
 	for rel, lines := range files {
+		if _, ok := skillLoads[rel]; !ok {
+			continue
+		}
+
 		for _, l := range lines {
 			for _, call := range loadCalls(l.text) {
-				sites = append(sites, loadSite{where: l.where, steps: call})
-				if _, ok := skillLoads[rel]; ok {
-					skillLoads[rel] = append(skillLoads[rel], call...)
-				}
+				skillLoads[rel] = append(skillLoads[rel], call...)
 			}
 		}
 	}
@@ -196,9 +207,8 @@ func TestStepReferences(t *testing.T) {
 		t.Errorf("%s no longer says a review entry loads `review` and `resolve` apart: update shipLoads with it", ship)
 	}
 
-	// the guard's sentence and its three bullets name guardedSteps
-	if !strings.Contains(shipText.String(), "brings the base in before three kinds of entry") {
-		t.Errorf("%s no longer guards three kinds of entry: update guardedSteps with it", ship)
+	if !strings.Contains(shipText.String(), "loads `catchup` in a call of its own") {
+		t.Errorf("%s no longer says the catchup guard loads apart from its entry: update shipLoads with it", ship)
 	}
 
 	// every name a load or a delegation uses has a step file
