@@ -32,8 +32,8 @@ func TestOneDigitOff(t *testing.T) {
 	}
 }
 
-// A commit ships the task when its subject opens with one of the ids or its
-// Task: trailer names one; the newest is the one a release is read for.
+// A commit ships the task when its subject opens with one of the ids, or its
+// Task: trailer names one. The newest is the one a release is read for.
 func TestMatchShipped(t *testing.T) {
 	rec := func(full, short, subject, trailer string) string {
 		return strings.Join([]string{full, short, subject, trailer}, "\x1f") + "\x1e\n"
@@ -56,9 +56,9 @@ func TestMatchShipped(t *testing.T) {
 	}
 }
 
-// Only a start whose every task is closed, with no branch, becomes a
-// discussion, or one listing a bundle with a closed member; a read that
-// fails or a driver with no state counts as open.
+// A start becomes a discussion when every task is closed with no branch, or
+// when it lists a bundle with a closed member. A failed read counts as open,
+// and so does a driver that states no state.
 func TestClosedStart(t *testing.T) {
 	state := map[string]tasksource.TaskInfo{
 		"GH-1": {Closed: true, Stated: true},

@@ -119,8 +119,8 @@ func closedDiscussion(ctx context.Context, cmd *cli.Command, argv []string) *f10
 	return discussionRequest(a)
 }
 
-// discussionRequest is the flow start a as a discussion: its ids, base and
-// agent kept, and none of the flow's flags, which --discuss refuses.
+// discussionRequest is the flow start a as a discussion. It keeps the ids,
+// the base and the agent, and drops the flow's flags, which --discuss refuses.
 func discussionRequest(a drivectl.DriveArgs) *f10v1.StartRequest {
 	return &f10v1.StartRequest{
 		Mode:  f10v1.StartMode_START_MODE_DISCUSS,

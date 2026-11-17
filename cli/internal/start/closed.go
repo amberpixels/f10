@@ -43,11 +43,10 @@ func closedCheckFor(t *target.Target) closedCheck {
 	}
 }
 
-// ClosedStart is the labels of the tasks ids names when every one of them
-// is closed and none has a branch, nil otherwise: such a start has nothing
-// to run, so it opens a discussion instead. A bundle with a closed member
-// switches the start whatever else it lists, because the drive judges a
-// bundle by its lead and would ship that member again. A read that fails
+// ClosedStart is the labels of the closed tasks when the start should open
+// a discussion instead, else nil. It switches when every task is closed with
+// no branch, or when a bundle has a closed member, because the drive judges
+// a bundle by its lead and would ship that member again. A failed read
 // counts as open, so the check never blocks a start.
 func ClosedStart(ctx context.Context, t *target.Target, ids []string) []string {
 	return closedCheckFor(t).all(ctx, ids)
@@ -182,7 +181,7 @@ func shippingIDs(ctx context.Context, tr stack.Tracker, r ref.Ref) map[string]bo
 	return ids
 }
 
-// openTasks is the tracker's open tasks; a failed read is none.
+// openTasks is the tracker's open tasks, none when the read fails.
 func openTasks(ctx context.Context, t *target.Target) []hostops.Row {
 	rows, err := tasksource.TasksFor(t).List(ctx, openListed)
 	if err != nil {
@@ -215,8 +214,8 @@ func shipped(ctx context.Context, dir, prefix string, ids map[string]bool) launc
 	return d
 }
 
-// matchShipped picks the log's commits naming one of ids, newest first, and
-// the full sha of the newest; log is shipped's format.
+// matchShipped picks the log's commits that name one of ids, newest first,
+// and the full sha of the newest. log is in shipped's format.
 func matchShipped(log, prefix string, ids map[string]bool) (launch.Closed, string) {
 	var (
 		d      launch.Closed

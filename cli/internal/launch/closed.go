@@ -6,8 +6,8 @@ import (
 )
 
 // Closed is what a discussion's agent is told about a task the tracker
-// already closed: the commits that shipped it and the open tasks a typo of
-// its id would have meant.
+// already closed. It holds the commits that shipped the task, and the open
+// tasks a typo of its id would have meant.
 type Closed struct {
 	ID      string   // the task, as its label
 	Shipped []string // "<sha> <subject>", newest first
