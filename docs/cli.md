@@ -838,7 +838,7 @@ A cancelled record is never picked up again: the same command line starts a new 
    Its own commits are what its branch has beyond the default branch, `origin/<default>`, its own base's branch, and the commit it was created at (its oldest reflog entry), merges left out, so a lagging local default branch, a squash-merged grandparent or a catchup merge never releases it early.
    `f10 pr catchup` prints the same answer as its `code:` line, so ship's guard and the driver agree.
    Implement never commits, so a first commit means a commit or pr step ran with verify green; the driver reads it from local refs on each poll, so a branch never pushed counts.
-   Under `--plan` no commit ever comes, so an opened base releases its dependents once its plan is saved, even if it halted after saving it.
+   A `--plan` run never commits, so there an opened base releases its dependents once its plan is saved, even if it halted after saving it.
    A dependent's own `finish` still waits until its base is through, so a dependent never merges before its base; while it waits its row reads `waiting for <id>`.
    Every task that is ready starts in the same pass, up to the cap.
    `--parallel <n>` caps the tasks running a skill at once, by default half the CPU cores, from 2 to 8.
