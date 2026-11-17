@@ -11,8 +11,7 @@ import (
 // Loads still over the budget, each struck from this list by the FT-570 PR
 // that brings it under, so the list only shrinks.
 var overBudgetLoads = map[string]bool{
-	"debug capture fetch investigate plan": true,
-	"ci catchup":                           true,
+	"ci catchup": true,
 }
 
 // Claude Code cuts a Bash output past 30,000 characters, so every load a skill

@@ -24,8 +24,9 @@ argument-hint: "<error | trace | logs | screenshot | description>"
   - Nothing in the conversation: ask for the report in one line and wait.
 
 **Run**
-1. Run `f10-load-project.sh debug capture fetch investigate plan` first, on every call of this skill.
-2. Follow the **debug** step it prints.
+1. Run `f10-load-project.sh debug capture fetch` and `f10-load-project.sh investigate plan` first, on every call of this skill, as two calls in the same message.
+   Loaded in one call they pass the Bash output cap.
+2. Follow the **debug** step the first load prints.
    For each bug with a confirmed cause, run the path it chose.
    The usual path runs **capture**, then **fetch**, **investigate** and **plan**.
    The other is the quicker flow the user picked.
