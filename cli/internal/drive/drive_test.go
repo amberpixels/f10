@@ -1686,18 +1686,55 @@ func TestDriveGraph(t *testing.T) {
 		}
 	})
 
-	t.Run("base outside the list, not finished", func(t *testing.T) {
+	t.Run("base outside the list, not started", func(t *testing.T) {
 		fx := newDriveFixture(t, "GH-2")
 		fx.task("GH-2", tasksource.TaskInfo{Body: "After: GH-9"}, "")
 		fx.task("GH-9", tasksource.TaskInfo{Body: "open"}, "")
 
 		err := fx.drive(t)
-		if err == nil || !strings.Contains(err.Error(), "not in the list and not finished") {
+		if err == nil || !strings.Contains(err.Error(), "not in the list, not started and not finished") {
 			t.Fatalf("err = %v", err)
 		}
 
 		if fx.f.Called("wt") || fx.f.Called("herdr") {
 			t.Error("something was created before the refusal")
+		}
+	})
+
+	// one task stacked on a task in progress, from its body or --after
+	for name, args := range map[string][]string{
+		"base outside the list, started": {"GH-2"},
+		"--after a started base":         {"GH-2", "--after", "GH-9"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			fx := newDriveFixture(t, args...)
+			fx.task("GH-2", tasksource.TaskInfo{Body: "After: GH-9"}, "")
+			fx.task("GH-9", tasksource.TaskInfo{Body: "open"}, testkit.Heads("GH-9/base"))
+
+			tasks, _, err := fx.in.resolveTasks(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if _, _, err := fx.in.graph(t.Context(), tasks); err != nil || tasks[0].Base != "GH-9" {
+				t.Errorf("base = %q, %v; want GH-9 stacked on", tasks[0].Base, err)
+			}
+		})
+	}
+
+	// --base names a branch, so the body's unstarted base is never read
+	t.Run("--base over an unstarted After:", func(t *testing.T) {
+		fx := newDriveFixture(t, "GH-2", "--base", "main")
+		fx.task("GH-2", tasksource.TaskInfo{Body: "After: GH-9"}, "")
+		fx.task("GH-9", tasksource.TaskInfo{Body: "open"}, "")
+
+		tasks, _, err := fx.in.resolveTasks(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if _, _, err := fx.in.graph(t.Context(), tasks); err != nil || tasks[0].Base != "" {
+			t.Errorf("base = %q, %v; want none", tasks[0].Base, err)
 		}
 	})
 

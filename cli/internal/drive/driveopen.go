@@ -66,19 +66,19 @@ func (in *DriveInput) KeepFlow(ctx context.Context, branch string) (runplan.Ship
 func (in *DriveInput) open(ctx context.Context, r *DriveRun) error {
 	task := r.Task
 
-	after, note, err := stack.BodyAfter(ctx, in.Tracker, in.Main, task.Ref, task.info.Body)
-	if err != nil {
-		return err
+	// --after or --base, typed for the drive's one task, win over its body,
+	// whose base is then never read: it may name one not started
+	after, note := task.after, ""
+	if in.Args.After == "" && in.Args.Base == "" {
+		var err error
+		if after, note, err = stack.BodyAfter(ctx, in.Tracker, in.Main, task.Ref, task.info.Body); err != nil {
+			return err
+		}
 	}
 
 	var title func(context.Context) (string, error)
 	if in.Title != nil {
 		title = in.Title(task.Ref)
-	}
-
-	// --after or --base, typed for the drive's one task, win over its body
-	if in.Args.After != "" || in.Args.Base != "" {
-		after, note = task.after, ""
 	}
 
 	o, err := start.OpenTask(ctx, start.StartInput{

@@ -85,7 +85,8 @@ With no draft among them, the parent goes to `f10 start` as typed, which runs ev
 f10 start <arguments>
 ```
 
-**A discussion or a PR** (`--discuss`, `--task`, a PR url or `#n`) runs in the foreground and returns once the agent is prompted.
+**A discussion or a PR** (`--discuss`, `--task` or a PR url) runs in the foreground and returns once the agent is prompted.
+A bare `#n` goes with **every other start**, in the background, because the binary asks the host whether it is a PR or a task: a pickup ends at once with its report and exit 0, or exit 3 as below, and a task runs its flow.
 The per-user f10 daemon then watches the task.
 A merged PR, a stalled agent and a stopped run land in its watch log, which `f10 watch` reads.
 Under `watch_catchup: on`, the daemon catches the task's open PR up with its target when the PR conflicts with it or must be caught up (`docs/cli.md` → Watch).

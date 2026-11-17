@@ -63,14 +63,16 @@ func (in *DriveInput) graph(ctx context.Context, tasks []DriveTask) ([]int, []st
 			continue
 		}
 
-		done, err := in.baseFinished(ctx, t.Base)
+		// a started base outside the list is stacked on as it stands, the way
+		// --after stacks one task on a task in progress
+		ok, err := in.baseOutside(ctx, t.Base)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		if !done {
-			return nil, nil, fmt.Errorf("%s is After: %s, which is not in the list and not finished: "+
-				"add %s to the list, or finish it first", t.Ref.ID, t.Base, t.Base)
+		if !ok {
+			return nil, nil, fmt.Errorf("%s is After: %s, which is not in the list, not started and not finished: "+
+				"add %s to the list, or start it first", t.Ref.ID, t.Base, t.Base)
 		}
 	}
 

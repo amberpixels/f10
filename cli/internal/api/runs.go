@@ -641,8 +641,14 @@ func (s *runService) startDrive(
 		return nil, err
 	}
 
+	how := "started"
+	if started.Attach {
+		how = "already running, followed"
+	}
+
 	o := output(c)
-	fmt.Fprintf(&o.Stdout, "drive %d: f10 start %s\nlog: %s\n", started.Drive, strings.Join(argv, " "), started.Log)
+	fmt.Fprintf(&o.Stdout, "drive %d %s: f10 start %s\nlog: %s\n",
+		started.Drive, how, strings.Join(argv, " "), started.Log)
 
 	return connect.NewResponse(&f10v1.StartResponse{
 		Drive:   int32(started.Drive), //nolint:gosec // a drive number

@@ -315,7 +315,9 @@ func spanRefs(from, to ref.Ref) []ref.Ref {
 	return refs
 }
 
-func (in *DriveInput) baseFinished(ctx context.Context, id string) (bool, error) {
+// baseOutside says a base the list does not hold can be built on: it has a
+// branch to stack on, or it is finished, so its code is in the default branch.
+func (in *DriveInput) baseOutside(ctx context.Context, id string) (bool, error) {
 	base, err := in.Tracker.Resolve(ctx, id)
 	if err != nil {
 		return false, err
@@ -323,7 +325,7 @@ func (in *DriveInput) baseFinished(ctx context.Context, id string) (bool, error)
 
 	branched, err := stack.HasTaskBranch(ctx, in.Main, base.ID)
 	if err != nil || branched {
-		return false, err
+		return branched, err
 	}
 
 	info, err := in.Tracker.Info(ctx, base)

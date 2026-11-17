@@ -43,7 +43,8 @@ function StartForm() {
         e.preventDefault();
         void f.run(async () => {
           const r = await api.runs.start({ project, task, mode, flow, pace });
-          return `Started ${r.task} on ${r.branch}`;
+          // a flow start runs as a drive, which opens the task after the call
+          return r.drive ? `Drive ${r.drive} runs ${task}` : `Started ${r.task} on ${r.branch}`;
         });
       }}
     >
