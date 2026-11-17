@@ -43,7 +43,7 @@ const (
 var (
 	FoundBy     = []string{"bisect", "blame", "none"}
 	Confidences = []string{"confirmed", "likely", Unclear}
-	Repros      = []string{"obvious", "full", "traced", "skipped", "unconfirmed"}
+	Repros      = []string{"obvious", "full", "traced", "trusted", "skipped", "unconfirmed"}
 )
 
 // widen is how far a finding's line may sit outside a faulty range and

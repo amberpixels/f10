@@ -84,9 +84,9 @@ The step ends in an **investigation brief** (point 6): a short write-up of what 
    Do it in a few targeted reads (`conventions/latency.md` rule 5).
 
    Each kind adds what the investigation must prove:
-   - **bug** - run the debug step's sections **A bug that is a task** and **Attribute**: `f10-state.sh set plan running debug; f10-load-project.sh debug`.
-     They triage, investigate and confirm the root cause at a `file:line`, reproducing where the triage calls for it.
-     They record the task that introduced the bug, and give the brief its reproduction and its `Regression of:` line.
+   - **bug** - run the **debug** step on the task, then its **Attribute**: `f10-state.sh set plan running debug; f10-load-project.sh debug`.
+     It confirms the root cause at a `file:line`, or trusts the investigation the task carries.
+     It records the task that introduced the bug, and gives the brief its reproduction and its `Regression of:` line.
      Three cases skip the pass:
      - The frontmatter declares `debug: off`.
        Trace the root cause from the code instead, and say in the brief that the pass was off.

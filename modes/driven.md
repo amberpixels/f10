@@ -43,7 +43,7 @@ Examples are a judge's rethink, a resolve `ask` and a deploy confirmation.
 `f10-state.sh ask` also puts the ask in the user's asks inbox (`f10 asks`).
 The inbox counts the ask on the status line, tells other sessions about it and notifies the user.
 
-Five kinds of open question never become an ask:
+Six kinds of open question never become an ask:
 
 - **A gap.** A driven run takes every gap on its default and lists the open ones in its report (`conventions/gaps.md`).
 - **A conflict.** A driven catchup settles every conflict by the task's intent and writes each choice down (the **catchup** step's Driven paragraph).
@@ -53,7 +53,9 @@ Five kinds of open question never become an ask:
 - **A stale task's verdict** (`steps/fetch.md` point 1).
   The run ends blocked and names the verdict file.
   The user decides either by sending `anyway`, as `f10 start <id> --answer anyway` or typed in this pane, or by closing the task.
-- **A bug that is costly to reproduce, under `debug_costly: skip` or `reproduce`** (`steps/debug.md` → A bug that is a task).
+- **A bug task that carries its own investigation** (`steps/debug.md`).
+  It is trusted when the cited code still reads as the task says, and verified otherwise.
+- **A bug that is costly to reproduce, under `debug_costly: skip` or `reproduce`** (`steps/debug.md`).
   The frontmatter's value decides, as the debug step says.
   The drive's report names every task planned without a reproduction, so a skipped one is seen.
 

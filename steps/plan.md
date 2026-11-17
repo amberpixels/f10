@@ -34,7 +34,7 @@ Badge: `f10-state.sh set plan running` on entry, unless `fetch` already opened t
 
    A bug, a refactor and a spike each open with a section of their own, after the header lines and before the stages:
    - **bug** - `## Reproduction` opens with the debug pass's outcome.
-     That line is one of `Reproduction: full`, `obvious`, `unconfirmed`, `traced`, `skipped (costly)` or `skipped (no repro)` (`steps/debug.md` → The outcome).
+     That line is one of `Reproduction: full`, `obvious`, `unconfirmed`, `traced`, `trusted`, `skipped (costly)` or `skipped (no repro)` (`steps/debug.md` → The outcome).
      With debug off, it is `Reproduction: not run (debug off)`.
      Then it holds the steps or input, and the expected behavior against the actual one, or, with no run, the evidence that shows the bug.
      It also names the root cause at `file:line` and the test that will fail before the fix.

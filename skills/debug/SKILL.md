@@ -13,7 +13,7 @@ argument-hint: "<error | trace | logs | screenshot | description>"
   It reports which steps the rest of the argument would run.
 - `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`; everything below still runs.
 - `<report>`: an error, a stack trace, log lines, a screenshot or a complaint in plain words, run through the **debug** step.
-  Each bug with a confirmed cause takes the path the debug step chooses (its point 8).
+  Each bug with a confirmed cause takes the path the debug step chooses (its point 6).
   The usual path runs **capture** with its debug brief, then **fetch** and **plan** on the new task id, one bug after another.
   For an urgent bug with a small fix, a quicker flow the project declares may be suggested, and it runs only when the user picks it.
   An argument that reports nothing ("let's debug something") counts as none.

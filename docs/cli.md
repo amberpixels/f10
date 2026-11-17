@@ -1843,7 +1843,7 @@ The agent passes what only reading the code settles:
 | `--lines` | `path:start-end` of the faulty lines, numbered as `--base` (default `HEAD`) has them; repeat for several |
 | `--found-by` | `bisect`, `blame` or `none` |
 | `--confidence` | `confirmed`, `likely` or `unclear` |
-| `--repro` | the debug pass's outcome: `obvious`, `full`, `traced`, `skipped` or `unconfirmed` |
+| `--repro` | the debug pass's outcome: `obvious`, `full`, `traced`, `trusted`, `skipped` or `unconfirmed` |
 | `--class` | `out-of-reach`, when the fault is an interaction no diff review could see |
 
 The command settles the rest.
