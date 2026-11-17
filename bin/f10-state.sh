@@ -300,7 +300,7 @@ cmd_doctor() {
   echo "--- status line ---"
   echo "In your settings.json statusLine command, after stdin is read into \$input:"
   echo "  f10=\$(printf '%s' \"\$input\" | \"\$HOME/.claude/f10/statusline\" 2>/dev/null)"
-  echo "then append \"\$f10\" to what it prints. See the README's Status line section."
+  echo "then append \"\$f10\" to what it prints. See docs/statusline.md in the plugin."
   exit 0
 }
 

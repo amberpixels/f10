@@ -11,8 +11,15 @@ f10 init
 ```
 
 Writes `.f10/instructions/project.md` from what detection found and adds `.f10/` to `.git/info/exclude`.
+Detection covers the stack, the tracker and its id format, the host and PR CLI, the verify commands, storage and visibility.
+A section it could not detect is left out, not stubbed.
 It never overwrites, so re-running is safe.
+The file's existence is what marks a repo as an f10 project.
 The `Project` one-liner is left for you: no probe knows what a project *is*.
+
+`f10 config` prints the effective configuration with where each value came from, the way `git config --show-origin` does.
+The origins are `detected`, `declared (main)`, `declared (worktree)`, `default` and `absent`.
+`--json` prints it for scripts.
 
 Run it before the first plan.
 With nothing declared, task ids take a prefix derived from the checkout's name (`f10` → `F10`, `git-undo` → `GU`, `herdr` → `HER`), and that prefix names every plan file and is how a branch is searched for its task.

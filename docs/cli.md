@@ -112,6 +112,16 @@ A verb means one thing under every noun.
 `read` writes content, `open` follows an address, `search` finds by description.
 The matrix stays sparse where a verb has no meaning for a noun.
 
+`f10 --help` lists the commands a person types.
+The verbs that steps and skills call, such as `f10 trace`, `f10 review` and `f10 task ref`, are plumbing.
+`f10 help --all` lists them under their own headings: top-level ones under `plumbing:`, and subcommands by their full path under `PLUMBING SUBCOMMANDS:`.
+`f10 help --agent` prints one line per command, generated from the command definitions.
+`bin/f10-inject.sh` tells every f10 skill that runs a step to load that output beside the conventions, so the agent's context holds the CLI as it was built.
+
+`bin/f10-load-project.sh` stays the loader that agents use.
+The binary may interpret `project.md` prose, and it shows what it cannot place as `unrecognized`.
+The parity suite in `cli/internal/layout` runs every fixture through both the script and the binary.
+
 ## Doctor
 
 `f10 doctor` runs every check below and prints one row per check: `ok`, `problem` or `not needed here`, with the evidence.
@@ -525,6 +535,8 @@ The plan and ship skills run it first whenever their argument is a task id, beca
 
 The answer path: `f10 status 42` reads the run the worktree's agent reports, its `ask` row included; `f10 asks answer 42 1=proceed 2="keep ours"` writes the answers through the asks inbox, which sends them as that agent's next prompt and closes the ask for every session.
 `/f10:status 42` does both in one go, with the question put to you in between.
+
+Judge, demo, handoff and explain are never forwarded, because they can read another worktree's branch and write nothing in it.
 
 Out of scope: more than one task or more than one command per call, tailing the remote agent's output, and answering Claude Code permission prompts.
 
