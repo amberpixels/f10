@@ -188,10 +188,10 @@ func (in *DriveInput) typedBase(ctx context.Context, tasks []DriveTask) error {
 	return nil
 }
 
-// subtasks is what a listed parent runs instead of itself: its subtasks in
-// After: order, a finished one reported as such and an open draft left out
-// with a note, since a draft is an idea not ready to plan. nil means r runs
-// itself: it has no subtask, or a branch, so it was started on its own.
+// subtasks is what a listed parent runs instead of itself, in After: order.
+// A finished subtask is kept, so a rerun reports it. An open draft is left
+// out with a note, because a draft is an idea not ready to plan. nil means r
+// runs itself, because it has no subtask or already has a branch.
 func (in *DriveInput) subtasks(ctx context.Context, r ref.Ref, suffix string) ([]ref.Ref, []string, error) {
 	read := in.Tracker.AllChildren
 	if read == nil {
@@ -315,8 +315,8 @@ func spanRefs(from, to ref.Ref) []ref.Ref {
 	return refs
 }
 
-// baseOutside says a base the list does not hold can be built on: it has a
-// branch to stack on, or it is finished, so its code is in the default branch.
+// baseOutside says a base the list does not hold can be built on. It has a
+// branch to stack on, or it is finished and its code is in the default branch.
 func (in *DriveInput) baseOutside(ctx context.Context, id string) (bool, error) {
 	base, err := in.Tracker.Resolve(ctx, id)
 	if err != nil {

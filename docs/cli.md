@@ -2,7 +2,12 @@
 
 A lookaround, and the commands that start, reach and finish tasks.
 The lookaround verbs explain the loaded configuration and read the things it points at, changing nothing.
-Six verbs act: `init` registers a checkout and never overwrites, `start` creates the branch and worktree a task is worked on in, opens them in Herdr and runs the task through its flow, one task or a list, `forward` hands a command to the agent a task already has, `stop` stops a drive, and `finish` merges the task's PR (or a branch never pushed, locally) and removes what start created.
+Six verbs act.
+`init` registers a checkout and never overwrites.
+`start` takes one task or a list, creates the branch and worktree each task is worked on in, opens them in Herdr and runs the task through its flow.
+`forward` hands a command to the agent a task already has.
+`stop` stops a drive.
+`finish` merges the task's PR (or a branch never pushed, locally) and removes what start created.
 
 The plugin requires the binary and ships it as `bin/f10`, a shim that runs the build matching `plugin.json`'s version.
 The skills and the binary are one contract: the skill text describes the flags the binary takes.
@@ -179,11 +184,14 @@ It moves the daemon's run dir too, unless `F10_RUN_DIR` or `XDG_RUNTIME_DIR` nam
 
 `f10 start 42` is the three hand-offs of starting a task as one command, and the drive that runs it through its flow after.
 It derives the branch name (the driver's `branch` verb, else `<ID>/<slug>` with the slug cut from the task's title, else the bare id with a note when the host returns no title), creates the worktree beside the main checkout - through `wt switch` when [worktrunk](https://github.com/max-sixty/worktrunk) is on `PATH`, so the project's hooks keep firing, else with `git worktree add` at the same sibling path - opens it as a Herdr workspace and starts a claude agent in its root pane.
-Then the [drive](#drives) prompts that agent one skill at a time, `/f10:plan <id>` when the flow leads with `plan` and no plan is saved, then `/f10:ship <id>`, then finish when the flow ends in it.
+Then the [drive](#drives) prompts that agent one skill at a time.
+It sends `/f10:plan <id>` when the flow leads with `plan` and no plan is saved, then `/f10:ship <id>`, then finish when the flow ends in it.
 Several ids, a bundle, a range or a parent start the same way, each task once its base has code.
-The command follows the drive until it ends, an agent asks, or a task halts; Ctrl+C stops only the following.
+The command follows the drive until it ends, an agent asks, or a task halts.
+Ctrl+C stops only the following.
 
-- each prompt is closed by `--driven`, the marker that tells the agent it is prompted from outside and routes every question through run state ([driven mode](../modes/driven.md)), so every gap takes its default.
+- each prompt is closed by `--driven` ([driven mode](../modes/driven.md)).
+  The marker tells the agent it is prompted from outside, so every question goes through run state and every gap takes its default.
   `--plan` plans every task and implements none.
   `--flow <name>` ships through that declared flow, as `/f10:ship <name>: <id>`.
   `--local` is `--flow local`, so nothing is pushed.
@@ -192,12 +200,16 @@ The command follows the drive until it ends, an agent asks, or a task halts; Ctr
   `--plan` with `--flow` or `--local` is refused, since `--plan` stops before ship, which runs the flow
 - `--discuss` opens one task's agent and prompts only the fetch, with no drive.
   The agent summarises the task and waits for you in its own pane, so the prompt is plain text with no `--driven` marker.
-  Words after the id are a note the agent acts on after the summary and before it waits (`f10 start 42 --discuss "/f10:judge it first"`); a note goes only with `--discuss` or a PR pickup, since a driven run takes its instructions from the task.
+  Words after the id are a note the agent acts on after the summary and before it waits (`f10 start 42 --discuss "/f10:judge it first"`).
+  A note goes only with `--discuss` or a PR pickup, because a driven run takes its instructions from the task.
   `--discuss` is exclusive with `--plan`, `--flow` and `--local`, and takes one id and none of the drive's flags.
   The command returns once the prompt is submitted, and the [watcher](#watch) looks after the task
-- the flow is recorded on the branch as `branch.<name>.f10-flow` in local git config, for `f10 status` and a rerun of `f10 start`; with `flow_by_area` declared and no flow named, nothing is recorded and the prompt is `/f10:ship <id>` alone, since ship picks the flow from the task's area
+- the flow is recorded on the branch as `branch.<name>.f10-flow` in local git config, for `f10 status` and a rerun of `f10 start`.
+  With `flow_by_area` declared and no flow named, nothing is recorded and the prompt is `/f10:ship <id>` alone, because ship picks the flow from the task's area
 - a plan the main checkout saved for the task (`.f10/plans/<id>.md`, written by `/f10:plan` after a discussion there) stays in place: every worktree's storage root is main's `.f10/` (or the out-of-tree root), so the worktree's agent reads it there.
-  The agent ships it: the drive's first prompt is `/f10:ship <id>`, or `/f10:ship <name>: <id>` with `--flow` or `--local`; `--plan` ends at once, saying the plan exists and that `/f10:plan <id>` in its pane replans it; `--discuss` names the plan's path.
+  The agent ships it, because the drive's first prompt is `/f10:ship <id>` (`/f10:ship <name>: <id>` with `--flow` or `--local`).
+  `--plan` ends at once, saying the plan exists and that `/f10:plan <id>` in the task's pane plans it again.
+  `--discuss` names the plan's path.
 - the agent is started with an `--add-dir` for each dir of the storage root an agent writes to: the task-file dirs and `audits`, created if missing.
   This happens whenever that root lies outside the worktree, so its writes there ask no permission.
   `instructions/` and `driver/` are left out, so a worktree's agent cannot change what every checkout loads.
@@ -209,8 +221,10 @@ The command follows the drive until it ends, an agent asks, or a task halts; Ctr
 - with neither `--after` nor `--base`, the task body decides: a line `After: <id>` (alone on its line, the last of the body by convention) is read as `--after <id>` when that task has a branch, and noted beneath the report.
   When the base has no branch and is finished (its issue closed, or its plan in main's `plans/archive/`), the branch is based on the default branch with a note; when it is not finished, start refuses before creating anything.
   A body that cannot be read is a note, never a refusal
-- a parent task with subtasks (`f10 task children`) is never started itself: its subtasks run instead, in `f10 task children` order, as if listed.
-  An open subtask labelled `draft` is left out with a line naming it, because a draft is an idea not ready to plan; list it to run it.
+- a parent task with subtasks is never started itself.
+  Its subtasks run instead, in `f10 task children` order, as if listed.
+  An open subtask labelled `draft` is left out with a line naming it, because a draft is an idea not ready to plan.
+  List a draft to run it.
   A finished subtask stays in, so a rerun reports it as finished.
   The expansion is skipped for a parent that already has a branch (started on its own) and for a tracker with no parent link.
   `/f10:start` asks which subtasks to run only when a draft is among them
@@ -781,7 +795,11 @@ The tracker is asked only when the plans dir leaves it open.
 Finish's own `already finished` is narrower, because it asks whether finish got as far as archiving the plan.
 The corrected row is saved when the drive's lease is free, and only shown when another process holds it.
 A row only ever moves to finished, because only a rerun knows a drive's next step for a halt settled halfway.
-`f10 stop <n>` marks the record cancelled, and `f10 stop <id>` does it to the running drive holding that task, naming every task it stops: a running driver stops at its next poll, after any finish it is in the middle of, ends every task still going with the row `cancelled` and exits **5**; nothing more is prompted, and worktrees, branches and agents stay as they are.
+`f10 stop <n>` marks the record cancelled.
+`f10 stop <id>` does the same to the running drive holding that task, and names every task it stops.
+A running driver stops at its next poll, after any finish it is in the middle of.
+It ends every task still going with the row `cancelled` and exits **5**.
+Nothing more is prompted, and worktrees, branches and agents stay as they are.
 A cancelled record is never picked up again: the same command line starts a new one.
 
 1. **The arguments.**
@@ -1184,7 +1202,7 @@ The daemon watches every project `f10 start` ran in, for the tasks no drive owns
 `watch_ci: on` lets it send a red PR to its agent (**red** below).
 Owning is the task's lease (**Drives**): a task a drive or a finish holds is never looked at, and the watcher's own finish takes the lease first, so a drive started later is refused with `owned by the f10 watcher`.
 
-- **Registering.** After its report, a discussion or a pickup hands the daemon the project's storage root, its main checkout and the same allowlisted environment a drive gets; a flow start does the same before it follows its drive. It never replaces or waits on a running daemon: a daemon of another version is used as it is, and one that is stopping is skipped with one line, so the next `f10 start` hands the project over. A failure is one `watch: warning:` line, never a failed command. The project stays watched across daemon restarts and upgrades (`watch.json` in the run dir, which keeps the newest registration's environment, tokens included), and leaves the list once a pass finds no task worktree left (under `watch: finish`, no local task branch either, since its janitor still has work), once its main checkout is gone, or after ten passes in a row fail. A registration that arrives while a pass runs gets one more pass after it, so a task started meanwhile is seen. `watch: off` in the frontmatter registers nothing.
+- **Registering.** After its report, a discussion or a pickup hands the daemon the project's storage root, its main checkout and the same allowlisted environment a drive gets. A flow start does the same before it follows its drive. It never replaces or waits on a running daemon: a daemon of another version is used as it is, and one that is stopping is skipped with one line, so the next `f10 start` hands the project over. A failure is one `watch: warning:` line, never a failed command. The project stays watched across daemon restarts and upgrades (`watch.json` in the run dir, which keeps the newest registration's environment, tokens included), and leaves the list once a pass finds no task worktree left (under `watch: finish`, no local task branch either, since its janitor still has work), once its main checkout is gone, or after ten passes in a row fail. A registration that arrives while a pass runs gets one more pass after it, so a task started meanwhile is seen. `watch: off` in the frontmatter registers nothing.
 - **A pass.** Every 3 minutes, and at once on registering, the daemon runs `f10 watch --pass` in the main checkout with that environment, its output appended to the project's watch log. For each task worktree whose lease nobody holds and that `f10 watch off` did not hand back, it reads the PR (`gh pr list --head`, one call per branch), the newest run reported from the worktree and the agent's status, and says at most one thing, in this order:
   - **merged**: the PR merged on the host. Under `watch: finish` it is finished when the branch's tip equals the PR's head and the agent is not working. The pass takes the task's lease, then reads the agent's status and the branch's tip again. It finishes the task as `f10 finish` would: the worktree removed, the workspace closed, the plan archived and main pulled. Its finish refuses anything but a merged PR, so the watcher never merges. A refusal, such as a dirty worktree or someone else's PR, is reported with `f10 finish <id>` to run by hand. A bundle's riders are closed as the PR body says (**Bundles**). A branch with commits the PR lacks is only reported.
   - **closed**: the PR closed without a merge; reported, never cleaned up.

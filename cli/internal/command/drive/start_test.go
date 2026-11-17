@@ -7,8 +7,8 @@ import (
 	f10v1 "github.com/amberpixels/f10/cli/gen/f10/v1"
 )
 
-// A discussion, --task and a PR url start one agent through the API; every
-// other start, a #n aside, is a drive. Neither reads the host for these.
+// A discussion, --task and a PR url start one agent through the API. Every
+// other start is a drive, a bare #n aside. No case here reads the host.
 func TestOneShotRouting(t *testing.T) {
 	for _, c := range []struct {
 		argv []string

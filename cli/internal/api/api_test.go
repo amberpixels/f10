@@ -424,7 +424,7 @@ func TestForwardNeedsText(t *testing.T) {
 	}
 }
 
-// A start of a task by its id runs as a drive with the start's flags; a
+// A start of a task by its id runs as a drive with the start's flags. A
 // discussion and a PR named by --task stay one-shot.
 func TestFlowStartArgv(t *testing.T) {
 	m := &f10v1.StartRequest{Flow: "local", Pace: "fast", Agent: "opus", After: "GH-7"}

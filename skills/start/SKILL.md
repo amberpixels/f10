@@ -8,7 +8,8 @@ argument-hint: "<id>[:profile]... | <id> -- <id> | <PR url> [--plan | --discuss]
 # f10 · start
 
 Start tasks beside this one.
-`f10 start` gives each task a branch, a worktree, a Herdr workspace and a claude agent, and the per-user f10 daemon steers each agent one skill at a time, marked `--driven` (`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`).
+`f10 start` gives each task a branch, a worktree, a Herdr workspace and a claude agent.
+The per-user f10 daemon then prompts each agent one skill at a time, marked `--driven` (`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`).
 The first skill is `/f10:plan` when the flow leads with a `plan` the pace keeps and the task has no plan file.
 Then comes `/f10:ship`, which runs every other entry.
 Then comes finish, when the flow ends in a `finish` entry.
@@ -17,26 +18,32 @@ A spike is closed after ship either way, because `f10 finish` closes it without 
 A plan the main checkout saved for a task stays where it is, in the storage root every worktree shares, and the agent ships it instead of planning again.
 A dependent opens once its base branch has a commit, and its finish waits for the base's.
 Two starts open one agent, prompt it once and leave it to you: `--discuss` and a PR pickup, because their agent waits for a person.
-This skill expands parents, runs the command (`${CLAUDE_PLUGIN_ROOT}/modes/binary.md`), relays its questions and prints its report; it runs no step.
+This skill expands parents, runs the command (`${CLAUDE_PLUGIN_ROOT}/modes/binary.md`), relays its questions and prints its report.
+It runs no step.
 
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
 - `<id>`: a task to start.
   A parent id expands into its unfinished subtasks (**Parents** below).
-  A bundle, `ABC-1+ABC-2`, is one entry: one branch, worktree, agent and PR, keyed on the lead, which any member's id reopens; its finish leaves every rider open, named in the report.
+  A bundle, `ABC-1+ABC-2`, is one entry with one branch, worktree, agent and PR.
+  It is keyed on the lead, and any member's id reopens it.
+  Its finish leaves every rider open, and the report names them.
   `<id> -- <id>` is a range.
 - `<id>:<profile>`: that task's agent profile, which wins over `--agent`.
 - `<PR url>` or `#n`: pick that PR up; its branch is checked out tracking origin's and linked to its task, and the agent summarises it and waits.
   A merged or closed PR is picked up the same way, for a post-merge review: checked out at the commit it landed as, on a local-only branch named for the task, the agent told the PR's state; `--plan` is refused on it.
-- `--discuss`: one task's agent is prompted without `--driven`; it summarises the task and waits.
+- `--discuss`: one task's agent is prompted without `--driven`, and it summarises the task and waits.
 - `<note>`: with `--discuss` or a PR, the words after the id; the agent acts on it after its summary, then waits.
 - `--plan`: plan every task and implement none.
-- `--flow <name>` / `--local`: the flow every task runs instead of `default` (`f10 flow` lists them); a rerun keeps the flow a task's branch already records.
+- `--flow <name>` / `--local`: the flow every task runs instead of `default` (`f10 flow` lists them).
+  A rerun keeps the flow a task's branch already records.
 - `--pace <name>`: the pace every task runs at (`docs/project-setup.md` → Paces).
   It is recorded on each branch over any earlier one.
   A rerun that names none keeps the pace a task's branch records.
 - `--after <task-id>` / `--base <branch>`: one task's base, over its body's `After:` line.
-- `--agent <profile>`: every agent's profile, `kind:model:effort` (`claude:opus:high`), `model:effort` or either alone, over the agents map's `default` (`docs/project-setup.md` → Agents); `--model <model>` is the model-only form (`opus`, `fable`, `opus-5.5`), near misses corrected.
+- `--agent <profile>`: every agent's profile, laid over the agents map's `default` (`docs/project-setup.md` → Agents).
+  It is `kind:model:effort` (`claude:opus:high`), `model:effort` or either alone.
+  `--model <model>` is the model-only form (`opus`, `fable`, `opus-5.5`), and near misses are corrected.
 - `--parallel N`: at most N tasks run a skill at once, and at most twice N agents stay open, because an idle session still holds its memory.
   The default is half the CPU cores, from 2 to 8.
   Tasks past the cap queue in the start's order and show as `queued`.
@@ -86,7 +93,9 @@ f10 start <arguments>
 ```
 
 **A discussion or a PR** (`--discuss`, `--task` or a PR url) runs in the foreground and returns once the agent is prompted.
-A bare `#n` goes with **every other start**, in the background, because the binary asks the host whether it is a PR or a task: a pickup ends at once with its report and exit 0, or exit 3 as below, and a task runs its flow.
+A bare `#n` runs in the background with **every other start**, because the binary asks the host whether it is a PR or a task.
+A pickup then ends at once with its report and exit 0, or with exit 3 as below.
+A task runs its flow.
 The per-user f10 daemon then watches the task.
 A merged PR, a stalled agent and a stopped run land in its watch log, which `f10 watch` reads.
 Under `watch_catchup: on`, the daemon catches the task's open PR up with its target when the PR conflicts with it or must be caught up (`docs/cli.md` → Watch).

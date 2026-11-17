@@ -20,8 +20,8 @@ import (
 )
 
 // StartCommand is the start verb. A task, a list, a range or a parent runs
-// through its flow in a drive the daemon steers; a discussion and a
-// picked-up PR open one agent, prompted once, since it waits for a person.
+// through its flow in a drive the daemon steers. A discussion or a
+// picked-up PR opens one agent prompted once, because it waits for a person.
 // Flags are parsed by hand, because a range is `GH-12 -- GH-15`.
 func StartCommand() *cli.Command {
 	return &cli.Command{

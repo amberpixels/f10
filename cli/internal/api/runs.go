@@ -156,9 +156,9 @@ func (s *runService) Start(
 	}), nil
 }
 
-// flowStart is the drive's command line when the start runs the task
-// through its flow: a task id, not a discussion or a picked-up PR, whose
-// agent waits for a person and so is prompted once.
+// flowStart is the drive's command line when the start runs a task by its
+// id through its flow. A discussion or a picked-up PR is prompted once
+// instead, because its agent waits for a person.
 func flowStart(
 	ctx context.Context, t *target.Target, m *f10v1.StartRequest, token, task, mode string,
 ) ([]string, bool, error) {
