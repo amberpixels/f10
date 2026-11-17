@@ -21,6 +21,7 @@ Every f10 run starts by loading it.
   Its overlay is the whole step.
 - **stage** - one ordered unit inside a plan, never a step or a skill.
 - **drive** - the daemon loop prompting started tasks per skill.
+  A discussion or a PR pickup has none.
 - **task id** - the tracker's id, in the project's format.
   It names the plan file, the branch and the report's rows.
   A planless run from free text has none, and no step may invent one.
@@ -184,7 +185,7 @@ Unless `project.md` says `public`:
 
 ## Commits
 
-Every step that commits (commit, push, pr, resolve, judge, catchup, ci, the ship skill's catchup guard) commits this way.
+Every committing step, the ship skill's catchup guard included, commits this way.
 
 - Small, conventional commits in the repo's style, with no AI attribution lines.
 - **Trailers**: the message ends in the lines `f10 trace trailers` prints, as its own last `-m` paragraph.
