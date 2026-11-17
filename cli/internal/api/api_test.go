@@ -23,6 +23,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
 	"github.com/amberpixels/f10/cli/internal/seam"
+	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/target"
 )
 
@@ -452,5 +453,23 @@ func TestFlowStartArgv(t *testing.T) {
 
 	if _, _, err := flowStart(t.Context(), nil, &f10v1.StartRequest{Note: "hi"}, "GH-1", "", ""); err == nil {
 		t.Error("a note on a flow start was taken")
+	}
+}
+
+// A flow start of closed tasks reaches Prepare as a discussion with no flow
+// or pace, which RefuseFlags would refuse beside --discuss.
+func TestClosedStartAsDiscussion(t *testing.T) {
+	req := asDiscussion(start.Request{Token: "GH-1", Mode: launch.ModePlan, Flow: "local", Pace: "fast", After: "GH-7"})
+	if req.Mode != launch.ModeDiscuss || req.Flow != "" || req.Pace != "" || req.After != "GH-7" {
+		t.Errorf("request = %+v", req)
+	}
+
+	if err := start.RefuseFlags(req); err != nil {
+		t.Errorf("the discussion is refused: %v", err)
+	}
+
+	m := &f10v1.StartRequest{Flow: "local", Pace: "fast"}
+	if got := strings.Join(droppedFlags(m, launch.ModePlan), ", "); got != "--plan, --flow local, --pace fast" {
+		t.Errorf("dropped = %q", got)
 	}
 }

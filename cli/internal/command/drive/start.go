@@ -11,9 +11,11 @@ import (
 	"github.com/urfave/cli/v3"
 
 	f10v1 "github.com/amberpixels/f10/cli/gen/f10/v1"
+	"github.com/amberpixels/f10/cli/internal/agents"
 	"github.com/amberpixels/f10/cli/internal/apiclient"
 	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
 	"github.com/amberpixels/f10/cli/internal/drive"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/target"
@@ -55,6 +57,8 @@ func StartCommand() *cli.Command {
 			"the branch and agent renamed to the group's lead, and returns once the daemon has the drive. " +
 			"A PR url or #n picks that PR up, and --task names its task when the PR names none. " +
 			"Words after the ids are a note for that agent.\n" +
+			"A start whose every task is closed, none with a branch, opens a discussion instead: " +
+			"its report names what shipped each task and any open task one digit off.\n" +
 			"Exit 0: every task went through its flow. 3: a picked-up PR names no task; rerun with --task. " +
 			"4: an agent asks; rerun with --answer. " +
 			"5: a task halted (a judge stop, a failure, an agent that stopped without reporting, its base halted).",
@@ -76,10 +80,75 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if once == nil {
+		once = closedDiscussion(ctx, cmd, argv)
+	}
+
+	if once == nil {
 		return Run(ctx, cmd, argv)
 	}
 
 	return startOnce(ctx, cmd, once)
+}
+
+// closedDiscussion is the discussion a flow start becomes when every task
+// it names is closed, nil otherwise. A resume, a range or an answer goes on
+// with a drive already agreed, so it is never checked.
+func closedDiscussion(ctx context.Context, cmd *cli.Command, argv []string) *f10v1.StartRequest {
+	a, err := drivectl.ParseDriveArgs(argv)
+	if err != nil || a.Plan != nil || a.Resume > 0 || a.Span || len(a.Answers) > 0 || len(a.Tasks) == 0 {
+		return nil
+	}
+
+	// outside Herdr the drive refuses before anything is read
+	if agents.RequireAgents() != nil {
+		return nil
+	}
+
+	t, err := target.For(ctx, cmd)
+	if err != nil {
+		return nil
+	}
+
+	labels := start.ClosedStart(ctx, t, a.Tasks)
+	if labels == nil {
+		return nil
+	}
+
+	fmt.Fprintln(cmd.ErrWriter, start.SwitchNote(labels, droppedDriveFlags(a)))
+
+	return discussionRequest(a)
+}
+
+// discussionRequest is the flow start a as a discussion. It keeps the ids,
+// the base and the agent, and drops the flow's flags, which --discuss refuses.
+func discussionRequest(a drivectl.DriveArgs) *f10v1.StartRequest {
+	return &f10v1.StartRequest{
+		Mode:  f10v1.StartMode_START_MODE_DISCUSS,
+		Token: a.Tasks[0],
+		Tasks: a.Tasks[1:],
+		After: a.After,
+		Base:  a.Base,
+		Agent: a.Agent,
+	}
+}
+
+// droppedDriveFlags names the flags a discussion takes no use of.
+func droppedDriveFlags(a drivectl.DriveArgs) []string {
+	var out []string
+
+	if a.PlanOnly {
+		out = append(out, "--plan")
+	}
+
+	if a.Flow != "" {
+		out = append(out, "--flow "+a.Flow)
+	}
+
+	if a.Pace != "" {
+		out = append(out, "--pace "+a.Pace)
+	}
+
+	return out
 }
 
 // onceFlags are the flags a discussion or a pickup takes, each with whether

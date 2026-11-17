@@ -51,6 +51,9 @@ type StartInput struct {
 	// Discussion is what a discussion of a parent or of several tasks
 	// covers, nil for any other start
 	Discussion *launch.Discussion
+	// Closed is the discussed tasks the tracker already closed, each with
+	// what shipped it
+	Closed []launch.Closed
 	// Started moves a task to tracker.status's started word; nil when none
 	// is declared, or for a PR picked up, whose task someone else started
 	Started func(ctx context.Context, task ref.Ref) error
@@ -113,7 +116,7 @@ func Launch(ctx context.Context, in StartInput) (Launched, error) {
 	l := Launched{OpenedTask: o, Agent: agentctl.AgentName(in.Task.ID, in.Suffix, o.Path)}
 
 	if o.Fresh {
-		text := launch.Prompt(in.Mode, o.Task.Label(), o.Dep, o.Plan, in.Pick, in.Note)
+		text := launch.Prompt(in.Mode, o.Task.Label(), o.Dep, o.Plan, in.Pick, in.Note, in.Closed...)
 		if in.Discussion != nil {
 			text = launch.DiscussionPrompt(*in.Discussion, in.Note)
 		}

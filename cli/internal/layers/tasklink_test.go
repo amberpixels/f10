@@ -30,6 +30,7 @@ var machineRead = map[string]string{
 	"internal/command/audit/audit.go":        `"  %s  %s  %s\n"`,              // audit map's task rows, read by the audit step
 	"internal/statusview/refs.go":            `"%s: %v"`,                      // a warning on stderr
 	"internal/command/task/taskreport.go":    `"%s: %v: no subtasks to list"`, // a warning on stderr
+	"internal/launch/closed.go":              `" %s is closed."`,              // a discussion prompt, read by the agent
 }
 
 // commandSources are the non-test files of the command tree: cmd/f10 and

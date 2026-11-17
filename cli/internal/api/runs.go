@@ -108,15 +108,24 @@ func (s *runService) Start(
 
 	ctx = inSession(ctx, s.sup, c, t)
 
-	if argv, flow, err := flowStart(ctx, t, m, token, task, mode); err != nil || flow {
-		if err != nil {
-			return nil, connect.NewError(connect.CodeInvalidArgument, err)
-		}
-
-		return s.startDrive(t, c, argv)
+	argv, flow, err := flowStart(ctx, t, m, token, task, mode)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
-	in, err := start.Prepare(ctx, t, start.Request{
+	// a drive of tasks that are all closed would run nothing: a discussion
+	// tells the user what shipped them instead
+	var closed string
+	if flow {
+		labels := start.ClosedStart(ctx, t, append([]string{token}, m.GetTasks()...))
+		if labels == nil {
+			return s.startDrive(t, c, argv)
+		}
+
+		closed = start.SwitchNote(labels, droppedFlags(m, mode))
+	}
+
+	sr := start.Request{
 		Token: token,
 		Mode:  mode,
 		Flow:  m.GetFlow(),
@@ -128,9 +137,19 @@ func (s *runService) Start(
 		Model: m.GetModel(),
 		Note:  m.GetNote(),
 		Also:  m.GetTasks(),
-	})
+	}
+
+	if closed != "" {
+		sr = asDiscussion(sr)
+	}
+
+	in, err := start.Prepare(ctx, t, sr)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
+	if closed != "" {
+		in.Notes = append([]string{closed}, in.Notes...)
 	}
 
 	o := output(c)
@@ -200,6 +219,34 @@ func flowStart(
 	}
 
 	return argv, true, nil
+}
+
+// asDiscussion is a flow start turned into a discussion: the flow and the
+// pace go, since a discussion runs neither and RefuseFlags refuses --flow
+// beside --discuss.
+func asDiscussion(req start.Request) start.Request {
+	req.Mode, req.Flow, req.Pace = launch.ModeDiscuss, "", ""
+
+	return req
+}
+
+// droppedFlags names the flow start's flags a discussion takes no use of.
+func droppedFlags(m *f10v1.StartRequest, mode string) []string {
+	var out []string
+
+	if mode == launch.ModePlan {
+		out = append(out, "--plan")
+	}
+
+	if m.GetFlow() != "" {
+		out = append(out, "--flow "+m.GetFlow())
+	}
+
+	if m.GetPace() != "" {
+		out = append(out, "--pace "+m.GetPace())
+	}
+
+	return out
 }
 
 // startToken is the start's argument and the task a picked-up PR is for:

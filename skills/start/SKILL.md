@@ -108,6 +108,10 @@ Under `watch_catchup: on`, the daemon catches the task's open PR up with its tar
    Ask the user for the task id once with `AskUserQuestion` (the PR's url in the question; the id comes through Other), rerun the same command with `--task <id>` appended, and relay its report.
 3. Every other failure is final: print the message verbatim and stop.
 
+**A start whose every task is closed**, none of them with a branch, opens a discussion instead of running the flow, because there is nothing left to run.
+It prints one line saying so, and the report names, for each closed task, the commits that shipped it and any open task whose id is one digit off.
+A PR pickup is unaffected.
+
 **A start inside a discussion's worktree** hands the worktree to the start's first group, renamed to its lead, and opens the other groups as usual.
 Run it in the foreground: it returns once the daemon has the drive, and prints that this agent gets its first prompt when the turn ends.
 Print its output and end the turn there, because the drive's first prompt comes into this pane.
