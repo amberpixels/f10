@@ -109,6 +109,22 @@ func Prepare(ctx context.Context, t *target.Target, req Request) (StartInput, er
 		return StartInput{}, err
 	}
 
+	if req.Mode == launch.ModeDiscuss && pick == nil {
+		in.Closed = describeClosed(ctx, t, discussedLabels(r, discussion))
+		if discussion != nil {
+			discussion.Closed = in.Closed
+		}
+
+		for _, c := range in.Closed {
+			in.Notes = append(in.Notes, c.Note())
+
+			// a closed task is never moved back to started
+			if c.ID == r.Label() {
+				in.Started = nil
+			}
+		}
+	}
+
 	return in, nil
 }
 

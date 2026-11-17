@@ -108,19 +108,33 @@ func (s *runService) Start(
 
 	ctx = inSession(ctx, s.sup, c, t)
 
-	if argv, flow, err := flowStart(ctx, t, m, token, task, mode); err != nil || flow {
-		if err != nil {
-			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	argv, flow, err := flowStart(ctx, t, m, token, task, mode)
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
+	// a drive of tasks that are all closed would run nothing: a discussion
+	// tells the user what shipped them instead
+	var closed string
+	if flow {
+		labels := start.ClosedStart(ctx, t, append([]string{token}, m.GetTasks()...))
+		if labels == nil {
+			return s.startDrive(t, c, argv)
 		}
 
-		return s.startDrive(t, c, argv)
+		closed = start.SwitchNote(labels, droppedFlags(m, mode))
+	}
+
+	flowName, pace := m.GetFlow(), m.GetPace()
+	if closed != "" {
+		mode, flowName, pace = launch.ModeDiscuss, "", ""
 	}
 
 	in, err := start.Prepare(ctx, t, start.Request{
 		Token: token,
 		Mode:  mode,
-		Flow:  m.GetFlow(),
-		Pace:  m.GetPace(),
+		Flow:  flowName,
+		Pace:  pace,
 		After: m.GetAfter(),
 		Base:  m.GetBase(),
 		Task:  task,
@@ -131,6 +145,10 @@ func (s *runService) Start(
 	})
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
+	if closed != "" {
+		in.Notes = append([]string{closed}, in.Notes...)
 	}
 
 	o := output(c)
@@ -200,6 +218,25 @@ func flowStart(
 	}
 
 	return argv, true, nil
+}
+
+// droppedFlags names the flow start's flags a discussion takes no use of.
+func droppedFlags(m *f10v1.StartRequest, mode string) []string {
+	var out []string
+
+	if mode == launch.ModePlan {
+		out = append(out, "--plan")
+	}
+
+	if m.GetFlow() != "" {
+		out = append(out, "--flow "+m.GetFlow())
+	}
+
+	if m.GetPace() != "" {
+		out = append(out, "--pace "+m.GetPace())
+	}
+
+	return out
 }
 
 // startToken is the start's argument and the task a picked-up PR is for:

@@ -110,3 +110,12 @@ func discussed(in StartInput) string {
 
 	return in.Task.Label()
 }
+
+// discussedLabels is every task the discussion reads, the worktree's first.
+func discussedLabels(r ref.Ref, d *launch.Discussion) []string {
+	if d != nil {
+		return d.Tasks
+	}
+
+	return []string{r.Label()}
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
@@ -30,7 +31,9 @@ func PromptAgentAs(ctx context.Context, path, id, suffix, text string) (string, 
 // Prompt is what an agent that waits for a person is told: a discussion,
 // or a picked-up PR, which is never shipped unread. A task run through its
 // flow is prompted by its drive, one skill at a time.
-func Prompt(mode, id string, dep *Dependency, plan string, pick *hostops.Pickup, note string) string {
+func Prompt(
+	mode, id string, dep *Dependency, plan string, pick *hostops.Pickup, note string, closed ...Closed,
+) string {
 	switch {
 	case pick != nil && mode == ModePlan:
 		return Driven(fmt.Sprintf("/f10:plan %s continue PR %s: its diff is the starting point", id, pick.URL))
@@ -38,13 +41,13 @@ func Prompt(mode, id string, dep *Dependency, plan string, pick *hostops.Pickup,
 		return pickupPrompt(id, plan, pick, note)
 	}
 
-	return discussPrompt(id, dep, plan, note)
+	return discussPrompt(id, dep, plan, note, closed)
 }
 
 // discussPrompt fetches the task and stops. It carries no driven marker:
 // the user talks to this agent in its pane, and its questions belong there.
 // `f10 task read` brings comments and images, so the prompt names neither.
-func discussPrompt(id string, dep *Dependency, plan, note string) string {
+func discussPrompt(id string, dep *Dependency, plan, note string, closed []Closed) string {
 	p := fmt.Sprintf("Run `f10 task read %s` and summarise what it asks in a few lines.", id)
 
 	if plan != "" {
@@ -55,7 +58,7 @@ func discussPrompt(id string, dep *Dependency, plan, note string) string {
 		p += " For context: " + DependencyClause(id, dep) + "."
 	}
 
-	return p + noteClause(note) + " Then stop and wait."
+	return p + closedClauses(closed) + noteClause(note) + " Then stop and wait."
 }
 
 // A Discussion is what a discussion of a parent or of several tasks
@@ -63,6 +66,7 @@ func discussPrompt(id string, dep *Dependency, plan, note string) string {
 type Discussion struct {
 	Tasks   []string // every id, the worktree's first
 	Parents []string // the ids among them with subtasks
+	Closed  []Closed // the ids among them the tracker closed
 }
 
 // DiscussionPrompt reads every task, shows how they relate and what the
@@ -87,13 +91,31 @@ func DiscussionPrompt(d Discussion, note string) string {
 		p.WriteString(" Show how the tasks depend on each other, from their After: lines.")
 	}
 
-	fmt.Fprintf(&p, " Then run `f10 drive plan %s` and show its proposal as a starting point "+
-		"for how they ship: one PR, bundles, or some alone.", strings.Join(d.Tasks, " "))
+	p.WriteString(closedClauses(d.Closed))
 
-	p.WriteString(" The discussion ends in a start command, such as `/f10:start A+B C`: run it in this pane " +
-		"only when the user says so, and its first group continues in this worktree.")
+	// the drive leaves a closed task out, so its proposal covers the open ones
+	if open := d.open(); len(open) > 0 {
+		fmt.Fprintf(&p, " Then run `f10 drive plan %s` and show its proposal as a starting point "+
+			"for how they ship: one PR, bundles, or some alone.", strings.Join(open, " "))
+
+		p.WriteString(" The discussion ends in a start command, such as `/f10:start A+B C`: run it in this pane " +
+			"only when the user says so, and its first group continues in this worktree.")
+	}
 
 	return p.String() + noteClause(note) + " Then stop and wait."
+}
+
+// open is the discussion's tasks the tracker has not closed.
+func (d Discussion) open() []string {
+	var out []string
+
+	for _, id := range d.Tasks {
+		if !slices.ContainsFunc(d.Closed, func(c Closed) bool { return c.ID == id }) {
+			out = append(out, id)
+		}
+	}
+
+	return out
 }
 
 // joinAnd joins items as a sentence does: "a", "a and b", "a, b and c".
