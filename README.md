@@ -172,9 +172,9 @@ f10 shows where a run is in Claude Code's [status line](https://code.claude.com/
 | `●` | done |
 | `◉` | prior: done before this run |
 | `◌` | skipped: will not happen this run |
-| <img src="docs/glyphs/partial.svg" width="14" alt="partial"> `󰅚` | partial: stopped, but work survived |
+| <img src="docs/glyphs/partial.svg" width="14" alt="partial"> | partial: stopped, but work survived |
 | `✗` | failed: stopped with nothing usable |
-| <img src="docs/glyphs/blocked.svg" width="14" alt="blocked"> `󰜺` | blocked: a judge verdict ended the run |
+| <img src="docs/glyphs/blocked.svg" width="14" alt="blocked"> | blocked: a judge verdict ended the run |
 
 A plugin cannot ship a status line, so you add one line to yours.
 [docs/statusline.md](docs/statusline.md) has the wiring, the colors and `f10 status`.
@@ -243,8 +243,6 @@ Go is checked with [standardgo](https://github.com/amberpixels/standardgo), pinn
 - [f10-drivers](https://github.com/amberpixels/f10-drivers): ready drivers for that contract, Notion first.
 - [Lore](docs/lore.md): why a line is the way it is, kept as entries per change next to the code.
 - [The control-plane API](proto/README.md): the proto contract, its generated code and the rules for changing it.
-
-Ideas, questions and bug reports are welcome as an [issue](https://github.com/amberpixels/f10/issues).
 
 ## License
 

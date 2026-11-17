@@ -32,11 +32,11 @@ f10-state.sh doctor   # where state lives, whether the symlink is in place, what
 | `●` | done |
 | `◉` | prior: done before this run, a saved plan reused |
 | `◌` | skipped: will not happen this run |
-| <img src="glyphs/partial.svg" width="14" alt="partial"> `󰅚` | partial: stopped, but work survived (committed but the push failed, a PR open with red CI) |
+| <img src="glyphs/partial.svg" width="14" alt="partial"> | partial: stopped, but work survived (committed but the push failed, a PR open with red CI) |
 | `✗` | failed: stopped with nothing usable |
-| <img src="glyphs/blocked.svg" width="14" alt="blocked"> `󰜺` | blocked: a judge verdict ended the run, so nothing broke and the user decided |
+| <img src="glyphs/blocked.svg" width="14" alt="blocked"> | blocked: a judge verdict ended the run, so nothing broke and the user decided |
 
-A stopped run adds the step it stopped on, so `◉ ● 󰜺 judge` reads "blocked at judge".
+A stopped run adds the step it stopped on, so `◉ ●` <img src="glyphs/blocked.svg" width="14" alt="blocked"> `judge` reads "blocked at judge".
 Open asks, across projects, add a count, ` f10 · 2 asks`, shown with or without a run: a driven agent is waiting on you (`f10 asks`, `/f10:asks`).
 The rest, the task, the reason, what unblocks it, and the question a driven agent is waiting on (`ask`), is `f10 status`; `f10 status <task-id>` reads the same for a task running in its own worktree, from the task's own run only; when the agent there has moved on to another task, it names that task and falls back to the task's plan file and PR.
 For a finished task, its worktree gone, it prints the same block from what `f10 finish` archived.
@@ -63,9 +63,8 @@ Three glyphs are Material Design icons that only [Nerd Fonts](https://www.nerdfo
 
 In any other font, each of the three shows as one empty box, and the circles still read.
 GitHub shows them as empty boxes too.
-So the glyph table under **Reading it** draws partial and blocked as images beside the code spans.
-The README draws the keycap in `statusline.svg` for the same reason.
-The code spans hold the real characters, so copying one gives you the glyph.
+So the docs draw partial and blocked as images, and the README draws the keycap in `statusline.svg`.
+To copy the real characters, take them from the `F10_STATE_GLYPHS` default below.
 
 ## Environment
 
