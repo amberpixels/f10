@@ -76,7 +76,7 @@ func openPullOf(
 	return h, p, s.Task, t.Effective.TitleTemplate, nil
 }
 
-// PullTitle is the title a request opens or is retitled with: it opens with
+// PullTitle is the title a request opens or is retitled with: it carries
 // the lead's id, written through tracker.title, and a bundle's names its
 // riders after that id, whatever the draft said.
 func PullTitle(title string, task *ref.Ref, titles tasktitle.Template) string {
@@ -90,8 +90,17 @@ func PullTitle(title string, task *ref.Ref, titles tasktitle.Template) string {
 	}
 
 	lead := task.Head()
-	if !ref.LeadsWith(title, lead.ID) && !titles.Applied(title, lead.ID, lead.Number) {
-		title = titles.Render(lead.ID, lead.Number, title)
+	bundled := len(lead.Riders()) > 0
+
+	// the riders tag hangs on the id, so a bundle under a template without
+	// {id} takes BundleTitle's own `<id> (+riders): ` form instead
+	if bundled && !strings.Contains(string(titles), "{id}") {
+		return ref.BundleTitle(title, *task)
+	}
+
+	bare := ref.WithoutRiders(title, lead.ID)
+	if !ref.LeadsWith(bare, lead.ID) && !titles.Applied(bare, lead.ID, lead.Number) {
+		title = titles.Render(lead.ID, lead.Number, bare)
 	}
 
 	return ref.BundleTitle(title, *task)

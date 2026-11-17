@@ -51,6 +51,17 @@ func LeadsWith(title, id string) bool {
 	return regexp.MustCompile(`(?i)^\s*` + idPattern(id)).MatchString(title)
 }
 
+// WithoutRiders is title with the riders tag after its first id dropped, so
+// a title f10 already wrote reads the same as its draft.
+func WithoutRiders(title, id string) string {
+	loc := regexp.MustCompile(`(?i)(?:^|[^a-z0-9])` + idPattern(id)).FindStringSubmatchIndex(title)
+	if loc == nil {
+		return title
+	}
+
+	return title[:loc[3]] + TrimRiders(title[loc[3]:])
+}
+
 // idPattern is id as a group, with the digit guard that keeps FT-1 from
 // matching inside FT-12.
 func idPattern(id string) string {

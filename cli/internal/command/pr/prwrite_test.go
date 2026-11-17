@@ -245,6 +245,11 @@ func TestPullTitle(t *testing.T) {
 		{"a bundle with the id names its riders", "GH-1: Lead", bundle, "{id}: {title}", "GH-1 (+GH-2, GH-3): Lead"},
 		{"a bundle without the id gets both", "Lead", bundle, "{id}: {title}", "GH-1 (+GH-2, GH-3): Lead"},
 		{"a rider's ref prefixes the lead", "Lead", rider, "{id}: {title}", "GH-1 (+GH-2): Lead"},
+		{"a bundle under a bracket template", "Lead", bundle, "[{id}] {title}", "[GH-1 (+GH-2, GH-3)] Lead"},
+		{"a bundle's bracket title retitles the same", "[GH-1 (+GH-2, GH-3)] Lead", bundle, "[{id}] {title}", "[GH-1 (+GH-2, GH-3)] Lead"},
+		{"a bundle under an id-last template", "Lead", bundle, "{title} ({id})", "Lead (GH-1 (+GH-2, GH-3))"},
+		{"a bundle's id-last title retitles the same", "Lead (GH-1 (+GH-2, GH-3))", bundle, "{title} ({id})", "Lead (GH-1 (+GH-2, GH-3))"},
+		{"a bundle under a #{n} template takes the id form", "Lead", bundle, "#{n} {title}", "GH-1 (+GH-2, GH-3): Lead"},
 		{"no task keeps the title", "Lead", nil, "{id}: {title}", "Lead"},
 		{"a body-only edit keeps no title", "", bundle, "{id}: {title}", ""},
 	} {

@@ -541,7 +541,8 @@ The placeholders are `{id}` (`FT-132`), `{n}` (`132`) and `{title}`, which must 
 Every read (`task read`, `search`, `children`, the board, status, a default branch name) takes a leading id and the punctuation after it back off, so f10 shows the id once.
 Only a template that opens with `{id}`, `{n}` or `#{n}` is stripped; one like `x--{id}--{title}` is written but read as is.
 `f10 task retitle --all` backfills the existing issues (`--dry-run` lists them first); a second run changes nothing.
-With nothing declared, titles stay bare.
+With nothing declared, issue titles stay bare.
+`f10 pr create` and `f10 pr edit` write the lead task's id onto every PR title through the same template, else as `<id>: <title>`, unless the title already carries it; a bundle's riders follow the id.
 
 ## Reporting back
 
