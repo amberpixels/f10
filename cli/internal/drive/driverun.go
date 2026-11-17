@@ -222,7 +222,10 @@ type DriveRun struct {
 	// place of the agent while the phase is verifying
 	Job *verifyJob
 	// checks is the pending head finish holds for; nil once nothing waits on it
-	checks *checksHold
+	// handing is set while the first skill waits for a discussion's turn to
+	// end in the worktree handed to this task
+	handing bool
+	checks  *checksHold
 	// triaged is the red head and triage record a ci turn was last sent
 	// for, so a triage that leaves both as they were halts
 	triaged string

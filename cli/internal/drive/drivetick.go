@@ -266,7 +266,7 @@ func stopping(runs []*DriveRun) bool {
 	for _, r := range runs {
 		asked = asked || r.End != nil && r.End.Code == ui.ExitAsk
 		active = active || r.active()
-		moving = moving || r.active() && r.Phase != atParked && r.Phase != atWaiting
+		moving = moving || r.active() && (r.Phase != atParked && r.Phase != atWaiting || r.handing)
 	}
 
 	return !active || asked && !moving

@@ -193,6 +193,20 @@ func Prompt(ctx context.Context, dir, name, text string) error {
 	return err
 }
 
+// RenameAgent gives the named agent a new name.
+func RenameAgent(ctx context.Context, dir, name, to string) error {
+	_, err := call(ctx, dir, "agent", "rename", name, to)
+
+	return err
+}
+
+// RenameWorkspace gives the workspace a new label.
+func RenameWorkspace(ctx context.Context, dir, id, label string) error {
+	_, err := call(ctx, dir, "workspace", "rename", id, label)
+
+	return err
+}
+
 // Screen is the named agent's visible screen, as text: `agent read`
 // prints the terminal itself, not a JSON envelope.
 func Screen(ctx context.Context, dir, name string) (string, error) {

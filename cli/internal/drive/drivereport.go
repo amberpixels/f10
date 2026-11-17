@@ -43,6 +43,8 @@ func (in *DriveInput) Report(runs []*DriveRun, notes []string) error {
 			rows = append(rows, render.Fact{Label: shown, Value: "queued"})
 		case r.active() && r.Phase == atParked:
 			rows = append(rows, render.Fact{Label: shown, Value: "waiting on " + in.id(r.Base.Task.Ref.ID)})
+		case r.active() && r.Phase == atWaiting && r.handing:
+			rows = append(rows, render.Fact{Label: shown, Value: "waiting for the discussion's turn to end"})
 		case r.active() && r.Phase == atWaiting && r.checks != nil:
 			rows = append(rows, render.Fact{Label: shown, Value: "waiting on checks"})
 		case r.active() && r.Phase == atWaiting:

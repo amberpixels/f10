@@ -32,8 +32,9 @@ It runs no step.
 - `<id>:<profile>`: that task's agent profile, which wins over `--agent`.
 - `<PR url>` or `#n`: pick that PR up; its branch is checked out tracking origin's and linked to its task, and the agent summarises it and waits.
   A merged or closed PR is picked up the same way, for a post-merge review: checked out at the commit it landed as, on a local-only branch named for the task, the agent told the PR's state; `--plan` is refused on it.
-- `--discuss`: one task's agent is prompted without `--driven`, and it summarises the task and waits.
-- `<note>`: with `--discuss` or a PR, the words after the id; the agent acts on it after its summary, then waits.
+- `--discuss`: one worktree and one agent, prompted without `--driven`; it reads the tasks and waits.
+  A parent opens the parent's worktree and its agent shows the subtask tree; several ids open the first id's, and its agent reads them all.
+- `<note>`: with `--discuss` or a PR, the words after the ids; the agent acts on it after its summary, then waits.
 - `--plan`: plan every task and implement none.
 - `--flow <name>` / `--local`: the flow every task runs instead of `default` (`f10 flow` lists them).
   A rerun keeps the flow a task's branch already records.
@@ -104,6 +105,10 @@ Under `watch_catchup: on`, the daemon catches the task's open PR up with its tar
 2. **Exit 3 is a question**: a PR whose body, title and branch name no task.
    Ask the user for the task id once with `AskUserQuestion` (the PR's url in the question; the id comes through Other), rerun the same command with `--task <id>` appended, and relay its report.
 3. Every other failure is final: print the message verbatim and stop.
+
+**A start inside a discussion's worktree** hands the worktree to the start's first group, renamed to its lead, and opens the other groups as usual.
+Run it in the foreground: it returns once the daemon has the drive, and prints that this agent gets its first prompt when the turn ends.
+Print its output and end the turn there, because the drive's first prompt comes into this pane.
 
 **Every other start** runs the tasks through their flow.
 Run it in the background (`run_in_background`), because a flow can take hours, and the command's exit wakes this session.

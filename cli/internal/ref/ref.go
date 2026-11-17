@@ -376,6 +376,31 @@ func Members(prefix, branch string) []string {
 	return members
 }
 
+// IsID says whether word is shaped as a task id f10 start takes: the
+// project's id, or any `ABC-12` when prefix is "", or a bare number, each
+// with an optional -suffix, or a bundle of them joined by Separator.
+func IsID(prefix, word string) bool {
+	if word == "" || strings.HasPrefix(word, "-") {
+		return false
+	}
+
+	pat := `^(?:[A-Za-z][A-Za-z0-9]*-)?[0-9]+$`
+	if prefix != "" {
+		pat = `(?i)^(?:` + regexp.QuoteMeta(prefix) + `-?)?[0-9]+$`
+	}
+
+	re := regexp.MustCompile(pat)
+
+	for m := range strings.SplitSeq(word, Separator) {
+		id, _ := SplitSuffix(m)
+		if !re.MatchString(id) {
+			return false
+		}
+	}
+
+	return true
+}
+
 // Match is the task id in text (a branch name, a PR title, a commit subject),
 // anchored on a non-word boundary rather than the start since the id sits in
 // any position and case (`feature/abc-123-fix-bug`).

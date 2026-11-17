@@ -48,6 +48,9 @@ type StartInput struct {
 	Progress       io.Writer       // where a wait in progress is reported, or nil for nowhere
 	Pick           *hostops.Pickup // the PR picked up, or nil for a task started by its id
 	Note           string          // the user's words after the id, for the agent before it waits, or ""
+	// Discussion is what a discussion of a parent or of several tasks
+	// covers, nil for any other start
+	Discussion *launch.Discussion
 	// Started moves a task to tracker.status's started word; nil when none
 	// is declared, or for a PR picked up, whose task someone else started
 	Started func(ctx context.Context, task ref.Ref) error
@@ -111,6 +114,9 @@ func Launch(ctx context.Context, in StartInput) (Launched, error) {
 
 	if o.Fresh {
 		text := launch.Prompt(in.Mode, o.Task.Label(), o.Dep, o.Plan, in.Pick, in.Note)
+		if in.Discussion != nil {
+			text = launch.DiscussionPrompt(*in.Discussion, in.Note)
+		}
 
 		sent := time.Now()
 
@@ -395,6 +401,12 @@ func recordBranchFacts(
 	if len(in.Task.Riders()) > 0 {
 		if err := recordBundle(ctx, in.Main, name, in.Task); err != nil {
 			return nil, err
+		}
+	}
+
+	if in.Mode == launch.ModeDiscuss {
+		if err := branchmeta.Set(ctx, in.Main, name, branchmeta.Discuss, discussed(in)); err != nil {
+			return nil, fmt.Errorf("marking %s as a discussion: %w", name, err)
 		}
 	}
 

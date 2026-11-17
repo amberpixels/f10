@@ -44,6 +44,10 @@ type unreachable struct{ herdr.Backend }
 
 func (unreachable) Available() error { return noSessionError{} }
 
+func (unreachable) RenameAgent(context.Context, string, string) error { return noSessionError{} }
+
+func (unreachable) RenameWorkspace(context.Context, string, string) error { return noSessionError{} }
+
 func (unreachable) Workspaces(context.Context) ([]agentctl.Workspace, error) {
 	return nil, noSessionError{}
 }

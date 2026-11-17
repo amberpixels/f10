@@ -58,6 +58,53 @@ func discussPrompt(id string, dep *Dependency, plan, note string) string {
 	return p + noteClause(note) + " Then stop and wait."
 }
 
+// A Discussion is what a discussion of a parent or of several tasks
+// covers; a lone task with no subtasks has none.
+type Discussion struct {
+	Tasks   []string // every id, the worktree's first
+	Parents []string // the ids among them with subtasks
+}
+
+// DiscussionPrompt reads every task, shows how they relate and what the
+// drive would propose, then waits. Its outcome is a start command, whose
+// first group continues in this worktree.
+func DiscussionPrompt(d Discussion, note string) string {
+	reads := make([]string, len(d.Tasks))
+	for i, id := range d.Tasks {
+		reads[i] = "`f10 task read " + id + "`"
+	}
+
+	var p strings.Builder
+
+	p.WriteString("Run " + joinAnd(reads) + " and summarise what each asks in a few lines.")
+
+	for _, id := range d.Parents {
+		fmt.Fprintf(&p, " Run `f10 task children %s --plain` and show its subtask tree as printed: "+
+			"each row marks what it waits on, a draft and a finished subtask.", id)
+	}
+
+	if len(d.Tasks) > 1 {
+		p.WriteString(" Show how the tasks depend on each other, from their After: lines.")
+	}
+
+	fmt.Fprintf(&p, " Then run `f10 drive plan %s` and show its proposal as a starting point "+
+		"for how they ship: one PR, bundles, or some alone.", strings.Join(d.Tasks, " "))
+
+	p.WriteString(" The discussion ends in a start command, such as `/f10:start A+B C`: run it in this pane " +
+		"only when the user says so, and its first group continues in this worktree.")
+
+	return p.String() + noteClause(note) + " Then stop and wait."
+}
+
+// joinAnd joins items as a sentence does: "a", "a and b", "a, b and c".
+func joinAnd(items []string) string {
+	if len(items) < 2 {
+		return strings.Join(items, "")
+	}
+
+	return strings.Join(items[:len(items)-1], ", ") + " and " + items[len(items)-1]
+}
+
 // pickupPrompt is discussPrompt for a picked-up PR: the task, the PR's
 // state and its diff summarised, then the agent waits in its own pane.
 func pickupPrompt(id, plan string, pick *hostops.Pickup, note string) string {

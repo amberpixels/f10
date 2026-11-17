@@ -58,6 +58,10 @@ const (
 	// CI is what a triage of red checks tried during one red spell
 	// (ci.go); any green read clears it.
 	CI Key = "f10-ci"
+	// Discuss marks a discussion's branch with the ids it opened for. A
+	// start run there hands it on, and the drive's first prompt waits for
+	// the discussion's turn to end, then clears it.
+	Discuss Key = "f10-discuss"
 )
 
 // keys is every Key, for splitting a listed entry's name.
@@ -77,6 +81,7 @@ var keys = []Key{
 	Pace,
 	Watch,
 	CI,
+	Discuss,
 }
 
 // For is the full config name of the key on branch, as git and its errors
@@ -195,6 +200,7 @@ type Record struct {
 	Pace        string
 	Watch       string
 	CI          Triage
+	Discuss     []string
 }
 
 func (r *Record) set(key Key, value string) {
@@ -231,6 +237,8 @@ func (r *Record) set(key Key, value string) {
 		r.Watch = value
 	case CI:
 		r.CI = ParseTriage(value)
+	case Discuss:
+		r.Discuss = strings.Fields(value)
 	case Chain: // an older drive's, which only the drive's unset reads
 	}
 }
