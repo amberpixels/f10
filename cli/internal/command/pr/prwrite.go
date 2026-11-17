@@ -76,9 +76,9 @@ func openPullOf(
 	return h, p, s.Task, t.Effective.TitleTemplate, nil
 }
 
-// PullTitle is the title a request opens or is retitled with: it carries
-// the lead's id, written through tracker.title, and a bundle's names its
-// riders after that id, whatever the draft said.
+// PullTitle is the title a request opens or is retitled with. It carries the
+// lead's id through tracker.title whatever the draft said. A bundle's names
+// its riders after that id.
 func PullTitle(title string, task *ref.Ref, titles tasktitle.Template) string {
 	if title == "" || task == nil {
 		return title
