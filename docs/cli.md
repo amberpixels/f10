@@ -1497,7 +1497,7 @@ A breaking change bumps `schema`.
 | `prs[].force_pushes` | your force-pushes to it in the period, by time, then after-sha |
 | `reviewed[].actions` | by time, then kind |
 | `tasks[].blocked` | what the task waits on when the period ends, and `since` when: `ask` (an ask with no answer yet, the question in one line), `halt` (a drive halted it after its run's last word, with the skill and reason) or `failed` (its run stopped `failed` or `partial`, with the step and the note, such as a red verify or CI); absent when nothing |
-| `tasks[].activity` | the steps run in the period, by time, each once a day: `plan` (saved or superseded), `debug` (cause found, not reproduced, or run), `spike` (report saved), `review` (`round 2: 3 fixed, 1 skipped`, or `round 2 opened`) and `judge` (the verdict and its subject) |
+| `tasks[].activity` | the steps run in the period, by time, each once a day: `plan` (saved or superseded), `debug` (cause found, cause unconfirmed, or run), `spike` (report saved), `review` (`round 2: 3 fixed, 1 skipped`, or `round 2 opened`) and `judge` (the verdict and its subject) |
 | `tasks[].stage` | where the run left the task, in words: `planned, not started`, `planning`, `review round 2`, `waiting on CI`, `waiting on <base>`, `shipping: <step>`; absent when the run has nothing `state` lacks, as after a finished ship. `state` keeps its values, because the carry-over and the classes read them |
 | `tasks[].driven` | the newest drive that lists the task and ran in the period; absent when none |
 | `tasks[].active_minutes` | the task's active minutes in the period, counted as `f10 stats` counts them, waits on you left out; always present. The `/f10:standup` skill renders it only when your `standup.md` asks for it |
@@ -1807,7 +1807,7 @@ The agent passes what only reading the code settles:
 | `--lines` | `path:start-end` of the faulty lines, numbered as `--base` (default `HEAD`) has them; repeat for several |
 | `--found-by` | `bisect`, `blame` or `none` |
 | `--confidence` | `confirmed`, `likely` or `unclear` |
-| `--repro` | the debug pass's outcome: `obvious`, `full`, `skipped` or `unconfirmed` |
+| `--repro` | the debug pass's outcome: `obvious`, `full`, `traced`, `skipped` or `unconfirmed` |
 | `--class` | `out-of-reach`, when the fault is an interaction no diff review could see |
 
 The command settles the rest.

@@ -57,9 +57,10 @@ Five kinds of open question never become an ask:
   The frontmatter's value decides, as the debug step says.
   The drive's report names every task planned without a reproduction, so a skipped one is seen.
 
-Two bug questions do become one ask each.
+Three bug questions do become one ask each.
+A report with more than three problems asks which to chase.
 Under `debug_costly: ask`, a costly bug asks its three options.
-A bug that does not reproduce asks what the user saw, and then its plan is written marked `Reproduction: unconfirmed`, so the drive goes on.
+A bug whose cause is not confirmed asks for the missing evidence, and then its plan is written marked `Reproduction: unconfirmed`, so the drive goes on.
 
 ## A turn ends at its report, never before
 

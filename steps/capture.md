@@ -28,7 +28,7 @@ The create adapter creates the task when `f10 task create` exits 3.
      Name them plainly, because later steps choose conditional roles from this note.
      A small body carries no _Areas_ note, because the fetch step derives the areas from the code.
    - **A task drafted from a debug brief** is at least **normal**.
-     It carries a _Reproduction_ section (the steps or input, the expected result and the actual one) and a _Root cause_ section (the `file:line` and its evidence), both taken from the brief.
+     It carries a _Reproduction_ section (the steps or input with the expected result and the actual one, or the evidence that shows the bug when nothing was run) and a _Root cause_ section (the `file:line`, its evidence, since when and whom it affects), both taken from the brief.
      Its title names the defect, not the fix.
    - **Altitude:** write for the engineer who will pick the task up, not for a stranger to the codebase.
      - Include a snippet only when its shape *is* the ask, such as a required output format or a wire payload.

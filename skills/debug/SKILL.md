@@ -1,8 +1,8 @@
 ---
 name: debug
-description: "f10 debug skill - reproduce and diagnose a bug from an error, a stack trace or a description; only a confirmed bug becomes a task and a plan. Use when the user says \"/f10:debug <error | trace | description>\", pastes an error or stack trace to chase, or says something broke (\"works on staging, not prod\") and no task exists yet."
+description: "f10 debug skill - investigate a report (an error, a stack trace, log lines, a screenshot of a user complaint, or a description) down to its cause in the code, reproducing it only when that is the cheapest proof; each confirmed bug becomes a task and a plan, and a report that holds no bug gets an answer. Use when the user says \"/f10:debug <report>\", pastes an error, a trace, logs or a screenshot of a complaint to chase, asks why something happened or did not, or says something broke (\"works on staging, not prod\") and no task exists yet."
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Agent, AskUserQuestion, Skill, ExitPlanMode
-argument-hint: "<error | stack trace | description>"
+argument-hint: "<error | trace | logs | screenshot | description>"
 ---
 
 # f10 · debug
@@ -12,19 +12,23 @@ argument-hint: "<error | stack trace | description>"
 - `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything, and stop.
   It reports which steps the rest of the argument would run.
 - `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`; everything below still runs.
-- `<error | trace | description>`: the bug report, run through the **debug** step.
-  A confirmed cause runs **capture** with the debug brief, then **fetch** and **plan** on the new task id.
-  An argument that reports no bug ("let's debug something") counts as none.
+- `<report>`: an error, a stack trace, log lines, a screenshot or a complaint in plain words, run through the **debug** step.
+  Each bug with a confirmed cause takes the path the debug step chooses (its point 8).
+  The usual path runs **capture** with its debug brief, then **fetch** and **plan** on the new task id, one bug after another.
+  For an urgent bug with a small fix, a quicker flow the project declares may be suggested, and it runs only when the user picks it.
+  An argument that reports nothing ("let's debug something") counts as none.
   A bug that already is a task needs no call here: fetch runs the same step file on it before planning.
 - No argument:
-  - An error or stack trace already in this conversation: that is the report.
+  - An error, a trace, logs or a screenshot already in this conversation: that is the report.
     Say in one line which one you took, then start.
   - Nothing in the conversation: ask for the report in one line and wait.
 
 **Run**
 1. Run `f10-load-project.sh debug capture fetch plan` first, on every call of this skill.
-2. Follow the **debug** step it prints; on a confirmed cause, **capture**, **fetch** and **plan**, in that order.
+2. Follow the **debug** step it prints; for each bug with a confirmed cause, run the path it chose: **capture**, **fetch** and **plan**, in that order, or the quicker flow the user picked.
 
 **Exit**
-- Stop at the saved plan, unless the argument chains a skill: then run it; or at debug's report when the bug does not reproduce.
+- Stop at the saved plans, unless the argument chains a skill: then run it.
+  A quicker flow the user picked ends where `/f10:ship` ends.
+  Stop at debug's report when the report holds no bug, or when its cause stays unsettled.
 - Next: `/f10:ship <id>`, once a plan is saved.

@@ -25,7 +25,7 @@ Three skills make up the chain:
 The other skills are optional, and each has its place around the chain:
 
 - **brainstorm** comes before the chain.
-- **debug** comes before it too, for a bug that arrives as an error.
+- **debug** comes before it too, for a bug that arrives as an error, logs or a user's complaint.
 - **judge** runs at any point.
 - **review** and **resolve** run before the PR.
 - **demo** and **explain** run after the PR.
@@ -90,7 +90,7 @@ Around the chain:
 | skill | what you get |
 |---|---|
 | `brainstorm` | a shape agreed in chat, or the decision not to build |
-| `debug` | a reproduced bug with its cause, then a task and a plan |
+| `debug` | the cause of a reported problem, then a task and a plan per bug, or an answer when it is not a bug |
 | `judge` | a verdict: proceed, proceed with changes, rethink, or stop |
 | `cleanup` | comments, prose and leftover code tightened, nothing committed |
 | `review` | a findings file from a reviewer that never saw your session |

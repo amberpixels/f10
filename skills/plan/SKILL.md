@@ -18,7 +18,7 @@ argument-hint: "[<task-id | free-text description>]"
 - No argument (an argument that names no task, like "let's plan something", counts as none):
   - A task already in this conversation (e.g. the user just fetched and discussed it): the task and the design agreed in chat are settled.
     Skip `capture` and the `fetch` investigation; go to the **plan** step with at most a few targeted reads of the code you'll mirror or touch.
-    Fetch's kind rules still run: settle the kind, and reproduce a bug or ask.
+    Fetch's kind rules still run: settle the kind, and confirm a bug's cause or ask.
   - No task in the conversation, and `f10 task current` prints an id (the branch's task): run it as a `<task-id>`.
     Say in one line which task you took and where from.
   - `f10 task current` exits non-zero: ask for a task in one line and wait.

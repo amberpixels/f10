@@ -79,13 +79,13 @@ The step ends in an **investigation brief** (point 6): a short write-up of what 
 3. **Investigate only the real unknowns.**
    The task text and anything established in this conversation are ground truth.
    Never re-verify a premise the task or the user gave you.
-   The one exception is a bug's reported behavior, which you reproduce (below).
+   The one exception is a bug's reported behavior, whose cause the debug step confirms (below).
    Investigate only what you need to design well: the exact code you will mirror or touch, existing patterns to reuse, callers, the downstream consumers behind a real decision, and the tests.
    Do it in a few targeted reads (`conventions/latency.md` rule 5).
 
    Each kind adds what the investigation must prove:
    - **bug** - run the debug step's sections **A bug that is a task** and **Attribute**: `f10-state.sh set plan running debug; f10-load-project.sh debug`.
-     They triage, reproduce and confirm the root cause at a `file:line`.
+     They triage, investigate and confirm the root cause at a `file:line`, reproducing where the triage calls for it.
      They record the task that introduced the bug, and give the brief its reproduction and its `Regression of:` line.
      Three cases skip the pass:
      - The frontmatter declares `debug: off`.
@@ -95,7 +95,7 @@ The step ends in an **investigation brief** (point 6): a short write-up of what 
      - A saved plan exists for the task.
        Ship runs fetch before it reuses a plan, so a rerun would otherwise reproduce again and record a second attribution.
      The steering `as a feature` settles the kind as a feature (point 2), so no pass runs, which is the opt-out for a "bug" label on a missing feature.
-     A bug that does not reproduce still gets a plan, marked `Reproduction: unconfirmed` (the debug step says how).
+     A bug whose cause is not confirmed still gets a plan, marked `Reproduction: unconfirmed` (the debug step says how).
    - **refactor** - find the behavior that must not change, the tests that pin it, and where coverage is missing.
    - **spike** - state the question so that an answer can be checked.
      Name the decision each answer feeds: the follow-up work that answer unlocks or kills.
@@ -124,4 +124,4 @@ The step ends in an **investigation brief** (point 6): a short write-up of what 
    There the brief becomes the inline plan `/f10:ship` prints in chat, with its gaps listed on their defaults.
 
 **On failure:** the tracker does not know the id, or the tracker is unreachable (`conventions/failure.md`).
-A bug that does not reproduce is not a failure: its plan is marked `Reproduction: unconfirmed`.
+A bug whose cause is not confirmed is not a failure: its plan is marked `Reproduction: unconfirmed`.

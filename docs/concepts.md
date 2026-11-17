@@ -156,7 +156,7 @@ Its **kind** is `feature`, `bug`, `refactor` or `spike`, and the plan records it
 f10 reads the kind from the steering, a label or the description.
 Only the steering or a label can make a task a spike, because a spike skips the PR.
 
-- A bug is reproduced and its cause traced before it is planned.
+- A bug's cause is confirmed before it is planned, by a reproduction or by evidence such as logs, records or history.
   Its fix starts with a test that fails first.
 - A refactor proves that behavior did not change, with tests green before and after.
 - A spike is a research task that answers a question.

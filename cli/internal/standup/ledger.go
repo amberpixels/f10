@@ -345,7 +345,7 @@ func activity(evs []ledger.Event, since, until time.Time) []Activity {
 
 				switch {
 				case p.GetRepro() == "unconfirmed":
-					outcome = "not reproduced"
+					outcome = "cause unconfirmed"
 				case p.GetOriginTask() != "":
 					outcome = "cause found: regression of " + p.GetOriginTask()
 				default:
