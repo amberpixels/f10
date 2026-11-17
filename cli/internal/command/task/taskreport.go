@@ -66,9 +66,9 @@ func reportNode(token, id, url string) tasktree.Node {
 	return tasktree.Node{Cells: []tasktree.Cell{{Text: id + ":"}, {Text: "↗ " + url}}}
 }
 
-// WriteParentTree hangs a parent's open subtasks under it, in After: order,
-// each with its title and its url on the line under it, so a split reads as one block. A parent
-// the tracker cannot link prints as one task's facts.
+// WriteParentTree hangs a parent's open subtasks under it in After: order, so
+// a split reads as one block. Each url goes on the line under its title. A
+// parent the tracker cannot link prints as one task's facts.
 func WriteParentTree(ctx context.Context, cmd *cli.Command, t *target.Target, token string, r ref.Ref,
 	k ledger.TaskRef,
 ) error {
