@@ -308,7 +308,7 @@ The label changes nothing that runs: the entry is still `pr`, and every claim an
 A label is lower kebab-case and unique within its flow.
 It is never the name of a step: a generic one, `finish` included, or any step a declared flow names.
 A shell reads `[...]` as a pattern, so quote a labelled entry on a command line: `f10-state.sh pipeline implement pr 'pr[pr-polish]'`.
-The last entry names what a run ships: an open PR, a pushed branch, a running deploy.
+The last entry before a trailing `finish` names what a run ships: an open PR, a pushed branch, a running deploy.
 A project-defined last step declares its own shipment on a `Shipment:` line in its overlay, and the final report prints that row in place of branch, PR or sha rows.
 Putting a project-defined step in a declared flow is the selection: unlike `push`, it needs no user naming the flow.
 A spike is the exception: its run ends after implement, whatever the flow, with a spike report.

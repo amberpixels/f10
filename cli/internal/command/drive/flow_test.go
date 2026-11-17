@@ -113,6 +113,25 @@ func TestFlowByArea(t *testing.T) {
 		t.Errorf("every flow finishing = %+v, want finish", all)
 	}
 
+	// a pace that breaks one area's flow fails only the ship that picks it
+	set := facts.NewPaceSet()
+	set.Over(
+		map[string]facts.Pace{"noplan": {Steps: map[string]facts.Dials{"plan": {Off: true}}}},
+		func(string, string) facts.Origin { return facts.DeclaredIn("test") },
+	)
+	eff.Flows["direct"] = flow.Of([]string{"plan", "judge", "implement", "pr", "finish"})
+
+	broken, err := testkit.PacedFlowIn(eff, set, "noplan", "")
+	if err != nil || broken.Finishes || !broken.Mixed {
+		t.Errorf("one area flow broken by the pace = %+v, %v; want no error and no finish", broken, err)
+	}
+
+	// a named flow ending at a PR with no finish says drive stops at ship
+	eff.Flows["open"] = flow.Of([]string{"implement", "pr"})
+	if open, _ := testkit.PacedFlowIn(eff, nil, "", "open"); !open.NoFinish || open.Finishes {
+		t.Errorf("a flow without finish = %+v, want NoFinish", open)
+	}
+
 	f := testkit.NewFakes(t)
 
 	in := &drive.DriveInput{

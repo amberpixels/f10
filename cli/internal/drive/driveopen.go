@@ -125,8 +125,14 @@ func (in *DriveInput) open(ctx context.Context, r *DriveRun) error {
 		o.Notes = append(o.Notes, paceNote)
 	}
 
-	if fl.Mixed {
+	switch {
+	case fl.Mixed:
 		o.Notes = append(o.Notes, "no finish: only some of the flows flow_by_area can pick end in finish")
+	case fl.NoFinish:
+		o.Notes = append(
+			o.Notes,
+			"no finish: the flow has no finish entry, so drive stops at ship; add finish to the flow to merge",
+		)
 	}
 
 	// status reads the finish record as drive finishing the branch; a rerun

@@ -162,6 +162,7 @@ type ShipFlow struct {
 	Pace     string // the pace it runs at, "" for none
 	Finishes bool   // drive ends the task with finish: the flow ends in it and the pace runs it
 	Mixed    bool   // ByArea only: some flows the map can pick finish and some do not
+	NoFinish bool   // the declared flow ends at a PR with no finish entry, so drive stops at ship
 }
 
 func (f ShipFlow) Word() string {
@@ -203,7 +204,7 @@ func PacedFlow(eff *facts.Effective, pace, name string) (ShipFlow, error) {
 	}
 
 	if name == "" && len(eff.FlowByArea) > 0 {
-		return byAreaFlow(eff, set, pace)
+		return byAreaFlow(eff, set, pace), nil
 	}
 
 	lookup := strings.ToLower(name)
@@ -227,6 +228,7 @@ func PacedFlow(eff *facts.Effective, pace, name string) (ShipFlow, error) {
 
 	run := flow.Of(r.Run())
 	fl := ShipFlow{Planless: !run.Plans(), Pace: pace, Finishes: run.Finishes()}
+	fl.NoFinish = !declared.Finishes() && declared.Delivered() == "pr"
 
 	if lookup != "default" {
 		fl.Name = lookup
@@ -237,8 +239,10 @@ func PacedFlow(eff *facts.Effective, pace, name string) (ShipFlow, error) {
 
 // byAreaFlow is the flow ship picks from the task's area, which drive cannot
 // know: it finishes only when every flow the map can pick, default included,
-// runs finish under the pace, so a mixed map never merges a task unasked.
-func byAreaFlow(eff *facts.Effective, set *facts.PaceSet, pace string) (ShipFlow, error) {
+// runs finish under the pace, so a mixed map never merges a task unasked. A
+// flow the pace breaks counts as not finishing: it fails only the ship that
+// picks it, never the whole drive.
+func byAreaFlow(eff *facts.Effective, set *facts.PaceSet, pace string) ShipFlow {
 	fl := ShipFlow{ByArea: true, Pace: pace}
 	some, all := false, true
 
@@ -250,15 +254,11 @@ func byAreaFlow(eff *facts.Effective, set *facts.PaceSet, pace string) (ShipFlow
 		}
 
 		r, err := set.ResolveFlow(name, declared, pace)
-		if err != nil {
-			return ShipFlow{}, err
-		}
-
-		finishes := flow.Of(r.Run()).Finishes()
+		finishes := err == nil && flow.Of(r.Run()).Finishes()
 		some, all = some || finishes, all && finishes
 	}
 
 	fl.Finishes, fl.Mixed = all, some && !all
 
-	return fl, nil
+	return fl
 }

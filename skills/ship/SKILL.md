@@ -192,7 +192,7 @@ Any other failure leaves the shipment standing: `f10-state.sh set ship partial <
 A driven run reports back too; nothing is asked.
 
 **Exit**
-- Stop after the flow's last entry (a spike's: implement) and the report back, with the final report.
+- Stop after the flow's last entry before a trailing `finish` (a spike's: implement) and the report back, with the final report.
   The final report starts with the facts block.
   The facts block holds the **shipment** rows the last delivering entry declares, plus a judge's, demo's or handoff's when they ran.
   Those rows include the branch, the PR/MR url, the sha and the deploy url.
