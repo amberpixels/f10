@@ -238,10 +238,10 @@ func PacedFlow(eff *facts.Effective, pace, name string) (ShipFlow, error) {
 }
 
 // byAreaFlow is the flow ship picks from the task's area, which drive cannot
-// know: it finishes only when every flow the map can pick, default included,
-// runs finish under the pace, so a mixed map never merges a task unasked. A
-// flow the pace breaks counts as not finishing: it fails only the ship that
-// picks it, never the whole drive.
+// know. It finishes only when every flow the map can pick runs finish under
+// the pace, default included, so a mixed map never merges a task unasked.
+// A flow the pace breaks counts as not finishing, because it fails only the
+// ship that picks it, never the whole drive.
 func byAreaFlow(eff *facts.Effective, set *facts.PaceSet, pace string) ShipFlow {
 	fl := ShipFlow{ByArea: true, Pace: pace}
 	some, all := false, true

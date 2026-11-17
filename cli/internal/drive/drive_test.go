@@ -1795,7 +1795,7 @@ func TestDriveChain(t *testing.T) {
 }
 
 // A flow ending in finish finishes under every pace but one that turns it
-// off; built-in slow no longer does.
+// off. The built-in slow pace no longer turns it off.
 func TestDriveSkillsFinishByDefault(t *testing.T) {
 	eff := &facts.Effective{
 		Flows: map[string]flow.Flow{"default": flow.Of(strings.Fields("plan judge implement pr finish"))},

@@ -32,7 +32,7 @@ type DriveInput struct {
 	driveState
 }
 
-// Skills is what drive prompts r through, in order; a spike whose flow does
+// Skills is what drive prompts r through, in order. A spike whose flow does
 // not finish gets finish once it closes.
 func (in *DriveInput) Skills(r *DriveRun) []string {
 	skills := in.sequenceOf(r.Flow)

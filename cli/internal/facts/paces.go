@@ -527,8 +527,8 @@ func (s *PaceSet) CeilingOrigin(key string) string {
 }
 
 // Capped is the pace with the ceiling laid on, and each replaced dial keyed
-// `<step>.<dial>`; a step the ceiling turns on or off is `<step>.run`.
-// Silence on rounds is the faster default, so it is capped; silence on
+// `<step>.<dial>`. A step the ceiling turns on or off is keyed `<step>.run`.
+// Silence on rounds is the faster default, so it is capped. Silence on
 // effort leaves the agents map alone.
 func (s *PaceSet) Capped(name string) (Pace, map[string]Dial) {
 	src := s.Paces[name]

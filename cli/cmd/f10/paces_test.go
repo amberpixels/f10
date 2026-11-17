@@ -76,8 +76,8 @@ func TestFlowUnderAPace(t *testing.T) {
 		}
 	}
 
-	// no pace named: medium, which sets nothing, so the flow as declared,
-	// an entry per line
+	// With no pace named, the run takes medium, which sets nothing. So the
+	// flow prints as declared, an entry per line.
 	want := "pace: medium (default)\n" +
 		strings.ReplaceAll("plan judge implement cleanup pr review:local judge pr finish", " ", "\n") + "\n"
 	if out := runApp(t, "-C", repo, "flow", "default").must(t); out != want {

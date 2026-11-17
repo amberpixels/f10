@@ -61,7 +61,8 @@ Deploy has its own confirmation (the **deploy** step).
    - `checks: pending`, `green` or `none`: go on, because only finish waits on checks.
    - A default branch that is red too does not stop the run: the step notes it, and the run asks once at its end, interactive or driven.
 
-**Flows** are the frontmatter's `flows:`, a name to its ordered entries, a list or one string split on spaces or arrows (`plan judge implement cleanup:comments,prose pr review:ci deploy:staging`); none declared is `default: plan implement pr finish`.
+**Flows** are the frontmatter's `flows:`, a name to its ordered entries, a list or one string split on spaces or arrows (`plan judge implement cleanup:comments,prose pr review:ci deploy:staging`).
+With none declared, the flow is `default: plan implement pr finish`.
 `f10 flow` lists them and what selects each.
 
 **Paces** tune the chosen flow (`docs/project-setup.md` → Paces).

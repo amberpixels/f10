@@ -85,8 +85,8 @@ func runFlow(ctx context.Context, cmd *cli.Command) error {
 	return runplan.WriteFlows(cmd.Writer, v)
 }
 
-// writeFlowEntries is one flow, an entry per line with its dials; the list
-// /f10:ship runs, but for a trailing finish, which drive runs.
+// writeFlowEntries is one flow, an entry per line with its dials. It is the
+// list /f10:ship runs, except a trailing finish, which drive runs.
 func writeFlowEntries(w io.Writer, v runplan.FlowView) error {
 	f := v.Flows[0]
 

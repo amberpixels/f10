@@ -135,8 +135,8 @@ func (in *DriveInput) open(ctx context.Context, r *DriveRun) error {
 		)
 	}
 
-	// status reads the finish record as drive finishing the branch; a rerun
-	// whose flow or pace runs no finish takes it off
+	// status reads the finish record as drive finishing the branch. A rerun
+	// whose flow or pace runs no finish takes it off.
 	skills := in.sequenceOf(fl)
 
 	finishes := slices.Contains(skills, "finish")
@@ -380,9 +380,10 @@ func (in *DriveInput) spikeDone(ctx context.Context, r *DriveRun) (bool, error) 
 	return pushed == "", nil
 }
 
-// closeAfterShip has drive finish a spike its flow does not finish: a spike
-// close merges nothing, which the flow's finish entry gates, and a spike left open
-// keeps its dependents on an empty base. status reads the finish record.
+// closeAfterShip has drive finish a spike its flow does not finish. A spike
+// close merges nothing, and the flow's finish entry gates only merges. A
+// spike left open keeps its dependents on an empty base. status reads the
+// finish record.
 func (in *DriveInput) closeAfterShip(ctx context.Context, r *DriveRun) {
 	r.Finishes = true
 	in.finishStep(ctx, r.O.Branch, branchmeta.FinishQueued, "")
