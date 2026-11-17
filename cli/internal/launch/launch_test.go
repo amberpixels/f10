@@ -1,6 +1,7 @@
 package launch_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/launch"
@@ -58,5 +59,39 @@ func TestPromptCheckedResendsEnterOnce(t *testing.T) {
 		if len(m.Enters) != c.enters || (note != "") != c.note {
 			t.Errorf("%s: %d Enters, note %q", name, len(m.Enters), note)
 		}
+	}
+}
+
+// A discussion of a parent and a list reads every task, shows each parent's
+// tree, how the tasks depend on each other and the drive's proposal, then
+// waits; it names the start that ends it and where its first group runs.
+func TestDiscussionPrompt(t *testing.T) {
+	got := launch.DiscussionPrompt(
+		launch.Discussion{Tasks: []string{"GH-1", "GH-2+GH-3"}, Parents: []string{"GH-1"}},
+		"judge it",
+	)
+
+	for _, want := range []string{
+		"`f10 task read GH-1` and `f10 task read GH-2+GH-3`",
+		"`f10 task children GH-1 --plain`",
+		"from their After: lines",
+		"`f10 drive plan GH-1 GH-2+GH-3`",
+		"its first group continues in this worktree",
+		"Then, as the user asks: judge it.",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("prompt lacks %q:\n%s", want, got)
+		}
+	}
+
+	if !strings.HasSuffix(got, "Then stop and wait.") {
+		t.Errorf("prompt does not end waiting:\n%s", got)
+	}
+
+	if strings.Contains(
+		launch.DiscussionPrompt(launch.Discussion{Tasks: []string{"GH-1"}, Parents: []string{"GH-1"}}, ""),
+		"After: lines",
+	) {
+		t.Error("a lone parent's prompt compares it with no other task")
 	}
 }

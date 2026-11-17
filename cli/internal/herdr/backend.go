@@ -187,6 +187,20 @@ func (b Backend) SendEnter(ctx context.Context, name string) error {
 	return SendKeys(ctx, b.Dir, name, "Enter")
 }
 
+var _ agentctl.Renamer = Backend{}
+
+func (b Backend) RenameAgent(ctx context.Context, name, to string) error {
+	ctx = b.scope(ctx)
+
+	return RenameAgent(ctx, b.Dir, name, to)
+}
+
+func (b Backend) RenameWorkspace(ctx context.Context, id, label string) error {
+	ctx = b.scope(ctx)
+
+	return RenameWorkspace(ctx, b.Dir, id, label)
+}
+
 func (b Backend) Focus(ctx context.Context, id string) error {
 	ctx = b.scope(ctx)
 

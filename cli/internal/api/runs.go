@@ -127,6 +127,7 @@ func (s *runService) Start(
 		Agent: m.GetAgent(),
 		Model: m.GetModel(),
 		Note:  m.GetNote(),
+		Also:  m.GetTasks(),
 	})
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
@@ -175,7 +176,8 @@ func flowStart(
 		return nil, false, errors.New("a note goes to an agent that waits: --discuss, or a picked-up PR")
 	}
 
-	argv := []string{token}
+	// the other tasks run in the same drive, as f10 start A B runs them
+	argv := append([]string{token}, m.GetTasks()...)
 	if mode == launch.ModePlan {
 		argv = append(argv, "--plan")
 	}

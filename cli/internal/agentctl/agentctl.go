@@ -105,6 +105,13 @@ type Backend interface {
 	Close(ctx context.Context, id string) error
 }
 
+// A Renamer renames a live agent and a workspace's label, so a discussion's
+// agent can take the name of the task it hands over to.
+type Renamer interface {
+	RenameAgent(ctx context.Context, name, to string) error
+	RenameWorkspace(ctx context.Context, id, label string) error
+}
+
 // AgentName cuts the bare name to leave room for a short hash of the
 // worktree path: Herdr's live agent names share one namespace across every
 // project, capped at 32 characters, and the same id in two checkouts must

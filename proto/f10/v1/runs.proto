@@ -225,6 +225,9 @@ message StartRequest {
   // -suffix, a PR url or #n. When set it wins over task and pr, and task
   // names the task a picked-up PR belongs to.
   string token = 13;
+  // tasks are the other ids a discussion covers, after token: the
+  // discussion opens token's worktree and reads them all.
+  repeated string tasks = 14;
 }
 
 message StartResponse {

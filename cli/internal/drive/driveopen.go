@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/finish"
 	"github.com/amberpixels/f10/cli/internal/flow"
@@ -334,6 +335,23 @@ func (in *DriveInput) next(ctx context.Context, r *DriveRun) error {
 
 	in.unqueue(r)
 
+	if waiting, err := in.discussionTurn(ctx, r); err != nil || waiting {
+		if err != nil {
+			return halt(r.Task.Ref.ID, skill, err.Error())
+		}
+
+		if !r.handing {
+			fmt.Fprintf(in.Out, "%s %s: waiting for the discussion's turn to end\n", in.id(r.Task.Ref.ID), skill)
+		}
+
+		r.handing = true
+		in.enter(r, atWaiting)
+
+		return nil
+	}
+
+	r.handing = false
+
 	// a spike merges nothing, so it needs no catchup and no clean merge
 	if skill == "finish" && spike {
 		return in.finishOrHold(ctx, r)
@@ -589,4 +607,25 @@ func onProfile(o start.OpenedTask) string {
 	}
 
 	return " on " + o.Profile.Short()
+}
+
+// discussionTurn holds a handed-over task's first skill while the
+// discussion's agent works: that turn ran f10 start, and a skill attached
+// to it would read as a stop with no report. At rest, the mark goes.
+func (in *DriveInput) discussionTurn(ctx context.Context, r *DriveRun) (bool, error) {
+	marked, err := branchmeta.Get(ctx, in.Main, r.O.Branch, branchmeta.Discuss)
+	if err != nil || marked == "" {
+		return false, err
+	}
+
+	ws, _, err := in.look(ctx, r)
+	if err != nil {
+		return false, err
+	}
+
+	if ws.Status == agentctl.StatusWorking {
+		return true, nil
+	}
+
+	return false, branchmeta.UnsetIfSet(ctx, in.Main, r.O.Branch, branchmeta.Discuss)
 }

@@ -1328,7 +1328,10 @@ type StartRequest struct {
 	// token is the argument as f10 start takes it: a task id with its
 	// -suffix, a PR url or #n. When set it wins over task and pr, and task
 	// names the task a picked-up PR belongs to.
-	Token         string `protobuf:"bytes,13,opt,name=token,proto3" json:"token,omitempty"`
+	Token string `protobuf:"bytes,13,opt,name=token,proto3" json:"token,omitempty"`
+	// tasks are the other ids a discussion covers, after token: the
+	// discussion opens token's worktree and reads them all.
+	Tasks         []string `protobuf:"bytes,14,rep,name=tasks,proto3" json:"tasks,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1452,6 +1455,13 @@ func (x *StartRequest) GetToken() string {
 		return x.Token
 	}
 	return ""
+}
+
+func (x *StartRequest) GetTasks() []string {
+	if x != nil {
+		return x.Tasks
+	}
+	return nil
 }
 
 type StartResponse struct {
@@ -2613,7 +2623,7 @@ const file_f10_v1_runs_proto_rawDesc = "" +
 	"\x14GetRunStatusResponse\x12%\n" +
 	"\x04runs\x18\x01 \x03(\v2\x11.f10.v1.RunStatusR\x04runs\x12\x12\n" +
 	"\x04view\x18\x02 \x01(\fR\x04view\x12)\n" +
-	"\aprinted\x18\x03 \x01(\v2\x0f.f10.v1.PrintedR\aprinted\"\xca\x02\n" +
+	"\aprinted\x18\x03 \x01(\v2\x0f.f10.v1.PrintedR\aprinted\"\xe0\x02\n" +
 	"\fStartRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x12\n" +
 	"\x04task\x18\x02 \x01(\tR\x04task\x12\x0e\n" +
@@ -2628,7 +2638,8 @@ const file_f10_v1_runs_proto_rawDesc = "" +
 	" \x01(\tR\x05model\x12\x12\n" +
 	"\x04note\x18\v \x01(\tR\x04note\x12-\n" +
 	"\x06caller\x18\f \x01(\v2\x15.f10.v1.CallerContextR\x06caller\x12\x14\n" +
-	"\x05token\x18\r \x01(\tR\x05token\"\xe3\x01\n" +
+	"\x05token\x18\r \x01(\tR\x05token\x12\x14\n" +
+	"\x05tasks\x18\x0e \x03(\tR\x05tasks\"\xe3\x01\n" +
 	"\rStartResponse\x12\x12\n" +
 	"\x04task\x18\x01 \x01(\tR\x04task\x12\x16\n" +
 	"\x06branch\x18\x02 \x01(\tR\x06branch\x12\x1a\n" +

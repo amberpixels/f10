@@ -103,6 +103,10 @@ func runDrive(ctx context.Context, cmd *cli.Command, argv []string, a drivectl.D
 		return err
 	}
 
+	if handed, err := handOver(ctx, cmd.Writer, t, argv, a); handed || err != nil {
+		return err
+	}
+
 	// the drive outlives this process unless asked to run in it
 	if !a.Fore && daemon.Supported {
 		return drive.ThroughDaemon(ctx, cmd.Writer, t, argv, a)
@@ -504,4 +508,52 @@ func runWatchPass(ctx context.Context, cmd *cli.Command, t *target.Target) error
 	}
 
 	return nil
+}
+
+// handOver gives a discussion's worktree to the start's first group and
+// hands the drive to the daemon. It never follows the drive, because the
+// drive prompts this worktree's agent, whose turn runs this command.
+func handOver(ctx context.Context, w io.Writer, t *target.Target, argv []string, a drivectl.DriveArgs) (bool, error) {
+	// the daemon's own drive process runs in this worktree after the hand-off
+	if a.Resume > 0 || len(a.Tasks) == 0 || os.Getenv(daemon.ResumeEnv) != "" {
+		return false, nil
+	}
+
+	branch, err := start.Discussing(ctx, t)
+	if err != nil || branch == "" {
+		return false, err
+	}
+
+	if a.Fore || !daemon.Supported {
+		return true, errors.New("this worktree holds a discussion, and the drive prompts its agent once this turn " +
+			"ends: run f10 start through the daemon, without --foreground")
+	}
+
+	// every id resolves before anything is renamed
+	for _, token := range a.Tasks {
+		id, _ := ref.SplitSuffix(ref.TypedLead(token))
+		if _, err := t.Reference(ctx, id); err != nil {
+			return true, fmt.Errorf("%s: %w", token, err)
+		}
+	}
+
+	h, err := start.PrepareHandOver(ctx, t, branch, a.Tasks[0])
+	if err != nil {
+		return true, err
+	}
+
+	notes, undo, err := h.Run(ctx)
+	if err != nil {
+		return true, err
+	}
+
+	if err := drive.HandOff(ctx, w, t, argv); err != nil {
+		return true, errors.Join(err, undo(ctx))
+	}
+
+	for _, n := range notes {
+		fmt.Fprintln(w, n)
+	}
+
+	return true, nil
 }

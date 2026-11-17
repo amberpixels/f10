@@ -31,6 +31,7 @@ type Request struct {
 	Agent string
 	Model string
 	Note  string
+	Also  []string // the other tasks a discussion covers, after Token
 }
 
 // Prepare settles everything a start needs before anything is created:
@@ -74,6 +75,11 @@ func Prepare(ctx context.Context, t *target.Target, req Request) (StartInput, er
 		return StartInput{}, err
 	}
 
+	discussion, err := settleDiscussion(ctx, t, r, pick, req)
+	if err != nil {
+		return StartInput{}, err
+	}
+
 	in := StartInput{
 		Main:    cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot),
 		Driver:  t.Driver(),
@@ -87,6 +93,8 @@ func Prepare(ctx context.Context, t *target.Target, req Request) (StartInput, er
 		Title:   worktree.TitleLookup(t, r.Number),
 		Pick:    pick,
 		Note:    note,
+
+		Discussion: discussion,
 	}
 
 	if pick == nil {

@@ -93,7 +93,7 @@ f10 ledger dump [--json] [--project p] [--task id] [--session s]   # the recorde
 f10 ledger schema        # the JSON Schema of each event kind's payload, by version (docs/ledger.schema.json)
 
 f10 start <id | id+id>[-suffix][:profile]... | <id> -- <id> [--plan] [--flow <name> | --local] [--pace <name>] [--after <id> | --base <branch>] [--agent <profile> | --model <model>] [--parallel <n>] [--answer [<id>=]<text>] [--every 30s] [--foreground]   # each task in a worktree, a Herdr workspace and an agent, run through the flow by a drive in the daemon
-f10 start <id> --discuss [note...] | <PR url | #n> [--plan] [--task <id>] [note...]   # one agent, prompted once, that summarises and waits
+f10 start <id | parent> [<id>...] --discuss [note...] | <PR url | #n> [--plan] [--task <id>] [note...]   # one agent in one worktree, prompted once, that reads the tasks and waits
 f10 start --resume <n> [--answer [<id>=]<text>] [--every 30s] [--parallel <n>]   # pick drive n up again
 f10 stop <id | n>   # stop the drive holding the task, or drive n; nothing more is prompted
 f10 forward <id>[-suffix] <text...>   # hand a command or a steering note to the agent working on the task
@@ -198,12 +198,23 @@ Ctrl+C stops only the following.
   A flow with no leading `plan` sends ship alone, and so does a pace that skips `plan`.
   `--pace <name>` is recorded on the branch, where ship's `f10 flow` reads it, so the prompt does not carry it.
   `--plan` with `--flow` or `--local` is refused, since `--plan` stops before ship, which runs the flow
-- `--discuss` opens one task's agent and prompts only the fetch, with no drive.
-  The agent summarises the task and waits for you in its own pane, so the prompt is plain text with no `--driven` marker.
-  Words after the id are a note the agent acts on after the summary and before it waits (`f10 start 42 --discuss "/f10:judge it first"`).
+- `--discuss` opens one worktree and one agent, prompted once with no drive.
+  The agent waits for you in its own pane, so the prompt is plain text with no `--driven` marker.
+  - One task: the agent summarises it and waits.
+  - A parent: the worktree is the parent's. The agent prints the subtask tree, each row marking what it waits on, a draft and a finished subtask, then the `f10 drive plan` proposal, and waits.
+  - Several ids (`f10 start A B C --discuss`): the worktree is the first id's. The agent reads every task, shows how they depend on each other and the `f10 drive plan` proposal, and waits. A listed id with subtasks also gets its tree.
+
+  The leading words shaped as task ids are the tasks, and the note starts at the first word that is not one.
+  A note is what the agent acts on after its summary and before it waits (`f10 start 42 --discuss "/f10:judge it first"`), so quote a note that starts with an id.
   A note goes only with `--discuss` or a PR pickup, because a driven run takes its instructions from the task.
-  `--discuss` is exclusive with `--plan`, `--flow` and `--local`, and takes one id and none of the drive's flags.
-  The command returns once the prompt is submitted, and the [watcher](#watch) looks after the task
+  `--discuss` is exclusive with `--plan`, `--flow` and `--local`, and takes none of the drive's flags; with several ids, `--after`, `--base` and a range are refused too, because one base cannot belong to several tasks.
+  The command returns once the prompt is submitted, and the [watcher](#watch) looks after the task.
+
+  The discussion's branch records `branch.<name>.f10-discuss`.
+  A flow start run inside that worktree (`/f10:start A+B C`, typed in the agent's pane) continues the conversation there:
+  - its first group takes the worktree and the agent. When the group's lead is not the task the worktree opened for, the branch is renamed to the lead's (`git branch -m`, its recorded facts moving with it), and the agent and the workspace are renamed to the lead's. Another lead starts without the discussed task's recorded base, flow, pace and agent profile. A lead that already has a branch, or one with subtasks, is refused before anything changes, and so is another lead when the discussion's branch was built on a base task's branch. A drive the daemon refuses puts the whole discussion back. The worktree's directory keeps its name, because every lookup goes by branch.
+  - the other groups get worktrees of their own.
+  - the command returns once the daemon has the drive, instead of following it, because the drive prompts that same agent. The drive holds the first skill until the agent's turn ends, then clears the mark. `--foreground` is refused there.
 - the flow is recorded on the branch as `branch.<name>.f10-flow` in local git config, for `f10 status` and a rerun of `f10 start`.
   With `flow_by_area` declared and no flow named, nothing is recorded and the prompt is `/f10:ship <id>` alone, because ship picks the flow from the task's area
 - a plan the main checkout saved for the task (`.f10/plans/<id>.md`, written by `/f10:plan` after a discussion there) stays in place: every worktree's storage root is main's `.f10/` (or the out-of-tree root), so the worktree's agent reads it there.

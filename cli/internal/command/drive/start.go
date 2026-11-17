@@ -14,6 +14,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/apiclient"
 	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
 	"github.com/amberpixels/f10/cli/internal/drive"
+	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/worktree"
@@ -49,8 +50,11 @@ func StartCommand() *cli.Command {
 			"f10 status --drives lists the drives; f10 stop stops one.\n" +
 			"The drive runs in the per-user f10 daemon, started when none runs: this command prints its progress, " +
 			"Ctrl+C stops only that, and rerunning it follows the drive again. --foreground runs it in this process.\n" +
-			"--discuss opens one task's agent, which summarises it and waits; a PR url or #n picks that PR up, " +
-			"and --task names its task when the PR names none. Words after the id are a note for that agent.\n" +
+			"--discuss opens one agent in one worktree, which reads the tasks and waits: a parent's, showing its subtask tree, " +
+			"or the first id's, reading every id listed. A start run in that worktree continues there as its first group, " +
+			"the branch and agent renamed to the group's lead, and returns once the daemon has the drive. " +
+			"A PR url or #n picks that PR up, and --task names its task when the PR names none. " +
+			"Words after the ids are a note for that agent.\n" +
 			"Exit 0: every task went through its flow. 3: a picked-up PR names no task; rerun with --task. " +
 			"4: an agent asks; rerun with --answer. " +
 			"5: a task halted (a judge stop, a failure, an agent that stopped without reporting, its base halted).",
@@ -125,9 +129,29 @@ func oneShot(ctx context.Context, cmd *cli.Command, argv []string) (*f10v1.Start
 		}
 	}
 
-	req.Token, req.Note = words[0], strings.Join(words[1:], " ")
+	req.Token, words = words[0], words[1:]
+
+	// the API resolves each id against the project, so a shape is enough here
+	if req.GetMode() == f10v1.StartMode_START_MODE_DISCUSS {
+		n := listed(words)
+		req.Tasks, words = words[:n], words[n:]
+	}
+
+	req.Note = strings.Join(words, " ")
 
 	return req, nil
+}
+
+// listed counts the leading words shaped as task ids: a discussion's other
+// tasks, before its note.
+func listed(words []string) int {
+	for i, w := range words {
+		if !ref.IsID("", w) {
+			return i
+		}
+	}
+
+	return len(words)
 }
 
 // errDriveFlag is a flag only a flow start takes.
@@ -145,8 +169,12 @@ func parseOnce(argv []string) (*f10v1.StartRequest, []string, error) {
 
 		takes, ok := onceFlags[name]
 		if !ok {
+			if name == "--" {
+				return nil, nil, fmt.Errorf("a range: %w; --discuss takes the ids one by one", errDriveFlag)
+			}
+
 			if strings.HasPrefix(name, "-") {
-				return nil, nil, fmt.Errorf("%s: %w; --discuss and a PR pickup take one id", name, errDriveFlag)
+				return nil, nil, fmt.Errorf("%s: %w; --discuss and a PR pickup take ids and a note", name, errDriveFlag)
 			}
 
 			words = append(words, argv[i])
