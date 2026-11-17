@@ -1,6 +1,6 @@
 ---
 name: start
-description: "f10 start skill - start tasks without leaving this session, each in its own worktree, Herdr workspace and agent, run through the project's flow by the f10 daemon: plan, ship, then finish when the flow ends in it; a list, a range or a parent runs every task, a dependent once its base has a commit, pausing once an agent asks and nothing else can move; --discuss or a PR link opens one agent that summarises and waits. Use when the user says \"/f10:start <task-id | ids | id -- id | parent | PR url | #n> [--plan | --discuss | --local | --flow <name>] [--pace <name>] [--after <task-id> | --base <branch>] [--task <id>] [--agent <profile> | --model <model>] [--parallel N]\", asks to start, run or ship one or several tasks in new worktrees, to run a parent's subtasks, to discuss a task before planning, to pick up someone else's PR, or asks what to bundle, run in parallel or order before starting a set of tasks."
+description: "f10 start skill - start tasks without leaving this session, each in its own worktree, Herdr workspace and agent, run through the project's flow by the f10 daemon: plan, ship, then finish when the flow ends in it; a list, a range or a parent runs every task, a dependent once its base has a commit (under --plan, once its base's plan is saved), pausing once an agent asks and nothing else can move; --discuss or a PR link opens one agent that summarises and waits. Use when the user says \"/f10:start <task-id | ids | id -- id | parent | PR url | #n> [--plan | --discuss | --local | --flow <name>] [--pace <name>] [--after <task-id> | --base <branch>] [--task <id>] [--agent <profile> | --model <model>] [--parallel N]\", asks to start, run or ship one or several tasks in new worktrees, to run a parent's subtasks, to discuss a task before planning, to pick up someone else's PR, or asks what to bundle, run in parallel or order before starting a set of tasks."
 allowed-tools: Bash, AskUserQuestion, Read, Grep
 argument-hint: "<id>[:profile]... | <id> -- <id> | <PR url> [--plan | --discuss] [--pace <name>]"
 ---
@@ -17,6 +17,7 @@ The pace can skip that entry as it skips any step, and the project's `ceiling: {
 A spike is closed after ship either way, because `f10 finish` closes it without a merge.
 A plan the main checkout saved for a task stays where it is, in the storage root every worktree shares, and the agent ships it instead of planning again.
 A dependent opens once its base branch has a commit, and its finish waits for the base's.
+Under `--plan` a dependent opens once its base's plan is saved, because it designs against that plan.
 Two starts open one agent, prompt it once and leave it to you: `--discuss` and a PR pickup, because their agent waits for a person.
 This skill expands parents, runs the command (`${CLAUDE_PLUGIN_ROOT}/modes/binary.md`), relays its questions and prints its report.
 It runs no step.
@@ -36,6 +37,7 @@ It runs no step.
   A parent opens the parent's worktree and its agent shows the subtask tree; several ids open the first id's, and its agent reads them all.
 - `<note>`: with `--discuss` or a PR, the words after the ids; the agent acts on it after its summary, then waits.
 - `--plan`: plan every task and implement none.
+  A later start without it ships the saved plans.
 - `--flow <name>` / `--local`: the flow every task runs instead of `default` (`f10 flow` lists them).
   A rerun keeps the flow a task's branch already records.
 - `--pace <name>`: the pace every task runs at (`docs/project-setup.md` → Paces).

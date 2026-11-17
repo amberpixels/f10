@@ -186,13 +186,14 @@ It moves the daemon's run dir too, unless `F10_RUN_DIR` or `XDG_RUNTIME_DIR` nam
 It derives the branch name (the driver's `branch` verb, else `<ID>/<slug>` with the slug cut from the task's title, else the bare id with a note when the host returns no title), creates the worktree beside the main checkout - through `wt switch` when [worktrunk](https://github.com/max-sixty/worktrunk) is on `PATH`, so the project's hooks keep firing, else with `git worktree add` at the same sibling path - opens it as a Herdr workspace and starts a claude agent in its root pane.
 Then the [drive](#drives) prompts that agent one skill at a time.
 It sends `/f10:plan <id>` when the flow leads with `plan` and no plan is saved, then `/f10:ship <id>`, then finish when the flow ends in it.
-Several ids, a bundle, a range or a parent start the same way, each task once its base has code.
+Several ids, a bundle, a range or a parent start the same way, each task once its base has code, or under `--plan` once its base's plan is saved.
 The command follows the drive until it ends, an agent asks, or a task halts.
 Ctrl+C stops only the following.
 
 - each prompt is closed by `--driven` ([driven mode](../modes/driven.md)).
   The marker tells the agent it is prompted from outside, so every question goes through run state and every gap takes its default.
   `--plan` plans every task and implements none.
+  A later start of the same tasks without `--plan` ships the saved plans.
   `--flow <name>` ships through that declared flow, as `/f10:ship <name>: <id>`.
   `--local` is `--flow local`, so nothing is pushed.
   A flow with no leading `plan` sends ship alone, and so does a pace that skips `plan`.
@@ -848,6 +849,7 @@ A cancelled record is never picked up again: the same command line starts a new 
    Its own commits are what its branch has beyond the default branch, `origin/<default>`, its own base's branch, and the commit it was created at (its oldest reflog entry), merges left out, so a lagging local default branch, a squash-merged grandparent or a catchup merge never releases it early.
    `f10 pr catchup` prints the same answer as its `code:` line, so ship's guard and the driver agree.
    Implement never commits, so a first commit means a commit or pr step ran with verify green; the driver reads it from local refs on each poll, so a branch never pushed counts.
+   A `--plan` run never commits, so there an opened base releases its dependents once its plan is saved, even if it halted after saving it.
    A dependent's own `finish` still waits until its base is through, so a dependent never merges before its base; while it waits its row reads `waiting for <id>`.
    Every task that is ready starts in the same pass, up to the cap.
    `--parallel <n>` caps the tasks running a skill at once, by default half the CPU cores, from 2 to 8.

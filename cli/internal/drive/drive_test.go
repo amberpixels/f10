@@ -4279,3 +4279,103 @@ func TestGuardRecordHoldsOnlyAtItsPlace(t *testing.T) {
 		t.Errorf("a stop at review read as the guard's: %q", got)
 	}
 }
+
+// Under --plan an opened base with a saved plan releases its dependents,
+// halted or not; an unopened one does not, and without --plan a plan alone
+// never does.
+func TestDriveReleasedOnTheBasesPlanUnderPlanOnly(t *testing.T) {
+	halted := DriveRun{Phase: atRunning, End: &driveResult{Code: ui.ExitHalted}}
+	cases := []struct {
+		name     string
+		planOnly bool
+		planned  bool
+		base     DriveRun
+		want     bool
+	}{
+		{"opened, planned", true, true, DriveRun{Phase: atRunning}, true},
+		{"halted after its plan", true, true, halted, true},
+		{"not opened yet", true, true, DriveRun{Phase: atPending}, false},
+		{"opened, halted, no plan", true, false, halted, false},
+		{"planned without --plan", false, true, halted, false},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			fx := newDriveFixture(t, "GH-2")
+			fx.in.Storage = storage.Root(t.TempDir())
+			fx.in.Args.PlanOnly = c.planOnly
+
+			if c.planned {
+				testkit.WritePlan(t, fx.in.Storage.Plan("GH-1"))
+			}
+
+			b := c.base
+			b.Task = DriveTask{Ref: ref.Ref{ID: "GH-1"}}
+			b.O = start.OpenedTask{Branch: "GH-1"}
+
+			if got := fx.in.released(t.Context(), &b); got != c.want {
+				t.Errorf("released = %v, want %v", got, c.want)
+			}
+		})
+	}
+}
+
+// Under --plan a base outside the list with a plan but no branch is refused
+// before anything opens, since start stacks the dependent on the base's branch.
+func TestDrivePlanOnlyRefusesAnUnstartedPlannedBase(t *testing.T) {
+	fx := newDriveFixture(t, "GH-2", "--plan")
+	fx.in.Storage = storage.Root(t.TempDir())
+	fx.task("GH-2", tasksource.TaskInfo{Body: "After: GH-9"}, "")
+	fx.task("GH-9", tasksource.TaskInfo{Body: "open"}, "")
+	testkit.WritePlan(t, fx.in.Storage.Plan("GH-9"))
+
+	err := fx.drive(t)
+	if err == nil || !strings.Contains(err.Error(), "not started and not finished") {
+		t.Fatalf("err = %v", err)
+	}
+
+	if fx.f.Called("wt") || fx.f.Called("herdr") {
+		t.Error("something was created before the refusal")
+	}
+}
+
+// Under --plan a dependent opens once its base's plan is saved, while the
+// base's plan turn is still running and its branch has no commit.
+func TestDrivePlanOnlyStartsADependentOnItsBasesPlan(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1", "GH-2", "--plan")
+	fx.in.Storage = storage.Root(t.TempDir())
+	fx.task("GH-1", tasksource.TaskInfo{Body: "base"}, "")
+	fx.task("GH-2", tasksource.TaskInfo{Body: "dependent"}, testkit.Heads("GH-2"))
+	fx.f.Meta.Seed("GH-2", branchmeta.After, "GH-1")
+	fx.f.Script(testkit.Worktrees, testkit.Porcelain("GH-1", "/code/repo.GH-1", "GH-2", "/code/repo.GH-2"))
+	fx.f.Script("git rev-list --count --no-merges refs/heads/GH-1 --not refs/heads/main", "0")
+
+	for i, id := range []string{"GH-1", "GH-2"} {
+		pane := fmt.Sprintf("pane:%d", i+1)
+		addDir := " -- " + strings.Join(start.AgentArgs(agentctl.Profile{}, fx.in.Storage, "/code/repo."+id), " ")
+		fx.f.Script("wt switch --no-cd --yes --format json --create "+id, "{}")
+		opened := `{"result":{"workspace":{"workspace_id":"ws:` + id + `"},"root_pane":{"pane_id":"` + pane +
+			`"},"already_open":false}}`
+		fx.f.Script("herdr worktree open --cwd /code/repo --path /code/repo."+id+" --label "+id, opened)
+		fx.f.Script("herdr agent start "+testkit.AgentOf(id)+" --kind claude --pane "+pane+addDir, "{}")
+		fx.expects(id, "plan")
+	}
+
+	fx.f.Script(testkit.WsList,
+		unopened, all("idle", "GH-1"), // GH-1's open and the look before its plan
+		all("working", "GH-1"),
+		unopened, all("idle", "GH-1", "GH-2"), // GH-2's, once GH-1's plan is saved
+		all("working", "GH-1", "GH-2"),
+		all("idle", "GH-1", "GH-2"))
+	fx.onTick[1] = func() { testkit.WritePlan(t, fx.in.Storage.Plan("GH-1")) }
+
+	if err := fx.drive(t); err != nil {
+		t.Fatalf("%v\n%s", err, fx.out.String())
+	}
+
+	out := fx.out.String()
+	sent, done := strings.Index(out, "GH-2 plan: sent"), strings.Index(out, "GH-1 plan: done")
+	if sent < 0 || done < 0 || sent > done {
+		t.Errorf("GH-2's plan was not sent before GH-1's plan reported:\n%s", out)
+	}
+}
