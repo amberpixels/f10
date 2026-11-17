@@ -48,7 +48,7 @@ const (
 	ByPane      = "pane"      // typed in the agent's own pane
 	ByAsks      = "asks"      // f10 asks answer, or its walk
 	BySkill     = "skill"     // /f10:asks
-	ByDrive     = "drive"     // f10 drive --answer
+	ByDrive     = "drive"     // f10 start --answer
 	ByCancelled = "cancelled" // its drive was cancelled
 	ByAPI       = "api"       // a client of the control-plane API
 )

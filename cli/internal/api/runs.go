@@ -108,6 +108,14 @@ func (s *runService) Start(
 
 	ctx = inSession(ctx, s.sup, c, t)
 
+	if argv, flow, err := flowStart(ctx, t, m, token, task, mode); err != nil || flow {
+		if err != nil {
+			return nil, connect.NewError(connect.CodeInvalidArgument, err)
+		}
+
+		return s.startDrive(t, c, argv)
+	}
+
 	in, err := start.Prepare(ctx, t, start.Request{
 		Token: token,
 		Mode:  mode,
@@ -146,6 +154,50 @@ func (s *runService) Start(
 		Agent:       l.Agent,
 		Printed:     printedOf(o),
 	}), nil
+}
+
+// flowStart is the drive's command line when the start runs the task
+// through its flow: a task id, not a discussion or a picked-up PR, whose
+// agent waits for a person and so is prompted once.
+func flowStart(
+	ctx context.Context, t *target.Target, m *f10v1.StartRequest, token, task, mode string,
+) ([]string, bool, error) {
+	if mode == launch.ModeDiscuss || task != "" {
+		return nil, false, nil
+	}
+
+	pick, _, err := start.PickupFor(ctx, t, token)
+	if err != nil || pick != nil {
+		return nil, false, err
+	}
+
+	if strings.TrimSpace(m.GetNote()) != "" {
+		return nil, false, errors.New("a note goes to an agent that waits: --discuss, or a picked-up PR")
+	}
+
+	argv := []string{token}
+	if mode == launch.ModePlan {
+		argv = append(argv, "--plan")
+	}
+
+	for _, f := range []struct{ name, value string }{
+		{"--flow", m.GetFlow()},
+		{"--pace", m.GetPace()},
+		{"--after", m.GetAfter()},
+		{"--base", m.GetBase()},
+		{"--agent", m.GetAgent()},
+		{"--model", m.GetModel()},
+	} {
+		if v := strings.TrimSpace(f.value); v != "" {
+			argv = append(argv, f.name, v)
+		}
+	}
+
+	if _, err := drivectl.ParseDriveArgs(argv); err != nil {
+		return nil, false, err
+	}
+
+	return argv, true, nil
 }
 
 // startToken is the start's argument and the task a picked-up PR is for:
@@ -270,11 +322,11 @@ func (s *runService) Drive(
 	}), nil
 }
 
-// driveArgv is the command line f10 drive takes for a drive given as fields.
+// driveArgv is the command line f10 start takes for a drive given as fields.
 func driveArgv(m *f10v1.DriveRequest) ([]string, error) {
 	if m.GetPlanFirst() {
 		return nil, connect.NewError(connect.CodeUnimplemented,
-			errors.New("plan_first is the /f10:drive skill's, not the binary's: plan each task, then drive"))
+			errors.New("plan_first is not the binary's: f10 drive plan proposes, then start what it proposes"))
 	}
 
 	var argv []string
@@ -548,16 +600,22 @@ func (s *runService) CancelDrive(
 	m := req.Msg
 	ctx, c := withCaller(ctx, req, m.GetCaller())
 
-	if m.GetDrive() <= 0 {
-		return nil, invalid("cancel needs a drive number")
+	if m.GetDrive() <= 0 && strings.TrimSpace(m.GetTask()) == "" {
+		return nil, invalid("stop needs a drive number or a task id")
 	}
 
-	t, err := callerTarget(ctx, s.sup, m.GetProject(), c, "drive")
+	t, err := callerTarget(ctx, s.sup, m.GetProject(), c, "stop")
 	if err != nil {
 		return nil, err
 	}
 
 	root, n, now := t.Layout.StorageRoot.Path(), int(m.GetDrive()), time.Now()
+
+	if n <= 0 {
+		if n, err = taskDrive(ctx, t, root, m.GetTask()); err != nil {
+			return nil, err
+		}
+	}
 
 	o := output(c)
 	if err := drive.DriveCancel(&o.Stdout, root, n, now); err != nil {
@@ -567,6 +625,49 @@ func (s *runService) CancelDrive(
 	drive.CloseDriveAsks(asks.Dir(), root, n, now)
 
 	return connect.NewResponse(&f10v1.CancelDriveResponse{Printed: printedOf(o)}), nil
+}
+
+// startDrive runs a flow start as the drive it is, as Drive does.
+func (s *runService) startDrive(
+	t *target.Target, c *f10v1.CallerContext, argv []string,
+) (*connect.Response[f10v1.StartResponse], error) {
+	started, err := s.sup.RunDrive(daemon.DriveSpec{
+		Argv: argv,
+		Dir:  cmp.Or(c.GetCheckout(), c.GetCwd(), t.Dir),
+		Root: t.Layout.StorageRoot.Path(),
+		Env:  callerEnv(s.sup, c, t),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	o := output(c)
+	fmt.Fprintf(&o.Stdout, "drive %d: f10 start %s\nlog: %s\n", started.Drive, strings.Join(argv, " "), started.Log)
+
+	return connect.NewResponse(&f10v1.StartResponse{
+		Drive:   int32(started.Drive), //nolint:gosec // a drive number
+		Log:     started.Log,
+		Printed: printedOf(o),
+	}), nil
+}
+
+// taskDrive is the number of the drive holding the task's lease: a running
+// drive, since a stopped one prompts nothing.
+func taskDrive(ctx context.Context, t *target.Target, root, task string) (int, error) {
+	r, err := t.Reference(ctx, strings.TrimSpace(task))
+	if err != nil {
+		return 0, invalid(err.Error())
+	}
+
+	id := r.Head().ID
+
+	holder, held := drivestore.Probe(root, id)
+	if !held || holder.Drive <= 0 {
+		return 0, connect.NewError(connect.CodeNotFound,
+			fmt.Errorf("no running drive holds %s: f10 status --drives lists them", id))
+	}
+
+	return holder.Drive, nil
 }
 
 // statusReport reads what f10 status shows: every live run with all, the

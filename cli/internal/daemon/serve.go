@@ -132,7 +132,7 @@ func (s *Server) Serve(ctx context.Context) error {
 		}
 
 		s.Child = func(argv []string) (string, []string) {
-			return exe, append([]string{"drive", "--foreground"}, argv...)
+			return exe, append([]string{"start", "--foreground"}, argv...)
 		}
 
 		if s.Pass == nil {

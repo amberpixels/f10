@@ -52,7 +52,7 @@ func Way(by string) string {
 	case BySkill:
 		return "with /f10:asks"
 	case ByDrive:
-		return "with f10 drive --answer"
+		return "with f10 start --answer"
 	case ByCancelled:
 		return "by cancelling its drive"
 	case ByAPI:

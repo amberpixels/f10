@@ -135,7 +135,7 @@ func (in *DriveInput) openRecord(tasks []DriveTask) error {
 
 	own, err := drivestore.Acquire(in.Root, drivestore.DriveKey(in.Rec.Number), in.Rec.Number)
 	if held := (drivestore.HeldError{}); errors.As(err, &held) {
-		return fmt.Errorf("drive %d is running (pid %d): f10 drive cancel %d stops it", in.Rec.Number,
+		return fmt.Errorf("drive %d is running (pid %d): f10 stop %d stops it", in.Rec.Number,
 			held.Holder.PID, in.Rec.Number)
 	}
 
@@ -334,7 +334,7 @@ func (in *DriveInput) number() int {
 
 func (in *DriveInput) resumeLine() string {
 	if in.Rec != nil {
-		return "f10 drive --resume " + strconv.Itoa(in.Rec.Number)
+		return "f10 start --resume " + strconv.Itoa(in.Rec.Number)
 	}
 
 	return resumeCommand(in.Argv)
@@ -401,7 +401,7 @@ func DriveList(
 		}
 
 		fmt.Fprintf(w, "drive %d  %s  %s\n", rec.Number, rec.Created.Local().Format(time.DateTime), status)
-		fmt.Fprintf(w, "  f10 drive %s\n", strings.Join(rec.Args, " "))
+		fmt.Fprintf(w, "  f10 start %s\n", strings.Join(rec.Args, " "))
 
 		nodes := make([]tasktree.Node, len(rec.Tasks))
 		for j, t := range rec.Tasks {
@@ -508,14 +508,19 @@ func DriveCancel(w io.Writer, root string, n int, now time.Time) error {
 		return err
 	}
 
+	ids := make([]string, 0, len(rec.Tasks))
+	for _, t := range rec.Tasks {
+		ids = append(ids, t.ID)
+	}
+
 	if holder, running := drivestore.Probe(root, drivestore.DriveKey(n)); running {
-		fmt.Fprintf(w, "drive %d cancelled: pid %d stops at its next poll, after any finish it is running\n",
-			rec.Number, holder.PID)
+		fmt.Fprintf(w, "drive %d stopped (%s): pid %d stops at its next poll, after any finish it is running\n",
+			rec.Number, strings.Join(ids, ", "), holder.PID)
 
 		return nil
 	}
 
-	fmt.Fprintf(w, "drive %d cancelled: it was not running\n", rec.Number)
+	fmt.Fprintf(w, "drive %d stopped (%s): it was not running\n", rec.Number, strings.Join(ids, ", "))
 
 	return nil
 }

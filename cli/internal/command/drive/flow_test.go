@@ -7,11 +7,9 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
-	startcmd "github.com/amberpixels/f10/cli/internal/command/start"
 	"github.com/amberpixels/f10/cli/internal/drive"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/flow"
-	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 )
@@ -98,10 +96,6 @@ func TestFlowByArea(t *testing.T) {
 
 	if named, _ := testkit.PacedFlowIn(eff, nil, "", "default"); named.ByArea || !named.Plans() {
 		t.Errorf("a named flow wins over the area map: %+v", named)
-	}
-
-	if got := launch.Prompt(startcmd.ModeDefault, fl, "GH-1", nil, "", nil, ""); got != "/f10:ship GH-1 --driven" {
-		t.Errorf("prompt = %q, want ship alone", got)
 	}
 
 	if got := strings.Join(drive.DriveSkills(fl), " "); got != "ship" || !fl.Mixed {

@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/launch"
-	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 )
 
@@ -20,7 +19,7 @@ func TestStartTypesAPromptWithANewline(t *testing.T) {
 	f.Script("herdr worktree open --cwd /code/repo --path /code/repo.GH-1 --label GH-1", testkit.Opened)
 	f.Script("herdr agent start "+testkit.AgentOf("GH-1")+" --kind claude --pane pane:7", "{}")
 
-	text := launch.Prompt(launch.ModeDiscuss, runplan.ShipFlow{}, "GH-1", nil, "", nil, "first\nsecond")
+	text := launch.Prompt(launch.ModeDiscuss, "GH-1", nil, "", nil, "first\nsecond")
 	f.Script("herdr agent prompt "+testkit.AgentOf("GH-1")+" "+text, "{}")
 
 	in := StartInput{

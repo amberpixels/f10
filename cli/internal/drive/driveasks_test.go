@@ -182,7 +182,7 @@ func TestDriveResumesForLateAnswer(t *testing.T) {
 		t.Fatalf("foreground err = %v\n%s", err, fx2.out.String())
 	}
 
-	if !strings.Contains(fx2.out.String(), "f10 drive --resume 1 takes the answer") {
+	if !strings.Contains(fx2.out.String(), "f10 start --resume 1 takes the answer") {
 		t.Errorf("foreground out = %s", fx2.out.String())
 	}
 }

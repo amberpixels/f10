@@ -40,7 +40,7 @@ const (
 	// Agent is the whole profile (kind:model:effort) a start or drive gave
 	// the branch's agent, read back on a rerun; absent for the kind's default.
 	Agent Key = "f10-agent"
-	// Finish is `f10 drive`'s record that it finishes the branch, and where
+	// Finish is a drive's record that it finishes the branch, and where
 	// that finish stands. Whether the drive still runs is its task's lease,
 	// never this: finish removes it with the branch, and a drive that stops
 	// short sets it back to queued.

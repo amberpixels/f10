@@ -51,7 +51,7 @@ func TestFlowAndConfigAgree(t *testing.T) {
 
 	human := runApp(t, "-C", repo, "flow").must(t)
 	for _, want := range []string{
-		"(f10 start, f10 drive)", "(--local, --flow local)", "(--flow direct)",
+		"(f10 start)", "(--local, --flow local)", "(--flow direct)",
 	} {
 		if !strings.Contains(human, want) {
 			t.Errorf("f10 flow misses %q:\n%s", want, human)

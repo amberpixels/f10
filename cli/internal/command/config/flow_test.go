@@ -10,7 +10,7 @@ import (
 func TestCompletingFlow(t *testing.T) {
 	for args, want := range map[string]bool{
 		"f10 start --flow --generate-shell-completion":       true,
-		"f10 drive GH-1 --flow --generate-shell-completion":  true,
+		"f10 start GH-1 --flow --generate-shell-completion":  true,
 		"f10 start --local --generate-shell-completion":      false,
 		"f10 start --flow local --generate-shell-completion": false,
 	} {

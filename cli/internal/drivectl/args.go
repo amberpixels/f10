@@ -34,13 +34,16 @@ var DriveFlags = []DriveFlag{
 	{Name: "--pace", Value: "NAME", Resume: true},
 	{Name: "--agent", Value: "PROFILE"},
 	{Name: "--model", Value: "MODEL", Alt: "--agent"},
+	{Name: "--plan"},
+	{Name: "--after", Value: "TASK-ID"},
+	{Name: "--base", Value: "BRANCH", Alt: "--after"},
 	{Name: "--answer", Value: "[ID=]TEXT", Resume: true, Tunes: true, Many: true},
 	{Name: "--every", Value: "DURATION", Resume: true, Tunes: true},
 	{Name: "--parallel", Value: "N", Resume: true, Tunes: true},
 	{Name: "--resume", Value: "N", Resume: true, Tunes: true},
 	{Name: "--foreground", Resume: true, Tunes: true},
 	// the planning arguments the agreed command came from, so a rerun of
-	// /f10:drive --plan follows this drive instead of proposing again
+	// a planning run that already agreed follows this drive instead of proposing again
 	{Name: "--planned", Value: "ARGS", Tunes: true},
 }
 
@@ -95,9 +98,9 @@ type DriveArgs struct {
 	Parallel int    // --parallel: the cap on tasks running a skill at once, 0 for the record's or the default
 	Resume   int    // --resume: the record to pick up
 	Fore     bool   // --foreground: run the loop in this process, not the daemon
-	List     bool   // `drive list`
-	All      bool   // `drive list --all`
-	Cancel   int    // `drive cancel <n>`
+	PlanOnly bool   // --plan: every task is planned and none implemented
+	After    string // --after: the one task's base task, over its body's After: line
+	Base     string // --base: the one task's base branch
 	Planned  string // --planned: the planning arguments this command was agreed from
 	Plan     *PlanArgs
 }
@@ -115,6 +118,27 @@ func (a *DriveArgs) set(name, value string) error {
 	switch name {
 	case "--foreground":
 		a.Fore = true
+
+		return nil
+	case "--plan":
+		a.PlanOnly = true
+
+		return nil
+	case "--after", "--base":
+		if a.After != "" || a.Base != "" {
+			return errors.New("--after and --base are exclusive: one names a task to depend on, the other a git ref")
+		}
+
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return fmt.Errorf("%s needs a value", name)
+		}
+
+		if name == "--after" {
+			a.After = value
+		} else {
+			a.Base = value
+		}
 
 		return nil
 	case "--local":
@@ -214,18 +238,7 @@ func ParseDriveArgs(args []string) (DriveArgs, error) {
 	seen := map[string]bool{}
 
 	if len(args) > 0 {
-		switch strings.TrimSpace(args[0]) {
-		case "list":
-			return parseDriveList(args[1:])
-		case "cancel":
-			if len(args) != 2 {
-				return DriveArgs{}, errors.New("cancel takes one drive number: f10 drive cancel 3")
-			}
-
-			n, err := DriveNumber(args[1])
-
-			return DriveArgs{Cancel: n}, err
-		case "plan":
+		if strings.TrimSpace(args[0]) == "plan" {
 			return parseDrivePlan(args[1:])
 		}
 	}
@@ -257,7 +270,7 @@ func ParseDriveArgs(args []string) (DriveArgs, error) {
 		switch {
 		case tok == "":
 			continue
-		case tok == "--foreground" || tok == "--local":
+		case tok == "--foreground" || tok == "--local" || tok == "--plan":
 			seen[tok] = true
 
 			if err := a.set(tok, ""); err != nil {
@@ -270,7 +283,7 @@ func ParseDriveArgs(args []string) (DriveArgs, error) {
 
 			a.Span = true
 		case strings.HasPrefix(tok, "-"):
-			return DriveArgs{}, fmt.Errorf("unknown flag %s: drive takes %s", tok, flagList(DriveFlags))
+			return DriveArgs{}, fmt.Errorf("unknown flag %s: start takes %s", tok, flagList(DriveFlags))
 		default:
 			task, p, err := splitProfile(tok)
 			if err != nil {
@@ -307,25 +320,16 @@ func ParseDriveArgs(args []string) (DriveArgs, error) {
 	case a.Resume > 0:
 		return a, nil
 	case len(a.Tasks) == 0:
-		return DriveArgs{}, errors.New("drive needs the tasks: GH-12 GH-15, or a range GH-12 -- GH-15")
+		return DriveArgs{}, errors.New("start needs the tasks: GH-12, GH-12 GH-15, or a range GH-12 -- GH-15")
+	case a.PlanOnly && a.Flow != "":
+		return DriveArgs{}, fmt.Errorf(
+			"--plan and --flow %s are exclusive: --plan stops before ship, which runs the flow", a.Flow)
+	case (a.After != "" || a.Base != "") && (len(a.Tasks) != 1 || a.Span):
+		return DriveArgs{}, errors.New("--after and --base set one task's base: start that task alone")
 	case a.Span && len(a.Tasks) != 2:
 		return DriveArgs{}, errors.New("a range is one id, --, one id: GH-12 -- GH-15")
 	case a.Span && slices.ContainsFunc(a.Profiles, func(p string) bool { return p != "" }):
 		return DriveArgs{}, errors.New("a range takes the run-wide --agent, not a profile on its ends")
-	}
-
-	return a, nil
-}
-
-func parseDriveList(args []string) (DriveArgs, error) {
-	a := DriveArgs{List: true}
-
-	for _, tok := range args {
-		if tok != "--all" {
-			return DriveArgs{}, fmt.Errorf("drive list takes only --all, not %s", tok)
-		}
-
-		a.All = true
 	}
 
 	return a, nil
@@ -371,7 +375,8 @@ func parseDrivePlan(args []string) (DriveArgs, error) {
 	switch {
 	case a.Span:
 		return DriveArgs{}, errors.New("drive plan takes ids or a parent, not a range")
-	case a.Resume > 0, len(a.Answers) > 0, a.Fore, a.Planned != "", a.Every != DefaultEvery:
+	case a.Resume > 0, len(a.Answers) > 0, a.Fore, a.Planned != "", a.Every != DefaultEvery,
+		a.PlanOnly, a.After != "", a.Base != "":
 		return DriveArgs{}, errors.New("drive plan takes ids or a parent, --facts, --json, --hint " +
 			"and the flags that shape a drive: --flow, --local, --pace, --agent, --model and --parallel")
 	}
@@ -405,7 +410,7 @@ func parseDrivePlan(args []string) (DriveArgs, error) {
 func DriveNumber(s string) (int, error) {
 	n, err := strconv.Atoi(strings.TrimSpace(s))
 	if err != nil || n <= 0 {
-		return 0, fmt.Errorf("%q is not a drive number: f10 drive list shows them", s)
+		return 0, fmt.Errorf("%q is not a drive number: f10 status --drives shows them", s)
 	}
 
 	return n, nil

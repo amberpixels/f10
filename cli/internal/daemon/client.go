@@ -206,7 +206,7 @@ func WatchProject(ctx context.Context, runDir, root, dir string, env []string) (
 
 // A DriveCall is one drive for the daemon to run, or to attach to.
 type DriveCall struct {
-	Args   []string // the drive's arguments, as f10 drive takes them
+	Args   []string // the drive's arguments, as f10 start takes them
 	Dir    string   // where the drive was typed
 	Env    []string // the allowlisted environment
 	Resume int      // the record --resume names

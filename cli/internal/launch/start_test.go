@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/launch"
-	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 )
 
@@ -74,7 +73,7 @@ func TestTaskBranch(t *testing.T) {
 // The discuss prompt is plain text the user follows up on in the agent's
 // pane, so it never carries the driven marker.
 func TestDiscussPrompt(t *testing.T) {
-	got := launch.Prompt(launch.ModeDiscuss, runplan.ShipFlow{}, "GH-1", nil, "", nil, "")
+	got := launch.Prompt(launch.ModeDiscuss, "GH-1", nil, "", nil, "")
 	want := "Run `f10 task read GH-1` and summarise what it asks in a few lines. Then stop and wait."
 
 	if got != want {
@@ -83,7 +82,7 @@ func TestDiscussPrompt(t *testing.T) {
 
 	dep := &launch.Dependency{Task: "GH-7", Branch: "GH-7/base", Plan: "/plans/GH-7.md", Planned: true}
 
-	got = launch.Prompt(launch.ModeDiscuss, runplan.ShipFlow{}, "GH-1", dep, "", nil, "")
+	got = launch.Prompt(launch.ModeDiscuss, "GH-1", dep, "", nil, "")
 	if !strings.Contains(got, "For context: GH-1 depends on GH-7, whose plan is at /plans/GH-7.md.") {
 		t.Errorf("prompt(discuss) with a dependency = %q, want the dependency named", got)
 	}
@@ -92,7 +91,7 @@ func TestDiscussPrompt(t *testing.T) {
 		t.Errorf("prompt(discuss) = %q, want no driven marker", got)
 	}
 
-	got = launch.Prompt(launch.ModeDiscuss, runplan.ShipFlow{}, "GH-1", nil, "/plans/GH-1.md", nil, "")
+	got = launch.Prompt(launch.ModeDiscuss, "GH-1", nil, "/plans/GH-1.md", nil, "")
 	if !strings.Contains(got, "A plan for it is saved at /plans/GH-1.md; read it too.") {
 		t.Errorf("prompt(discuss) with a plan = %q, want the plan named", got)
 	}

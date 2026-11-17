@@ -164,7 +164,7 @@ Run the **capture** step with this body as its description, as one task, never s
   `After:` holds one id, so a theme that depends on several names the one created last and lists the others in its body.
 - Create the subtasks in phase order, so every `After:` names a task that already exists.
 
-`/f10:drive` starts a subtask once the task its `After:` names has a commit.
+`/f10:start` on a parent starts each subtask once the task its `After:` names has a commit.
 So the `After:` lines order the work, but they do not hold a phase until the one before it has finished.
 The parent's body says so, under the phase list.
 

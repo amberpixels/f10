@@ -76,12 +76,18 @@ func (in *DriveInput) open(ctx context.Context, r *DriveRun) error {
 		title = in.Title(task.Ref)
 	}
 
+	// --after or --base, typed for the drive's one task, win over its body
+	if in.Args.After != "" || in.Args.Base != "" {
+		after, note = task.after, ""
+	}
+
 	o, err := start.OpenTask(ctx, start.StartInput{
 		Main:           in.Main,
 		Driver:         in.Driver,
 		Task:           task.Ref,
 		Suffix:         task.Suffix,
 		After:          after,
+		Base:           in.Args.Base,
 		Storage:        in.Storage,
 		Title:          title,
 		Profile:        task.profile,
@@ -156,6 +162,10 @@ func (in *DriveInput) open(ctx context.Context, r *DriveRun) error {
 	pos, err := in.position(ctx, o, skills)
 	if err != nil {
 		return err
+	}
+
+	if in.Args.PlanOnly && o.Plan != "" {
+		fmt.Fprintf(in.Out, "  planned already: /f10:plan %s in its pane plans it again\n", task.Ref.Head().ID)
 	}
 
 	r.O, r.Pos, r.Flow, r.Finishes = o, pos, fl, finishes

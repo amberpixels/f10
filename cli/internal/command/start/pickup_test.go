@@ -7,10 +7,8 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
-	startcmd "github.com/amberpixels/f10/cli/internal/command/start"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/launch"
-	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 )
@@ -18,8 +16,8 @@ import (
 // A picked-up PR is summarised and discussed with no driven marker, or
 // planned from its diff with --plan; never shipped.
 func TestPromptForAPickup(t *testing.T) {
-	for _, mode := range []string{startcmd.ModeDefault, launch.ModeDiscuss} {
-		got := launch.Prompt(mode, runplan.ShipFlow{}, "GH-1", nil, "", testkit.PickGH, "")
+	for _, mode := range []string{"", launch.ModeDiscuss} {
+		got := launch.Prompt(mode, "GH-1", nil, "", testkit.PickGH, "")
 		for _, want := range []string{"f10 task read GH-1", "f10 pr view --comments 30", "f10 pr diff 30", "stop and wait"} {
 			if !strings.Contains(got, want) {
 				t.Errorf("prompt(%q) for a PR = %q, missing %q", mode, got, want)
@@ -32,13 +30,12 @@ func TestPromptForAPickup(t *testing.T) {
 	}
 
 	want := "/f10:plan GH-1 continue PR " + testkit.PickGH.URL + ": its diff is the starting point " + launch.DrivenMarker
-	if got := launch.Prompt(launch.ModePlan, runplan.ShipFlow{}, "GH-1", nil, "", testkit.PickGH, ""); got != want {
+	if got := launch.Prompt(launch.ModePlan, "GH-1", nil, "", testkit.PickGH, ""); got != want {
 		t.Errorf("prompt(plan) for a PR = %q, want %q", got, want)
 	}
 
 	if got := launch.Prompt(
-		startcmd.ModeDefault,
-		runplan.ShipFlow{},
+		launch.ModeDiscuss,
 		"GH-1",
 		nil,
 		"/p/GH-1.md",
@@ -51,7 +48,7 @@ func TestPromptForAPickup(t *testing.T) {
 		t.Errorf("prompt for a PR with a plan = %q, want the plan named", got)
 	}
 
-	got := launch.Prompt(startcmd.ModeDefault, runplan.ShipFlow{}, "GH-1", nil, "", testkit.PickMerged, "")
+	got := launch.Prompt(launch.ModeDiscuss, "GH-1", nil, "", testkit.PickMerged, "")
 	if !strings.Contains(got, "that the PR is merged by alice on 2026-10-12 and what its diff does") ||
 		strings.Contains(got, "open threads") {
 		t.Errorf("prompt for a merged PR = %q, want its state named before the diff", got)
@@ -68,7 +65,7 @@ func TestRefuseLandedPlan(t *testing.T) {
 	for _, c := range []struct {
 		mode string
 		pick *hostops.Pickup
-	}{{startcmd.ModeDefault, testkit.PickMerged}, {launch.ModeDiscuss, testkit.PickMerged}, {launch.ModePlan, testkit.PickGH}, {launch.ModePlan, nil}} {
+	}{{"", testkit.PickMerged}, {launch.ModeDiscuss, testkit.PickMerged}, {launch.ModePlan, testkit.PickGH}, {launch.ModePlan, nil}} {
 		if err := start.RefuseLandedPlan(c.mode, c.pick); err != nil {
 			t.Errorf("refuseLandedPlan(%q, %v) = %v, want nil", c.mode, c.pick, err)
 		}
@@ -106,8 +103,7 @@ func TestStartPicksUpAPR(t *testing.T) {
 			"",
 			wt,
 		)+" "+launch.Prompt(
-			startcmd.ModeDefault,
-			runplan.ShipFlow{},
+			launch.ModeDiscuss,
 			"GH-1",
 			nil,
 			"",
@@ -162,7 +158,7 @@ func TestStartPicksUpAMergedPR(t *testing.T) {
 	f.Script("herdr agent start "+agentctl.AgentName("GH-1", "", wt)+" --kind claude --pane pane:7", "{}")
 	f.Script(
 		"herdr agent prompt "+agentctl.AgentName("GH-1", "", wt)+" "+
-			launch.Prompt(startcmd.ModeDefault, runplan.ShipFlow{}, "GH-1", nil, "", testkit.PickMerged, ""),
+			launch.Prompt(launch.ModeDiscuss, "GH-1", nil, "", testkit.PickMerged, ""),
 		"{}",
 	)
 
@@ -212,7 +208,7 @@ func TestStartPicksUpAMergedPROnItsOwnBranch(t *testing.T) {
 	f.Script("herdr agent start "+agentctl.AgentName("GH-1", "", wt)+" --kind claude --pane pane:7", "{}")
 	f.Script(
 		"herdr agent prompt "+agentctl.AgentName("GH-1", "", wt)+" "+
-			launch.Prompt(startcmd.ModeDefault, runplan.ShipFlow{}, "GH-1", nil, "", testkit.PickMerged, ""),
+			launch.Prompt(launch.ModeDiscuss, "GH-1", nil, "", testkit.PickMerged, ""),
 		"{}",
 	)
 
@@ -259,8 +255,7 @@ func TestStartTracksAnOriginOnlyBranch(t *testing.T) {
 			"",
 			wt,
 		)+" "+launch.Prompt(
-			startcmd.ModeDefault,
-			runplan.ShipFlow{},
+			launch.ModeDiscuss,
 			"GH-1",
 			nil,
 			"",

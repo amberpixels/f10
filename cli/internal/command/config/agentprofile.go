@@ -27,7 +27,7 @@ import (
 
 // defaultReach is what runs on the default key; a spawning step's is
 // facts.SpawnerReach.
-const defaultReach = "the task's agent (f10 start, f10 drive)"
+const defaultReach = "the task's agent (f10 start)"
 
 // AgentReachNone is the line for a step no lever reaches.
 const AgentReachNone = "no lever yet: runs inline on the task agent's profile"

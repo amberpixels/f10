@@ -105,7 +105,7 @@ func (in *DriveInput) resumeAnswered(tasks []DriveTask) bool {
 		}
 
 		if !in.DaemonRun {
-			fmt.Fprintf(in.Out, "%s was answered %s as this drive stopped: f10 drive --resume %d takes the answer\n",
+			fmt.Fprintf(in.Out, "%s was answered %s as this drive stopped: f10 start --resume %d takes the answer\n",
 				a.Task, asks.Way(a.By), in.Rec.Number)
 
 			return false

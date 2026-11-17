@@ -31,8 +31,8 @@ import (
 func Command() *cli.Command {
 	return &cli.Command{
 		Name:  "daemon",
-		Usage: "the per-user process that runs drives and watches started tasks; f10 drive and f10 start start it when needed",
-		Description: "Bare, it serves in the foreground: what f10 drive starts, detached. " +
+		Usage: "the per-user process that runs drives and watches started tasks; f10 start starts it when needed",
+		Description: "Bare, it serves in the foreground: what f10 start starts, detached. " +
 			"It exits after ten minutes with no drive, no watched project and no call, unless f10 remote on " +
 			"turned the tailnet listener on or it runs as the service f10 remote install set up. A client of a " +
 			"newer release replaces it: each drive stops at its next tick and the new daemon resumes it.",
@@ -51,7 +51,7 @@ func Command() *cli.Command {
 			},
 			{
 				Name:   "stop",
-				Usage:  "stop the daemon; each drive stops at its next tick, and f10 drive --resume N goes on",
+				Usage:  "stop the daemon; each drive stops at its next tick, and f10 start --resume N goes on",
 				Flags:  []cli.Flag{&cli.BoolFlag{Name: "now", Usage: "stop each drive at once, not at its next tick"}},
 				Action: runDaemonStop,
 			},
@@ -140,10 +140,10 @@ func runDaemonStop(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if cmd.Bool("now") {
-		fmt.Fprintln(cmd.Writer, "f10 daemon stopping: each drive stops now; f10 drive --resume <n> goes on with one")
+		fmt.Fprintln(cmd.Writer, "f10 daemon stopping: each drive stops now; f10 start --resume <n> goes on with one")
 	} else {
 		fmt.Fprintln(cmd.Writer,
-			"f10 daemon stopping: each drive stops at its next tick; f10 drive --resume <n> goes on with one")
+			"f10 daemon stopping: each drive stops at its next tick; f10 start --resume <n> goes on with one")
 	}
 
 	return nil

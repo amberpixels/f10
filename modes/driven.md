@@ -1,6 +1,6 @@
 # Mode · driven - a run prompted from another session
 
-A **driven** run is one that another session prompted, through `f10 start`, `f10 forward` or `f10 drive`.
+A **driven** run is one that another session prompted, through `f10 start` or `f10 forward`.
 Nobody is watching its pane.
 A question asked in that pane stalls until someone happens to find it, so driven mode mostly changes **how questions travel.**
 The steps, the plan, the pipeline and the reports stay the same.
@@ -37,7 +37,7 @@ Examples are a judge's rethink, a resolve `ask` and a deploy confirmation.
 3. **End the turn.**
    Print the ask once, under a facts block that carries the task.
    The print is for a person looking at this pane, so end it with "Answer here".
-   Never end it with a command meant for another session, such as `f10 forward`, `f10 status` or `f10 drive --answer`.
+   Never end it with a command meant for another session, such as `f10 forward`, `f10 status` or `f10 start --answer`.
    The driving session reads the ask through `f10 status <task-id>` and already knows its own way back.
 
 `f10-state.sh ask` also puts the ask in the user's asks inbox (`f10 asks`).
@@ -48,11 +48,11 @@ Five kinds of open question never become an ask:
 - **A gap.** A driven run takes every gap on its default and lists the open ones in its report (`conventions/gaps.md`).
 - **A conflict.** A driven catchup settles every conflict by the task's intent and writes each choice down (the **catchup** step's Driven paragraph).
 - **A base with no code, or not on origin before `pr`.** Ship stops with `f10-state.sh wait <base-id>` and asks nothing.
-  `f10 drive` sends ship again once the base commits.
+  The drive sends ship again once the base commits.
   For a stop at `pr`, it sends ship again once the base's branch is on origin or the base has finished (`skills/ship/SKILL.md` → the catchup guard, `steps/pr.md` point 4).
 - **A stale task's verdict** (`steps/fetch.md` point 1).
   The run ends blocked and names the verdict file.
-  The user decides either by sending `anyway`, as `f10 drive --answer <id> anyway` or typed in this pane, or by closing the task.
+  The user decides either by sending `anyway`, as `f10 start <id> --answer anyway` or typed in this pane, or by closing the task.
 - **A bug that is costly to reproduce, under `debug_costly: skip` or `reproduce`** (`steps/debug.md` → A bug that is a task).
   The frontmatter's value decides, as the debug step says.
   The drive's report names every task planned without a reproduction, so a skipped one is seen.
@@ -125,10 +125,10 @@ A dialog you cannot avoid is answered in this pane.
 ## When drive finishes the task
 
 Sometimes the ship prompt says that drive finishes the task after ship.
-`f10 drive` does that when the run's flow ends in a `finish` entry that the pace does not turn off, read under the project's ceiling.
+The drive does that when the run's flow ends in a `finish` entry that the pace does not turn off, read under the project's ceiling.
 In that case, end the report with one line that says so.
-Name the PR by number where there is one, and say that nothing is owed in this pane: `Next: f10 drive merges #204 and removes this worktree; nothing to do here.`
-For a spike the line is `Next: f10 drive closes the spike and removes this worktree; nothing to do here.`
+Name the PR by number where there is one, and say that nothing is owed in this pane: `Next: the drive merges #204 and removes this worktree; nothing to do here.`
+For a spike the line is `Next: the drive closes the spike and removes this worktree; nothing to do here.`
 
 A driven run whose prompt does not say this adds no such line.
 

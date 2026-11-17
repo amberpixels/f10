@@ -34,7 +34,7 @@ func TestStartAndForwardThroughAnotherBackend(t *testing.T) {
 
 	agent := testkit.AgentOf("GH-1")
 	if !slices.Equal(m.Started, []string{agent}) || len(m.Prompts[agent]) != 0 ||
-		len(m.Args[agent]) == 0 || !strings.HasPrefix(m.Args[agent][0], "/f10:") {
+		len(m.Args[agent]) == 0 || !strings.HasPrefix(m.Args[agent][0], "Run `f10 task read GH-1`") {
 		t.Fatalf("started %q with %q, prompts %q", m.Started, m.Args, m.Prompts)
 	}
 

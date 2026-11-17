@@ -23,4 +23,4 @@ argument-hint: "[since <ref | date> | all]"
 
 **Exit**
 - Stop at the report, or once the capture it offered has created the tasks.
-- Next: `/f10:start <task>` for one task, or `/f10:drive <parent>` once a parent and its subtasks exist.
+- Next: `/f10:start <task>` for one task, or `/f10:start <parent>` once a parent and its subtasks exist.

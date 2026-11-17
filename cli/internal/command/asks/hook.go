@@ -69,7 +69,7 @@ func resumeAskDrive(ctx context.Context, w io.Writer, a asks.Ask) error {
 	n := strconv.Itoa(a.Drive)
 
 	if !daemon.Supported {
-		fmt.Fprintf(w, "drive %d is stopped: f10 drive --resume %s in %s takes the answer\n", a.Drive, n, a.Main)
+		fmt.Fprintf(w, "drive %d is stopped: f10 start --resume %s in %s takes the answer\n", a.Drive, n, a.Main)
 
 		return nil
 	}

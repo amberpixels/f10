@@ -12,7 +12,7 @@ const Tradeoff = "a bundle is one PR: one revert, one review over a mixed diff, 
 
 // Command is the drive command line the plan runs, extra flags appended.
 func (p Plan) Command(extra ...string) string {
-	return "f10 drive " + strings.Join(append(append([]string{}, p.Args...), extra...), " ")
+	return "f10 start " + strings.Join(append(append([]string{}, p.Args...), extra...), " ")
 }
 
 // Saving is the line naming what bundling saves, "" when it saves nothing.
@@ -21,7 +21,7 @@ func (p Plan) Saving() string {
 		return ""
 	}
 
-	return fmt.Sprintf("saves about %s and %s against driving them one by one",
+	return fmt.Sprintf("saves about %s and %s against starting them one by one",
 		count(p.Waits, "CI wait"), count(p.Finishes, "finish"))
 }
 
@@ -90,14 +90,14 @@ func (p Plan) Write(w io.Writer, notes []string, extra ...string) error {
 	return nil
 }
 
-// Hint is the one line a plain drive prints when the rules alone would save
-// at least one CI wait, "" otherwise.
-func (p Plan) Hint(planArgs string) string {
+// Hint is the one line a plain start prints when the rules alone would save
+// at least one CI wait, "" otherwise: the start command that saves them.
+func (p Plan) Hint() string {
 	f := p.Formed
 	if f.Waits < 1 {
 		return ""
 	}
 
-	return fmt.Sprintf("a plan would bundle %s into %s and save about %s: /f10:drive %s --plan",
-		count(f.Bundled, "task"), count(f.Bundles, "bundle"), count(f.Waits, "CI wait"), planArgs)
+	return fmt.Sprintf("bundling %s into %s would save about %s: %s",
+		count(f.Bundled, "task"), count(f.Bundles, "bundle"), count(f.Waits, "CI wait"), p.Command())
 }

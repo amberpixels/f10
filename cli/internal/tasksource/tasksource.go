@@ -650,8 +650,8 @@ func (s RefusedSource) why(verb string) string {
 // VerbNeeds names what needs each verb, for the refusal when a driver
 // declines it.
 var VerbNeeds = map[string]string{
-	trackerdriver.VerbRead:   "`f10 task read`, `f10 start` and `f10 drive` need",
-	trackerdriver.VerbBranch: "`f10 start` and `f10 drive` need for a branch name past the bare id",
+	trackerdriver.VerbRead:   "`f10 task read`, `f10 start` needs",
+	trackerdriver.VerbBranch: "`f10 start` needs for a branch name past the bare id",
 	trackerdriver.VerbURL:    "`f10 task open <id>` needs",
 	trackerdriver.VerbIndex:  "`f10 task open` with no id needs",
 	trackerdriver.VerbList:   "`f10 task open --print` and the board's next rows need",

@@ -159,7 +159,7 @@ func (in WatchInput) hostTrouble(tasks []WatchedTask, store map[string]watchRepo
 		Task: watchHostKey,
 		Kind: watchUnanswered,
 		Text: fmt.Sprintf("%v; %s left out of this pass", cause, strings.Join(ids, ", ")),
-		Next: "check the host CLI's login in the shell that registered the project, then run f10 start or f10 drive there",
+		Next: "check the host CLI's login in the shell that registered the project, then run f10 start there",
 		Key:  watchUnanswered,
 		At:   in.Now(),
 	}

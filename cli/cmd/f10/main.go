@@ -1,8 +1,8 @@
 // Command f10 is the surface for a person and for the commands an agent runs
 // between pipeline runs; bin/f10-load-project.sh is the surface for the run
 // itself. Lookaround verbs change nothing and act for the reader only by
-// handing a url to a browser or a file to an editor; init, start, forward,
-// drive, standup mark and finish act. A verb means one thing under every noun
+// handing a url to a browser or a file to an editor; init, start, stop,
+// forward, standup mark and finish act. A verb means one thing under every noun
 // (`read` writes content, `open` follows an address) and the matrix stays
 // sparse rather than redefining one to fill a hole. `f10 --help` shows the
 // human verbs; the verbs the steps call are Hidden under plumbingCategory.
@@ -61,7 +61,7 @@ func main() {
 func newApp() *cli.Command {
 	return &cli.Command{
 		Name:    "f10",
-		Usage:   "look around a project's f10 configuration, tasks, plans and your activity, start a task, reach its agent, drive a list and finish it",
+		Usage:   "look around a project's f10 configuration, tasks, plans and your activity, start tasks, reach their agents and finish them",
 		Version: buildinfo.Version(),
 		// -C takes a path whole, commas included
 		DisableSliceFlagSeparator: true,
@@ -91,7 +91,8 @@ func newApp() *cli.Command {
 			standupcmd.Command(),
 			boardcmd.Command(),
 			atlascmd.Command(),
-			startcmd.Command(),
+			drivecmd.StartCommand(),
+			startcmd.StopCommand(),
 			startcmd.ForwardCommand(),
 			drivecmd.Command(),
 			daemoncmd.Command(),

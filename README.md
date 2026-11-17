@@ -111,8 +111,7 @@ Session tools, which run the binary:
 | `asks` | every question driven agents wait on, in one questionnaire |
 | `read` | a task and its images loaded into the session |
 | `board` | what changed today (`--state`: where every task stands) |
-| `start` | a worktree, a Herdr workspace and a prompted agent |
-| `drive` | a list of tasks run through the flow, bases first |
+| `start` | each task in its own worktree and agent, run through the flow, bases first |
 | `finish` | the PR merged, and the worktree, branch and workspace gone |
 
 Each runs as `/f10:<skill>`, and `--help` on any skill lists its arguments.
@@ -188,8 +187,8 @@ It downloads the build from this repo's release, or builds it from `cli/` when G
 f10 doctor       # are the plugin, the binary and the environment wired up?
 f10 config       # the effective configuration, with where each value came from
 f10 task read    # the current task as markdown
-f10 start 1042   # a worktree, a Herdr workspace and a prompted agent
-f10 drive 1042 1043
+f10 start 1042   # a worktree, a Herdr workspace and an agent, run through the flow
+f10 start 1042 1043
 f10 finish 1042  # merge the PR, remove the worktree, pull main
 ```
 

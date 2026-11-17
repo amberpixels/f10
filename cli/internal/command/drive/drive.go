@@ -1,11 +1,12 @@
-// Package drive is the f10 drive command: it parses a drive's arguments and
-// hands them to the drive service.
+// Package drive runs f10 start's drives, serves the hidden f10 drive plan,
+// and is the f10 watch command.
 package drive
 
 import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -14,16 +15,12 @@ import (
 	"strings"
 	"time"
 
-	"connectrpc.com/connect"
 	"github.com/urfave/cli/v3"
 
-	f10v1 "github.com/amberpixels/f10/cli/gen/f10/v1"
 	"github.com/amberpixels/f10/cli/internal/agents"
-	"github.com/amberpixels/f10/cli/internal/apiclient"
 	"github.com/amberpixels/f10/cli/internal/asknotify"
 	"github.com/amberpixels/f10/cli/internal/asks"
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
-	configcmd "github.com/amberpixels/f10/cli/internal/command/config"
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/drive"
 	"github.com/amberpixels/f10/cli/internal/drivectl"
@@ -43,66 +40,55 @@ import (
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
-// Command is the drive verb, which runs tasks through their flow and exits when every
-// task is through or one needs a human. It is Go, not a Claude session:
-// ordering, prompting and polling are deterministic, and a session polling
-// an agent pays a round trip and a slice of context per check.
+// Command is the hidden drive verb: only `drive plan`, which proposes how to
+// start tasks and changes nothing. The tasks themselves run through f10 start.
 func Command() *cli.Command {
 	return &cli.Command{
-		Name:      "drive",
-		Usage:     "run a list of tasks through a flow, each once its base has a commit, stopping once an agent asks and nothing else can move",
-		ArgsUsage: drive.DriveUsage(),
-		Description: "Each task runs the default flow, or the one --flow or --local names (f10 flow lists them): " +
-			"plan when the flow has a plan entry and the task no plan file, then ship, " +
-			"then finish when the flow ends in it and the pace does not turn it off. A rerun keeps the flow a task's branch records.\n" +
-			"--pace NAME runs every task at that pace (f10 config lists them), recorded on each branch so a rerun keeps it; " +
-			"a pace skips or tunes the flow's entries and never adds one.\n" +
-			"A task's base is its branch's recorded --after, else its body's After: line; " +
-			"every task whose base branch has a commit runs, its finish waits for the base's, " +
-			"and a halt stops only its dependents.\n" +
-			"--parallel N caps the tasks running a skill at once (default: half the CPU cores, 2 to 8), " +
-			"and the agents open to twice N; the rest queue in the drive's order. A task on an ask, its base or " +
-			"its finish frees its slot. A rerun or --resume keeps the drive's cap unless it passes a new one.\n" +
-			"--agent starts every agent on PROFILE (kind:model:effort, or a part), laid over the agents map's default; " +
-			"--model is the model-only form; <id>:<profile> starts one task's agent on its own, which wins.\n" +
-			"Each drive keeps a record under the storage root, picked up by the same command or --resume N, " +
-			"and holds a lease on each task: a task another drive holds is skipped, and f10 finish refuses it. " +
-			"list shows the drives; cancel N stops one from prompting further.\n" +
-			"plan proposes how to drive the tasks and changes nothing: small tasks of one kind sharing files or an area " +
+		Name:   "drive",
+		Hidden: true,
+		Usage:  "plumbing: drive plan proposes how to start tasks, and changes nothing",
+		Description: "plan proposes how to start the tasks and changes nothing: small tasks of one kind sharing files or an area " +
 			"bundled under bundle_max_lines, the rest alone with the reason, After: lines to add, and --parallel; " +
-			"--facts FILE lays the drive skill's estimates on top, --json prints it for the skill, " +
-			"--hint prints one line when a plan saves a CI wait. A drive run with --planned ARGS is the one " +
-			"plan ARGS names afterwards instead of proposing again.\n" +
-			"The drive runs in the per-user f10 daemon, started when none runs: this command prints its progress, " +
-			"Ctrl+C stops only that, and rerunning it follows the drive again. --foreground runs it in this process.\n" +
-			"Exit 0: every task went through its flow. 4: an agent asks; rerun with --answer. " +
-			"5: a task halted (a judge stop, a failure, an agent that stopped without reporting, its base halted).",
-		// a range is `GH-12 -- GH-15`, and flag parsing would swallow the --
+			"--facts FILE lays the start skill's estimates on top, --json prints it for the skill, " +
+			"--hint prints one line when a plan saves a CI wait.",
 		SkipFlagParsing: true,
-		Action:          runDrive,
-		ShellComplete:   configcmd.CompleteFlow,
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			argv := cmd.Args().Slice()
+
+			switch {
+			case len(argv) == 0 || slices.Contains(argv, "--help") || slices.Contains(argv, "-h"):
+				return cli.ShowSubcommandHelp(cmd)
+			case argv[0] != "plan":
+				return errors.New("f10 drive is gone: f10 start runs tasks, " +
+					"f10 status --drives lists drives, f10 stop stops one")
+			}
+
+			a, err := drivectl.ParseDriveArgs(argv)
+			if err != nil {
+				return err
+			}
+
+			return runDrivePlan(ctx, cmd, a)
+		},
 	}
 }
 
-func runDrive(ctx context.Context, cmd *cli.Command) error {
-	argv := cmd.Args().Slice()
-	if slices.Contains(argv, "--help") || slices.Contains(argv, "-h") {
-		return cli.ShowSubcommandHelp(cmd)
-	}
-
+// Run is f10 start for tasks run through their flow: the drive, in the
+// daemon unless --foreground, else in this process.
+func Run(ctx context.Context, cmd *cli.Command, argv []string) error {
 	a, err := drivectl.ParseDriveArgs(argv)
 	if err != nil {
 		return err
 	}
 
-	if a.List || a.Cancel > 0 {
-		return driveRecords(ctx, cmd, a)
-	}
-
 	if a.Plan != nil {
-		return runDrivePlan(ctx, cmd, a)
+		return errors.New("plan is f10 drive plan's: f10 start takes task ids")
 	}
 
+	return runDrive(ctx, cmd, argv, a)
+}
+
+func runDrive(ctx context.Context, cmd *cli.Command, argv []string, a drivectl.DriveArgs) error {
 	// the daemon may drain this drive before it opens anything: the signal
 	// waits in the channel until the loop exists to take it
 	drain, unwatch := drive.WatchDrain(a.Fore)
@@ -227,43 +213,6 @@ func runDrive(ctx context.Context, cmd *cli.Command) error {
 	return drive.Drive(ctx, cmd.Writer, in)
 }
 
-// driveRecords is drive list and drive cancel, which the daemon answers.
-func driveRecords(ctx context.Context, cmd *cli.Command, a drivectl.DriveArgs) error {
-	c, err := apiclient.Dial(ctx)
-	if err != nil {
-		return err
-	}
-
-	caller, err := c.Caller(cmd)
-	if err != nil {
-		return err
-	}
-
-	var printed *f10v1.Printed
-
-	if a.List {
-		res, err := c.Runs.ListDrives(ctx, connect.NewRequest(&f10v1.ListDrivesRequest{All: a.All, Caller: caller}))
-		if err != nil {
-			return apiclient.Err(err, cmd.Writer, cmd.ErrWriter)
-		}
-
-		printed = res.Msg.GetPrinted()
-	} else {
-		res, err := c.Runs.CancelDrive(ctx, connect.NewRequest(&f10v1.CancelDriveRequest{
-			Drive: int32(a.Cancel), Caller: caller, //nolint:gosec // a drive number
-		}))
-		if err != nil {
-			return apiclient.Err(err, cmd.Writer, cmd.ErrWriter)
-		}
-
-		printed = res.Msg.GetPrinted()
-	}
-
-	apiclient.Print(cmd.Writer, cmd.ErrWriter, printed)
-
-	return nil
-}
-
 // runDrivePlan prints a proposal and changes nothing, so the daemon, a hook
 // or a status line may call it: no agents, no daemon, no record.
 func runDrivePlan(ctx context.Context, cmd *cli.Command, a drivectl.DriveArgs) error {
@@ -293,14 +242,14 @@ func runDrivePlan(ctx context.Context, cmd *cli.Command, a drivectl.DriveArgs) e
 	case res.Agreed != nil:
 		_, err := fmt.Fprintf(
 			w,
-			"agreed in drive %d: f10 drive %s\n",
+			"agreed in drive %d: f10 start %s\n",
 			res.Agreed.Number,
 			strings.Join(res.Agreed.Args, " "),
 		)
 
 		return err
 	case pa.Hint:
-		if line := res.Plan.Hint(pa.Key); line != "" {
+		if line := res.Plan.Hint(); line != "" {
 			_, err := fmt.Fprintln(w, line)
 
 			return err
@@ -324,7 +273,7 @@ func writePlanJSON(w io.Writer, res drive.PlanResult) error {
 
 	if res.Agreed != nil {
 		out.Agreed = res.Agreed.Number
-		out.Command = "f10 drive " + strings.Join(res.Agreed.Args, " ")
+		out.Command = "f10 start " + strings.Join(res.Agreed.Args, " ")
 	} else {
 		out.Plan = &res.Plan
 		out.Command = res.Plan.Command(res.Extra...)
@@ -347,7 +296,7 @@ func WatchCommand() *cli.Command {
 		Usage: "what the f10 daemon watches in this project: tasks no drive owns, " +
 			"their merged PRs, stalled agents and stopped runs",
 		Description: "Bare, it lists each task the last pass saw and what it reported. " +
-			"f10 start and f10 drive hand the project to the daemon, which runs a pass every few minutes; " +
+			"f10 start hands the project to the daemon, which runs a pass every few minutes; " +
 			"watch: finish (the default), report or off in project.md says what a pass may do, " +
 			"and watch_catchup: on lets it catch an open PR up with its target, " +
 			"leaving conflicts and verify to the task's agent. A red PR is reported once per head, " +

@@ -239,9 +239,8 @@ func TestPlanHintWithoutASheet(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if hint := res.Plan.Hint(
-		"GH-10",
-	); hint != "a plan would bundle 2 tasks into 1 bundle and save about 1 CI wait: /f10:drive GH-10 --plan" {
+	const saves = "bundling 2 tasks into 1 bundle would save about 1 CI wait: f10 start "
+	if hint := res.Plan.Hint(); !strings.HasPrefix(hint, saves) {
 		t.Errorf("hint %q", hint)
 	}
 
@@ -250,7 +249,7 @@ func TestPlanHintWithoutASheet(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if hint := typed.Plan.Hint("GH-30+GH-14"); hint != "" {
+	if hint := typed.Plan.Hint(); hint != "" {
 		t.Errorf("a typed bundle hinted %q", hint)
 	}
 }

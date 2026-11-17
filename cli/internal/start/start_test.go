@@ -2,20 +2,13 @@ package start
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"strings"
 	"testing"
 
-	"github.com/urfave/cli/v3"
-
 	"github.com/amberpixels/f10/cli/internal/launch"
-	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/shell"
-	"github.com/amberpixels/f10/cli/internal/stack"
-	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/testkit"
-	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // A --after that points to no branch refuses before git, wt or herdr
@@ -216,108 +209,4 @@ func TestStartReusesABareBranchOverTheSlug(t *testing.T) {
 	if strings.Contains(out.String(), "bare id") {
 		t.Errorf("the note explains a name that was not given:\n%s", out.String())
 	}
-}
-
-// A parent with unfinished subtasks is refused with ui.ExitParent, reading no
-// more than whether the task has a branch; a started task, one whose subtasks
-// are all finished and one with none start.
-func TestStartRefusesAParent(t *testing.T) {
-	kidsOf := func(rows []stack.ChildRow, err error, asked *bool) func(context.Context, ref.Ref) ([]stack.ChildRow, error) {
-		return func(context.Context, ref.Ref) ([]stack.ChildRow, error) {
-			*asked = true
-
-			return rows, err
-		}
-	}
-
-	t.Run("open subtasks", func(t *testing.T) {
-		f := testkit.NewFakes(t)
-		f.Script(testkit.RefsLocal, "")
-
-		var asked bool
-
-		rows := []stack.ChildRow{{ID: "GH-2"}, {ID: "GH-3", Finished: true}, {ID: "GH-4"}}
-		in := StartInput{
-			Main:     "/code/repo",
-			Storage:  testkit.Storage,
-			Task:     testkit.Gh1,
-			Children: kidsOf(rows, nil, &asked),
-		}
-		err := RefuseStartParent(t.Context(), in)
-
-		var coder cli.ExitCoder
-		if !errors.As(err, &coder) || coder.ExitCode() != ui.ExitParent {
-			t.Fatalf("err = %v, want exit %d", err, ui.ExitParent)
-		}
-
-		for _, want := range []string{"GH-1 is a parent of GH-2, GH-4", "/f10:drive GH-1", "f10 start GH-2"} {
-			if !strings.Contains(err.Error(), want) {
-				t.Errorf("message missing %q: %v", want, err)
-			}
-		}
-
-		if !asked {
-			t.Error("the refusal did not come from the subtask lookup")
-		}
-
-		for _, c := range f.Calls {
-			if !strings.HasPrefix(c, "git for-each-ref") {
-				t.Errorf("%q ran for the check, which only looks for the task's branch", c)
-			}
-		}
-	})
-
-	for name, tc := range map[string]struct {
-		rows []stack.ChildRow
-		err  error
-	}{
-		"every subtask finished": {rows: []stack.ChildRow{{ID: "GH-2", Finished: true}}},
-		"no subtasks":            {rows: []stack.ChildRow{}},
-		"no parent link":         {err: tasksource.ErrNoParentLink},
-	} {
-		t.Run(name, func(t *testing.T) {
-			f := testkit.NewFakes(t)
-			f.Script(testkit.RefsLocal, "")
-
-			var asked bool
-
-			in := StartInput{
-				Main:     "/code/repo",
-				Storage:  testkit.Storage,
-				Task:     testkit.Gh1,
-				Children: kidsOf(tc.rows, tc.err, &asked),
-			}
-			if err := RefuseStartParent(t.Context(), in); err != nil || !asked {
-				t.Errorf("err = %v, asked = %v; want a pass after asking", err, asked)
-			}
-		})
-	}
-
-	t.Run("a started task", func(t *testing.T) {
-		f := testkit.NewFakes(t)
-		f.Script(testkit.RefsLocal, testkit.Heads("GH-1"))
-
-		var asked bool
-
-		in := StartInput{
-			Main:     "/code/repo",
-			Storage:  testkit.Storage,
-			Task:     testkit.Gh1,
-			Children: kidsOf([]stack.ChildRow{{ID: "GH-2"}}, nil, &asked),
-		}
-		if err := RefuseStartParent(t.Context(), in); err != nil || asked {
-			t.Errorf("err = %v, asked = %v; a started task is never a parent", err, asked)
-		}
-	})
-
-	t.Run("no check", func(t *testing.T) {
-		testkit.NewFakes(t)
-
-		if err := RefuseStartParent(
-			t.Context(),
-			StartInput{Main: "/code/repo", Storage: testkit.Storage, Task: testkit.Gh1},
-		); err != nil {
-			t.Errorf("err = %v with no children lookup", err)
-		}
-	})
 }

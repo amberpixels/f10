@@ -11,11 +11,11 @@ import (
 
 // clientFiles are the files of the control-plane verbs, which the daemon's
 // API serves: each parses its flags, calls the API and prints the reply.
-// The verbs left in process (janitor, the asks hook and resume, drive's
-// foreground run and its plan) live in other files.
+// The verbs left in process (janitor, the asks hook and resume, start's
+// drives and drive plan) live in other files.
 var clientFiles = []string{
 	"status/status.go",
-	"start/start.go",
+	"start/stop.go",
 	"start/forward.go",
 	"finish/finish.go",
 	"board/board.go",

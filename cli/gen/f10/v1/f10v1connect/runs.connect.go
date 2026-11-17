@@ -54,17 +54,21 @@ type RunServiceClient interface {
 	// GetRunStatus is where f10 runs stand: one task's, a project's, or every
 	// live run on the machine, with the question a stopped run waits on.
 	GetRunStatus(context.Context, *connect.Request[v1.GetRunStatusRequest]) (*connect.Response[v1.GetRunStatusResponse], error)
-	// Start opens a task's worktree, workspace and agent, already prompted.
+	// Start runs a task through its flow in a drive, as f10 start does. A
+	// discussion or a picked-up PR opens the worktree, workspace and agent,
+	// prompted once, since nothing steers an agent that waits for a person.
 	Start(context.Context, *connect.Request[v1.StartRequest]) (*connect.Response[v1.StartResponse], error)
-	// Drive runs a list of tasks through a flow, each once its base has a commit.
+	// Drive runs a list of tasks through a flow, each once its base has a
+	// commit, as f10 start does with several tasks.
 	Drive(context.Context, *connect.Request[v1.DriveRequest]) (*connect.Response[v1.DriveResponse], error)
 	// Finish merges a task's PR and removes its worktree, branch and workspace.
 	Finish(context.Context, *connect.Request[v1.FinishRequest]) (*connect.Response[v1.FinishResponse], error)
 	// Forward hands text to the agent working on a task, as f10 forward does.
 	Forward(context.Context, *connect.Request[v1.ForwardRequest]) (*connect.Response[v1.ForwardResponse], error)
-	// ListDrives lists a project's drive records, as f10 drive list does.
+	// ListDrives lists a project's drive records, as f10 status --drives does.
 	ListDrives(context.Context, *connect.Request[v1.ListDrivesRequest]) (*connect.Response[v1.ListDrivesResponse], error)
-	// CancelDrive stops a drive from prompting further and closes its asks.
+	// CancelDrive stops a drive from prompting further and closes its asks,
+	// as f10 stop does.
 	CancelDrive(context.Context, *connect.Request[v1.CancelDriveRequest]) (*connect.Response[v1.CancelDriveResponse], error)
 }
 
@@ -175,17 +179,21 @@ type RunServiceHandler interface {
 	// GetRunStatus is where f10 runs stand: one task's, a project's, or every
 	// live run on the machine, with the question a stopped run waits on.
 	GetRunStatus(context.Context, *connect.Request[v1.GetRunStatusRequest]) (*connect.Response[v1.GetRunStatusResponse], error)
-	// Start opens a task's worktree, workspace and agent, already prompted.
+	// Start runs a task through its flow in a drive, as f10 start does. A
+	// discussion or a picked-up PR opens the worktree, workspace and agent,
+	// prompted once, since nothing steers an agent that waits for a person.
 	Start(context.Context, *connect.Request[v1.StartRequest]) (*connect.Response[v1.StartResponse], error)
-	// Drive runs a list of tasks through a flow, each once its base has a commit.
+	// Drive runs a list of tasks through a flow, each once its base has a
+	// commit, as f10 start does with several tasks.
 	Drive(context.Context, *connect.Request[v1.DriveRequest]) (*connect.Response[v1.DriveResponse], error)
 	// Finish merges a task's PR and removes its worktree, branch and workspace.
 	Finish(context.Context, *connect.Request[v1.FinishRequest]) (*connect.Response[v1.FinishResponse], error)
 	// Forward hands text to the agent working on a task, as f10 forward does.
 	Forward(context.Context, *connect.Request[v1.ForwardRequest]) (*connect.Response[v1.ForwardResponse], error)
-	// ListDrives lists a project's drive records, as f10 drive list does.
+	// ListDrives lists a project's drive records, as f10 status --drives does.
 	ListDrives(context.Context, *connect.Request[v1.ListDrivesRequest]) (*connect.Response[v1.ListDrivesResponse], error)
-	// CancelDrive stops a drive from prompting further and closes its asks.
+	// CancelDrive stops a drive from prompting further and closes its asks,
+	// as f10 stop does.
 	CancelDrive(context.Context, *connect.Request[v1.CancelDriveRequest]) (*connect.Response[v1.CancelDriveResponse], error)
 }
 

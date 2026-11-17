@@ -1455,14 +1455,20 @@ func (x *StartRequest) GetToken() string {
 }
 
 type StartResponse struct {
-	state       protoimpl.MessageState `protogen:"open.v1"`
-	Task        string                 `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
-	Branch      string                 `protobuf:"bytes,2,opt,name=branch,proto3" json:"branch,omitempty"`
-	Worktree    string                 `protobuf:"bytes,3,opt,name=worktree,proto3" json:"worktree,omitempty"`
-	WorkspaceId string                 `protobuf:"bytes,4,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	Agent       string                 `protobuf:"bytes,5,opt,name=agent,proto3" json:"agent,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// task, branch, worktree, workspace_id and agent are a discussion's or a
+	// pickup's; a drive opens its task after the call returns.
+	Task        string `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
+	Branch      string `protobuf:"bytes,2,opt,name=branch,proto3" json:"branch,omitempty"`
+	Worktree    string `protobuf:"bytes,3,opt,name=worktree,proto3" json:"worktree,omitempty"`
+	WorkspaceId string `protobuf:"bytes,4,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	Agent       string `protobuf:"bytes,5,opt,name=agent,proto3" json:"agent,omitempty"`
 	// printed is the report f10 start prints, and the waits it reported.
-	Printed       *Printed `protobuf:"bytes,6,opt,name=printed,proto3" json:"printed,omitempty"`
+	Printed *Printed `protobuf:"bytes,6,opt,name=printed,proto3" json:"printed,omitempty"`
+	// drive is the drive a flow start runs in, 0 for a discussion or a pickup.
+	Drive int32 `protobuf:"varint,7,opt,name=drive,proto3" json:"drive,omitempty"`
+	// log is that drive's log file, which grows until the drive exits.
+	Log           string `protobuf:"bytes,8,opt,name=log,proto3" json:"log,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1539,6 +1545,20 @@ func (x *StartResponse) GetPrinted() *Printed {
 	return nil
 }
 
+func (x *StartResponse) GetDrive() int32 {
+	if x != nil {
+		return x.Drive
+	}
+	return 0
+}
+
+func (x *StartResponse) GetLog() string {
+	if x != nil {
+		return x.Log
+	}
+	return ""
+}
+
 // A DriveTask is one task of a drive, with its own agent profile.
 type DriveTask struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1605,7 +1625,7 @@ type DriveRequest struct {
 	Parallel int32  `protobuf:"varint,8,opt,name=parallel,proto3" json:"parallel,omitempty"`
 	// plan_first plans every task before any ships.
 	PlanFirst bool `protobuf:"varint,9,opt,name=plan_first,json=planFirst,proto3" json:"plan_first,omitempty"`
-	// args are the drive's arguments as `f10 drive` takes them. When set they
+	// args are the drive's arguments as `f10 start` takes them. When set they
 	// win over the fields above, so a rerun of a typed command line keys to
 	// the record it opened.
 	Args []string `protobuf:"bytes,10,rep,name=args,proto3" json:"args,omitempty"`
@@ -2259,7 +2279,7 @@ func (x *ListDrivesRequest) GetCaller() *CallerContext {
 type DriveRecord struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	Number int32                  `protobuf:"varint,1,opt,name=number,proto3" json:"number,omitempty"`
-	// args are the drive's arguments as f10 drive took them.
+	// args are the drive's arguments as f10 start took them.
 	Args []string `protobuf:"bytes,2,rep,name=args,proto3" json:"args,omitempty"`
 	// state is running, stopped, done or cancelled.
 	State         string                 `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty"`
@@ -2329,7 +2349,7 @@ func (x *DriveRecord) GetStarted() *timestamppb.Timestamp {
 type ListDrivesResponse struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	Drives []*DriveRecord         `protobuf:"bytes,1,rep,name=drives,proto3" json:"drives,omitempty"`
-	// printed is the table f10 drive list prints.
+	// printed is the table f10 status --drives prints.
 	Printed       *Printed `protobuf:"bytes,2,opt,name=printed,proto3" json:"printed,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -2380,10 +2400,13 @@ func (x *ListDrivesResponse) GetPrinted() *Printed {
 }
 
 type CancelDriveRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Project       string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
-	Drive         int32                  `protobuf:"varint,2,opt,name=drive,proto3" json:"drive,omitempty"`
-	Caller        *CallerContext         `protobuf:"bytes,3,opt,name=caller,proto3" json:"caller,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Project string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
+	// drive is the drive's number; task, when set instead, is a task id whose
+	// drive is stopped.
+	Drive         int32          `protobuf:"varint,2,opt,name=drive,proto3" json:"drive,omitempty"`
+	Caller        *CallerContext `protobuf:"bytes,3,opt,name=caller,proto3" json:"caller,omitempty"`
+	Task          string         `protobuf:"bytes,4,opt,name=task,proto3" json:"task,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2439,9 +2462,16 @@ func (x *CancelDriveRequest) GetCaller() *CallerContext {
 	return nil
 }
 
+func (x *CancelDriveRequest) GetTask() string {
+	if x != nil {
+		return x.Task
+	}
+	return ""
+}
+
 type CancelDriveResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// printed is what f10 drive cancel prints.
+	// printed is what f10 stop prints.
 	Printed       *Printed `protobuf:"bytes,1,opt,name=printed,proto3" json:"printed,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -2598,14 +2628,16 @@ const file_f10_v1_runs_proto_rawDesc = "" +
 	" \x01(\tR\x05model\x12\x12\n" +
 	"\x04note\x18\v \x01(\tR\x04note\x12-\n" +
 	"\x06caller\x18\f \x01(\v2\x15.f10.v1.CallerContextR\x06caller\x12\x14\n" +
-	"\x05token\x18\r \x01(\tR\x05token\"\xbb\x01\n" +
+	"\x05token\x18\r \x01(\tR\x05token\"\xe3\x01\n" +
 	"\rStartResponse\x12\x12\n" +
 	"\x04task\x18\x01 \x01(\tR\x04task\x12\x16\n" +
 	"\x06branch\x18\x02 \x01(\tR\x06branch\x12\x1a\n" +
 	"\bworktree\x18\x03 \x01(\tR\bworktree\x12!\n" +
 	"\fworkspace_id\x18\x04 \x01(\tR\vworkspaceId\x12\x14\n" +
 	"\x05agent\x18\x05 \x01(\tR\x05agent\x12)\n" +
-	"\aprinted\x18\x06 \x01(\v2\x0f.f10.v1.PrintedR\aprinted\"1\n" +
+	"\aprinted\x18\x06 \x01(\v2\x0f.f10.v1.PrintedR\aprinted\x12\x14\n" +
+	"\x05drive\x18\a \x01(\x05R\x05drive\x12\x10\n" +
+	"\x03log\x18\b \x01(\tR\x03log\"1\n" +
 	"\tDriveTask\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05agent\x18\x02 \x01(\tR\x05agent\"\x91\x03\n" +
@@ -2672,11 +2704,12 @@ const file_f10_v1_runs_proto_rawDesc = "" +
 	"\astarted\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\astarted\"l\n" +
 	"\x12ListDrivesResponse\x12+\n" +
 	"\x06drives\x18\x01 \x03(\v2\x13.f10.v1.DriveRecordR\x06drives\x12)\n" +
-	"\aprinted\x18\x02 \x01(\v2\x0f.f10.v1.PrintedR\aprinted\"s\n" +
+	"\aprinted\x18\x02 \x01(\v2\x0f.f10.v1.PrintedR\aprinted\"\x87\x01\n" +
 	"\x12CancelDriveRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x14\n" +
 	"\x05drive\x18\x02 \x01(\x05R\x05drive\x12-\n" +
-	"\x06caller\x18\x03 \x01(\v2\x15.f10.v1.CallerContextR\x06caller\"@\n" +
+	"\x06caller\x18\x03 \x01(\v2\x15.f10.v1.CallerContextR\x06caller\x12\x12\n" +
+	"\x04task\x18\x04 \x01(\tR\x04task\"@\n" +
 	"\x13CancelDriveResponse\x12)\n" +
 	"\aprinted\x18\x01 \x01(\v2\x0f.f10.v1.PrintedR\aprinted*\xf6\x01\n" +
 	"\vPhaseStatus\x12\x1c\n" +

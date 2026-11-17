@@ -7,13 +7,13 @@ Context: the loader's `verify:` line, `project.md → Hosting & PR` and the opti
 Badge: none, because inside ship the step runs under the badge of the entry it runs before.
 Sent on its own by `/f10:ci`, the step ends with `f10-state.sh done ci`.
 That line is not a badge.
-It is the end signal that `f10 drive` reads, like catchup's.
+It is the end signal that the drive reads, like catchup's.
 
 No flow names `ci`.
 The step runs when one of three callers reads red checks on the PR:
 
 - **Ship** reads the checks at each entry boundary once the PR is open (`skills/ship/SKILL.md` → Run), and at its Exit.
-- **`f10 drive`** reads them on its tick, and sends `/f10:ci --driven` to the task's agent.
+- **The drive** reads them on its tick, and sends `/f10:ci --driven` to the task's agent.
 - **The watcher** reports a red PR once, and sends `/f10:ci --driven` only under `watch_ci: on`.
 
 **The `ci` overlay** (`.f10/instructions/ci.md`) is optional.

@@ -75,7 +75,7 @@ f10 drops rows whose `state` is `closed`, resolves `id` and `after` to the proje
 
 `after` is optional: a row with a `body` instead has its `After:` line read from it.
 `[]` means the task has no subtasks.
-Exit `3` declines the verb as for any other: f10 falls back to the host's issues, and where the tracker is not the host's, reads it as no parent link, so `/f10:drive` drives the id as given.
+Exit `3` declines the verb as for any other: f10 falls back to the host's issues, and where the tracker is not the host's, reads it as no parent link, so `f10 start` runs the id as given.
 
 ## Creating a task
 

@@ -20,8 +20,8 @@
 #   f10-state.sh note <reason> [<next>] why a run stopped, and what unblocks it
 #   f10-state.sh ask <text>             the question a driven run stopped on, options included
 #   f10-state.sh wait <base-task>       the base a driven ship stopped for, its branch without code yet
-#   f10-state.sh stop guard            the stop ship left is its catchup guard's; f10 drive catches up, then resumes it
-#   f10-state.sh done <step>            a step with no phase (catchup) reported; f10 drive reads it as its end
+#   f10-state.sh stop guard            the stop ship left is its catchup guard's; the drive catches up, then resumes it
+#   f10-state.sh done <step>            a step with no phase (catchup) reported; the drive reads it as its end
 #   f10-state.sh final <step>           declare the ship pipeline's last step
 #   f10-state.sh pipeline <step>...     declare the ship pipeline's steps, the last one final
 #   f10-state.sh show                   the current run, human-readable (`f10 status` says more)
@@ -323,8 +323,8 @@ f10-state.sh - where an f10 run is right now, for the status line to render.
   note <reason> [<next>]   why a run stopped, and what unblocks it
   ask <text>               the question a driven run stopped on, options included
   wait <base-task>         the base a driven ship stopped for, its branch without code yet
-  stop guard               the stop ship left is its catchup guard's; f10 drive catches up, then resumes it
-  done <step>              a step with no phase (catchup) reported; f10 drive reads it as its end
+  stop guard               the stop ship left is its catchup guard's; the drive catches up, then resumes it
+  done <step>              a step with no phase (catchup) reported; the drive reads it as its end
   final <step>             declare the ship pipeline's last step
   pipeline <step>...       declare the ship pipeline's steps, the last one final
   show                     the current run, human-readable

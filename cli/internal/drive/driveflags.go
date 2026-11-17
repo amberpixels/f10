@@ -44,14 +44,15 @@ func flagUsage(flags []drivectl.DriveFlag) string {
 	return strings.Join(parts, " ")
 }
 
-// DriveUsage is drive's ArgsUsage, read off DriveFlags.
+// DriveUsage is start's flags for a flow start, read off DriveFlags.
 func DriveUsage() string {
 	run := slices.DeleteFunc(
 		slices.Clone(drivectl.DriveFlags),
 		func(f drivectl.DriveFlag) bool { return f.Name == "--resume" },
 	)
 
-	return "<id>[:profile]... | <id> -- <id>  " + flagUsage(run) + "\n" +
-		"   f10 drive --resume N " + flagUsage(drivectl.ResumeTunes()) + " | list [--all] | cancel N\n" +
-		"   f10 drive plan <parent | id>... [--facts FILE] [--json] [--hint]"
+	return flagUsage(run)
 }
+
+// ResumeUsage is the flags --resume N takes.
+func ResumeUsage() string { return flagUsage(drivectl.ResumeTunes()) }

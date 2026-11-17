@@ -78,7 +78,7 @@ func TestDriveRecordIsPickedUpByTheSameCommand(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 
-	if want := `answer with: f10 drive --resume 1 --answer "1. … 2. …"`; !strings.Contains(fx.out.String(), want) {
+	if want := `answer with: f10 start --resume 1 --answer "1. … 2. …"`; !strings.Contains(fx.out.String(), want) {
 		t.Errorf("output lacks %q:\n%s", want, fx.out.String())
 	}
 
@@ -340,7 +340,7 @@ func TestDriveStopsWhenCancelled(t *testing.T) {
 			t.Error(err)
 		}
 
-		if !strings.Contains(out.String(), "drive 1 cancelled: pid") {
+		if !strings.Contains(out.String(), "drive 1 stopped (GH-1): pid") {
 			t.Errorf("cancel said %q", out.String())
 		}
 	}
@@ -362,7 +362,7 @@ func TestDriveStopsWhenCancelled(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, want := range []string{"drive 1 ", "  cancelled\n", "f10 drive GH-1 judge ship", "└─ GH-1:  cancelled"} {
+	for _, want := range []string{"drive 1 ", "  cancelled\n", "f10 start GH-1 judge ship", "└─ GH-1:  cancelled"} {
 		if !strings.Contains(list.String(), want) {
 			t.Errorf("list lacks %q:\n%s", want, list.String())
 		}

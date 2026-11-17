@@ -10,6 +10,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
@@ -99,7 +100,7 @@ func (in *DriveInput) resolveTasks(ctx context.Context) ([]DriveTask, []string, 
 
 		task.finished = stack.FinishedTask(info, in.Tracker.Storage, r.ID, branched)
 
-		if !ranged && !task.finished && !branched {
+		if !ranged && !task.finished && !branched && len(r.Riders()) > 0 {
 			for _, m := range r.MemberRefs() {
 				if err := in.refuseParent(ctx, m); err != nil {
 					return err
@@ -139,26 +140,129 @@ func (in *DriveInput) resolveTasks(ctx context.Context) ([]DriveTask, []string, 
 			return nil, nil, fmt.Errorf("%s ships in bundle %s, which takes no suffix", r.ID, r.Label())
 		}
 
+		subs, left, err := in.subtasks(ctx, r, suffix)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		notes = append(notes, left...)
+
+		for _, sub := range subs {
+			if err := add(sub, "", i); err != nil {
+				return nil, nil, err
+			}
+		}
+
+		if subs != nil {
+			continue
+		}
+
 		// any member drives the whole bundle, under its lead
 		if err := add(r.Head(), suffix, i); err != nil {
 			return nil, nil, err
 		}
 	}
 
-	return tasks, notes, nil
+	return tasks, notes, in.typedBase(ctx, tasks)
 }
 
-// refuseParent stops a parent with unfinished subtasks: the subtasks are what
-// runs, chosen in the drive skill. A started task is never a parent here, so
-// a resumed drive asks the tracker nothing more.
+// typedBase lays --after or --base over the one task's body: --after names
+// its base task, --base a branch, which leaves it no base task.
+func (in *DriveInput) typedBase(ctx context.Context, tasks []DriveTask) error {
+	switch {
+	case in.Args.After == "" && in.Args.Base == "":
+		return nil
+	case len(tasks) != 1:
+		return fmt.Errorf("--after and --base set one task's base, and %s runs %d tasks", in.Args.Tasks[0], len(tasks))
+	case in.Args.Base != "":
+		tasks[0].after = ""
+	case in.Args.After != "":
+		base, err := in.Tracker.Resolve(ctx, in.Args.After)
+		if err != nil {
+			return fmt.Errorf("--after: %w", err)
+		}
+
+		tasks[0].after = base.Head().ID
+	}
+
+	return nil
+}
+
+// subtasks is what a listed parent runs instead of itself: its subtasks in
+// After: order, a finished one reported as such and an open draft left out
+// with a note, since a draft is an idea not ready to plan. nil means r runs
+// itself: it has no subtask, or a branch, so it was started on its own.
+func (in *DriveInput) subtasks(ctx context.Context, r ref.Ref, suffix string) ([]ref.Ref, []string, error) {
+	read := in.Tracker.AllChildren
+	if read == nil {
+		read = in.Tracker.Children
+	}
+
+	if suffix != "" || len(r.Riders()) > 0 || read == nil {
+		return nil, nil, nil
+	}
+
+	x, err := stack.LoadBranchIndex(ctx, in.Main)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if first, err := x.Any(ctx, r.ID); err != nil || first != "" {
+		return nil, nil, err
+	}
+
+	rows, err := read(ctx, r)
+	if errors.Is(err, tasksource.ErrNoParentLink) {
+		return nil, nil, nil
+	}
+
+	if err != nil {
+		return nil, nil, fmt.Errorf("%s: reading its subtasks: %w", r.ID, err)
+	}
+
+	if len(rows) == 0 {
+		return nil, nil, nil
+	}
+
+	var (
+		subs  []ref.Ref
+		notes []string
+	)
+
+	for _, row := range rows {
+		draft := slices.ContainsFunc(row.Labels, func(l string) bool { return strings.EqualFold(l, "draft") })
+		if draft && !row.Finished {
+			notes = append(notes, fmt.Sprintf("%s left out: a draft subtask of %s; list it to run it", row.ID, r.ID))
+
+			continue
+		}
+
+		sub, err := in.Tracker.Resolve(ctx, row.ID)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		subs = append(subs, sub.Head())
+	}
+
+	if len(subs) == 0 {
+		return nil, nil, fmt.Errorf("%s's subtasks are all drafts: list the ones to run", r.ID)
+	}
+
+	return subs, notes, nil
+}
+
+// refuseParent stops a bundle member with unfinished subtasks, since one
+// branch would ship the whole umbrella. A started task is never a parent
+// here, so a resumed drive asks the tracker nothing more.
 func (in *DriveInput) refuseParent(ctx context.Context, r ref.Ref) error {
 	open, err := stack.OpenSubtasks(ctx, in.Tracker, r)
 	if err != nil || len(open) == 0 {
 		return err
 	}
 
-	return fmt.Errorf("%s is a parent of %s: list the subtasks to drive (f10 task children %s), "+
-		"or run /f10:drive %s to choose", r.ID, strings.Join(open, ", "), r.ID, r.ID)
+	return fmt.Errorf("%s is a parent of %s: start the parent alone, or list the subtasks to bundle",
+		r.ID, strings.Join(open, ", "))
 }
 
 func (in *DriveInput) span(ctx context.Context) (ref.Ref, ref.Ref, error) {

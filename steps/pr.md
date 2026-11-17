@@ -19,7 +19,7 @@ Any commit this step makes follows `conventions/context.md` → Commits, with `-
    The id must still be in it, because `f10 task read` with no argument reads the id back out of the branch name.
    A run with no task id (free-text planless work) names its branch the way the project does.
    When this step creates a branch for a task id, it links the branch to the task with `git config branch.<name>.f10-task <id>`.
-   That link lets `f10 start`, `f10 finish`, `--after` and `f10 drive` find the branch whatever its shape.
+   That link lets `f10 start`, `f10 finish` and `--after` find the branch whatever its shape.
 3. **Open or refresh.**
    Run `f10 pr view` on the current branch.
    Only an open PR counts.
@@ -38,7 +38,7 @@ Any commit this step makes follows `conventions/context.md` → Commits, with `-
    A `found: f10-after-branch gone` line under the branch means the base task finished and its branch was deleted, so its code is already in the default branch.
    In that case, run `git config --unset` on both `f10-after` and `f10-after-branch`, and open against the default branch the command printed.
    **Driven**, a base not on origin is a wait, not a failure, because the base's own flow pushes it or its finish retargets this PR.
-   Run `f10-state.sh set ship blocked pr; f10-state.sh wait <base-id>; f10-state.sh note "waiting on <base-id>: its branch is not on origin yet" "rerun ship once <base-id> is pushed or finished; f10 drive does it by itself"`, then report.
+   Run `f10-state.sh set ship blocked pr; f10-state.sh wait <base-id>; f10-state.sh note "waiting on <base-id>: its branch is not on origin yet" "rerun ship once <base-id> is pushed or finished; the drive does it by itself"`, then report.
    `<base-id>` is the branch's `f10-after` config, the base task's id.
 5. **Draft the title and body.**
    Opening and refreshing draft them the same way.

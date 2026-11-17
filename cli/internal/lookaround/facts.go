@@ -93,7 +93,7 @@ type Branch struct {
 	After  string   // the base task recorded on it
 	Model  string   // the agent's model, where start recorded it
 	Agent  string   // the agent's profile as typed (opus:high), where start recorded one
-	// Finish is `f10 drive`'s record of running the branch's finish, while
+	// Finish is a drive's record of running the branch's finish, while
 	// that drive holds the task's lease
 	Finish *branchmeta.DriveFinish
 }

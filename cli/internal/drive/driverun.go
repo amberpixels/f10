@@ -59,6 +59,11 @@ func (in *DriveInput) enter(r *DriveRun, p runPhase) {
 }
 
 func (in *DriveInput) sequenceOf(fl runplan.ShipFlow) []string {
+	// --plan plans every task and ships none, whatever the flow holds
+	if in.Args.PlanOnly {
+		return []string{"plan"}
+	}
+
 	if in.Sequence != nil {
 		return in.Sequence(fl)
 	}

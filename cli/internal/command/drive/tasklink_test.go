@@ -36,7 +36,7 @@ func requireLinked(t *testing.T, out string, ids ...string) {
 		}
 	}
 
-	// a command line to copy (f10 drive FT-1 FT-2) keeps its ids plain
+	// a command line to copy (f10 start FT-1 FT-2) keeps its ids plain
 	bare := commandLine.ReplaceAllString(testkit.LinkSpan.ReplaceAllString(out, ""), "")
 
 	for _, id := range ids {
