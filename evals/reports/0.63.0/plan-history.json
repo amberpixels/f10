@@ -1,0 +1,23 @@
+{
+  "scenario": "plan-history",
+  "version": "0.63.0",
+  "commit": "ce103f98-dirty",
+  "at": "2026-11-17T14:25:32.179826Z",
+  "pass": true,
+  "checks": [
+    {
+      "name": "plan",
+      "pass": true
+    },
+    {
+      "name": "intent",
+      "pass": true
+    },
+    {
+      "name": "history",
+      "pass": true
+    }
+  ],
+  "cost_usd": 0.5815246,
+  "duration_ms": 41464
+}
