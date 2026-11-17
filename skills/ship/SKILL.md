@@ -62,7 +62,7 @@ Deploy has its own confirmation (the **deploy** step).
 3. Load each flow entry just before it runs, in one call with its badge: `f10-state.sh set ship running <entry>; f10-load-project.sh <step>`, and follow the step from that load.
    A `review` entry loads `review` and `resolve` as two calls in the same message, because together they pass the Bash output cap.
    A `pr` entry loads `pr handoff` unless its `handoff off` dial is set, because the pr step runs the handoff.
-   The catchup guard (below) loads `catchup` in a call of its own, in the same message as the load of the entry it guards, because together they pass the Bash output cap.
+   The catchup guard (below) loads `catchup` in a call of its own, in the same message as the load of the entry it guards, because together they pass the 25,000 characters a load keeps under the Bash output cap.
 4. **Read the checks at each boundary** once the branch has an open PR (after the first `pr` entry), in the same call as the load: `f10-state.sh set ship running <entry>; f10 pr checks --brief; f10-load-project.sh <step>`.
    It costs no turn, because the line comes back with the step.
    - `checks: red`: run `f10-load-project.sh ci catchup` and the **ci** step before the entry, under the entry's badge.
