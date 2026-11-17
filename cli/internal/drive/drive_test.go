@@ -122,6 +122,10 @@ func newDriveFixture(t *testing.T, args ...string) *driveFixture {
 		},
 		Now: func() time.Time { return fx.clock },
 		Sleep: func(_ context.Context, d time.Duration) error {
+			// A real tick sleeps long past a fake verify, so a job in flight
+			// lands before the clock moves, however slow the machine.
+			fx.awaitJobs(t)
+
 			fx.sleeps++
 			fx.clock = fx.clock.Add(d)
 
@@ -302,6 +306,24 @@ func (fx *driveFixture) writeShipStop(t *testing.T, status, leaf string, at int,
 
 	if err := os.WriteFile(filepath.Join(fx.in.StateDir, "s-GH-1.state"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// awaitJobs waits for every verify job the drive's runs hold. It is bounded,
+// so a job that never ends fails the test instead of hanging it.
+func (fx *driveFixture) awaitJobs(t *testing.T) {
+	t.Helper()
+
+	for _, r := range fx.in.Runs {
+		if r.Job == nil {
+			continue
+		}
+
+		select {
+		case <-r.Job.Done:
+		case <-time.After(10 * time.Second):
+			t.Fatalf("%s: the verify job did not finish", r.Task.Ref.ID)
+		}
 	}
 }
 
