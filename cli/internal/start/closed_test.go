@@ -57,7 +57,8 @@ func TestMatchShipped(t *testing.T) {
 }
 
 // Only a start whose every task is closed, with no branch, becomes a
-// discussion; a read that fails or a driver with no state counts as open.
+// discussion, or one listing a bundle with a closed member; a read that
+// fails or a driver with no state counts as open.
 func TestClosedStart(t *testing.T) {
 	state := map[string]tasksource.TaskInfo{
 		"GH-1": {Closed: true, Stated: true},
@@ -93,6 +94,7 @@ func TestClosedStart(t *testing.T) {
 		{[]string{"GH-1"}, []string{"GH-1"}},
 		{[]string{"GH-5"}, []string{"GH-5+GH-1"}},
 		{[]string{"GH-1", "GH-2"}, nil},
+		{[]string{"GH-5", "GH-2"}, []string{"GH-5+GH-1"}},
 		{[]string{"GH-3"}, nil},
 		{[]string{"GH-4"}, nil},
 		{[]string{"GH-9"}, nil},

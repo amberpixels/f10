@@ -116,6 +116,12 @@ func closedDiscussion(ctx context.Context, cmd *cli.Command, argv []string) *f10
 
 	fmt.Fprintln(cmd.ErrWriter, start.SwitchNote(labels, droppedDriveFlags(a)))
 
+	return discussionRequest(a)
+}
+
+// discussionRequest is the flow start a as a discussion: its ids, base and
+// agent kept, and none of the flow's flags, which --discuss refuses.
+func discussionRequest(a drivectl.DriveArgs) *f10v1.StartRequest {
 	return &f10v1.StartRequest{
 		Mode:  f10v1.StartMode_START_MODE_DISCUSS,
 		Token: a.Tasks[0],
@@ -140,14 +146,6 @@ func droppedDriveFlags(a drivectl.DriveArgs) []string {
 
 	if a.Pace != "" {
 		out = append(out, "--pace "+a.Pace)
-	}
-
-	if a.Parallel > 0 {
-		out = append(out, "--parallel")
-	}
-
-	if a.Every > 0 {
-		out = append(out, "--every")
 	}
 
 	return out

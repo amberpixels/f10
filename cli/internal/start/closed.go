@@ -45,8 +45,10 @@ func closedCheckFor(t *target.Target) closedCheck {
 
 // ClosedStart is the labels of the tasks ids names when every one of them
 // is closed and none has a branch, nil otherwise: such a start has nothing
-// to run, so it opens a discussion instead. A read that fails counts as
-// open, so the check never blocks a start.
+// to run, so it opens a discussion instead. A bundle with a closed member
+// switches the start whatever else it lists, because the drive judges a
+// bundle by its lead and would ship that member again. A read that fails
+// counts as open, so the check never blocks a start.
 func ClosedStart(ctx context.Context, t *target.Target, ids []string) []string {
 	return closedCheckFor(t).all(ctx, ids)
 }
@@ -56,17 +58,35 @@ func (c closedCheck) all(ctx context.Context, ids []string) []string {
 		return nil
 	}
 
-	labels := make([]string, 0, len(ids))
+	var (
+		labels  []string
+		open    bool
+		bundled bool
+	)
 
 	for _, token := range ids {
 		id, _ := ref.SplitSuffix(strings.TrimSpace(token))
 
 		r, err := c.tr.Resolve(ctx, id)
-		if err != nil || !c.closed(ctx, r.Head()) {
-			return nil
+		if err != nil {
+			open = true
+
+			continue
 		}
 
-		labels = append(labels, r.Head().Label())
+		r = r.Head()
+		if !c.closed(ctx, r) {
+			open = true
+
+			continue
+		}
+
+		labels = append(labels, r.Label())
+		bundled = bundled || len(r.Riders()) > 0
+	}
+
+	if len(labels) == 0 || open && !bundled {
+		return nil
 	}
 
 	return labels

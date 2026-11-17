@@ -125,16 +125,11 @@ func (s *runService) Start(
 		closed = start.SwitchNote(labels, droppedFlags(m, mode))
 	}
 
-	flowName, pace := m.GetFlow(), m.GetPace()
-	if closed != "" {
-		mode, flowName, pace = launch.ModeDiscuss, "", ""
-	}
-
-	in, err := start.Prepare(ctx, t, start.Request{
+	sr := start.Request{
 		Token: token,
 		Mode:  mode,
-		Flow:  flowName,
-		Pace:  pace,
+		Flow:  m.GetFlow(),
+		Pace:  m.GetPace(),
 		After: m.GetAfter(),
 		Base:  m.GetBase(),
 		Task:  task,
@@ -142,7 +137,13 @@ func (s *runService) Start(
 		Model: m.GetModel(),
 		Note:  m.GetNote(),
 		Also:  m.GetTasks(),
-	})
+	}
+
+	if closed != "" {
+		sr = asDiscussion(sr)
+	}
+
+	in, err := start.Prepare(ctx, t, sr)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
@@ -218,6 +219,15 @@ func flowStart(
 	}
 
 	return argv, true, nil
+}
+
+// asDiscussion is a flow start turned into a discussion: the flow and the
+// pace go, since a discussion runs neither and RefuseFlags refuses --flow
+// beside --discuss.
+func asDiscussion(req start.Request) start.Request {
+	req.Mode, req.Flow, req.Pace = launch.ModeDiscuss, "", ""
+
+	return req
 }
 
 // droppedFlags names the flow start's flags a discussion takes no use of.
