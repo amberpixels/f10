@@ -154,7 +154,9 @@ However, never agree because agreeing is cheaper.
 Gather the subject as point 1 says.
 Then spawn **one fresh `general-purpose` agent**.
 Never use `fork`, because a fork inherits the whole conversation.
-Give the agent the subject verbatim, the checkout root, and these instructions: run the two context loads (`f10-load-conventions.sh` and `f10-load-project.sh judge`), follow this step except point 8, write no file, and return the verdict with its argument.
+Give the agent the subject verbatim and the checkout root.
+Its instructions are to run `f10-load-conventions.sh` and `f10-load-project.sh judge` as two Bash calls, then follow this step except point 8.
+It writes no file, and returns the verdict with its argument.
 The Agent tool call carries the `model` and `effort` that the load's `judge` profile line names (`conventions/context.md` → Agent profiles).
 Relay the agent's verdict unchanged.
 You may dispute it in one line.

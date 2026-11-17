@@ -1,0 +1,24 @@
+{
+  "scenario": "review-planted",
+  "version": "0.63.0",
+  "commit": "ce103f98-dirty",
+  "at": "2026-11-17T15:29:50.454118Z",
+  "pass": true,
+  "checks": [
+    {
+      "name": "findings",
+      "pass": true
+    },
+    {
+      "name": "planted",
+      "pass": true,
+      "detail": "4 of 4 planted found, 1 outside"
+    },
+    {
+      "name": "lore",
+      "pass": true
+    }
+  ],
+  "cost_usd": 0.8739678000000002,
+  "duration_ms": 88856
+}

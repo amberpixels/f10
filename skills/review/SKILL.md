@@ -15,8 +15,22 @@ Running `/f10:review ci` authorizes the `f10 review ack` and `f10 review trigger
 - `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything, and stop.
   It reports which steps the rest of the argument would run.
 - `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`; everything below still runs.
-- `ci`: strip it and run the step's remote review.
-  Standalone, the remote review reads the latest CI review in, triggers a new one, or hands it to `/f10:resolve <id> ci`.
+- `ci`: strip it and run the step's **CI review**, with its **Pick** replaced by a choice from `f10 review pick --latest --json`:
+  - **No review by the reviewer**: do what **Pick** does when no review is done.
+  - **The latest review is still running**: wait, with no question.
+  - **A done review**: ask one AskUserQuestion with two options, **Resolve this review** and **Trigger a new review**.
+    Name the reviewer, and the review's age from `updatedAt` ("claude[bot], ~10 minutes ago").
+    The option that comes first, as the recommended one, depends on the review:
+    - Unhandled: resolve first, even when stale, because its findings are unread.
+    - Handled and not settled: resolve first, unless `stale: true`, which means commits landed on the PR after the review saw it.
+    - Settled, or handled and stale: trigger first.
+
+    A driven run asks nothing: it takes the first option, and the report names it.
+    With `triggerable: false` there is no question.
+    Resolve then, or for a settled review, say in the declared words what the user does and stop, a normal end.
+  - **Resolve**: invoke `/f10:resolve <id> ci` with the Skill tool, keeping `--driven`.
+    Resolve reads the review in itself, so no findings file is written here.
+  - **Trigger**: trigger and wait, then run the CI review's points 3 and 4 on the review it returns.
 - `host`: strip it and run the local review on the step's **host engine**, the host's own code review.
   It does not combine with `ci`.
 - `since [<ref>]`: invoke `/f10:audit` with the Skill tool, then stop.

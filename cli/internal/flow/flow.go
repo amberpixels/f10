@@ -188,7 +188,7 @@ var Guarded = []string{"implement", "pr", "judge"}
 var GenericSteps = []string{
 	"audit", "brainstorm", "capture", "capture-adapter", "catchup", "ci", "cleanup", "commit", "debug",
 	"demo", "deploy", "explain", "fetch", "finish", "handoff", "implement", "investigate", "judge",
-	"plan", "pr", "push", "resolve", "review", "stale", "standup",
+	"plan", "pr", "push", "resolve", "review", "review-ci", "review-host", "review-local", "stale", "standup",
 }
 
 // MarshalJSON writes the flow as its written entries, labels in brackets.

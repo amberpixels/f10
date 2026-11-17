@@ -18,9 +18,9 @@ import (
 
 var (
 	// a load call naming steps; `<step>` placeholders and --overlays print no step
-	loadCallRe = regexp.MustCompile("f10-load-project\\.sh((?: [a-z]+)+)[`;]")
-	stepRefRe  = regexp.MustCompile("`steps/([a-z]+)\\.md`")
-	boldRe     = regexp.MustCompile(`\*\*([a-z]+)\*\*`)
+	loadCallRe = regexp.MustCompile("f10-load-project\\.sh((?: [a-z][a-z-]*)+)[`;]")
+	stepRefRe  = regexp.MustCompile("`steps/([a-z][a-z-]*)\\.md`")
+	boldRe     = regexp.MustCompile(`\*\*([a-z][a-z-]*)\*\*`)
 	pointRe    = regexp.MustCompile(`^\s*points?\b`)
 )
 
@@ -34,7 +34,7 @@ var (
 	}
 	nonFlowSteps = []string{
 		"audit", "brainstorm", "capture", "capture-adapter", "ci", "debug", "explain",
-		"fetch", "investigate", "plan", "stale", "standup",
+		"fetch", "investigate", "plan", "review-ci", "review-host", "review-local", "stale", "standup",
 	}
 	guardedSteps = flow.Guarded
 )
@@ -45,13 +45,10 @@ func shipLoads() [][]string {
 		{"fetch"},
 		{"investigate", "plan"},
 		{"investigate"},
-		{"review", "resolve"},
 	}
+	// a review entry loads resolve in a call of its own, and resolve is never named
 	for _, s := range flowSteps {
-		// a review entry loads both, and resolve is never named
-		if s != "review" && s != "resolve" {
-			loads = append(loads, []string{s})
-		}
+		loads = append(loads, []string{s})
 	}
 
 	// the catchup guard joins the load of each entry it guards
@@ -195,8 +192,8 @@ func TestStepReferences(t *testing.T) {
 		shipText.WriteString(l.text + "\n")
 	}
 
-	if !strings.Contains(shipText.String(), "loads `review resolve`") {
-		t.Errorf("%s no longer says a review entry loads `review resolve`: update shipLoads with it", ship)
+	if !strings.Contains(shipText.String(), "loads `review` and `resolve` as two calls") {
+		t.Errorf("%s no longer says a review entry loads `review` and `resolve` apart: update shipLoads with it", ship)
 	}
 
 	// the guard's sentence and its three bullets name guardedSteps
@@ -291,6 +288,8 @@ func TestStepReferenceExtractors(t *testing.T) {
 		{line: "`f10-state.sh set ship running <entry>; f10-load-project.sh <step>`", loads: nil},
 		{line: "`(cd <dir> && f10-load-project.sh --overlays standup)`", loads: nil},
 		{line: "Run `f10-load-project.sh` first", loads: nil},
+		{line: "load `f10-load-project.sh review review-local`, then", loads: [][]string{{"review", "review-local"}}},
+		{line: "as `steps/review-ci.md` point 4 says", refs: []string{"review-ci"}},
 		{line: "2. Follow the **review** step it prints, then **Arguments**", bold: []string{"review"}},
 	}
 

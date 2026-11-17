@@ -28,7 +28,7 @@ var (
 // allowNotCommand holds `file: phrase` code spans that start with f10 but
 // name no command.
 var allowNotCommand = map[string]string{
-	"steps/review.md: f10 never performs it": "prose: what a manual pick name means",
+	"steps/review-ci.md: f10 never performs it": "prose: what a manual pick name means",
 }
 
 // hostCLIAllowlist is every raw gh or glab call the prose may make, keyed

@@ -20,9 +20,11 @@ One measured `/f10:ship` over already-written code took 202s: ~50s of commands, 
 
 **Batching never licenses skipping.**
 Never drop or reorder a command, and never substitute a tool for a declared adapter (`conventions/failure.md` rule 4).
-Two kinds of call travel alone:
+Three kinds of call travel alone:
 
 - A command whose output decides what comes next.
 - Anything outward-facing (`pr`, `push`, `deploy`), which never shares a call with something that could have vetoed it.
+- Each `f10-load-*.sh` call, because two loads together pass the Bash output cap and come back as a file to read.
+  Send them as separate calls in one message.
 
 Correctness beats latency.

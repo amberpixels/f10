@@ -20,6 +20,9 @@ type badge struct {
 // planningSteps are loaded before a pipeline runs, never as a pipeline step.
 var planningSteps = []string{"capture", "capture-adapter", "fetch", "investigate", "stale", "debug", "plan"}
 
+// entryParts are loaded inside a review entry, so they never name the leaf.
+var entryParts = []string{"resolve", "review-ci", "review-host", "review-local"}
+
 func (b badge) Observe(ctx context.Context, o observe.Observation) error {
 	if b.session == "" {
 		return nil
@@ -51,7 +54,7 @@ func (b badge) apply(o observe.Observation, issueID string, r *state.Run, loaded
 		// ship loads each pipeline step alone, right before it runs; a
 		// catchup's turn loads its step inside ship's run, never as an entry
 		if !loaded || r.Skill != "ship" || r.Turn != "" || len(o.Steps) != 1 ||
-			slices.Contains(planningSteps, o.Steps[0]) ||
+			slices.Contains(planningSteps, o.Steps[0]) || slices.Contains(entryParts, o.Steps[0]) ||
 			(r.Ship != state.Upcoming && r.Ship != "running") {
 			return false, nil
 		}

@@ -23,8 +23,10 @@ Running `/f10:resolve ci` authorizes the `f10 review ack` and `f10 review settle
   Say in one line which findings file you took, then start.
 
 **Run**
-1. Run `f10-load-project.sh review resolve` first, on every call of this skill: both steps, since the findings file's shape lives in the review step.
-2. Follow the **resolve** step it prints.
+1. Run `f10-load-project.sh review` and `f10-load-project.sh resolve` first, on every call of this skill, as two calls in one message, because together they pass the Bash output cap.
+   The review step holds the findings file's shape.
+   With `ci`, add `f10-load-project.sh review-ci` in the same message, because the **CI review** section runs its points.
+2. Follow the **resolve** step.
 
 **Exit**
 - Stop once the verdicts are written, verify is green, and the fixes are landed or left as point 9 says.

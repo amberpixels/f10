@@ -22,7 +22,7 @@ So after such an entry, resolve runs only point 5, on the review that entry ackn
 1. **Latest.**
    Run `f10 review pick --latest --json`.
    If there is no review, or the newest one is not done yet, that is a normal end, and the report names `/f10:review ci`.
-   If the remote facts are missing or the host refuses them, the step fails, the same way the review step's remote review fails.
+   If the remote facts are missing or the host refuses them, the step fails, the same way the **review-ci** step's remote review fails.
 2. **Settled.**
    If the pick says `settled: true`, report "nothing to resolve" and end normally.
    Nothing changes.
@@ -36,7 +36,7 @@ So after such an entry, resolve runs only point 5, on the review that entry ackn
    Its `revision:` is the picked revision.
    A file with no `revision:` line holds no review, because a rewritten sticky comment keeps its sha, so only the revision tells two versions apart.
    If a file holds the review, it is the file that point 1 of **Settle the findings** takes.
-   If none does, run points 3 and 4 of the review step's **remote review**: shape the findings file, write its lore entries, and acknowledge the review with the picked id.
+   If none does, run points 3 and 4 of the **review-ci** step's remote review: shape the findings file, write its lore entries, and acknowledge the review with the picked id.
    They run under the review step's **Rounds** rules, and a round those rules decline is a normal end here.
    The new file is then the one point 1 of **Settle the findings** takes.
 5. **Settle**, after point 10 of **Settle the findings**.
@@ -81,8 +81,7 @@ So after such an entry, resolve runs only point 5, on the review that entry ackn
      That covers a real fork, a finding that disputes the task, and a fix whose scope is not yours.
      Every `ask` is collected for point 7.
 
-   A finding **repeats a settled one** as the review step's brief defines it (point 2).
-   A repeat has the same file, lines overlapping the settled one's `now:` lines, and the same claim.
+   A finding **repeats a settled one** when it has the same file, lines overlapping the settled one's `now:` lines, and the same claim.
    A `skip` of a repeat cites it: the `reason:` opens with the settled finding's id and its reason, then says why it still holds.
    A `fix` of a repeat says in its `reason:` why the earlier reason no longer holds, because the earlier verdict went the other way.
 
