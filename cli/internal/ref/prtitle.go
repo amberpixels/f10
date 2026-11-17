@@ -33,8 +33,7 @@ func BundleTitle(title string, r Ref) string {
 
 	tag += ")"
 
-	// the digit guard keeps FT-1 from matching inside FT-12
-	re := regexp.MustCompile(`(?i)(?:^|[^a-z0-9])(` + regexp.QuoteMeta(head.ID) + `)(?:[^0-9]|$)`)
+	re := regexp.MustCompile(`(?i)(?:^|[^a-z0-9])` + idPattern(head.ID))
 
 	loc := re.FindStringSubmatchIndex(title)
 	if loc == nil {
@@ -44,6 +43,29 @@ func BundleTitle(title string, r Ref) string {
 	end := loc[3]
 
 	return title[:end] + tag + TrimRiders(title[end:])
+}
+
+// LeadsWith reports whether title opens with id, in any case, after leading
+// space.
+func LeadsWith(title, id string) bool {
+	return regexp.MustCompile(`(?i)^\s*` + idPattern(id)).MatchString(title)
+}
+
+// WithoutRiders is title with the riders tag after its first id dropped, so
+// a title f10 already wrote reads the same as its draft.
+func WithoutRiders(title, id string) string {
+	loc := regexp.MustCompile(`(?i)(?:^|[^a-z0-9])` + idPattern(id)).FindStringSubmatchIndex(title)
+	if loc == nil {
+		return title
+	}
+
+	return title[:loc[3]] + TrimRiders(title[loc[3]:])
+}
+
+// idPattern is id as a group, with the digit guard that keeps FT-1 from
+// matching inside FT-12.
+func idPattern(id string) string {
+	return `(` + regexp.QuoteMeta(id) + `)(?:[^0-9]|$)`
 }
 
 // TrimRiders drops the riders tag that opens rest, the text after a lead id.

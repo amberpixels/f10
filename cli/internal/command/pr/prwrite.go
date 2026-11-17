@@ -19,6 +19,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/reviews"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/tasktitle"
 	"github.com/amberpixels/f10/cli/internal/textx"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -29,53 +30,77 @@ const statusLimit = 140
 // openPull is the subject's open request, read whole, for a command that
 // writes to it: a merged or closed one, or none, is refused by name.
 func openPull(ctx context.Context, cmd *cli.Command) (hostops.Host, forge.PR, error) {
-	h, p, _, err := openPullOf(ctx, cmd)
+	h, p, _, _, err := openPullOf(ctx, cmd)
 
 	return h, p, err
 }
 
-// openPullOf is openPull with the task the request ships, nil for none.
-func openPullOf(ctx context.Context, cmd *cli.Command) (hostops.Host, forge.PR, *ref.Ref, error) {
+// openPullOf is openPull with the task the request ships, nil for none, and
+// the tracker.title its title is written through.
+func openPullOf(
+	ctx context.Context,
+	cmd *cli.Command,
+) (hostops.Host, forge.PR, *ref.Ref, tasktitle.Template, error) {
 	t, err := target.For(ctx, cmd)
 	if err != nil {
-		return hostops.Host{}, forge.PR{}, nil, err
+		return hostops.Host{}, forge.PR{}, nil, "", err
 	}
 
 	s, err := reviews.ResolvePRSubject(ctx, t, cmd.Args().First())
 	if err != nil {
-		return hostops.Host{}, forge.PR{}, nil, err
+		return hostops.Host{}, forge.PR{}, nil, "", err
 	}
 
 	if s.LookupErr != nil {
-		return hostops.Host{}, forge.PR{}, nil, s.LookupErr
+		return hostops.Host{}, forge.PR{}, nil, "", s.LookupErr
 	}
 
 	if s.Number == 0 {
-		return hostops.Host{}, forge.PR{}, nil, fmt.Errorf("no open PR for %s", s.Branch)
+		return hostops.Host{}, forge.PR{}, nil, "", fmt.Errorf("no open PR for %s", s.Branch)
 	}
 
 	h, err := hostops.HostOf(t)
 	if err != nil {
-		return hostops.Host{}, forge.PR{}, nil, err
+		return hostops.Host{}, forge.PR{}, nil, "", err
 	}
 
 	p, err := h.PR(ctx, strconv.Itoa(s.Number))
 	if err != nil {
-		return hostops.Host{}, forge.PR{}, nil, err
+		return hostops.Host{}, forge.PR{}, nil, "", err
 	}
 
 	if err := RequireOpen(p); err != nil {
-		return hostops.Host{}, forge.PR{}, nil, err
+		return hostops.Host{}, forge.PR{}, nil, "", err
 	}
 
-	return h, p, s.Task, nil
+	return h, p, s.Task, t.Effective.TitleTemplate, nil
 }
 
-// PullTitle is the title a request opens or is retitled with: a bundle's
-// names its riders after the lead id, whatever the draft said.
-func PullTitle(title string, task *ref.Ref) string {
+// PullTitle is the title a request opens or is retitled with. It carries the
+// lead's id through tracker.title whatever the draft said. A bundle's names
+// its riders after that id.
+func PullTitle(title string, task *ref.Ref, titles tasktitle.Template) string {
 	if title == "" || task == nil {
 		return title
+	}
+
+	// with no tracker.title, the form a bundle's title already takes
+	if titles == "" {
+		titles = "{id}: {title}"
+	}
+
+	lead := task.Head()
+	bundled := len(lead.Riders()) > 0
+
+	// the riders tag hangs on the id, so a bundle under a template without
+	// {id} takes BundleTitle's own `<id> (+riders): ` form instead
+	if bundled && !strings.Contains(string(titles), "{id}") {
+		return ref.BundleTitle(title, *task)
+	}
+
+	bare := ref.WithoutRiders(title, lead.ID)
+	if !ref.LeadsWith(bare, lead.ID) && !titles.Applied(bare, lead.ID, lead.Number) {
+		title = titles.Render(lead.ID, lead.Number, bare)
 	}
 
 	return ref.BundleTitle(title, *task)
@@ -104,12 +129,12 @@ func runPREdit(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
-	h, p, task, err := openPullOf(ctx, cmd)
+	h, p, task, titles, err := openPullOf(ctx, cmd)
 	if err != nil {
 		return err
 	}
 
-	return h.EditPull(ctx, strconv.Itoa(p.Number), PullTitle(title, task), body)
+	return h.EditPull(ctx, strconv.Itoa(p.Number), PullTitle(title, task, titles), body)
 }
 
 // readBody reads a PR body from file, - meaning stdin; an empty one is
@@ -205,7 +230,8 @@ func runPRCreate(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	url, err := h.OpenPull(ctx, forge.NewPull{
-		Head: s.Branch, Base: base, Title: PullTitle(cmd.String("title"), s.Task), Body: body,
+		Head: s.Branch, Base: base, Body: body,
+		Title:  PullTitle(cmd.String("title"), s.Task, t.Effective.TitleTemplate),
 		Labels: cmd.StringSlice("label"), Assignees: cmd.StringSlice("assignee"), Draft: cmd.Bool("draft"),
 	})
 	if err != nil {

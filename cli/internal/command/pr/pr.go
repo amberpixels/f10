@@ -106,7 +106,7 @@ func Command() *cli.Command {
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:     "title",
-						Usage:    "the `TITLE`; a bundle's riders are added after the lead id",
+						Usage:    "the `TITLE`; the task id is added unless the title carries it, and a bundle's riders after the lead id",
 						Required: true,
 					},
 					&cli.StringFlag{Name: "body-file", Usage: "the body from `FILE`; - reads stdin", Required: true},
@@ -125,7 +125,7 @@ func Command() *cli.Command {
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:  "title",
-						Usage: "the new `TITLE`; a bundle's riders are added after the lead id",
+						Usage: "the new `TITLE`; the task id is added unless the title carries it, and a bundle's riders after the lead id",
 					},
 					&cli.StringFlag{Name: "body-file", Usage: "the new body from `FILE`; - reads stdin"},
 				},
