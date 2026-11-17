@@ -320,8 +320,10 @@ func (in *DriveInput) startRunnable(
 
 // released: a base lets its dependents start once through, or once it has
 // code of its own, which only a commit or pr step makes with verify green.
+// Under --plan its saved plan is enough, since the dependent's plan designs
+// against that plan and a plan-only run writes no code.
 func (in *DriveInput) released(ctx context.Context, b *DriveRun) bool {
-	if b.through() {
+	if b.through() || in.planReleased(b) {
 		return true
 	}
 
@@ -335,6 +337,13 @@ func (in *DriveInput) released(ctx context.Context, b *DriveRun) bool {
 	}
 
 	return stack.BaseHasCode(ctx, in.Main, b.O.Branch, def)
+}
+
+// planReleased: under --plan, an opened base with a saved plan, ended or
+// not. It must be opened, since the cap's order can reach a dependent before
+// its base, and a dependent opened first finds no base branch to stack on.
+func (in *DriveInput) planReleased(b *DriveRun) bool {
+	return in.Args.PlanOnly && b.opened() && in.Storage.PlanLive(b.Task.Ref.Head().ID)
 }
 
 // markMoved marks a running dependent whose base branch moved past it, read

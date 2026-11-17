@@ -274,7 +274,9 @@ func (in *DriveInput) next(ctx context.Context, r *DriveRun) error {
 
 	skill := skills[r.Pos]
 
-	if b := r.Base; b != nil && b.End != nil && b.End.Code == ui.ExitHalted {
+	// a base that halted after saving its plan still leaves a plan-only
+	// dependent the plan it designs against
+	if b := r.Base; b != nil && b.End != nil && b.End.Code == ui.ExitHalted && !in.planReleased(b) {
 		return endWith(baseHalted(r, skill))
 	}
 
