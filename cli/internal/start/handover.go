@@ -99,42 +99,59 @@ func PrepareHandOver(ctx context.Context, t *target.Target, branch, first string
 			"or put another group first", r.ID, existing.Name)
 	}
 
+	// the branch was made from the discussed task's base, which another
+	// lead would ship on top of
+	rec, err := branchmeta.Load(ctx, h.Main, branch)
+	if err != nil {
+		return HandOver{}, err
+	}
+
+	if rec.AfterBranch != "" {
+		return HandOver{}, fmt.Errorf("%s is built on %s, the base of the task it was opened for: "+
+			"start %s from the main checkout, or put that task's group first", branch, rec.AfterBranch, r.ID)
+	}
+
 	return h, nil
 }
 
 // Run renames the agent and the workspace, then the branch, and records
-// the group's riders. A git failure after the renames puts them back, so a
-// refused hand-off leaves the discussion as it was.
-func (h HandOver) Run(ctx context.Context) ([]string, error) {
+// the group's lead and riders over the discussed task's facts. A failure
+// puts back what it changed; on success, the returned func undoes the
+// whole hand-off, for a drive the daemon then refuses.
+func (h HandOver) Run(ctx context.Context) ([]string, func(context.Context) error, error) {
 	b := agents.Agents(h.Path)
 
 	ren, ok := b.(agentctl.Renamer)
 	if !ok {
-		return nil, fmt.Errorf("%s cannot rename an agent, so this worktree cannot continue as %s", b.Name(), h.Task.ID)
+		return nil, nil, fmt.Errorf("%s cannot rename an agent, so this worktree cannot continue as %s",
+			b.Name(), h.Task.ID)
 	}
 
 	ws, agent, err := discussionAgent(ctx, b, h.Path)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	to := agentctl.AgentName(h.Task.ID, h.Suffix, h.Path)
 
-	undo, err := h.rename(ctx, ren, ws, agent, to)
+	unname, err := h.rename(ctx, ren, ws, agent, to)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	if err := h.moveBranch(ctx); err != nil {
-		return nil, errors.Join(err, undo(ctx))
+	unmove, err := h.moveBranch(ctx)
+	if err != nil {
+		return nil, nil, errors.Join(err, unname(ctx))
 	}
+
+	undo := func(ctx context.Context) error { return errors.Join(unmove(ctx), unname(ctx)) }
 
 	note := "this worktree continues as " + h.Task.Label()
 	if h.Name != h.Branch {
 		note += fmt.Sprintf(": %s renamed to %s", h.Branch, h.Name)
 	}
 
-	return []string{note}, nil
+	return []string{note}, undo, nil
 }
 
 // rename gives the agent and the workspace the task's names, and returns
@@ -173,23 +190,78 @@ func (h HandOver) rename(
 	return back, nil
 }
 
+// leadKeys are the facts a start records for its own task; another lead
+// starts without the discussed task's.
+var leadKeys = []branchmeta.Key{
+	branchmeta.Task, branchmeta.Riders, branchmeta.After, branchmeta.AfterBranch, branchmeta.Tip,
+	branchmeta.Moved, branchmeta.Landed, branchmeta.Agent, branchmeta.Flow, branchmeta.Pace, branchmeta.Drive,
+}
+
 // moveBranch renames the branch, which moves its recorded facts with it,
-// then writes the group's lead and riders over the discussion's.
-func (h HandOver) moveBranch(ctx context.Context) error {
-	if h.Name != h.Branch {
+// then writes the group's lead and riders in place of the discussed task's.
+// It returns what puts the name and the facts back; a failure midway puts
+// them back itself.
+func (h HandOver) moveBranch(ctx context.Context) (func(context.Context) error, error) {
+	kept := map[branchmeta.Key]string{}
+
+	for _, k := range leadKeys {
+		v, err := branchmeta.Get(ctx, h.Main, h.Branch, k)
+		if err != nil {
+			return nil, err
+		}
+
+		kept[k] = v
+	}
+
+	renamed := h.Name != h.Branch
+	if renamed {
 		if _, err := gitx.Exec(ctx, h.Main, "branch", "-m", h.Branch, h.Name); err != nil {
-			return fmt.Errorf("renaming %s to %s: %w", h.Branch, h.Name, err)
+			return nil, fmt.Errorf("renaming %s to %s: %w", h.Branch, h.Name, err)
+		}
+	}
+
+	undo := func(ctx context.Context) error {
+		var errs []error
+
+		for _, k := range leadKeys {
+			if kept[k] == "" {
+				errs = append(errs, branchmeta.UnsetIfSet(ctx, h.Main, h.Name, k))
+			} else {
+				errs = append(errs, branchmeta.Set(ctx, h.Main, h.Name, k, kept[k]))
+			}
+		}
+
+		if renamed {
+			if _, err := gitx.Exec(ctx, h.Main, "branch", "-m", h.Name, h.Branch); err != nil {
+				errs = append(errs, fmt.Errorf("renaming %s back to %s: %w", h.Name, h.Branch, err))
+			}
+		}
+
+		return errors.Join(errs...)
+	}
+
+	if err := h.recordLead(ctx, renamed); err != nil {
+		return nil, errors.Join(err, undo(ctx))
+	}
+
+	return undo, nil
+}
+
+// recordLead writes the group's lead and riders; another lead also drops
+// the discussed task's flow, pace, profile and base facts.
+func (h HandOver) recordLead(ctx context.Context, renamed bool) error {
+	for _, k := range leadKeys {
+		if !renamed && k != branchmeta.Task && k != branchmeta.Riders {
+			continue
+		}
+
+		if err := branchmeta.UnsetIfSet(ctx, h.Main, h.Name, k); err != nil {
+			return err
 		}
 	}
 
 	if len(h.Task.Riders()) > 0 {
 		return recordBundle(ctx, h.Main, h.Name, h.Task)
-	}
-
-	for _, k := range []branchmeta.Key{branchmeta.Task, branchmeta.Riders} {
-		if err := branchmeta.UnsetIfSet(ctx, h.Main, h.Name, k); err != nil {
-			return err
-		}
 	}
 
 	return nil

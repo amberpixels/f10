@@ -51,7 +51,8 @@ func TestHandOverRenamesForTheLead(t *testing.T) {
 		Task: ref.Ref{ID: "GH-2", Bundle: []string{"GH-2", "GH-3"}},
 	}
 
-	if _, err := h.Run(t.Context()); err != nil {
+	_, undo, err := h.Run(t.Context())
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -60,9 +61,9 @@ func TestHandOverRenamesForTheLead(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if rec.Task != "GH-2" || !slices.Equal(rec.Riders, []string{"GH-3"}) || rec.Pace != "fast" ||
+	if rec.Task != "GH-2" || !slices.Equal(rec.Riders, []string{"GH-3"}) || rec.Pace != "" ||
 		len(rec.Discuss) == 0 {
-		t.Errorf("record = %+v, want lead GH-2, rider GH-3, pace and the discussion kept", rec)
+		t.Errorf("record = %+v, want lead GH-2, rider GH-3, the discussed task's pace gone, the discussion kept", rec)
 	}
 
 	if got := strings.TrimSpace(testkit.Git(t, path, "branch", "--show-current")); got != "GH-2/ship" {
@@ -76,6 +77,29 @@ func TestHandOverRenamesForTheLead(t *testing.T) {
 	if m.Spaces[0].Label != "GH-2/ship" {
 		t.Errorf("workspace label = %q, want GH-2/ship", m.Spaces[0].Label)
 	}
+
+	// a drive the daemon refuses puts the whole discussion back
+	if err := undo(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+
+	back, err := branchmeta.Load(t.Context(), main, "GH-1/talk")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if back.Task != "" || len(back.Riders) > 0 || back.Pace != "fast" || len(back.Discuss) == 0 {
+		t.Errorf("record after undo = %+v, want the discussion's own facts", back)
+	}
+
+	if want := agentctl.AgentName(
+		"GH-1",
+		"",
+		path,
+	); !slices.Equal(m.Started, []string{want}) ||
+		m.Spaces[0].Label != "GH-1/talk" {
+		t.Errorf("after undo: agents %q, workspace %q; want the discussion's names", m.Started, m.Spaces[0].Label)
+	}
 }
 
 // The task the discussion opened for keeps its branch and agent, alone.
@@ -85,7 +109,7 @@ func TestHandOverToTheSameTaskRenamesNothing(t *testing.T) {
 
 	h := HandOver{Main: main, Path: path, Branch: "GH-1/talk", Name: "GH-1/talk", Task: ref.Ref{ID: "GH-1"}}
 
-	if _, err := h.Run(t.Context()); err != nil {
+	if _, _, err := h.Run(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -103,7 +127,7 @@ func TestHandOverUndoesTheRenamesOnAGitFailure(t *testing.T) {
 
 	h := HandOver{Main: main, Path: path, Branch: "GH-1/talk", Name: "GH-2/ship", Task: ref.Ref{ID: "GH-2"}}
 
-	if _, err := h.Run(t.Context()); err == nil {
+	if _, _, err := h.Run(t.Context()); err == nil {
 		t.Fatal("want the rename onto an existing branch refused")
 	}
 

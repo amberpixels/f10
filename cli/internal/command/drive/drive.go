@@ -515,7 +515,8 @@ func runWatchPass(ctx context.Context, cmd *cli.Command, t *target.Target) error
 // follows the drive, because the drive prompts this worktree's agent, whose
 // turn is the one running this command.
 func handOver(ctx context.Context, w io.Writer, t *target.Target, argv []string, a drivectl.DriveArgs) (bool, error) {
-	if a.Resume > 0 || len(a.Tasks) == 0 {
+	// the daemon's own drive process runs in this worktree after the hand-off
+	if a.Resume > 0 || len(a.Tasks) == 0 || os.Getenv(daemon.ResumeEnv) != "" {
 		return false, nil
 	}
 
@@ -529,19 +530,31 @@ func handOver(ctx context.Context, w io.Writer, t *target.Target, argv []string,
 			"ends: run f10 start through the daemon, without --foreground")
 	}
 
+	// every id resolves before anything is renamed
+	for _, token := range a.Tasks {
+		id, _ := ref.SplitSuffix(ref.TypedLead(token))
+		if _, err := t.Reference(ctx, id); err != nil {
+			return true, fmt.Errorf("%s: %w", token, err)
+		}
+	}
+
 	h, err := start.PrepareHandOver(ctx, t, branch, a.Tasks[0])
 	if err != nil {
 		return true, err
 	}
 
-	notes, err := h.Run(ctx)
+	notes, undo, err := h.Run(ctx)
 	if err != nil {
 		return true, err
+	}
+
+	if err := drive.HandOff(ctx, w, t, argv); err != nil {
+		return true, errors.Join(err, undo(ctx))
 	}
 
 	for _, n := range notes {
 		fmt.Fprintln(w, n)
 	}
 
-	return true, drive.HandOff(ctx, w, t, argv)
+	return true, nil
 }

@@ -212,7 +212,7 @@ Ctrl+C stops only the following.
 
   The discussion's branch records `branch.<name>.f10-discuss`.
   A flow start run inside that worktree (`/f10:start A+B C`, typed in the agent's pane) continues the conversation there:
-  - its first group takes the worktree and the agent. When the group's lead is not the task the worktree opened for, the branch is renamed to the lead's (`git branch -m`, its recorded facts moving with it), and the agent and the workspace are renamed to the lead's. A lead that already has a branch, or one with subtasks, is refused before anything changes. The worktree's directory keeps its name, because every lookup goes by branch.
+  - its first group takes the worktree and the agent. When the group's lead is not the task the worktree opened for, the branch is renamed to the lead's (`git branch -m`, its recorded facts moving with it), and the agent and the workspace are renamed to the lead's. Another lead starts without the discussed task's recorded base, flow, pace and agent profile. A lead that already has a branch, or one with subtasks, is refused before anything changes, and so is another lead when the discussion's branch was built on a base task's branch. A drive the daemon refuses puts the whole discussion back. The worktree's directory keeps its name, because every lookup goes by branch.
   - the other groups get worktrees of their own.
   - the command returns once the daemon has the drive, instead of following it, because the drive prompts that same agent. The drive holds the first skill until the agent's turn ends, then clears the mark. `--foreground` is refused there.
 - the flow is recorded on the branch as `branch.<name>.f10-flow` in local git config, for `f10 status` and a rerun of `f10 start`.
