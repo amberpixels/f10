@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/gitx"
@@ -24,7 +25,7 @@ const PRLimit = 1000
 // The gh field sets: a person's own requests, other people's, and what a
 // board wants to know about every request.
 const (
-	OwnFields     = "number,title,state,isDraft,headRefName,baseRefName,url,author,createdAt,mergedAt,changedFiles,mergeCommit"
+	OwnFields     = "number,title,state,isDraft,headRefName,baseRefName,url,author,createdAt,updatedAt,mergedAt,changedFiles,mergeCommit"
 	ForeignFields = "number,title,state,url,author,mergedAt,mergedBy"
 	BoardFields   = "number,title,state,isDraft,headRefName,baseRefName,headRefOid,url,author,assignees," +
 		"reviewRequests,reviews,reviewDecision,mergeable,mergeStateStatus,statusCheckRollup," +
@@ -373,9 +374,9 @@ func (p pull) checks() string {
 	return out
 }
 
-// Pulls is every request a person's standup needs: their own, with their
-// commits and force-pushes, and others' they reviewed or merged since
-// since.
+// Pulls is every request a person's standup needs: their own, and others'
+// they reviewed or merged since since. The own requests' commits and
+// force-pushes are PullDetail's, read only for the ones the report shows.
 func (h Host) Pulls(ctx context.Context, login string, since time.Time) ([]PR, error) {
 	if h.glab() {
 		return h.standupMRs(ctx, login, since)
@@ -398,21 +399,60 @@ func (h Host) Pulls(ctx context.Context, login string, since time.Time) ([]PR, e
 		return nil, err
 	}
 
-	out := make([]PR, 0, len(own))
+	return append(own, foreignPulls(login, reviewed, merged)...), nil
+}
 
-	for _, p := range own {
-		if p.Commits, err = h.PullCommits(ctx, p.Number); err != nil {
-			return nil, err
-		}
+// DetailParallel is how many requests PullDetail reads at once.
+const DetailParallel = 8
 
-		if p.ForcePushes, err = h.PRForcePushes(ctx, p.Number, login); err != nil {
-			return nil, err
-		}
+// PullDetail fills the commits and force-pushes of the user's own requests,
+// a few at a time. Each entry of the result is that request's failure, nil
+// where it read; one failure leaves the others read.
+func (h Host) PullDetail(ctx context.Context, prs []*PR, login string, since time.Time) []error {
+	errs := make([]error, len(prs))
+	sem := make(chan struct{}, DetailParallel)
 
-		out = append(out, p)
+	var wg sync.WaitGroup
+
+	for i, p := range prs {
+		wg.Go(func() {
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			errs[i] = h.pullDetail(ctx, p, login, since)
+		})
 	}
 
-	return append(out, foreignPulls(login, reviewed, merged)...), nil
+	wg.Wait()
+
+	return errs
+}
+
+func (h Host) pullDetail(ctx context.Context, p *PR, login string, since time.Time) error {
+	commits, err := h.PullCommits(ctx, p.Number)
+	if err != nil {
+		return err
+	}
+
+	var pushes []ForcePush
+
+	if h.glab() {
+		pushes, err = h.MRForcePushes(ctx, p.Number, since)
+	} else {
+		pushes, err = h.PRForcePushes(ctx, p.Number, login)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	p.Commits, p.ForcePushes = commits, pushes
+
+	if h.glab() {
+		p.Empty = len(commits) == 0
+	}
+
+	return nil
 }
 
 // PullsSince is what a board reads: every open request, and every one
@@ -650,22 +690,6 @@ func (h Host) standupMRs(ctx context.Context, login string, since time.Time) ([]
 		return nil, err
 	}
 
-	out := make([]PR, 0, len(own))
-
-	for _, p := range own {
-		if p.Commits, err = h.PullCommits(ctx, p.Number); err != nil {
-			return nil, err
-		}
-
-		p.Empty = len(p.Commits) == 0
-
-		if p.ForcePushes, err = h.MRForcePushes(ctx, p.Number, since); err != nil {
-			return nil, err
-		}
-
-		out = append(out, p)
-	}
-
 	foreign := foreignPulls(login, asReviewer, merged)
 
 	for i, p := range foreign {
@@ -681,7 +705,7 @@ func (h Host) standupMRs(ctx context.Context, login string, since time.Time) ([]
 		foreign[i].Reviews = reviews
 	}
 
-	return append(out, foreign...), nil
+	return append(own, foreign...), nil
 }
 
 // MRReviews is the notes that count as reviewing: any plain comment, and

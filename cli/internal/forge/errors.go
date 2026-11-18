@@ -2,6 +2,7 @@ package forge
 
 import (
 	"errors"
+	"regexp"
 	"strings"
 )
 
@@ -13,6 +14,9 @@ var (
 	// ErrUnsupported is a host without the feature asked for, such as
 	// GitHub sub-issues or GitLab work items.
 	ErrUnsupported = errors.New("not supported by this host")
+	// ErrTransient is a 5xx from the host's API: a gateway or server error
+	// that a second try may not meet.
+	ErrTransient = errors.New("transient host error")
 )
 
 // An Error is a host CLI exiting non-zero. Its text is the CLI's own stderr,
@@ -46,5 +50,14 @@ func classify(stderr string) error {
 		}
 	}
 
+	if serverError.MatchString(stderr) {
+		return ErrTransient
+	}
+
 	return nil
 }
+
+// serverError is gh's `HTTP 5xx` and glab's `5xx <reason>` status lines.
+var serverError = regexp.MustCompile(
+	`HTTP 5\d\d\b|\b5\d\d (Bad Gateway|Service Unavailable|Gateway Time-?out|Internal Server Error)`,
+)

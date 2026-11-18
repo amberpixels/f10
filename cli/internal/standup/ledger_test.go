@@ -267,3 +267,47 @@ func TestRoundOpenedBeforeThePeriod(t *testing.T) {
 		t.Errorf("activity = %+v, want the round dated at its verdict", task.Activity)
 	}
 }
+
+// A drive that stopped before finish exits non-zero, but the PR a person
+// merged after it counts as shipped, so the drive row agrees with the task's.
+func TestMergedTaskCountsShippedOnItsDrive(t *testing.T) {
+	in := withLedger(input(nil, []HostPR{own(40, "FT-14/x", "main", HostMerged)}),
+		claim(2, "FT-14", ledger.StateSet, &ledger.ClaimPayload{Ship: "done"}),
+	)
+	in.Ledger.Drives = []*drivestore.Record{{
+		Number: 23, Created: at(1),
+		Tasks: []drivestore.Task{
+			{ID: "FT-14", Phase: drivestore.PhaseEnded, Outcome: &drivestore.Outcome{Code: 4}},
+		},
+	}}
+
+	r := Group(in)
+	if task := taskByID(t, r, "FT-14"); task.State != StateShipped {
+		t.Fatalf("state = %q, want shipped", task.State)
+	}
+
+	if want := []Drive{{Number: 23, Tasks: 1, Shipped: 1}}; !slices.Equal(r.Drives, want) {
+		t.Errorf("drives = %+v, want %+v", r.Drives, want)
+	}
+}
+
+// An ask stays blocked while the ledger holds it, and names the first task
+// commit after it, which may have settled it.
+func TestAskNamesALaterCommit(t *testing.T) {
+	ask := claim(3, "FT-8", ledger.StateAsk, &ledger.ClaimPayload{Ship: "blocked", Ask: "1. Fix the mock? [yes | no]"})
+	commits := []Commit{
+		commit("c2", "FT-8/work", "earlier", 2),
+		commit("c5", "FT-8/work", "fix", 5),
+		commit("c6", "FT-8/work", "more", 6),
+	}
+
+	task := taskByID(t, Group(withLedger(input(commits, nil), ask)), "FT-8")
+	if task.Blocked == nil || task.Blocked.LaterCommit != "c5" {
+		t.Errorf("blocked = %+v, want later_commit c5", task.Blocked)
+	}
+
+	task = taskByID(t, Group(withLedger(input(commits[:1], nil), ask)), "FT-8")
+	if task.Blocked == nil || task.Blocked.LaterCommit != "" {
+		t.Errorf("blocked = %+v, want no later commit", task.Blocked)
+	}
+}

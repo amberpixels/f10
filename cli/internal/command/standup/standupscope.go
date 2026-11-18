@@ -45,8 +45,11 @@ func collectTarget(ctx context.Context, t *target.Target, since time.Time) (stan
 		Upkeep: t.Effective.UpkeepPaths,
 	}
 
+	// standup only reads, so a 5xx is safe to retry
 	if h := hostops.OptionalHostOf(t); h != nil {
-		src.Host = &h.Host
+		host := h.Host
+		host.RetryTransient = true
+		src.Host = &host
 	}
 
 	in, err := standup.Collect(ctx, src, since)
@@ -132,4 +135,22 @@ func collectAll(ctx context.Context, targets []*target.Target, since time.Time) 
 	}
 
 	return ins, nil
+}
+
+// detailAll runs the detail pass over every checkout, a few at a time.
+func detailAll(ctx context.Context, ins []standup.Input, from time.Time) {
+	sem := make(chan struct{}, scope.ScopeParallel)
+
+	var wg sync.WaitGroup
+
+	for i := range ins {
+		wg.Go(func() {
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			standup.Detail(ctx, &ins[i], from)
+		})
+	}
+
+	wg.Wait()
 }

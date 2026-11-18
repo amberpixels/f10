@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
@@ -25,9 +26,10 @@ type Source struct {
 	Host   *forge.Host // nil: no host CLI for this checkout
 }
 
-// Collect reads git and, where the checkout has one, the host. A checkout
-// with no host CLI reports commits only; a host CLI that fails is the
-// command's error, never a quiet fall back to commits.
+// Collect reads git and, where the checkout has one, the host's searches.
+// A checkout with no host CLI reports commits only; a login or a search that
+// fails is the command's error, never a quiet fall back to commits. The own
+// PRs' commits and force-pushes wait for Detail.
 func Collect(ctx context.Context, src Source, since time.Time) (Input, error) {
 	email := gitx.Out(ctx, src.Dir, "config", "user.email")
 	if email == "" {
@@ -59,6 +61,7 @@ func Collect(ctx context.Context, src Source, since time.Time) (Input, error) {
 		Commits:       commits,
 		Bases:         bases,
 		UpkeepPaths:   src.Upkeep,
+		defRef:        defRef,
 	}
 
 	if src.Host == nil {
@@ -75,7 +78,38 @@ func Collect(ctx context.Context, src Source, since time.Time) (Input, error) {
 		return Input{}, err
 	}
 
-	prs := hostPRs(pulls)
+	in.Host, in.User.Login, in.PRs = src.Host.Name, login, hostPRs(pulls)
+	in.host, in.pulls = src.Host, pulls
+
+	return in, nil
+}
+
+// Detail reads what Collect left out, for the own PRs updated since from:
+// their commits and force-pushes, then the CI of the commits since from. A
+// push moves a PR's updatedAt, so a PR updated earlier has no activity since.
+// A PR whose read fails is a warning, and the report still prints.
+func Detail(ctx context.Context, in *Input, from time.Time) {
+	if in.host == nil {
+		return
+	}
+
+	var want []*forge.PR
+
+	for i := range in.pulls {
+		p := &in.pulls[i]
+		// a host that gives no update time is read in full
+		if strings.EqualFold(p.Author, in.User.Login) && (p.UpdatedAt.IsZero() || !p.UpdatedAt.Before(from)) {
+			want = append(want, p)
+		}
+	}
+
+	for i, err := range in.host.PullDetail(ctx, want, in.User.Login, from) {
+		if err != nil {
+			in.Warnings = append(in.Warnings, fmt.Sprintf("%s#%d: commits not read: %v", in.Repo, want[i].Number, err))
+		}
+	}
+
+	prs := hostPRs(in.pulls)
 
 	// a force-push's commits are taken against the PR's base: the base f10
 	// recorded, else the host's
@@ -84,31 +118,44 @@ func Collect(ctx context.Context, src Source, since time.Time) (Input, error) {
 			continue
 		}
 
-		base := baseRefs(ctx, src.Dir, cmp.Or(bases[p.Head], p.Base), defRef, def)
+		base := baseRefs(ctx, in.Checkout, cmp.Or(in.Bases[p.Head], p.Base), in.defRef, in.DefaultBranch)
 		if len(base) == 0 {
 			continue
 		}
 
 		for j, fp := range p.ForcePushes {
-			prs[i].ForcePushes[j].SamePatches = samePatches(ctx, src.Dir, base[0], fp.Before, fp.After)
+			prs[i].ForcePushes[j].SamePatches = samePatches(ctx, in.Checkout, base[0], fp.Before, fp.After)
 		}
 	}
 
-	// a parent the host never saw (an unpushed commit) has no CI: unknown,
-	// which classifies as work rather than failing the report
+	in.PRs = prs
+	parentCI(ctx, *in.host, in.Commits, from, in.UpkeepPaths)
+}
+
+// parentCI reads the CI of each CI-fix-shaped commit's parent since from, a
+// few at a time. A parent the host never saw (an unpushed commit) has no CI:
+// unknown, which classifies as work rather than failing the report.
+func parentCI(ctx context.Context, h forge.Host, commits []Commit, from time.Time, upkeep []string) {
+	sem := make(chan struct{}, forge.DetailParallel)
+
+	var wg sync.WaitGroup
+
 	for i, c := range commits {
-		if c.At.Before(since) || !NeedsCI(c, src.Upkeep) {
+		if c.At.Before(from) || !NeedsCI(c, upkeep) {
 			continue
 		}
 
-		if ci, err := src.Host.CommitCI(ctx, c.Parents[0]); err == nil && ci != nil {
-			commits[i].ParentCI = &CI{Red: ci.Red, At: ci.At}
-		}
+		wg.Go(func() {
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			if ci, err := h.CommitCI(ctx, c.Parents[0]); err == nil && ci != nil {
+				commits[i].ParentCI = &CI{Red: ci.Red, At: ci.At}
+			}
+		})
 	}
 
-	in.Host, in.User.Login, in.PRs = src.Host.Name, login, prs
-
-	return in, nil
+	wg.Wait()
 }
 
 // hostPRs is forge's requests in this package's shape, the fields Group reads.

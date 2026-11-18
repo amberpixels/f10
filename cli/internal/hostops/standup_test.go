@@ -55,13 +55,19 @@ func TestStandupPullsGitHub(t *testing.T) {
 	  {"number":9,"title":"theirs","state":"MERGED","url":"u9","author":{"login":"bob"},
 	   "mergedAt":"2026-10-14T10:00:00Z","mergedBy":{"login":"me"}}]`)
 
-	got, err := hostops.NewHost("gh", ".").Pulls(t.Context(), "me", testkit.StandupSince)
+	h := hostops.NewHost("gh", ".")
+
+	got, err := h.Pulls(t.Context(), "me", testkit.StandupSince)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if len(got) != 2 {
 		t.Fatalf("got %d PRs, want own #5 and foreign #9: %+v", len(got), got)
+	}
+
+	if errs := h.PullDetail(t.Context(), []*forge.PR{&got[0]}, "me", testkit.StandupSince); errs[0] != nil {
+		t.Fatal(errs[0])
 	}
 
 	own, foreign := got[0], got[1]
@@ -112,13 +118,19 @@ func TestStandupPullsGitLab(t *testing.T) {
 	  {"body":"requested review from @me","system":true,"created_at":"2026-10-14T08:00:00Z","author":{"username":"bob"}},
 	  {"body":"looks good","system":false,"created_at":"2026-10-14T10:00:00Z","author":{"username":"me"}}]`)
 
-	got, err := hostops.NewHost("glab", ".").Pulls(t.Context(), "me", testkit.StandupSince)
+	h := hostops.NewHost("glab", ".")
+
+	got, err := h.Pulls(t.Context(), "me", testkit.StandupSince)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if len(got) != 2 {
 		t.Fatalf("got %d MRs, want 2: %+v", len(got), got)
+	}
+
+	if errs := h.PullDetail(t.Context(), []*forge.PR{&got[0]}, "me", testkit.StandupSince); errs[0] != nil {
+		t.Fatal(errs[0])
 	}
 
 	if own := got[0]; own.Number != 3 || own.Empty || own.Head != "FT-2/b" ||

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -109,21 +110,15 @@ func runStandup(ctx context.Context, cmd *cli.Command) error {
 	// only the fallback reads the working days, so a broken standup.md
 	// fails no run that would not use it; the day is the person's, so it is
 	// found over every repository at once
-	if period == standup.PeriodLastWorkingDay {
+	if period != standup.PeriodLastWorkingDay {
+		detailAll(ctx, ins, start)
+	} else {
 		workdays, err := scope.ReadWorkdays()
 		if err != nil {
 			return err
 		}
 
-		var activity []time.Time
-		for _, in := range ins {
-			activity = append(activity, standup.ActivityTimes(standup.Group(in))...)
-		}
-
-		start = calendar.LastActiveWorkday(now, workdays, activity)
-		for i := range ins {
-			ins[i].Since = start
-		}
+		start = fallbackStart(ctx, ins, now, from, workdays)
 	}
 
 	reports := make([]standup.Report, len(ins))
@@ -212,4 +207,44 @@ func ParseSince(s string) (time.Time, error) {
 	}
 
 	return p.Start, nil
+}
+
+// fallbackStart settles the last active working day in two passes. The
+// first reads git and the host's searches alone; the detail pass then reads
+// only the PRs updated since that day. More activity can only find a later
+// day, so the second answer is covered, unless the first found none and fell
+// back to the last working day: then the whole window is read.
+func fallbackStart(ctx context.Context, ins []standup.Input, now, from time.Time, w calendar.Workdays) time.Time {
+	first, found := lastActive(ins, now, w)
+
+	if found {
+		detailAll(ctx, ins, first)
+	} else {
+		detailAll(ctx, ins, from)
+	}
+
+	start, _ := lastActive(ins, now, w)
+	for i := range ins {
+		ins[i].Since = start
+	}
+
+	return start
+}
+
+// lastActive is the last active working day over every checkout, and whether
+// it held activity rather than being the last working day by default.
+func lastActive(ins []standup.Input, now time.Time, w calendar.Workdays) (time.Time, bool) {
+	var activity []time.Time
+	for _, in := range ins {
+		activity = append(activity, standup.ActivityTimes(standup.Group(in))...)
+	}
+
+	day := calendar.LastActiveWorkday(now, w, activity)
+	next := day.AddDate(0, 0, 1)
+
+	return day, slices.ContainsFunc(activity, func(t time.Time) bool {
+		t = t.In(now.Location())
+
+		return !t.Before(day) && t.Before(next)
+	})
 }

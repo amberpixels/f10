@@ -151,6 +151,8 @@ func classes(t *testing.T, fx standupFixture, dir string) map[string]string {
 		t.Fatal(err)
 	}
 
+	standup.Detail(t.Context(), &in, fx.Since)
+
 	r := standup.Group(in)
 	out := map[string]string{}
 
