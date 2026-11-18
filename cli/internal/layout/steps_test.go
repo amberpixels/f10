@@ -38,7 +38,7 @@ var (
 
 func shipLoads() [][]string {
 	loads := [][]string{
-		{"capture", "fetch", "investigate", "plan"},
+		{"capture", "fetch"},
 		{"fetch"},
 		{"investigate", "plan"},
 		{"investigate"},

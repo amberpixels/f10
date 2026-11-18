@@ -26,7 +26,7 @@ Running this skill authorizes three actions, for this task's PR only:
 - Extra text is steering ("rerun only", "the lint job is known to flake").
 
 **Run**
-1. Run `f10-load-project.sh ci catchup` first, on every call of this skill.
+1. Run `f10-load-project.sh ci` and `f10-load-project.sh catchup` first, on every call of this skill, as two calls in the same message, because together they pass the Bash output cap.
 2. Follow the **ci** step it prints.
 
 **Exit**

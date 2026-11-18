@@ -10,9 +10,7 @@ import (
 
 // Loads still over the budget, each struck from this list by the FT-570 PR
 // that brings it under, so the list only shrinks.
-var overBudgetLoads = map[string]bool{
-	"ci catchup": true,
-}
+var overBudgetLoads = map[string]bool{}
 
 // Claude Code cuts a Bash output past 30,000 characters, so every load a skill
 // or ship makes stays under 25,000, leaving room for a project's own
