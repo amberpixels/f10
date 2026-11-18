@@ -105,7 +105,14 @@ func RecordKey(argv []string) string {
 	return drivestore.Key(recordArgs(argv))
 }
 
-func ThroughDaemon(ctx context.Context, w io.Writer, t *target.Target, argv []string, a drivectl.DriveArgs) error {
+// ThroughDaemon runs the drive in the daemon. With follow it prints the
+// drive's progress until the drive ends, and Ctrl+C stops only the
+// following. Without follow it returns once the daemon has the drive. A
+// start inside a discussion's worktree needs that, because the drive
+// prompts that same agent, which must end this turn first.
+func ThroughDaemon(
+	ctx context.Context, w io.Writer, t *target.Target, argv []string, a drivectl.DriveArgs, follow bool,
+) error {
 	dir, ver := daemon.RunDir(), buildinfo.Version()
 
 	cwd, err := os.Getwd()
@@ -117,6 +124,30 @@ func ThroughDaemon(ctx context.Context, w io.Writer, t *target.Target, argv []st
 		Args: argv,
 		Dir:  cwd,
 		Env:  daemon.DriveEnv(os.Environ(), t.Effective.DriveEnv),
+	}
+
+	if !follow {
+		e := &daemon.Ensurer{Dir: dir, Version: ver}
+		if _, err := e.Ensure(ctx); err != nil {
+			return err
+		}
+
+		drivectl.WatchProject(ctx, w, t)
+
+		rep, err := daemon.RunDrive(ctx, dir, req)
+		if err != nil {
+			return err
+		}
+
+		n := rep.Drive
+		if n == 0 {
+			n = runningDrive(dir, rep.Log)
+		}
+
+		fmt.Fprintf(w, "drive %d runs in the f10 daemon; this agent gets its first prompt once this turn ends: "+
+			"f10 daemon logs %d -f follows it\n", n, n)
+
+		return nil
 	}
 
 	// a rerun may attach to the drive still running, which reads its cap
@@ -138,44 +169,6 @@ func ThroughDaemon(ctx context.Context, w io.Writer, t *target.Target, argv []st
 	drivectl.WatchProject(ctx, w, t)
 
 	return followDrive(ctx, w, dir, ver, req, nil)
-}
-
-// HandOff starts the drive in the daemon and returns without following it.
-// It serves a start run inside a discussion's worktree: the drive prompts
-// that same agent, which must end this turn first.
-func HandOff(ctx context.Context, w io.Writer, t *target.Target, argv []string) error {
-	dir, ver := daemon.RunDir(), buildinfo.Version()
-
-	cwd, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("getwd: %w", err)
-	}
-
-	e := &daemon.Ensurer{Dir: dir, Version: ver}
-	if _, err := e.Ensure(ctx); err != nil {
-		return err
-	}
-
-	drivectl.WatchProject(ctx, w, t)
-
-	rep, err := daemon.RunDrive(ctx, dir, daemon.DriveCall{
-		Args: argv,
-		Dir:  cwd,
-		Env:  daemon.DriveEnv(os.Environ(), t.Effective.DriveEnv),
-	})
-	if err != nil {
-		return err
-	}
-
-	n := rep.Drive
-	if n == 0 {
-		n = runningDrive(dir, rep.Log)
-	}
-
-	fmt.Fprintf(w, "drive %d runs in the f10 daemon; this agent gets its first prompt once this turn ends: "+
-		"f10 daemon logs %d -f follows it\n", n, n)
-
-	return nil
 }
 
 // setDriveParallel writes a given --parallel into the record --resume names

@@ -22,7 +22,7 @@ function tabs(): Tab[] {
     { path: "/", label: "Runs", show: can(c, P.status) },
     { path: "/asks", label: "Asks", show: can(c, P.listAsks), badge: openAsks.value?.length },
     { path: "/board", label: "Board", show: can(c, P.board) },
-    { path: "/start", label: "Start", show: can(c, P.start) || can(c, P.drive) },
+    { path: "/start", label: "Start", show: can(c, P.start) },
     { path: "/capture", label: "Capture", show: can(c, P.createTask) },
   ].filter((t) => t.show);
 }

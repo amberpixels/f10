@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/amberpixels/f10/cli/internal/drivectl"
 	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/hostops"
@@ -130,22 +131,7 @@ func Prepare(ctx context.Context, t *target.Target, req Request) (StartInput, er
 
 // RefuseFlags refuses the exclusive pairs before anything is looked up.
 func RefuseFlags(req Request) error {
-	if req.Flow != "" && req.Mode != "" {
-		return fmt.Errorf(
-			"--flow %s and --%s are exclusive: --%s stops before ship, which runs the flow",
-			req.Flow,
-			req.Mode,
-			req.Mode,
-		)
-	}
-
-	if strings.TrimSpace(req.After) != "" && strings.TrimSpace(req.Base) != "" {
-		return errors.New(
-			"--base and --after are exclusive: one names a git ref, the other a task to depend on",
-		)
-	}
-
-	return nil
+	return drivectl.RefusePairs(req.Flow, req.Mode, req.After, req.Base)
 }
 
 // startRef is the task the run starts and its suffix: a picked-up PR's one

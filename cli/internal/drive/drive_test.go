@@ -1858,6 +1858,24 @@ func TestDriveExpandsAParent(t *testing.T) {
 		}
 	})
 
+	// one branch would ship the whole umbrella, so a bundle member with open
+	// subtasks is refused, naming them
+	t.Run("a bundle naming a parent", func(t *testing.T) {
+		fx := newDriveFixture(t, "GH-1+GH-5")
+		fx.task("GH-1", tasksource.TaskInfo{Body: "free"}, "")
+		fx.task("GH-5", tasksource.TaskInfo{Body: "the parent"}, "")
+		withChildren(fx, map[string][]stack.ChildRow{
+			"GH-1": {},
+			"GH-5": {{ID: "GH-6"}, {ID: "GH-7", Finished: true}},
+		})
+
+		_, _, err := fx.in.resolveTasks(t.Context())
+		if err == nil ||
+			err.Error() != "GH-5 is a parent of GH-6: start the parent alone, or list the subtasks to bundle" {
+			t.Errorf("err = %v, want the parent refused with its open subtask", err)
+		}
+	})
+
 	t.Run("a range member is not asked", func(t *testing.T) {
 		fx := newDriveFixture(t, "GH-1", "--", "GH-2")
 		fx.task("GH-1", tasksource.TaskInfo{Body: "free"}, "")

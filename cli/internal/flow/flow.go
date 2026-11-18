@@ -5,6 +5,7 @@ package flow
 
 import (
 	"encoding/json"
+	"maps"
 	"slices"
 	"strings"
 )
@@ -182,14 +183,74 @@ var Delivering = []string{"implement", "commit", "push", "pr", "deploy"}
 // Guarded are the entries ship's catchup guard runs before.
 var Guarded = []string{"implement", "pr", "judge"}
 
-// GenericSteps is every generic step a flow entry may name, finish
-// included, which drive runs rather than ship. A label never takes one of these names, so status and
-// stats never show a step that did not run.
-var GenericSteps = []string{
-	"audit", "brainstorm", "capture", "capture-adapter", "catchup", "ci", "cleanup", "commit", "debug",
-	"demo", "deploy", "explain", "fetch", "finish", "handoff", "implement", "investigate", "judge",
-	"plan", "pr", "push", "resolve", "review", "review-ci", "review-host", "review-local", "stale", "standup",
+// A StepClass says where a generic step is loaded, which is what the badge
+// hook needs to tell a ship entry from a step loaded on the way to one.
+type StepClass int
+
+const (
+	// EntryStep is a flow entry ship loads alone, right before it runs.
+	EntryStep StepClass = iota
+	// Planning is loaded before a pipeline runs, never as a pipeline step.
+	Planning
+	// Part is loaded inside an entry and runs under its badge: a review's
+	// parts, the catchup guard, the red-checks path.
+	Part
+	// Own runs only from its own skill, never inside ship.
+	Own
+)
+
+// Steps is every generic step and its class, finish included, which drive
+// runs rather than ship. A new step file fails a test until it has a row.
+var Steps = map[string]StepClass{
+	"implement":       EntryStep,
+	"judge":           EntryStep,
+	"cleanup":         EntryStep,
+	"commit":          EntryStep,
+	"push":            EntryStep,
+	"pr":              EntryStep,
+	"review":          EntryStep,
+	"demo":            EntryStep,
+	"deploy":          EntryStep,
+	"handoff":         EntryStep,
+	"finish":          EntryStep,
+	"capture":         Planning,
+	"capture-adapter": Planning,
+	"fetch":           Planning,
+	"investigate":     Planning,
+	"stale":           Planning,
+	"debug":           Planning,
+	"plan":            Planning,
+	"catchup":         Part,
+	"ci":              Part,
+	"resolve":         Part,
+	"review-ci":       Part,
+	"review-host":     Part,
+	"review-local":    Part,
+	"audit":           Own,
+	"brainstorm":      Own,
+	"explain":         Own,
+	"standup":         Own,
 }
+
+// StepsOf is the steps of one class, sorted.
+func StepsOf(c StepClass) []string {
+	var out []string
+
+	for name, class := range Steps {
+		if class == c {
+			out = append(out, name)
+		}
+	}
+
+	slices.Sort(out)
+
+	return out
+}
+
+// GenericSteps is every generic step a flow entry may name. A label never
+// takes one of these names, so status and stats never show a step that did
+// not run.
+var GenericSteps = slices.Sorted(maps.Keys(Steps))
 
 // MarshalJSON writes the flow as its written entries, labels in brackets.
 func (f Flow) MarshalJSON() ([]byte, error) { return json.Marshal(f.Written()) }

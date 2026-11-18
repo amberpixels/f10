@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { AskSchema, QuestionSchema } from "../../../gen/agents/v1/asks_pb";
 import { RunSchema, RunStatusSchema } from "../../../gen/f10/v1/runs_pb";
 import { AskForm, initialAnswers } from "./Asks";
-import { taskList } from "./Start";
+import { startReply, taskList } from "./Start";
 import { groups } from "./Status";
 
 const ask = create(AskSchema, {
@@ -74,5 +74,16 @@ describe("taskList", () => {
   it("reads ids and a chain", () => {
     expect(taskList("FT-1, FT-2")).toEqual({ ids: ["FT-1", "FT-2"], chain: false });
     expect(taskList("FT-1 -- FT-2")).toEqual({ ids: ["FT-1", "FT-2"], chain: true });
+  });
+});
+
+describe("startReply", () => {
+  it("tells a joined drive from a started one and a discussion", () => {
+    const r = { drive: 4, attached: true, task: "", branch: "" };
+    expect(startReply(r, "FT-1")).toBe("Joined drive 4");
+    expect(startReply({ ...r, attached: false }, "FT-1 FT-2")).toBe("Drive 4 runs FT-1 FT-2");
+    expect(startReply({ drive: 0, attached: false, task: "FT-1", branch: "FT-1/x" }, "FT-1")).toBe(
+      "Started FT-1 on FT-1/x",
+    );
   });
 });

@@ -13,7 +13,7 @@ import (
 )
 
 // finishRecords marks the task finished in every stopped drive record that
-// lists it, so drive list needs no rerun. A failure is a line: the merge
+// lists it, so f10 status --drives shows it finished with no rerun. A failure is a line: the merge
 // already landed.
 func finishRecords(w io.Writer, in FinishInput, branch string) {
 	if in.Root == "" {

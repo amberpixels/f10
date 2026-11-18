@@ -74,3 +74,17 @@ func FirstLine(s string) string {
 
 	return line
 }
+
+// JoinAnd joins items as a sentence does: "a", "a and b", "a, b and c".
+func JoinAnd(items []string) string { return joinLast(items, " and ") }
+
+// JoinOr joins items as a question does: "a", "a or b", "a, b or c".
+func JoinOr(items []string) string { return joinLast(items, " or ") }
+
+func joinLast(items []string, last string) string {
+	if len(items) < 2 {
+		return strings.Join(items, "")
+	}
+
+	return strings.Join(items[:len(items)-1], ", ") + last + items[len(items)-1]
+}

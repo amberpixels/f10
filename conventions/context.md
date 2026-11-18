@@ -48,6 +48,7 @@ Steps come only from it, never from `steps/` read by hand.
    State them once, the prefix included, and suggest `f10 init`, which writes them down.
    Never refuse to run for missing config.
 4. **With no loader**, read `.f10/instructions/` from the main checkout and the worktree, else `~/.f10/<project>/instructions/`, and apply the points above by hand.
+   `layering: replaces` in the worktree's frontmatter drops main's layer.
 5. **Agent profiles.**
    A step that spawns a subagent passes the Agent tool the `model` and `effort` that its profile line's `Agent tool:` part names.
    That line is `<step>.<kind>` when the plan has a kind, else `<step>`, and a line with no `Agent tool:` part passes neither.

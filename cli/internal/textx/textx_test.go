@@ -52,3 +52,25 @@ func TestAge(t *testing.T) {
 		}
 	}
 }
+
+func TestJoin(t *testing.T) {
+	t.Parallel()
+
+	for _, c := range []struct {
+		in      []string
+		and, or string
+	}{
+		{nil, "", ""},
+		{[]string{"a"}, "a", "a"},
+		{[]string{"a", "b"}, "a and b", "a or b"},
+		{[]string{"a", "b", "c"}, "a, b and c", "a, b or c"},
+	} {
+		if got := JoinAnd(c.in); got != c.and {
+			t.Errorf("JoinAnd(%q) = %q, want %q", c.in, got, c.and)
+		}
+
+		if got := JoinOr(c.in); got != c.or {
+			t.Errorf("JoinOr(%q) = %q, want %q", c.in, got, c.or)
+		}
+	}
+}

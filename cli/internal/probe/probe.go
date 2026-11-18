@@ -14,6 +14,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/layout"
+	"github.com/amberpixels/f10/cli/internal/textx"
 )
 
 // A Signal is one detected value plus the evidence that produced it.
@@ -247,8 +248,7 @@ func verifySignals(root string, stack []Signal) []Signal {
 			}
 
 			if len(cmds) == 0 {
-				last := len(b.targets) - 1
-				entries := strings.Join(b.targets[:last], ", ") + " or " + b.targets[last]
+				entries := textx.JoinOr(b.targets)
 				out = append(out, Signal{
 					Value:    "the " + f + " has no " + entries + " " + b.noun + ": pick the ones that lint and test",
 					Evidence: f,

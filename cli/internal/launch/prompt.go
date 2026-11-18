@@ -10,6 +10,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/agents"
 	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/textx"
 )
 
 // PromptAgentAs prompts the task's agent in the worktree at path, falling
@@ -80,7 +81,7 @@ func DiscussionPrompt(d Discussion, note string) string {
 
 	var p strings.Builder
 
-	p.WriteString("Run " + joinAnd(reads) + " and summarise what each asks in a few lines.")
+	p.WriteString("Run " + textx.JoinAnd(reads) + " and summarise what each asks in a few lines.")
 
 	for _, id := range d.Parents {
 		fmt.Fprintf(&p, " Run `f10 task children %s --plain` and show its subtask tree as printed: "+
@@ -116,15 +117,6 @@ func (d Discussion) open() []string {
 	}
 
 	return out
-}
-
-// joinAnd joins items as a sentence does: "a", "a and b", "a, b and c".
-func joinAnd(items []string) string {
-	if len(items) < 2 {
-		return strings.Join(items, "")
-	}
-
-	return strings.Join(items[:len(items)-1], ", ") + " and " + items[len(items)-1]
 }
 
 // pickupPrompt is discussPrompt for a picked-up PR: the task, the PR's

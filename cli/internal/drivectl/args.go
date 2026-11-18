@@ -10,10 +10,12 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 	"github.com/amberpixels/f10/cli/internal/runplan"
+	"github.com/amberpixels/f10/cli/internal/textx"
 )
 
-// A DriveFlag is one of drive's flags. The parser, its refusals, the record
-// match and the usage line all read DriveFlags, so a new flag is one row.
+// A DriveFlag is one of start's flags. Every parse of start's command line
+// reads StartFlags, so a new flag is one row. A flow start reads it through
+// DriveFlags, and a discussion or a pickup through the rows marked Once.
 type DriveFlag struct {
 	Name  string
 	Value string // the value's word in the usage, "" for a switch
@@ -26,26 +28,34 @@ type DriveFlag struct {
 	// so a record is matched without it
 	Tunes bool
 	Many  bool // given once per value
+	// Once is set when a discussion or a PR pickup takes the flag too
+	Once bool
+	// OnceOnly is set for a flag only a discussion or a pickup takes
+	OnceOnly bool
 }
 
-var DriveFlags = []DriveFlag{
-	{Name: "--flow", Value: "NAME"},
-	{Name: "--local", Alt: "--flow"},
-	{Name: "--pace", Value: "NAME", Resume: true},
-	{Name: "--agent", Value: "PROFILE"},
-	{Name: "--model", Value: "MODEL", Alt: "--agent"},
-	{Name: "--plan"},
-	{Name: "--after", Value: "TASK-ID"},
-	{Name: "--base", Value: "BRANCH", Alt: "--after"},
+// StartFlags is every flag f10 start takes.
+var StartFlags = []DriveFlag{
+	{Name: "--flow", Value: "NAME", Once: true},
+	{Name: "--local", Alt: "--flow", Once: true},
+	{Name: "--pace", Value: "NAME", Resume: true, Once: true},
+	{Name: "--agent", Value: "PROFILE", Once: true},
+	{Name: "--model", Value: "MODEL", Alt: "--agent", Once: true},
+	{Name: "--plan", Once: true},
+	{Name: "--after", Value: "TASK-ID", Once: true},
+	{Name: "--base", Value: "BRANCH", Alt: "--after", Once: true},
 	{Name: "--answer", Value: "[ID=]TEXT", Resume: true, Tunes: true, Many: true},
 	{Name: "--every", Value: "DURATION", Resume: true, Tunes: true},
 	{Name: "--parallel", Value: "N", Resume: true, Tunes: true},
 	{Name: "--resume", Value: "N", Resume: true, Tunes: true},
 	{Name: "--foreground", Resume: true, Tunes: true},
-	// the planning arguments the agreed command came from, so a rerun of
-	// a planning run that already agreed follows this drive instead of proposing again
-	{Name: "--planned", Value: "ARGS", Tunes: true},
+	{Name: "--discuss", Once: true, OnceOnly: true},
+	{Name: "--task", Value: "TASK-ID", Once: true, OnceOnly: true},
 }
+
+// DriveFlags are the flags a flow start takes: StartFlags less the ones only
+// a discussion or a pickup takes.
+var DriveFlags = slices.DeleteFunc(slices.Clone(StartFlags), func(f DriveFlag) bool { return f.OnceOnly })
 
 func DriveFlagNamed(name string) (DriveFlag, bool) {
 	i := slices.IndexFunc(DriveFlags, func(f DriveFlag) bool { return f.Name == name })
@@ -55,6 +65,68 @@ func DriveFlagNamed(name string) (DriveFlag, bool) {
 
 	return DriveFlags[i], true
 }
+
+// A FlagValue is one flag a caller builds a start from: a switch when its
+// value is "true", else the name and the value, and left out when empty.
+type FlagValue struct{ Name, Value string }
+
+// AppendFlags appends flags to argv in the order given, each checked against
+// StartFlags, so a caller building a start from fields keeps no table of its
+// own. The order is the caller's because the drive record's key is the
+// command line as written, and a rerun attaches to its drive by that key.
+func AppendFlags(argv []string, flags ...FlagValue) ([]string, error) {
+	for _, fv := range flags {
+		i := slices.IndexFunc(StartFlags, func(f DriveFlag) bool { return f.Name == fv.Name })
+		if i < 0 {
+			return nil, fmt.Errorf("%s is not a start flag", fv.Name)
+		}
+
+		v := strings.TrimSpace(fv.Value)
+
+		switch f := StartFlags[i]; {
+		case v == "" || (f.Value == "" && v == "false"):
+		case f.Value == "" && v == "true":
+			argv = append(argv, f.Name)
+		case f.Value == "":
+			return nil, fmt.Errorf("%s takes no value", f.Name)
+		default:
+			argv = append(argv, f.Name, v)
+		}
+	}
+
+	return argv, nil
+}
+
+// OnceFlagNamed is the row of a flag a discussion or a pickup takes.
+func OnceFlagNamed(name string) (DriveFlag, bool) {
+	i := slices.IndexFunc(StartFlags, func(f DriveFlag) bool { return f.Name == name && f.Once })
+	if i < 0 {
+		return DriveFlag{}, false
+	}
+
+	return StartFlags[i], true
+}
+
+// RefusePairs refuses the exclusive pairs every start shares, worded once:
+// a mode that stops before ship beside a flow, and a base given two ways.
+func RefusePairs(flow, mode, after, base string) error {
+	if flow != "" && mode != "" {
+		return fmt.Errorf(
+			"--flow %s and --%s are exclusive: --%s stops before ship, which runs the flow",
+			flow,
+			mode,
+			mode,
+		)
+	}
+
+	if strings.TrimSpace(after) != "" && strings.TrimSpace(base) != "" {
+		return errAfterAndBase
+	}
+
+	return nil
+}
+
+var errAfterAndBase = errors.New("--after and --base are exclusive: one names a task to depend on, the other a git ref")
 
 // ResumeTunes are the flags --resume N takes to change a drive: the ones
 // that tune it and take a value.
@@ -77,11 +149,7 @@ func flagList(flags []DriveFlag) string {
 		names = append(names, f.Name)
 	}
 
-	if len(names) < 2 {
-		return strings.Join(names, "")
-	}
-
-	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
+	return textx.JoinAnd(names)
 }
 
 // DriveArgs is the command line, parsed by hand so `--` survives.
@@ -101,7 +169,6 @@ type DriveArgs struct {
 	PlanOnly bool   // --plan: every task is planned and none implemented
 	After    string // --after: the one task's base task, over its body's After: line
 	Base     string // --base: the one task's base branch
-	Planned  string // --planned: the planning arguments this command was agreed from
 	Plan     *PlanArgs
 }
 
@@ -111,7 +178,6 @@ type PlanArgs struct {
 	JSON  bool     // --json
 	Hint  bool     // --hint: one line, or nothing
 	Pass  []string // the drive flags to carry onto the proposed command
-	Key   string   // the planning arguments, as --planned records them
 }
 
 func (a *DriveArgs) set(name, value string) error {
@@ -126,7 +192,7 @@ func (a *DriveArgs) set(name, value string) error {
 		return nil
 	case "--after", "--base":
 		if a.After != "" || a.Base != "" {
-			return errors.New("--after and --base are exclusive: one names a task to depend on, the other a git ref")
+			return errAfterAndBase
 		}
 
 		value = strings.TrimSpace(value)
@@ -147,12 +213,6 @@ func (a *DriveArgs) set(name, value string) error {
 		}
 
 		a.Flow = runplan.LocalFlow
-
-		return nil
-	case "--planned":
-		if a.Planned = strings.Join(strings.Fields(value), " "); a.Planned == "" {
-			return errors.New("--planned needs the planning arguments")
-		}
 
 		return nil
 	case "--resume":
@@ -237,12 +297,6 @@ func ParseDriveArgs(args []string) (DriveArgs, error) {
 	a := DriveArgs{Every: DefaultEvery}
 	seen := map[string]bool{}
 
-	if len(args) > 0 {
-		if strings.TrimSpace(args[0]) == "plan" {
-			return parseDrivePlan(args[1:])
-		}
-	}
-
 	for i := 0; i < len(args); i++ {
 		tok := strings.TrimSpace(args[i])
 
@@ -322,8 +376,7 @@ func ParseDriveArgs(args []string) (DriveArgs, error) {
 	case len(a.Tasks) == 0:
 		return DriveArgs{}, errors.New("start needs the tasks: GH-12, GH-12 GH-15, or a range GH-12 -- GH-15")
 	case a.PlanOnly && a.Flow != "":
-		return DriveArgs{}, fmt.Errorf(
-			"--plan and --flow %s are exclusive: --plan stops before ship, which runs the flow", a.Flow)
+		return DriveArgs{}, RefusePairs(a.Flow, "plan", "", "")
 	case (a.After != "" || a.Base != "") && (len(a.Tasks) != 1 || a.Span):
 		return DriveArgs{}, errors.New("--after and --base set one task's base: start that task alone")
 	case a.Span && len(a.Tasks) != 2:
@@ -335,9 +388,10 @@ func ParseDriveArgs(args []string) (DriveArgs, error) {
 	return a, nil
 }
 
-// parseDrivePlan reads `drive plan`: ids or a parent, the drive flags that
-// shape the proposed command, and the plan's own flags.
-func parseDrivePlan(args []string) (DriveArgs, error) {
+// ParseDrivePlan reads `drive plan`'s arguments after the word plan: ids or
+// a parent, the drive flags that shape the proposed command, and the plan's
+// own flags. f10 start never parses them, so `f10 start plan` is a task word.
+func ParseDrivePlan(args []string) (DriveArgs, error) {
 	pa := &PlanArgs{}
 
 	var rest []string
@@ -375,7 +429,7 @@ func parseDrivePlan(args []string) (DriveArgs, error) {
 	switch {
 	case a.Span:
 		return DriveArgs{}, errors.New("drive plan takes ids or a parent, not a range")
-	case a.Resume > 0, len(a.Answers) > 0, a.Fore, a.Planned != "", a.Every != DefaultEvery,
+	case a.Resume > 0, len(a.Answers) > 0, a.Fore, a.Every != DefaultEvery,
 		a.PlanOnly, a.After != "", a.Base != "":
 		return DriveArgs{}, errors.New("drive plan takes ids or a parent, --facts, --json, --hint " +
 			"and the flags that shape a drive: --flow, --local, --pace, --agent, --model and --parallel")
@@ -401,7 +455,6 @@ func parseDrivePlan(args []string) (DriveArgs, error) {
 		}
 	}
 
-	pa.Key = strings.Join(rest, " ")
 	a.Plan = pa
 
 	return a, nil

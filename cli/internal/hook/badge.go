@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 
+	"github.com/amberpixels/f10/cli/internal/flow"
 	"github.com/amberpixels/f10/cli/internal/observe"
 	"github.com/amberpixels/f10/cli/internal/state"
 )
@@ -17,12 +18,13 @@ type badge struct {
 	cwd     string
 }
 
-// planningSteps are loaded before a pipeline runs, never as a pipeline step.
-var planningSteps = []string{"capture", "capture-adapter", "fetch", "investigate", "stale", "debug", "plan"}
-
-// entryParts are loaded inside an entry (a review's parts, the red-checks
-// path's ci and catchup), so they never name the leaf.
-var entryParts = []string{"catchup", "ci", "resolve", "review-ci", "review-host", "review-local"}
+// planningSteps and entryParts never name the leaf: the first load before a
+// pipeline runs, the second inside an entry. Both come from the flow's step
+// table, so a new or split step is classed where its file lands.
+var (
+	planningSteps = flow.StepsOf(flow.Planning)
+	entryParts    = flow.StepsOf(flow.Part)
+)
 
 func (b badge) Observe(ctx context.Context, o observe.Observation) error {
 	if b.session == "" {

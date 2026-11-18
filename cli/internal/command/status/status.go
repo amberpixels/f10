@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/urfave/cli/v3"
@@ -27,11 +28,11 @@ func Command() *cli.Command {
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:  "all",
-				Usage: "every live run on this machine, not only this repo's; with --drives, the done and cancelled drives too",
+				Usage: "every live run on this machine, not only this repo's; with --drives, every drive record, not only the newest 20",
 			},
 			&cli.BoolFlag{
 				Name:  "drives",
-				Usage: "this project's drives, the records f10 start keeps: running and stopped ones",
+				Usage: "this project's drive records, the newest 20, each running, stopped, done or cancelled",
 			},
 			ui.JSONFlag("emit the same runs as JSON"),
 			&cli.BoolFlag{
@@ -108,7 +109,29 @@ func listDrives(ctx context.Context, cmd *cli.Command, all bool) error {
 		return apiclient.Err(err, cmd.Writer, cmd.ErrWriter)
 	}
 
-	apiclient.Print(cmd.Writer, cmd.ErrWriter, res.Msg.GetPrinted())
+	if !cmd.Bool("json") {
+		apiclient.Print(cmd.Writer, cmd.ErrWriter, res.Msg.GetPrinted())
 
-	return nil
+		return nil
+	}
+
+	out := make([]driveJSON, 0, len(res.Msg.GetDrives()))
+	for _, d := range res.Msg.GetDrives() {
+		row := driveJSON{Number: int(d.GetNumber()), Args: d.GetArgs(), State: d.GetState()}
+		if d.GetStarted() != nil {
+			row.Started = d.GetStarted().AsTime().Format(time.RFC3339)
+		}
+
+		out = append(out, row)
+	}
+
+	return ui.JSON(cmd.Writer, out)
+}
+
+// driveJSON is one drive record as status --drives --json prints it.
+type driveJSON struct {
+	Number  int      `json:"number"`
+	Args    []string `json:"args"`
+	State   string   `json:"state"`
+	Started string   `json:"started,omitempty"`
 }

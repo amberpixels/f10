@@ -28,12 +28,32 @@ function useForm() {
 
 const field = (set: (v: string) => void) => (e: Event) => set((e.target as HTMLInputElement).value);
 
+/** taskList reads ids separated by spaces or commas; `--` chains them. */
+export function taskList(raw: string): { ids: string[]; chain: boolean } {
+  const chain = /(^|\s)--(\s|$)/.test(raw);
+  const ids = raw
+    .split(/[\s,]+/)
+    .map((s) => s.trim())
+    .filter((s) => s && s !== "--");
+  return { ids, chain };
+}
+
+/** startReply is what a start says it did. */
+export function startReply(r: { drive: number; attached: boolean; task: string; branch: string }, typed: string) {
+  if (r.attached) return `Joined drive ${r.drive}`;
+  return r.drive ? `Drive ${r.drive} runs ${typed}` : `Started ${r.task} on ${r.branch}`;
+}
+
+// StartForm is f10 start's: one id or several, a range with --, and how far
+// the agents run. A flow start runs as a drive, which opens its tasks after
+// the call. A discussion opens one agent.
 function StartForm() {
   const [project, setProject] = useState(projects.value[0]?.id ?? "");
-  const [task, setTask] = useState("");
+  const [tasks, setTasks] = useState("");
   const [mode, setMode] = useState(StartMode.SHIP);
   const [flow, setFlow] = useState("");
   const [pace, setPace] = useState("");
+  const [parallel, setParallel] = useState("");
   const f = useForm();
 
   return (
@@ -42,17 +62,26 @@ function StartForm() {
       onSubmit={(e) => {
         e.preventDefault();
         void f.run(async () => {
-          const r = await api.runs.start({ project, task, mode, flow, pace });
-          // a flow start runs as a drive, which opens the task after the call
-          return r.drive ? `Drive ${r.drive} runs ${task}` : `Started ${r.task} on ${r.branch}`;
+          const { ids, chain } = taskList(tasks);
+          const r = await api.runs.start({
+            project,
+            token: ids[0] ?? "",
+            tasks: ids.slice(1),
+            chain,
+            mode,
+            flow,
+            pace,
+            parallel: Number(parallel) || 0,
+          });
+          return startReply(r, ids.join(chain ? " -- " : " "));
         });
       }}
     >
-      <h3>Start a task</h3>
+      <h3>Start tasks</h3>
       <ProjectPicker projects={projects.value} value={project} onChange={setProject} />
       <label>
-        Task id
-        <input value={task} onInput={field(setTask)} required />
+        Task ids
+        <input value={tasks} onInput={field(setTasks)} placeholder="FT-1 FT-2, or FT-1 -- FT-2 for a range" required />
       </label>
       <label>
         Mode
@@ -71,6 +100,10 @@ function StartForm() {
           Pace
           <input value={pace} onInput={field(setPace)} placeholder="default" />
         </label>
+        <label>
+          Parallel
+          <input value={parallel} inputMode="numeric" onInput={field(setParallel)} />
+        </label>
       </div>
       {f.error && <p class="error">{f.error}</p>}
       {f.done && <p class="ok">{f.done}</p>}
@@ -81,80 +114,9 @@ function StartForm() {
   );
 }
 
-/** taskList reads ids separated by spaces or commas; `--` chains them. */
-export function taskList(raw: string): { ids: string[]; chain: boolean } {
-  const chain = /(^|\s)--(\s|$)/.test(raw);
-  const ids = raw
-    .split(/[\s,]+/)
-    .map((s) => s.trim())
-    .filter((s) => s && s !== "--");
-  return { ids, chain };
-}
-
-function DriveForm() {
-  const [project, setProject] = useState(projects.value[0]?.id ?? "");
-  const [tasks, setTasks] = useState("");
-  const [flow, setFlow] = useState("");
-  const [pace, setPace] = useState("");
-  const [parallel, setParallel] = useState("");
-  const f = useForm();
-
-  return (
-    <form
-      class="card form"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void f.run(async () => {
-          const { ids, chain } = taskList(tasks);
-          const r = await api.runs.drive({
-            project,
-            tasks: ids.map((id) => ({ id })),
-            chain,
-            flow,
-            pace,
-            parallel: Number(parallel) || 0,
-          });
-          return r.attached ? `Joined drive ${r.drive}` : `Drive ${r.drive || ""} started`;
-        });
-      }}
-    >
-      <h3>Drive tasks</h3>
-      <ProjectPicker projects={projects.value} value={project} onChange={setProject} />
-      <label>
-        Task ids
-        <input value={tasks} onInput={field(setTasks)} placeholder="FT-1 FT-2, or FT-1 -- FT-2 to chain" required />
-      </label>
-      <div class="row">
-        <label>
-          Flow
-          <input value={flow} onInput={field(setFlow)} placeholder="project default" />
-        </label>
-        <label>
-          Pace
-          <input value={pace} onInput={field(setPace)} placeholder="default" />
-        </label>
-        <label>
-          Parallel
-          <input value={parallel} inputMode="numeric" onInput={field(setParallel)} />
-        </label>
-      </div>
-      {f.error && <p class="error">{f.error}</p>}
-      {f.done && <p class="ok">{f.done}</p>}
-      <button type="submit" disabled={f.busy}>
-        {f.busy ? "Starting…" : "Drive"}
-      </button>
-    </form>
-  );
-}
-
 export function Start() {
   const c = caller.value;
-  return (
-    <Section title="Start or drive">
-      {can(c, P.start) && <StartForm />}
-      {can(c, P.drive) && <DriveForm />}
-    </Section>
-  );
+  return <Section title="Start">{can(c, P.start) && <StartForm />}</Section>;
 }
 
 export function Forward(props: { root: string; task: string }) {

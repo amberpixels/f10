@@ -106,7 +106,7 @@ The full pass runs whenever the light pass does not.
 
 A dense sentence is hard to read, so the `prose` and `comments` targets measure density as well as judging it by `conventions/voice.md`.
 The check is `f10-cleanup-check.sh prose <ref | --all> <files>`.
-With the default scope, the ref is the merge base from `git merge-base HEAD "$(f10 pr base)"`, so only the lines the branch changed count.
+With the default scope, the ref is the fork point `f10 pr base --fork-point` prints, the same one `f10 pr diff` uses, so only the lines the branch changed count.
 With a scope given by path, `--all` checks every line.
 
 It flags a sentence that has a semicolon, more than 3 joints or more than 30 words.

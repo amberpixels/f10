@@ -218,16 +218,24 @@ message StartRequest {
   // agent is a profile name; model overrides only the model.
   string agent = 9;
   string model = 10;
-  // note is extra text the agent's prompt carries.
+  // note is extra text a discussion's or a pickup's prompt carries. A flow
+  // start refuses one, because a driven run takes its instructions from the
+  // task.
   string note = 11;
   CallerContext caller = 12;
   // token is the argument as f10 start takes it: a task id with its
   // -suffix, a PR url or #n. When set it wins over task and pr, and task
   // names the task a picked-up PR belongs to.
   string token = 13;
-  // tasks are the other ids a discussion covers, after token: the
-  // discussion opens token's worktree and reads them all.
+  // tasks are the other ids, after token. A discussion opens token's
+  // worktree and reads them all, and a flow start runs them in one drive.
   repeated string tasks = 14;
+  // chain makes a flow start a range: token, then the one id in tasks, and
+  // every id between, as `f10 start A -- B` runs them.
+  bool chain = 15;
+  // parallel caps a flow start's tasks running a skill at once; 0 keeps the
+  // record's or the default.
+  int32 parallel = 16;
 }
 
 message StartResponse {
@@ -244,6 +252,9 @@ message StartResponse {
   int32 drive = 7;
   // log is that drive's log file, which grows until the drive exits.
   string log = 8;
+  // attached is true when the daemon already ran that drive and the call
+  // followed it instead of starting another.
+  bool attached = 9;
 }
 
 // A DriveTask is one task of a drive, with its own agent profile.
@@ -252,6 +263,10 @@ message DriveTask {
   string agent = 2;
 }
 
+// DriveRequest starts or resumes a drive. f10 start sends args. The field
+// form (args unset) is kept for older clients only: a new client calls
+// Start, which runs the same flow start with its closed-task check and
+// plan-only mode. The field form refuses a start of closed tasks.
 message DriveRequest {
   string project = 1;
   repeated DriveTask tasks = 2;
@@ -262,8 +277,9 @@ message DriveRequest {
   string agent = 6;
   string model = 7;
   int32 parallel = 8;
-  // plan_first plans every task before any ships.
-  bool plan_first = 9;
+  // plan_first is refused: a plan-only start is StartRequest with mode
+  // START_MODE_PLAN.
+  bool plan_first = 9 [deprecated = true];
   // args are the drive's arguments as `f10 start` takes them. When set they
   // win over the fields above, so a rerun of a typed command line keys to
   // the record it opened.

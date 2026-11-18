@@ -114,7 +114,6 @@ func (in *DriveInput) openRecord(tasks []DriveTask) error {
 			Agent:    in.Args.Agent,
 			Session:  in.Session,
 			Parallel: in.Parallel,
-			Planned:  in.Args.Planned,
 		}
 
 		for i, t := range tasks {
@@ -340,6 +339,10 @@ func (in *DriveInput) resumeLine() string {
 	return resumeCommand(in.Argv)
 }
 
+// DrivesShown is how many records status --drives lists without --all,
+// newest first.
+const DrivesShown = 20
+
 // DriveList prints the records, newest first. finished reports a row's task
 // finished outside its drive; nil checks nothing.
 func DriveList(
@@ -361,11 +364,9 @@ func DriveList(
 		return nil
 	}
 
-	const shown = 20
-
 	more := 0
-	if !all && len(recs) > shown {
-		more, recs = len(recs)-shown, recs[:shown]
+	if !all && len(recs) > DrivesShown {
+		more, recs = len(recs)-DrivesShown, recs[:DrivesShown]
 	}
 
 	var ids []string

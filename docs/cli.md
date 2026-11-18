@@ -81,7 +81,7 @@ f10 review settle [n] --id <id> --revision <rev>      # leave the declared settl
 f10 review round [task-id] [--json]                   # the findings directory, its latest round and the next, or the decline (exit 3)
 f10 trace trailers --step <step> [--task <id>] [--round n --fixed n --skipped n]   # the Task:, Step: and Review: lines a step's commit ends in; nothing with traces off
 f10 trace state --step <step> [--round n] [--open n] [--asks n] [--task <id>] [--body-file <file>]   # rewrite the hidden state block in the branch's open PR body, or put it into a drafted body; nothing with traces off
-f10 status [id] [--all] [--json | --plain] | --drives [--all]   # --drives: the drive records, running and stopped (--all: every one); else where the run is: a task's in its worktree (bare: the session's task, else the branch's, with that output's --json shape; in the main checkout, a `launched here` tree of what the session started or drove that is still live, nested by `After:` as a parent's children are, task rows under --json), else this session's, every live one, or a row per child of a parent
+f10 status [id] [--all] [--json | --plain] | --drives [--all]   # --drives: the newest 20 drive records, each running, stopped, done or cancelled (--all: every one); else where the run is: a task's in its worktree (bare: the session's task, else the branch's, with that output's --json shape; in the main checkout, a `launched here` tree of what the session started or drove that is still live, nested by `After:` as a parent's children are, task rows under --json), else this session's, every live one, or a row per child of a parent
 f10 standup [--since <time> | --week] [-C <checkout>]... [--group <name>]... [--all] [--json]   # your commits and PRs since your last standup, grouped by project and task
 f10 standup mark --since <time> [--at <time>]      # record a standup as reported: the next one starts where it ended
 f10 board [<window> | --since <window>] [--state] [--remote] [-C <checkout>]... [--group <name>]... [--all] [--detail] [--by person] [--json | --html] [--out <path>]   # what changed today (else the last working day); --state: where every task stands; one project or several
@@ -141,10 +141,10 @@ It changes nothing, so it is always safe to run; `-C` points it at another check
 | `scripts` | every file in the plugin's `bin/`, the `f10` shim included: executable, and inside a Claude Code session resolved from that `bin/` on PATH | `claude plugin update`, or restart the session; for a shadowed `f10`, remove the copy PATH reaches first |
 | `hooks` | the plugin enabled in `settings.json` (a plugin loaded on the session's PATH counts as enabled) and its `hooks/hooks.json`; "registered but needs a restart" when the install changed after this session started (the `<session>.started` marker the SessionStart hook writes), or, outside a session, after the last session start anywhere | `claude plugin enable`, or restart Claude Code |
 | `statusline` | `statusLine` in `settings.json` runs `~/.claude/f10/statusline`, and the link resolves; scoped to the status-line badge | add the segment from [the status line](statusline.md), or start a session to relink it |
-| `herdr` | `herdr` on PATH; scoped to `start`, `forward`, `drive` and `finish` | install Herdr |
+| `herdr` | `herdr` on PATH; scoped to `start`, `forward` and `finish` | install Herdr |
 | `remote` | the tailnet listener's setting, this machine's Tailscale address, the address and web client URL the running daemon bound (asked of a running daemon, never starting one), whether it serves HTTPS, the MCP endpoint when `--mcp` turned it on, and the service file with the program it runs; `not needed here` while the listener is off and no service is installed; scoped to `remote` | `tailscale up`, `f10 daemon logs`, enabling HTTPS certificates in the tailnet's admin console, or `f10 remote install` again when the service's program is gone |
 | `host` | the `gh` or `glab` the remote routes to, installed and `auth status` green for the host; `not needed here` without a remote | `<cli> auth login --hostname <host>` |
-| `driver` | the `f10-drivers` the `.f10/driver` shim runs (the shim itself, or the path or bare name its text gives): its `--version` against the oldest release this binary works with, v0.4.0, the first that takes `--set` on `task create`; a too-old one, or one that predates `--version`, is scoped to `task create --set`; a custom driver is not compared; a tracker that reads only through a driver (Notion, Jira) with no `.f10/driver` is a problem scoped to `task`, `start` and `drive`, and a host-issues tracker without a driver gets no row | `go install github.com/amberpixels/f10-drivers/cmd/f10-drivers@latest`, or add the shim per [the driver contract](driver-contract.md) |
+| `driver` | the `f10-drivers` the `.f10/driver` shim runs (the shim itself, or the path or bare name its text gives): its `--version` against the oldest release this binary works with, v0.4.0, the first that takes `--set` on `task create`; a too-old one, or one that predates `--version`, is scoped to `task create --set`; a custom driver is not compared; a tracker that reads only through a driver (Notion, Jira) with no `.f10/driver` is a problem scoped to `task` and `start`, and a host-issues tracker without a driver gets no row | `go install github.com/amberpixels/f10-drivers/cmd/f10-drivers@latest`, or add the shim per [the driver contract](driver-contract.md) |
 | `project` | `project.md` frontmatter and the user's own files in `~/.f10` (`agents.md`, `paces.md`): no unknown keys or values; `not needed here` outside a project when the user's files are clean | edit the named file; `f10 config` shows every fact |
 
 Inside a session the plugin judged is the one on the session's PATH (a directory marketplace or `--plugin-dir` included); outside one, the install `installed_plugins.json` records.
@@ -188,7 +188,9 @@ Then the [drive](#drives) prompts that agent one skill at a time.
 It sends `/f10:plan <id>` when the flow leads with `plan` and no plan is saved, then `/f10:ship <id>`, then finish when the flow ends in it.
 Several ids, a bundle, a range or a parent start the same way, each task once its base has code, or under `--plan` once its base's plan is saved.
 The command follows the drive until it ends, an agent asks, or a task halts.
-Ctrl+C stops only the following.
+Ctrl+C stops only the following, and the drive goes on in the daemon.
+
+What the start does, case by case:
 
 - each prompt is closed by `--driven` ([driven mode](../modes/driven.md)).
   The marker tells the agent it is prompted from outside, so every question goes through run state and every gap takes its default.
@@ -216,6 +218,13 @@ Ctrl+C stops only the following.
   - its first group takes the worktree and the agent. When the group's lead is not the task the worktree opened for, the branch is renamed to the lead's (`git branch -m`, its recorded facts moving with it), and the agent and the workspace are renamed to the lead's. Another lead starts without the discussed task's recorded base, flow, pace and agent profile. A lead that already has a branch, or one with subtasks, is refused before anything changes, and so is another lead when the discussion's branch was built on a base task's branch. A drive the daemon refuses puts the whole discussion back. The worktree's directory keeps its name, because every lookup goes by branch.
   - the other groups get worktrees of their own.
   - the command returns once the daemon has the drive, instead of following it, because the drive prompts that same agent. The drive holds the first skill until the agent's turn ends, then clears the mark. `--foreground` is refused there.
+- a start whose every task is closed, none with a branch, opens a discussion instead of a drive, because a drive would run nothing.
+  A note says so first, and names the flags the discussion drops: `--plan`, `--flow` and `--pace`.
+  It also names any other task's `:profile` as dropped, because one agent opens.
+  The first task's `:profile` is the discussion's agent unless `--agent` or `--model` names one.
+  The agent's report names the commits that shipped each task and the release that holds them.
+  It also names any open task whose id is one digit off, in case the id was mistyped.
+  A resume, a range or `--answer` goes on with a drive already agreed, so it is never switched.
 - the flow is recorded on the branch as `branch.<name>.f10-flow` in local git config, for `f10 status` and a rerun of `f10 start`.
   With `flow_by_area` declared and no flow named, nothing is recorded and the prompt is `/f10:ship <id>` alone, because ship picks the flow from the task's area
 - a plan the main checkout saved for the task (`.f10/plans/<id>.md`, written by `/f10:plan` after a discussion there) stays in place: every worktree's storage root is main's `.f10/` (or the out-of-tree root), so the worktree's agent reads it there.
@@ -1105,12 +1114,6 @@ An unknown field is refused, so a misspelt one never reads as not sized:
 `with` bundles with that task, whatever the rules say.
 `after` is an id, or `none` to drop the line.
 
-**The agreed command.**
-A command agreed from a proposal runs with `--planned "<args>"`, the planning arguments, which the record keeps beside the command line and the match ignores.
-`f10 drive plan <args>` then finds that drive, while it is neither cancelled nor done.
-It prints `agreed in drive <n>: f10 start …` in place of a fresh proposal, so a rerun follows what was agreed.
-`--json` carries it as `agreed`, and `--hint` prints nothing.
-
 ## Daemon
 
 `f10 daemon` is one process per user that runs drives, so a drive outlives the session that typed it, and watches the projects tasks were started in (**Watch** below).
@@ -1157,11 +1160,11 @@ Then it prints each watched project: its last pass, that pass's exit, and its lo
   | scope | methods |
   |---|---|
   | any token | `Hello` |
-  | `read` | `GetDaemonStatus`, `GetTask`, `GetRunStatus`, `GetBoard`, `WatchEvents`, `ListAsks`, `ListWorkspaces`, `ListAgents`, `GetAgentStatus`, `ListArtifacts`, `GetArtifact`, `ListProjects` |
+  | `read` | `GetDaemonStatus`, `GetTask`, `GetRunStatus`, `GetBoard`, `WatchEvents`, `ListAsks`, `ListWorkspaces`, `ListAgents`, `GetAgentStatus`, `ListArtifacts`, `GetArtifact`, `ListProjects`, `ListDrives` |
   | `answer` | `AnswerAsk` |
   | `steer` | `SendText`, `Forward` |
-  | `start` | `Start`, `Drive`, `CreateTask` |
-  | `finish` | `Finish` |
+  | `start` | `Start`, `Drive`, `CancelDrive`, `CreateTask` |
+  | `finish` | `Finish`, `CloseWorkspace` |
   | socket only | `StopDaemon`, `WatchProject` |
 
   A remote call's environment fields are ignored, because a remote client has no local session to pass.
@@ -1174,7 +1177,7 @@ Then it prints each watched project: its last pass, that pass's exit, and its lo
   - **Runs**: every live run, grouped by project, with why a run stopped and its PR's checks.
   - **Asks**: the open asks, answered in place by tapping an option.
   - **A task**: its flow and a box that sends a command or a note to its agent, as `f10 forward` does (`Forward`). It also shows the plan, the spike report and the handoff. It shows the verdicts, the findings and the demo report. The files are read through `ListArtifacts` and `GetArtifact`, by kind and name, never by path.
-  - **Board**, **Start** (start or drive tasks) and **Capture** (create a task).
+  - **Board**, **Start** (start one task or several, a range, a plan-only run or a discussion) and **Capture** (create a task).
 
   A screen or button that the token's scopes do not allow is hidden.
   Live updates come from `WatchEvents`.

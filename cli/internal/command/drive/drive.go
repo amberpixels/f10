@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/urfave/cli/v3"
@@ -63,7 +62,7 @@ func Command() *cli.Command {
 					"f10 status --drives lists drives, f10 stop stops one")
 			}
 
-			a, err := drivectl.ParseDriveArgs(argv)
+			a, err := drivectl.ParseDrivePlan(argv[1:])
 			if err != nil {
 				return err
 			}
@@ -79,10 +78,6 @@ func Run(ctx context.Context, cmd *cli.Command, argv []string) error {
 	a, err := drivectl.ParseDriveArgs(argv)
 	if err != nil {
 		return err
-	}
-
-	if a.Plan != nil {
-		return errors.New("plan is f10 drive plan's: f10 start takes task ids")
 	}
 
 	return runDrive(ctx, cmd, argv, a)
@@ -109,7 +104,7 @@ func runDrive(ctx context.Context, cmd *cli.Command, argv []string, a drivectl.D
 
 	// the drive outlives this process unless asked to run in it
 	if !a.Fore && daemon.Supported {
-		return drive.ThroughDaemon(ctx, cmd.Writer, t, argv, a)
+		return drive.ThroughDaemon(ctx, cmd.Writer, t, argv, a, true)
 	}
 
 	// a resume runs the record's own command line, with the answers and
@@ -242,17 +237,6 @@ func runDrivePlan(ctx context.Context, cmd *cli.Command, a drivectl.DriveArgs) e
 	switch {
 	case pa.JSON:
 		return writePlanJSON(w, res)
-	case res.Agreed != nil && pa.Hint:
-		return nil
-	case res.Agreed != nil:
-		_, err := fmt.Fprintf(
-			w,
-			"agreed in drive %d: f10 start %s\n",
-			res.Agreed.Number,
-			strings.Join(res.Agreed.Args, " "),
-		)
-
-		return err
 	case pa.Hint:
 		if line := res.Plan.Hint(); line != "" {
 			_, err := fmt.Fprintln(w, line)
@@ -268,22 +252,12 @@ func runDrivePlan(ctx context.Context, cmd *cli.Command, a drivectl.DriveArgs) e
 
 func writePlanJSON(w io.Writer, res drive.PlanResult) error {
 	out := struct {
-		Agreed  int              `json:"agreed,omitempty"`
 		Command string           `json:"command"`
 		Plan    *driveplan.Plan  `json:"plan,omitempty"`
 		Tasks   []driveplan.Task `json:"tasks,omitempty"`
 		Notes   []string         `json:"notes,omitempty"`
 		Saving  string           `json:"saving,omitempty"`
-	}{Notes: res.Notes, Tasks: res.Tasks}
-
-	if res.Agreed != nil {
-		out.Agreed = res.Agreed.Number
-		out.Command = "f10 start " + strings.Join(res.Agreed.Args, " ")
-	} else {
-		out.Plan = &res.Plan
-		out.Command = res.Plan.Command(res.Extra...)
-		out.Saving = res.Plan.Saving()
-	}
+	}{Notes: res.Notes, Tasks: res.Tasks, Plan: &res.Plan, Command: res.Plan.Command(res.Extra...), Saving: res.Plan.Saving()}
 
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
@@ -548,7 +522,7 @@ func handOver(ctx context.Context, w io.Writer, t *target.Target, argv []string,
 		return true, err
 	}
 
-	if err := drive.HandOff(ctx, w, t, argv); err != nil {
+	if err := drive.ThroughDaemon(ctx, w, t, argv, a, false); err != nil {
 		return true, errors.Join(err, undo(ctx))
 	}
 
