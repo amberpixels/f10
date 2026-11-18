@@ -11,11 +11,13 @@ import (
 )
 
 // One rule decides a finished task for drive, status, children and drive
-// list: no branch, no live plan, and closed or archived.
+// list. A branch or a live plan means unfinished. Then the tracker's state
+// decides, and the archive only where the tracker states none.
 func TestFinishedTask(t *testing.T) {
 	cases := []struct {
 		name               string
-		closed, branched   bool
+		closed, stated     bool
+		branched           bool
 		archived, livePlan bool
 		want               bool
 	}{
@@ -26,6 +28,9 @@ func TestFinishedTask(t *testing.T) {
 		{name: "closed, re-planned", closed: true, livePlan: true},
 		{name: "closed with a branch", closed: true, branched: true},
 		{name: "archived with a branch", archived: true, branched: true},
+		{name: "open (stated), archived", stated: true, archived: true},
+		{name: "open (stated), nothing", stated: true},
+		{name: "closed (stated), archived", closed: true, stated: true, archived: true, want: true},
 	}
 
 	for _, c := range cases {
@@ -40,7 +45,7 @@ func TestFinishedTask(t *testing.T) {
 			}
 
 			if got := stack.FinishedTask(
-				tasksource.TaskInfo{Closed: c.closed},
+				tasksource.TaskInfo{Closed: c.closed, Stated: c.stated},
 				root,
 				"GH-1",
 				c.branched,

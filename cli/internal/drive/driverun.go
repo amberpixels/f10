@@ -112,6 +112,7 @@ type driveDeps struct {
 	Tracker stack.Tracker
 	Title   func(ref.Ref) func(context.Context) (string, error)
 	Started func(context.Context, ref.Ref) error // nil when tracker.status declares no started word
+	Landed  start.LandedLookup                   // nil with no host, which keeps a new branch's name as given
 	Finish  func(ctx context.Context, w io.Writer, req DriveFinish) error
 	// Checks reads the checks on branch's open request, with its url; ""
 	// for a branch with none open. nil when the host cannot be reached

@@ -62,8 +62,8 @@ func finishParent(ctx context.Context, w io.Writer, in FinishInput, gone goneErr
 	for _, k := range kids {
 		ids = append(ids, k.ID)
 
-		// drive counts an open subtask with its plan archived as finished, so
-		// the refusal says only the tracker disagrees
+		// a tracker with no state leaves drive to count an archived plan as
+		// finished, so the refusal says only the row disagrees
 		if !strings.EqualFold(k.State, "closed") {
 			reason := k.ID + " is open"
 			if k.Finished {

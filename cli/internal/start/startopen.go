@@ -57,6 +57,9 @@ type StartInput struct {
 	// Started moves a task to tracker.status's started word; nil when none
 	// is declared, or for a PR picked up, whose task someone else started
 	Started func(ctx context.Context, task ref.Ref) error
+	// Landed reads the landed request a branch name was the head of. Nil
+	// skips the check.
+	Landed LandedLookup
 }
 
 // Start runs the flow: the checkout and its agent, the prompt, the report.
@@ -186,7 +189,10 @@ type OpenedTask struct {
 	Dep    *launch.Dependency
 	Plan   string // the task's plan the worktree reads, or "" when none was saved or no agent was started
 	Fresh  bool
-	Notes  []string
+	// NewBranch says this start created the branch, so nothing rooted at
+	// its path (a run state, a record) is a turn on it
+	NewBranch bool
+	Notes     []string
 	// Profile is what the agent was started on, when fresh; a report names
 	// it when it is not the kind's default
 	Profile agentctl.Profile
@@ -266,6 +272,10 @@ func OpenTask(ctx context.Context, in StartInput) (OpenedTask, error) {
 		notes = append(notes, settled.slugNote)
 	}
 
+	if settled.landedNote != "" {
+		notes = append(notes, settled.landedNote)
+	}
+
 	path, notes, err := openWorktree(ctx, in, name, base, dep, existing, notes)
 	if err != nil {
 		return OpenedTask{}, err
@@ -282,7 +292,7 @@ func OpenTask(ctx context.Context, in StartInput) (OpenedTask, error) {
 
 	notes = append(notes, wsNotes...)
 
-	o := OpenedTask{Task: in.Task, Branch: name, Path: path, Ws: ws, Dep: dep}
+	o := OpenedTask{Task: in.Task, Branch: name, Path: path, Ws: ws, Dep: dep, NewBranch: existing.Name == ""}
 
 	agent := agentctl.AgentName(in.Task.ID, in.Suffix, path)
 
@@ -489,6 +499,9 @@ type settledBranch struct {
 	base     baseRef
 	dep      *launch.Dependency
 	existing stack.FoundBranch
+	// landedNote says why the name is numbered: the plain one was a landed
+	// request's head
+	landedNote string
 }
 
 // branchFor settles the branch before anything is created. An open PR's
@@ -525,7 +538,14 @@ func branchFor(ctx context.Context, in StartInput) (settledBranch, error) {
 		return settledBranch{}, err
 	}
 
-	return settledBranch{name: name, slugNote: slugNote, base: base, dep: dep, existing: existing}, nil
+	name, existing, landedNote, err := avoidLanded(ctx, in, name, existing)
+	if err != nil {
+		return settledBranch{}, err
+	}
+
+	return settledBranch{
+		name: name, slugNote: slugNote, landedNote: landedNote, base: base, dep: dep, existing: existing,
+	}, nil
 }
 
 // landedBranchFor names a merged or closed PR's branch as a task start

@@ -40,6 +40,9 @@ type Tracker struct {
 	AllChildren func(ctx context.Context, task ref.Ref) ([]ChildRow, error)
 	Storage     storage.Root       // where a finished task's plan is archived
 	titles      tasktitle.Template // tracker.title, whose prefix comes off each child's title
+	// stated says a child row's state comes from the tracker, as Info's does.
+	// The host's issues state one, and a driver states none.
+	stated bool
 }
 
 // TrackerFor binds the lookups to this target: the driver's `read` for the
@@ -57,6 +60,7 @@ func TrackerFor(t *target.Target) Tracker {
 		},
 		Storage: t.Layout.StorageRoot,
 		titles:  t.Effective.TitleTemplate,
+		stated:  t.Driver() == nil && t.HostIssues(),
 	}
 
 	children := func(keepClosed bool) func(context.Context, ref.Ref) ([]ChildRow, error) {
@@ -78,12 +82,17 @@ func TrackerFor(t *target.Target) Tracker {
 	return tr
 }
 
-// FinishedTask is the one "is this task done with": no branch, no live plan
-// (a re-plan is pending work whatever the tracker says), and closed or its
-// plan archived, which catches a merge whose PR body closed no issue.
+// FinishedTask is the one "is this task done with". A branch or a live plan
+// is pending work, whatever the tracker says. Otherwise the tracker's state
+// decides, because a task may ship in several PRs. Only a tracker with no
+// state leaves it to the archived plan.
 func FinishedTask(info tasksource.TaskInfo, root storage.Root, id string, hasBranch bool) bool {
 	if hasBranch || root.PlanLive(id) {
 		return false
+	}
+
+	if info.Stated {
+		return info.Closed
 	}
 
 	return info.Closed || root.PlanArchived(id)

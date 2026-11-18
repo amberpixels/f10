@@ -94,6 +94,7 @@ func Prepare(ctx context.Context, t *target.Target, req Request) (StartInput, er
 		Title:   worktree.TitleLookup(t, r.Number),
 		Pick:    pick,
 		Note:    note,
+		Landed:  LandedFor(t),
 
 		Discussion: discussion,
 	}
