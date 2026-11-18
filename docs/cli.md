@@ -843,7 +843,9 @@ A cancelled record is never picked up again: the same command line starts a new 
    Each task has at most one base: the `branch.<name>.f10-after` its branch recorded once started, else the `After:` line in its body.
    Where the two disagree, the branch wins, with a note.
    The map is rebuilt on every run, and nothing about it is stored.
-   A base outside the list that is not finished is refused, and so are tasks that wait on each other in a circle, both before anything is created.
+   A base outside the list is stacked on when it has a branch, and is refused when it has none and is not finished.
+   Tasks that wait on each other in a circle are refused too, both before anything is created.
+   A task stacked on a base outside the list ends at its PR with a note, because finish refuses a PR stacked on an unmerged branch and only a listed base parks it until that base lands.
    Within the list the graph sets the order: a base runs first wherever it is listed, and among tasks ready at once the one listed first goes first.
 4. **Per task.**
    A task starts once its base releases it.

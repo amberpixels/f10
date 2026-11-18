@@ -80,3 +80,19 @@ func TestALocalCallRunsInTheCallersEnvironment(t *testing.T) {
 		t.Errorf("env = %v, want the caller's %v", shell.EnvOf(ctx), env)
 	}
 }
+
+// A drive started by a caller with no env of its own (the web client, MCP)
+// carries no session id, so its launch never lands in the last local
+// caller's launches.
+func TestSessionlessDropsSessionIDs(t *testing.T) {
+	t.Parallel()
+
+	env := []string{"F10_SESSION_ID=s1", "CLAUDE_CODE_SESSION_ID=s2", "CLAUDE_CODE_ENTRYPOINT=cli", "PATH=/bin"}
+	if got := sessionless(env); !slices.Equal(got, []string{"CLAUDE_CODE_ENTRYPOINT=cli", "PATH=/bin"}) {
+		t.Errorf("sessionless = %v", got)
+	}
+
+	if len(env) != 4 {
+		t.Errorf("the input was changed: %v", env)
+	}
+}

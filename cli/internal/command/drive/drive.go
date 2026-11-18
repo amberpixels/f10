@@ -147,7 +147,8 @@ func runDrive(ctx context.Context, cmd *cli.Command, argv []string, a drivectl.D
 	drv := t.Driver()
 	h, hostErr := hostops.HostOf(t)
 
-	if fl.Finishes && hostErr != nil {
+	// --plan stops at plan, so a finish in the flow never runs and needs no host
+	if fl.Finishes && !a.PlanOnly && hostErr != nil {
 		return fmt.Errorf("the flow ends in finish, and finish merges through the host: %w", hostErr)
 	}
 

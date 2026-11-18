@@ -750,6 +750,14 @@ func (s *PaceSet) ResolveFlow(flowName string, declared flow.Flow, pace string) 
 		r.Entries = append(r.Entries, e)
 	}
 
+	// finish merges the PR the pr entry opens, so a pace that skips pr skips
+	// the finish too, rather than leaving a flow the pr-before-finish rule refuses
+	if last := len(r.Entries) - 1; last >= 0 && r.Entries[last].Step == "finish" && r.Entries[last].Skipped == "" &&
+		!slices.ContainsFunc(r.Entries, func(e ResolvedEntry) bool { return e.Step == "pr" && e.Skipped == "" }) &&
+		slices.ContainsFunc(declared, func(e flow.Entry) bool { return e.Step == "pr" }) {
+		r.Entries[last].Skipped = "no pr runs at pace " + pace
+	}
+
 	run := r.Run()
 	if len(run) == 0 {
 		return r, fmt.Errorf("pace %s skips every entry of the %s flow", pace, flowName)

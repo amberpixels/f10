@@ -109,7 +109,7 @@ func Drive(ctx context.Context, w io.Writer, in *DriveInput) (err error) {
 		}
 	}
 
-	// a base outside the list was refused unless finished
+	// a base outside the list was refused unless started or finished, and leaves Base nil
 	for _, r := range runs {
 		r.Base = byID[r.Task.Base]
 	}

@@ -266,6 +266,32 @@ func TestPaceSkipsFinish(t *testing.T) {
 	}
 }
 
+// A pace that skips pr skips the finish after it too, since nothing opens
+// the PR finish would merge.
+func TestPaceSkipsPRSkipsFinish(t *testing.T) {
+	t.Parallel()
+
+	s := NewPaceSet()
+	s.Over(
+		map[string]Pace{"nopr": {Steps: map[string]Dials{"pr": {Off: true}}}},
+		func(string, string) Origin { return DeclaredIn("test") },
+	)
+
+	r, err := s.ResolveFlow("default", flowOf(strings.Fields(DefaultFlow)), "nopr")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := strings.Join(r.Run(), " "); got != "plan implement" ||
+		!strings.Contains(r.Entries[3].Skipped, "no pr runs at pace nopr") {
+		t.Errorf("run %q, finish entry %+v", got, r.Entries[3])
+	}
+
+	if bad := s.PaceProblems(map[string]flow.Flow{"default": flow.Of(strings.Fields(DefaultFlow))}); len(bad) != 0 {
+		t.Errorf("problems = %v", bad)
+	}
+}
+
 // A pace that leaves a flow invalid fails, naming the pace and the flow,
 // and shows as a problem at load.
 func TestPaceThatBreaksAFlow(t *testing.T) {

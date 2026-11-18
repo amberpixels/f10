@@ -132,7 +132,9 @@ func (in *DriveInput) open(ctx context.Context, r *DriveRun) error {
 		o.Notes = append(o.Notes, paceNote)
 	}
 
+	// --plan stops at plan, so what the flow says about finish does not apply
 	switch {
+	case in.Args.PlanOnly:
 	case fl.Mixed:
 		o.Notes = append(o.Notes, "no finish: only some of the flows flow_by_area can pick end in finish")
 	case fl.NoFinish:
@@ -140,6 +142,11 @@ func (in *DriveInput) open(ctx context.Context, r *DriveRun) error {
 			o.Notes,
 			"no finish: the flow has no finish entry, so drive stops at ship; add finish to the flow to merge",
 		)
+	}
+
+	fl, stackNote := outsideStack(r, o, fl, in.Args.PlanOnly)
+	if stackNote != "" {
+		o.Notes = append(o.Notes, stackNote)
 	}
 
 	// status reads the finish record as drive finishing the branch. A rerun
@@ -630,4 +637,20 @@ func (in *DriveInput) discussionTurn(ctx context.Context, r *DriveRun) (bool, er
 	}
 
 	return false, branchmeta.UnsetIfSet(ctx, in.Main, r.O.Branch, branchmeta.Discuss)
+}
+
+// outsideStack takes finish off a task stacked on a base the drive does not
+// hold: finish refuses a PR stacked on an unmerged branch, and only a listed
+// base parks it until that base lands, so the task ends at its PR.
+func outsideStack(r *DriveRun, o start.OpenedTask, fl runplan.ShipFlow, planOnly bool) (runplan.ShipFlow, string) {
+	if r.Base != nil || o.Dep == nil || !fl.Finishes || planOnly {
+		return fl, ""
+	}
+
+	fl.Finishes = false
+
+	return fl, fmt.Sprintf(
+		"no finish: stacked on %s, which this drive does not hold; finish %s first, then f10 finish %s",
+		o.Dep.Task, o.Dep.Task, r.Task.Ref.ID,
+	)
 }

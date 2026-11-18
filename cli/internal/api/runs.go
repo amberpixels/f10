@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -350,7 +351,7 @@ func (s *runService) Drive(
 
 	env := daemon.LocalEnv(req, m.GetEnv())
 	if len(env) == 0 {
-		env = driveEnvFor(s.sup, t)
+		env = sessionless(driveEnvFor(s.sup, t))
 	}
 
 	started, err := s.sup.RunDrive(daemon.DriveSpec{
@@ -431,6 +432,24 @@ func driveArgv(m *f10v1.DriveRequest) ([]string, error) {
 
 // driveEnvFor is the environment a drive started without one runs with:
 // the newest local session's, else the daemon's own, allowlisted.
+// driveCallerEnv is callerEnv for a drive. A caller with no env of its own
+// (the web client, MCP) lends the drive no session, so its launch is
+// recorded under no session rather than the last local caller's.
+func driveCallerEnv(sup Supervisor, c *f10v1.CallerContext, t *target.Target) []string {
+	if len(c.GetEnv()) > 0 {
+		return callerEnv(sup, c, t)
+	}
+
+	return sessionless(driveEnvFor(sup, t))
+}
+
+// sessionless drops the variables state.Session reads.
+func sessionless(env []string) []string {
+	return slices.DeleteFunc(slices.Clone(env), func(kv string) bool {
+		return strings.HasPrefix(kv, "F10_SESSION_ID=") || strings.HasPrefix(kv, "CLAUDE_CODE_SESSION_ID=")
+	})
+}
+
 func driveEnvFor(sup Supervisor, t *target.Target) []string {
 	if env := sup.SessionEnv(); len(env) > 0 {
 		return env
@@ -684,7 +703,7 @@ func (s *runService) startDrive(
 		Argv: argv,
 		Dir:  cmp.Or(c.GetCheckout(), c.GetCwd(), t.Dir),
 		Root: t.Layout.StorageRoot.Path(),
-		Env:  callerEnv(s.sup, c, t),
+		Env:  driveCallerEnv(s.sup, c, t),
 	})
 	if err != nil {
 		return nil, err

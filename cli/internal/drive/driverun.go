@@ -200,7 +200,7 @@ type DriveRun struct {
 	O        start.OpenedTask
 	Phase    runPhase
 	Flow     runplan.ShipFlow // the flow this task ships through: its branch's record, else the run's
-	Finishes bool             // drive ends the task with finish: the pace says so, or a spike closes
+	Finishes bool             // drive ends the task with finish: the flow's finish entry, or a spike closes
 	Pos      int              // the index in its skills of the skill in flight, or the next one
 	End      *driveResult
 	// freshAt is when this drive opened the task to start its agent: run
