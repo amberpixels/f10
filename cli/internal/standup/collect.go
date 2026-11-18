@@ -27,7 +27,7 @@ type Source struct {
 }
 
 // Collect reads git and, where the checkout has one, the host's searches.
-// A checkout with no host CLI reports commits only; a login or a search that
+// A checkout with no host CLI reports commits only. A login or a search that
 // fails is the command's error, never a quiet fall back to commits. The own
 // PRs' commits and force-pushes wait for Detail.
 func Collect(ctx context.Context, src Source, since time.Time) (Input, error) {

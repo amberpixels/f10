@@ -15,7 +15,7 @@ var (
 	// GitHub sub-issues or GitLab work items.
 	ErrUnsupported = errors.New("not supported by this host")
 	// ErrTransient is a 5xx from the host's API: a gateway or server error
-	// that a second try may not meet.
+	// that may clear on a second try.
 	ErrTransient = errors.New("transient host error")
 )
 

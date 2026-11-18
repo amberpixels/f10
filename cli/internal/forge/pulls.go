@@ -406,8 +406,8 @@ func (h Host) Pulls(ctx context.Context, login string, since time.Time) ([]PR, e
 const DetailParallel = 8
 
 // PullDetail fills the commits and force-pushes of the user's own requests,
-// a few at a time. Each entry of the result is that request's failure, nil
-// where it read; one failure leaves the others read.
+// a few at a time. Each entry of the result is that request's failure, or nil
+// where it read. One failure leaves the others read.
 func (h Host) PullDetail(ctx context.Context, prs []*PR, login string, since time.Time) []error {
 	errs := make([]error, len(prs))
 	sem := make(chan struct{}, DetailParallel)

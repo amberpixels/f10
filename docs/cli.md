@@ -1331,7 +1331,9 @@ It groups them by project, then task, and gives each task where it ended the per
 It changes nothing and does not fetch: local and remote-tracking branches are read as they are, while PR states come fresh from the host.
 
 **Host reads** come in two passes, so a busy repository answers in seconds.
-The searches run first, then each of your PRs' commits and force-pushes, eight at a time, only for the PRs updated since the period starts, because a push always moves a PR's update time.
+The searches run first.
+Then your PRs' commits and force-pushes are read, eight at a time, only for the PRs updated since the period starts.
+A push always moves a PR's update time, so a PR updated earlier has nothing in the period.
 With no stored standup, the start is settled from git and the searches before the second pass, and settled again after it.
 A host 5xx is retried once per call.
 A login or a search that still fails fails the command, because without them the report has no PRs.

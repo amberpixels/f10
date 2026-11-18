@@ -45,7 +45,7 @@ type Standup struct {
 	Projects []Project `json:"projects"`
 	// Ledger is set when a ledger was read: its half is this machine's alone
 	Ledger *LedgerNote `json:"ledger,omitempty"`
-	// Warnings name what the host failed to give after a retry; the report
+	// Warnings name what the host failed to give after a retry. The report
 	// printed without it
 	Warnings []string `json:"warnings"`
 }

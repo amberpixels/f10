@@ -209,11 +209,10 @@ func ParseSince(s string) (time.Time, error) {
 	return p.Start, nil
 }
 
-// fallbackStart settles the last active working day in two passes. The
-// first reads git and the host's searches alone; the detail pass then reads
-// only the PRs updated since that day. More activity can only find a later
-// day, so the second answer is covered, unless the first found none and fell
-// back to the last working day: then the whole window is read.
+// fallbackStart settles the last active working day in two passes. The first
+// reads git and the host's searches alone, and detail is read from its day.
+// More activity only finds a later day, so the second answer is covered. A
+// first pass with no activity reads the whole window instead.
 func fallbackStart(
 	ins []standup.Input, now, from time.Time, w calendar.Workdays, detail func(from time.Time),
 ) time.Time {
