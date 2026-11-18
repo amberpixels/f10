@@ -72,3 +72,23 @@ func TestIssueReadsBothCLIs(t *testing.T) {
 		t.Errorf("Item = %+v, %v; want the merge request flagged", item, err)
 	}
 }
+
+// A create's number comes from the url the CLI prints last, in every issue
+// url shape IssuePath accepts.
+func TestCreateIssueReadsEveryIssueURL(t *testing.T) {
+	for _, tc := range []struct{ host, out, url, number string }{
+		{"gh", "https://github.com/o/r/issues/7\n", "https://github.com/o/r/issues/7", "7"},
+		{"glab", "Creating issue\nhttps://gitlab.com/g/p/-/issues/8\n", "https://gitlab.com/g/p/-/issues/8", "8"},
+		{"glab", "Creating issue\nhttps://gitlab.com/g/p/-/work_items/9\n", "https://gitlab.com/g/p/-/work_items/9", "9"},
+	} {
+		script(t, map[string]string{
+			"gh issue create --title T --body B":                            tc.out,
+			"glab issue create --title T --description B --no-editor --yes": tc.out,
+		})
+
+		url, number, err := Host{Name: tc.host}.CreateIssue(t.Context(), "T", "B", nil)
+		if err != nil || url != tc.url || number != tc.number {
+			t.Errorf("%s create of %q = %q, %q, %v; want %q, %q", tc.host, tc.out, url, number, err, tc.url, tc.number)
+		}
+	}
+}
