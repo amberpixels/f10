@@ -38,7 +38,7 @@ var (
 
 func shipLoads() [][]string {
 	loads := [][]string{
-		{"capture", "fetch", "investigate", "plan"},
+		{"capture", "fetch"},
 		{"fetch"},
 		{"investigate", "plan"},
 		{"investigate"},
@@ -209,6 +209,13 @@ func TestStepReferences(t *testing.T) {
 
 	if !strings.Contains(shipText.String(), "loads `catchup` in a call of its own") {
 		t.Errorf("%s no longer says the catchup guard loads apart from its entry: update shipLoads with it", ship)
+	}
+
+	if !strings.Contains(shipText.String(), "`capture fetch` and `investigate plan` for a description, as two calls") {
+		t.Errorf(
+			"%s no longer says a description loads `capture fetch` and `investigate plan` apart: update shipLoads with it",
+			ship,
+		)
 	}
 
 	// every name a load or a delegation uses has a step file
