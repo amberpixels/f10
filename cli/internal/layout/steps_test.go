@@ -211,6 +211,13 @@ func TestStepReferences(t *testing.T) {
 		t.Errorf("%s no longer says the catchup guard loads apart from its entry: update shipLoads with it", ship)
 	}
 
+	if !strings.Contains(shipText.String(), "`capture fetch` and `investigate plan` for a description, as two calls") {
+		t.Errorf(
+			"%s no longer says a description loads `capture fetch` and `investigate plan` apart: update shipLoads with it",
+			ship,
+		)
+	}
+
 	// every name a load or a delegation uses has a step file
 	for _, site := range sites {
 		for _, s := range site.steps {

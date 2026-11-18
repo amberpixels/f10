@@ -53,7 +53,7 @@ Deploy has its own confirmation (the **deploy** step).
 
 **Run**
 1. Run `f10-load-project.sh` first, on every call of this skill, naming the steps the input needs:
-   - `capture fetch` and `investigate plan` for a description, as two calls in the same message, because together they pass the Bash output cap
+   - `capture fetch` and `investigate plan` for a description, as two calls in the same message, because together they pass the 25,000 characters a load keeps under the Bash output cap
    - `fetch` for a task id, because a saved plan needs nothing more, and the Arguments item loads the rest when it is missing
    - none for a plan file
 
