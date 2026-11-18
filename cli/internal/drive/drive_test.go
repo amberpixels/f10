@@ -1572,6 +1572,38 @@ func TestDrivePositionCountsTheWorktreesPlan(t *testing.T) {
 	}
 }
 
+// A run state at the worktree's path that says ship done moves an existing
+// branch past ship, but not a branch this start made: that state is an
+// earlier worktree's, left at a path the same branch name gives again.
+func TestDrivePositionIgnoresARunAtANewBranch(t *testing.T) {
+	chain := []string{"plan", "ship", "finish"}
+
+	for _, tc := range []struct {
+		name      string
+		newBranch bool
+		plan      string
+		want      int
+	}{
+		{name: "new branch, plan saved", newBranch: true, plan: "/p/GH-1.md", want: 1},
+		{name: "new branch, no plan", newBranch: true, want: 0},
+		{name: "existing branch", want: 2},
+		{name: "existing branch, fresh agent", plan: "/p/GH-1.md", want: 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fx := newDriveFixture(t, "GH-1")
+			fx.writeRun(t, "done", "", "", "")
+
+			o := start.OpenedTask{Branch: "GH-1", Path: "/code/repo.GH-1", Plan: tc.plan, NewBranch: tc.newBranch}
+			o.Fresh = tc.plan != ""
+
+			pos, err := fx.in.position(t.Context(), o, chain)
+			if err != nil || pos != tc.want {
+				t.Errorf("position = %d, %v; want %d", pos, err, tc.want)
+			}
+		})
+	}
+}
+
 // A range takes every id between its ends; a pull request in it, or a
 // number the tracker does not know, is skipped with a note.
 func TestDriveRangeSkipsWhatIsNotATask(t *testing.T) {
@@ -1602,6 +1634,36 @@ func TestDriveRefusesAListedPullRequest(t *testing.T) {
 
 	if _, _, err := fx.in.resolveTasks(t.Context()); err == nil || !strings.Contains(err.Error(), "pull request") {
 		t.Errorf("err = %v", err)
+	}
+}
+
+// A task the tracker states open is not finished by a plan an earlier PR's
+// finish archived, typed bare or with a suffix for its next PR; a closed one
+// with the same archive is.
+func TestDriveOpenTaskWithAnArchivedPlan(t *testing.T) {
+	for _, c := range []struct {
+		arg    string
+		closed bool
+		want   bool
+	}{
+		{arg: "GH-1"},
+		{arg: "GH-1-rest"},
+		{arg: "GH-1", closed: true, want: true},
+	} {
+		t.Run(fmt.Sprintf("%s closed=%v", c.arg, c.closed), func(t *testing.T) {
+			fx := newDriveFixture(t, c.arg)
+			fx.task("GH-1", tasksource.TaskInfo{Body: "x", Closed: c.closed, Stated: true}, "")
+			testkit.WritePlan(t, filepath.Join(fx.in.Tracker.Storage.Archive(), "GH-1.md"))
+
+			tasks, _, err := fx.in.resolveTasks(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if len(tasks) != 1 || tasks[0].finished != c.want {
+				t.Errorf("tasks = %+v, want finished %v", tasks, c.want)
+			}
+		})
 	}
 }
 

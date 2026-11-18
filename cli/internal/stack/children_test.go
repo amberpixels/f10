@@ -15,7 +15,8 @@ import (
 )
 
 // GitHub sub-issues come back open only, in the project's id format, with
-// the After: base resolved, the labels carried and the archive read.
+// the After: base resolved and the labels carried; an open one whose earlier
+// PR archived a plan is still unfinished, since the host states it open.
 func TestChildrenFromGitHub(t *testing.T) {
 	f := testkit.NewFakes(t)
 	tg := testkit.ChildTarget(t, "gh")
@@ -52,8 +53,8 @@ func TestChildrenFromGitHub(t *testing.T) {
 		t.Errorf("FT-73 = %+v", r)
 	}
 
-	if !rows[2].Finished || rows[0].Finished {
-		t.Errorf("finished = %v %v, want only the archived FT-75", rows[0].Finished, rows[2].Finished)
+	if rows[0].Finished || rows[2].Finished {
+		t.Errorf("finished = %v %v, want neither: both are open", rows[0].Finished, rows[2].Finished)
 	}
 }
 

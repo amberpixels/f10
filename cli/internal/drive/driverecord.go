@@ -460,14 +460,14 @@ func RowFinishedFor(ctx context.Context, t *target.Target) func(string) bool {
 }
 
 // finishedLazily is FinishedTask with its reads made lazily: the tracker is
-// asked only when no branch, live plan or archived plan already decides.
+// asked only when no branch or live plan already decides.
 func finishedLazily(root storage.Root, id string, branched func() (bool, error), info func() tasksource.TaskInfo) bool {
 	if b, err := branched(); err != nil || b {
 		return false
 	}
 
 	var ti tasksource.TaskInfo
-	if !root.PlanLive(id) && !root.PlanArchived(id) {
+	if !root.PlanLive(id) {
 		ti = info()
 	}
 

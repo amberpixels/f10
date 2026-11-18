@@ -79,11 +79,16 @@ func TrackerFor(t *target.Target) Tracker {
 }
 
 // FinishedTask is the one "is this task done with": no branch, no live plan
-// (a re-plan is pending work whatever the tracker says), and closed or its
-// plan archived, which catches a merge whose PR body closed no issue.
+// (a re-plan is pending work whatever the tracker says), then the tracker's
+// state where it states one, since a task may ship in several PRs; only a
+// tracker with no state leaves it to the archived plan.
 func FinishedTask(info tasksource.TaskInfo, root storage.Root, id string, hasBranch bool) bool {
 	if hasBranch || root.PlanLive(id) {
 		return false
+	}
+
+	if info.Stated {
+		return info.Closed
 	}
 
 	return info.Closed || root.PlanArchived(id)

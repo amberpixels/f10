@@ -95,6 +95,7 @@ func (in *DriveInput) open(ctx context.Context, r *DriveRun) error {
 		ProfileFlagged: task.flagged,
 		Progress:       in.Out,
 		FlowKept:       true,
+		Landed:         in.Landed,
 	})
 	if err != nil {
 		return err
@@ -225,6 +226,18 @@ func (in *DriveInput) keepPace(
 // worktree reads counts as plan done, so driven ship takes it rather than
 // planning again.
 func (in *DriveInput) position(ctx context.Context, o start.OpenedTask, skills []string) (int, error) {
+	pos := 0
+
+	if i := slices.Index(skills, "plan"); i >= 0 && o.Plan != "" {
+		pos = i + 1
+	}
+
+	// a run state at a new branch's path is an earlier worktree's, one the
+	// same name left behind
+	if o.NewBranch {
+		return pos, nil
+	}
+
 	last, err := branchmeta.Get(ctx, in.Main, o.Branch, branchmeta.Drive)
 	if err != nil {
 		return 0, fmt.Errorf("reading where the drive left %s: %w", o.Branch, err)
@@ -234,12 +247,6 @@ func (in *DriveInput) position(ctx context.Context, o start.OpenedTask, skills [
 		if i := slices.Index(skills, last); i >= 0 {
 			return i + 1, nil
 		}
-	}
-
-	pos := 0
-
-	if i := slices.Index(skills, "plan"); i >= 0 && o.Plan != "" {
-		pos = i + 1
 	}
 
 	run, err := in.run(o.Path)

@@ -150,10 +150,11 @@ func runDrive(ctx context.Context, cmd *cli.Command, argv []string, a drivectl.D
 	var (
 		pullOf   func(context.Context, string) (forge.PR, error)
 		checksOf func(context.Context, string) (forge.HeadChecks, string, error)
+		landed   start.LandedLookup
 	)
 
 	if hostErr == nil {
-		pullOf, checksOf = h.PR, h.OpenChecks
+		pullOf, checksOf, landed = h.PR, h.OpenChecks, start.LandedVia(h.Host)
 	}
 
 	in := &drive.DriveInput{
@@ -184,6 +185,7 @@ func runDrive(ctx context.Context, cmd *cli.Command, argv []string, a drivectl.D
 		Tracker:         stack.TrackerFor(t),
 		Title:           func(r ref.Ref) func(context.Context) (string, error) { return worktree.TitleLookup(t, r.Number) },
 		Started:         start.StartedMove(t),
+		Landed:          landed,
 		Record:          drive.RecordAt,
 		Finish: func(ctx context.Context, w io.Writer, req drive.DriveFinish) error {
 			fin, err := drive.DriveFinishInput(t, main, h, req)

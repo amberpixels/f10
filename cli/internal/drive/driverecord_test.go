@@ -594,17 +594,20 @@ func TestTaskStandingWaiting(t *testing.T) {
 }
 
 // drive list decides a row by FinishedTask, asking the tracker only when the
-// branch and the plans dir leave it open.
+// branch and the live plan leave it open; an archived plan does not, since
+// an open task may ship another PR.
 func TestFinishedLazily(t *testing.T) {
 	cases := []struct {
 		name                     string
 		branched, archived, live bool
-		closed, wantInfo, want   bool
+		closed, stated           bool
+		wantInfo, want           bool
 	}{
-		{name: "closed, nothing on disk", closed: true, wantInfo: true, want: true},
-		{name: "open, nothing on disk", wantInfo: true},
+		{name: "closed, nothing on disk", closed: true, stated: true, wantInfo: true, want: true},
+		{name: "open, nothing on disk", stated: true, wantInfo: true},
 		{name: "branched", branched: true, closed: true},
-		{name: "archived", archived: true, want: true},
+		{name: "archived, no state", archived: true, wantInfo: true, want: true},
+		{name: "archived, open", archived: true, stated: true, wantInfo: true},
 		{name: "re-planned", archived: true, live: true, closed: true},
 	}
 
@@ -622,7 +625,10 @@ func TestFinishedLazily(t *testing.T) {
 			asked := false
 			got := finishedLazily(root, "GH-1",
 				func() (bool, error) { return c.branched, nil },
-				func() tasksource.TaskInfo { asked = true; return tasksource.TaskInfo{Closed: c.closed} })
+				func() tasksource.TaskInfo {
+					asked = true
+					return tasksource.TaskInfo{Closed: c.closed, Stated: c.stated}
+				})
 
 			if got != c.want || asked != c.wantInfo {
 				t.Errorf("finishedLazily = %v, tracker asked %v; want %v, %v", got, asked, c.want, c.wantInfo)
