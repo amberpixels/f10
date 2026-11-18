@@ -372,7 +372,11 @@ func (h Host) SetIssueOpen(ctx context.Context, number string, open bool) error 
 	return err
 }
 
-var issueNumberRe = regexp.MustCompile(`/issues/(\d+)\b`)
+// IssuePath is an issue's url path before its number, on GitHub and on GitLab,
+// which prints work items where it used to print issues.
+const IssuePath = `(?:-/)?(?:issues|work_items)/`
+
+var issueNumberRe = regexp.MustCompile(`/` + IssuePath + `(\d+)\b`)
 
 // CreateIssue returns the new issue's url and number, read from the url the
 // CLI prints: a list query afterwards could find another create's issue.

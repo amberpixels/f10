@@ -5,10 +5,12 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	"github.com/amberpixels/f10/cli/internal/forge"
 )
 
 var (
-	issueURL = regexp.MustCompile(`https?://\S+?/(?:-/)?issues/\d+`)
+	issueURL = regexp.MustCompile(`https?://\S+?/` + forge.IssuePath + `\d+`)
 	prURL    = regexp.MustCompile(`https?://\S+?/(?:pull|(?:-/)?merge_requests)/\d+`)
 	// `[main 1a2b3c4] subject`, `[main (root-commit) 1a2b3c4] subject`,
 	// `[detached HEAD 1a2b3c4] subject`

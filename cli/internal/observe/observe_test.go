@@ -62,6 +62,8 @@ func TestFromBashCommandShapes(t *testing.T) {
 		{"path to the script", "/plugins/f10/bin/f10-load-project.sh implement", "=== f10 project @ /x ===\n", []string{"step_started"}},
 		{"commit text in an echo is not a commit", "echo git commit", commit, nil},
 		{"gh issue view is not a create", "gh issue view 12", "https://github.com/acme/app/issues/12\n", nil},
+		{"glab issue create", "glab issue create -t T", "https://gitlab.com/acme/app/-/issues/3\n", []string{"issue_created"}},
+		{"glab issue create as a work item", "glab issue create -t T", "https://gitlab.com/acme/app/-/work_items/3\n", []string{"issue_created"}},
 		{"glab pr is not glab's word", "glab pr create", "https://gitlab.com/acme/app/-/merge_requests/1\n", nil},
 		{"f10 without finish", "f10 status FT-12", "", nil},
 		{"f10 pr create", "f10 pr create --title T --body-file b.md", "https://github.com/acme/app/pull/4\n", []string{"pr_created"}},

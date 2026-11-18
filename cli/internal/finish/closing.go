@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"regexp"
 
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ref"
 )
 
 // issueRef is an issue by `#n` or by its url; the number's pattern goes in
 // place of %[1]s.
-const issueRef = `(#%[1]s|https?://\S+/(?:issues|work_items)/%[1]s)\b`
+const issueRef = `(#%[1]s|https?://\S+/` + forge.IssuePath + `%[1]s)\b`
 
 // closingKeyword is GitHub's and GitLab's closing keywords before an issue.
 // Pickup reads with the same pattern, so what finish keeps open is what it finds.
