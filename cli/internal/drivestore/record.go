@@ -32,9 +32,6 @@ type Record struct {
 	// Parallel is the cap on tasks running a skill at once, as the drive
 	// took it; a rerun or a resume keeps it unless it passes --parallel
 	Parallel int `yaml:"parallel,omitempty"`
-	// Planned is the planning arguments the drive's command was agreed from
-	// (drive plan), so the same planning call follows this drive
-	Planned string `yaml:"planned,omitempty"`
 	// Answers are given and not yet taken, by task id, "" for the bare one
 	Answers  map[string]string `yaml:"answers,omitempty"`
 	Answered []Answer          `yaml:"answered,omitempty"`
@@ -255,25 +252,6 @@ func Find(root string, args []string) (*Record, error) {
 
 	for _, r := range recs {
 		if r.Cancelled == nil && !r.Done() && r.Key() == key {
-			return r, nil
-		}
-	}
-
-	return nil, nil //nolint:nilnil // none is not an error
-}
-
-// FindPlanned is the newest live record agreed from the planning
-// arguments, nil for none.
-func FindPlanned(root, planned string) (*Record, error) {
-	recs, err := List(root)
-	if err != nil {
-		return nil, err
-	}
-
-	key := Key(strings.Fields(planned))
-
-	for _, r := range recs {
-		if r.Cancelled == nil && !r.Done() && r.Planned != "" && Key(strings.Fields(r.Planned)) == key {
 			return r, nil
 		}
 	}

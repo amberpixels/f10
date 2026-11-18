@@ -139,19 +139,15 @@ func commitsSince(ctx context.Context, dir string, paths []string, since time.Ti
 
 var changeRe = regexp.MustCompile(`(?im)^change:\s*(\S+)`)
 
-// TrailerTask is a bundle's lead from Task:, else the id a Change: names.
+// TrailerTask is the task raw trailer text names, as regression.TrailerTask
+// reads it.
 func TrailerTask(trailers string) string {
-	if tasks := trace.Parse(trailers).Tasks; len(tasks) > 0 {
-		return tasks[0]
+	var changes []string
+	for _, m := range changeRe.FindAllStringSubmatch(trailers, -1) {
+		changes = append(changes, m[1])
 	}
 
-	if m := changeRe.FindStringSubmatch(trailers); m != nil {
-		id, _, _ := strings.Cut(m[1], ".")
-
-		return id
-	}
-
-	return ""
+	return regression.TrailerTask(trace.Parse(trailers).Tasks, changes)
 }
 
 // addedLines sums numstat's first column, with the files it counted; a

@@ -23,7 +23,6 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/lookaround"
 	"github.com/amberpixels/f10/cli/internal/seam"
-	"github.com/amberpixels/f10/cli/internal/start"
 	"github.com/amberpixels/f10/cli/internal/target"
 )
 
@@ -456,20 +455,21 @@ func TestFlowStartArgv(t *testing.T) {
 	}
 }
 
-// A flow start of closed tasks reaches Prepare as a discussion with no flow
-// or pace, which RefuseFlags would refuse beside --discuss.
-func TestClosedStartAsDiscussion(t *testing.T) {
-	req := asDiscussion(start.Request{Token: "GH-1", Mode: launch.ModePlan, Flow: "local", Pace: "fast", After: "GH-7"})
-	if req.Mode != launch.ModeDiscuss || req.Flow != "" || req.Pace != "" || req.After != "GH-7" {
-		t.Errorf("request = %+v", req)
+// A Start with chain runs a range, and with parallel caps the drive, in the
+// argv the CLI would type for the same start.
+func TestFlowStartChainAndParallel(t *testing.T) {
+	argv, flow, err := flowStart(t.Context(), nil,
+		&f10v1.StartRequest{Tasks: []string{"GH-4"}, Chain: true, Parallel: 3, Pace: "fast"}, "GH-1", "", "")
+	if err != nil || !flow {
+		t.Fatalf("flow = %v, %v", flow, err)
 	}
 
-	if err := start.RefuseFlags(req); err != nil {
-		t.Errorf("the discussion is refused: %v", err)
+	if got := strings.Join(argv, " "); got != "GH-1 -- GH-4 --pace fast --parallel 3" {
+		t.Errorf("argv = %q", got)
 	}
 
-	m := &f10v1.StartRequest{Flow: "local", Pace: "fast"}
-	if got := strings.Join(droppedFlags(m, launch.ModePlan), ", "); got != "--plan, --flow local, --pace fast" {
-		t.Errorf("dropped = %q", got)
+	if _, _, err := flowStart(t.Context(), nil,
+		&f10v1.StartRequest{Tasks: []string{"GH-2", "GH-3"}, Chain: true}, "GH-1", "", ""); err == nil {
+		t.Error("a chain of three ids was taken")
 	}
 }

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/amberpixels/f10/cli/internal/daemon"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/tasksource"
@@ -53,6 +55,11 @@ func TestMatchShipped(t *testing.T) {
 
 	if none, newest := matchShipped(log, "FT", map[string]bool{"FT-7": true}); none.Shipped != nil || newest != "" {
 		t.Errorf("a task nothing names shipped %q", none.Shipped)
+	}
+	// a follow-up PR's commit names its task by Change: alone
+	change := strings.Join([]string{"eeee", "ee", "Tidy the docs", "", "FT-9.2"}, "\x1f") + "\x1e\n"
+	if got, _ := matchShipped(change, "FT", map[string]bool{"FT-9": true}); len(got.Shipped) != 1 {
+		t.Errorf("a Change: FT-9.2 commit shipped %q, want it counted for FT-9", got.Shipped)
 	}
 }
 
@@ -107,12 +114,50 @@ func TestClosedStart(t *testing.T) {
 }
 
 func TestSwitchNote(t *testing.T) {
-	if got := SwitchNote([]string{"GH-1"}, []string{"--plan"}); got !=
+	if got := SwitchNote([]string{"GH-1"}, []string{"--plan"}, ""); got !=
 		"GH-1 is closed: opening a discussion instead of running the flow (--plan dropped)" {
 		t.Errorf("one = %q", got)
 	}
 
-	if got := SwitchNote([]string{"GH-1", "GH-2"}, nil); !strings.HasPrefix(got, "GH-1, GH-2 are closed:") {
+	if got := SwitchNote([]string{"GH-1", "GH-2"}, nil, ""); !strings.HasPrefix(got, "GH-1, GH-2 are closed:") {
 		t.Errorf("two = %q", got)
+	}
+
+	if got := SwitchNote([]string{"GH-1"}, nil, "opus"); got !=
+		"GH-1 is closed: opening a discussion instead of running the flow, on the opus profile" {
+		t.Errorf("profile = %q", got)
+	}
+}
+
+// A closed flow start keeps its base and the first task's :profile as the
+// discussion's agent, and names the flags and other profiles it drops.
+func TestSwitchKeepsBaseAndProfile(t *testing.T) {
+	a, err := drivectl.ParseDriveArgs([]string{"GH-1:opus", "GH-2:sonnet", "--plan", "--pace", "fast"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := switchProfile(a); got != "opus" {
+		t.Errorf("profile = %q, want opus", got)
+	}
+
+	if got := switchDropped(a); !slices.Equal(got, []string{"--plan", "--pace fast", "GH-2:sonnet"}) {
+		t.Errorf("dropped = %q", got)
+	}
+
+	a, err = drivectl.ParseDriveArgs([]string{"GH-1:opus", "--agent", "haiku", "--after", "GH-7"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := switchProfile(a); got != "" {
+		t.Errorf("profile = %q, want none beside the run-wide haiku", got)
+	}
+
+	// the daemon's drive process never switches: its caller already checked
+	t.Setenv(daemon.ResumeEnv, "1")
+
+	if sw := ClosedSwitch(t.Context(), nil, a); sw != nil {
+		t.Errorf("switched in the drive process: %+v", sw)
 	}
 }

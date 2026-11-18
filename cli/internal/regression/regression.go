@@ -182,13 +182,7 @@ func CommitTask(ctx context.Context, dir, prefix, sha string) (string, error) {
 		return "", err
 	}
 
-	if ids := trailers[lore.TrailerTask]; len(ids) > 0 {
-		return ids[0], nil
-	}
-
-	if ids := trailers[lore.TrailerChange]; len(ids) > 0 {
-		id, _, _ := strings.Cut(ids[0], ".")
-
+	if id := TrailerTask(trailers[lore.TrailerTask], trailers[lore.TrailerChange]); id != "" {
 		return id, nil
 	}
 
@@ -197,6 +191,29 @@ func CommitTask(ctx context.Context, dir, prefix, sha string) (string, error) {
 	}
 
 	return SubjectTask(prefix, gitx.Out(ctx, dir, "show", "-s", "--format=%s", sha, "--")), nil
+}
+
+// TrailerTask is the task a commit's trailers name: a bundle's lead from
+// Task:, else the task a Change: names, its PR's .n cut off; "" for none.
+// Every reader of commit trailers calls it, so none tells a different owner.
+func TrailerTask(tasks, changes []string) string {
+	if len(tasks) > 0 {
+		return tasks[0]
+	}
+
+	if len(changes) > 0 {
+		return ChangeTask(changes[0])
+	}
+
+	return ""
+}
+
+// ChangeTask is the task a Change: trailer's value names: `FT-9.2`, a
+// task's second PR, is FT-9.
+func ChangeTask(change string) string {
+	id, _, _ := strings.Cut(strings.TrimSpace(change), ".")
+
+	return id
 }
 
 // SubjectTask is the id a commit subject opens with, "" for none: the last

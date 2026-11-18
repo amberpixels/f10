@@ -1322,16 +1322,24 @@ type StartRequest struct {
 	// agent is a profile name; model overrides only the model.
 	Agent string `protobuf:"bytes,9,opt,name=agent,proto3" json:"agent,omitempty"`
 	Model string `protobuf:"bytes,10,opt,name=model,proto3" json:"model,omitempty"`
-	// note is extra text the agent's prompt carries.
+	// note is extra text a discussion's or a pickup's prompt carries. A flow
+	// start refuses one, because a driven run takes its instructions from the
+	// task.
 	Note   string         `protobuf:"bytes,11,opt,name=note,proto3" json:"note,omitempty"`
 	Caller *CallerContext `protobuf:"bytes,12,opt,name=caller,proto3" json:"caller,omitempty"`
 	// token is the argument as f10 start takes it: a task id with its
 	// -suffix, a PR url or #n. When set it wins over task and pr, and task
 	// names the task a picked-up PR belongs to.
 	Token string `protobuf:"bytes,13,opt,name=token,proto3" json:"token,omitempty"`
-	// tasks are the other ids a discussion covers, after token: the
-	// discussion opens token's worktree and reads them all.
-	Tasks         []string `protobuf:"bytes,14,rep,name=tasks,proto3" json:"tasks,omitempty"`
+	// tasks are the other ids, after token. A discussion opens token's
+	// worktree and reads them all, and a flow start runs them in one drive.
+	Tasks []string `protobuf:"bytes,14,rep,name=tasks,proto3" json:"tasks,omitempty"`
+	// chain makes a flow start a range: token, then the one id in tasks, and
+	// every id between, as `f10 start A -- B` runs them.
+	Chain bool `protobuf:"varint,15,opt,name=chain,proto3" json:"chain,omitempty"`
+	// parallel caps a flow start's tasks running a skill at once; 0 keeps the
+	// record's or the default.
+	Parallel      int32 `protobuf:"varint,16,opt,name=parallel,proto3" json:"parallel,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1464,6 +1472,20 @@ func (x *StartRequest) GetTasks() []string {
 	return nil
 }
 
+func (x *StartRequest) GetChain() bool {
+	if x != nil {
+		return x.Chain
+	}
+	return false
+}
+
+func (x *StartRequest) GetParallel() int32 {
+	if x != nil {
+		return x.Parallel
+	}
+	return 0
+}
+
 type StartResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// task, branch, worktree, workspace_id and agent are a discussion's or a
@@ -1478,7 +1500,10 @@ type StartResponse struct {
 	// drive is the drive a flow start runs in, 0 for a discussion or a pickup.
 	Drive int32 `protobuf:"varint,7,opt,name=drive,proto3" json:"drive,omitempty"`
 	// log is that drive's log file, which grows until the drive exits.
-	Log           string `protobuf:"bytes,8,opt,name=log,proto3" json:"log,omitempty"`
+	Log string `protobuf:"bytes,8,opt,name=log,proto3" json:"log,omitempty"`
+	// attached is true when the daemon already ran that drive and the call
+	// followed it instead of starting another.
+	Attached      bool `protobuf:"varint,9,opt,name=attached,proto3" json:"attached,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1569,6 +1594,13 @@ func (x *StartResponse) GetLog() string {
 	return ""
 }
 
+func (x *StartResponse) GetAttached() bool {
+	if x != nil {
+		return x.Attached
+	}
+	return false
+}
+
 // A DriveTask is one task of a drive, with its own agent profile.
 type DriveTask struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1622,6 +1654,10 @@ func (x *DriveTask) GetAgent() string {
 	return ""
 }
 
+// DriveRequest starts or resumes a drive. f10 start sends args. The field
+// form (args unset) is kept for older clients only: a new client calls
+// Start, which runs the same flow start with its closed-task check and
+// plan-only mode. The field form refuses a start of closed tasks.
 type DriveRequest struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Project string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
@@ -1633,7 +1669,10 @@ type DriveRequest struct {
 	Agent    string `protobuf:"bytes,6,opt,name=agent,proto3" json:"agent,omitempty"`
 	Model    string `protobuf:"bytes,7,opt,name=model,proto3" json:"model,omitempty"`
 	Parallel int32  `protobuf:"varint,8,opt,name=parallel,proto3" json:"parallel,omitempty"`
-	// plan_first plans every task before any ships.
+	// plan_first is refused: a plan-only start is StartRequest with mode
+	// START_MODE_PLAN.
+	//
+	// Deprecated: Marked as deprecated in f10/v1/runs.proto.
 	PlanFirst bool `protobuf:"varint,9,opt,name=plan_first,json=planFirst,proto3" json:"plan_first,omitempty"`
 	// args are the drive's arguments as `f10 start` takes them. When set they
 	// win over the fields above, so a rerun of a typed command line keys to
@@ -1741,6 +1780,7 @@ func (x *DriveRequest) GetParallel() int32 {
 	return 0
 }
 
+// Deprecated: Marked as deprecated in f10/v1/runs.proto.
 func (x *DriveRequest) GetPlanFirst() bool {
 	if x != nil {
 		return x.PlanFirst
@@ -2623,7 +2663,7 @@ const file_f10_v1_runs_proto_rawDesc = "" +
 	"\x14GetRunStatusResponse\x12%\n" +
 	"\x04runs\x18\x01 \x03(\v2\x11.f10.v1.RunStatusR\x04runs\x12\x12\n" +
 	"\x04view\x18\x02 \x01(\fR\x04view\x12)\n" +
-	"\aprinted\x18\x03 \x01(\v2\x0f.f10.v1.PrintedR\aprinted\"\xe0\x02\n" +
+	"\aprinted\x18\x03 \x01(\v2\x0f.f10.v1.PrintedR\aprinted\"\x92\x03\n" +
 	"\fStartRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x12\n" +
 	"\x04task\x18\x02 \x01(\tR\x04task\x12\x0e\n" +
@@ -2639,7 +2679,9 @@ const file_f10_v1_runs_proto_rawDesc = "" +
 	"\x04note\x18\v \x01(\tR\x04note\x12-\n" +
 	"\x06caller\x18\f \x01(\v2\x15.f10.v1.CallerContextR\x06caller\x12\x14\n" +
 	"\x05token\x18\r \x01(\tR\x05token\x12\x14\n" +
-	"\x05tasks\x18\x0e \x03(\tR\x05tasks\"\xe3\x01\n" +
+	"\x05tasks\x18\x0e \x03(\tR\x05tasks\x12\x14\n" +
+	"\x05chain\x18\x0f \x01(\bR\x05chain\x12\x1a\n" +
+	"\bparallel\x18\x10 \x01(\x05R\bparallel\"\xff\x01\n" +
 	"\rStartResponse\x12\x12\n" +
 	"\x04task\x18\x01 \x01(\tR\x04task\x12\x16\n" +
 	"\x06branch\x18\x02 \x01(\tR\x06branch\x12\x1a\n" +
@@ -2648,10 +2690,11 @@ const file_f10_v1_runs_proto_rawDesc = "" +
 	"\x05agent\x18\x05 \x01(\tR\x05agent\x12)\n" +
 	"\aprinted\x18\x06 \x01(\v2\x0f.f10.v1.PrintedR\aprinted\x12\x14\n" +
 	"\x05drive\x18\a \x01(\x05R\x05drive\x12\x10\n" +
-	"\x03log\x18\b \x01(\tR\x03log\"1\n" +
+	"\x03log\x18\b \x01(\tR\x03log\x12\x1a\n" +
+	"\battached\x18\t \x01(\bR\battached\"1\n" +
 	"\tDriveTask\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
-	"\x05agent\x18\x02 \x01(\tR\x05agent\"\x91\x03\n" +
+	"\x05agent\x18\x02 \x01(\tR\x05agent\"\x95\x03\n" +
 	"\fDriveRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12'\n" +
 	"\x05tasks\x18\x02 \x03(\v2\x11.f10.v1.DriveTaskR\x05tasks\x12\x14\n" +
@@ -2660,9 +2703,9 @@ const file_f10_v1_runs_proto_rawDesc = "" +
 	"\x04pace\x18\x05 \x01(\tR\x04pace\x12\x14\n" +
 	"\x05agent\x18\x06 \x01(\tR\x05agent\x12\x14\n" +
 	"\x05model\x18\a \x01(\tR\x05model\x12\x1a\n" +
-	"\bparallel\x18\b \x01(\x05R\bparallel\x12\x1d\n" +
+	"\bparallel\x18\b \x01(\x05R\bparallel\x12!\n" +
 	"\n" +
-	"plan_first\x18\t \x01(\bR\tplanFirst\x12\x12\n" +
+	"plan_first\x18\t \x01(\bB\x02\x18\x01R\tplanFirst\x12\x12\n" +
 	"\x04args\x18\n" +
 	" \x03(\tR\x04args\x12\x10\n" +
 	"\x03dir\x18\v \x01(\tR\x03dir\x12\x10\n" +

@@ -116,14 +116,16 @@ func (s *runService) Start(
 
 	// a drive of tasks that are all closed would run nothing: a discussion
 	// tells the user what shipped them instead
-	var closed string
+	var sw *start.Switch
 	if flow {
-		labels := start.ClosedStart(ctx, t, append([]string{token}, m.GetTasks()...))
-		if labels == nil {
-			return s.startDrive(t, c, argv)
+		a, err := drivectl.ParseDriveArgs(argv)
+		if err != nil {
+			return nil, invalid(err.Error())
 		}
 
-		closed = start.SwitchNote(labels, droppedFlags(m, mode))
+		if sw = start.ClosedSwitch(ctx, t, a); sw == nil {
+			return s.startDrive(t, c, argv)
+		}
 	}
 
 	sr := start.Request{
@@ -140,8 +142,10 @@ func (s *runService) Start(
 		Also:  m.GetTasks(),
 	}
 
-	if closed != "" {
-		sr = asDiscussion(sr)
+	if sw != nil {
+		sr = start.Request{
+			Token: sw.Token, Mode: launch.ModeDiscuss, After: sw.After, Base: sw.Base, Agent: sw.Agent, Also: sw.Tasks,
+		}
 	}
 
 	in, err := start.Prepare(ctx, t, sr)
@@ -149,8 +153,8 @@ func (s *runService) Start(
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
-	if closed != "" {
-		in.Notes = append([]string{closed}, in.Notes...)
+	if sw != nil {
+		in.Notes = append([]string{sw.Note}, in.Notes...)
 	}
 
 	o := output(c)
@@ -196,23 +200,34 @@ func flowStart(
 		return nil, false, errors.New("a note goes to an agent that waits: --discuss, or a picked-up PR")
 	}
 
-	// the other tasks run in the same drive, as f10 start A B runs them
+	// the other tasks run in the same drive, as f10 start A B runs them, or
+	// as its range with chain
 	argv := append([]string{token}, m.GetTasks()...)
-	if mode == launch.ModePlan {
-		argv = append(argv, "--plan")
+	if m.GetChain() {
+		if len(m.GetTasks()) != 1 {
+			return nil, false, errors.New("chain takes the two ends of a range: the token and one id")
+		}
+
+		argv = []string{token, "--", m.GetTasks()[0]}
 	}
 
-	for _, f := range []struct{ name, value string }{
-		{"--flow", m.GetFlow()},
-		{"--pace", m.GetPace()},
-		{"--after", m.GetAfter()},
-		{"--base", m.GetBase()},
-		{"--agent", m.GetAgent()},
-		{"--model", m.GetModel()},
-	} {
-		if v := strings.TrimSpace(f.value); v != "" {
-			argv = append(argv, f.name, v)
-		}
+	parallel := ""
+	if m.GetParallel() > 0 {
+		parallel = strconv.Itoa(int(m.GetParallel()))
+	}
+
+	argv, err = drivectl.AppendFlags(argv,
+		drivectl.FlagValue{Name: "--plan", Value: strconv.FormatBool(mode == launch.ModePlan)},
+		drivectl.FlagValue{Name: "--flow", Value: m.GetFlow()},
+		drivectl.FlagValue{Name: "--pace", Value: m.GetPace()},
+		drivectl.FlagValue{Name: "--after", Value: m.GetAfter()},
+		drivectl.FlagValue{Name: "--base", Value: m.GetBase()},
+		drivectl.FlagValue{Name: "--agent", Value: m.GetAgent()},
+		drivectl.FlagValue{Name: "--model", Value: m.GetModel()},
+		drivectl.FlagValue{Name: "--parallel", Value: parallel},
+	)
+	if err != nil {
+		return nil, false, err
 	}
 
 	if _, err := drivectl.ParseDriveArgs(argv); err != nil {
@@ -220,34 +235,6 @@ func flowStart(
 	}
 
 	return argv, true, nil
-}
-
-// asDiscussion is a flow start turned into a discussion: the flow and the
-// pace go, since a discussion runs neither and RefuseFlags refuses --flow
-// beside --discuss.
-func asDiscussion(req start.Request) start.Request {
-	req.Mode, req.Flow, req.Pace = launch.ModeDiscuss, "", ""
-
-	return req
-}
-
-// droppedFlags names the flow start's flags a discussion takes no use of.
-func droppedFlags(m *f10v1.StartRequest, mode string) []string {
-	var out []string
-
-	if mode == launch.ModePlan {
-		out = append(out, "--plan")
-	}
-
-	if m.GetFlow() != "" {
-		out = append(out, "--flow "+m.GetFlow())
-	}
-
-	if m.GetPace() != "" {
-		out = append(out, "--pace "+m.GetPace())
-	}
-
-	return out
 }
 
 // startToken is the start's argument and the task a picked-up PR is for:
@@ -324,8 +311,8 @@ func (s *runService) Drive(
 		dir = d
 	}
 
-	argv := m.GetArgs()
-	if len(argv) == 0 {
+	argv, fields := m.GetArgs(), len(m.GetArgs()) == 0
+	if fields {
 		var err error
 		if argv, err = driveArgv(m); err != nil {
 			return nil, err
@@ -344,9 +331,18 @@ func (s *runService) Drive(
 		resume = 0
 	}
 
-	t, terr := target.At(ctx, dir, false, "drive")
+	t, terr := target.At(ctx, dir, false, "start")
 	if terr != nil {
 		return nil, invalid(terr.Error())
+	}
+
+	// the field form comes from a client that never ran start's closed check,
+	// and a drive cannot answer with the discussion Start would open
+	if fields {
+		if sw := start.ClosedSwitch(ctx, t, parsed); sw != nil {
+			return nil, connect.NewError(connect.CodeFailedPrecondition,
+				fmt.Errorf("%s: Start opens that discussion, since a drive would run nothing", sw.Note))
+		}
 	}
 
 	env := daemon.LocalEnv(req, m.GetEnv())
@@ -372,11 +368,12 @@ func (s *runService) Drive(
 	}), nil
 }
 
-// driveArgv is the command line f10 start takes for a drive given as fields.
+// driveArgv is the command line f10 start takes for a drive given as fields:
+// the deprecated form, still served for clients built against it.
 func driveArgv(m *f10v1.DriveRequest) ([]string, error) {
-	if m.GetPlanFirst() {
+	if m.GetPlanFirst() { //nolint:staticcheck // refused by name, for clients built against it
 		return nil, connect.NewError(connect.CodeUnimplemented,
-			errors.New("plan_first is not the binary's: f10 drive plan proposes, then start what it proposes"))
+			errors.New("plan_first is deprecated: Start with mode START_MODE_PLAN plans every task and ships none"))
 	}
 
 	var argv []string
@@ -403,24 +400,28 @@ func driveArgv(m *f10v1.DriveRequest) ([]string, error) {
 		}
 	}
 
-	for _, f := range []struct{ name, value string }{
-		{"--flow", m.GetFlow()}, {"--pace", m.GetPace()}, {"--agent", m.GetAgent()}, {"--model", m.GetModel()},
-	} {
-		if f.value != "" {
-			argv = append(argv, f.name, f.value)
-		}
+	flags := []drivectl.FlagValue{
+		{Name: "--flow", Value: m.GetFlow()},
+		{Name: "--pace", Value: m.GetPace()},
+		{Name: "--agent", Value: m.GetAgent()},
+		{Name: "--model", Value: m.GetModel()},
 	}
 
 	if m.GetParallel() > 0 {
-		argv = append(argv, "--parallel", strconv.Itoa(int(m.GetParallel())))
+		flags = append(flags, drivectl.FlagValue{Name: "--parallel", Value: strconv.Itoa(int(m.GetParallel()))})
 	}
 
 	if m.GetEvery() != nil {
-		argv = append(argv, "--every", m.GetEvery().AsDuration().String())
+		flags = append(flags, drivectl.FlagValue{Name: "--every", Value: m.GetEvery().AsDuration().String()})
 	}
 
 	for _, a := range m.GetAnswers() {
-		argv = append(argv, "--answer", a)
+		flags = append(flags, drivectl.FlagValue{Name: "--answer", Value: a})
+	}
+
+	argv, err := drivectl.AppendFlags(argv, flags...)
+	if err != nil {
+		return nil, invalid(err.Error())
 	}
 
 	if len(argv) == 0 {
@@ -430,8 +431,6 @@ func driveArgv(m *f10v1.DriveRequest) ([]string, error) {
 	return argv, nil
 }
 
-// driveEnvFor is the environment a drive started without one runs with:
-// the newest local session's, else the daemon's own, allowlisted.
 // driveCallerEnv is callerEnv for a drive. A caller with no env of its own
 // (the web client, MCP) lends the drive no session, so its launch is
 // recorded under no session rather than the last local caller's.
@@ -450,6 +449,8 @@ func sessionless(env []string) []string {
 	})
 }
 
+// driveEnvFor is the environment a drive started without one runs with:
+// the newest local session's, else the daemon's own, allowlisted.
 func driveEnvFor(sup Supervisor, t *target.Target) []string {
 	if env := sup.SessionEnv(); len(env) > 0 {
 		return env
@@ -603,7 +604,7 @@ func (s *runService) ListDrives(
 	m := req.Msg
 	ctx, c := withCaller(ctx, req, m.GetCaller())
 
-	t, err := callerTarget(ctx, s.sup, m.GetProject(), c, "drive")
+	t, err := callerTarget(ctx, s.sup, m.GetProject(), c, "status")
 	if err != nil {
 		return nil, err
 	}
@@ -626,6 +627,11 @@ func (s *runService) ListDrives(
 		drive.RowFinishedFor(ctx, t),
 	); err != nil {
 		return nil, o.Wrap(err)
+	}
+
+	// the same records the table shows
+	if !m.GetAll() && len(recs) > drive.DrivesShown {
+		recs = recs[:drive.DrivesShown]
 	}
 
 	out := &f10v1.ListDrivesResponse{Printed: printedOf(o)}
@@ -719,9 +725,10 @@ func (s *runService) startDrive(
 		started.Drive, how, strings.Join(argv, " "), started.Log)
 
 	return connect.NewResponse(&f10v1.StartResponse{
-		Drive:   int32(started.Drive), //nolint:gosec // a drive number
-		Log:     started.Log,
-		Printed: printedOf(o),
+		Drive:    int32(started.Drive), //nolint:gosec // a drive number
+		Log:      started.Log,
+		Attached: started.Attach,
+		Printed:  printedOf(o),
 	}), nil
 }
 

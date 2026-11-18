@@ -122,3 +122,25 @@ func TestGenericStepsMatchStepFiles(t *testing.T) {
 		t.Errorf("GenericSteps = %v, want the steps/ files plus finish: %v", got, want)
 	}
 }
+
+// The badge hook skips planning steps and an entry's parts, so a step loaded
+// alone inside ship keeps the entry's leaf: the red-checks ci load among them.
+func TestStepClasses(t *testing.T) {
+	if got := StepsOf(
+		Part,
+	); !slices.Equal(
+		got,
+		[]string{"catchup", "ci", "resolve", "review-ci", "review-host", "review-local"},
+	) {
+		t.Errorf("parts = %q", got)
+	}
+
+	if got := StepsOf(
+		Planning,
+	); !slices.Equal(
+		got,
+		[]string{"capture", "capture-adapter", "debug", "fetch", "investigate", "plan", "stale"},
+	) {
+		t.Errorf("planning = %q", got)
+	}
+}

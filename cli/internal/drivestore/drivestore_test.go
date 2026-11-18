@@ -363,3 +363,34 @@ func TestTaskPhase(t *testing.T) {
 		t.Fatalf("an old record read as %+v, %v", got, err)
 	}
 }
+
+// A record written before --planned went still reads, and still matches its
+// own command line: the decoder ignores the planned key.
+func TestRecordWithPlannedStillReads(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	rec := &Record{Created: time.Now(), Args: []string{"GH-1"}, Tasks: []Task{{ID: "GH-1"}}}
+
+	if err := Create(root, rec); err != nil {
+		t.Fatal(err)
+	}
+
+	f, err := os.OpenFile(Path(root, rec.Number), os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := f.WriteString("planned: GH-10\n"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := Find(root, []string{"GH-1"})
+	if err != nil || got == nil || got.Number != rec.Number {
+		t.Errorf("Find = %+v, %v; want drive %d", got, err, rec.Number)
+	}
+}

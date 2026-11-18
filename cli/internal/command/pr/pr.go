@@ -72,10 +72,16 @@ func Command() *cli.Command {
 				ArgsUsage: "[PR | task-id]",
 				Hidden:    true,
 				Category:  command.Plumbing,
-				Flags: []cli.Flag{&cli.BoolFlag{
-					Name:  "origin",
-					Usage: "fail when origin does not have the base, which a PR cannot target",
-				}},
+				Flags: []cli.Flag{
+					&cli.BoolFlag{
+						Name:  "origin",
+						Usage: "fail when origin does not have the base, which a PR cannot target",
+					},
+					&cli.BoolFlag{
+						Name:  "fork-point",
+						Usage: "print where the branch left its base instead: the commit pr diff diffs from, one line",
+					},
+				},
 				Action: runPRBase,
 			},
 			{
@@ -200,6 +206,24 @@ func runPRBase(ctx context.Context, cmd *cli.Command) error {
 
 	if cmd.Bool("origin") && stack.RefSHA(ctx, s.Main, "refs/remotes/origin/"+base) == "" {
 		return fmt.Errorf("the base %s is not on origin: push it first", base)
+	}
+
+	// the newer of the local and origin merge bases, so a base that moved on
+	// origin and not locally never counts its own commits as this branch's
+	if cmd.Bool("fork-point") {
+		head := s.HeadRef()
+		if s.Here {
+			head = "HEAD"
+		}
+
+		from, err := stack.ForkPoint(ctx, cmp.Or(s.Path, s.Main), head, base)
+		if err != nil {
+			return err
+		}
+
+		_, err = fmt.Fprintln(cmd.Writer, from)
+
+		return err
 	}
 
 	out := base + "\n"

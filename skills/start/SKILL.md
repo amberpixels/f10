@@ -1,6 +1,6 @@
 ---
 name: start
-description: "f10 start skill - start tasks without leaving this session, each in its own worktree, Herdr workspace and agent, run through the project's flow by the f10 daemon: plan, ship, then finish when the flow ends in it; a list, a range or a parent runs every task, a dependent once its base has a commit (under --plan, once its base's plan is saved), pausing once an agent asks and nothing else can move; --discuss or a PR link opens one agent that summarises and waits. Use when the user says \"/f10:start <task-id | ids | id -- id | parent | PR url | #n> [--plan | --discuss | --local | --flow <name>] [--pace <name>] [--after <task-id> | --base <branch>] [--task <id>] [--agent <profile> | --model <model>] [--parallel N]\", asks to start, run or ship one or several tasks in new worktrees, to run a parent's subtasks, to discuss a task before planning, to pick up someone else's PR, or asks what to bundle, run in parallel or order before starting a set of tasks."
+description: "f10 start skill - start tasks without leaving this session, each in its own worktree, Herdr workspace and agent, run through the project's flow by the f10 daemon: plan, ship, then finish when the flow ends in it; a list, a range or a parent runs every task, a dependent once its base has a commit (under --plan, once its base's plan is saved), pausing once an agent asks and nothing else can move; --discuss or a PR link opens one agent that summarises and waits. Use when the user says \"/f10:start <task-id | ids | id -- id | parent | PR url | #n> [--plan | --discuss | --local | --flow <name>] [--pace <name>] [--after <task-id> | --base <branch>] [--task <id>] [--agent <profile> | --model <model>] [--parallel N]\", asks to start, run or ship one or several tasks in new worktrees, to run a parent's subtasks, to discuss a task before planning, to pick up someone else's PR, or asks what to bundle, run in parallel or order before starting a set of tasks, which --discuss answers: its agent reads the tasks and proposes it."
 allowed-tools: Bash, AskUserQuestion, Read, Grep
 argument-hint: "<id>[:profile]... | <id> -- <id> | <PR url> [--plan | --discuss] [--pace <name>]"
 ---
@@ -78,12 +78,13 @@ With no draft among them, the parent goes to `f10 start` as typed, which runs ev
 5. **Check for a broken chain**: a chosen candidate whose `after` is an unfinished sibling left out.
    Name each (`FT-75 is after FT-74, which you left out`) and ask once more, in one `AskUserQuestion`, a question per break: `[include FT-74 | drop FT-75]`.
    Apply the answers and check again; never fix a break silently.
-   A base outside the siblings is not checked here: `f10 start` refuses an unfinished one itself.
+   A base outside the siblings is not checked here: `f10 start` stacks on one with a branch and refuses one with no branch that is not finished.
 6. **Build the arguments**: replace each such parent in place by its chosen subtasks, in the rows' order.
    Each subtask carries the parent's `:profile` suffix.
    Other ids and flags stay as given.
    Nothing left to start: say so in one line and stop.
-7. **The hint**: with two ids or more after the expansion, run `f10 drive plan <the arguments> --hint` in the same Bash call as point 1.
+7. **The hint**: with two ids or more, or a parent, in the arguments as typed, run `f10 drive plan <the arguments as typed> --hint` in the same Bash call as point 1.
+   It runs before point 6 builds the expanded list, so it reads the typed arguments, and `drive plan` expands a parent itself.
    It prints one line only when bundling would save a CI wait, with the command that saves it.
    The rules read saved plans (a small plan's size, its `Areas:` line), because a plain start reads no code.
    Print that line under the trees, and start as asked.

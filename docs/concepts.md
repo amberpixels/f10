@@ -145,6 +145,7 @@ A mode is a way of running a skill that changes how it executes, kept in `modes/
 - `dry-run.md`: `--dry-run`
 - `driven.md`: `--driven`, a run prompted from another session
 - `forward.md`: a task id that another worktree holds
+- `binary.md`: a skill that only runs the f10 binary and relays its output (asks, board, finish, read, start and status)
 
 ## Artifacts
 

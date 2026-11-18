@@ -108,3 +108,25 @@ func TestParseDriveArgs(t *testing.T) {
 		}
 	}
 }
+
+// f10 start never reads a leading plan as drive plan's: the word is a task
+// word, and only ParseDrivePlan takes drive plan's flags.
+func TestStartPlanIsATaskWord(t *testing.T) {
+	a, err := drivectl.ParseDriveArgs([]string{"plan", "FT-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if a.Plan != nil || strings.Join(a.Tasks, " ") != "plan FT-1" {
+		t.Errorf("args = %+v, want plan and FT-1 as tasks and no plan arguments", a)
+	}
+
+	if _, err := drivectl.ParseDriveArgs([]string{"FT-1", "--hint"}); err == nil {
+		t.Error("start took drive plan's --hint")
+	}
+
+	p, err := drivectl.ParseDrivePlan([]string{"FT-1", "--hint"})
+	if err != nil || p.Plan == nil || !p.Plan.Hint {
+		t.Errorf("drive plan = %+v, %v; want the hint set", p, err)
+	}
+}

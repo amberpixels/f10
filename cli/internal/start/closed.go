@@ -4,8 +4,11 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
+	"github.com/amberpixels/f10/cli/internal/daemon"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/launch"
@@ -47,9 +50,84 @@ func closedCheckFor(t *target.Target) closedCheck {
 // a discussion instead, else nil. It switches when every task is closed with
 // no branch, or when a bundle has a closed member, because the drive judges
 // a bundle by its lead and would ship that member again. A failed read
-// counts as open, so the check never blocks a start.
-func ClosedStart(ctx context.Context, t *target.Target, ids []string) []string {
+// counts as open, so the check never blocks a start. A var, so a test of a
+// caller fakes the tracker's answer.
+var ClosedStart = func(ctx context.Context, t *target.Target, ids []string) []string {
 	return closedCheckFor(t).all(ctx, ids)
+}
+
+// A Switch is a flow start turned into a discussion, because every task it
+// names is closed.
+type Switch struct {
+	Note  string // what the user is told first
+	Token string
+	Tasks []string // the other ids, after Token
+	After string
+	Base  string
+	Agent string
+}
+
+// ClosedSwitch is the discussion the flow start a becomes when every task it
+// names is closed, nil otherwise. The CLI and the API both call it, so the
+// switch reads one way wherever a start comes from. A resume, a range or an
+// answer goes on with a drive already agreed, so it is never switched, and
+// neither is the daemon's own drive process, whose caller already checked.
+func ClosedSwitch(ctx context.Context, t *target.Target, a drivectl.DriveArgs) *Switch {
+	if a.Resume > 0 || a.Span || len(a.Answers) > 0 || len(a.Tasks) == 0 || os.Getenv(daemon.ResumeEnv) != "" {
+		return nil
+	}
+
+	labels := ClosedStart(ctx, t, a.Tasks)
+	if labels == nil {
+		return nil
+	}
+
+	profile := switchProfile(a)
+
+	return &Switch{
+		Note:  SwitchNote(labels, switchDropped(a), profile),
+		Token: a.Tasks[0],
+		Tasks: a.Tasks[1:],
+		After: a.After,
+		Base:  a.Base,
+		Agent: cmp.Or(a.Agent, profile),
+	}
+}
+
+// switchProfile is the first task's :profile when no run-wide --agent or
+// --model replaces it, because the discussion opens that task's worktree.
+func switchProfile(a drivectl.DriveArgs) string {
+	if a.Agent != "" || len(a.Profiles) == 0 {
+		return ""
+	}
+
+	return a.Profiles[0]
+}
+
+// switchDropped names the flags a discussion takes no use of, and the other
+// tasks' profiles, since one agent opens.
+func switchDropped(a drivectl.DriveArgs) []string {
+	var out []string
+
+	if a.PlanOnly {
+		out = append(out, "--plan")
+	}
+
+	if a.Flow != "" {
+		out = append(out, "--flow "+a.Flow)
+	}
+
+	if a.Pace != "" {
+		out = append(out, "--pace "+a.Pace)
+	}
+
+	for i, p := range a.Profiles {
+		if i > 0 && p != "" {
+			out = append(out, a.Tasks[i]+":"+p)
+		}
+	}
+
+	return out
 }
 
 func (c closedCheck) all(ctx context.Context, ids []string) []string {
@@ -109,9 +187,13 @@ func (c closedCheck) closed(ctx context.Context, r ref.Ref) bool {
 
 // SwitchNote is the line a start that became a discussion prints, naming
 // the flags a discussion has no use for.
-func SwitchNote(labels, dropped []string) string {
+func SwitchNote(labels, dropped []string, profile string) string {
 	n := fmt.Sprintf("%s %s closed: opening a discussion instead of running the flow",
 		strings.Join(labels, ", "), map[bool]string{true: "is", false: "are"}[len(labels) == 1])
+
+	if profile != "" {
+		n += ", on the " + profile + " profile"
+	}
 
 	if len(dropped) > 0 {
 		n += " (" + strings.Join(dropped, ", ") + " dropped)"
@@ -200,10 +282,11 @@ func openTasks(ctx context.Context, t *target.Target) []hostops.Row {
 }
 
 // shipped reads the default branch's commits that name one of ids, by a
-// Task: trailer or a subject that opens with the id.
+// Task: or Change: trailer or a subject that opens with the id.
 func shipped(ctx context.Context, dir, prefix string, ids map[string]bool) launch.Closed {
 	log := gitx.Out(ctx, dir, "log", regression.DefaultRef(ctx, dir),
-		"--format=%H%x1f%h%x1f%s%x1f%(trailers:key="+lore.TrailerTask+",valueonly,separator=%x20)%x1e", "--")
+		"--format=%H%x1f%h%x1f%s%x1f%(trailers:key="+lore.TrailerTask+",valueonly,separator=%x20)"+
+			"%x1f%(trailers:key="+lore.TrailerChange+",valueonly,separator=%x20)%x1e", "--")
 
 	d, newest := matchShipped(log, prefix, ids)
 	if newest != "" {
@@ -228,9 +311,16 @@ func matchShipped(log, prefix string, ids map[string]bool) (launch.Closed, strin
 			continue
 		}
 
+		// every Task: id counts, so a bundle's rider is shipped too
 		named := ids[strings.ToUpper(regression.SubjectTask(prefix, f[2]))]
 		for id := range strings.FieldsSeq(f[3]) {
 			named = named || ids[strings.ToUpper(id)]
+		}
+
+		if len(f) > 4 {
+			for change := range strings.FieldsSeq(f[4]) {
+				named = named || ids[strings.ToUpper(regression.ChangeTask(change))]
+			}
 		}
 
 		if !named {

@@ -3,6 +3,8 @@ package launch
 import (
 	"fmt"
 	"strings"
+
+	"github.com/amberpixels/f10/cli/internal/textx"
 )
 
 // Closed is what a discussion's agent is told about a task the tracker
@@ -32,7 +34,7 @@ func (c Closed) Note() string {
 	}
 
 	if len(c.Typos) > 0 {
-		n += "; did you mean " + joinOr(c.Typos) + "?"
+		n += "; did you mean " + textx.JoinOr(c.Typos) + "?"
 	}
 
 	return n
@@ -65,7 +67,7 @@ func (c Closed) clause() string {
 	p.WriteString(" Say so, and ask which the user meant:")
 
 	if len(c.Typos) > 0 {
-		fmt.Fprintf(&p, " a typo for %s, which `f10 start <id>` runs instead;", joinOr(c.Typos))
+		fmt.Fprintf(&p, " a typo for %s, which `f10 start <id>` runs instead;", textx.JoinOr(c.Typos))
 	}
 
 	p.WriteString(" a small fix on top of the shipped work, as a follow-up PR from this branch;" +
@@ -82,13 +84,4 @@ func closedClauses(closed []Closed) string {
 	}
 
 	return p.String()
-}
-
-// joinOr joins items as a question does: "a", "a or b", "a, b or c".
-func joinOr(items []string) string {
-	if len(items) < 2 {
-		return strings.Join(items, "")
-	}
-
-	return strings.Join(items[:len(items)-1], ", ") + " or " + items[len(items)-1]
 }

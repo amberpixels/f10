@@ -8,10 +8,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/amberpixels/f10/cli/internal/drivectl"
-	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/storage"
@@ -94,7 +92,7 @@ func writeSheet(t *testing.T, body string) string {
 func planArgs(t *testing.T, args ...string) drivectl.DriveArgs {
 	t.Helper()
 
-	a, err := drivectl.ParseDriveArgs(append([]string{"plan"}, args...))
+	a, err := drivectl.ParseDrivePlan(args)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,37 +184,6 @@ func TestPlanRefusesAnUnknownSheetField(t *testing.T) {
 	sheet := writeSheet(t, `{"GH-14": {"line": 20}}`)
 	if _, err := Plan(context.Background(), planFixture(t), planArgs(t, "GH-14", "--facts", sheet)); err == nil {
 		t.Error("a misspelt field read as not sized")
-	}
-}
-
-func TestPlanFollowsTheAgreedDrive(t *testing.T) {
-	t.Parallel()
-
-	in := planFixture(t)
-	rec := &drivestore.Record{
-		Created: time.Now(),
-		Args:    []string{"GH-11+GH-12", "GH-14"},
-		Planned: "GH-10",
-		Tasks:   []drivestore.Task{{ID: "GH-11+GH-12"}, {ID: "GH-14"}},
-	}
-
-	if err := drivestore.Create(in.Storage.Path(), rec); err != nil {
-		t.Fatal(err)
-	}
-
-	res, err := Plan(context.Background(), in, planArgs(t, "GH-10"))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if res.Agreed == nil || res.Agreed.Number != rec.Number {
-		t.Fatalf("want drive %d agreed, got %+v", rec.Number, res.Agreed)
-	}
-
-	// the drive itself matches on its own command, --planned aside
-	found, err := drivestore.Find(in.Storage.Path(), recordArgs([]string{"GH-11+GH-12", "GH-14", "--planned", "GH-10"}))
-	if err != nil || found == nil || found.Number != rec.Number {
-		t.Errorf("Find = %+v, %v", found, err)
 	}
 }
 

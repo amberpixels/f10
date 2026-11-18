@@ -13,7 +13,6 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/drivectl"
 	"github.com/amberpixels/f10/cli/internal/driveplan"
-	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
@@ -31,14 +30,12 @@ type PlanInput struct {
 	DefaultParallel int
 }
 
-// PlanResult is a proposal, or the drive already agreed from the same
-// planning arguments.
+// PlanResult is a proposal.
 type PlanResult struct {
-	Plan   driveplan.Plan
-	Tasks  []driveplan.Task
-	Notes  []string // tasks left out, and why
-	Extra  []string // the drive flags carried onto the command
-	Agreed *drivestore.Record
+	Plan  driveplan.Plan
+	Tasks []driveplan.Task
+	Notes []string // tasks left out, and why
+	Extra []string // the drive flags carried onto the command
 }
 
 // A SheetTask is one task's row in the facts sheet the drive skill writes:
@@ -66,23 +63,11 @@ var kindLabels = map[string]string{
 // riskyLabels mark a task that never bundles.
 var riskyLabels = []string{"migration", "risky"}
 
-// Plan proposes how to drive the arguments' tasks, or names the drive
-// already agreed from them.
+// Plan proposes how to drive the arguments' tasks.
 func Plan(ctx context.Context, in PlanInput, a drivectl.DriveArgs) (PlanResult, error) {
 	pa := a.Plan
 	if pa == nil {
 		return PlanResult{}, errors.New("drive plan: no plan arguments")
-	}
-
-	if root := in.Storage.Path(); root != "" {
-		rec, err := drivestore.FindPlanned(root, pa.Key)
-		if err != nil {
-			return PlanResult{}, err
-		}
-
-		if rec != nil {
-			return PlanResult{Agreed: rec}, nil
-		}
 	}
 
 	sheet, err := readSheet(pa.Facts)

@@ -31,7 +31,7 @@ const (
 )
 
 // herdrScope is every command that runs inside a Herdr session.
-var herdrScope = []string{"start", "forward", "drive", "finish"}
+var herdrScope = []string{"start", "forward", "finish"}
 
 // stateScript is the plugin script the status line runs and steps call; finding it on PATH finds the plugin.
 const stateScript = "f10-state.sh"
@@ -522,7 +522,7 @@ var driverScope = []string{"task create --set"}
 
 // noDriverScope is what a driver-only tracker without a driver breaks; the
 // steps still read the task through project.md's fetch adapter.
-var noDriverScope = []string{"task", "start", "drive"}
+var noDriverScope = []string{"task", "start"}
 
 // versionTimeout bounds `f10-drivers --version`, so a hung executable never hangs doctor.
 const versionTimeout = 5 * time.Second

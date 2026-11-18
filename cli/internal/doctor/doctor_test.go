@@ -324,7 +324,7 @@ func TestHerdrMissingIsScopedAndDoesNotFail(t *testing.T) {
 	delete(f.path, "herdr")
 
 	r := f.run(CheckHerdr)
-	if strings.Join(r.Scope, ",") != "start,forward,drive,finish" {
+	if strings.Join(r.Scope, ",") != "start,forward,finish" {
 		t.Errorf("scope = %v", r.Scope)
 	}
 

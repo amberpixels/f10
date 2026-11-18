@@ -4,6 +4,7 @@ import (
 	"go/parser"
 	"go/token"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -47,6 +48,36 @@ func TestClientFilesHoldNoControlPlane(t *testing.T) {
 					t.Errorf("%s imports %s: a control-plane verb calls the API (internal/apiclient)", name, path)
 				}
 			}
+		}
+	}
+}
+
+// startAllowed is every f10 package drive/start.go imports. The file runs
+// start's in-process checks (a closed task, a PR to pick up) before it calls
+// the API, so it cannot pass the client-files guard; a new import here is a
+// choice made on purpose, not drift.
+var startAllowed = []string{
+	"gen/f10/v1", "internal/agents", "internal/apiclient", "internal/command/config", "internal/drive",
+	"internal/drivectl", "internal/launch", "internal/start", "internal/target",
+}
+
+func TestStartFileImportsOnlyItsAllowlist(t *testing.T) {
+	t.Parallel()
+
+	f, err := parser.ParseFile(token.NewFileSet(), filepath.FromSlash("drive/start.go"), nil, parser.ImportsOnly)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, imp := range f.Imports {
+		path, _ := strconv.Unquote(imp.Path.Value)
+
+		rel, ok := strings.CutPrefix(path, "github.com/amberpixels/f10/cli/")
+		if ok && !slices.Contains(startAllowed, rel) {
+			t.Errorf(
+				"drive/start.go imports %s, outside its allowlist: route it through the API, or add it on purpose",
+				path,
+			)
 		}
 	}
 }

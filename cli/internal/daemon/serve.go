@@ -42,7 +42,7 @@ type Server struct {
 	Dir     string // the run dir
 	Version string
 	// Child is the command a drive's argv runs as: by default the daemon's
-	// own binary, `drive --foreground <argv>`.
+	// own binary, `start --foreground <argv>`.
 	Child func(argv []string) (string, []string)
 	// Pass is the command one watch pass runs as in a project's main
 	// checkout: by default the daemon's own binary, `watch --pass`.

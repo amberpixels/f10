@@ -350,3 +350,21 @@ func TestTypedMembers(t *testing.T) {
 		t.Errorf("TypedLead = %q", got)
 	}
 }
+
+func TestIsID(t *testing.T) {
+	for word, want := range map[string]bool{
+		"ABC-12":      true,
+		"12":          true,
+		"ABC-12-b":    true,
+		"ABC-1+ABC-2": true,
+		"-x":          false,
+		"plan":        false,
+		"":            false,
+		"ABC-":        false,
+		"fix it":      false,
+	} {
+		if got := IsID(word); got != want {
+			t.Errorf("IsID(%q) = %v, want %v", word, got, want)
+		}
+	}
+}

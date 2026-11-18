@@ -61,6 +61,29 @@ func TestPRBaseOriginRefusesALocalBase(t *testing.T) {
 	}
 }
 
+// The fork point is the newer of the local and origin merge bases, so a
+// catchup on origin's base with local main behind counts none of origin's
+// commits as the branch's.
+func TestPRBaseForkPointTakesOrigin(t *testing.T) {
+	dir := testkit.PrRepo(t)
+	testkit.Git(t, dir, "switch", "-q", "-c", "feat")
+	testkit.CommitFile(t, dir, "feat.txt")
+
+	// origin's main moves on, and feat catches up with it, local main behind
+	testkit.Git(t, dir, "switch", "-q", "main")
+	testkit.CommitFile(t, dir, "upstream.txt")
+	testkit.Git(t, dir, "push", "-q", "origin", "main")
+	upstream := strings.TrimSpace(testkit.Git(t, dir, "rev-parse", "HEAD"))
+	testkit.Git(t, dir, "reset", "-q", "--hard", "HEAD~1")
+	testkit.Git(t, dir, "switch", "-q", "feat")
+	testkit.Git(t, dir, "merge", "-q", "--no-edit", "origin/main")
+
+	out, _, err := runApp(t, "-C", dir, "pr", "base", "--fork-point").streams()
+	if err != nil || strings.TrimSpace(out) != upstream {
+		t.Errorf("fork point = %q, %v; want origin's main %s", out, err, upstream)
+	}
+}
+
 // A stacked branch's diff holds its own work, uncommitted included, and
 // none of the base task's commits.
 func TestPRDiffStacked(t *testing.T) {
