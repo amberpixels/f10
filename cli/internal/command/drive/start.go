@@ -78,26 +78,40 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 
 	switch sa.Kind {
 	case drivectl.FlowStart:
-		if req := closedDiscussion(ctx, cmd, sa.Drive); req != nil {
-			return startOnce(ctx, cmd, req)
-		}
-
-		return Run(ctx, cmd, argv)
+		return flowStart(ctx, cmd, argv, sa.Drive)
 	case drivectl.MaybePickup:
 		t, err := target.For(ctx, cmd)
 		if err != nil {
 			return err
 		}
 
-		if pick, _, err := start.PickupFor(ctx, t, sa.Once.Token); err != nil {
+		pick, _, err := start.PickupFor(ctx, t, sa.Once.Token)
+		if err != nil {
 			return err
-		} else if pick == nil {
-			return Run(ctx, cmd, argv)
+		}
+
+		// a #n the host names a task is a flow start, closed check included
+		if pick == nil {
+			a, err := sa.Flow()
+			if err != nil {
+				return err
+			}
+
+			return flowStart(ctx, cmd, argv, a)
 		}
 	case drivectl.DiscussStart, drivectl.PickupStart:
 	}
 
 	return startOnce(ctx, cmd, onceRequest(sa.Once))
+}
+
+// flowStart runs a as a drive, or as a discussion when every task is closed.
+func flowStart(ctx context.Context, cmd *cli.Command, argv []string, a drivectl.DriveArgs) error {
+	if req := closedDiscussion(ctx, cmd, a); req != nil {
+		return startOnce(ctx, cmd, req)
+	}
+
+	return Run(ctx, cmd, argv)
 }
 
 // onceRequest is a discussion or a pickup as the API takes it.

@@ -212,15 +212,17 @@ What the start does, case by case:
   A note goes only with `--discuss` or a PR pickup, because a driven run takes its instructions from the task.
   `--discuss` is exclusive with `--plan`, `--flow` and `--local`, and takes none of the drive's flags; with several ids, `--after`, `--base` and a range are refused too, because one base cannot belong to several tasks.
   The command returns once the prompt is submitted, and the [watcher](#watch) looks after the task.
-- a start whose every task is closed, none with a branch, opens a discussion instead of a drive, because a drive would run nothing.
-  A note says so first, naming the flags the discussion drops (`--plan`, `--flow`, `--pace`), and the agent's report names the commits that shipped each task, the release that holds them, and any open task whose id is one digit off, in case the id was mistyped.
-  A resume, a range or `--answer` goes on with a drive already agreed, so it is never switched.
 
   The discussion's branch records `branch.<name>.f10-discuss`.
   A flow start run inside that worktree (`/f10:start A+B C`, typed in the agent's pane) continues the conversation there:
   - its first group takes the worktree and the agent. When the group's lead is not the task the worktree opened for, the branch is renamed to the lead's (`git branch -m`, its recorded facts moving with it), and the agent and the workspace are renamed to the lead's. Another lead starts without the discussed task's recorded base, flow, pace and agent profile. A lead that already has a branch, or one with subtasks, is refused before anything changes, and so is another lead when the discussion's branch was built on a base task's branch. A drive the daemon refuses puts the whole discussion back. The worktree's directory keeps its name, because every lookup goes by branch.
   - the other groups get worktrees of their own.
   - the command returns once the daemon has the drive, instead of following it, because the drive prompts that same agent. The drive holds the first skill until the agent's turn ends, then clears the mark. `--foreground` is refused there.
+- a start whose every task is closed, none with a branch, opens a discussion instead of a drive, because a drive would run nothing.
+  A note says so first, naming the flags the discussion drops (`--plan`, `--flow`, `--pace`) and any other task's `:profile`, because one agent opens.
+  The first task's `:profile` is the discussion's agent unless `--agent` or `--model` names one.
+  The agent's report names the commits that shipped each task, the release that holds them, and any open task whose id is one digit off, in case the id was mistyped.
+  A resume, a range or `--answer` goes on with a drive already agreed, so it is never switched.
 - the flow is recorded on the branch as `branch.<name>.f10-flow` in local git config, for `f10 status` and a rerun of `f10 start`.
   With `flow_by_area` declared and no flow named, nothing is recorded and the prompt is `/f10:ship <id>` alone, because ship picks the flow from the task's area
 - a plan the main checkout saved for the task (`.f10/plans/<id>.md`, written by `/f10:plan` after a discussion there) stays in place: every worktree's storage root is main's `.f10/` (or the out-of-tree root), so the worktree's agent reads it there.

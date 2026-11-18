@@ -187,13 +187,29 @@ func (s *runService) Start(
 func flowStart(
 	ctx context.Context, t *target.Target, m *f10v1.StartRequest, token, task, mode string,
 ) ([]string, bool, error) {
+	// a range and a cap are a drive's, refused as f10 start refuses them
+	once := func() error {
+		switch {
+		case m.GetChain():
+			return errors.New("a range runs as a drive: --discuss and a PR pickup take the ids one by one")
+		case m.GetParallel() > 0:
+			return errors.New("parallel caps a drive: --discuss and a PR pickup open one agent")
+		}
+
+		return nil
+	}
+
 	if mode == launch.ModeDiscuss || task != "" {
-		return nil, false, nil
+		return nil, false, once()
 	}
 
 	pick, _, err := start.PickupFor(ctx, t, token)
-	if err != nil || pick != nil {
+	if err != nil {
 		return nil, false, err
+	}
+
+	if pick != nil {
+		return nil, false, once()
 	}
 
 	if strings.TrimSpace(m.GetNote()) != "" {

@@ -472,4 +472,14 @@ func TestFlowStartChainAndParallel(t *testing.T) {
 		&f10v1.StartRequest{Tasks: []string{"GH-2", "GH-3"}, Chain: true}, "GH-1", "", ""); err == nil {
 		t.Error("a chain of three ids was taken")
 	}
+
+	// a discussion takes neither, as f10 start --discuss refuses them
+	for _, m := range []*f10v1.StartRequest{
+		{Tasks: []string{"GH-4"}, Chain: true},
+		{Parallel: 2},
+	} {
+		if _, flow, err := flowStart(t.Context(), nil, m, "GH-1", "", launch.ModeDiscuss); flow || err == nil {
+			t.Errorf("discussion %v: flow = %v, err = %v; want refused", m, flow, err)
+		}
+	}
 }
