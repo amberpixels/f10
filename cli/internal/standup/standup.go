@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/ref"
 )
 
@@ -113,6 +114,11 @@ type Input struct {
 	Bases         map[string]string // head branch to the base branch `f10 start --after` recorded
 	UpkeepPaths   []string          // the project's globs, on top of the default upkeep paths
 	Ledger        *Ledger           // nil: no ledger read
+	Warnings      []string          // what the host failed to give, the report printed without it
+
+	defRef string      // the default branch as a ref, for Detail
+	host   *forge.Host // nil: no host, or Input built by hand
+	pulls  []forge.PR  // the host's answer, which Detail fills in
 }
 
 // PR is one of the user's PRs in the report.
@@ -193,6 +199,7 @@ type Report struct {
 	Other    Other
 	Reviewed []ReviewedPR
 	Drives   []Drive
+	Warnings []string
 }
 
 // Group sorts the collected activity into tasks.
@@ -207,6 +214,7 @@ func Group(in Input) Report {
 		Checkout: in.Checkout,
 		User:     in.User,
 		Tasks:    []Task{},
+		Warnings: slices.Clone(in.Warnings),
 		Other:    Other{PRs: []PR{}, Commits: []Commit{}},
 		Reviewed: []ReviewedPR{},
 		Drives:   []Drive{},
@@ -341,10 +349,7 @@ func Group(in Input) Report {
 	}
 
 	active := addLedger(in.Ledger, byUpper, since, task)
-
-	if in.Ledger != nil {
-		rep.Drives = DriveSummaries(in.Repo, in.Ledger.Drives, since, in.Ledger.Until, active)
-	}
+	shipped := map[string]bool{}
 
 	for _, t := range tasks {
 		t.PRs = chainOrder(t.PRs)
@@ -353,6 +358,11 @@ func Group(in Input) Report {
 			t.State = StateStarted // the ledger alone saw it: work begun, nothing landed
 		}
 		t.Class = taskClass(*t, since, time.Time{})
+		shipped[strings.ToUpper(t.ID)] = t.State == StateShipped
+
+		if t.Blocked != nil && t.Blocked.Kind == BlockedAsk {
+			t.Blocked.LaterCommit = commitAfter(*t, t.Blocked.Since)
+		}
 
 		if len(t.PRs) > 0 {
 			root := t.PRs[0]
@@ -364,6 +374,10 @@ func Group(in Input) Report {
 		}
 
 		rep.Tasks = append(rep.Tasks, *t)
+	}
+
+	if in.Ledger != nil {
+		rep.Drives = DriveSummaries(in.Repo, in.Ledger.Drives, since, in.Ledger.Until, active, shipped)
 	}
 
 	slices.SortFunc(rep.Tasks, func(a, b Task) int { return compareIDs(a.ID, b.ID) })
@@ -439,6 +453,33 @@ func periodPushes(pushes []ForcePush, since time.Time) []ForcePush {
 	})
 
 	return out
+}
+
+// commitAfter is the sha of the task's first work commit authored after at,
+// or "" with none: an ask a later commit may have settled. Upkeep, such as a
+// base merge, settles no question.
+func commitAfter(t Task, at time.Time) string {
+	var first *Commit
+
+	consider := func(cs []Commit) {
+		for i, c := range cs {
+			if c.Class != ClassUpkeep && c.At.After(at) && (first == nil || c.At.Before(first.At)) {
+				first = &cs[i]
+			}
+		}
+	}
+
+	consider(t.Commits)
+
+	for _, p := range t.PRs {
+		consider(p.Commits)
+	}
+
+	if first == nil {
+		return ""
+	}
+
+	return first.SHA
 }
 
 // inPeriod is a PR the user touched in the period; a rebase keeps author

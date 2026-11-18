@@ -387,6 +387,8 @@ func TestCollectStandupToleratesAnUnknownParent(t *testing.T) {
 		t.Fatalf("a parent the host never saw failed the report: %v", err)
 	}
 
+	Detail(t.Context(), &in, standupSince)
+
 	if in.Commits[0].ParentCI != nil {
 		t.Errorf("CI = %+v, want unknown", in.Commits[0].ParentCI)
 	}
@@ -394,4 +396,71 @@ func TestCollectStandupToleratesAnUnknownParent(t *testing.T) {
 	if f.called("gh api repos/{owner}/{repo}/commits/p0/") {
 		t.Error("asked CI for a commit from before the period")
 	}
+}
+
+// Detail reads only the own PRs updated since from, a failed read becomes a
+// warning, and the PRs it read carry their commits.
+func TestDetailReadsOnlyPRsUpdatedSince(t *testing.T) {
+	f := newFakes(t)
+	seam.Swap(t, &forge.RetryPause, 0)
+	scriptStandupGit(f, "me@x.io", "origin/main")
+
+	pr := func(n int, updated string) string {
+		return `{"number":` + strconv.Itoa(n) + `,"title":"t","state":"OPEN","headRefName":"FT-` + strconv.Itoa(n) +
+			`/b","baseRefName":"main","author":{"login":"me"},"createdAt":"2026-10-01T00:00:00Z","updatedAt":"` +
+			updated + `"}`
+	}
+
+	f.script("gh api user", `{"login":"me"}`)
+	f.script(ghSearch("author:me updated:>="+ghStamp, forge.OwnFields),
+		"["+pr(1, "2026-10-14T09:00:00Z")+","+pr(2, "2026-10-12T09:00:00Z")+","+pr(3, "2026-10-14T11:00:00Z")+"]")
+	f.script(ghSearch("reviewed-by:me updated:>="+ghStamp, forge.ForeignFields+",reviews"), `[]`)
+	f.script(ghSearch("is:merged merged:>="+ghStamp, forge.ForeignFields), `[]`)
+
+	f.script("gh api --paginate repos/{owner}/{repo}/pulls/1/commits?per_page=100",
+		`[{"sha":"c1","commit":{"message":"m","author":{"email":"me@x.io","date":"2026-10-14T09:00:00Z"}}}]`)
+	f.script(forcePushCall(1), `{"data":{}}`)
+	f.fail("gh api --paginate repos/{owner}/{repo}/pulls/3/commits?per_page=100",
+		shell.Result{Code: 1, Stderr: "HTTP 504"})
+
+	in, err := Collect(
+		t.Context(),
+		Source{Dir: ".", Main: ".", Prefix: "FT", Host: &forge.Host{Name: "gh", Dir: ".", RetryTransient: true}},
+		standupSince,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	in.Repo = "app"
+	Detail(t.Context(), &in, standupSince.Add(8*time.Hour))
+
+	if f.called("gh api --paginate repos/{owner}/{repo}/pulls/2/") {
+		t.Error("read PR 2, updated before the period")
+	}
+
+	if got := in.PRs[0].Commits; len(got) != 1 || got[0].SHA != "c1" {
+		t.Errorf("PR 1 commits = %+v, want c1", got)
+	}
+
+	if want := []string{"app#3: commits not read: gh: HTTP 504"}; !slices.Equal(in.Warnings, want) {
+		t.Errorf("warnings = %q, want %q", in.Warnings, want)
+	}
+
+	retries := 0
+
+	for _, c := range f.calls {
+		if strings.Contains(c, "pulls/3/commits") {
+			retries++
+		}
+	}
+
+	if retries != 2 {
+		t.Errorf("PR 3 read %d times, want 2 (one retry)", retries)
+	}
+}
+
+func forcePushCall(n int) string {
+	return "gh api graphql -f query=" + forge.ForcePushesQuery +
+		" -F owner={owner} -F name={repo} -F number=" + strconv.Itoa(n)
 }

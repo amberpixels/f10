@@ -1330,6 +1330,15 @@ Three cases decline, exit 3, with a `decline:` line and the findings behind it i
 It groups them by project, then task, and gives each task where it ended the period.
 It changes nothing and does not fetch: local and remote-tracking branches are read as they are, while PR states come fresh from the host.
 
+**Host reads** come in two passes, so a busy repository answers in seconds.
+The searches run first.
+Then your PRs' commits and force-pushes are read, eight at a time, only for the PRs updated since the period starts.
+A push always moves a PR's update time, so a PR updated earlier has nothing in the period.
+With no stored standup, the start is settled from git and the searches before the second pass, and settled again after it.
+A host 5xx is retried once per call.
+A login or a search that still fails fails the command, because without them the report has no PRs.
+A PR whose commits still fail becomes a `warnings` line, and the report prints without them.
+
 **The scope** is this checkout, or the union of:
 
 - `-C <path | name>`, repeatable; a path always works, a name once `F10_ROOTS` is set.
@@ -1490,7 +1499,7 @@ A breaking change bumps `schema`.
         }
       ],
       "commits": [],
-      "blocked": {"kind": "ask", "since": "...", "text": "1. Refactor as agreed? [yes | stop]"},
+      "blocked": {"kind": "ask", "since": "...", "text": "1. Refactor as agreed? [yes | stop]", "later_commit": "..."},
       "activity": [{"at": "...", "kind": "review", "text": "round 1: 3 fixed, 1 skipped"}],
       "stage": "review round 2",
       "driven": 12,
@@ -1506,7 +1515,8 @@ A breaking change bumps `schema`.
   "drives": [{"repo": "svc-a", "number": 12, "tasks": 5, "shipped": 4, "needs_you": 1}]
   }
   ],
-  "ledger": {"scope": "this machine only", "contributed": true}
+  "ledger": {"scope": "this machine only", "contributed": true},
+  "warnings": []
 }
 ```
 
@@ -1544,7 +1554,9 @@ A breaking change bumps `schema`.
 | `tasks[].stage` | where the run left the task, in words: `planned, not started`, `planning`, `review round 2`, `waiting on CI`, `waiting on <base>`, `shipping: <step>`; absent when the run has nothing `state` lacks, as after a finished ship. `state` keeps its values, because the carry-over and the classes read them |
 | `tasks[].driven` | the newest drive that lists the task and ran in the period; absent when none |
 | `tasks[].active_minutes` | the task's active minutes in the period, counted as `f10 stats` counts them, waits on you left out; always present. The `/f10:standup` skill renders it only when your `standup.md` asks for it |
-| `drives` | each drive that ran in the period (created in it, or with a task your ledger rows show active in it), with its task count, the tasks shipped and the tasks that ended needing you |
+| `tasks[].blocked.later_commit` | on an `ask`: the sha of the task's first commit authored after it, which may have settled it while the ledger still holds the ask open; absent when none |
+| `drives` | each drive that ran in the period (created in it, or with a task your ledger rows show active in it), with its task count, the tasks shipped and the tasks that ended needing you; a task the report shows `shipped` counts as shipped whatever its drive outcome, because a drive that stops before finish ends non-zero on a PR merged later |
+| `warnings` | one line per PR whose commits or force-pushes the host did not return after a retry, such as `svc-a#40: commits not read: gh: HTTP 504`; the report printed without them. Always present |
 | `ledger` | present when a ledger exists: `scope` is always `this machine only`, and `contributed` says whether the ledger added anything to the report |
 
 ## Board

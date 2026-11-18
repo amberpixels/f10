@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/amberpixels/f10/cli/internal/shell"
 )
@@ -22,6 +23,9 @@ type Host struct {
 	// Repo names the repository when no checkout can: `owner/repo`, or
 	// `host/owner/repo` off the CLI's default host; set, every command carries it.
 	Repo string
+	// RetryTransient retries a command once after a 5xx. Only read-only
+	// callers set it, because a retried write may already have landed.
+	RetryTransient bool
 }
 
 // At is the same host answering from another checkout of the repo.
@@ -123,6 +127,24 @@ func (h Host) pick(gh, glab []string) []string {
 
 // run runs one host CLI command and returns its stdout.
 func (h Host) run(ctx context.Context, args ...string) (string, error) {
+	out, err := h.runOnce(ctx, args...)
+	if err == nil || !h.RetryTransient || !errors.Is(err, ErrTransient) {
+		return out, err
+	}
+
+	select {
+	case <-ctx.Done():
+		return "", err
+	case <-time.After(RetryPause):
+	}
+
+	return h.runOnce(ctx, args...)
+}
+
+// RetryPause is the wait before the one retry of a transient failure.
+var RetryPause = 2 * time.Second
+
+func (h Host) runOnce(ctx context.Context, args ...string) (string, error) {
 	res, err := shell.Capture(ctx, h.Dir, h.Name, h.named(args)...)
 	if err != nil {
 		return "", fmt.Errorf("running %s: %w", h.Name, err)

@@ -54,6 +54,9 @@ type Blocked struct {
 	Kind  string    `json:"kind"`
 	Since time.Time `json:"since"`
 	Text  string    `json:"text"`
+	// LaterCommit is an ask's first task commit after it: the ask stays
+	// open in the ledger, but that commit may have settled it
+	LaterCommit string `json:"later_commit,omitempty"`
 }
 
 // The kinds of activity a step leaves without a commit.
@@ -465,7 +468,12 @@ func ranIn(r *drivestore.Record, since, until time.Time, active map[string]bool)
 }
 
 // DriveSummaries is each drive that ran in the period, by its outcome so far.
-func DriveSummaries(repo string, drives []*drivestore.Record, since, until time.Time, active map[string]bool) []Drive {
+// A task the report has shipped counts as shipped whatever its outcome,
+// because a drive that stops before finish exits non-zero on a PR a person
+// merges later. shipped is keyed by the upper-cased task id.
+func DriveSummaries(
+	repo string, drives []*drivestore.Record, since, until time.Time, active, shipped map[string]bool,
+) []Drive {
 	out := []Drive{}
 
 	for _, r := range drives {
@@ -477,7 +485,7 @@ func DriveSummaries(repo string, drives []*drivestore.Record, since, until time.
 
 		for _, t := range r.Tasks {
 			switch {
-			case t.Outcome != nil && t.Outcome.Code == 0:
+			case shipped[strings.ToUpper(t.ID)], t.Outcome != nil && t.Outcome.Code == 0:
 				d.Shipped++
 			case t.Outcome != nil:
 				d.NeedsYou++

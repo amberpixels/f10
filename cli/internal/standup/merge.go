@@ -45,6 +45,9 @@ type Standup struct {
 	Projects []Project `json:"projects"`
 	// Ledger is set when a ledger was read: its half is this machine's alone
 	Ledger *LedgerNote `json:"ledger,omitempty"`
+	// Warnings name what the host failed to give after a retry. The report
+	// printed without it
+	Warnings []string `json:"warnings"`
 }
 
 // Merge joins per-repository reports into projects, one per tracker key, and
@@ -54,7 +57,14 @@ type Standup struct {
 //nolint:lostfield // Ledger is the command's, set once it knows a ledger exists
 func Merge(since time.Time, period string, reports []Report) Standup {
 	since = since.UTC()
-	out := Standup{Schema: Schema, Since: since, Period: period, Days: []string{}, Projects: []Project{}}
+	out := Standup{
+		Schema:   Schema,
+		Since:    since,
+		Period:   period,
+		Days:     []string{},
+		Projects: []Project{},
+		Warnings: []string{},
+	}
 
 	byKey := map[string]int{}
 	byID := []map[string]int{}
@@ -90,6 +100,7 @@ func Merge(since time.Time, period string, reports []Report) Standup {
 		p.Other.Commits = append(p.Other.Commits, r.Other.Commits...)
 		p.Reviewed = append(p.Reviewed, r.Reviewed...)
 		p.Drives = append(p.Drives, r.Drives...)
+		out.Warnings = append(out.Warnings, r.Warnings...)
 	}
 
 	for i := range out.Projects {
