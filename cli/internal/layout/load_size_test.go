@@ -8,8 +8,8 @@ import (
 	"testing"
 )
 
-// Loads still over the budget, each struck from this list by the FT-570 PR
-// that brings it under, so the list only shrinks.
+// Loads over the budget whose fix is still in flight; the test fails once one
+// fits, so an entry never outlives its fix.
 var overBudgetLoads = map[string]bool{}
 
 // Claude Code cuts a Bash output past 30,000 characters, so every load a skill

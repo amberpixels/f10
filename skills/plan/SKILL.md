@@ -35,7 +35,7 @@ argument-hint: "[<task-id | free-text description>]"
 **Run**
 1. Run `f10-load-project.sh fetch investigate plan` first, on every call of this skill.
    With a free-text argument, run `f10-load-project.sh capture fetch` and `f10-load-project.sh investigate plan` instead, as two calls in the same message, because together they pass the 25,000 characters a load keeps under the Bash output cap.
-2. Follow each step it prints, in the order the Arguments item gives.
+2. Follow each step they print, in the order the Arguments item gives.
 
 **Exit**
 - Stop at the saved plan, unless the argument chains a skill: then run it.
