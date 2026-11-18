@@ -94,7 +94,7 @@ func ShapeChildren(
 			return nil, err
 		}
 
-		row.Finished = FinishedTask(tasksource.TaskInfo{Stated: c.State != ""}, tr.Storage, r.ID, branched)
+		row.Finished = FinishedTask(tasksource.TaskInfo{Stated: tr.stated}, tr.Storage, r.ID, branched)
 		rows = append(rows, row)
 	}
 

@@ -106,8 +106,23 @@ func TestAvoidLandedFoundBranch(t *testing.T) {
 		in := StartInput{Main: "/code/repo", Landed: landedOn(heads, &asked)}
 
 		_, _, _, err := avoidLanded(t.Context(), in, "GH-1/slug", stack.FoundBranch{Name: "GH-1/slug"})
-		if err == nil || !strings.Contains(err.Error(), merged.URL) || !strings.Contains(err.Error(), "git branch -D") {
+		if err == nil || !strings.Contains(err.Error(), merged.URL) || !strings.Contains(err.Error(), "which merged") {
 			t.Errorf("err = %v, want the leftover refused, naming the PR", err)
+		}
+	})
+
+	t.Run("closed without a merge", func(t *testing.T) {
+		f := testkit.NewFakes(t)
+		f.Script("git rev-parse --verify --quiet refs/heads/GH-1/slug", "aaa")
+
+		closed := forge.PR{URL: "https://x/pull/90", Status: forge.Closed, HeadSHA: "aaa"}
+
+		var asked []string
+		in := StartInput{Main: "/code/repo", Landed: landedOn(map[string]forge.PR{"GH-1/slug": closed}, &asked)}
+
+		got, existing, _, err := avoidLanded(t.Context(), in, "GH-1/slug", stack.FoundBranch{Name: "GH-1/slug"})
+		if err != nil || got != "GH-1/slug" || existing.Name != "GH-1/slug" {
+			t.Errorf("avoidLanded = %q, %+v, %v; want the only copy of unmerged work reused", got, existing, err)
 		}
 	})
 

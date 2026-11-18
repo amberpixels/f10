@@ -12,25 +12,22 @@ import (
 	"github.com/amberpixels/f10/cli/internal/target"
 )
 
-// A LandedLookup is the newest merged or closed request whose head is
-// branch, and false when none is.
+// A LandedLookup is the newest request whose head is branch, when it is
+// merged or closed, and false when there is none or the newest is open.
 type LandedLookup func(ctx context.Context, branch string) (forge.PR, bool, error)
 
-// LandedVia asks the host's requests by head branch.
+// LandedVia asks the host's requests by head branch, newest first: an open
+// one means the branch is in use, whatever landed on it before.
 func LandedVia(h forge.Host) LandedLookup {
 	return func(ctx context.Context, branch string) (forge.PR, bool, error) {
 		prs, err := h.PullsByHead(ctx, branch)
-		if err != nil {
+		if err != nil || len(prs) == 0 {
 			return forge.PR{}, false, err
 		}
 
-		for _, p := range prs {
-			if p.Status == forge.Merged || p.Status == forge.Closed {
-				return p, true, nil
-			}
-		}
+		p := prs[0]
 
-		return forge.PR{}, false, nil
+		return p, p.Status == forge.Merged || p.Status == forge.Closed, nil
 	}
 }
 
@@ -70,7 +67,7 @@ func avoidLanded(
 
 		if !existing.Remote {
 			return "", existing, "", fmt.Errorf(
-				"%s is %s's branch, which landed, and carries nothing past it: "+
+				"%s is %s's branch, which merged, and carries nothing past it: "+
 					"remove it (git branch -D %s, after removing any worktree that has it) and start again",
 				existing.Name, p.URL, existing.Name)
 		}
@@ -115,15 +112,16 @@ func avoidLanded(
 		name, name, landedMax)
 }
 
-// staleLanded says a found branch is a landed request's head with nothing
-// past it: its tip is that head, or an ancestor of it.
+// staleLanded says a found branch is a merged request's head with nothing
+// past it: its tip is that head, or an ancestor of it. A closed request's
+// head is in no default branch, so its branch is the only copy and is reused.
 func staleLanded(ctx context.Context, in StartInput, b stack.FoundBranch) (bool, forge.PR, error) {
 	p, landed, err := in.Landed(ctx, b.Name)
 	if err != nil {
 		return false, p, fmt.Errorf("reading the requests whose head is %s: %w", b.Name, err)
 	}
 
-	if !landed || p.HeadSHA == "" {
+	if !landed || p.Status != forge.Merged || p.HeadSHA == "" {
 		return false, p, nil
 	}
 

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
 	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
@@ -69,6 +70,8 @@ func launchKids(ctx context.Context, warn io.Writer, t *target.Target, sid strin
 		queued  bool
 		phase   string
 		checks  bool
+		done    bool // the drive's own record says finished
+		waiting bool // the drive has not opened it yet
 	}
 
 	var tokens []token
@@ -78,15 +81,18 @@ func launchKids(ctx context.Context, warn io.Writer, t *target.Target, sid strin
 		case state.LaunchStart:
 			tokens = append(tokens, token{text: l.Value, started: true})
 		case state.LaunchDrive:
-			for _, task := range driveTasks(t.Layout.StorageRoot.Path(), l.Value) {
+			tasks, unopened := driveTasks(t.Layout.StorageRoot.Path(), l.Value)
+			for i, task := range tasks {
 				tokens = append(
 					tokens,
 					token{
-						text:   task.ID,
-						after:  task.After,
-						queued: task.Queued,
-						phase:  task.Phase,
-						checks: task.Checks != "",
+						text:    task.ID,
+						after:   task.After,
+						queued:  task.Queued,
+						phase:   task.Phase,
+						checks:  task.Checks != "",
+						done:    drivectl.RowDone(task),
+						waiting: unopened[i],
 					},
 				)
 			}
@@ -101,6 +107,16 @@ func launchKids(ctx context.Context, warn io.Writer, t *target.Target, sid strin
 	main := cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot)
 	root := stack.TrackerFor(t).Storage
 	bases := map[string]string{} // siblings share a base: resolve it once
+
+	// live is every task a drive has yet to open: a base among them is not
+	// finished, whatever its archive holds
+	live := map[string]bool{}
+	for _, tok := range tokens {
+		if tok.waiting && !tok.done {
+			id, _ := ref.SplitSuffix(tok.text)
+			live[strings.ToUpper(id)] = true
+		}
+	}
 
 	for _, tok := range tokens {
 		id, suffix := ref.SplitSuffix(tok.text)
@@ -120,13 +136,16 @@ func launchKids(ctx context.Context, warn io.Writer, t *target.Target, sid strin
 			continue
 		}
 
-		// a finished task reads nothing further: its row would only drop
+		// a finished task reads nothing further: its row would only drop. A
+		// task its drive has not opened yet is the drive's to judge, since
+		// status asks no tracker and its archived plan is an earlier PR's
 		branched, err := stack.HasTaskBranch(ctx, main, r.ID)
-		if err == nil && (tok.started && !branched || stack.FinishedTask(tasksource.TaskInfo{}, root, r.ID, branched)) {
+		if tok.done || err == nil && (tok.started && !branched ||
+			!tok.waiting && stack.FinishedTask(tasksource.TaskInfo{}, root, r.ID, branched)) {
 			continue
 		}
 
-		k.After = launchBase(ctx, t, main, r.ID, suffix, tok.after, branched, bases)
+		k.After = launchBase(ctx, t, main, r.ID, suffix, tok.after, branched, bases, live)
 		kids = append(kids, k)
 		refs = append(refs, r)
 	}
@@ -151,6 +170,7 @@ func launchBase(
 	main, id, suffix, recorded string,
 	branched bool,
 	seen map[string]string,
+	live map[string]bool,
 ) string {
 	base := recorded
 	if branched {
@@ -174,7 +194,8 @@ func launchBase(
 		out = r.Head().ID
 
 		has, err := stack.HasTaskBranch(ctx, main, out)
-		if err != nil || stack.FinishedTask(tasksource.TaskInfo{}, stack.TrackerFor(t).Storage, out, has) {
+		if err != nil || !live[strings.ToUpper(out)] &&
+			stack.FinishedTask(tasksource.TaskInfo{}, stack.TrackerFor(t).Storage, out, has) {
 			out = ""
 		}
 	}
@@ -186,16 +207,22 @@ func launchBase(
 
 // driveTasks is drive n's tasks as typed, none once the drive is done or
 // cancelled, or its record is gone. Queued, parked and waiting hold only
-// while the driver runs: a stopped drive holds no task back.
-func driveTasks(root, n string) []drivestore.Task {
+// while the driver runs: a stopped drive holds no task back. unopened says,
+// per task, that the drive never opened it, read before that reset.
+func driveTasks(root, n string) ([]drivestore.Task, []bool) {
 	num, err := strconv.Atoi(n)
 	if err != nil {
-		return nil
+		return nil, nil
 	}
 
 	d, ok := drivestore.ActiveOne(root, num)
 	if !ok {
-		return nil
+		return nil, nil
+	}
+
+	unopened := make([]bool, len(d.Tasks))
+	for i, task := range d.Tasks {
+		unopened[i] = task.Phase == drivestore.PhasePending || task.Phase == drivestore.PhaseQueued
 	}
 
 	if !d.Running {
@@ -204,5 +231,5 @@ func driveTasks(root, n string) []drivestore.Task {
 		}
 	}
 
-	return d.Tasks
+	return d.Tasks, unopened
 }
