@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// Loads over the budget whose fix is still in flight; the test fails once one
+// Loads over the budget whose fix is still in flight. The test fails once one
 // fits, so an entry never outlives its fix.
 var overBudgetLoads = map[string]bool{}
 
