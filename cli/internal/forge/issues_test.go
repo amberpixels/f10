@@ -74,7 +74,7 @@ func TestIssueReadsBothCLIs(t *testing.T) {
 }
 
 // A create's number comes from the url the CLI prints last, in every issue
-// url shape: GitLab now prints work items where it printed issues.
+// url shape IssuePath accepts.
 func TestCreateIssueReadsEveryIssueURL(t *testing.T) {
 	for _, tc := range []struct{ host, out, url, number string }{
 		{"gh", "https://github.com/o/r/issues/7\n", "https://github.com/o/r/issues/7", "7"},
