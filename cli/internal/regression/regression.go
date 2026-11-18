@@ -193,8 +193,8 @@ func CommitTask(ctx context.Context, dir, prefix, sha string) (string, error) {
 	return SubjectTask(prefix, gitx.Out(ctx, dir, "show", "-s", "--format=%s", sha, "--")), nil
 }
 
-// TrailerTask is the task a commit's trailers name: a bundle's lead from
-// Task:, else the task a Change: names, its PR's .n cut off; "" for none.
+// TrailerTask is the task a commit's trailers name, "" for none. Task:
+// names a bundle's lead, else Change: names the task with its PR's .n.
 // Every reader of commit trailers calls it, so none tells a different owner.
 func TrailerTask(tasks, changes []string) string {
 	if len(tasks) > 0 {
@@ -208,8 +208,8 @@ func TrailerTask(tasks, changes []string) string {
 	return ""
 }
 
-// ChangeTask is the task a Change: trailer's value names: `FT-9.2`, a
-// task's second PR, is FT-9.
+// ChangeTask is the task a Change: trailer's value names. `FT-9.2` is
+// FT-9's second PR, so it names FT-9.
 func ChangeTask(change string) string {
 	id, _, _ := strings.Cut(strings.TrimSpace(change), ".")
 

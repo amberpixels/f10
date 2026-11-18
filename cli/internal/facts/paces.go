@@ -660,9 +660,8 @@ func (r Resolved) RunFlow() flow.Flow {
 	return run
 }
 
-// Labeled is the entries that run as written, each with its label, for
-// display only: the flow listings show it, while ship runs the lines
-// `f10 flow <name>` prints.
+// Labeled is the entries that run as written, each with its label. It is
+// for display only, because ship runs the lines `f10 flow <name>` prints.
 func (r Resolved) Labeled() []string { return r.RunFlow().Written() }
 
 // Parsed is the entry as it runs, with its label.

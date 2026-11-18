@@ -70,8 +70,9 @@ type Switch struct {
 // ClosedSwitch is the discussion the flow start a becomes when every task it
 // names is closed, nil otherwise. The CLI and the API both call it, so the
 // switch reads one way wherever a start comes from. A resume, a range or an
-// answer goes on with a drive already agreed, so it is never switched, and
-// neither is the daemon's own drive process, whose caller already checked.
+// answer goes on with a drive already agreed, so it is never switched. The
+// daemon's own drive process is not switched either, because its caller
+// already checked.
 func ClosedSwitch(ctx context.Context, t *target.Target, a drivectl.DriveArgs) *Switch {
 	if a.Resume > 0 || a.Span || len(a.Answers) > 0 || len(a.Tasks) == 0 || os.Getenv(daemon.ResumeEnv) != "" {
 		return nil

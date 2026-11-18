@@ -14,9 +14,8 @@ import (
 )
 
 // A DriveFlag is one of start's flags. Every parse of start's command line
-// reads StartFlags: the flow start's parser, its refusals, the record match
-// and the usage line through DriveFlags, and a discussion's or a pickup's
-// parser through the rows marked Once, so a new flag is one row.
+// reads StartFlags, so a new flag is one row. A flow start reads it through
+// DriveFlags, and a discussion or a pickup through the rows marked Once.
 type DriveFlag struct {
 	Name  string
 	Value string // the value's word in the usage, "" for a switch

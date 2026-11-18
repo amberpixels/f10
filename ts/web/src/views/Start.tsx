@@ -46,7 +46,7 @@ export function startReply(r: { drive: number; attached: boolean; task: string; 
 
 // StartForm is f10 start's: one id or several, a range with --, and how far
 // the agents run. A flow start runs as a drive, which opens its tasks after
-// the call; a discussion opens one agent.
+// the call. A discussion opens one agent.
 function StartForm() {
   const [project, setProject] = useState(projects.value[0]?.id ?? "");
   const [tasks, setTasks] = useState("");

@@ -53,9 +53,9 @@ type StartArgs struct {
 // named a task.
 func (s StartArgs) Flow() (DriveArgs, error) { return ParseDriveArgs(s.argv) }
 
-// ParseStart reads start's command line. --discuss or --task make a
-// one-shot start, and so does a first word naming a PR; anything else is a
-// flow start, which takes ids, a range and the drive's flags.
+// ParseStart reads start's command line. --discuss, --task or a first word
+// naming a PR make a one-shot start. Anything else is a flow start, which
+// takes ids, a range and the drive's flags.
 func ParseStart(argv []string) (StartArgs, error) {
 	named := false
 

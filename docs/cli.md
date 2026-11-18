@@ -219,9 +219,11 @@ What the start does, case by case:
   - the other groups get worktrees of their own.
   - the command returns once the daemon has the drive, instead of following it, because the drive prompts that same agent. The drive holds the first skill until the agent's turn ends, then clears the mark. `--foreground` is refused there.
 - a start whose every task is closed, none with a branch, opens a discussion instead of a drive, because a drive would run nothing.
-  A note says so first, naming the flags the discussion drops (`--plan`, `--flow`, `--pace`) and any other task's `:profile`, because one agent opens.
+  A note says so first, and names the flags the discussion drops: `--plan`, `--flow` and `--pace`.
+  It also names any other task's `:profile` as dropped, because one agent opens.
   The first task's `:profile` is the discussion's agent unless `--agent` or `--model` names one.
-  The agent's report names the commits that shipped each task, the release that holds them, and any open task whose id is one digit off, in case the id was mistyped.
+  The agent's report names the commits that shipped each task and the release that holds them.
+  It also names any open task whose id is one digit off, in case the id was mistyped.
   A resume, a range or `--answer` goes on with a drive already agreed, so it is never switched.
 - the flow is recorded on the branch as `branch.<name>.f10-flow` in local git config, for `f10 status` and a rerun of `f10 start`.
   With `flow_by_area` declared and no flow named, nothing is recorded and the prompt is `/f10:ship <id>` alone, because ship picks the flow from the task's area

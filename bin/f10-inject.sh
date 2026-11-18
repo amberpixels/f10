@@ -23,7 +23,7 @@ set -uo pipefail
 state_dir="${F10_STATE_DIR:-$HOME/.claude/f10/state}"
 
 # The skills that run a step and so read the conventions. asks, board, finish, read, start and status run the binary
-# alone; --help loads nothing (modes/help.md).
+# alone. --help loads nothing (modes/help.md).
 skills="audit brainstorm capture catchup ci cleanup debug demo explain handoff judge plan resolve review ship standup"
 
 # shellcheck disable=SC2016 # the backticks are markdown for the model, not a command

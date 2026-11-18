@@ -379,9 +379,9 @@ func Members(prefix, branch string) []string {
 // idShape is any `ABC-12` or a bare number.
 var idShape = regexp.MustCompile(`^(?:[A-Za-z][A-Za-z0-9]*-)?\d+$`)
 
-// IsID says whether word is shaped as a task id f10 start takes: any
-// `ABC-12` or a bare number, each with an optional -suffix, or a bundle of
-// them joined by Separator. The shape is enough, because the API resolves
+// IsID says whether word is shaped as a task id f10 start takes. That is
+// `ABC-12` or a bare number with an optional -suffix, or a bundle of them
+// joined by Separator. The shape is enough, because the API resolves
 // each id against the project.
 func IsID(word string) bool {
 	if word == "" || strings.HasPrefix(word, "-") {

@@ -107,9 +107,9 @@ func RecordKey(argv []string) string {
 
 // ThroughDaemon runs the drive in the daemon. With follow it prints the
 // drive's progress until the drive ends, and Ctrl+C stops only the
-// following. Without it, it returns once the daemon has the drive: a start
-// run inside a discussion's worktree does that, because the drive prompts
-// that same agent, which must end this turn first.
+// following. Without follow it returns once the daemon has the drive. A
+// start inside a discussion's worktree needs that, because the drive
+// prompts that same agent, which must end this turn first.
 func ThroughDaemon(
 	ctx context.Context, w io.Writer, t *target.Target, argv []string, a drivectl.DriveArgs, follow bool,
 ) error {
