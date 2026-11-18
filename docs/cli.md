@@ -240,7 +240,9 @@ What the start does, case by case:
   A base still at the default branch's commit is noted as a task with no code yet.
   It fails before creating anything when the task has no branch
 - with neither `--after` nor `--base`, the task body decides: a line `After: <id>` (alone on its line, the last of the body by convention) is read as `--after <id>` when that task has a branch, and noted beneath the report.
-  When the base has no branch and is finished (its issue closed, or, for a tracker with no state, its plan in main's `plans/archive/`), the branch is based on the default branch with a note; when it is not finished, start refuses before creating anything.
+  A base with no branch is finished when its issue is closed, or, for a tracker with no state, when its plan is in main's `plans/archive/`.
+  A finished base puts the branch on the default branch, with a note.
+  An unfinished one makes start refuse before creating anything.
   A body that cannot be read is a note, never a refusal
 - a parent task with subtasks is never started itself.
   Its subtasks run instead, in `f10 task children` order, as if listed.
@@ -266,8 +268,11 @@ What the start does, case by case:
 - the default branch is `<ID>/<slug>`: the title fetched through `gh` or `glab`, lowercased, non-alphanumerics collapsed to single hyphens, cut at 40 characters on a hyphen (`F10-8/default-task-ids-from-the-project-name`).
   The id stays in front, so the branch is still searched by its task.
   A project with its own shape encodes it in the driver's `branch` verb; no title, or a title with no ASCII letters in it, leaves the bare id and says so beneath the report
-- a new branch never takes a name a merged or closed PR used as its head, because every lookup by head branch would read that PR as the new branch's and finish the task at once: the task's next PR gets `<name>-2`, `-3` and so on, said beneath the report.
-  A local branch that is such a PR's head with nothing past it is refused, naming the PR, until it is removed; origin's copy of one is left alone
+- a new branch never takes a name a merged or closed PR used as its head.
+  Finish, the watcher and the drive look PRs up by head branch, so each would read that PR as the new branch's and finish the task at once.
+  The task's next PR gets `<name>-2`, `-3` and so on, and a note beneath the report says so.
+  A local branch at a merged PR's head with nothing past it is refused, naming the PR, until it is removed.
+  Origin's copy of one is left alone, and a branch whose PR closed without a merge is reused, because it holds the only copy of that work
 - a suffix glued to the id (`42-attempt2`, `42_v2`) salts the branch and the agent name, so a second worktree for one task can live beside the first
 - the agent is named `<id>` lowercased, with the suffix, then six hex characters hashed from the worktree path (`gh-12-3e78d4`): Herdr's agent names are one namespace across every project, so the same id in two repositories never collides
 - `f10 start <PR url | #n>` picks up a PR someone else opened: the task is in the tracker, the branch and the PR are on the remote, and nothing is local.

@@ -593,9 +593,8 @@ func TestTaskStandingWaiting(t *testing.T) {
 	}
 }
 
-// drive list decides a row by FinishedTask, asking the tracker only when the
-// branch and the live plan leave it open; an archived plan does not, since
-// an open task may ship another PR.
+// drive list decides a row by FinishedTask. It asks the tracker unless a
+// branch or a live plan decides, because an open task may ship another PR.
 func TestFinishedLazily(t *testing.T) {
 	cases := []struct {
 		name                     string

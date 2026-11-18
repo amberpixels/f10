@@ -47,8 +47,8 @@ func LandedFor(t *target.Target) LandedLookup {
 const landedMax = 20
 
 // avoidLanded keeps a new branch off a name a landed request used as its
-// head, since every lookup by head branch (finish, the watcher, the drive)
-// would read that request as this branch's and finish the task at once.
+// head. Finish, the watcher and the drive look requests up by head branch,
+// so each would read that request as this branch's and finish the task.
 func avoidLanded(
 	ctx context.Context,
 	in StartInput,

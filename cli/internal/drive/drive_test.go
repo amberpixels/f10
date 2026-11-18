@@ -1572,9 +1572,9 @@ func TestDrivePositionCountsTheWorktreesPlan(t *testing.T) {
 	}
 }
 
-// A run state at the worktree's path that says ship done moves an existing
-// branch past ship, but not a branch this start made: that state is an
-// earlier worktree's, left at a path the same branch name gives again.
+// A run state that says ship done at the worktree's path moves an existing
+// branch past ship. It does not move a branch this start made, because that
+// state belongs to an earlier worktree at the same path.
 func TestDrivePositionIgnoresARunAtANewBranch(t *testing.T) {
 	chain := []string{"plan", "ship", "finish"}
 
@@ -1637,9 +1637,9 @@ func TestDriveRefusesAListedPullRequest(t *testing.T) {
 	}
 }
 
-// A task the tracker states open is not finished by a plan an earlier PR's
-// finish archived, typed bare or with a suffix for its next PR; a closed one
-// with the same archive is.
+// A plan an earlier PR's finish archived does not finish a task the tracker
+// states open, typed bare or with a suffix. A closed one with the same
+// archive is finished.
 func TestDriveOpenTaskWithAnArchivedPlan(t *testing.T) {
 	for _, c := range []struct {
 		arg    string

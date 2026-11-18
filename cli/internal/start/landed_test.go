@@ -21,9 +21,9 @@ func landedOn(heads map[string]forge.PR, asked *[]string) LandedLookup {
 	}
 }
 
-// A new branch whose name a landed request used as its head takes the next
-// numbered name no ref and no landed request has, with a note; no lookup,
-// or a name nothing landed on, keeps the name.
+// A new branch whose name a landed request used takes the next numbered name
+// that no ref and no landed request has, with a note. With no lookup, or a
+// name nothing landed on, the name stays.
 func TestAvoidLandedNumbersANewBranch(t *testing.T) {
 	merged := forge.PR{URL: "https://x/pull/576", Status: forge.Merged, HeadSHA: "aaa"}
 
@@ -91,9 +91,10 @@ func TestAvoidLandedNumbersANewBranch(t *testing.T) {
 	})
 }
 
-// A found branch that is a landed request's head with nothing past it is
-// refused when local, since reusing it finishes the task at once, and left
-// for a new name when only origin has it; one with work past it is reused.
+// A local branch at a merged request's head with nothing past it is
+// refused, because reusing it finishes the task at once. Origin's copy of
+// one gives way to a new name. A branch with work past it, or whose request
+// closed without a merge, is reused.
 func TestAvoidLandedFoundBranch(t *testing.T) {
 	merged := forge.PR{URL: "https://x/pull/576", Status: forge.Merged, HeadSHA: "aaa"}
 	heads := map[string]forge.PR{"GH-1/slug": merged}

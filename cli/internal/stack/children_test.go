@@ -15,8 +15,8 @@ import (
 )
 
 // GitHub sub-issues come back open only, in the project's id format, with
-// the After: base resolved and the labels carried; an open one whose earlier
-// PR archived a plan is still unfinished, since the host states it open.
+// the After: base resolved and the labels carried. An open one whose earlier
+// PR archived a plan is unfinished, because the host states it open.
 func TestChildrenFromGitHub(t *testing.T) {
 	f := testkit.NewFakes(t)
 	tg := testkit.ChildTarget(t, "gh")

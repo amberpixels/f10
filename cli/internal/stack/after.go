@@ -40,8 +40,8 @@ type Tracker struct {
 	AllChildren func(ctx context.Context, task ref.Ref) ([]ChildRow, error)
 	Storage     storage.Root       // where a finished task's plan is archived
 	titles      tasktitle.Template // tracker.title, whose prefix comes off each child's title
-	// stated says a child row's state is the tracker's, as Info's is: the
-	// host's issues do, a driver reports none
+	// stated says a child row's state comes from the tracker, as Info's does.
+	// The host's issues state one, and a driver states none.
 	stated bool
 }
 
@@ -82,10 +82,10 @@ func TrackerFor(t *target.Target) Tracker {
 	return tr
 }
 
-// FinishedTask is the one "is this task done with": no branch, no live plan
-// (a re-plan is pending work whatever the tracker says), then the tracker's
-// state where it states one, since a task may ship in several PRs; only a
-// tracker with no state leaves it to the archived plan.
+// FinishedTask is the one "is this task done with". A branch or a live plan
+// is pending work, whatever the tracker says. Otherwise the tracker's state
+// decides, because a task may ship in several PRs. Only a tracker with no
+// state leaves it to the archived plan.
 func FinishedTask(info tasksource.TaskInfo, root storage.Root, id string, hasBranch bool) bool {
 	if hasBranch || root.PlanLive(id) {
 		return false

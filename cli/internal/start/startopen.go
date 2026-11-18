@@ -57,8 +57,8 @@ type StartInput struct {
 	// Started moves a task to tracker.status's started word; nil when none
 	// is declared, or for a PR picked up, whose task someone else started
 	Started func(ctx context.Context, task ref.Ref) error
-	// Landed reads the landed request a branch name was the head of; nil
-	// skips the check
+	// Landed reads the landed request a branch name was the head of. Nil
+	// skips the check.
 	Landed LandedLookup
 }
 

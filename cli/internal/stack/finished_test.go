@@ -11,8 +11,8 @@ import (
 )
 
 // One rule decides a finished task for drive, status, children and drive
-// list: no branch, no live plan, then the tracker's state where it states
-// one, else the archive.
+// list. A branch or a live plan means unfinished. Then the tracker's state
+// decides, and the archive only where the tracker states none.
 func TestFinishedTask(t *testing.T) {
 	cases := []struct {
 		name               string

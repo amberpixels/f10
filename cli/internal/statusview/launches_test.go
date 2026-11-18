@@ -14,8 +14,8 @@ import (
 )
 
 // A drive's queued task keeps its row though an earlier PR archived its
-// plan, and its dependent still waits on it; the drive's own record, not
-// the archive, drops a task it finished.
+// plan, and its dependent still waits on it. A task the drive finished
+// drops by the drive's own record.
 func TestLaunchKidsKeepAQueuedTaskWithAnArchivedPlan(t *testing.T) {
 	f := testkit.NewFakes(t)
 	stateDir := t.TempDir()
