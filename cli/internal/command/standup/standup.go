@@ -118,7 +118,7 @@ func runStandup(ctx context.Context, cmd *cli.Command) error {
 			return err
 		}
 
-		start = fallbackStart(ctx, ins, now, from, workdays)
+		start = fallbackStart(ins, now, from, workdays, func(at time.Time) { detailAll(ctx, ins, at) })
 	}
 
 	reports := make([]standup.Report, len(ins))
@@ -214,13 +214,15 @@ func ParseSince(s string) (time.Time, error) {
 // only the PRs updated since that day. More activity can only find a later
 // day, so the second answer is covered, unless the first found none and fell
 // back to the last working day: then the whole window is read.
-func fallbackStart(ctx context.Context, ins []standup.Input, now, from time.Time, w calendar.Workdays) time.Time {
+func fallbackStart(
+	ins []standup.Input, now, from time.Time, w calendar.Workdays, detail func(from time.Time),
+) time.Time {
 	first, found := lastActive(ins, now, w)
 
 	if found {
-		detailAll(ctx, ins, first)
+		detail(first)
 	} else {
-		detailAll(ctx, ins, from)
+		detail(from)
 	}
 
 	start, _ := lastActive(ins, now, w)

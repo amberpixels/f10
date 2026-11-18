@@ -49,6 +49,15 @@ func RenderStandup(w io.Writer, links *render.TaskLinks, s standup.Standup) erro
 		b.WriteString("\nnothing\n")
 	}
 
+	// the report printed without these PRs' commits, so it says so
+	if len(s.Warnings) > 0 {
+		b.WriteString("\nwarnings\n")
+
+		for _, w := range s.Warnings {
+			fmt.Fprintf(&b, "  %s\n", w)
+		}
+	}
+
 	_, err := io.WriteString(w, b.String())
 
 	return err

@@ -39,7 +39,8 @@ So do the ledger's additions.
 They are what a task is blocked on, the steps that left no commit, its precise stage, its drive and its active minutes.
 Never re-read git, the host or the ledger to second-guess them.
 Never re-read them as a fallback when the command fails either.
-The command already retries a host 5xx once per call, so a failure of it is reported as `conventions/failure.md` says and never rerun, because a rerun repeats every call it made.
+The command already retries a host 5xx once per call, so a 5xx it still reports is not rerun, because a rerun repeats every call it made.
+Any other failure follows `conventions/failure.md`, whose one retry still applies to a transient error the command does not retry, such as a dropped connection.
 
 1. **Collect** the read time, the person's settings and the report, in one call:
 

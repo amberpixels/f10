@@ -455,14 +455,15 @@ func periodPushes(pushes []ForcePush, since time.Time) []ForcePush {
 	return out
 }
 
-// commitAfter is the sha of the task's first commit authored after at, or
-// "" with none: an ask a later commit may have settled.
+// commitAfter is the sha of the task's first work commit authored after at,
+// or "" with none: an ask a later commit may have settled. Upkeep, such as a
+// base merge, settles no question.
 func commitAfter(t Task, at time.Time) string {
 	var first *Commit
 
 	consider := func(cs []Commit) {
 		for i, c := range cs {
-			if c.At.After(at) && (first == nil || c.At.Before(first.At)) {
+			if c.Class != ClassUpkeep && c.At.After(at) && (first == nil || c.At.Before(first.At)) {
 				first = &cs[i]
 			}
 		}

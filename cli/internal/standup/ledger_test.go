@@ -306,8 +306,11 @@ func TestAskNamesALaterCommit(t *testing.T) {
 		t.Errorf("blocked = %+v, want later_commit c5", task.Blocked)
 	}
 
-	task = taskByID(t, Group(withLedger(input(commits[:1], nil), ask)), "FT-8")
+	lock := commit("c4", "FT-8/work", "bump lock", 4)
+	lock.Files = []File{{Path: "go.sum"}}
+
+	task = taskByID(t, Group(withLedger(input([]Commit{commits[0], lock}, nil), ask)), "FT-8")
 	if task.Blocked == nil || task.Blocked.LaterCommit != "" {
-		t.Errorf("blocked = %+v, want no later commit", task.Blocked)
+		t.Errorf("blocked = %+v, want no later commit: c2 came before, c4 is upkeep", task.Blocked)
 	}
 }
