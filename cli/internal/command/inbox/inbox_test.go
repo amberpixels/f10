@@ -187,6 +187,52 @@ func TestWalkAsksKeepsANumericOption(t *testing.T) {
 	}
 }
 
+// An ask whose one question holds its background and an "Options:" list
+// shows them as context, a question and lettered options, the recommended
+// one the default; the answer goes back as the chosen option's text.
+func TestWalkAsksRecoversProseOptions(t *testing.T) {
+	text := "Tests are red on PR #61 for a reason from main. Cause: config/pages.yml lost the key. " +
+		"What should happen with the red tests? Options: 1) fix it in this PR, " +
+		"2) leave it red (recommended: main needs its own fix), 3) rerun once more"
+
+	for _, c := range []struct{ input, want string }{
+		{"\n", "FT-1: 1. leave it red"},
+		{"b\n", "FT-1: 1. fix it in this PR"},
+		{"bump the timeout\n", "FT-1: 1. bump the timeout"},
+	} {
+		dir := t.TempDir()
+		testkit.Raised(t, dir, asks.Ask{Task: "FT-1", Root: "/r", Skill: "ci", Text: text})
+		f := &fakeDeliver{}
+
+		var out bytes.Buffer
+
+		if err := inboxcmd.WalkAsks(
+			context.Background(), &out, bufio.NewReader(strings.NewReader(c.input)), dir, f.deliverer(),
+		); err != nil {
+			t.Fatal(err)
+		}
+
+		got := out.String()
+		for _, want := range []string{
+			"   Tests are red on PR #61 for a reason from main.\n",
+			"   · cause  config/pages.yml lost the key.\n",
+			" 1. What should happen with the red tests?\n",
+			"    a) leave it red  (default, recommended: main needs its own fix)\n",
+			"    b) fix it in this PR\n",
+			"    c) rerun once more\n",
+			"1 [a]> ",
+		} {
+			if !strings.Contains(got, want) {
+				t.Errorf("walk printed:\n%s\nwant it to hold %q", got, want)
+			}
+		}
+
+		if !slices.Equal(f.prompted, []string{c.want}) {
+			t.Errorf("input %q prompted %v, want %q", c.input, f.prompted, c.want)
+		}
+	}
+}
+
 // The walk shows an ask's context, its question and lettered options with
 // the default marked, and prompts with the default's letter; piped, it
 // prints no escape codes, and a letter picks its option.
@@ -210,7 +256,7 @@ func TestWalkAsksShowsContextAndLetters(t *testing.T) {
 	got := out.String()
 	for _, want := range []string{
 		"FT-1 · at ci · asked",
-		" Lint failed at ab12ab12, see https://ci.example/run/42.\n",
+		"   Lint failed at ab12ab12, see https://ci.example/run/42.\n",
 		" 1. Fix it here?\n",
 		"    a) leave  (default)\n",
 		"    b) fix\n",
