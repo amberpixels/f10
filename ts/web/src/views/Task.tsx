@@ -72,7 +72,7 @@ export function TaskView(props: { root: string; task: string }) {
         {status && <Checks status={status} />}
         {r?.ask && (
           <p>
-            <a href="/asks">Answer the ask</a>
+            <a href="/inbox">Answer the ask</a>
           </p>
         )}
       </Section>

@@ -92,8 +92,8 @@ type driveConfig struct {
 	StateDir string
 	Session  string // the session that typed the command, inherited through the daemon's environment
 	TTL      time.Duration
-	// AsksDir is the inbox an ask goes to and answers come from; "" keeps none
-	AsksDir string
+	// InboxDir is the inbox an ask goes to and answers come from; "" keeps none
+	InboxDir string
 	// DaemonRun is a drive a daemon runs that restarts it: an answer that
 	// came after it stopped looking ends it ExitResume for that restart
 	DaemonRun bool

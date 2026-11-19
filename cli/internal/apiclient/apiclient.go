@@ -39,7 +39,7 @@ type Clients struct {
 	Tasks  f10v1connect.TaskServiceClient
 	Board  f10v1connect.BoardServiceClient
 	Agents agentsv1connect.AgentServiceClient
-	Asks   agentsv1connect.InboxServiceClient
+	Inbox  agentsv1connect.InboxServiceClient
 
 	// inProcess: the handlers run here, in this process's environment, so
 	// a caller passes none
@@ -88,17 +88,17 @@ func over(hc *http.Client, base string, local bool) *Clients {
 		Tasks:     f10v1connect.NewTaskServiceClient(hc, base),
 		Board:     f10v1connect.NewBoardServiceClient(hc, base),
 		Agents:    agentsv1connect.NewAgentServiceClient(hc, base),
-		Asks:      agentsv1connect.NewInboxServiceClient(hc, base),
+		Inbox:     agentsv1connect.NewInboxServiceClient(hc, base),
 		inProcess: local,
 	}
 }
 
-// AsksIn is an asks client over the inbox in dir with d moving answers on,
+// InboxIn is a client of the inbox in dir with d moving answers on,
 // served in process: what a test of the inbox command calls instead of the
 // daemon's inbox.
-func AsksIn(dir string, d agents.Deliverer) agentsv1connect.InboxServiceClient {
+func InboxIn(dir string, d agents.Deliverer) agentsv1connect.InboxServiceClient {
 	mux := http.NewServeMux()
-	agentsrpc.Mount(mux, agentsrpc.Options{Deliverer: d, AsksDir: func() string { return dir }})
+	agentsrpc.Mount(mux, agentsrpc.Options{Deliverer: d, InboxDir: func() string { return dir }})
 
 	return agentsv1connect.NewInboxServiceClient(&http.Client{Transport: handlerTransport{mux}}, daemon.SocketURL)
 }

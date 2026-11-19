@@ -2,13 +2,13 @@ import { useEffect, useState } from "preact/hooks";
 
 import { message, P } from "./api";
 import { enableNotifications, notifyState } from "./notify";
-import { onLink, route } from "./router";
+import { onLink, redirect, route } from "./router";
 import { caller, can, forgetToken, token } from "./session";
 import { api, live, openAsks, start } from "./store";
 import { ArtifactView } from "./views/Artifact";
-import { Asks } from "./views/Asks";
 import { Board } from "./views/Board";
 import { Capture } from "./views/Capture";
+import { Inbox } from "./views/Inbox";
 import { Login } from "./views/Login";
 import { Start } from "./views/Start";
 import { Status } from "./views/Status";
@@ -20,7 +20,7 @@ function tabs(): Tab[] {
   const c = caller.value;
   return [
     { path: "/", label: "Runs", show: can(c, P.status) },
-    { path: "/asks", label: "Asks", show: can(c, P.listAsks), badge: openAsks.value?.length },
+    { path: "/inbox", label: "Inbox", show: can(c, P.listAsks), badge: openAsks.value?.length },
     { path: "/board", label: "Board", show: can(c, P.board) },
     { path: "/start", label: "Start", show: can(c, P.start) },
     { path: "/capture", label: "Capture", show: can(c, P.createTask) },
@@ -31,8 +31,10 @@ function Page() {
   const { path, q } = route.value;
   const get = (k: string) => q.get(k) ?? "";
   switch (path) {
-    case "/asks":
-      return <Asks />;
+    case "/inbox":
+      return <Inbox />;
+    case "/asks": // the old address: drop with the f10 asks alias in v0.68
+      return <Redirect to="/inbox" />;
     case "/board":
       return <Board project={get("p")} />;
     case "/start":
@@ -46,6 +48,11 @@ function Page() {
     default:
       return <Status />;
   }
+}
+
+function Redirect({ to }: { to: string }) {
+  useEffect(() => redirect(to), [to]);
+  return null;
 }
 
 function Nav() {

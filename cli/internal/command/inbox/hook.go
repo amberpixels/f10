@@ -47,8 +47,8 @@ func liveDeliver() Deliverer {
 	}
 }
 
-// runAsksResume resumes the drive an answered ask names.
-func runAsksResume(ctx context.Context, cmd *cli.Command) error {
+// runInboxResume resumes the drive an answered ask names.
+func runInboxResume(ctx context.Context, cmd *cli.Command) error {
 	dir := asks.Dir()
 
 	a, isOpen, err := asks.Get(dir, cmd.Args().First())
@@ -98,9 +98,9 @@ func resumeAskDrive(ctx context.Context, w io.Writer, a asks.Ask) error {
 	return nil
 }
 
-// runAsksHook prints, as context, the open asks this session has not been
+// runInboxHook prints, as context, the open asks this session has not been
 // told, leaving out the asking agent's own session.
-func runAsksHook(ctx context.Context, cmd *cli.Command) error {
+func runInboxHook(ctx context.Context, cmd *cli.Command) error {
 	// a hook never fails the prompt it runs for
 	defer func() { _ = recover() }()
 
@@ -133,14 +133,14 @@ func runAsksHook(ctx context.Context, cmd *cli.Command) error {
 		root = layout.Locate(ctx, p.Cwd).CheckoutRoot
 	}
 
-	_, _ = cmd.Writer.Write(AsksContext(asks.Dir(), state.Dir(), p.Session, p.Event, root))
+	_, _ = cmd.Writer.Write(InboxContext(asks.Dir(), state.Dir(), p.Session, p.Event, root))
 
 	return nil
 }
 
-// AsksContext is the hook's output: the untold open asks, outside the
+// InboxContext is the hook's output: the untold open asks, outside the
 // session's own checkout, as additional context; nothing when none.
-func AsksContext(dir, stateDir, session, event, root string) []byte {
+func InboxContext(dir, stateDir, session, event, root string) []byte {
 	open, err := asks.Open(dir)
 	if err != nil || len(open) == 0 {
 		return nil

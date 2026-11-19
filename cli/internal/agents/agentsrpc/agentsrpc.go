@@ -27,7 +27,7 @@ import (
 // to a drive, which the agents core knows nothing about, and the inbox.
 type Options struct {
 	Deliverer agents.Deliverer
-	AsksDir   func() string // the inbox; asks.Dir when nil
+	InboxDir  func() string // the inbox; asks.Dir when nil
 	Now       func() time.Time
 	// Session runs ctx's commands in a local caller's env, its agent calls in
 	// the session that env names; nil leaves ctx as it is
@@ -39,8 +39,8 @@ type Options struct {
 
 // Mount adds AgentService and InboxService to mux.
 func Mount(mux *http.ServeMux, o Options, opts ...connect.HandlerOption) {
-	if o.AsksDir == nil {
-		o.AsksDir = asks.Dir
+	if o.InboxDir == nil {
+		o.InboxDir = asks.Dir
 	}
 
 	if o.Now == nil {
@@ -253,7 +253,7 @@ func (s inboxService) ListAsks(
 	ctx context.Context,
 	req *connect.Request[agentsv1.ListAsksRequest],
 ) (*connect.Response[agentsv1.ListAsksResponse], error) {
-	dir := s.o.AsksDir()
+	dir := s.o.InboxDir()
 
 	open, err := asks.Open(dir)
 	if err != nil {
@@ -300,7 +300,7 @@ func (s inboxService) AnswerAsk(
 		return s.answerAsCommand(ctx, req)
 	}
 
-	dir := s.o.AsksDir()
+	dir := s.o.InboxDir()
 
 	a, err := agents.FindKey(dir, req.Msg.GetId())
 	if err != nil {
@@ -353,7 +353,7 @@ func (s inboxService) answerAsCommand(
 ) (*connect.Response[agentsv1.AnswerAskResponse], error) {
 	m := req.Msg
 	c := callerOf(req, m.GetCaller())
-	dir := s.o.AsksDir()
+	dir := s.o.InboxDir()
 
 	find := func() (asks.Ask, error) { return agents.FindKey(dir, m.GetId()) }
 	if m.GetMatch() != "" {

@@ -21,7 +21,7 @@ func inboxFixture(t *testing.T, args ...string) (*driveFixture, *int) {
 	t.Helper()
 
 	fx := newDriveFixture(t, args...)
-	fx.in.Root, fx.in.AsksDir, fx.in.DaemonRun = t.TempDir(), t.TempDir(), true
+	fx.in.Root, fx.in.InboxDir, fx.in.DaemonRun = t.TempDir(), t.TempDir(), true
 
 	notified := 0
 	fx.in.Notify = func(context.Context, asks.Ask) error {
@@ -65,7 +65,7 @@ func TestDriveRaisesAskIntoInbox(t *testing.T) {
 		t.Fatalf("err = %v\n%s", err, fx.out.String())
 	}
 
-	open, err := asks.Open(fx.in.AsksDir)
+	open, err := asks.Open(fx.in.InboxDir)
 	if err != nil || len(open) != 1 {
 		t.Fatalf("open asks = %+v, %v", open, err)
 	}
@@ -88,11 +88,11 @@ func TestDriveTakesInboxAnswer(t *testing.T) {
 	fx.resumedOnAsk(t)
 	fx.f.Script("herdr agent prompt "+testkit.AgentOf("GH-1")+" 1. stop", "{}")
 
-	a, _, _ := asks.Raise(fx.in.AsksDir, asks.Ask{
+	a, _, _ := asks.Raise(fx.in.InboxDir, asks.Ask{
 		Task: "GH-1", Root: fx.in.Root, Drive: 1,
 		Worktree: "/code/repo.GH-1", Text: "1. Rethink: [proceed | stop]",
 	}, time.Now())
-	if _, err := asks.Claim(fx.in.AsksDir, a.Key(), asks.ByAsks, "1. stop", false, time.Now()); err != nil {
+	if _, err := asks.Claim(fx.in.InboxDir, a.Key(), asks.ByAsks, "1. stop", false, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -104,7 +104,7 @@ func TestDriveTakesInboxAnswer(t *testing.T) {
 		t.Errorf("output:\n%s", fx.out.String())
 	}
 
-	got, _, _ := asks.Get(fx.in.AsksDir, a.Key())
+	got, _, _ := asks.Get(fx.in.InboxDir, a.Key())
 	if got.TakenAt.IsZero() {
 		t.Error("the inbox answer was not marked taken")
 	}
@@ -121,11 +121,11 @@ func TestDriveFollowsPaneAnswer(t *testing.T) {
 	fx, _ := inboxFixture(t, "GH-1", "judge")
 	fx.resumedOnAsk(t)
 
-	a, _, _ := asks.Raise(fx.in.AsksDir, asks.Ask{
+	a, _, _ := asks.Raise(fx.in.InboxDir, asks.Ask{
 		Task: "GH-1", Root: fx.in.Root, Drive: 1,
 		Worktree: "/code/repo.GH-1", Text: "1. Rethink: [proceed | stop]",
 	}, time.Now())
-	if _, err := asks.Claim(fx.in.AsksDir, a.Key(), asks.ByPane, "stop", true, time.Now()); err != nil {
+	if _, err := asks.Claim(fx.in.InboxDir, a.Key(), asks.ByPane, "stop", true, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -154,7 +154,7 @@ func TestDriveResumesForLateAnswer(t *testing.T) {
 			t.Error("the drive's lease was free before it exited")
 		}
 
-		_, err := asks.Claim(fx.in.AsksDir, a.Key(), asks.ByAsks, "1. proceed", false, time.Now())
+		_, err := asks.Claim(fx.in.InboxDir, a.Key(), asks.ByAsks, "1. proceed", false, time.Now())
 
 		return err
 	}
@@ -173,7 +173,7 @@ func TestDriveResumesForLateAnswer(t *testing.T) {
 	fx2.in.DaemonRun = false
 	fx2.asking(t)
 	fx2.in.Notify = func(_ context.Context, a asks.Ask) error {
-		_, err := asks.Claim(fx2.in.AsksDir, a.Key(), asks.ByAsks, "1. proceed", false, time.Now())
+		_, err := asks.Claim(fx2.in.InboxDir, a.Key(), asks.ByAsks, "1. proceed", false, time.Now())
 
 		return err
 	}

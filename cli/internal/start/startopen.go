@@ -272,8 +272,8 @@ func OpenTask(ctx context.Context, in StartInput) (OpenedTask, error) {
 		notes = append(notes, settled.slugNote)
 	}
 
-	if settled.landedNote != "" {
-		notes = append(notes, settled.landedNote)
+	if settled.numberedNote != "" {
+		notes = append(notes, settled.numberedNote)
 	}
 
 	path, notes, err := openWorktree(ctx, in, name, base, dep, existing, notes)
@@ -499,9 +499,9 @@ type settledBranch struct {
 	base     baseRef
 	dep      *launch.Dependency
 	existing stack.FoundBranch
-	// landedNote says why the name is numbered: the plain one was a landed
+	// numberedNote says why the name is numbered: the plain one was a landed
 	// request's head
-	landedNote string
+	numberedNote string
 }
 
 // branchFor settles the branch before anything is created. An open PR's
@@ -538,13 +538,13 @@ func branchFor(ctx context.Context, in StartInput) (settledBranch, error) {
 		return settledBranch{}, err
 	}
 
-	name, existing, landedNote, err := avoidLanded(ctx, in, name, existing)
+	name, existing, numberedNote, err := avoidLanded(ctx, in, name, existing)
 	if err != nil {
 		return settledBranch{}, err
 	}
 
 	return settledBranch{
-		name: name, slugNote: slugNote, landedNote: landedNote, base: base, dep: dep, existing: existing,
+		name: name, slugNote: slugNote, numberedNote: numberedNote, base: base, dep: dep, existing: existing,
 	}, nil
 }
 

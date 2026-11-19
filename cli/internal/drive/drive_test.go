@@ -3773,7 +3773,7 @@ func TestDriveParksAShipOnItsBasesCode(t *testing.T) {
 	fx.f.Script("git rev-parse -q --verify refs/heads/GH-1", "a1", "a2")
 	fx.f.Script("git rev-parse -q --verify MERGE_HEAD", "")
 	fx.f.Script("git status --porcelain", "")
-	fx.in.AsksDir = t.TempDir()
+	fx.in.InboxDir = t.TempDir()
 
 	fx.f.Script(testkit.WsList,
 		unopened, all("idle", "GH-1"),
@@ -3812,7 +3812,7 @@ func TestDriveParksAShipOnItsBasesCode(t *testing.T) {
 		}
 	}
 
-	if entries, _ := os.ReadDir(fx.in.AsksDir); len(entries) > 0 {
+	if entries, _ := os.ReadDir(fx.in.InboxDir); len(entries) > 0 {
 		t.Errorf("a parked ship raised an ask: %v", entries)
 	}
 }
@@ -3829,7 +3829,7 @@ func TestDriveParksAShipOnItsBaseUntilOriginHasIt(t *testing.T) {
 	fx.f.Script("git rev-parse -q --verify refs/remotes/origin/GH-1", "")
 	fx.f.Script("git rev-parse -q --verify MERGE_HEAD", "")
 	fx.f.Script("git status --porcelain", "")
-	fx.in.AsksDir = t.TempDir()
+	fx.in.InboxDir = t.TempDir()
 
 	fx.f.Script(testkit.WsList,
 		unopened, all("idle", "GH-1"),
@@ -3872,7 +3872,7 @@ func TestDriveParksAShipOnItsBaseUntilOriginHasIt(t *testing.T) {
 		t.Errorf("the origin wait resent early or counted an attempt:\n%s", out)
 	}
 
-	if entries, _ := os.ReadDir(fx.in.AsksDir); len(entries) > 0 {
+	if entries, _ := os.ReadDir(fx.in.InboxDir); len(entries) > 0 {
 		t.Errorf("a parked ship raised an ask: %v", entries)
 	}
 }
