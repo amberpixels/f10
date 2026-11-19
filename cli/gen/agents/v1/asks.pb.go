@@ -341,7 +341,10 @@ type ListAsksRequest struct {
 	AnsweredSince *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=answered_since,json=answeredSince,proto3" json:"answered_since,omitempty"`
 	// caller is where a local inbox command runs: with it, view links each
 	// ask's task when the caller's output is a terminal.
-	Caller        *CallerContext `protobuf:"bytes,2,opt,name=caller,proto3" json:"caller,omitempty"`
+	Caller *CallerContext `protobuf:"bytes,2,opt,name=caller,proto3" json:"caller,omitempty"`
+	// project is the storage root whose asks to list; empty lists every
+	// project's.
+	Project       string `protobuf:"bytes,3,opt,name=project,proto3" json:"project,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -388,6 +391,13 @@ func (x *ListAsksRequest) GetCaller() *CallerContext {
 		return x.Caller
 	}
 	return nil
+}
+
+func (x *ListAsksRequest) GetProject() string {
+	if x != nil {
+		return x.Project
+	}
+	return ""
 }
 
 type ListAsksResponse struct {
@@ -812,10 +822,11 @@ const file_agents_v1_asks_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\",\n" +
 	"\x06Answer\x12\f\n" +
 	"\x01n\x18\x01 \x01(\x05R\x01n\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value\"\x86\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value\"\xa0\x01\n" +
 	"\x0fListAsksRequest\x12A\n" +
 	"\x0eanswered_since\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\ransweredSince\x120\n" +
-	"\x06caller\x18\x02 \x01(\v2\x18.agents.v1.CallerContextR\x06caller\"v\n" +
+	"\x06caller\x18\x02 \x01(\v2\x18.agents.v1.CallerContextR\x06caller\x12\x18\n" +
+	"\aproject\x18\x03 \x01(\tR\aproject\"v\n" +
 	"\x10ListAsksResponse\x12\"\n" +
 	"\x04open\x18\x01 \x03(\v2\x0e.agents.v1.AskR\x04open\x12*\n" +
 	"\banswered\x18\x02 \x03(\v2\x0e.agents.v1.AskR\banswered\x12\x12\n" +

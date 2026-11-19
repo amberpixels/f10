@@ -35,13 +35,17 @@ Examples are a judge's rethink, a resolve `ask` and a deploy confirmation.
    For ship, the leaf is the flow entry that stopped.
    The `Stop` hook leaves a `blocked` state alone.
 3. **End the turn.**
-   Print the ask once, under a facts block that carries the task.
-   The print is for a person looking at this pane, so end it with "Answer here".
-   Never end it with a command meant for another session, such as `f10 forward`, `f10 status` or `f10 start --answer`.
+   `f10-state.sh ask` prints the ask as a banner, rendered by f10.
+   Print that banner verbatim as the final message, under a facts block that carries the task, inside a code fence.
+   Claude Code collapses Bash output, so the banner shows only when you print it, and the fence keeps its `━` rules from rendering as a heading.
+   Never type the banner by hand, because a hand-typed one drifts from the text the answers are read against.
+   The banner ends with where an answer goes, so add nothing after it.
+   Never add a command meant for another session, such as `f10 forward`, `f10 status` or `f10 start --answer`.
    The driving session reads the ask through `f10 status <task-id>` and already knows its own way back.
 
-`f10-state.sh ask` also puts the ask in the user's inbox (`f10 inbox`).
-The inbox counts the ask on the status line, tells other sessions about it and notifies the user.
+`f10-state.sh ask` also puts the ask in the user's inbox (`f10 inbox`), and inside Herdr it shows this pane as blocked until the ask is answered.
+The inbox counts the ask on the status line of this project's sessions, tells this project's other sessions about it, and notifies the user.
+A drive's agents are never told another agent's ask, because they could only print it into their pane.
 
 Six kinds of open question never become an ask:
 

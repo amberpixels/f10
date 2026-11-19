@@ -37,6 +37,8 @@ type Fakes struct {
 	// Defaults answers a call under one of these prefixes, and no script of
 	// its own, with that stdout
 	Defaults map[string]string
+	// Driven names the agents started with a drive's mark (launch.DrivenEnv)
+	Driven []string
 	// Launches are the agent starts argvLaunch answered for a test
 	Launches []string
 	// Meta holds the branch records; its writes join calls in order
@@ -90,7 +92,12 @@ func NewFakes(t *testing.T) *Fakes {
 	})
 
 	seam.Swap(t, &shell.Capture, func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
-		args = withoutTestGrants(name, args)
+		args, driven := withoutTestGrants(name, args)
+		if driven != "" {
+			f.mu.Lock()
+			f.Driven = append(f.Driven, driven)
+			f.mu.Unlock()
+		}
 		if res, ok := f.argvLaunch(filepath.Base(name), args); ok {
 			return res, nil
 		}
@@ -140,16 +147,27 @@ func (f *Fakes) Answer(key string) shell.Result {
 }
 
 // withoutTestGrants drops the --add-dir pairs Storage adds to an agent
-// start, and the "--" they leave alone at the end.
-func withoutTestGrants(name string, args []string) []string {
+// start, a drive's mark, and the "--" they leave alone at the end; driven
+// names the agent when the mark was there.
+func withoutTestGrants(name string, args []string) ([]string, string) {
 	if filepath.Base(name) != "herdr" || len(args) < 2 || args[0] != "agent" || args[1] != "start" {
-		return args
+		return args, ""
 	}
 
-	var out []string
+	var (
+		out    []string
+		driven string
+	)
 
 	for i := 0; i < len(args); i++ {
 		if args[i] == "--add-dir" && i+1 < len(args) && gitx.Inside(args[i+1], Storage.Path()) {
+			i++
+
+			continue
+		}
+
+		if args[i] == "--settings" && i+1 < len(args) && strings.Contains(args[i+1], launch.DrivenEnv) {
+			driven = args[2]
 			i++
 
 			continue
@@ -162,7 +180,7 @@ func withoutTestGrants(name string, args []string) []string {
 		out = out[:len(out)-1]
 	}
 
-	return out
+	return out, driven
 }
 
 // Script sets the answers for key: one per call, the last repeating.

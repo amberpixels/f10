@@ -13,6 +13,7 @@ import (
 const (
 	launchesExt = ".launches"
 	inboxExt    = ".inbox"
+	projectExt  = ".project"
 	// legacyAsksExt is the marks' name before the inbox rename, still pruned so
 	// old files go. Drop it in v0.68.
 	legacyAsksExt = ".asks"
@@ -33,6 +34,12 @@ type Launch struct {
 // InboxPath marks the asks a session was told, so each is told once.
 func InboxPath(dir, session string) string {
 	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+inboxExt)
+}
+
+// ProjectPath holds the hash of the session's project, written at session
+// start, so the status line counts that project's asks without running git.
+func ProjectPath(dir, session string) string {
+	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+projectExt)
 }
 
 // LaunchesPath lists what a session launched, so a bare status in the main

@@ -31,6 +31,11 @@ func TestDriveLaunchesWithTheFirstSkill(t *testing.T) {
 	if len(fx.f.Launches) != 1 || fx.f.Launches[0] != want {
 		t.Errorf("launches = %q, want %q", fx.f.Launches, want)
 	}
+
+	// marked, so its hooks tell it no other agent's asks
+	if len(fx.f.Driven) != 1 || fx.f.Driven[0] != testkit.AgentOf("GH-1") {
+		t.Errorf("driven agents = %q, want %s marked", fx.f.Driven, testkit.AgentOf("GH-1"))
+	}
 }
 
 // The drive checks a typed send once, EnterRetry after it, and never one

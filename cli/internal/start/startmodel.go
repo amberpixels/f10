@@ -1,10 +1,12 @@
 package start
 
 import (
+	"cmp"
 	"fmt"
 	"os"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/launch"
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
@@ -23,6 +25,21 @@ func AgentArgs(p agentctl.Profile, root storage.Root, worktree string) []string 
 	}
 
 	return args
+}
+
+// drivenSettings sets launch.DrivenEnv for the session: Claude Code applies
+// a settings env to its own process, so every hook it runs inherits it.
+var drivenSettings = `{"env":{"` + launch.DrivenEnv + `":"1"}}`
+
+// LaunchArgs is AgentArgs for a launch, marked as a drive's when driven:
+// the mark goes first, because --add-dir takes every argument after it.
+func LaunchArgs(p agentctl.Profile, root storage.Root, worktree string, driven bool) []string {
+	args := AgentArgs(p, root, worktree)
+	if !driven || cmp.Or(p.Kind, agentctl.DefaultKind) != agentctl.DefaultKind {
+		return args
+	}
+
+	return append([]string{"--settings", drivenSettings}, args...)
 }
 
 // makeStorageDirs creates the task-file dirs AgentArgs names, since claude

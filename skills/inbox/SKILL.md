@@ -1,8 +1,8 @@
 ---
 name: inbox
-description: "f10 inbox skill - the questions driven agents are waiting on, across projects, put to the user in one questionnaire and answered: a drive's task resumes its drive, any other agent gets the answer as its next prompt. Use when the user says \"/f10:inbox\" (formerly /f10:asks), asks what agents are waiting on or asking, or wants to answer the open asks the status line counts."
+description: "f10 inbox skill - the questions driven agents are waiting on in this project (every project with --all), put to the user in one questionnaire and answered: a drive's task resumes its drive, any other agent gets the answer as its next prompt. Use when the user says \"/f10:inbox\" (formerly /f10:asks), asks what agents are waiting on or asking, or wants to answer the open asks the status line counts."
 allowed-tools: Bash, AskUserQuestion
-argument-hint: "[task-id]"
+argument-hint: "[task-id] [--all]"
 ---
 
 # f10 · inbox
@@ -13,9 +13,11 @@ This skill reads the inbox, asks the user, and writes the answers (`${CLAUDE_PLU
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
 - A task id (or `<project>:<task>`): only that task's ask.
-- No argument: every open ask.
+- `--all`: every project's open asks.
+  Without it, the list holds this project's asks, or every project's outside a git checkout.
+- No argument: every open ask of this project.
 
-1. Run `f10 inbox list --json`.
+1. Run `f10 inbox list --json`, adding `--all` when the argument has it or names `<project>:<task>` for another project.
    `open` empty, or no ask for the task named: say so in one line, naming any `answered` row for that task (who answered, when), and stop.
 2. **Ask once, in one `AskUserQuestion`**, a question per numbered question of each open ask, in the list's order.
    Header: the task id (`<project>:<task>` when two asks share an id).

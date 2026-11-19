@@ -17,6 +17,7 @@ type Ask struct {
 	Project   string     `yaml:"project,omitempty" json:"project,omitempty"` // the main checkout's basename, for display
 	Worktree  string     `yaml:"worktree"          json:"worktree"`          // the asking agent's checkout
 	Suffix    string     `yaml:"suffix,omitempty"  json:"suffix,omitempty"`  // the agent's name suffix, for a second attempt at a task
+	Pane      string     `yaml:"pane,omitempty"    json:"pane,omitempty"`    // the asking agent's herdr pane, reported blocked while open
 	Drive     int        `yaml:"drive,omitempty"   json:"drive,omitempty"`   // the drive whose task asks, 0 for none
 	Skill     string     `yaml:"skill,omitempty"   json:"skill,omitempty"`   // where it asked; finish for finish's own question
 	Text      string     `yaml:"text"              json:"text"`              // the ask as written, one line

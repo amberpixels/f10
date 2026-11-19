@@ -428,3 +428,28 @@ func TestAgentNotFoundMatchesTheBackendError(t *testing.T) {
 		t.Errorf("errors.Is(%v, ErrAgentNotFound) = true", busy)
 	}
 }
+
+func TestReportBlockedAndRelease(t *testing.T) {
+	calls := fake(t, shell.Result{Stdout: `{"result":{}}`})
+
+	if err := ReportBlocked(t.Context(), "/repo", "w1:p2", "-1. Merge?"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ReleaseAgent(t.Context(), "/repo", "w1:p2"); err != nil {
+		t.Fatal(err)
+	}
+
+	report, release := (*calls)[0], (*calls)[1]
+	if !strings.HasPrefix(
+		report,
+		"herdr pane report-agent w1:p2 --source f10:inbox --agent claude --state blocked --seq ",
+	) ||
+		!strings.HasSuffix(report, " --message=-1. Merge?") {
+		t.Errorf("report = %q", report)
+	}
+
+	if !strings.HasPrefix(release, "herdr pane release-agent w1:p2 --source f10:inbox --agent claude --seq ") {
+		t.Errorf("release = %q", release)
+	}
+}

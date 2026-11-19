@@ -77,12 +77,18 @@ func Dir() string {
 	return filepath.Join(home, ".claude", "f10", "inbox")
 }
 
-// Key names a task's ask: the storage root's hash, so two projects' FT-1
-// differ, and the task id.
-func Key(root, task string) string {
+// ProjectHash names a project by its storage root: the prefix of every ask
+// key under it, which the status line globs without opening a file.
+func ProjectHash(root string) string {
 	sum := sha256.Sum256([]byte(root))
 
-	return hex.EncodeToString(sum[:4]) + "-" + strings.ToUpper(task)
+	return hex.EncodeToString(sum[:4])
+}
+
+// Key names a task's ask: the project's hash, so two projects' FT-1 differ,
+// and the task id.
+func Key(root, task string) string {
+	return ProjectHash(root) + "-" + strings.ToUpper(task)
 }
 
 // Key is the ask's own key.
@@ -184,7 +190,14 @@ func merge(prev *Ask, a Ask) bool {
 	for _, f := range []struct {
 		dst *string
 		src string
-	}{{&prev.URL, a.URL}, {&prev.Main, a.Main}, {&prev.Project, a.Project}, {&prev.Suffix, a.Suffix}, {&prev.Skill, a.Skill}} {
+	}{
+		{&prev.URL, a.URL},
+		{&prev.Main, a.Main},
+		{&prev.Project, a.Project},
+		{&prev.Suffix, a.Suffix},
+		{&prev.Skill, a.Skill},
+		{&prev.Pane, a.Pane},
+	} {
 		if *f.dst == "" && f.src != "" {
 			*f.dst, changed = f.src, true
 		}
@@ -320,13 +333,42 @@ func Get(dir, key string) (*Ask, bool, error) {
 // Open lists the open asks, oldest first.
 func Open(dir string) ([]Ask, error) { return list(dir) }
 
-// Answered lists asks answered since, oldest answer first.
-func Answered(dir string, since time.Time) ([]Ask, error) {
-	all, err := list(filepath.Join(dir, answeredDir))
+// OpenIn lists the open asks of the project at root, every project's when
+// root is empty.
+func OpenIn(dir, root string) ([]Ask, error) {
+	all, err := list(dir)
+
+	return in(all, root), err
+}
+
+// in keeps the asks of the project at root; empty keeps them all. It reads
+// the field, not the file name, so a file under another name still counts.
+func in(all []Ask, root string) []Ask {
+	if root == "" {
+		return all
+	}
 
 	var out []Ask
 
 	for _, a := range all {
+		if a.Root == root {
+			out = append(out, a)
+		}
+	}
+
+	return out
+}
+
+// Answered lists asks answered since, oldest answer first.
+func Answered(dir string, since time.Time) ([]Ask, error) { return AnsweredIn(dir, "", since) }
+
+// AnsweredIn is Answered for the project at root, every project when empty.
+func AnsweredIn(dir, root string, since time.Time) ([]Ask, error) {
+	all, err := list(filepath.Join(dir, answeredDir))
+
+	var out []Ask
+
+	for _, a := range in(all, root) {
 		if !a.AnsweredAt.Before(since) {
 			out = append(out, a)
 		}

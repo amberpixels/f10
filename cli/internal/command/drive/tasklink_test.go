@@ -106,7 +106,7 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 			}
 
 			var out bytes.Buffer
-			if err := inboxcmd.ListAsks(t.Context(), &out, dir, time.Now(), false); err != nil {
+			if err := inboxcmd.ListAsks(t.Context(), &out, dir, "", time.Now(), false); err != nil {
 				t.Fatal(err)
 			}
 

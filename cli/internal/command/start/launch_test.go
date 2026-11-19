@@ -42,4 +42,9 @@ func TestStartLaunchesWithTheFirstPrompt(t *testing.T) {
 	if f.Called("herdr agent prompt") || f.Called("herdr agent read") {
 		t.Errorf("the first prompt was typed: %q", f.Calls)
 	}
+
+	// a discussion's agent is the user's, so its hooks are not a drive's
+	if len(f.Driven) != 0 {
+		t.Errorf("driven agents = %q, want none", f.Driven)
+	}
 }

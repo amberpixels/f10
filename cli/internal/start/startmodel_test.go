@@ -80,3 +80,19 @@ func TestAgentArgsAddsDemo(t *testing.T) {
 		t.Fatalf("agentArgs = %q, want the demo dir added", got)
 	}
 }
+
+// A drive's agent is marked ahead of the storage grants, which take every
+// argument after --add-dir; any other launch carries no mark.
+func TestLaunchArgsMarksADrive(t *testing.T) {
+	root := storage.InRepo("/code/repo")
+
+	got := LaunchArgs(agentctl.Profile{}, root, "/code/repo.GH-1", true)
+	if len(got) < 2 || got[0] != "--settings" || !strings.Contains(got[1], `"F10_DRIVEN":"1"`) {
+		t.Errorf("driven = %q, want the --settings mark first", got)
+	}
+
+	plain := LaunchArgs(agentctl.Profile{}, root, "/code/repo.GH-1", false)
+	if strings.Contains(strings.Join(plain, " "), "--settings") {
+		t.Errorf("undriven = %q, want no mark", plain)
+	}
+}

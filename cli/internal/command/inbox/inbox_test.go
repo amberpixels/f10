@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -15,6 +16,8 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/asks"
 	inboxcmd "github.com/amberpixels/f10/cli/internal/command/inbox"
+	"github.com/amberpixels/f10/cli/internal/launch"
+	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 )
 
@@ -184,6 +187,40 @@ func TestWalkAsksKeepsANumericOption(t *testing.T) {
 	}
 }
 
+// A list for one project leaves another project's asks out, open or
+// answered; an empty project lists them all.
+func TestListAsksKeepsToTheProject(t *testing.T) {
+	dir := t.TempDir()
+	testkit.Raised(t, dir, asks.Ask{Task: "FT-1", Root: "/a", Project: "a"})
+	b := testkit.Raised(t, dir, asks.Ask{Task: "FT-2", Root: "/b", Project: "b"})
+
+	if _, err := asks.Claim(dir, b.Key(), asks.ByPane, "wait", true, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+
+	read := func(project string) inboxcmd.AskList {
+		var out bytes.Buffer
+		if err := inboxcmd.ListAsks(t.Context(), &out, dir, project, time.Now(), true); err != nil {
+			t.Fatal(err)
+		}
+
+		var got inboxcmd.AskList
+		if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+
+		return got
+	}
+
+	if got := read("/a"); len(got.Open) != 1 || got.Open[0].Task != "FT-1" || len(got.Answered) != 0 {
+		t.Errorf("project a = %+v", got)
+	}
+
+	if got := read(""); len(got.Open) != 1 || len(got.Answered) != 1 {
+		t.Errorf("every project = %+v", got)
+	}
+}
+
 func TestListAsksJSON(t *testing.T) {
 	dir := t.TempDir()
 	a := testkit.Raised(t, dir, asks.Ask{Task: "FT-1", Root: "/r"})
@@ -194,7 +231,7 @@ func TestListAsksJSON(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := inboxcmd.ListAsks(t.Context(), &out, dir, time.Now(), true); err != nil {
+	if err := inboxcmd.ListAsks(t.Context(), &out, dir, "", time.Now(), true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -216,18 +253,97 @@ func TestInboxContextOncePerSession(t *testing.T) {
 	testkit.Raised(t, dir, asks.Ask{Task: "FT-1", Root: "/r", Worktree: "/w1", Skill: "review"})
 	testkit.Raised(t, dir, asks.Ask{Task: "FT-2", Root: "/r", Worktree: "/w2"})
 
-	out := string(inboxcmd.InboxContext(dir, stateDir, "s1", "UserPromptSubmit", "/w2"))
-	if !strings.Contains(out, "FT-1 asks at review") || strings.Contains(out, "FT-2") ||
+	out := string(inboxcmd.InboxContext(dir, stateDir, "s1", "UserPromptSubmit", "/w2", "/r"))
+	if !strings.Contains(out, "ASK · FT-1 · at review") || strings.Contains(out, "FT-2") ||
 		!strings.Contains(out, `"hookEventName":"UserPromptSubmit"`) {
 		t.Errorf("first prompt:\n%s", out)
 	}
 
-	if out := inboxcmd.InboxContext(dir, stateDir, "s1", "UserPromptSubmit", "/w2"); out != nil {
+	if out := inboxcmd.InboxContext(dir, stateDir, "s1", "UserPromptSubmit", "/w2", "/r"); out != nil {
 		t.Errorf("told twice:\n%s", out)
 	}
 
-	if out := string(inboxcmd.InboxContext(dir, stateDir, "s2", "SessionStart", "")); !strings.Contains(out, "FT-2") {
+	if out := string(
+		inboxcmd.InboxContext(dir, stateDir, "s2", "SessionStart", "", ""),
+	); !strings.Contains(
+		out,
+		"FT-2",
+	) {
 		t.Errorf("another session was not told:\n%s", out)
+	}
+}
+
+// A session in one project is never told another project's asks; one
+// outside any project is told every project's, each named.
+func TestInboxContextKeepsToTheProject(t *testing.T) {
+	dir := t.TempDir()
+	testkit.Raised(t, dir, asks.Ask{Task: "FT-1", Root: "/a", Project: "a", Worktree: "/a1"})
+	testkit.Raised(t, dir, asks.Ask{Task: "FT-2", Root: "/b", Project: "b", Worktree: "/b1"})
+
+	out := string(inboxcmd.InboxContext(dir, t.TempDir(), "s1", "UserPromptSubmit", "/a0", "/a"))
+	if !strings.Contains(out, "FT-1") || strings.Contains(out, "FT-2") {
+		t.Errorf("in project a:\n%s", out)
+	}
+
+	out = string(inboxcmd.InboxContext(dir, t.TempDir(), "s1", "UserPromptSubmit", "", ""))
+	if !strings.Contains(out, "ASK · a:FT-1") || !strings.Contains(out, "ASK · b:FT-2") {
+		t.Errorf("outside any project:\n%s", out)
+	}
+}
+
+// SessionStart records the session's project for the status line, and
+// drops the record outside any project.
+func TestWriteProject(t *testing.T) {
+	stateDir := t.TempDir()
+	path := state.ProjectPath(stateDir, "s1")
+
+	inboxcmd.WriteProject(stateDir, "s1", "/a")
+
+	if raw, _ := os.ReadFile(path); strings.TrimSpace(string(raw)) != asks.ProjectHash("/a") {
+		t.Errorf("project file = %q, want %s", raw, asks.ProjectHash("/a"))
+	}
+
+	inboxcmd.WriteProject(stateDir, "s1", "")
+
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("project file outside a project: %v", err)
+	}
+}
+
+// A driven agent's hook tells it nothing, on any event, the prompt that
+// carries its own answer included; the same hook undriven tells the ask.
+func TestInboxHookSkipsADrivenAgent(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("F10_INBOX_DIR", dir)
+	t.Setenv("F10_STATE_DIR", t.TempDir())
+	testkit.Raised(t, dir, asks.Ask{Task: "FT-1", Root: "/r", Worktree: "/w1"})
+
+	hook := func(event string) string {
+		var out bytes.Buffer
+
+		cmd := inboxcmd.Command()
+		cmd.Writer = &out
+		cmd.Reader = strings.NewReader(`{"hook_event_name":"` + event + `","session_id":"s1","cwd":"/"}`)
+
+		if err := cmd.Run(t.Context(), []string{"inbox", "hook"}); err != nil {
+			t.Fatal(err)
+		}
+
+		return out.String()
+	}
+
+	t.Setenv(launch.DrivenEnv, "1")
+
+	for _, event := range []string{"SessionStart", "UserPromptSubmit"} {
+		if out := hook(event); out != "" {
+			t.Errorf("%s told a driven agent:\n%s", event, out)
+		}
+	}
+
+	t.Setenv(launch.DrivenEnv, "")
+
+	if out := hook("UserPromptSubmit"); !strings.Contains(out, "FT-1") {
+		t.Errorf("an undriven session was not told:\n%s", out)
 	}
 }
 

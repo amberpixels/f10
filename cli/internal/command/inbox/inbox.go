@@ -25,6 +25,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/apiclient"
 	"github.com/amberpixels/f10/cli/internal/asknotify"
 	"github.com/amberpixels/f10/cli/internal/asks"
+	"github.com/amberpixels/f10/cli/internal/layout"
+	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -50,17 +52,19 @@ func AsksAlias() *cli.Command {
 func noun(name string) *cli.Command {
 	return &cli.Command{
 		Name:  name,
-		Usage: "the questions driven agents wait on, across projects: list, answer, or walk them in a terminal",
+		Usage: "the questions driven agents wait on in this project: list, answer, or walk them in a terminal",
 		Description: "A driven agent's ask, or a drive's finish question, waits here until the first answer from " +
 			"any way in: its own pane, f10 inbox, /f10:inbox or f10 start --answer. An answer to a drive's task " +
 			"resumes the drive; one to an agent no drive watches is sent to it. Bare f10 inbox walks the open asks " +
-			"in a terminal and lists them otherwise. ~/.f10/inbox.md sets notify, the command run for each new ask.",
+			"in a terminal and lists them otherwise. Both show this project's asks, and --all every project's. " +
+			"~/.f10/inbox.md sets notify, the command run for each new ask.",
+		Flags:  []cli.Flag{allFlag()},
 		Action: runInbox,
 		Commands: []*cli.Command{
 			{
 				Name:   "list",
 				Usage:  "the open asks, then those answered in the last day",
-				Flags:  []cli.Flag{ui.JSONFlag("print JSON, for /f10:inbox")},
+				Flags:  []cli.Flag{ui.JSONFlag("print JSON, for /f10:inbox"), allFlag()},
 				Action: runInboxList,
 			},
 			{
@@ -91,6 +95,25 @@ func noun(name string) *cli.Command {
 	}
 }
 
+func allFlag() cli.Flag {
+	return &cli.BoolFlag{Name: "all", Usage: "every project's asks, not only this project's"}
+}
+
+// scopeOf is the project a list shows: the cwd's, unless --all or outside
+// git, where it is every project's ("").
+func scopeOf(ctx context.Context, cmd *cli.Command) string {
+	if cmd.Bool("all") {
+		return ""
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+
+	return ProjectOf(layout.Locate(ctx, cwd))
+}
+
 func runInbox(ctx context.Context, cmd *cli.Command) error {
 	if !ui.Interactive() {
 		return runInboxList(ctx, cmd)
@@ -101,7 +124,7 @@ func runInbox(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	return walk(ctx, cmd.Writer, bufio.NewReader(os.Stdin), c.Inbox, c.AgentsCaller(cmd))
+	return walk(ctx, cmd.Writer, bufio.NewReader(os.Stdin), c.Inbox, c.AgentsCaller(cmd), scopeOf(ctx, cmd))
 }
 
 type askView struct {
@@ -145,20 +168,21 @@ func runInboxList(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	return list(ctx, cmd.Writer, c.Inbox, c.AgentsCaller(cmd), time.Now(), cmd.Bool("json"))
+	return list(ctx, cmd.Writer, c.Inbox, c.AgentsCaller(cmd), scopeOf(ctx, cmd), time.Now(), cmd.Bool("json"))
 }
 
-// ListAsks prints the inbox in dir, served in process: the inbox command's
-// list for a test's inbox.
-func ListAsks(ctx context.Context, w io.Writer, dir string, now time.Time, asJSON bool) error {
-	return list(ctx, w, apiclient.InboxIn(dir, Deliverer{}), nil, now, asJSON)
+// ListAsks prints the inbox in dir for the project at project, every
+// project's when empty, served in process: the inbox command's list for a
+// test's inbox.
+func ListAsks(ctx context.Context, w io.Writer, dir, project string, now time.Time, asJSON bool) error {
+	return list(ctx, w, apiclient.InboxIn(dir, Deliverer{}), nil, project, now, asJSON)
 }
 
 func list(
 	ctx context.Context, w io.Writer, c agentsv1connect.InboxServiceClient, caller *agentsv1.CallerContext,
-	now time.Time, asJSON bool,
+	project string, now time.Time, asJSON bool,
 ) error {
-	inbox, err := readInbox(ctx, c, caller, now.Add(-recentAnswered))
+	inbox, err := readInbox(ctx, c, caller, project, now.Add(-recentAnswered))
 	if err != nil {
 		return err
 	}
@@ -190,7 +214,7 @@ func list(
 			fmt.Fprintln(w)
 		}
 
-		printAsk(w, links, a, now)
+		printAsk(w, links, a, project == "", now)
 	}
 
 	if len(answered) > 0 {
@@ -199,7 +223,7 @@ func list(
 		for _, a := range answered {
 			fmt.Fprintf(
 				w,
-				"  %s answered %s at %s: %s\n",
+				"  "+asks.InboxIcon+" %s answered %s at %s: %s\n",
 				asknotify.AskLink(
 					links,
 					a,
@@ -214,11 +238,13 @@ func list(
 	return nil
 }
 
-// readInbox is the open asks, and those answered since since when it is set.
+// readInbox is the open asks of the project at project, every project's
+// when empty, and those answered since since when it is set.
 func readInbox(
-	ctx context.Context, c agentsv1connect.InboxServiceClient, caller *agentsv1.CallerContext, since time.Time,
+	ctx context.Context, c agentsv1connect.InboxServiceClient, caller *agentsv1.CallerContext,
+	project string, since time.Time,
 ) (asks.Inbox, error) {
-	req := &agentsv1.ListAsksRequest{Caller: caller}
+	req := &agentsv1.ListAsksRequest{Caller: caller, Project: project}
 	if !since.IsZero() {
 		req.AnsweredSince = timestamppb.New(since)
 	}
@@ -249,24 +275,26 @@ func linksOf(w io.Writer, inbox asks.Inbox) *render.TaskLinks {
 	return links
 }
 
-func printAsk(w io.Writer, links *render.TaskLinks, a asks.Ask, now time.Time) {
-	where := ""
-	if a.Skill != "" {
-		where = " at " + a.Skill
+// printAsk draws a as its banner, its task linked on a terminal and named
+// with its project in a list that spans several, then how long it waited
+// and its task's url.
+func printAsk(w io.Writer, links *render.TaskLinks, a asks.Ask, named bool, now time.Time) {
+	// the url an ask carries is its lead's, so a bundle's members link from the ledger
+	if !strings.Contains(a.Task, ref.Separator) {
+		links.Known(a.Project, a.Task, a.URL)
 	}
 
-	fmt.Fprintf(w, "%s asks%s, %s ago\n", asknotify.AskLink(links, a), where, now.Sub(a.AskedAt).Round(time.Minute))
+	name := links.ID(a.Project, a.Task)
 
-	for _, q := range a.Questions {
-		fmt.Fprintf(w, "  %d. %s\n", q.N, q.Text)
-
-		if len(q.Options) > 0 {
-			fmt.Fprintf(w, "     %s  (default %s)\n", asks.Letters(q.Options), q.Default())
-		}
+	if named && a.Project != "" {
+		name = a.Project + ":" + name
 	}
+
+	fmt.Fprint(w, asks.Banner(a, name))
+	fmt.Fprintf(w, " asked %s ago\n", now.Sub(a.AskedAt).Round(time.Minute))
 
 	if a.URL != "" {
-		fmt.Fprintf(w, "  %s\n", a.URL)
+		fmt.Fprintf(w, " %s\n", a.URL)
 	}
 }
 
@@ -315,9 +343,9 @@ func answer(
 }
 
 // WalkAsks walks the inbox in dir with d moving answers on, served in
-// process: the inbox command's walk for a test's inbox.
+// process: the inbox command's walk for a test's inbox, every project's.
 func WalkAsks(ctx context.Context, w io.Writer, in *bufio.Reader, dir string, d Deliverer) error {
-	return walk(ctx, w, in, apiclient.InboxIn(dir, d), nil)
+	return walk(ctx, w, in, apiclient.InboxIn(dir, d), nil, "")
 }
 
 // walk puts each open ask's questions to the person at the terminal, and
@@ -328,8 +356,9 @@ func walk(
 	in *bufio.Reader,
 	c agentsv1connect.InboxServiceClient,
 	caller *agentsv1.CallerContext,
+	project string,
 ) error {
-	inbox, err := readInbox(ctx, c, caller, time.Time{})
+	inbox, err := readInbox(ctx, c, caller, project, time.Time{})
 	if err != nil {
 		return err
 	}
@@ -348,7 +377,7 @@ func walk(
 			fmt.Fprintln(w)
 		}
 
-		printAsk(w, links, a, time.Now())
+		printAsk(w, links, a, project == "", time.Now())
 
 		var values []string
 

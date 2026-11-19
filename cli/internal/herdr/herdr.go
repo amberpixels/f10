@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -192,6 +193,31 @@ func Prompt(ctx context.Context, dir, name, text string) error {
 
 	return err
 }
+
+// AskSource is the source f10 reports a pane's ask under, so a release
+// drops only the state f10 set.
+const AskSource = "f10:inbox"
+
+// ReportBlocked marks pane's agent blocked on message, under AskSource.
+func ReportBlocked(ctx context.Context, dir, pane, message string) error {
+	_, err := call(ctx, dir, "pane", "report-agent", pane, "--source", AskSource, "--agent", "claude",
+		"--state", "blocked", "--seq", seq(), "--message="+message)
+
+	return err
+}
+
+// ReleaseAgent drops the state AskSource reported on pane, so herdr's own
+// detection reads the agent again. Reporting working instead would hold
+// the pane working after the agent's turn ends.
+func ReleaseAgent(ctx context.Context, dir, pane string) error {
+	_, err := call(ctx, dir, "pane", "release-agent", pane, "--source", AskSource, "--agent", "claude",
+		"--seq", seq())
+
+	return err
+}
+
+// seq orders reports from one source: herdr ignores one older than the last.
+func seq() string { return strconv.FormatInt(time.Now().UnixNano(), 10) }
 
 // RenameAgent gives the named agent a new name.
 func RenameAgent(ctx context.Context, dir, name, to string) error {

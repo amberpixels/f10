@@ -11,6 +11,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/asknotify"
 	"github.com/amberpixels/f10/cli/internal/asks"
+	"github.com/amberpixels/f10/cli/internal/herdr"
 	"github.com/amberpixels/f10/cli/internal/render"
 )
 
@@ -196,7 +197,46 @@ func Answer(
 
 	fmt.Fprintf(w, "%s answered: %s\n", AskName(claimed), text)
 
+	ReleasePane(ctx, w, claimed)
+
 	sent, err := d.Deliver(ctx, w, dir, claimed)
 
 	return claimed, sent, err
+}
+
+// ReportBlocked shows the asking agent's herdr pane blocked on the ask's
+// first question while it is open; outside herdr it does nothing.
+func ReportBlocked(ctx context.Context, w io.Writer, a asks.Ask) {
+	if a.Pane == "" || !a.AnsweredAt.IsZero() || herdr.Available() != nil {
+		return
+	}
+
+	msg := a.Text
+	if len(a.Questions) > 0 {
+		msg = a.Questions[0].Text
+	}
+
+	if err := herdr.ReportBlocked(ctx, "", a.Pane, msg); err != nil {
+		fmt.Fprintf(w, "  showing %s's pane blocked: %v\n", AskName(a), err)
+	}
+}
+
+// ReleasePane hands an answered ask's pane back to herdr's own detection,
+// so it stops showing blocked; a failure is a line on w, never the answer's.
+func ReleasePane(ctx context.Context, w io.Writer, a asks.Ask) {
+	if a.Pane == "" {
+		return
+	}
+
+	b, ok := Agents(a.Worktree).(interface {
+		Available() error
+		ReleaseAgent(ctx context.Context, pane string) error
+	})
+	if !ok || b.Available() != nil {
+		return
+	}
+
+	if err := b.ReleaseAgent(ctx, a.Pane); err != nil {
+		fmt.Fprintf(w, "  clearing %s's blocked pane: %v\n", AskName(a), err)
+	}
 }
