@@ -187,6 +187,77 @@ func TestWalkAsksKeepsANumericOption(t *testing.T) {
 	}
 }
 
+// The walk shows an ask's context, its question and lettered options with
+// the default marked, and prompts with the default's letter; piped, it
+// prints no escape codes, and a letter picks its option.
+func TestWalkAsksShowsContextAndLetters(t *testing.T) {
+	dir := t.TempDir()
+	sha := strings.Repeat("ab12", 10)
+	testkit.Raised(t, dir, asks.Ask{
+		Task: "FT-1", Root: "/r", Skill: "ci",
+		Text:    "1. Fix it here? [leave | fix | rerun]",
+		Context: "Lint failed at " + sha + ", see https://ci.example/run/42.",
+	})
+	f := &fakeDeliver{}
+
+	var out bytes.Buffer
+
+	in := bufio.NewReader(strings.NewReader("b\n"))
+	if err := inboxcmd.WalkAsks(context.Background(), &out, in, dir, f.deliverer()); err != nil {
+		t.Fatal(err)
+	}
+
+	got := out.String()
+	for _, want := range []string{
+		"FT-1 · at ci · asked",
+		" Lint failed at ab12ab12, see https://ci.example/run/42.\n",
+		" 1. Fix it here?\n",
+		"    a) leave  (default)\n",
+		"    b) fix\n",
+		"    c) rerun\n",
+		"1 [a]> ",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("walk printed:\n%s\nwant it to hold %q", got, want)
+		}
+	}
+
+	if strings.Contains(got, "\x1b") || strings.Contains(got, sha) {
+		t.Errorf("walk printed escapes or the full sha:\n%q", got)
+	}
+
+	if !slices.Equal(f.prompted, []string{"FT-1: 1. fix"}) {
+		t.Errorf("prompted %v, want option b, fix", f.prompted)
+	}
+}
+
+// The plain list prints an ask's context under its banner, which leaves it
+// out, and --json carries it.
+func TestListAsksShowsContext(t *testing.T) {
+	dir := t.TempDir()
+	testkit.Raised(
+		t,
+		dir,
+		asks.Ask{Task: "FT-1", Root: "/r", Text: "1. Merge? [yes | no]", Context: "Checks are green."},
+	)
+
+	for _, asJSON := range []bool{false, true} {
+		var out bytes.Buffer
+		if err := inboxcmd.ListAsks(context.Background(), &out, dir, "", time.Now(), asJSON); err != nil {
+			t.Fatal(err)
+		}
+
+		want := " Checks are green.\n"
+		if asJSON {
+			want = `"context": "Checks are green."`
+		}
+
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("list (json %v) printed:\n%s\nwant %q", asJSON, out.String(), want)
+		}
+	}
+}
+
 // A list for one project leaves another project's asks out, open or
 // answered. An empty project lists them all.
 func TestListAsksKeepsToTheProject(t *testing.T) {

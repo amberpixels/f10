@@ -21,6 +21,7 @@ type Ask struct {
 	Drive     int        `yaml:"drive,omitempty"   json:"drive,omitempty"`   // the drive whose task asks, 0 for none
 	Skill     string     `yaml:"skill,omitempty"   json:"skill,omitempty"`   // where it asked; finish for finish's own question
 	Text      string     `yaml:"text"              json:"text"`              // the ask as written, one line
+	Context   string     `yaml:"context,omitempty" json:"context,omitempty"` // background kept apart from the questions
 	Questions []Question `yaml:"questions"         json:"questions"`
 	AskedAt   time.Time  `yaml:"asked_at"          json:"asked_at"`
 
@@ -75,9 +76,17 @@ var numbered = regexp.MustCompile(`(?:^|\s)(\d+)\.\s`)
 var options = regexp.MustCompile(`\[([^\[\]]*\|[^\[\]]*|[^\[\]|]+)\]\s*$`)
 
 // Parse splits `1. Reuse the plan? [reuse | re-plan] 2. ...` into questions;
-// text not numbered from 1 is one free-text question, so an odd ask still
-// reaches the user whole.
+// text with no question numbered 1 is one free-text question, so an odd ask
+// still reaches the user whole. Split also keeps the prose before question 1.
 func Parse(text string) []Question {
+	_, qs := Split(text)
+
+	return qs
+}
+
+// Split is Parse that also returns the prose before question 1, the
+// background an agent wrote first, so it never swallows the questions.
+func Split(text string) (string, []Question) {
 	text = strings.TrimSpace(text)
 
 	locs := numbered.FindAllStringSubmatchIndex(text, -1)
@@ -102,11 +111,50 @@ func Parse(text string) []Question {
 		qs = append(qs, question(n, text[loc[1]:end]))
 	}
 
-	if len(qs) == 0 || locs[0][0] != 0 {
-		return []Question{question(1, text)}
+	if len(qs) == 0 {
+		return "", []Question{question(1, text)}
 	}
 
-	return qs
+	// prose before question 1 is background only when it ends a sentence,
+	// so "merge after 1. lint passes?" stays one question
+	var prose string
+
+	for _, loc := range locs {
+		if n, _ := strconv.Atoi(text[loc[2]:loc[3]]); n == 1 {
+			prose = strings.TrimSpace(text[:loc[0]])
+
+			break
+		}
+	}
+
+	if prose != "" && !strings.ContainsAny(prose[len(prose)-1:], ".:?!)") {
+		return "", []Question{question(1, text)}
+	}
+
+	return prose, qs
+}
+
+// choiceList is a list of choices written in a question's prose, which Parse
+// cannot offer: an "Options:" label, or "1) ... 2)" and "a) ... b)" runs.
+var choiceList = regexp.MustCompile(`(?i)\boptions?\s*:|(?:^|\s)\(?1\)\s.*\s\(?2\)\s|(?:^|\s)\(?a\)\s.*\s\(?b\)\s`)
+
+// Lint names each question that lists choices in its text but has no
+// bracketed options, so the walk could not offer them as choices.
+func Lint(qs []Question) []string {
+	var out []string
+
+	for _, q := range qs {
+		if len(q.Options) == 0 && choiceList.MatchString(q.Text) {
+			out = append(out, fmt.Sprintf(
+				"question %d lists choices in its text, which the inbox cannot offer; ask again with them in brackets, "+
+					"background as the second argument: ask \"%d. <question>? [first | second]\" \"<context>\"",
+				q.N,
+				q.N,
+			))
+		}
+	}
+
+	return out
 }
 
 func question(n int, body string) Question {

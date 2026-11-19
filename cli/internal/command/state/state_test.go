@@ -113,3 +113,56 @@ func TestAskPrintsTheBannerAndKeepsThePane(t *testing.T) {
 		t.Errorf("printed:\n%s\nwant the banner:\n%s", out.String(), want)
 	}
 }
+
+// An ask that lists its choices in prose still raises, exits 0 and prints
+// its banner, and warns on stderr; its context reaches the inbox.
+func TestAskWarnsOnChoicesInProse(t *testing.T) {
+	home, inbox := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("F10_STATE_DIR", t.TempDir())
+	t.Setenv("F10_INBOX_DIR", inbox)
+	t.Setenv("F10_SESSION_ID", "s1")
+	t.Setenv("HERDR_PANE_ID", "")
+	t.Setenv("HERDR_ENV", "")
+
+	if err := os.MkdirAll(filepath.Join(home, ".f10"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(
+		filepath.Join(home, ".f10", "inbox.md"),
+		[]byte("---\nnotify: off\n---\n"),
+		0o600,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Chdir(testkit.ScopeRepo(t, t.TempDir(), "app"))
+
+	var out, errOut bytes.Buffer
+
+	for _, args := range [][]string{
+		{"task", "FT-12"},
+		{"ask", "1. What next? Options: 1) leave it red, 2) fix it, 3) rerun", "Lint failed on run 42."},
+	} {
+		cmd := Command()
+		cmd.Writer, cmd.ErrWriter = &out, &errOut
+
+		if err := cmd.Run(t.Context(), append([]string{"state"}, args...)); err != nil {
+			t.Fatalf("%v: %v", args, err)
+		}
+	}
+
+	if !bytes.Contains(errOut.Bytes(), []byte("f10-state: question 1 lists choices in its text")) {
+		t.Errorf("stderr = %q, want the choices warning", errOut.String())
+	}
+
+	open, err := asks.Open(inbox)
+	if err != nil || len(open) != 1 || open[0].Context != "Lint failed on run 42." {
+		t.Fatalf("inbox = %+v, %v; want one ask with its context", open, err)
+	}
+
+	if !bytes.Contains(out.Bytes(), []byte("ASK · FT-12")) {
+		t.Errorf("stdout = %q, want the banner", out.String())
+	}
+}

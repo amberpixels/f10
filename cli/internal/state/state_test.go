@@ -305,7 +305,7 @@ func TestBlockedRunFacts(t *testing.T) {
 		r.Set("ship", "running", "judge"),
 		r.Set("ship", "blocked", "judge"),
 		r.SetNote("stop: the change patches the symptom", "move the retry into the client"),
-		r.SetAsk("1. keep the retry? [no | yes]\n2. where? [client | server]"),
+		r.SetAsk("1. keep the retry? [no | yes]\n2. where? [client | server]", ""),
 	} {
 		if err != nil {
 			t.Fatal(err)
@@ -388,7 +388,7 @@ func TestSetRejectsTypos(t *testing.T) {
 		r.Set("ship", "runing", ""),
 		r.SetTask("", ""),
 		r.SetNote("", "x"),
-		r.SetAsk(""),
+		r.SetAsk("", ""),
 		r.SetFinal(""),
 		r.SetDone("", time.Unix(1_800_000_000, 0)),
 	} {

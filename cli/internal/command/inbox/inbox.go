@@ -135,6 +135,7 @@ type askView struct {
 	Skill      string          `json:"skill,omitempty"`
 	Drive      int             `json:"drive,omitempty"`
 	Text       string          `json:"text"`
+	Context    string          `json:"context,omitempty"`
 	Questions  []asks.Question `json:"questions"`
 	AskedAt    time.Time       `json:"asked_at"`
 	Answer     string          `json:"answer,omitempty"`
@@ -153,7 +154,7 @@ type AskList struct {
 func viewOf(a asks.Ask) askView {
 	v := askView{
 		Key: a.Key(), Task: a.Task, Project: a.Project, URL: a.URL, Skill: a.Skill, Drive: a.Drive,
-		Text: a.Text, Questions: a.Questions, AskedAt: a.AskedAt, Answer: a.Answer, By: a.By,
+		Text: a.Text, Context: a.Context, Questions: a.Questions, AskedAt: a.AskedAt, Answer: a.Answer, By: a.By,
 	}
 	if !a.AnsweredAt.IsZero() {
 		v.AnsweredAt = &a.AnsweredAt
@@ -275,10 +276,26 @@ func linksOf(w io.Writer, inbox asks.Inbox) *render.TaskLinks {
 	return links
 }
 
-// printAsk draws a as its banner, then how long it waited and its task's
-// url. The task is linked on a terminal, and named with its project in a
-// list that spans several.
+// printAsk draws a as its banner, then how long it waited, its task's url
+// and its context, which the banner leaves out.
 func printAsk(w io.Writer, links *render.TaskLinks, a asks.Ask, named bool, now time.Time) {
+	fmt.Fprint(w, asks.Banner(a, askName(links, a, named)))
+	fmt.Fprintf(w, " asked %s ago\n", now.Sub(a.AskedAt).Round(time.Minute))
+
+	if a.URL != "" {
+		fmt.Fprintf(w, " %s\n", a.URL)
+	}
+
+	if a.Context != "" {
+		for _, line := range render.Wrap(a.Context, max(0, ui.Width(w)-1)) {
+			fmt.Fprintf(w, " %s\n", line)
+		}
+	}
+}
+
+// askName is a's task as a list labels it: linked on a terminal, and named
+// with its project in a list that spans several.
+func askName(links *render.TaskLinks, a asks.Ask, named bool) string {
 	// the url an ask carries is its lead's, so a bundle's members link from the ledger
 	if !strings.Contains(a.Task, ref.Separator) {
 		links.Known(a.Project, a.Task, a.URL)
@@ -290,12 +307,7 @@ func printAsk(w io.Writer, links *render.TaskLinks, a asks.Ask, named bool, now 
 		name = a.Project + ":" + name
 	}
 
-	fmt.Fprint(w, asks.Banner(a, name))
-	fmt.Fprintf(w, " asked %s ago\n", now.Sub(a.AskedAt).Round(time.Minute))
-
-	if a.URL != "" {
-		fmt.Fprintf(w, " %s\n", a.URL)
-	}
+	return name
 }
 
 // A Deliverer moves a claimed answer on (agents.Deliverer).
@@ -371,13 +383,14 @@ func walk(
 	}
 
 	links := linksOf(w, inbox)
+	view := newWalkView(w, links.On)
 
 	for i, a := range open {
 		if i > 0 {
 			fmt.Fprintln(w)
 		}
 
-		printAsk(w, links, a, project == "", time.Now())
+		view.ask(a, askName(links, a, project == ""), time.Now())
 
 		var values []string
 
@@ -432,13 +445,14 @@ func wireValue(q asks.Question, resolved string) string {
 	return resolved
 }
 
-// askLine reads one question's answer until it resolves: Enter is the
-// default, s skips the ask.
+// askLine reads one question's answer until it resolves: a letter, a number
+// or an option's text; Enter is the default, s skips the ask.
 func askLine(w io.Writer, in *bufio.Reader, q asks.Question) (string, error) {
 	for {
+		// the default is option a, as the walk letters them
 		prompt := fmt.Sprintf("%d> ", q.N)
-		if d := q.Default(); d != "" {
-			prompt = fmt.Sprintf("%d [%s]> ", q.N, d)
+		if q.Default() != "" {
+			prompt = fmt.Sprintf("%d [a]> ", q.N)
 		}
 
 		fmt.Fprint(w, prompt)
