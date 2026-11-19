@@ -127,16 +127,30 @@ func Split(text string) (string, []Question) {
 		}
 	}
 
-	if prose != "" && !strings.ContainsAny(prose[len(prose)-1:], ".:?!)") {
+	if prose != "" && (!strings.ContainsAny(prose[len(prose)-1:], ".:?!)") || choicesOnly(qs)) {
 		return "", []Question{question(1, text)}
 	}
 
 	return prose, qs
 }
 
+// choicesOnly reports numbered items that read as a question's choices,
+// "Options: 1. leave it 2. fix it", not questions: none asks or offers options.
+func choicesOnly(qs []Question) bool {
+	for _, q := range qs {
+		if len(q.Options) > 0 || strings.HasSuffix(q.Text, "?") {
+			return false
+		}
+	}
+
+	return true
+}
+
 // choiceList is a list of choices written in a question's prose, which Parse
-// cannot offer: an "Options:" label, or "1) ... 2)" and "a) ... b)" runs.
-var choiceList = regexp.MustCompile(`(?i)\boptions?\s*:|(?:^|\s)\(?1\)\s.*\s\(?2\)\s|(?:^|\s)\(?a\)\s.*\s\(?b\)\s`)
+// cannot offer: an "Options:" label, or "1) ... 2)", "1. ... 2." and "a) ... b)" runs.
+var choiceList = regexp.MustCompile(
+	`(?i)\boptions?\s*:|(?:^|\s)\(?1[.)]\s.*\s\(?2[.)]\s|(?:^|\s)\(?a\)\s.*\s\(?b\)\s`,
+)
 
 // Lint names each question that lists choices in its text but has no
 // bracketed options, so the walk could not offer them as choices.

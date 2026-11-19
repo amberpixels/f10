@@ -386,6 +386,15 @@ func TestSplit(t *testing.T) {
 			text: "Should the drive merge #204 now?",
 			want: []Question{{N: 1, Text: "Should the drive merge #204 now?"}},
 		},
+		{
+			// a dotted list of choices is not a list of questions
+			text: "CI is red. Options: 1. leave it red 2. fix it 3. rerun",
+			want: []Question{{N: 1, Text: "CI is red. Options: 1. leave it red 2. fix it 3. rerun"}},
+		},
+		{
+			text: "Which do you prefer? 1. the client 2. the server",
+			want: []Question{{N: 1, Text: "Which do you prefer? 1. the client 2. the server"}},
+		},
 	}
 
 	for _, c := range cases {
@@ -406,6 +415,8 @@ func TestLint(t *testing.T) {
 	for text, warns := range map[string]bool{
 		"CI is red on the lint job. Options: 1) leave it red, 2) fix it in this PR, 3) rerun once more": true,
 		"1. What next? a) leave it b) fix it":                    true,
+		"CI is red. Options: 1. leave it red 2. fix it 3. rerun": true,
+		"Which do you prefer? 1. the client 2. the server":       true,
 		"1. Fix it here? [fix | leave | rerun]":                  false,
 		"1. Which port should it listen on?":                     false,
 		"1. Keep v1. 2 clients use it? [keep | drop]":            false,
