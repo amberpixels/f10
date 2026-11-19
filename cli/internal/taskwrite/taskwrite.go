@@ -120,8 +120,8 @@ func LinkMentions(ctx context.Context, t *target.Target, body string, warn io.Wr
 	return out
 }
 
-// LinkWith runs scan once to find the bare ids, resolves them in one lookup,
-// and runs it again to link them; it names each linked id on warn. An id it
+// LinkWith scans once to find the bare ids and resolves them in one lookup.
+// It scans again to link them, and names each linked id on warn. An id it
 // cannot title stays bare.
 func LinkWith(
 	ctx context.Context,

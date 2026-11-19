@@ -16,7 +16,7 @@ type Mention struct {
 	Linked bool
 }
 
-// Resolve gives an id's title and url; false leaves the mention bare.
+// Resolve gives an id's title and url. False leaves the mention bare.
 type Resolve func(id string) (title, url string, ok bool)
 
 // A Scan is Markdown or HTML.
@@ -38,8 +38,8 @@ func HTMLLink(id, title, url string) string {
 	return `<a href="` + html.EscapeString(url) + `">` + html.EscapeString(id+": "+title) + "</a>"
 }
 
-// Markdown links each id's first bare mention outside code, comments, links
-// and the lines f10 parses (After:, trailers, closing keywords).
+// Markdown links each id's first bare mention. It skips code, comments and
+// links, and the lines f10 or the host parses.
 func Markdown(text, prefix string, resolve Resolve) (string, []Mention) {
 	kinds := make([]kind, len(text))
 	skip(kinds, text, commentRE)
@@ -50,8 +50,8 @@ func Markdown(text, prefix string, resolve Resolve) (string, []Mention) {
 	return rewrite(text, prefix, kinds, resolve, markdownFormat)
 }
 
-// HTML is Markdown for a page: it skips the head, script, style, pre and
-// code elements and every tag's attributes, and counts an anchor as linked.
+// HTML is Markdown for a page. It skips the elements that hold no prose
+// and every tag's attributes, and an anchor counts as a link.
 func HTML(text, prefix string, resolve Resolve) (string, []Mention) {
 	kinds := make([]kind, len(text))
 	skip(kinds, text, commentRE)
@@ -97,9 +97,8 @@ var (
 
 	fenceRE = regexp.MustCompile("^ {0,3}(```+|~~~+)")
 
-	// the lines a parser reads: f10's After: and trailers, and the host's
-	// closing keywords, which only work on the bare form; a keyword opens a
-	// parsed line only before a reference, so prose starting "Fix the" is not one
+	// lines a parser reads, which work only on the bare form. A closing
+	// keyword counts only before a reference, so "Fix the bug" stays prose.
 	parsedLineRE = regexp.MustCompile(`(?i)^\s*(?:[-*]\s+)?(?:(?:after|task|step|review)\s*:|` +
 		`(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?|part\s+of)\s+(?:[#!]\d|https?://|[a-z][a-z0-9]*-\d))`)
 )
@@ -110,7 +109,7 @@ func skip(kinds []kind, text string, re *regexp.Regexp) {
 	}
 }
 
-// fill sets a plain range to k; exempt also overrides linked, since code
+// fill sets a plain range to k. Exempt also overrides linked, because code
 // inside a link's text is still code.
 func fill(kinds []kind, from, to int, k kind) {
 	for i := from; i < to; i++ {
@@ -184,8 +183,8 @@ var listItemRE = regexp.MustCompile(`^\s*(?:[-*+]|\d+[.)])\s`)
 
 func isListItem(line string) bool { return listItemRE.MatchString(line) }
 
-// markCodeSpans exempts inline code: a run of backticks up to the next run
-// of the same length; an unmatched run is literal.
+// markCodeSpans exempts inline code, from a run of backticks to the next run
+// of the same length. A run with no match is literal.
 func markCodeSpans(kinds []kind, text string) {
 	for i := 0; i < len(text); {
 		if text[i] != '`' || kinds[i] == exempt {
@@ -331,9 +330,8 @@ var (
 	htmlFormat     = format{render: HTMLLink, escape: html.EscapeString}
 )
 
-// titled is how much of rest repeats the title the link now carries, as
-// `: <title>` or ` (<title>)`, so the link takes its place instead of
-// doubling it; 0 when rest goes on with anything else.
+// titled is the length of a title that rest repeats after the id, so the
+// link replaces it instead of doubling it. It is 0 for any other text.
 func titled(rest, title string) int {
 	for _, form := range []string{": " + title, " (" + title + ")"} {
 		if len(rest) >= len(form) && strings.EqualFold(rest[:len(form)], form) {
@@ -348,8 +346,8 @@ func idRE(prefix string) *regexp.Regexp {
 	return regexp.MustCompile(`(?i)(` + regexp.QuoteMeta(prefix) + `-(\d+))`)
 }
 
-// bounded reports an id standing alone, not inside a path, a branch name,
-// a file name or a bundle (`plans/FT-5.md`, `FT-5/fix`, `FT-5-x`, `FT-5+FT-6`).
+// bounded reports an id standing alone. An id inside a longer token, such
+// as `plans/FT-5.md`, `FT-5/fix` or `FT-5+FT-6`, is part of that token.
 func bounded(text string, from, to int) bool {
 	if from > 0 && strings.ContainsRune("/_-.+\\#@", rune(text[from-1])) || from > 0 && isWord(text[from-1]) {
 		return false

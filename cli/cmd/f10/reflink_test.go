@@ -61,8 +61,8 @@ func TestTaskCreateLinksTheBody(t *testing.T) {
 	}
 }
 
-// check fails naming each bare first mention it could link, link fixes the
-// file in place, and check passes after; HTML goes by its extension.
+// check names each bare first mention it could link and fails. link fixes
+// the file in place, so check then passes. HTML goes by its extension.
 func TestRefsCheckAndLink(t *testing.T) {
 	t.Setenv(ledger.PathEnv, filepath.Join(t.TempDir(), "f10.db"))
 

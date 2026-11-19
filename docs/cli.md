@@ -1955,12 +1955,19 @@ Text that leaves the machine never carries the marker.
 ## Links on the way out
 
 `pr create`, `pr edit`, `pr comment`, `task create` and `task comment` send text that renders links.
-Each one links the first mention of every task id in that text, the PR's own task included, as `task ref --md` would.
-A task id is a token in the project's id format (`FT-109`, any case) standing on its own.
-An id inside a path, a url, a branch name, a file name or a bundle (`plans/FT-109.md`, `FT-109/fix`, `FT-109+FT-110`) is part of that longer token and stays as written.
-Later mentions stay bare, and so does every mention in an inline code span, a code block, an HTML comment (the hidden state block), an `After:` line, a `Task:`, `Step:` or `Review:` trailer, or a closing line such as `Closes #12`.
+Each one links the first mention of every task id in that text as `task ref --md` would, the PR's own task included.
+A task id is a token in the project's id format, such as `FT-109` in any case, that stands on its own.
+An id inside a longer token stays as written, because it is part of that token.
+Such tokens are paths, urls, branch names, file names and bundles, as in `plans/FT-109.md`, `FT-109/fix` or `FT-109+FT-110`.
+Later mentions stay bare.
+So does every mention in these places, because code or a parser reads them:
+- an inline code span or a code block
+- an HTML comment, which holds the hidden state block
+- an `After:` line, or a `Task:`, `Step:` or `Review:` trailer
+- a closing line such as `Closes #12`
 A mention already inside a link counts as the first.
-An image's alt text and a reference link's label (`[FT-109]`, `[FT-109]: <url>`) stay as written and do not count as the first mention, because a link there would break the image or the reference.
+An image's alt text and a reference link's label (`[FT-109]`, `[FT-109]: <url>`) stay as written.
+They do not count as the first mention either, because a link there would break the image or the reference.
 A mention already followed by its title (`FT-109: <title>` or `FT-109 (<title>)`) becomes the link, title included, so the title does not appear twice.
 `task create` never links the title line, and `pr create` and `pr edit` never link the title, because a title renders nothing.
 An id f10 cannot title stays bare, with the note `task ref` prints, and the command goes on.
@@ -1972,7 +1979,8 @@ To keep an id bare, put it in a code span.
 An id it cannot title is a note on stderr, not a failure.
 `link` rewrites the file in place and prints each id it linked.
 A file ending in `.html` or `.htm` is read as HTML.
-Its head, `script`, `style`, `pre` and `code` elements and every tag's attributes are skipped, an anchor counts as a link, and a link is written as `<a href="<url>"><ID>: <title></a>`.
+Its head, its `script`, `style`, `pre` and `code` elements and every tag's attributes are skipped.
+An anchor counts as a link, and a new link is written as `<a href="<url>"><ID>: <title></a>`.
 Any other file is read as markdown.
 
 ## Report

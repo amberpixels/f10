@@ -7,7 +7,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/reflink"
 )
 
-// known resolves FT-1, FT-2 and FT-58; any other id is unknown.
+// known resolves FT-1, FT-2 and FT-58. Any other id is unknown.
 func known(id string) (string, string, bool) {
 	switch id {
 	case "FT-1":

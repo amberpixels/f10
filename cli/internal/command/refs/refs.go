@@ -1,6 +1,6 @@
-// Package refs is the f10 refs command: the first-mention links that pr and
-// task writes add on the way out, for a file f10 never sends, such as a
-// page published another way.
+// Package refs is the f10 refs command. It adds the links that pr and task
+// writes add on the way out to a file f10 never sends, such as a page
+// published another way.
 package refs
 
 import (

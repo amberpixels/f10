@@ -117,11 +117,12 @@ Every committing step, the ship skill's catchup guard included, commits this way
 
 Text that leaves the machine names a task by its title, never a bare id, because an id does not autolink on most trackers.
 
-- **Text that renders links**, such as a PR or task body, a comment or a published page, links the first mention of every id as `<ID>: <title>`, the work's own task included.
+- **Text that renders links** links the first mention of every id as `<ID>: <title>`, the work's own task included.
+  Such text is a PR or task body, a comment or a published page.
   Later mentions may stay bare, and code spans, `After:` lines and trailers stay as written.
-- **The binary links on the way out.** `f10 pr create`, `pr edit`, `pr comment`, `task create` and `task comment` link a first mention left bare.
+- **The binary links on the way out.** The commands that send such text link a first mention left bare: `f10 pr create`, `pr edit`, `pr comment`, `task create` and `task comment`.
   Text f10 does not send, such as a page or a skill adapter's PR body, runs `f10 refs link <file>` first.
-- **Text that renders nothing** (titles, commit messages): `<ID> (<title>)`, for a task other than the work's own.
+- **Text that renders nothing**, such as a title or a commit message, names a task other than the work's own as `<ID> (<title>)`.
 - Each body, reply and commit message names the task in full once, and may use the bare id after.
 - **One `f10 task ref <id>... --md`** gives every title and url, and without `--md` it prints `<ID> (<title>)`.
   A trailing `[closed]` is for you, never for the text.
