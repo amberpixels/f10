@@ -313,17 +313,18 @@ func TestWriteProject(t *testing.T) {
 // A driven agent's hook tells it nothing, on any event, the prompt that
 // carries its own answer included; the same hook undriven tells the ask.
 func TestInboxHookSkipsADrivenAgent(t *testing.T) {
-	dir := t.TempDir()
+	dir, stateDir := t.TempDir(), t.TempDir()
 	t.Setenv("F10_INBOX_DIR", dir)
-	t.Setenv("F10_STATE_DIR", t.TempDir())
-	testkit.Raised(t, dir, asks.Ask{Task: "FT-1", Root: "/r", Worktree: "/w1"})
+	t.Setenv("F10_STATE_DIR", stateDir)
+	// a live worktree, so the session start's prune keeps the ask
+	testkit.Raised(t, dir, asks.Ask{Task: "FT-1", Root: "/r", Worktree: t.TempDir()})
 
-	hook := func(event string) string {
+	hook := func(event, cwd string) string {
 		var out bytes.Buffer
 
 		cmd := inboxcmd.Command()
 		cmd.Writer = &out
-		cmd.Reader = strings.NewReader(`{"hook_event_name":"` + event + `","session_id":"s1","cwd":"/"}`)
+		cmd.Reader = strings.NewReader(`{"hook_event_name":"` + event + `","session_id":"s1","cwd":"` + cwd + `"}`)
 
 		if err := cmd.Run(t.Context(), []string{"inbox", "hook"}); err != nil {
 			t.Fatal(err)
@@ -334,15 +335,22 @@ func TestInboxHookSkipsADrivenAgent(t *testing.T) {
 
 	t.Setenv(launch.DrivenEnv, "1")
 
+	repo := testkit.ScopeRepo(t, t.TempDir(), "app")
+
 	for _, event := range []string{"SessionStart", "UserPromptSubmit"} {
-		if out := hook(event); out != "" {
+		if out := hook(event, repo); out != "" {
 			t.Errorf("%s told a driven agent:\n%s", event, out)
 		}
 	}
 
+	// its status line still counts its own project's asks alone
+	if _, err := os.Stat(state.ProjectPath(stateDir, "s1")); err != nil {
+		t.Errorf("a driven session start wrote no project record: %v", err)
+	}
+
 	t.Setenv(launch.DrivenEnv, "")
 
-	if out := hook("UserPromptSubmit"); !strings.Contains(out, "FT-1") {
+	if out := hook("UserPromptSubmit", "/"); !strings.Contains(out, "FT-1") {
 		t.Errorf("an undriven session was not told:\n%s", out)
 	}
 }

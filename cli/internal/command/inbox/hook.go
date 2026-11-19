@@ -104,11 +104,6 @@ func runInboxHook(ctx context.Context, cmd *cli.Command) error {
 	// a hook never fails the prompt it runs for
 	defer func() { _ = recover() }()
 
-	// first, and free: a driven agent's prompt runs no git
-	if os.Getenv(launch.DrivenEnv) == "1" {
-		return nil
-	}
-
 	in := io.Reader(os.Stdin)
 	if r := cmd.Root().Reader; r != nil {
 		in = r
@@ -141,10 +136,16 @@ func runInboxHook(ctx context.Context, cmd *cli.Command) error {
 		return lay
 	}
 
-	// before the empty-inbox shortcut: the status line reads it either way
+	// before the driven and empty-inbox returns: every session's status line,
+	// a drive's included, counts by it
 	if p.Event == "SessionStart" {
 		asks.Prune(asks.Dir(), time.Now())
 		WriteProject(state.Dir(), p.Session, ProjectOf(locate()))
+	}
+
+	// a driven agent's prompt runs no git
+	if os.Getenv(launch.DrivenEnv) == "1" {
+		return nil
 	}
 
 	// every prompt in every session runs this: an empty inbox costs no git

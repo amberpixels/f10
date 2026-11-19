@@ -203,6 +203,11 @@ func merge(prev *Ask, a Ask) bool {
 		}
 	}
 
+	// the pane is where the agent is now: a recovered agent asks from a new one
+	if a.Pane != "" && a.Pane != prev.Pane {
+		prev.Pane, changed = a.Pane, true
+	}
+
 	if prev.Drive == 0 && a.Drive != 0 {
 		prev.Drive, changed = a.Drive, true
 	}

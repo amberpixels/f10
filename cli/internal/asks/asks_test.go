@@ -350,4 +350,12 @@ func TestRaiseKeepsPane(t *testing.T) {
 	if err != nil || got.Pane != "w1-2" || got.Drive != 4 {
 		t.Fatalf("merged raise = %+v, %v", got, err)
 	}
+
+	// the agent recovered in a new pane asks again: the ask follows it
+	moved := sample("/r")
+	moved.Pane = "w3-1"
+
+	if got, _, _ := Raise(dir, moved, now); got.Pane != "w3-1" {
+		t.Errorf("re-raised from a new pane, pane = %q, want w3-1", got.Pane)
+	}
 }
