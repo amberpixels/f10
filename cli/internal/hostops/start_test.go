@@ -97,6 +97,7 @@ func TestHostIssueDocLabels(t *testing.T) {
 	f.Script("glab issue view 7 -F json",
 		`{"iid":7,"title":"Crash","state":"opened","labels":["bug"],"created_at":"2026-10-01T08:00:00Z",`+
 			`"web_url":"https://gitlab.com/g/p/-/issues/7"}`)
+	f.Script("glab api --paginate projects/:fullpath/issues/7/notes?per_page=100&sort=asc&order_by=created_at", `[]`)
 
 	tests := []struct {
 		host   string
@@ -125,5 +126,22 @@ func TestHostIssueDocLabels(t *testing.T) {
 		if err != nil || !strings.Contains(doc, tt.want) {
 			t.Errorf("%s issueDoc(%s) = %q, %v; want a line %q", tt.host, tt.number, doc, err, tt.want)
 		}
+	}
+}
+
+// task read on GitLab prints the issue's notes as comments, an internal one
+// marked so its text is not repeated in public.
+func TestHostIssueDocGitLabNotes(t *testing.T) {
+	f := testkit.NewFakes(t)
+	f.Script("glab issue view 7 -F json",
+		`{"iid":7,"title":"Crash","state":"opened","web_url":"https://gitlab.com/g/p/-/issues/7"}`)
+	f.Script("glab api --paginate projects/:fullpath/issues/7/notes?per_page=100&sort=asc&order_by=created_at",
+		`[{"id":1,"body":"squash the schema","author":{"username":"ann"}},`+
+			`{"id":2,"body":"customer is X","internal":true,"author":{"username":"bo"}}]`)
+
+	doc, _, err := hostops.NewHost("glab", "/code/repo").IssueDoc(t.Context(), "FT-7", "7", testkit.StaleOf(""))
+	if err != nil || !strings.Contains(doc, "**ann**\n\nsquash the schema") ||
+		!strings.Contains(doc, "**bo (internal)**\n\ncustomer is X") {
+		t.Errorf("IssueDoc = %q, %v", doc, err)
 	}
 }

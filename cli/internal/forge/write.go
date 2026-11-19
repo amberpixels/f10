@@ -192,6 +192,16 @@ func (h Host) Thread(ctx context.Context, number int, threadURL string) (string,
 	return "", ErrNoThread
 }
 
+// A note is one GitLab comment on an issue or a merge request; System marks
+// GitLab's own activity entries, such as a label change.
+type note struct {
+	ID       int64  `json:"id"`
+	Body     string `json:"body"`
+	System   bool   `json:"system"`
+	Internal bool   `json:"internal"`
+	Author   user   `json:"author"`
+}
+
 // A Posted comment is one already on a request, as far as a duplicate check
 // needs it.
 type Posted struct {
@@ -207,13 +217,6 @@ func (h Host) ThreadComments(ctx context.Context, number int, webURL, thread str
 	n := strconv.Itoa(number)
 
 	if h.glab() {
-		type note struct {
-			ID     int64  `json:"id"`
-			Body   string `json:"body"`
-			System bool   `json:"system"`
-			Author user   `json:"author"`
-		}
-
 		var notes []note
 
 		if thread == "" {

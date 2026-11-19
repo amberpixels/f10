@@ -2,6 +2,7 @@ package forge
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"testing"
 )
@@ -70,6 +71,33 @@ func TestIssueReadsBothCLIs(t *testing.T) {
 
 	if item, err := (Host{Name: "glab"}).Item(t.Context(), "9"); err != nil || !item.Pull {
 		t.Errorf("Item = %+v, %v; want the merge request flagged", item, err)
+	}
+}
+
+// glab's JSON issue view carries no notes, so a read with comments asks the
+// notes API, oldest first, leaves out system notes such as label changes, and
+// flags internal notes.
+func TestIssueWithCommentsReadsGitLabNotes(t *testing.T) {
+	notes := "glab api --paginate projects/:fullpath/issues/%s/notes?per_page=100&sort=asc&order_by=created_at"
+
+	script(t, map[string]string{
+		"glab issue view 8 -F json": `{"iid":8,"title":"G","state":"opened","web_url":"https://gitlab.com/o/r/-/issues/8"}`,
+		fmt.Sprintf(notes, "8"): `[{"id":1,"body":"squash the schema","system":false,"author":{"username":"ann"}},` +
+			`{"id":2,"body":"added ~bug label","system":true,"author":{"username":"ann"}}]` + "\n" +
+			`[{"id":3,"body":"agreed","system":false,"internal":true,"author":{"username":"bo"}}]`,
+		"glab issue view 9 -F json": `{"iid":9,"title":"H","state":"opened","web_url":"https://gitlab.com/o/r/-/issues/9"}`,
+		fmt.Sprintf(notes, "9"):     `[]`,
+	})
+
+	gl, err := Host{Name: "glab"}.IssueWithComments(t.Context(), "8")
+	want := []IssueComment{{Author: "ann", Body: "squash the schema"}, {Author: "bo", Body: "agreed", Internal: true}}
+
+	if err != nil || !slices.Equal(gl.Comments, want) {
+		t.Errorf("glab comments = %+v, %v; want %+v", gl.Comments, err, want)
+	}
+
+	if bare, err := (Host{Name: "glab"}).IssueWithComments(t.Context(), "9"); err != nil || len(bare.Comments) != 0 {
+		t.Errorf("glab issue without notes = %+v, %v", bare.Comments, err)
 	}
 }
 
