@@ -12,7 +12,10 @@ import (
 
 const (
 	launchesExt = ".launches"
-	asksExt     = ".asks"
+	inboxExt    = ".inbox"
+	// legacyAsksExt is the marks' name before the inbox rename, still pruned so
+	// old files go. Drop it in v0.68.
+	legacyAsksExt = ".asks"
 )
 
 // Launch kinds: a task `f10 start` opened, or a drive by its number.
@@ -27,9 +30,9 @@ type Launch struct {
 	Value string // the task as typed for start, the drive's number for drive
 }
 
-// AsksPath marks the asks a session was told, so each is told once.
-func AsksPath(dir, session string) string {
-	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+asksExt)
+// InboxPath marks the asks a session was told, so each is told once.
+func InboxPath(dir, session string) string {
+	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+inboxExt)
 }
 
 // LaunchesPath lists what a session launched, so a bare status in the main

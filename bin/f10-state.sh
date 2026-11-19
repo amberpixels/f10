@@ -41,8 +41,8 @@
 set -uo pipefail
 
 state_dir="${F10_STATE_DIR:-$HOME/.claude/f10/state}"
-asks_dir="${F10_ASKS_DIR:-$HOME/.claude/f10/asks}" # one file per open ask, any project
-ttl="${F10_STATE_TTL:-86400}"                      # a badge older than this reads as stale and renders as nothing
+inbox_dir="${F10_INBOX_DIR:-$HOME/.claude/f10/inbox}" # one file per open ask, any project
+ttl="${F10_STATE_TTL:-86400}"                         # a badge older than this reads as stale and renders as nothing
 phases="capture plan ship"
 
 # --- the state file: `key value` lines, one per key ---------------------------------------------
@@ -146,7 +146,7 @@ color_for() {
 asks_segment() {
   _asks=""
   local n=0 f
-  for f in "$asks_dir"/*.yaml; do
+  for f in "$inbox_dir"/*.yaml; do
     [ -e "$f" ] && n=$((n + 1))
   done
   [ "$n" -gt 0 ] || return 0

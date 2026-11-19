@@ -17,7 +17,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/target"
 )
 
-// deliverer moves an answer given through the API on as f10 asks answer
+// deliverer moves an answer given through the API on as f10 inbox answer
 // does, except that a stopped drive resumes in this daemon directly: dialling
 // its own socket would run an Ensurer against itself.
 func deliverer(sup Supervisor) agents.Deliverer {
@@ -44,7 +44,7 @@ func deliverer(sup Supervisor) agents.Deliverer {
 				return nil
 			}
 
-			t, err := target.At(ctx, a.Main, false, "asks")
+			t, err := target.At(ctx, a.Main, false, "inbox")
 			if err != nil {
 				return fmt.Errorf("resuming drive %d: %w", a.Drive, err)
 			}

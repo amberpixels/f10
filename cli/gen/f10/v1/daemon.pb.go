@@ -172,7 +172,7 @@ type Caller struct {
 	Token  string   `protobuf:"bytes,2,opt,name=token,proto3" json:"token,omitempty"`
 	Scopes []string `protobuf:"bytes,3,rep,name=scopes,proto3" json:"scopes,omitempty"`
 	// procedures lists the procedures the token's scopes allow, such as
-	// /agents.v1.AskService/AnswerAsk, so a client hides what it cannot call.
+	// /agents.v1.InboxService/AnswerAsk, so a client hides what it cannot call.
 	Procedures    []string `protobuf:"bytes,4,rep,name=procedures,proto3" json:"procedures,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

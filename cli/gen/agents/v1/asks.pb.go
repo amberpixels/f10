@@ -29,9 +29,9 @@ const (
 	AnswerSource_ANSWER_SOURCE_UNSPECIFIED AnswerSource = 0
 	// typed in the agent's own pane
 	AnswerSource_ANSWER_SOURCE_PANE AnswerSource = 1
-	// the asks command, or its walk
+	// the inbox command, or its walk
 	AnswerSource_ANSWER_SOURCE_ASKS AnswerSource = 2
-	// the asks skill in an agent session
+	// the inbox skill in an agent session
 	AnswerSource_ANSWER_SOURCE_SKILL AnswerSource = 3
 	// a drive's own answer flag
 	AnswerSource_ANSWER_SOURCE_DRIVE AnswerSource = 4
@@ -339,7 +339,7 @@ type ListAsksRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// answered_since adds the asks answered after it; unset lists open asks only.
 	AnsweredSince *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=answered_since,json=answeredSince,proto3" json:"answered_since,omitempty"`
-	// caller is where a local asks command runs: with it, view links each
+	// caller is where a local inbox command runs: with it, view links each
 	// ask's task when the caller's output is a terminal.
 	Caller        *CallerContext `protobuf:"bytes,2,opt,name=caller,proto3" json:"caller,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -394,7 +394,7 @@ type ListAsksResponse struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	Open     []*Ask                 `protobuf:"bytes,1,rep,name=open,proto3" json:"open,omitempty"`
 	Answered []*Ask                 `protobuf:"bytes,2,rep,name=answered,proto3" json:"answered,omitempty"`
-	// view is the inbox as the asks command renders it, as JSON, for a
+	// view is the inbox as the inbox command renders it, as JSON, for a
 	// client of the same release. Other clients read open and answered.
 	View          []byte `protobuf:"bytes,3,opt,name=view,proto3" json:"view,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -457,10 +457,10 @@ type AnswerAskRequest struct {
 	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	// answers names questions by number; a question not named takes its default.
 	Answers []*Answer `protobuf:"bytes,2,rep,name=answers,proto3" json:"answers,omitempty"`
-	// match finds the open ask by its task, or project:task, as the asks
+	// match finds the open ask by its task, or project:task, as the inbox
 	// command takes it, in place of id.
 	Match string `protobuf:"bytes,3,opt,name=match,proto3" json:"match,omitempty"`
-	// values are the answers as the asks command takes them, N=VALUE each,
+	// values are the answers as the inbox command takes them, N=VALUE each,
 	// in place of answers.
 	Values []string `protobuf:"bytes,4,rep,name=values,proto3" json:"values,omitempty"`
 	// answered_by is the way in to record, asks or skill; empty is the API.
@@ -547,7 +547,7 @@ type AnswerAskResponse struct {
 	Ask   *Ask                   `protobuf:"bytes,1,opt,name=ask,proto3" json:"ask,omitempty"`
 	// delivered is true when the answer reached the agent at once.
 	Delivered bool `protobuf:"varint,2,opt,name=delivered,proto3" json:"delivered,omitempty"`
-	// output is what the asks command prints for the answer.
+	// output is what the inbox command prints for the answer.
 	Output        string `protobuf:"bytes,3,opt,name=output,proto3" json:"output,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -854,9 +854,8 @@ const file_agents_v1_asks_proto_rawDesc = "" +
 	"\x13ANSWER_SOURCE_SKILL\x10\x03\x12\x17\n" +
 	"\x13ANSWER_SOURCE_DRIVE\x10\x04\x12\x1b\n" +
 	"\x17ANSWER_SOURCE_CANCELLED\x10\x05\x12\x15\n" +
-	"\x11ANSWER_SOURCE_API\x10\x062\x99\x01\n" +
-	"\n" +
-	"AskService\x12C\n" +
+	"\x11ANSWER_SOURCE_API\x10\x062\x9b\x01\n" +
+	"\fInboxService\x12C\n" +
 	"\bListAsks\x12\x1a.agents.v1.ListAsksRequest\x1a\x1b.agents.v1.ListAsksResponse\x12F\n" +
 	"\tAnswerAsk\x12\x1b.agents.v1.AnswerAskRequest\x1a\x1c.agents.v1.AnswerAskResponseB\x96\x01\n" +
 	"\rcom.agents.v1B\tAsksProtoP\x01Z5github.com/amberpixels/f10/cli/gen/agents/v1;agentsv1\xa2\x02\x03AXX\xaa\x02\tAgents.V1\xca\x02\tAgents\\V1\xe2\x02\x15Agents\\V1\\GPBMetadata\xea\x02\n" +
@@ -909,10 +908,10 @@ var file_agents_v1_asks_proto_depIdxs = []int32{
 	2,  // 13: agents.v1.AskRaised.ask:type_name -> agents.v1.Ask
 	0,  // 14: agents.v1.AskAnswered.answered_by:type_name -> agents.v1.AnswerSource
 	12, // 15: agents.v1.AskAnswered.labels:type_name -> agents.v1.AskAnswered.LabelsEntry
-	4,  // 16: agents.v1.AskService.ListAsks:input_type -> agents.v1.ListAsksRequest
-	6,  // 17: agents.v1.AskService.AnswerAsk:input_type -> agents.v1.AnswerAskRequest
-	5,  // 18: agents.v1.AskService.ListAsks:output_type -> agents.v1.ListAsksResponse
-	7,  // 19: agents.v1.AskService.AnswerAsk:output_type -> agents.v1.AnswerAskResponse
+	4,  // 16: agents.v1.InboxService.ListAsks:input_type -> agents.v1.ListAsksRequest
+	6,  // 17: agents.v1.InboxService.AnswerAsk:input_type -> agents.v1.AnswerAskRequest
+	5,  // 18: agents.v1.InboxService.ListAsks:output_type -> agents.v1.ListAsksResponse
+	7,  // 19: agents.v1.InboxService.AnswerAsk:output_type -> agents.v1.AnswerAskResponse
 	18, // [18:20] is the sub-list for method output_type
 	16, // [16:18] is the sub-list for method input_type
 	16, // [16:16] is the sub-list for extension type_name

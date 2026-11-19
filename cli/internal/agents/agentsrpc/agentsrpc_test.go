@@ -20,7 +20,7 @@ import (
 
 type clients struct {
 	agents agentsv1connect.AgentServiceClient
-	asks   agentsv1connect.AskServiceClient
+	asks   agentsv1connect.InboxServiceClient
 }
 
 func serveAgents(t *testing.T, o agentsrpc.Options) clients {
@@ -34,7 +34,7 @@ func serveAgents(t *testing.T, o agentsrpc.Options) clients {
 
 	return clients{
 		agents: agentsv1connect.NewAgentServiceClient(srv.Client(), srv.URL),
-		asks:   agentsv1connect.NewAskServiceClient(srv.Client(), srv.URL),
+		asks:   agentsv1connect.NewInboxServiceClient(srv.Client(), srv.URL),
 	}
 }
 
@@ -80,7 +80,7 @@ func TestAgentServiceReadsAndPromptsTheBackend(t *testing.T) {
 	}
 }
 
-func TestAskServiceAnswersThroughTheDeliverer(t *testing.T) {
+func TestInboxServiceAnswersThroughTheDeliverer(t *testing.T) {
 	dir := t.TempDir()
 	a := testkit.Raised(t, dir, asks.Ask{Task: "FT-1", Root: "/r", Project: "r", Drive: 3})
 

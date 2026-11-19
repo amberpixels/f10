@@ -1,4 +1,4 @@
-package asks_test
+package inbox_test
 
 import (
 	"bufio"
@@ -11,8 +11,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/urfave/cli/v3"
+
 	"github.com/amberpixels/f10/cli/internal/asks"
-	askscmd "github.com/amberpixels/f10/cli/internal/command/asks"
+	inboxcmd "github.com/amberpixels/f10/cli/internal/command/inbox"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 )
 
@@ -23,8 +25,8 @@ type fakeDeliver struct {
 	resumed  []int
 }
 
-func (f *fakeDeliver) deliverer() askscmd.Deliverer {
-	return askscmd.Deliverer{
+func (f *fakeDeliver) deliverer() inboxcmd.Deliverer {
+	return inboxcmd.Deliverer{
 		Prompt: func(_ context.Context, _ io.Writer, a asks.Ask) error {
 			f.prompted = append(f.prompted, a.Task+": "+a.Answer)
 
@@ -59,8 +61,15 @@ func TestAnswerAskRoutes(t *testing.T) {
 			f := &fakeDeliver{live: c.live}
 
 			var out bytes.Buffer
-			if err := askscmd.AnswerAsk(context.Background(), &out, dir, "ft-1", []string{"1=b", "2=8080"}, asks.ByAsks,
-				f.deliverer()); err != nil {
+			if err := inboxcmd.AnswerAsk(
+				context.Background(),
+				&out,
+				dir,
+				"ft-1",
+				[]string{"1=b", "2=8080"},
+				asks.ByAsks,
+				f.deliverer(),
+			); err != nil {
 				t.Fatal(err)
 			}
 
@@ -78,8 +87,8 @@ func TestAnswerAskRoutes(t *testing.T) {
 			}
 
 			// a second way in finds it answered
-			err := askscmd.AnswerAsk(context.Background(), &out, dir, "FT-1", nil, asks.BySkill, f.deliverer())
-			if !strings.Contains(fmtErr(err), "already answered with f10 asks") {
+			err := inboxcmd.AnswerAsk(context.Background(), &out, dir, "FT-1", nil, asks.BySkill, f.deliverer())
+			if !strings.Contains(fmtErr(err), "already answered with f10 inbox") {
 				t.Errorf("second answer: %v", err)
 			}
 		})
@@ -100,13 +109,13 @@ func TestAnswerAskRefuses(t *testing.T) {
 	testkit.Raised(t, dir, asks.Ask{Task: "FT-1", Root: "/b", Project: "beta"})
 	f := &fakeDeliver{}
 
-	err := askscmd.AnswerAsk(context.Background(), io.Discard, dir, "FT-1", nil, asks.ByAsks, f.deliverer())
+	err := inboxcmd.AnswerAsk(context.Background(), io.Discard, dir, "FT-1", nil, asks.ByAsks, f.deliverer())
 	if !strings.Contains(fmtErr(err), "alpha:FT-1 or beta:FT-1") {
 		t.Errorf("ambiguous task: %v", err)
 	}
 
 	// question 2 has no default, so it must be answered
-	err = askscmd.AnswerAsk(
+	err = inboxcmd.AnswerAsk(
 		context.Background(),
 		io.Discard,
 		dir,
@@ -119,7 +128,7 @@ func TestAnswerAskRefuses(t *testing.T) {
 		t.Errorf("missing free answer: %v", err)
 	}
 
-	err = askscmd.AnswerAsk(
+	err = inboxcmd.AnswerAsk(
 		context.Background(),
 		io.Discard,
 		dir,
@@ -145,7 +154,7 @@ func TestWalkAsks(t *testing.T) {
 
 	// Enter takes FT-1's default; FT-2 is skipped
 	in := bufio.NewReader(strings.NewReader("\ns\n"))
-	if err := askscmd.WalkAsks(context.Background(), io.Discard, in, dir, f.deliverer()); err != nil {
+	if err := inboxcmd.WalkAsks(context.Background(), io.Discard, in, dir, f.deliverer()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -166,7 +175,7 @@ func TestWalkAsksKeepsANumericOption(t *testing.T) {
 	f := &fakeDeliver{}
 
 	in := bufio.NewReader(strings.NewReader("b\n"))
-	if err := askscmd.WalkAsks(context.Background(), io.Discard, in, dir, f.deliverer()); err != nil {
+	if err := inboxcmd.WalkAsks(context.Background(), io.Discard, in, dir, f.deliverer()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -185,11 +194,11 @@ func TestListAsksJSON(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := askscmd.ListAsks(t.Context(), &out, dir, time.Now(), true); err != nil {
+	if err := inboxcmd.ListAsks(t.Context(), &out, dir, time.Now(), true); err != nil {
 		t.Fatal(err)
 	}
 
-	var got askscmd.AskList
+	var got inboxcmd.AskList
 
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
 		t.Fatal(err)
@@ -207,17 +216,48 @@ func TestAsksContextOncePerSession(t *testing.T) {
 	testkit.Raised(t, dir, asks.Ask{Task: "FT-1", Root: "/r", Worktree: "/w1", Skill: "review"})
 	testkit.Raised(t, dir, asks.Ask{Task: "FT-2", Root: "/r", Worktree: "/w2"})
 
-	out := string(askscmd.AsksContext(dir, stateDir, "s1", "UserPromptSubmit", "/w2"))
+	out := string(inboxcmd.AsksContext(dir, stateDir, "s1", "UserPromptSubmit", "/w2"))
 	if !strings.Contains(out, "FT-1 asks at review") || strings.Contains(out, "FT-2") ||
 		!strings.Contains(out, `"hookEventName":"UserPromptSubmit"`) {
 		t.Errorf("first prompt:\n%s", out)
 	}
 
-	if out := askscmd.AsksContext(dir, stateDir, "s1", "UserPromptSubmit", "/w2"); out != nil {
+	if out := inboxcmd.AsksContext(dir, stateDir, "s1", "UserPromptSubmit", "/w2"); out != nil {
 		t.Errorf("told twice:\n%s", out)
 	}
 
-	if out := string(askscmd.AsksContext(dir, stateDir, "s2", "SessionStart", "")); !strings.Contains(out, "FT-2") {
+	if out := string(inboxcmd.AsksContext(dir, stateDir, "s2", "SessionStart", "")); !strings.Contains(out, "FT-2") {
 		t.Errorf("another session was not told:\n%s", out)
+	}
+}
+
+// The old asks noun runs the same verbs, hidden, so an installed plugin's
+// f10 asks hook keeps working until the plugin updates.
+func TestAsksAliasMatchesInbox(t *testing.T) {
+	inbox, alias := inboxcmd.Command(), inboxcmd.AsksAlias()
+	if inbox.Name != "inbox" || inbox.Hidden {
+		t.Fatalf("inbox = %q, hidden %v", inbox.Name, inbox.Hidden)
+	}
+
+	if alias.Name != "asks" || !alias.Hidden {
+		t.Fatalf("alias = %q, hidden %v", alias.Name, alias.Hidden)
+	}
+
+	verbs := func(cmds []*cli.Command) []string {
+		out := make([]string, 0, len(cmds))
+		for _, c := range cmds {
+			out = append(out, c.Name)
+		}
+
+		return out
+	}
+
+	if got, want := verbs(
+		alias.Commands,
+	), verbs(
+		inbox.Commands,
+	); !slices.Equal(got, want) ||
+		!slices.Contains(got, "hook") {
+		t.Errorf("alias verbs %v, inbox verbs %v", got, want)
 	}
 }

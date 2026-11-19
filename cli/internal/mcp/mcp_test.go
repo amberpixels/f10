@@ -62,7 +62,7 @@ func TestEveryUnaryMethodIsATool(t *testing.T) {
 
 // asksStub is an ask inbox of one open ask, answered once.
 type asksStub struct {
-	agentsv1connect.UnimplementedAskServiceHandler
+	agentsv1connect.UnimplementedInboxServiceHandler
 
 	answered []*agentsv1.Answer
 }
@@ -100,7 +100,7 @@ func connectTo(t *testing.T, stub *asksStub, allow ...string) *sdk.ClientSession
 	t.Helper()
 
 	mux := http.NewServeMux()
-	mux.Handle(agentsv1connect.NewAskServiceHandler(stub))
+	mux.Handle(agentsv1connect.NewInboxServiceHandler(stub))
 
 	server := mcp.New(mcp.Options{
 		Allow:   func(p string) bool { return slices.Contains(allow, p) },
@@ -140,7 +140,12 @@ func text(res *sdk.CallToolResult) string {
 
 func TestToolsAnswerAnOpenAsk(t *testing.T) {
 	stub := &asksStub{}
-	cs := connectTo(t, stub, agentsv1connect.AskServiceListAsksProcedure, agentsv1connect.AskServiceAnswerAskProcedure)
+	cs := connectTo(
+		t,
+		stub,
+		agentsv1connect.InboxServiceListAsksProcedure,
+		agentsv1connect.InboxServiceAnswerAskProcedure,
+	)
 
 	list, err := cs.ListTools(t.Context(), nil)
 	if err != nil {
@@ -193,7 +198,7 @@ func TestToolsAnswerAnOpenAsk(t *testing.T) {
 }
 
 func TestToolsRefuseBadArgumentsAndUnofferedTools(t *testing.T) {
-	cs := connectTo(t, &asksStub{}, agentsv1connect.AskServiceAnswerAskProcedure)
+	cs := connectTo(t, &asksStub{}, agentsv1connect.InboxServiceAnswerAskProcedure)
 
 	res, err := cs.CallTool(t.Context(), &sdk.CallToolParams{Name: "answer_ask", Arguments: map[string]any{"idd": "x"}})
 	if err != nil || !res.IsError || !strings.Contains(text(res), "the arguments do not fit answer_ask") {

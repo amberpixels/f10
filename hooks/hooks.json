@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10 asks hook",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10 inbox hook",
             "timeout": 5
           }
         ]
@@ -168,7 +168,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10 asks hook",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10 inbox hook",
             "timeout": 5
           }
         ]

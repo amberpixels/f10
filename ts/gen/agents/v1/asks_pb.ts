@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file agents/v1/asks.proto.
  */
 export const file_agents_v1_asks: GenFile = /*@__PURE__*/
-  fileDesc("ChRhZ2VudHMvdjEvYXNrcy5wcm90bxIJYWdlbnRzLnYxIjQKCFF1ZXN0aW9uEgkKAW4YASABKAUSDAoEdGV4dBgCIAEoCRIPCgdvcHRpb25zGAMgAygJIpYDCgNBc2sSCgoCaWQYASABKAkSDQoFYWdlbnQYAiABKAkSFAoMd29ya3NwYWNlX2lkGAMgASgJEgwKBHRleHQYBCABKAkSJgoJcXVlc3Rpb25zGAUgAygLMhMuYWdlbnRzLnYxLlF1ZXN0aW9uEiwKCGFza2VkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIOCgZhbnN3ZXIYByABKAkSLAoLYW5zd2VyZWRfYnkYCCABKA4yFy5hZ2VudHMudjEuQW5zd2VyU291cmNlEi8KC2Fuc3dlcmVkX2F0GAkgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIwCgxkZWxpdmVyZWRfYXQYCiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEioKBmxhYmVscxgLIAMoCzIaLmFnZW50cy52MS5Bc2suTGFiZWxzRW50cnkaLQoLTGFiZWxzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ASIiCgZBbnN3ZXISCQoBbhgBIAEoBRINCgV2YWx1ZRgCIAEoCSJvCg9MaXN0QXNrc1JlcXVlc3QSMgoOYW5zd2VyZWRfc2luY2UYASABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEigKBmNhbGxlchgCIAEoCzIYLmFnZW50cy52MS5DYWxsZXJDb250ZXh0ImAKEExpc3RBc2tzUmVzcG9uc2USHAoEb3BlbhgBIAMoCzIOLmFnZW50cy52MS5Bc2sSIAoIYW5zd2VyZWQYAiADKAsyDi5hZ2VudHMudjEuQXNrEgwKBHZpZXcYAyABKAwioAEKEEFuc3dlckFza1JlcXVlc3QSCgoCaWQYASABKAkSIgoHYW5zd2VycxgCIAMoCzIRLmFnZW50cy52MS5BbnN3ZXISDQoFbWF0Y2gYAyABKAkSDgoGdmFsdWVzGAQgAygJEhMKC2Fuc3dlcmVkX2J5GAUgASgJEigKBmNhbGxlchgGIAEoCzIYLmFnZW50cy52MS5DYWxsZXJDb250ZXh0IlMKEUFuc3dlckFza1Jlc3BvbnNlEhsKA2FzaxgBIAEoCzIOLmFnZW50cy52MS5Bc2sSEQoJZGVsaXZlcmVkGAIgASgIEg4KBm91dHB1dBgDIAEoCSIuCg1DYWxsZXJDb250ZXh0EgsKA2VudhgBIAMoCRIQCgh0ZXJtaW5hbBgCIAEoCCIoCglBc2tSYWlzZWQSGwoDYXNrGAEgASgLMg4uYWdlbnRzLnYxLkFzayLNAQoLQXNrQW5zd2VyZWQSCgoCaWQYASABKAkSDgoGYW5zd2VyGAIgASgJEiwKC2Fuc3dlcmVkX2J5GAMgASgOMhcuYWdlbnRzLnYxLkFuc3dlclNvdXJjZRIRCglkZWxpdmVyZWQYBCABKAgSMgoGbGFiZWxzGAUgAygLMiIuYWdlbnRzLnYxLkFza0Fuc3dlcmVkLkxhYmVsc0VudHJ5Gi0KC0xhYmVsc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEqwwEKDEFuc3dlclNvdXJjZRIdChlBTlNXRVJfU09VUkNFX1VOU1BFQ0lGSUVEEAASFgoSQU5TV0VSX1NPVVJDRV9QQU5FEAESFgoSQU5TV0VSX1NPVVJDRV9BU0tTEAISFwoTQU5TV0VSX1NPVVJDRV9TS0lMTBADEhcKE0FOU1dFUl9TT1VSQ0VfRFJJVkUQBBIbChdBTlNXRVJfU09VUkNFX0NBTkNFTExFRBAFEhUKEUFOU1dFUl9TT1VSQ0VfQVBJEAYymQEKCkFza1NlcnZpY2USQwoITGlzdEFza3MSGi5hZ2VudHMudjEuTGlzdEFza3NSZXF1ZXN0GhsuYWdlbnRzLnYxLkxpc3RBc2tzUmVzcG9uc2USRgoJQW5zd2VyQXNrEhsuYWdlbnRzLnYxLkFuc3dlckFza1JlcXVlc3QaHC5hZ2VudHMudjEuQW5zd2VyQXNrUmVzcG9uc2VClgEKDWNvbS5hZ2VudHMudjFCCUFza3NQcm90b1ABWjVnaXRodWIuY29tL2FtYmVycGl4ZWxzL2YxMC9jbGkvZ2VuL2FnZW50cy92MTthZ2VudHN2MaICA0FYWKoCCUFnZW50cy5WMcoCCUFnZW50c1xWMeICFUFnZW50c1xWMVxHUEJNZXRhZGF0YeoCCkFnZW50czo6VjFiBnByb3RvMw", [file_google_protobuf_timestamp]);
+  fileDesc("ChRhZ2VudHMvdjEvYXNrcy5wcm90bxIJYWdlbnRzLnYxIjQKCFF1ZXN0aW9uEgkKAW4YASABKAUSDAoEdGV4dBgCIAEoCRIPCgdvcHRpb25zGAMgAygJIpYDCgNBc2sSCgoCaWQYASABKAkSDQoFYWdlbnQYAiABKAkSFAoMd29ya3NwYWNlX2lkGAMgASgJEgwKBHRleHQYBCABKAkSJgoJcXVlc3Rpb25zGAUgAygLMhMuYWdlbnRzLnYxLlF1ZXN0aW9uEiwKCGFza2VkX2F0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIOCgZhbnN3ZXIYByABKAkSLAoLYW5zd2VyZWRfYnkYCCABKA4yFy5hZ2VudHMudjEuQW5zd2VyU291cmNlEi8KC2Fuc3dlcmVkX2F0GAkgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIwCgxkZWxpdmVyZWRfYXQYCiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEioKBmxhYmVscxgLIAMoCzIaLmFnZW50cy52MS5Bc2suTGFiZWxzRW50cnkaLQoLTGFiZWxzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ASIiCgZBbnN3ZXISCQoBbhgBIAEoBRINCgV2YWx1ZRgCIAEoCSJvCg9MaXN0QXNrc1JlcXVlc3QSMgoOYW5zd2VyZWRfc2luY2UYASABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEigKBmNhbGxlchgCIAEoCzIYLmFnZW50cy52MS5DYWxsZXJDb250ZXh0ImAKEExpc3RBc2tzUmVzcG9uc2USHAoEb3BlbhgBIAMoCzIOLmFnZW50cy52MS5Bc2sSIAoIYW5zd2VyZWQYAiADKAsyDi5hZ2VudHMudjEuQXNrEgwKBHZpZXcYAyABKAwioAEKEEFuc3dlckFza1JlcXVlc3QSCgoCaWQYASABKAkSIgoHYW5zd2VycxgCIAMoCzIRLmFnZW50cy52MS5BbnN3ZXISDQoFbWF0Y2gYAyABKAkSDgoGdmFsdWVzGAQgAygJEhMKC2Fuc3dlcmVkX2J5GAUgASgJEigKBmNhbGxlchgGIAEoCzIYLmFnZW50cy52MS5DYWxsZXJDb250ZXh0IlMKEUFuc3dlckFza1Jlc3BvbnNlEhsKA2FzaxgBIAEoCzIOLmFnZW50cy52MS5Bc2sSEQoJZGVsaXZlcmVkGAIgASgIEg4KBm91dHB1dBgDIAEoCSIuCg1DYWxsZXJDb250ZXh0EgsKA2VudhgBIAMoCRIQCgh0ZXJtaW5hbBgCIAEoCCIoCglBc2tSYWlzZWQSGwoDYXNrGAEgASgLMg4uYWdlbnRzLnYxLkFzayLNAQoLQXNrQW5zd2VyZWQSCgoCaWQYASABKAkSDgoGYW5zd2VyGAIgASgJEiwKC2Fuc3dlcmVkX2J5GAMgASgOMhcuYWdlbnRzLnYxLkFuc3dlclNvdXJjZRIRCglkZWxpdmVyZWQYBCABKAgSMgoGbGFiZWxzGAUgAygLMiIuYWdlbnRzLnYxLkFza0Fuc3dlcmVkLkxhYmVsc0VudHJ5Gi0KC0xhYmVsc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEqwwEKDEFuc3dlclNvdXJjZRIdChlBTlNXRVJfU09VUkNFX1VOU1BFQ0lGSUVEEAASFgoSQU5TV0VSX1NPVVJDRV9QQU5FEAESFgoSQU5TV0VSX1NPVVJDRV9BU0tTEAISFwoTQU5TV0VSX1NPVVJDRV9TS0lMTBADEhcKE0FOU1dFUl9TT1VSQ0VfRFJJVkUQBBIbChdBTlNXRVJfU09VUkNFX0NBTkNFTExFRBAFEhUKEUFOU1dFUl9TT1VSQ0VfQVBJEAYymwEKDEluYm94U2VydmljZRJDCghMaXN0QXNrcxIaLmFnZW50cy52MS5MaXN0QXNrc1JlcXVlc3QaGy5hZ2VudHMudjEuTGlzdEFza3NSZXNwb25zZRJGCglBbnN3ZXJBc2sSGy5hZ2VudHMudjEuQW5zd2VyQXNrUmVxdWVzdBocLmFnZW50cy52MS5BbnN3ZXJBc2tSZXNwb25zZUKWAQoNY29tLmFnZW50cy52MUIJQXNrc1Byb3RvUAFaNWdpdGh1Yi5jb20vYW1iZXJwaXhlbHMvZjEwL2NsaS9nZW4vYWdlbnRzL3YxO2FnZW50c3YxogIDQVhYqgIJQWdlbnRzLlYxygIJQWdlbnRzXFYx4gIVQWdlbnRzXFYxXEdQQk1ldGFkYXRh6gIKQWdlbnRzOjpWMWIGcHJvdG8z", [file_google_protobuf_timestamp]);
 
 /**
  * A Question is one numbered question of an ask.
@@ -159,7 +159,7 @@ export type ListAsksRequest = Message<"agents.v1.ListAsksRequest"> & {
   answeredSince?: Timestamp | undefined;
 
   /**
-   * caller is where a local asks command runs: with it, view links each
+   * caller is where a local inbox command runs: with it, view links each
    * ask's task when the caller's output is a terminal.
    *
    * @generated from field: agents.v1.CallerContext caller = 2;
@@ -189,7 +189,7 @@ export type ListAsksResponse = Message<"agents.v1.ListAsksResponse"> & {
   answered: Ask[];
 
   /**
-   * view is the inbox as the asks command renders it, as JSON, for a
+   * view is the inbox as the inbox command renders it, as JSON, for a
    * client of the same release. Other clients read open and answered.
    *
    * @generated from field: bytes view = 3;
@@ -221,7 +221,7 @@ export type AnswerAskRequest = Message<"agents.v1.AnswerAskRequest"> & {
   answers: Answer[];
 
   /**
-   * match finds the open ask by its task, or project:task, as the asks
+   * match finds the open ask by its task, or project:task, as the inbox
    * command takes it, in place of id.
    *
    * @generated from field: string match = 3;
@@ -229,7 +229,7 @@ export type AnswerAskRequest = Message<"agents.v1.AnswerAskRequest"> & {
   match: string;
 
   /**
-   * values are the answers as the asks command takes them, N=VALUE each,
+   * values are the answers as the inbox command takes them, N=VALUE each,
    * in place of answers.
    *
    * @generated from field: repeated string values = 4;
@@ -273,7 +273,7 @@ export type AnswerAskResponse = Message<"agents.v1.AnswerAskResponse"> & {
   delivered: boolean;
 
   /**
-   * output is what the asks command prints for the answer.
+   * output is what the inbox command prints for the answer.
    *
    * @generated from field: string output = 3;
    */
@@ -395,14 +395,14 @@ export enum AnswerSource {
   PANE = 1,
 
   /**
-   * the asks command, or its walk
+   * the inbox command, or its walk
    *
    * @generated from enum value: ANSWER_SOURCE_ASKS = 2;
    */
   ASKS = 2,
 
   /**
-   * the asks skill in an agent session
+   * the inbox skill in an agent session
    *
    * @generated from enum value: ANSWER_SOURCE_SKILL = 3;
    */
@@ -437,17 +437,17 @@ export const AnswerSourceSchema: GenEnum<AnswerSource> = /*@__PURE__*/
   enumDesc(file_agents_v1_asks, 0);
 
 /**
- * AskService is the inbox of questions agents stop on. The first answer from
+ * InboxService is the inbox of questions agents stop on. The first answer from
  * any way in closes an ask.
  *
- * @generated from service agents.v1.AskService
+ * @generated from service agents.v1.InboxService
  */
-export const AskService: GenService<{
+export const InboxService: GenService<{
   /**
    * ListAsks lists the questions agents are waiting on, and with
    * answered_since also the ones answered since then.
    *
-   * @generated from rpc agents.v1.AskService.ListAsks
+   * @generated from rpc agents.v1.InboxService.ListAsks
    */
   listAsks: {
     methodKind: "unary";
@@ -458,7 +458,7 @@ export const AskService: GenService<{
    * AnswerAsk answers an open ask by its id, one value per numbered
    * question, and delivers the answer to the agent that asked.
    *
-   * @generated from rpc agents.v1.AskService.AnswerAsk
+   * @generated from rpc agents.v1.InboxService.AnswerAsk
    */
   answerAsk: {
     methodKind: "unary";

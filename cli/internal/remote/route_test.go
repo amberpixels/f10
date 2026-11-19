@@ -35,7 +35,7 @@ func TestRouteKeepsTokensOnTheAPI(t *testing.T) {
 		{http.MethodGet, "/asks", http.StatusOK, "app"},
 		{http.MethodHead, "/assets/app.js", http.StatusOK, ""},
 		{http.MethodPost, "/f10.v1.TaskService/GetTask", http.StatusUnauthorized, "checked"},
-		{http.MethodGet, "/agents.v1.AskService/ListAsks", http.StatusUnauthorized, "checked"},
+		{http.MethodGet, "/agents.v1.InboxService/ListAsks", http.StatusUnauthorized, "checked"},
 		{http.MethodPost, "/", http.StatusMethodNotAllowed, ""},
 	} {
 		req, _ := http.NewRequestWithContext(t.Context(), c.method, srv.URL+c.path, http.NoBody)
@@ -97,7 +97,7 @@ func TestAuthPutsTheCallerInTheContext(t *testing.T) {
 	h.ServeHTTP(httptest.NewRecorder(), req)
 
 	if got.Token != "phone" || strings.Join(got.Scopes, ",") != "read,answer" ||
-		!slices.Contains(got.Procedures, "/agents.v1.AskService/AnswerAsk") {
+		!slices.Contains(got.Procedures, "/agents.v1.InboxService/AnswerAsk") {
 		t.Errorf("caller = %+v", got)
 	}
 }

@@ -46,8 +46,8 @@ type Inbox struct {
 // Ways in an ask was answered by.
 const (
 	ByPane      = "pane"      // typed in the agent's own pane
-	ByAsks      = "asks"      // f10 asks answer, or its walk
-	BySkill     = "skill"     // /f10:asks
+	ByAsks      = "asks"      // f10 inbox answer, or its walk
+	BySkill     = "skill"     // /f10:inbox
 	ByDrive     = "drive"     // f10 start --answer
 	ByCancelled = "cancelled" // its drive was cancelled
 	ByAPI       = "api"       // a client of the control-plane API

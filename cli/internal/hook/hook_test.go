@@ -598,7 +598,7 @@ func TestPromptSubmitMarksThePrompt(t *testing.T) {
 	}
 }
 
-// A typed prompt is passed on with its cwd, for the asks inbox to read as
+// A typed prompt is passed on with its cwd, for the inbox to read as
 // an answer in an asking agent's pane.
 func TestPromptSubmitTellsPromptTyped(t *testing.T) {
 	env := testEnv(t)

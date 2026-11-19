@@ -43,7 +43,7 @@ func (in *DriveInput) takeInbox(tasks []DriveTask) {
 
 	untaken, err := asks.Untaken(in.AsksDir, in.Root)
 	if err != nil {
-		fmt.Fprintf(in.Out, "  reading the asks inbox: %v\n", err)
+		fmt.Fprintf(in.Out, "  reading the inbox: %v\n", err)
 	}
 
 	for _, a := range untaken {

@@ -19,8 +19,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/state"
 )
 
-// asksConfigFile is the user's ask settings in ~/.f10; f10 only reads it.
-const asksConfigFile = "md"
+// inboxConfigFile is the user's inbox settings in ~/.f10; f10 only reads it.
+const inboxConfigFile = "inbox.md"
 
 // notifyTimeout bounds a notify command: a hung notifier never holds an
 // agent's ask or a drive's tick for long.
@@ -65,19 +65,19 @@ func RaiseAsk(
 	}
 }
 
-// asksConfig is ~/.f10/md's frontmatter.
-type asksConfig struct {
+// inboxConfig is ~/.f10/inbox.md's frontmatter.
+type inboxConfig struct {
 	// Notify runs per new ask through sh, {task}, {question} and {url}
 	// standing for shell variables; "off" runs nothing, empty the desktop
 	// default
 	Notify string `yaml:"notify"`
 }
 
-// Notify tells the user of a new ask by the command ~/.f10/md names, else
+// Notify tells the user of a new ask by the command ~/.f10/inbox.md names, else
 // the desktop's own notification.
 func Notify(ctx context.Context, a asks.Ask) error {
-	var cfg asksConfig
-	if _, err := scope.ReadUserConfig(asksConfigFile, &cfg); err != nil {
+	var cfg inboxConfig
+	if _, err := scope.ReadUserConfig(inboxConfigFile, &cfg); err != nil {
 		return err
 	}
 
@@ -205,7 +205,7 @@ func PaneAnswered(ctx context.Context, cwd, prompt string) {
 		}
 
 		if exe, err := os.Executable(); err == nil {
-			_ = shell.Detached(exe, "asks", "resume", claimed.Key())
+			_ = shell.Detached(exe, "inbox", "resume", claimed.Key())
 		}
 	}
 }

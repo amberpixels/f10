@@ -108,7 +108,7 @@ Session tools, which run the binary:
 | skill | what you get |
 |---|---|
 | `status` | where a run is, and the question its agent waits on |
-| `asks` | every question driven agents wait on, in one questionnaire |
+| `inbox` | every question driven agents wait on, in one questionnaire |
 | `read` | a task and its images loaded into the session |
 | `board` | what changed today (`--state`: where every task stands) |
 | `start` | each task in its own worktree and agent, run through the flow, bases first |

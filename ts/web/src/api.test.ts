@@ -33,6 +33,6 @@ describe("bearer", () => {
 describe("proc", () => {
   it("names a procedure the way the server's scope table does", () => {
     expect(proc(RunService, "forward")).toBe("/f10.v1.RunService/Forward");
-    expect(P.answerAsk).toBe("/agents.v1.AskService/AnswerAsk");
+    expect(P.answerAsk).toBe("/agents.v1.InboxService/AnswerAsk");
   });
 });

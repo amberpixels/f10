@@ -114,7 +114,7 @@ export type Caller = Message<"f10.v1.Caller"> & {
 
   /**
    * procedures lists the procedures the token's scopes allow, such as
-   * /agents.v1.AskService/AnswerAsk, so a client hides what it cannot call.
+   * /agents.v1.InboxService/AnswerAsk, so a client hides what it cannot call.
    *
    * @generated from field: repeated string procedures = 4;
    */

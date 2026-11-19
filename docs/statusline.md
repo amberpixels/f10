@@ -37,7 +37,7 @@ f10-state.sh doctor   # where state lives, whether the symlink is in place, what
 | <img src="glyphs/blocked.svg" width="14" alt="blocked"> | blocked: a judge verdict ended the run, so nothing broke and the user decided |
 
 A stopped run adds the step it stopped on, so `◉ ●` <img src="glyphs/blocked.svg" width="14" alt="blocked"> `judge` reads "blocked at judge".
-Open asks, across projects, add a count, ` f10 · 2 asks`, shown with or without a run: a driven agent is waiting on you (`f10 asks`, `/f10:asks`).
+Open asks, across projects, add a count, ` f10 · 2 asks`, shown with or without a run: a driven agent is waiting on you (`f10 inbox`, `/f10:inbox`).
 The rest, the task, the reason, what unblocks it, and the question a driven agent is waiting on (`ask`), is `f10 status`; `f10 status <task-id>` reads the same for a task running in its own worktree, from the task's own run only; when the agent there has moved on to another task, it names that task and falls back to the task's plan file and PR.
 For a finished task, its worktree gone, it prints the same block from what `f10 finish` archived.
 Bare `f10 status` in a checkout whose branch names no task prints a `launched here` tree, a row per live task this session started or drove.
@@ -76,7 +76,7 @@ To copy the real characters, take them from the `F10_STATE_GLYPHS` default below
 | `F10_STATUS_GLYPHS` | replace the four icons in `f10 status` trees: open PR, merged PR, review and judge ([cli](cli.md#status)) |
 | `F10_STATE_DIR` | where state files live, default `~/.claude/f10/state` |
 | `F10_STATE_TTL` | seconds before a badge reads as stale, default one day |
-| `F10_ASKS_DIR` | where open asks are counted from, default `~/.claude/f10/asks` |
+| `F10_INBOX_DIR` | where open asks are counted from, default `~/.claude/f10/inbox` |
 
 State is one small file per session, outside every repo, so stealth mode keeps nothing f10-shaped inside a project.
 `/clear` starts a new session and retires the badge.
@@ -94,7 +94,7 @@ Inside a session, `! f10 status` already has the session id.
 
 An agent in another worktree runs **driven** ([modes/driven.md](../modes/driven.md)).
 Nobody watches its pane, so it writes its questions to run state as one `ask` row and stops blocked.
-`/f10:status <id>` puts those questions to you, and writes your answers through `f10 asks answer`, which sends them to that agent.
+`/f10:status <id>` puts those questions to you, and writes your answers through `f10 inbox answer`, which sends them to that agent.
 
 ## How the badge stays current
 

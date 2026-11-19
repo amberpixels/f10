@@ -64,10 +64,10 @@ func Setup() func() {
 	}
 
 	for name, value := range map[string]string{
-		"HOME":         home,
-		"F10_LEDGER":   filepath.Join(Root, "f10.db"),
-		"F10_ASKS_DIR": filepath.Join(Root, "asks"),
-		"F10_RUN_DIR":  runDir,
+		"HOME":          home,
+		"F10_LEDGER":    filepath.Join(Root, "f10.db"),
+		"F10_INBOX_DIR": filepath.Join(Root, "inbox"),
+		"F10_RUN_DIR":   runDir,
 		// the developer's git config never shapes a fixture
 		"GIT_CONFIG_GLOBAL":   os.DevNull,
 		"GIT_CONFIG_NOSYSTEM": "1",
@@ -80,7 +80,7 @@ func Setup() func() {
 		panic(err)
 	}
 
-	if err := os.WriteFile(filepath.Join(UserDir(), "md"), []byte("---\nnotify: off\n---\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(UserDir(), "inbox.md"), []byte("---\nnotify: off\n---\n"), 0o600); err != nil {
 		panic(err)
 	}
 

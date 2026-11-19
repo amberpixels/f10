@@ -48,7 +48,7 @@ message Caller {
   string token = 2;
   repeated string scopes = 3;
   // procedures lists the procedures the token's scopes allow, such as
-  // /agents.v1.AskService/AnswerAsk, so a client hides what it cannot call.
+  // /agents.v1.InboxService/AnswerAsk, so a client hides what it cannot call.
   repeated string procedures = 4;
 }
 

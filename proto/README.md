@@ -91,7 +91,7 @@ A client that drops before any event resumes from that cursor.
 It takes the state before that cursor from the read methods, not from the stream.
 The read methods are `ListAsks`, `GetBoard` and `GetRunStatus`.
 `kinds` narrows the stream to the ledger kinds named, each `state_*` kind by its own name, and an unknown kind is refused, because a misspelt one would otherwise stream nothing.
-`ask_raised` and `ask_answered` are the asks inbox's, which records them in the ledger as asks are raised and answered.
+`ask_raised` and `ask_answered` are the inbox's, which records them in the ledger as asks are raised and answered.
 Their rows carry no project, because asks are raised from hooks that must not run git.
 So a stream narrowed to a project matches them by the project of the ask's `main` label.
 `ask_answered` rows written before `AskAnswered.labels` existed match only a stream with no project.

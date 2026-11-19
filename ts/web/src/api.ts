@@ -9,7 +9,7 @@ import {
 import { createConnectTransport } from "@connectrpc/connect-web";
 import type { DescService } from "@bufbuild/protobuf";
 
-import { AskService } from "../../gen/agents/v1/asks_pb";
+import { InboxService } from "../../gen/agents/v1/asks_pb";
 import { ArtifactService } from "../../gen/f10/v1/artifacts_pb";
 import { BoardService } from "../../gen/f10/v1/board_pb";
 import { DaemonService } from "../../gen/f10/v1/daemon_pb";
@@ -32,8 +32,8 @@ export const P = {
   start: proc(RunService, "start"),
   drive: proc(RunService, "drive"),
   createTask: proc(TaskService, "createTask"),
-  listAsks: proc(AskService, "listAsks"),
-  answerAsk: proc(AskService, "answerAsk"),
+  listAsks: proc(InboxService, "listAsks"),
+  answerAsk: proc(InboxService, "answerAsk"),
   artifacts: proc(ArtifactService, "listArtifacts"),
   board: proc(BoardService, "getBoard"),
   projects: proc(ProjectService, "listProjects"),
@@ -65,7 +65,7 @@ export type Clients = {
   events: Client<typeof EventService>;
   artifacts: Client<typeof ArtifactService>;
   projects: Client<typeof ProjectService>;
-  asks: Client<typeof AskService>;
+  asks: Client<typeof InboxService>;
 };
 
 export function clientsOver(transport: Transport): Clients {
@@ -77,7 +77,7 @@ export function clientsOver(transport: Transport): Clients {
     events: createClient(EventService, transport),
     artifacts: createClient(ArtifactService, transport),
     projects: createClient(ProjectService, transport),
-    asks: createClient(AskService, transport),
+    asks: createClient(InboxService, transport),
   };
 }
 
