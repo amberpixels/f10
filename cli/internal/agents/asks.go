@@ -205,7 +205,7 @@ func Answer(
 }
 
 // ReportBlocked shows the asking agent's herdr pane blocked on the ask's
-// first question while it is open; outside herdr it does nothing.
+// first question while it is open. Outside herdr it does nothing.
 func ReportBlocked(ctx context.Context, w io.Writer, a asks.Ask) {
 	if a.Pane == "" || !a.AnsweredAt.IsZero() || herdr.Available() != nil {
 		return
@@ -222,7 +222,7 @@ func ReportBlocked(ctx context.Context, w io.Writer, a asks.Ask) {
 }
 
 // ReleasePane hands an answered ask's pane back to herdr's own detection,
-// so it stops showing blocked; a failure is a line on w, never the answer's.
+// so it stops showing blocked. A failure is a line on w, never the answer's.
 func ReleasePane(ctx context.Context, w io.Writer, a asks.Ask) {
 	if a.Pane == "" {
 		return

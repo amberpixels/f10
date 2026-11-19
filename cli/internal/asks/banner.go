@@ -20,7 +20,7 @@ const BannerFooter = "Answer here, or /f10:inbox from the main session"
 // Banner renders a as the one shape every way in prints it. It renders the
 // questions Parse read, so what the user sees is what an answer resolves
 // against. name labels the task, such as project:task in a list spanning
-// projects or a terminal's link; empty is the task id.
+// projects, or a terminal's link. Empty is the task id.
 func Banner(a Ask, name string) string {
 	task := a.Task
 	if name != "" {

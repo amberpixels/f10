@@ -346,7 +346,7 @@ func OpenIn(dir, root string) ([]Ask, error) {
 	return in(all, root), err
 }
 
-// in keeps the asks of the project at root; empty keeps them all. It reads
+// in keeps the asks of the project at root, and empty keeps them all. It reads
 // the field, not the file name, so a file under another name still counts.
 func in(all []Ask, root string) []Ask {
 	if root == "" {

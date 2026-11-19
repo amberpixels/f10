@@ -188,7 +188,7 @@ func TestWalkAsksKeepsANumericOption(t *testing.T) {
 }
 
 // A list for one project leaves another project's asks out, open or
-// answered; an empty project lists them all.
+// answered. An empty project lists them all.
 func TestListAsksKeepsToTheProject(t *testing.T) {
 	dir := t.TempDir()
 	testkit.Raised(t, dir, asks.Ask{Task: "FT-1", Root: "/a", Project: "a"})
@@ -273,7 +273,7 @@ func TestInboxContextOncePerSession(t *testing.T) {
 	}
 }
 
-// A session in one project is never told another project's asks; one
+// A session in one project is never told another project's asks. One
 // outside any project is told every project's, each named.
 func TestInboxContextKeepsToTheProject(t *testing.T) {
 	dir := t.TempDir()
@@ -310,8 +310,8 @@ func TestWriteProject(t *testing.T) {
 	}
 }
 
-// A driven agent's hook tells it nothing, on any event, the prompt that
-// carries its own answer included; the same hook undriven tells the ask.
+// A driven agent's hook tells it nothing on any event, including the
+// prompt that carries its own answer. The same hook undriven tells the ask.
 func TestInboxHookSkipsADrivenAgent(t *testing.T) {
 	dir, stateDir := t.TempDir(), t.TempDir()
 	t.Setenv("F10_INBOX_DIR", dir)

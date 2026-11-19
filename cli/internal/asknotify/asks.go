@@ -42,8 +42,8 @@ func AskLink(links *render.TaskLinks, a asks.Ask) string {
 }
 
 // RaiseAsk puts a in the inbox and, the first time, runs the notify
-// command; it returns the ask as the inbox holds it, else a. Neither
-// failing changes the run that asked: a line says so.
+// command. It returns the ask as the inbox holds it, else a. Neither
+// failing changes the run that asked, and a line says so.
 func RaiseAsk(
 	ctx context.Context,
 	w io.Writer,
@@ -184,7 +184,7 @@ func AskFromRun(ctx context.Context, r *state.Run, cwd string) (asks.Ask, bool) 
 }
 
 // PaneAnswered claims the open ask of the checkout at cwd for a prompt
-// typed in its pane, and starts the resume of its drive apart from this
+// typed in its pane. It starts the resume of its drive apart from this
 // hook, which has seconds to live. It returns the asks it closed.
 func PaneAnswered(ctx context.Context, cwd, prompt string) []asks.Ask {
 	root := layout.Locate(ctx, cwd).CheckoutRoot

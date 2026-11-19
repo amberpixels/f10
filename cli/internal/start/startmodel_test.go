@@ -81,8 +81,8 @@ func TestAgentArgsAddsDemo(t *testing.T) {
 	}
 }
 
-// A drive's agent is marked ahead of the storage grants, which take every
-// argument after --add-dir; any other launch carries no mark.
+// A drive's agent is marked ahead of the storage grants, because --add-dir
+// takes every argument after it. Any other launch carries no mark.
 func TestLaunchArgsMarksADrive(t *testing.T) {
 	root := storage.InRepo("/code/repo")
 

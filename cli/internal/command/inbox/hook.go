@@ -159,8 +159,8 @@ func runInboxHook(ctx context.Context, cmd *cli.Command) error {
 	return nil
 }
 
-// ProjectOf is the project a layout sits in, as its asks name it: the
-// storage root, or "" outside git, where no project's asks get mixed.
+// ProjectOf is the storage root a layout's asks name as their project.
+// Outside git it is "", because no project's asks get mixed there.
 func ProjectOf(l *layout.Layout) string {
 	if l.MainRoot == "" {
 		return ""
@@ -183,9 +183,9 @@ func WriteProject(stateDir, session, root string) {
 	_ = os.WriteFile(path, []byte(asks.ProjectHash(root)+"\n"), 0o600)
 }
 
-// InboxContext is the hook's output: the untold open asks of the project
-// at project, every project's when it is empty, outside the session's own
-// checkout, as additional context; nothing when none.
+// InboxContext is the hook's additional context: the open asks of the
+// project at project that this session was not told, leaving out its own
+// checkout's. An empty project takes every project's. None gives nothing.
 func InboxContext(dir, stateDir, session, event, checkout, project string) []byte {
 	open, err := asks.OpenIn(dir, project)
 	if err != nil || len(open) == 0 {

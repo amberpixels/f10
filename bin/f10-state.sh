@@ -141,10 +141,10 @@ color_for() {
   esac
 }
 
-# This project's open asks, as ` f10 · 󰚇 2 asks`, or nothing: a glob, no parse, since it runs on
-# every refresh. An ask's file name starts with its project's hash, which the SessionStart hook
-# writes to `<session>.project`; with no such file (no session, or outside git) every project's
-# asks count. Shown with or without a run. The icon is md-inbox (U+F0687, Nerd Fonts).
+# This project's open asks as ` f10 · 󰚇 2 asks`, or nothing. It globs and never parses, because
+# it runs on every refresh. An ask's file name starts with its project's hash, which the
+# SessionStart hook writes to `<session>.project`. With no such file, every project's asks count.
+# Shown with or without a run. The icon is md-inbox (U+F0687, Nerd Fonts).
 asks_segment() {
   _asks=""
   local n=0 f hash="" glob="*"

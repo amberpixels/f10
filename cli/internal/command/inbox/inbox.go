@@ -99,8 +99,8 @@ func allFlag() cli.Flag {
 	return &cli.BoolFlag{Name: "all", Usage: "every project's asks, not only this project's"}
 }
 
-// scopeOf is the project a list shows: the cwd's, unless --all or outside
-// git, where it is every project's ("").
+// scopeOf is the project a list shows, the cwd's. It is "" for every
+// project's, with --all or outside git.
 func scopeOf(ctx context.Context, cmd *cli.Command) string {
 	if cmd.Bool("all") {
 		return ""
@@ -275,9 +275,9 @@ func linksOf(w io.Writer, inbox asks.Inbox) *render.TaskLinks {
 	return links
 }
 
-// printAsk draws a as its banner, its task linked on a terminal and named
-// with its project in a list that spans several, then how long it waited
-// and its task's url.
+// printAsk draws a as its banner, then how long it waited and its task's
+// url. The task is linked on a terminal, and named with its project in a
+// list that spans several.
 func printAsk(w io.Writer, links *render.TaskLinks, a asks.Ask, named bool, now time.Time) {
 	// the url an ask carries is its lead's, so a bundle's members link from the ledger
 	if !strings.Contains(a.Task, ref.Separator) {

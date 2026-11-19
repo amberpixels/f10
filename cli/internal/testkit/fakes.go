@@ -146,9 +146,9 @@ func (f *Fakes) Answer(key string) shell.Result {
 	return queue[0]
 }
 
-// withoutTestGrants drops the --add-dir pairs Storage adds to an agent
-// start, a drive's mark, and the "--" they leave alone at the end; driven
-// names the agent when the mark was there.
+// withoutTestGrants drops from an agent start the --add-dir pairs Storage
+// adds, a drive's mark, and the "--" they leave at the end. It also names
+// the agent when the mark was there.
 func withoutTestGrants(name string, args []string) ([]string, string) {
 	if filepath.Base(name) != "herdr" || len(args) < 2 || args[0] != "agent" || args[1] != "start" {
 		return args, ""
