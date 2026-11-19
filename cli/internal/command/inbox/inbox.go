@@ -390,13 +390,14 @@ func walk(
 			fmt.Fprintln(w)
 		}
 
-		view.ask(a, askName(links, a, project == ""), time.Now())
+		qs := shownQuestions(a)
+		view.ask(a, qs, askName(links, a, project == ""), time.Now())
 
 		var values []string
 
 		skip := false
 
-		for _, q := range a.Questions {
+		for _, q := range qs {
 			value, err := askLine(w, in, q)
 			if err != nil {
 				return err
@@ -408,7 +409,9 @@ func walk(
 				break
 			}
 
-			values = append(values, strconv.Itoa(q.N)+"="+wireValue(q, value))
+			// against the stored question: a recovered option goes as its
+			// text, which a question without options takes
+			values = append(values, strconv.Itoa(q.N)+"="+wireValue(q.Stored, value))
 		}
 
 		if skip {
@@ -446,8 +449,9 @@ func wireValue(q asks.Question, resolved string) string {
 }
 
 // askLine reads one question's answer until it resolves to an option, by
-// letter, number or text. Enter takes the default, and s skips the ask.
-func askLine(w io.Writer, in *bufio.Reader, q asks.Question) (string, error) {
+// letter, number or text. Enter takes the default, and s skips the ask. A
+// recovered question takes free text too, its options being a guess.
+func askLine(w io.Writer, in *bufio.Reader, q shownQuestion) (string, error) {
 	for {
 		// the default is option a, as the walk letters them
 		prompt := fmt.Sprintf("%d> ", q.N)
@@ -471,9 +475,13 @@ func askLine(w io.Writer, in *bufio.Reader, q asks.Question) (string, error) {
 			return q.Default(), nil
 		}
 
-		resolved, err := asks.Resolve(q, line)
+		resolved, err := asks.Resolve(q.Question, line)
 		if err == nil {
 			return resolved, nil
+		}
+
+		if q.Recovered {
+			return line, nil
 		}
 
 		fmt.Fprintln(w, err)
