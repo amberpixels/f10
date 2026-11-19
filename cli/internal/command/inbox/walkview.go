@@ -90,19 +90,26 @@ func (v walkView) ask(a asks.Ask, qs []shownQuestion, name string, now time.Time
 		v.println(" " + v.faint.Render(a.URL))
 	}
 
-	context := []string{a.Context}
-	for _, q := range qs {
-		context = append(context, q.Context)
-	}
+	// question 1's recovered background reads as the ask's own; a later
+	// question's stays beside that question
+	v.context(a.Context)
 
-	if text := strings.TrimSpace(strings.Join(context, " ")); text != "" {
-		v.context(text)
-	}
+	for i, q := range qs {
+		if i == 0 {
+			v.context(q.Context)
+		}
 
-	for _, q := range qs {
 		fmt.Fprintln(v.w)
 
+		if i > 0 {
+			v.context(q.Context)
+		}
+
 		lead := " " + strconv.Itoa(q.N) + ". "
+		if q.Text == "" { // a question that was only its list
+			v.println(v.bold.Render(strings.TrimRight(lead, " ")))
+		}
+
 		v.lines(v.words(q.Text, v.bold), lead, strings.Repeat(" ", len(lead)), v.bold)
 
 		for i, o := range q.Options {

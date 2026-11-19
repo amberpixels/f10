@@ -23,8 +23,11 @@ var (
 	// an item marker: 1) (1) 1. a) (a), after a start, a space or a separator
 	itemMarker = regexp.MustCompile(`(?:^|[\s,;])(\(?)([1a])([.)])\s`)
 	listLabel  = regexp.MustCompile(`(?i)\b(?:options?|choices?)\s*:\s*$`)
-	recommend  = regexp.MustCompile(`(?i)\s*\((recommended\b[^)]*)\)|\s+[-,]?\s*(recommended\b.*)$`)
-	joiner     = regexp.MustCompile(`(?i)[\s,;.]+(?:or|and)?$`)
+	// "(recommended ...)", or a trailing " - recommended ..." set off by a dash
+	recommend = regexp.MustCompile(`(?i)\s*\((recommended\b[^)]*)\)|\s+-\s+(recommended\b.*)$`)
+	// a last item that goes on past the list: ", then which port?"
+	moreProse = regexp.MustCompile(`(?i),|;|\bthen\b`)
+	joiner    = regexp.MustCompile(`(?i)[\s,;.]+(?:or|and)?$`)
 )
 
 // Recover finds the choices a question without options lists in its text,
@@ -41,12 +44,12 @@ func Recover(q Question) (Recovered, bool) {
 			start = loc[4]
 		}
 
-		items, ok := listFrom(q.Text[start:], q.Text[loc[2]:loc[3]] != "", q.Text[loc[4]], q.Text[loc[6]])
+		items, asked, ok := listFrom(q.Text[start:], q.Text[loc[2]:loc[3]] != "", q.Text[loc[4]], q.Text[loc[6]])
 		if !ok {
 			continue
 		}
 
-		return recovered(q.N, strings.TrimSpace(listLabel.ReplaceAllString(q.Text[:start], "")), items), true
+		return recovered(q.N, strings.TrimSpace(listLabel.ReplaceAllString(q.Text[:start], "")), items, asked), true
 	}
 
 	return Recovered{}, false
@@ -55,7 +58,7 @@ func Recover(q Question) (Recovered, bool) {
 // listFrom splits text, which opens with item 1 (or a), into its items:
 // each next marker in the same form, counting up, the last running to the
 // end. A last item asking something is prose after the list, not a choice.
-func listFrom(text string, paren bool, first, closer byte) ([]string, bool) {
+func listFrom(text string, paren bool, first, closer byte) ([]string, bool, bool) {
 	marker := func(i int) string {
 		m := strconv.Itoa(i+1) + string(closer)
 		if first == 'a' {
@@ -85,21 +88,36 @@ func listFrom(text string, paren bool, first, closer byte) ([]string, bool) {
 		rest = strings.TrimLeft(rest[next[0]:], " ,;")[len(marker(i)):]
 	}
 
-	if len(items) < 2 || strings.HasSuffix(strings.TrimSpace(items[len(items)-1]), "?") {
-		return nil, false
+	if len(items) < 2 {
+		return nil, false, false
+	}
+
+	// "Should I (a) rebase or (b) merge?" ends its question on the last
+	// item; a last item that goes on asking is prose after the list
+	last := strings.TrimSpace(items[len(items)-1])
+
+	asked := strings.HasSuffix(last, "?")
+	if asked {
+		if moreProse.MatchString(last) {
+			return nil, false, false
+		}
+
+		items[len(items)-1] = strings.TrimSuffix(last, "?")
 	}
 
 	for i, it := range items {
 		items[i] = strings.TrimSpace(joiner.ReplaceAllString(strings.TrimSpace(it), ""))
 		if items[i] == "" {
-			return nil, false
+			return nil, false, false
 		}
 	}
 
-	return items, true
+	return items, asked, true
 }
 
-func recovered(n int, prose string, items []string) Recovered {
+// asked says the list closed the question with its "?", which the
+// question keeps once the list is cut off.
+func recovered(n int, prose string, items []string, asked bool) Recovered {
 	r := Recovered{Question: Question{N: n, Text: prose}}
 
 	// the question is the prose from its last sentence asking something;
@@ -112,6 +130,10 @@ func recovered(n int, prose string, items []string) Recovered {
 
 			break
 		}
+	}
+
+	if asked && r.Context == "" && !strings.HasSuffix(r.Question.Text, "?") {
+		r.Question.Text += "?"
 	}
 
 	def := 0

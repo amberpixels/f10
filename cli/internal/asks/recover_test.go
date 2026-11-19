@@ -48,6 +48,29 @@ func TestRecover(t *testing.T) {
 			want: Recovered{Question: Question{N: 1, Text: "Keep it?", Options: []string{"keep", "drop"}}},
 		},
 		{
+			name: "the word recommended inside an option is its text",
+			text: "Which config? Options: 1) use the recommended config, 2) keep mine",
+			ok:   true,
+			want: Recovered{Question: Question{N: 1, Text: "Which config?", Options: []string{
+				"use the recommended config", "keep mine",
+			}}},
+		},
+		{
+			name: "a dash-set recommendation",
+			text: "Which? 1) keep 2) drop - recommended, nothing reads it",
+			ok:   true,
+			want: Recovered{
+				Question: Question{N: 1, Text: "Which?", Options: []string{"drop", "keep"}},
+				Note:     "recommended, nothing reads it",
+			},
+		},
+		{
+			name: "the list closes the question",
+			text: "Should I (a) rebase or (b) merge?",
+			ok:   true,
+			want: Recovered{Question: Question{N: 1, Text: "Should I?", Options: []string{"rebase", "merge"}}},
+		},
+		{
 			name: "a list followed by a question is prose",
 			text: "Pick 1) the client or 2) the server, then which port?",
 		},
@@ -94,6 +117,8 @@ func TestRecoverAgreesWithLint(t *testing.T) {
 		"1. What next? a) leave it b) fix it",
 		"CI is red. Options: 1. leave it red 2. fix it 3. rerun",
 		"Which do you prefer? 1. the client 2. the server",
+		"Should I (a) rebase or (b) merge?",
+		"Should I a) rebase or b) merge?",
 	} {
 		for _, q := range Parse(text) {
 			if len(Lint([]Question{q})) == 0 {

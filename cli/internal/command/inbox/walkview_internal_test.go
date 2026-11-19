@@ -117,3 +117,32 @@ func TestWalkViewShortensLinkedURL(t *testing.T) {
 		t.Errorf("piped url printed %q", out.String())
 	}
 }
+
+// A later question's recovered background prints beside that question, and
+// each part of the context keeps its own sentences.
+func TestWalkViewContextPerQuestion(t *testing.T) {
+	t.Parallel()
+
+	a := asks.Ask{
+		Task: "FT-1", AskedAt: time.Now(), Context: "Background here",
+		Questions: []asks.Question{
+			{N: 1, Text: "Reuse the plan?", Options: []string{"reuse", "re-plan"}},
+			{N: 2, Text: "Lint is red. Cause: main. What now? Options: 1) leave 2) fix"},
+			{N: 3, Text: "Options: 1) yes 2) no"},
+		},
+	}
+
+	v, out := viewAt(0, false)
+	v.ask(a, shownQuestions(a), "FT-1", time.Now())
+
+	got := out.String()
+	for _, want := range []string{
+		"   Background here\n\n 1. Reuse the plan?",
+		"\n\n   Lint is red.\n   · cause  main.\n 2. What now?\n",
+		"\n 3.\n    a) yes",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("walk printed:\n%s\nwant it to hold %q", got, want)
+		}
+	}
+}
