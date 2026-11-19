@@ -59,6 +59,12 @@ func TestMarkdown(t *testing.T) {
 		{"inside a word", "LEFT-1 xFT-1", "LEFT-1 xFT-1"},
 		{"end of sentence", "Fixed in FT-1.", "Fixed in " + one + "."},
 		{"parenthesised", "(FT-1)", "(" + one + ")"},
+		{"reference definition", "See [the base][b].\n\n[b]: https://t/1 \"FT-1\"", "See [the base][b].\n\n[b]: https://t/1 \"FT-1\""},
+		{"bracketed label", "See [FT-1].\n\n[FT-1]: https://t/1\n\nFT-2", "See [FT-1].\n\n[FT-1]: https://t/1\n\n" + two},
+		{"image alt text", "![FT-1 before](img/before.png)\n\nShips FT-1.", "![FT-1 before](img/before.png)\n\nShips " + one + "."},
+		{"title after a colon", "FT-2: two, then", two + ", then"},
+		{"title in parentheses", "FT-2 (Two) ships", two + " ships"},
+		{"another text after a colon", "FT-2: done", two + ": done"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got, _ := reflink.Markdown(tc.in, "FT", known); got != tc.want {
@@ -94,7 +100,7 @@ func TestNoPrefixLinksNothing(t *testing.T) {
 
 func TestHTML(t *testing.T) {
 	in := `<html><head><title>FT-1 report</title></head><body>` +
-		`<h1 data-id="FT-1">FT-1 shipped</h1><code>FT-2</code><pre>FT-2</pre>` +
+		`<h1 data-id="FT-1">FT-1: One [x] shipped</h1><code>FT-2</code><pre>FT-2</pre>` +
 		`<a href="https://t/2">FT-2</a><p>FT-2 and FT-1</p><!-- FT-58 --><script>x="FT-58"</script></body></html>`
 	want := `<html><head><title>FT-1 report</title></head><body>` +
 		`<h1 data-id="FT-1"><a href="https://t/1">FT-1: One [x]</a> shipped</h1><code>FT-2</code><pre>FT-2</pre>` +

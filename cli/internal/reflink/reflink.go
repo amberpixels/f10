@@ -47,7 +47,7 @@ func Markdown(text, prefix string, resolve Resolve) (string, []Mention) {
 	markCodeSpans(kinds, text)
 	markLinks(kinds, text)
 
-	return rewrite(text, prefix, kinds, resolve, MarkdownLink)
+	return rewrite(text, prefix, kinds, resolve, markdownFormat)
 }
 
 // HTML is Markdown for a page: it skips the head, script, style, pre and
@@ -62,7 +62,7 @@ func HTML(text, prefix string, resolve Resolve) (string, []Mention) {
 	markAnchors(kinds, text)
 	skip(kinds, text, tagRE)
 
-	return rewrite(text, prefix, kinds, resolve, HTMLLink)
+	return rewrite(text, prefix, kinds, resolve, htmlFormat)
 }
 
 type kind uint8
@@ -91,6 +91,9 @@ var (
 
 		return out
 	}()
+
+	// `[label]: url`, whose label a reference link names elsewhere
+	refDefinitionRE = regexp.MustCompile(`^ {0,3}\[[^\]]+\]:\s`)
 
 	fenceRE = regexp.MustCompile("^ {0,3}(```+|~~~+)")
 
@@ -151,7 +154,7 @@ func markLines(kinds []kind, text string) {
 			indented = true
 
 			fill(kinds, start, end, exempt)
-		case parsedLineRE.MatchString(line):
+		case parsedLineRE.MatchString(line), refDefinitionRE.MatchString(line):
 			fill(kinds, start, end, exempt)
 		}
 
@@ -238,6 +241,13 @@ func markLinks(kinds []kind, text string) {
 			continue
 		}
 
+		// an image's alt text names the task but links nowhere
+		if text[m[0]] == '!' {
+			fill(kinds, m[0], m[1], exempt)
+
+			continue
+		}
+
 		fill(kinds, m[2], m[3], linked)
 		fill(kinds, m[4], m[5], exempt)
 	}
@@ -257,8 +267,7 @@ func markAnchors(kinds []kind, text string) {
 
 // rewrite links the first plain mention of each id. An id already linked
 // earlier, or one the resolver does not know, keeps its later mentions bare.
-func rewrite(text, prefix string, kinds []kind, resolve Resolve, render func(id, title, url string) string,
-) (string, []Mention) {
+func rewrite(text, prefix string, kinds []kind, resolve Resolve, f format) (string, []Mention) {
 	if prefix == "" {
 		return text, nil
 	}
@@ -281,19 +290,26 @@ func rewrite(text, prefix string, kinds []kind, resolve Resolve, render func(id,
 			continue
 		}
 
-		seen[id] = true
-
 		if kinds[from] == linked {
+			seen[id] = true
+
 			continue
 		}
+
+		// `[FT-5]` alone is a reference label, which a link would nest in
+		if from > 0 && text[from-1] == '[' && to < len(text) && text[to] == ']' {
+			continue
+		}
+
+		seen[id] = true
 
 		mention := Mention{ID: id, Line: 1 + strings.Count(text[:from], "\n")}
 
 		if title, url, ok := resolve(id); ok && title != "" && url != "" {
 			out.WriteString(text[last:from])
-			out.WriteString(render(id, title, url))
+			out.WriteString(f.render(id, title, url))
 
-			last, mention.Linked = to, true
+			last, mention.Linked = to+titled(text[to:], f.escape(title)), true
 		}
 
 		mentions = append(mentions, mention)
@@ -302,6 +318,30 @@ func rewrite(text, prefix string, kinds []kind, resolve Resolve, render func(id,
 	out.WriteString(text[last:])
 
 	return out.String(), mentions
+}
+
+// A format renders a link and escapes text as the document holds it.
+type format struct {
+	render func(id, title, url string) string
+	escape func(string) string
+}
+
+var (
+	markdownFormat = format{render: MarkdownLink, escape: func(s string) string { return s }}
+	htmlFormat     = format{render: HTMLLink, escape: html.EscapeString}
+)
+
+// titled is how much of rest repeats the title the link now carries, as
+// `: <title>` or ` (<title>)`, so the link takes its place instead of
+// doubling it; 0 when rest goes on with anything else.
+func titled(rest, title string) int {
+	for _, form := range []string{": " + title, " (" + title + ")"} {
+		if len(rest) >= len(form) && strings.EqualFold(rest[:len(form)], form) {
+			return len(form)
+		}
+	}
+
+	return 0
 }
 
 func idRE(prefix string) *regexp.Regexp {

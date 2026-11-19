@@ -264,10 +264,9 @@ func runPRComment(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	// linked before CommentOnce, so a retry compares the text it posted
-	body = taskwrite.LinkMentions(ctx, t, body, cmd.ErrWriter)
+	link := func(text string) string { return taskwrite.LinkMentions(ctx, t, text, cmd.ErrWriter) }
 
-	url, err := CommentOnce(ctx, cmd.ErrWriter, h, p, cmd.String("reply-to"), cmd.String("quote"), body)
+	url, err := LinkedCommentOnce(ctx, cmd.ErrWriter, h, p, link, cmd.String("reply-to"), cmd.String("quote"), body)
 	if err != nil {
 		return err
 	}
@@ -275,6 +274,19 @@ func runPRComment(ctx context.Context, cmd *cli.Command) error {
 	_, err = fmt.Fprintln(cmd.Writer, url)
 
 	return err
+}
+
+// LinkedCommentOnce links the body before CommentOnce compares it, so a
+// retry finds the linked text it posted instead of posting it again.
+func LinkedCommentOnce(
+	ctx context.Context,
+	warn io.Writer,
+	h hostops.Host,
+	p forge.PR,
+	link func(string) string,
+	replyTo, quote, body string,
+) (string, error) {
+	return CommentOnce(ctx, warn, h, p, replyTo, quote, link(body))
 }
 
 // CommentOnce never posts the same text twice where it lands: a retry after

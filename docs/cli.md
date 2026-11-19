@@ -1960,6 +1960,8 @@ A task id is a token in the project's id format (`FT-109`, any case) standing on
 An id inside a path, a url, a branch name, a file name or a bundle (`plans/FT-109.md`, `FT-109/fix`, `FT-109+FT-110`) is part of that longer token and stays as written.
 Later mentions stay bare, and so does every mention in an inline code span, a code block, an HTML comment (the hidden state block), an `After:` line, a `Task:`, `Step:` or `Review:` trailer, or a closing line such as `Closes #12`.
 A mention already inside a link counts as the first.
+An image's alt text and a reference link's label (`[FT-109]`, `[FT-109]: <url>`) stay as written and do not count as the first mention, because a link there would break the image or the reference.
+A mention already followed by its title (`FT-109: <title>` or `FT-109 (<title>)`) becomes the link, title included, so the title does not appear twice.
 `task create` never links the title line, and `pr create` and `pr edit` never link the title, because a title renders nothing.
 An id f10 cannot title stays bare, with the note `task ref` prints, and the command goes on.
 Stderr names the ids linked.
