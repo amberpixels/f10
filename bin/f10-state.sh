@@ -18,7 +18,7 @@
 #   f10-state.sh set <capture|plan|ship> <upcoming|running|done|failed|partial|skipped|prior|blocked> [<leaf>]
 #   f10-state.sh task <id> [<url>]      record the task this run is about
 #   f10-state.sh note <reason> [<next>] why a run stopped, and what unblocks it
-#   f10-state.sh ask <text>             the question a driven run stopped on, options included
+#   f10-state.sh ask <text> [<context>] the question a driven run stopped on, options included, and its background
 #   f10-state.sh wait <base-task>       the base a driven ship stopped for, its branch without code yet
 #   f10-state.sh stop guard            the stop ship left is its catchup guard's; the drive catches up, then resumes it
 #   f10-state.sh done <step>            a step with no phase (catchup) reported; the drive reads it as its end
@@ -330,7 +330,7 @@ f10-state.sh - where an f10 run is right now, for the status line to render.
   set <capture|plan|ship> <upcoming|running|done|failed|partial|skipped|prior|blocked> [<leaf>]
   task <id> [<url>]        record the task this run is about
   note <reason> [<next>]   why a run stopped, and what unblocks it
-  ask <text>               the question a driven run stopped on, options included
+  ask <text> [<context>]   the question a driven run stopped on, options included, and its background
   wait <base-task>         the base a driven ship stopped for, its branch without code yet
   stop guard               the stop ship left is its catchup guard's; the drive catches up, then resumes it
   done <step>              a step with no phase (catchup) reported; the drive reads it as its end

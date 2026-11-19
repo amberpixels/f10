@@ -56,7 +56,7 @@ func RaiseAsk(
 	if err != nil {
 		fmt.Fprintf(w, "  keeping %s's ask in the inbox: %v\n", AskLink(render.LinksFor(w, false), a), err)
 
-		a.Questions = asks.Parse(a.Text)
+		a.ParseText()
 
 		return a
 	}
@@ -180,6 +180,7 @@ func AskFromRun(ctx context.Context, r *state.Run, cwd string) (asks.Ask, bool) 
 		Pane:     os.Getenv("HERDR_PANE_ID"),
 		Skill:    r.Leaf,
 		Text:     r.Ask,
+		Context:  r.AskContext,
 	}, true
 }
 

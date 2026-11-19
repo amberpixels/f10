@@ -54,8 +54,12 @@ func Command() *cli.Command {
 				func(r *state.Run, a cli.Args) error { return r.SetTask(a.Get(0), a.Get(1)) }),
 			verb("note", "<reason> [<next>]", "why a run stopped, and what unblocks it",
 				func(r *state.Run, a cli.Args) error { return r.SetNote(a.Get(0), a.Get(1)) }),
-			verb("ask", "<text>", "the question a driven run stopped on, options included",
-				func(r *state.Run, a cli.Args) error { return r.SetAsk(a.Get(0)) }),
+			verb(
+				"ask",
+				"<text> [<context>]",
+				"the question a driven run stopped on, options included, and its background",
+				func(r *state.Run, a cli.Args) error { return r.SetAsk(a.Get(0), a.Get(1)) },
+			),
 			verb("wait", "<base-task>", "the base task a driven ship stopped for, its branch without code yet",
 				func(r *state.Run, a cli.Args) error { return r.SetWait(a.Get(0)) }),
 			verb("stop", "guard", "the kind of stop ship left: guard for its catchup guard",
@@ -160,6 +164,13 @@ func writeState(ctx context.Context, cmd *cli.Command, kind string, apply func(r
 
 	if err := cmp.Or(applyErr, err); err != nil {
 		return err
+	}
+
+	// warned with or without a session, so step prose meets it before a real run
+	if kind == "state_ask" {
+		for _, warning := range asks.Lint(asks.Parse(r.Ask)) {
+			fmt.Fprintln(cmd.ErrWriter, "f10-state: "+warning)
+		}
 	}
 
 	if r.Session == "" {

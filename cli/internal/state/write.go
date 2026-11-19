@@ -168,6 +168,11 @@ func (r *Run) Save(ctx context.Context, dir string, now time.Time) error {
 		signal = append([][2]string{{"wait", r.Wait}}, signal...)
 	}
 
+	// so is an ask's context, which only a driven ask that gives one writes
+	if r.AskContext != "" {
+		signal = append([][2]string{{"ask_context", r.AskContext}}, signal...)
+	}
+
 	// and labels, which only a flow that names its entries has
 	if r.Labels != nil {
 		signal = append([][2]string{{"labels", joinLabels(r.Labels)}}, signal...)
@@ -321,7 +326,7 @@ func (r *Run) Set(phase, status, leaf string) error {
 
 	switch {
 	case status == "running":
-		r.Leaf, r.Note, r.Next, r.Ask, r.Wait, r.Stop = leaf, "", "", "", "", ""
+		r.Leaf, r.Note, r.Next, r.Ask, r.AskContext, r.Wait, r.Stop = leaf, "", "", "", "", "", ""
 		r.Done, r.DoneAt = "", time.Time{}
 	case Stopped(status):
 		if leaf != "" {
@@ -403,13 +408,13 @@ func (r *Run) SetNote(reason, next string) error {
 }
 
 // SetAsk records the questionnaire a driven run stopped on, options
-// included: no one is in its pane to answer.
-func (r *Run) SetAsk(text string) error {
+// included, and the background it gives apart: no one is in its pane to answer.
+func (r *Run) SetAsk(text, background string) error {
 	if text == "" {
 		return usagef("ask needs the question")
 	}
 
-	r.Ask = oneLine(text)
+	r.Ask, r.AskContext = oneLine(text), oneLine(background)
 
 	return nil
 }
@@ -634,7 +639,7 @@ func (r *Run) Seed(ctx context.Context, skill, args, cwd string) bool {
 	}
 
 	r.Skill, r.Turn = skill, ""
-	r.Leaf, r.Final, r.Note, r.Next, r.Ask, r.Wait, r.Stop = "", "", "", "", "", "", ""
+	r.Leaf, r.Final, r.Note, r.Next, r.Ask, r.AskContext, r.Wait, r.Stop = "", "", "", "", "", "", "", ""
 	r.Done, r.DoneAt = "", time.Time{}
 	r.Pipeline, r.Labels, r.At = nil, nil, 0
 	r.Ship = Upcoming

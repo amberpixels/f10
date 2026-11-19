@@ -61,10 +61,11 @@ type Run struct {
 	Pipeline []string `json:"pipeline,omitempty"`
 	// Labels is each Pipeline entry's display name by index ("" for none);
 	// nil when no entry has one. Nothing matches on it, only shows it
-	Labels []string `json:"labels,omitempty"`
-	Note   string   `json:"note,omitempty"` // why the run stopped
-	Next   string   `json:"next,omitempty"` // what unblocks it
-	Ask    string   `json:"ask,omitempty"`  // the question a driven run stopped on, options included
+	Labels     []string `json:"labels,omitempty"`
+	Note       string   `json:"note,omitempty"`        // why the run stopped
+	Next       string   `json:"next,omitempty"`        // what unblocks it
+	Ask        string   `json:"ask,omitempty"`         // the question a driven run stopped on, options included
+	AskContext string   `json:"ask_context,omitempty"` // the background the ask gave apart from its questions
 	// Wait is the base task a driven ship stopped for, its branch without
 	// code yet: a drive parks the task and sends ship again once it has some
 	Wait string `json:"wait,omitempty"`
@@ -271,6 +272,8 @@ func Load(path string) (*Run, error) {
 			r.Next = value
 		case "ask":
 			r.Ask = value
+		case "ask_context":
+			r.AskContext = value
 		case "wait":
 			r.Wait = value
 		case "stop":

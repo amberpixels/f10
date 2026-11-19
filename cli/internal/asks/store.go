@@ -105,7 +105,7 @@ func answeredPath(dir, key string) string { return filepath.Join(dir, answeredDi
 // heard, with no drive to take it, is done: asking again is a new ask.
 func Raise(dir string, a Ask, now time.Time) (Ask, bool, error) {
 	a.Text = strings.TrimSpace(a.Text)
-	a.Questions = Parse(a.Text)
+	a.ParseText()
 	key := a.Key()
 
 	for range holdTries {
@@ -183,6 +183,14 @@ func (a *Ask) pending() bool {
 	return a.TakenAt.IsZero() && (a.DeliveredAt.IsZero() || a.Drive > 0)
 }
 
+// ParseText sets a's questions from its text, and adds any background written
+// before question 1 to its context.
+func (a *Ask) ParseText() {
+	prose, qs := Split(a.Text)
+	a.Questions = qs
+	a.Context = strings.TrimSpace(strings.TrimSpace(a.Context) + " " + prose)
+}
+
 // merge fills prev's empty fields from a, reporting a change.
 func merge(prev *Ask, a Ask) bool {
 	changed := false
@@ -197,6 +205,7 @@ func merge(prev *Ask, a Ask) bool {
 		{&prev.Suffix, a.Suffix},
 		{&prev.Skill, a.Skill},
 		{&prev.Pane, a.Pane},
+		{&prev.Context, a.Context},
 	} {
 		if *f.dst == "" && f.src != "" {
 			*f.dst, changed = f.src, true

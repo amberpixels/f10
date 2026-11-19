@@ -359,3 +359,102 @@ func TestRaiseKeepsPane(t *testing.T) {
 		t.Errorf("re-raised from a new pane, pane = %q, want w3-1", got.Pane)
 	}
 }
+
+// Prose ending a sentence before question 1 is the ask's background, so the
+// questions keep their options; prose that runs into "1." stays a question.
+func TestSplit(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		text, context string
+		want          []Question
+	}{
+		{
+			text:    "CI is red on lint. 1. Fix it here? [fix | leave]",
+			context: "CI is red on lint.",
+			want:    []Question{{N: 1, Text: "Fix it here?", Options: []string{"fix", "leave"}}},
+		},
+		{
+			text: "1. Merge? [yes | no]",
+			want: []Question{{N: 1, Text: "Merge?", Options: []string{"yes", "no"}}},
+		},
+		{
+			text: "Should we merge after 1. lint passes?",
+			want: []Question{{N: 1, Text: "Should we merge after 1. lint passes?"}},
+		},
+		{
+			text: "Should the drive merge #204 now?",
+			want: []Question{{N: 1, Text: "Should the drive merge #204 now?"}},
+		},
+		{
+			// a dotted list of choices is not a list of questions
+			text: "CI is red. Options: 1. leave it red 2. fix it 3. rerun",
+			want: []Question{{N: 1, Text: "CI is red. Options: 1. leave it red 2. fix it 3. rerun"}},
+		},
+		{
+			text: "Which do you prefer? 1. the client 2. the server",
+			want: []Question{{N: 1, Text: "Which do you prefer? 1. the client 2. the server"}},
+		},
+	}
+
+	for _, c := range cases {
+		context, got := Split(c.text)
+		if context != c.context || !slices.EqualFunc(got, c.want, func(a, b Question) bool {
+			return a.N == b.N && a.Text == b.Text && slices.Equal(a.Options, b.Options)
+		}) {
+			t.Errorf("Split(%q) = %q, %+v; want %q, %+v", c.text, context, got, c.context, c.want)
+		}
+	}
+}
+
+// Choices written in a question's prose are named; bracketed options and a
+// plain free-text question are not.
+func TestLint(t *testing.T) {
+	t.Parallel()
+
+	for text, warns := range map[string]bool{
+		"CI is red on the lint job. Options: 1) leave it red, 2) fix it in this PR, 3) rerun once more": true,
+		"1. What next? a) leave it b) fix it":                    true,
+		"CI is red. Options: 1. leave it red 2. fix it 3. rerun": true,
+		"Which do you prefer? 1. the client 2. the server":       true,
+		"1. Fix it here? [fix | leave | rerun]":                  false,
+		"1. Which port should it listen on?":                     false,
+		"1. Keep v1. 2 clients use it? [keep | drop]":            false,
+		"Fix it (1) here or (2) in a follow-up? [here | follow]": false,
+	} {
+		if got := len(Lint(Parse(text))) > 0; got != warns {
+			t.Errorf("Lint(%q) warns = %v, want %v", text, got, warns)
+		}
+	}
+}
+
+// A raise moves the prose before question 1 into the context, after any
+// context given, and a re-raise of the same text fills a missing context.
+func TestRaiseKeepsContext(t *testing.T) {
+	t.Parallel()
+
+	dir, now := t.TempDir(), time.Now()
+
+	a := sample("/r")
+	a.Text = "Lint is red. 1. Fix it? [fix | leave]"
+	a.Context = "Run 42 failed."
+
+	got, _, err := Raise(dir, a, now)
+	if err != nil || got.Context != "Run 42 failed. Lint is red." || len(got.Questions) != 1 ||
+		len(got.Questions[0].Options) != 2 {
+		t.Fatalf("raised = %+v, %v", got, err)
+	}
+
+	b := sample("/r")
+	b.Text = "1. Merge? [yes | no]"
+
+	if _, _, err := Raise(dir, b, now); err != nil {
+		t.Fatal(err)
+	}
+
+	b.Context = "Checks are green."
+
+	if got, _, _ := Raise(dir, b, now); got.Context != "Checks are green." {
+		t.Errorf("re-raised with a context, context = %q", got.Context)
+	}
+}
