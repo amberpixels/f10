@@ -41,6 +41,7 @@ var Table = []Rule{
 	{Prefix: "internal/buildinfo", Rank: -2},
 	{Prefix: "internal/calendar", Rank: -2},
 	{Prefix: "internal/mdline", Rank: -2},
+	{Prefix: "internal/reflink", Rank: -2}, // first-mention task links, no I/O
 	{Prefix: "internal/tasktitle", Rank: -2},
 	{Prefix: "internal/flow", Rank: -2},
 	{Prefix: "internal/trace", Rank: -2},
@@ -99,6 +100,7 @@ var Table = []Rule{
 	// the commands that read a task, its request, the config and the board
 	{Prefix: "internal/command/task", Rank: 4},
 	{Prefix: "internal/command/pr", Rank: 4},
+	{Prefix: "internal/command/refs", Rank: 4},
 	{Prefix: "internal/command/review", Rank: 4},
 	{Prefix: "internal/command/config", Rank: 4},
 	{Prefix: "internal/command/standup", Rank: 4},

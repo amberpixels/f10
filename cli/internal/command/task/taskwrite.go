@@ -87,6 +87,8 @@ func runTaskComment(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
+	body = taskwrite.LinkMentions(ctx, t, body, cmd.ErrWriter)
+
 	url, err := tasksource.TasksFor(t).Comment(ctx, cmd.ErrWriter, r, body)
 	if err != nil {
 		return err

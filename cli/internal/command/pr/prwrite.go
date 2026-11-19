@@ -20,6 +20,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasktitle"
+	"github.com/amberpixels/f10/cli/internal/taskwrite"
 	"github.com/amberpixels/f10/cli/internal/textx"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -36,44 +37,44 @@ func openPull(ctx context.Context, cmd *cli.Command) (hostops.Host, forge.PR, er
 }
 
 // openPullOf is openPull with the task the request ships, nil for none, and
-// the tracker.title its title is written through.
+// the target, whose tracker.title the title is written through.
 func openPullOf(
 	ctx context.Context,
 	cmd *cli.Command,
-) (hostops.Host, forge.PR, *ref.Ref, tasktitle.Template, error) {
+) (hostops.Host, forge.PR, *ref.Ref, *target.Target, error) {
 	t, err := target.For(ctx, cmd)
 	if err != nil {
-		return hostops.Host{}, forge.PR{}, nil, "", err
+		return hostops.Host{}, forge.PR{}, nil, nil, err
 	}
 
 	s, err := reviews.ResolvePRSubject(ctx, t, cmd.Args().First())
 	if err != nil {
-		return hostops.Host{}, forge.PR{}, nil, "", err
+		return hostops.Host{}, forge.PR{}, nil, nil, err
 	}
 
 	if s.LookupErr != nil {
-		return hostops.Host{}, forge.PR{}, nil, "", s.LookupErr
+		return hostops.Host{}, forge.PR{}, nil, nil, s.LookupErr
 	}
 
 	if s.Number == 0 {
-		return hostops.Host{}, forge.PR{}, nil, "", fmt.Errorf("no open PR for %s", s.Branch)
+		return hostops.Host{}, forge.PR{}, nil, nil, fmt.Errorf("no open PR for %s", s.Branch)
 	}
 
 	h, err := hostops.HostOf(t)
 	if err != nil {
-		return hostops.Host{}, forge.PR{}, nil, "", err
+		return hostops.Host{}, forge.PR{}, nil, nil, err
 	}
 
 	p, err := h.PR(ctx, strconv.Itoa(s.Number))
 	if err != nil {
-		return hostops.Host{}, forge.PR{}, nil, "", err
+		return hostops.Host{}, forge.PR{}, nil, nil, err
 	}
 
 	if err := RequireOpen(p); err != nil {
-		return hostops.Host{}, forge.PR{}, nil, "", err
+		return hostops.Host{}, forge.PR{}, nil, nil, err
 	}
 
-	return h, p, s.Task, t.Effective.TitleTemplate, nil
+	return h, p, s.Task, t, nil
 }
 
 // PullTitle is the title a request opens or is retitled with. It carries the
@@ -129,12 +130,16 @@ func runPREdit(ctx context.Context, cmd *cli.Command) error {
 		}
 	}
 
-	h, p, task, titles, err := openPullOf(ctx, cmd)
+	h, p, task, t, err := openPullOf(ctx, cmd)
 	if err != nil {
 		return err
 	}
 
-	return h.EditPull(ctx, strconv.Itoa(p.Number), PullTitle(title, task, titles), body)
+	if body != "" {
+		body = taskwrite.LinkMentions(ctx, t, body, cmd.ErrWriter)
+	}
+
+	return h.EditPull(ctx, strconv.Itoa(p.Number), PullTitle(title, task, t.Effective.TitleTemplate), body)
 }
 
 // readBody reads a PR body from file, - meaning stdin; an empty one is
@@ -230,7 +235,7 @@ func runPRCreate(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	url, err := h.OpenPull(ctx, forge.NewPull{
-		Head: s.Branch, Base: base, Body: body,
+		Head: s.Branch, Base: base, Body: taskwrite.LinkMentions(ctx, t, body, cmd.ErrWriter),
 		Title:  PullTitle(cmd.String("title"), s.Task, t.Effective.TitleTemplate),
 		Labels: cmd.StringSlice("label"), Assignees: cmd.StringSlice("assignee"), Draft: cmd.Bool("draft"),
 	})
@@ -254,12 +259,14 @@ func runPRComment(ctx context.Context, cmd *cli.Command) error {
 		return errors.New("pr comment reads the comment as markdown on stdin, and it was empty")
 	}
 
-	h, p, err := openPull(ctx, cmd)
+	h, p, _, t, err := openPullOf(ctx, cmd)
 	if err != nil {
 		return err
 	}
 
-	url, err := CommentOnce(ctx, cmd.ErrWriter, h, p, cmd.String("reply-to"), cmd.String("quote"), body)
+	link := func(text string) string { return taskwrite.LinkMentions(ctx, t, text, cmd.ErrWriter) }
+
+	url, err := LinkedCommentOnce(ctx, cmd.ErrWriter, h, p, link, cmd.String("reply-to"), cmd.String("quote"), body)
 	if err != nil {
 		return err
 	}
@@ -267,6 +274,19 @@ func runPRComment(ctx context.Context, cmd *cli.Command) error {
 	_, err = fmt.Fprintln(cmd.Writer, url)
 
 	return err
+}
+
+// LinkedCommentOnce links the body before CommentOnce compares it, so a
+// retry finds the linked text it posted instead of posting it again.
+func LinkedCommentOnce(
+	ctx context.Context,
+	warn io.Writer,
+	h hostops.Host,
+	p forge.PR,
+	link func(string) string,
+	replyTo, quote, body string,
+) (string, error) {
+	return CommentOnce(ctx, warn, h, p, replyTo, quote, link(body))
 }
 
 // CommentOnce never posts the same text twice where it lands: a retry after

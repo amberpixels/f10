@@ -33,6 +33,7 @@ import (
 	lorecmd "github.com/amberpixels/f10/cli/internal/command/lore"
 	mcpcmd "github.com/amberpixels/f10/cli/internal/command/mcp"
 	prcmd "github.com/amberpixels/f10/cli/internal/command/pr"
+	refscmd "github.com/amberpixels/f10/cli/internal/command/refs"
 	remotecmd "github.com/amberpixels/f10/cli/internal/command/remote"
 	reviewcmd "github.com/amberpixels/f10/cli/internal/command/review"
 	standupcmd "github.com/amberpixels/f10/cli/internal/command/standup"
@@ -85,6 +86,7 @@ func newApp() *cli.Command {
 			taskcmd.PlanCommand(),
 			taskcmd.DemoCommand(),
 			prcmd.Command(),
+			refscmd.Command(),
 			reviewcmd.Command(),
 			tracecmd.Command(),
 			statuscmd.Command(),

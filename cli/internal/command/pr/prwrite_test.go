@@ -63,6 +63,24 @@ func TestCommentOnceFindsItsOwnPost(t *testing.T) {
 	}
 }
 
+// A retried comment is linked before the check, so the linked text posted
+// the first time is found and nothing posts twice.
+func TestLinkedCommentOnceFindsTheLinkedPost(t *testing.T) {
+	f := testkit.NewFakes(t)
+	f.Script("gh api user", `{"login":"me"}`)
+	f.Script(issueComments, `[{"body":"done [FT-1: One](https://t/1)","html_url":"u1","user":{"login":"me"}}]`)
+
+	link := func(s string) string { return strings.Replace(s, "FT-1", "[FT-1: One](https://t/1)", 1) }
+
+	var warn bytes.Buffer
+
+	got, err := prcmd.LinkedCommentOnce(t.Context(), &warn, hostops.NewHost("gh", t.TempDir()), headPR(), link, "",
+		"", "done FT-1")
+	if err != nil || got != "u1" || !strings.Contains(warn.String(), "already posted") {
+		t.Errorf("linkedCommentOnce = %q, %v, %q; want the earlier linked post", got, err, warn.String())
+	}
+}
+
 // A url naming no thread falls back to a top-level comment, and says so.
 func TestCommentOnceFallsBack(t *testing.T) {
 	f := testkit.NewFakes(t)

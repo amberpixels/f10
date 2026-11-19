@@ -31,6 +31,7 @@ var machineRead = map[string]string{
 	"internal/statusview/refs.go":            `"%s: %v"`,                      // a warning on stderr
 	"internal/command/task/taskreport.go":    `"%s: %v: no subtasks to list"`, // a warning on stderr
 	"internal/launch/closed.go":              `" %s is closed."`,              // a discussion prompt, read by the agent
+	"internal/command/refs/refs.go":          `"%s:%d: %s is not linked\n"`,   // refs check, a linter's line
 }
 
 // commandSources are the non-test files of the command tree: cmd/f10 and
