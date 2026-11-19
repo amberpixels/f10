@@ -94,7 +94,7 @@ func over(hc *http.Client, base string, local bool) *Clients {
 }
 
 // AsksIn is an asks client over the inbox in dir with d moving answers on,
-// served in process: what a test of the asks command calls instead of the
+// served in process: what a test of the inbox command calls instead of the
 // daemon's inbox.
 func AsksIn(dir string, d agents.Deliverer) agentsv1connect.InboxServiceClient {
 	mux := http.NewServeMux()

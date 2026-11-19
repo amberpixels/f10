@@ -147,7 +147,7 @@ func runAsksList(ctx context.Context, cmd *cli.Command) error {
 	return list(ctx, cmd.Writer, c.Asks, c.AgentsCaller(cmd), time.Now(), cmd.Bool("json"))
 }
 
-// ListAsks prints the inbox in dir, served in process: the asks command's
+// ListAsks prints the inbox in dir, served in process: the inbox command's
 // list for a test's inbox.
 func ListAsks(ctx context.Context, w io.Writer, dir string, now time.Time, asJSON bool) error {
 	return list(ctx, w, apiclient.AsksIn(dir, Deliverer{}), nil, now, asJSON)
@@ -292,7 +292,7 @@ func runAsksAnswer(ctx context.Context, cmd *cli.Command) error {
 }
 
 // AnswerAsk answers token's open ask in the inbox in dir with d moving it
-// on, served in process: the asks command's answer for a test's inbox.
+// on, served in process: the inbox command's answer for a test's inbox.
 func AnswerAsk(ctx context.Context, w io.Writer, dir, token string, values []string, by string, d Deliverer) error {
 	return answer(ctx, w, apiclient.AsksIn(dir, d), nil, token, values, by)
 }
@@ -314,7 +314,7 @@ func answer(
 }
 
 // WalkAsks walks the inbox in dir with d moving answers on, served in
-// process: the asks command's walk for a test's inbox.
+// process: the inbox command's walk for a test's inbox.
 func WalkAsks(ctx context.Context, w io.Writer, in *bufio.Reader, dir string, d Deliverer) error {
 	return walk(ctx, w, in, apiclient.AsksIn(dir, d), nil)
 }

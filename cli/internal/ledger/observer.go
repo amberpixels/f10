@@ -33,7 +33,7 @@ const (
 	RegressionFound   = "regression_found"   // a bug task's cause traced to the task that shipped it
 	RegressionClaimed = "regression_claimed" // a task whose text names the task it regressed
 
-	AskRaised   = "ask_raised"   // an agent stopped on a question, from the asks inbox
+	AskRaised   = "ask_raised"   // an agent stopped on a question, from the inbox
 	AskAnswered = "ask_answered" // the first answer closed it
 
 	WatchReported = "watch_reported" // a fact the watcher told, once

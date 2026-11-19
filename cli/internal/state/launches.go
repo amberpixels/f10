@@ -13,6 +13,9 @@ import (
 const (
 	launchesExt = ".launches"
 	inboxExt    = ".inbox"
+	// legacyAsksExt is the marks' name before the inbox rename, still pruned so
+	// old files go. Drop it in v0.68.
+	legacyAsksExt = ".asks"
 )
 
 // Launch kinds: a task `f10 start` opened, or a drive by its number.

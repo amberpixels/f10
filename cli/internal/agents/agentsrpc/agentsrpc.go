@@ -1,5 +1,5 @@
 // Package agentsrpc serves agents.v1 over the agents core: the workspaces
-// and agents of the multiplexer, text sent to an agent, and the asks inbox.
+// and agents of the multiplexer, text sent to an agent, and the inbox.
 package agentsrpc
 
 import (
@@ -295,7 +295,7 @@ func (s inboxService) AnswerAsk(
 	ctx context.Context,
 	req *connect.Request[agentsv1.AnswerAskRequest],
 ) (*connect.Response[agentsv1.AnswerAskResponse], error) {
-	// the asks command's own call: its words, its output, its refusals
+	// the inbox command's own call: its words, its output, its refusals
 	if req.Msg.GetMatch() != "" || len(req.Msg.GetValues()) > 0 {
 		return s.answerAsCommand(ctx, req)
 	}
@@ -345,7 +345,7 @@ func (s inboxService) AnswerAsk(
 }
 
 // answerAsCommand answers the open ask match finds, else the one id keys,
-// as the asks command does: its refusals and what it prints read the same
+// as the inbox command does: its refusals and what it prints read the same
 // as in process.
 func (s inboxService) answerAsCommand(
 	ctx context.Context,
@@ -386,7 +386,7 @@ func (s inboxService) answerAsCommand(
 	}), nil
 }
 
-// valuesOf is the request's answers as N=VALUE, as the asks command takes them.
+// valuesOf is the request's answers as N=VALUE, as the inbox command takes them.
 func valuesOf(m *agentsv1.AnswerAskRequest) []string {
 	if len(m.GetValues()) > 0 {
 		return m.GetValues()
