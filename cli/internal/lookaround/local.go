@@ -268,7 +268,7 @@ func readLedger(ctx context.Context, path, project string, resolve func(string) 
 func finishedNow(l *Local, id string) bool {
 	_, live := l.Plans[id]
 
-	return LedgerFinishStands(l.Finished[id], live)
+	return LedgerFinishStands(l.Finished[id], live, false, false) // a local read: no tracker
 }
 
 // finishedFrom marks each task a finish row names; resolve turns the

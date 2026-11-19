@@ -72,16 +72,23 @@ func TestClaimRunLeavesWaitAndDoneOff(t *testing.T) {
 }
 
 // A ledger finish counts only while no live plan says the task came back,
-// the rule the board's local collector applies too.
+// the rule the board's local collector applies too, and while the tracker
+// does not state the task open: a task's first PR finished, its next is due.
 func TestAddLedgerKeepsARePlannedTaskOpen(t *testing.T) {
 	t.Parallel()
 
-	var replanned, done TaskFacts
+	var replanned, done, nextPR, closed TaskFacts
 
-	replanned.AddLedger(LedgerTask{Finished: true}, true)
-	done.AddLedger(LedgerTask{Finished: true}, false)
+	replanned.AddLedger(LedgerTask{Finished: true}, true, false, false)
+	done.AddLedger(LedgerTask{Finished: true}, false, false, false)
+	nextPR.AddLedger(LedgerTask{Finished: true}, false, true, false)
+	closed.AddLedger(LedgerTask{Finished: true}, false, true, true)
 
 	if replanned.Finished || !done.Finished || done.FinishedFrom != FinishedByLedger {
 		t.Errorf("re-planned %+v, finished %+v", replanned, done)
+	}
+
+	if nextPR.Finished || !closed.Finished {
+		t.Errorf("stated open %+v, stated closed %+v", nextPR, closed)
 	}
 }

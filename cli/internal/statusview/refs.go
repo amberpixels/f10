@@ -117,7 +117,7 @@ func FinishedIn(ctx context.Context, t *target.Target, refs []ref.Ref) map[strin
 				hit = strings.EqualFold(resolve(token), r.ID)
 			}
 
-			if hit && lookaround.LedgerFinishStands(true, t.Layout.StorageRoot.PlanLive(r.ID)) {
+			if hit && lookaround.LedgerFinishStands(true, t.Layout.StorageRoot.PlanLive(r.ID), false, false) {
 				out[r.ID] = true
 			}
 		}

@@ -78,6 +78,15 @@ func TasksFor(t *target.Target) taskSource {
 	return FallbackSource{first: driverSource{t: t, d: d}, Rest: rest}
 }
 
+// InfoStates says Info's answers for t carry the tracker's state: only the
+// host's issues answer it. A driver states none, and with no host CLI Info
+// fails, so neither does.
+func InfoStates(t *target.Target) bool {
+	_, ok := TasksFor(t).(HostSource)
+
+	return ok
+}
+
 // FallbackSource asks the driver, and the rest only for a verb it declines.
 type FallbackSource struct {
 	first driverSource

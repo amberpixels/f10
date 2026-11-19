@@ -621,7 +621,7 @@ It applies only to the tree; a run's block prints as without it.
 
 | stage | when | color |
 |---|---|---|
-| `done` | finished (finish ran, the issue closed, the plan archived) or the PR merged | green |
+| `done` | finished (the issue closed; for a tracker that reports no state, finish ran or the plan archived) or the PR merged | green |
 | `shipped` | the ship pipeline ended, the PR not merged yet | faint green |
 | `asking` | a driven run stopped on a question; the `ask:` line under it holds the question | red |
 | `halted` | a phase failed, partial or blocked, or drive halted the task itself (an idle agent, a refused finish) after its run's last word; `halt:` and `next:` lines under it | red |
@@ -822,6 +822,7 @@ A drive that is not running, a cancelled one included, has each row not yet fini
 The check is the rule drive and status use.
 A task with no branch here or on origin and no live plan reads `finished` when its issue is closed.
 An archived plan counts only for a tracker that reports no state, because an open issue may ship another PR.
+A finish the ledger recorded counts the same way, so `f10 status` never calls a task done while `f10 start` would open its next PR.
 The tracker is asked only when no branch or live plan decides.
 Finish's own `already finished` is narrower, because it asks whether finish got as far as archiving the plan.
 The corrected row is saved when the drive's lease is free, and only shown when another process holds it.
@@ -1184,7 +1185,7 @@ Then it prints each watched project: its last pass, that pass's exit, and its lo
   Once the certificate is in place, the `http://` address redirects to the `https://` one. The browser keeps the token per address, so you sign in once more there.
   The app has these screens:
   - **Runs**: every live run, grouped by project, with why a run stopped and its PR's checks.
-  - **Asks**: the open asks, answered in place by tapping an option.
+  - **Inbox** (`/inbox`; the old `/asks` address redirects there until v0.68): the open asks, answered in place by tapping an option.
   - **A task**: its flow and a box that sends a command or a note to its agent, as `f10 forward` does (`Forward`). It also shows the plan, the spike report and the handoff. It shows the verdicts, the findings and the demo report. The files are read through `ListArtifacts` and `GetArtifact`, by kind and name, never by path.
   - **Board**, **Start** (start one task or several, a range, a plan-only run or a discussion) and **Capture** (create a task).
 
@@ -1841,7 +1842,7 @@ On GitHub, requests to GitHub's own hosts carry the `gh` token, so a private rep
 `f10 finish` removes the task's images from the shared root and from main's `.f10/`; a worktree's go with the worktree.
 `--no-images` keeps the links as they are, for a read that only wants the title.
 `search` prints a table to a terminal and JSON to a pipe.
-`children` prints a tree to a terminal and JSON to a pipe or with `--json`; `--plain` prints the tree into a pipe too, with no urls (they stay in `--json`), and `--open` leaves out the finished rows as well (merged, or the plan archived), a dependent of a finished base moving up to its base's level.
+`children` prints a tree to a terminal and JSON to a pipe or with `--json`; `--plain` prints the tree into a pipe too, with no urls (they stay in `--json`), and `--open` leaves out the finished rows as well (the issue closed, or, for a tracker that reports no state, the plan archived), a dependent of a finished base moving up to its base's level.
 
 ## Stale
 

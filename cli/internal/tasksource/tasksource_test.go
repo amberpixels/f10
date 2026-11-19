@@ -47,3 +47,16 @@ func TestTasksPicksTheSource(t *testing.T) {
 		})
 	}
 }
+
+// Info states the tracker's state only where the host's issues answer it:
+// with no host CLI, Info fails, so children rows must not claim a state
+// either, or they and drive would disagree on the same task.
+func TestInfoStatesFollowsTheAnsweringSource(t *testing.T) {
+	if !tasksource.InfoStates(testkit.ChildTarget(t, "gh")) {
+		t.Error("the host's issues state no state")
+	}
+
+	if tasksource.InfoStates(testkit.ChildTarget(t, "")) {
+		t.Error("a checkout with no host CLI states a state")
+	}
+}
