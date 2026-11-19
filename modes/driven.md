@@ -40,7 +40,7 @@ Examples are a judge's rethink, a resolve `ask` and a deploy confirmation.
    Never end it with a command meant for another session, such as `f10 forward`, `f10 status` or `f10 start --answer`.
    The driving session reads the ask through `f10 status <task-id>` and already knows its own way back.
 
-`f10-state.sh ask` also puts the ask in the user's asks inbox (`f10 asks`).
+`f10-state.sh ask` also puts the ask in the user's inbox (`f10 inbox`).
 The inbox counts the ask on the status line, tells other sessions about it and notifies the user.
 
 Six kinds of open question never become an ask:
@@ -106,7 +106,7 @@ The task halts only in these cases:
 ## The answer
 
 An answer arrives as your **next prompt**, in plain text, numbered the way the ask was.
-It may be typed in this pane, sent by the drive, or sent from anywhere by `f10 asks answer` or `/f10:asks`.
+It may be typed in this pane, sent by the drive, or sent from anywhere by `f10 inbox answer` or `/f10:inbox`.
 The first answer to arrive closes the ask in the inbox, whichever way it came.
 
 When the answer arrives:

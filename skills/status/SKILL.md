@@ -39,10 +39,10 @@ Never reorder it, summarise it, or turn it into a table, because the binary alre
    A failure is printed as is and ends the turn.
 2. **When the output carries an `ask` row**, the agent is driven (`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`) and stopped on that question.
    Put it to the user in **one `AskUserQuestion`**: one question per numbered item, the bracketed options as the choices, the first as recommended.
-   Then write the answers through the asks inbox, numbered as the ask was, each answer the option's text, quoted:
+   Then write the answers through the inbox, numbered as the ask was, each answer the option's text, quoted:
 
    ```
-   f10 asks answer <task-id> --by skill 1=<answer> 2=<answer>
+   f10 inbox answer <task-id> --by skill 1=<answer> 2=<answer>
    ```
 
    Print one line saying where the answer went, as the command printed it (sent to the agent, a drive resumed), and stop.
@@ -51,7 +51,7 @@ Never reorder it, summarise it, or turn it into a table, because the binary alre
 3. **A parent, or the session's launches, prints a tree** instead of a block, with a row per child.
    Each row carries its task url and PR url on `url` and `pr` lines.
    A child's files are one call away: `f10 status <child-id>` prints its block.
-   An `asking` child carries its question, whole, on an `ask` line under its row: put every one to the user in **one `AskUserQuestion`**, the questions grouped by child id, and answer each child's ask with its own answers (`f10 asks answer <child-id> --by skill 1=<answer>`), one command per child in one Bash call.
+   An `asking` child carries its question, whole, on an `ask` line under its row: put every one to the user in **one `AskUserQuestion`**, the questions grouped by child id, and answer each child's ask with its own answers (`f10 inbox answer <child-id> --by skill 1=<answer>`), one command per child in one Bash call.
    No `asking` child: the tree is the whole answer.
    Stop.
 4. No `ask` row: the status is the whole answer.

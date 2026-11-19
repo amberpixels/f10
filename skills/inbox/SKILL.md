@@ -1,13 +1,13 @@
 ---
-name: asks
-description: "f10 asks skill - the questions driven agents are waiting on, across projects, put to the user in one questionnaire and answered: a drive's task resumes its drive, any other agent gets the answer as its next prompt. Use when the user says \"/f10:asks\", asks what agents are waiting on or asking, or wants to answer the open asks the status line counts."
+name: inbox
+description: "f10 inbox skill - the questions driven agents are waiting on, across projects, put to the user in one questionnaire and answered: a drive's task resumes its drive, any other agent gets the answer as its next prompt. Use when the user says \"/f10:inbox\" (formerly /f10:asks), asks what agents are waiting on or asking, or wants to answer the open asks the status line counts."
 allowed-tools: Bash, AskUserQuestion
 argument-hint: "[task-id]"
 ---
 
-# f10 · asks
+# f10 · inbox
 
-Driven agents' questions wait in one per-user inbox until the first answer from any way in (`docs/cli.md` → Asks).
+Driven agents' questions wait in one per-user inbox until the first answer from any way in (`docs/cli.md` → Inbox).
 This skill reads the inbox, asks the user, and writes the answers (`${CLAUDE_PLUGIN_ROOT}/modes/binary.md`); it runs no step.
 
 **Arguments**
@@ -15,7 +15,7 @@ This skill reads the inbox, asks the user, and writes the answers (`${CLAUDE_PLU
 - A task id (or `<project>:<task>`): only that task's ask.
 - No argument: every open ask.
 
-1. Run `f10 asks list --json`.
+1. Run `f10 inbox list --json`.
    `open` empty, or no ask for the task named: say so in one line, naming any `answered` row for that task (who answered, when), and stop.
 2. **Ask once, in one `AskUserQuestion`**, a question per numbered question of each open ask, in the list's order.
    Header: the task id (`<project>:<task>` when two asks share an id).
@@ -26,7 +26,7 @@ This skill reads the inbox, asks the user, and writes the answers (`${CLAUDE_PLU
 3. **Write the answers**, every ask in one Bash call, one command per ask:
 
    ```
-   f10 asks answer <task> --by skill 1=<option or text> 2=<option or text>
+   f10 inbox answer <task> --by skill 1=<option or text> 2=<option or text>
    ```
 
    Pass each answer as the option's text, quoted; free text the user typed goes in as typed.
