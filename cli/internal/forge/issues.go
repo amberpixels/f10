@@ -29,8 +29,9 @@ type Issue struct {
 
 // An IssueComment is one comment on an issue, by its author's login.
 type IssueComment struct {
-	Author string
-	Body   string
+	Author   string
+	Body     string
+	Internal bool // a GitLab internal note, hidden from the issue's public readers
 }
 
 // ErrNotIssue is a number that names a pull request where an issue was
@@ -150,7 +151,8 @@ func (h Host) IssueWithComments(ctx context.Context, number string) (Issue, erro
 
 	for _, n := range notes {
 		if !n.System {
-			iss.Comments = append(iss.Comments, IssueComment{Author: n.Author.name(), Body: n.Body})
+			c := IssueComment{Author: n.Author.name(), Body: n.Body, Internal: n.Internal}
+			iss.Comments = append(iss.Comments, c)
 		}
 	}
 

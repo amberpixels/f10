@@ -75,7 +75,8 @@ func TestIssueReadsBothCLIs(t *testing.T) {
 }
 
 // glab's JSON issue view carries no notes, so a read with comments asks the
-// notes API, oldest first, and leaves out system notes such as label changes.
+// notes API, oldest first, leaves out system notes such as label changes, and
+// flags internal notes.
 func TestIssueWithCommentsReadsGitLabNotes(t *testing.T) {
 	notes := "glab api --paginate projects/:fullpath/issues/%s/notes?per_page=100&sort=asc&order_by=created_at"
 
@@ -83,13 +84,13 @@ func TestIssueWithCommentsReadsGitLabNotes(t *testing.T) {
 		"glab issue view 8 -F json": `{"iid":8,"title":"G","state":"opened","web_url":"https://gitlab.com/o/r/-/issues/8"}`,
 		fmt.Sprintf(notes, "8"): `[{"id":1,"body":"squash the schema","system":false,"author":{"username":"ann"}},` +
 			`{"id":2,"body":"added ~bug label","system":true,"author":{"username":"ann"}}]` + "\n" +
-			`[{"id":3,"body":"agreed","system":false,"author":{"username":"bo"}}]`,
+			`[{"id":3,"body":"agreed","system":false,"internal":true,"author":{"username":"bo"}}]`,
 		"glab issue view 9 -F json": `{"iid":9,"title":"H","state":"opened","web_url":"https://gitlab.com/o/r/-/issues/9"}`,
 		fmt.Sprintf(notes, "9"):     `[]`,
 	})
 
 	gl, err := Host{Name: "glab"}.IssueWithComments(t.Context(), "8")
-	want := []IssueComment{{Author: "ann", Body: "squash the schema"}, {Author: "bo", Body: "agreed"}}
+	want := []IssueComment{{Author: "ann", Body: "squash the schema"}, {Author: "bo", Body: "agreed", Internal: true}}
 
 	if err != nil || !slices.Equal(gl.Comments, want) {
 		t.Errorf("glab comments = %+v, %v; want %+v", gl.Comments, err, want)

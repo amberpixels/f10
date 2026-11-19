@@ -98,7 +98,13 @@ func (h Host) IssueDoc(
 	b.WriteString("\n")
 
 	for _, c := range iss.Comments {
-		fmt.Fprintf(&b, "\n---\n\n**%s**\n\n%s\n", cmp.Or(c.Author, "comment"), strings.TrimSpace(c.Body))
+		// an internal note is marked so its text is not repeated where the issue's public readers see it
+		author := cmp.Or(c.Author, "comment")
+		if c.Internal {
+			author += " (internal)"
+		}
+
+		fmt.Fprintf(&b, "\n---\n\n**%s**\n\n%s\n", author, strings.TrimSpace(c.Body))
 	}
 
 	return b.String(), iss, nil
