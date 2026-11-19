@@ -718,7 +718,8 @@ func TestSeedChainsADigitPrefix(t *testing.T) {
 	}
 }
 
-// The open asks count on the status line, with a run and without one.
+// The open asks count on the status line, with a run and without one: a
+// session that recorded its project counts that project's alone.
 func TestRenderCountsAsks(t *testing.T) {
 	t.Parallel()
 
@@ -730,18 +731,28 @@ func TestRenderCountsAsks(t *testing.T) {
 	script := filepath.Join(filepath.Dir(file), "..", "..", "..", "bin", "f10-state.sh")
 	dir, asks := t.TempDir(), t.TempDir()
 
-	for _, name := range []string{"a-FT-1.yaml", "b-FT-2.yaml"} {
+	for _, name := range []string{"0a0a0a0a-FT-1.yaml", "0b0b0b0b-FT-2.yaml", "0b0b0b0b-FT-3.yaml"} {
 		if err := os.WriteFile(filepath.Join(asks, name), nil, 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	r := &Run{Session: "asks", Capture: "upcoming", Plan: "upcoming", Ship: "upcoming"}
-	if err := r.Save(t.Context(), dir, time.Now()); err != nil {
+	for _, session := range []string{"asks", "scoped"} {
+		r := &Run{Session: session, Capture: "upcoming", Plan: "upcoming", Ship: "upcoming"}
+		if err := r.Save(t.Context(), dir, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := os.WriteFile(ProjectPath(dir, "scoped"), []byte("0a0a0a0a\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
-	for session, want := range map[string]string{"asks": " 󱊴 ○○○ f10 · 2 asks", "none": " f10 · 2 asks"} {
+	for session, want := range map[string]string{
+		"asks":   " 󱊴 ○○○ f10 · 󰚇 3 asks",
+		"scoped": " 󱊴 ○○○ f10 · 󰚇 1 ask",
+		"none":   " f10 · 󰚇 3 asks",
+	} {
 		cmd := exec.Command(script, "render", session)
 		cmd.Env = append(os.Environ(), dirEnv+"="+dir, "NO_COLOR=1", "F10_INBOX_DIR="+asks)
 

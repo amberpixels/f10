@@ -42,7 +42,8 @@ func AskLink(links *render.TaskLinks, a asks.Ask) string {
 }
 
 // RaiseAsk puts a in the inbox and, the first time, runs the notify
-// command. Neither failing changes the run that asked: a line says so.
+// command. It returns the ask as the inbox holds it, else a. Neither
+// failing changes the run that asked, and a line says so.
 func RaiseAsk(
 	ctx context.Context,
 	w io.Writer,
@@ -50,12 +51,14 @@ func RaiseAsk(
 	a asks.Ask,
 	now time.Time,
 	notify func(context.Context, asks.Ask) error,
-) {
+) asks.Ask {
 	raised, fresh, err := asks.Raise(dir, a, now)
 	if err != nil {
 		fmt.Fprintf(w, "  keeping %s's ask in the inbox: %v\n", AskLink(render.LinksFor(w, false), a), err)
 
-		return
+		a.Questions = asks.Parse(a.Text)
+
+		return a
 	}
 
 	if fresh && notify != nil {
@@ -63,6 +66,8 @@ func RaiseAsk(
 			fmt.Fprintf(w, "  notifying %s's ask: %v\n", AskLink(render.LinksFor(w, false), a), err)
 		}
 	}
+
+	return raised
 }
 
 // inboxConfig is ~/.f10/inbox.md's frontmatter.
@@ -172,26 +177,29 @@ func AskFromRun(ctx context.Context, r *state.Run, cwd string) (asks.Ask, bool) 
 		Main:     cmp.Or(lay.MainRoot, lay.CheckoutRoot),
 		Project:  lay.Project,
 		Worktree: lay.CheckoutRoot,
+		Pane:     os.Getenv("HERDR_PANE_ID"),
 		Skill:    r.Leaf,
 		Text:     r.Ask,
 	}, true
 }
 
 // PaneAnswered claims the open ask of the checkout at cwd for a prompt
-// typed in its pane, and starts the resume of its drive apart from this
-// hook, which has seconds to live.
-func PaneAnswered(ctx context.Context, cwd, prompt string) {
+// typed in its pane. It starts the resume of its drive apart from this
+// hook, which has seconds to live. It returns the asks it closed.
+func PaneAnswered(ctx context.Context, cwd, prompt string) []asks.Ask {
 	root := layout.Locate(ctx, cwd).CheckoutRoot
 	if root == "" {
-		return
+		return nil
 	}
 
 	dir := asks.Dir()
 
 	open, err := asks.Open(dir)
 	if err != nil {
-		return
+		return nil
 	}
+
+	var closed []asks.Ask
 
 	for _, a := range open {
 		// finish's question is the drive's, not the agent's
@@ -200,7 +208,13 @@ func PaneAnswered(ctx context.Context, cwd, prompt string) {
 		}
 
 		claimed, err := asks.Claim(dir, a.Key(), asks.ByPane, strings.TrimSpace(prompt), true, time.Now())
-		if err != nil || claimed.Drive == 0 {
+		if err != nil {
+			continue
+		}
+
+		closed = append(closed, claimed)
+
+		if claimed.Drive == 0 {
 			continue
 		}
 
@@ -208,4 +222,6 @@ func PaneAnswered(ctx context.Context, cwd, prompt string) {
 			_ = shell.Detached(exe, "inbox", "resume", claimed.Key())
 		}
 	}
+
+	return closed
 }

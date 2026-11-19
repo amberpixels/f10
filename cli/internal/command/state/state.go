@@ -7,11 +7,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/agents"
 	"github.com/amberpixels/f10/cli/internal/asknotify"
 	"github.com/amberpixels/f10/cli/internal/asks"
 	"github.com/amberpixels/f10/cli/internal/ledger"
@@ -170,7 +172,11 @@ func writeState(ctx context.Context, cmd *cli.Command, kind string, apply func(r
 	if kind == "state_ask" {
 		if cwd, err := os.Getwd(); err == nil {
 			if a, ok := asknotify.AskFromRun(ctx, r, cwd); ok {
-				asknotify.RaiseAsk(ctx, cmd.ErrWriter, asks.Dir(), a, now, asknotify.Notify)
+				raised := asknotify.RaiseAsk(ctx, cmd.ErrWriter, asks.Dir(), a, now, asknotify.Notify)
+				agents.ReportBlocked(ctx, cmd.ErrWriter, raised)
+
+				// the model prints this verbatim, so it never types the ask by hand
+				_, _ = io.WriteString(cmd.Writer, asks.Banner(raised, ""))
 			}
 		}
 	}

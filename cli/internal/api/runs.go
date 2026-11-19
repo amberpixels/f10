@@ -712,7 +712,7 @@ func (s *runService) CancelDrive(
 		return nil, o.Wrap(err)
 	}
 
-	drive.CloseDriveAsks(asks.Dir(), root, n, now)
+	drive.CloseDriveAsks(ctx, &o.Stdout, asks.Dir(), root, n, now)
 
 	return connect.NewResponse(&f10v1.CancelDriveResponse{Printed: printedOf(o)}), nil
 }

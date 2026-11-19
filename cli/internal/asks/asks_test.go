@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -282,5 +283,79 @@ func TestRaiseMergeNeverReopens(t *testing.T) {
 		if err != nil || isOpen {
 			t.Fatalf("after a claim the ask reads open %v, %v", isOpen, err)
 		}
+	}
+}
+
+func TestOpenInScopesByProject(t *testing.T) {
+	t.Parallel()
+
+	dir, now := t.TempDir(), time.Now()
+
+	mustRaise := func(a Ask) Ask {
+		t.Helper()
+
+		got, _, err := Raise(dir, a, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		return got
+	}
+
+	mustRaise(sample("/a"))
+	b := mustRaise(sample("/b"))
+
+	if got, _ := OpenIn(dir, "/a"); len(got) != 1 || got[0].Root != "/a" {
+		t.Errorf("OpenIn /a = %+v, want project a's ask alone", got)
+	}
+
+	if got, _ := OpenIn(dir, ""); len(got) != 2 {
+		t.Errorf("OpenIn with no project = %d asks, want 2", len(got))
+	}
+
+	if _, err := Claim(dir, b.Key(), ByAsks, "1. yes", false, now); err != nil {
+		t.Fatal(err)
+	}
+
+	if got, _ := AnsweredIn(dir, "/a", time.Time{}); len(got) != 0 {
+		t.Errorf("AnsweredIn /a = %+v, want none", got)
+	}
+
+	if got, _ := AnsweredIn(dir, "/b", time.Time{}); len(got) != 1 {
+		t.Errorf("AnsweredIn /b = %d asks, want 1", len(got))
+	}
+
+	if !strings.HasPrefix(b.Key(), ProjectHash("/b")+"-") {
+		t.Errorf("key %s does not start with its project's hash", b.Key())
+	}
+}
+
+func TestRaiseKeepsPane(t *testing.T) {
+	t.Parallel()
+
+	dir, now := t.TempDir(), time.Now()
+
+	agent := sample("/r")
+	agent.Pane = "w1-2"
+
+	if _, _, err := Raise(dir, agent, now); err != nil {
+		t.Fatal(err)
+	}
+
+	// the drive's raise of the same ask has no pane and must not drop it
+	drive := sample("/r")
+	drive.Drive = 4
+
+	got, _, err := Raise(dir, drive, now)
+	if err != nil || got.Pane != "w1-2" || got.Drive != 4 {
+		t.Fatalf("merged raise = %+v, %v", got, err)
+	}
+
+	// the agent recovered in a new pane asks again: the ask follows it
+	moved := sample("/r")
+	moved.Pane = "w3-1"
+
+	if got, _, _ := Raise(dir, moved, now); got.Pane != "w3-1" {
+		t.Errorf("re-raised from a new pane, pane = %q, want w3-1", got.Pane)
 	}
 }

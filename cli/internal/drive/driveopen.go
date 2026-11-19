@@ -95,6 +95,7 @@ func (in *DriveInput) open(ctx context.Context, r *DriveRun) error {
 		ProfileFlagged: task.flagged,
 		Progress:       in.Out,
 		FlowKept:       true,
+		Driven:         true,
 		Landed:         in.Landed,
 	})
 	if err != nil {

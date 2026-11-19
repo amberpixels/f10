@@ -36,7 +36,7 @@ var Tools = []Tool{
 		Name:        "list_asks",
 		Procedure:   "/agents.v1.InboxService/ListAsks",
 		Description: "ListAsks lists the questions agents are waiting on, and with answered_since also the ones answered since then.",
-		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"answered_since\":{\"description\":\"answered_since adds the asks answered after it; unset lists open asks only.\",\"format\":\"date-time\",\"type\":\"string\"}},\"type\":\"object\"}",
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"answered_since\":{\"description\":\"answered_since adds the asks answered after it; unset lists open asks only.\",\"format\":\"date-time\",\"type\":\"string\"},\"project\":{\"description\":\"project is the storage root whose asks to list; empty lists every project's.\",\"type\":\"string\"}},\"type\":\"object\"}",
 		NewRequest:  func() proto.Message { return &v1.ListAsksRequest{} },
 		Call: func(ctx context.Context, hc connect.HTTPClient, baseURL string, req proto.Message, opts ...connect.ClientOption) (proto.Message, error) {
 			res, err := agentsv1connect.NewInboxServiceClient(hc, baseURL, opts...).ListAsks(ctx, connect.NewRequest(req.(*v1.ListAsksRequest)))

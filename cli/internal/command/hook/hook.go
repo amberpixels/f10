@@ -13,6 +13,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/agents"
 	"github.com/amberpixels/f10/cli/internal/asknotify"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hook"
@@ -70,9 +71,13 @@ func runHook(ctx context.Context, cmd *cli.Command) error {
 		StorageRoot: func(ctx context.Context, cwd string) string { return layout.Locate(ctx, cwd).StorageRoot.Path() },
 		TaskID:      hookTaskID,
 		StatusText:  HookStatusText,
-		PromptTyped: asknotify.PaneAnswered,
-		Profile:     hookProfile,
-		Observers:   []observe.Observer{recorder},
+		PromptTyped: func(ctx context.Context, cwd, prompt string) {
+			for _, a := range asknotify.PaneAnswered(ctx, cwd, prompt) {
+				agents.ReleasePane(ctx, io.Discard, a)
+			}
+		},
+		Profile:   hookProfile,
+		Observers: []observe.Observer{recorder},
 	}
 
 	_, err = cmd.Writer.Write(hook.Dispatch(ctx, raw, env))

@@ -92,7 +92,7 @@ func (in *DriveInput) send(ctx context.Context, r *DriveRun, skill string) error
 
 		// closed before the prompt, so the pane hook does not read the
 		// drive's own answer as one typed there
-		in.claimSent(r, answer)
+		in.claimSent(ctx, r, answer)
 
 		if err := in.deliver(ctx, r, answer); err != nil {
 			return err

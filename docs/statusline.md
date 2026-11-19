@@ -37,7 +37,11 @@ f10-state.sh doctor   # where state lives, whether the symlink is in place, what
 | <img src="glyphs/blocked.svg" width="14" alt="blocked"> | blocked: a judge verdict ended the run, so nothing broke and the user decided |
 
 A stopped run adds the step it stopped on, so `◉ ●` <img src="glyphs/blocked.svg" width="14" alt="blocked"> `judge` reads "blocked at judge".
-Open asks, across projects, add a count, ` f10 · 2 asks`, shown with or without a run: a driven agent is waiting on you (`f10 inbox`, `/f10:inbox`).
+Open asks of this session's project add a count, ` f10 · 󰚇 2 asks`, shown with or without a run.
+The count means a driven agent is waiting on you (`f10 inbox`, `/f10:inbox`).
+Its icon is md-inbox (U+F0687).
+The session start hook writes the project to `<session>.project` beside the run state, as the hash every ask's file name starts with.
+A session with no such record, such as one outside git, counts every project's asks.
 The rest, the task, the reason, what unblocks it, and the question a driven agent is waiting on (`ask`), is `f10 status`; `f10 status <task-id>` reads the same for a task running in its own worktree, from the task's own run only; when the agent there has moved on to another task, it names that task and falls back to the task's plan file and PR.
 For a finished task, its worktree gone, it prints the same block from what `f10 finish` archived.
 Bare `f10 status` in a checkout whose branch names no task prints a `launched here` tree, a row per live task this session started or drove.

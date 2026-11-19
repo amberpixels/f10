@@ -35,6 +35,7 @@ type StartInput struct {
 	Mode     string
 	Flow     runplan.ShipFlow                      // the flow ship runs; zero for default
 	FlowKept bool                                  // drive records the flow and the pace itself, keeping what the branch has
+	Driven   bool                                  // a drive runs the agent, so its hooks are marked (launch.DrivenEnv)
 	Pace     string                                // the --pace typed, recorded on the branch; "" records none
 	After    string                                // task id whose branch is the base and whose plan is the contract, or ""
 	Base     string                                // branch whose ref is the base, or ""
@@ -460,7 +461,7 @@ func prepareLaunch(
 	o.launch = &pendingLaunch{
 		agent:   agent,
 		profile: profile,
-		args:    AgentArgs(profile, in.Storage, path),
+		args:    LaunchArgs(profile, in.Storage, path, in.Driven),
 		waiting: shellWait(in.Progress, ws.Slot),
 	}
 	o.Fresh = true

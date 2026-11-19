@@ -253,9 +253,9 @@ func (s inboxService) ListAsks(
 	ctx context.Context,
 	req *connect.Request[agentsv1.ListAsksRequest],
 ) (*connect.Response[agentsv1.ListAsksResponse], error) {
-	dir := s.o.InboxDir()
+	dir, project := s.o.InboxDir(), req.Msg.GetProject()
 
-	open, err := asks.Open(dir)
+	open, err := asks.OpenIn(dir, project)
 	if err != nil {
 		return nil, err
 	}
@@ -268,7 +268,7 @@ func (s inboxService) ListAsks(
 	}
 
 	if since := req.Msg.GetAnsweredSince(); since != nil {
-		answered, err := asks.Answered(dir, since.AsTime())
+		answered, err := asks.AnsweredIn(dir, project, since.AsTime())
 		if err != nil {
 			return nil, err
 		}

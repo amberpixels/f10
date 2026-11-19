@@ -141,21 +141,28 @@ color_for() {
   esac
 }
 
-# The open asks across projects, as ` f10 · 2 asks`, or nothing: a glob, no parse, since it runs on
-# every refresh. Shown with or without a run, since an ask is the user's wherever it was raised.
+# This project's open asks as ` f10 · 󰚇 2 asks`, or nothing. It globs and never parses, because
+# it runs on every refresh. An ask's file name starts with its project's hash, which the
+# SessionStart hook writes to `<session>.project`. With no such file, every project's asks count.
+# Shown with or without a run. The icon is md-inbox (U+F0687, Nerd Fonts).
 asks_segment() {
   _asks=""
-  local n=0 f
-  for f in "$inbox_dir"/*.yaml; do
+  local n=0 f hash="" glob="*"
+  if [ -n "$sid" ] && [ -f "$state_dir/$sid.project" ]; then
+    read -r hash <"$state_dir/$sid.project"
+    case "$hash" in '' | *[!0-9a-f]*) hash="" ;; esac # a hand-edited file must not widen the glob
+    [ -n "$hash" ] && glob="$hash-*"
+  fi
+  for f in "$inbox_dir"/$glob.yaml; do
     [ -e "$f" ] && n=$((n + 1))
   done
   [ "$n" -gt 0 ] || return 0
 
   local noun="asks"
   [ "$n" = 1 ] && noun="ask"
-  _asks=" f10 · $n $noun"
+  _asks=" f10 · 󰚇 $n $noun"
   if [ -z "${NO_COLOR:-}" ] && [ "${F10_STATE_COLOR:-1}" != "0" ]; then
-    _asks=" "$'\033[1;33m'"f10 · $n $noun"$'\033[0m'
+    _asks=" "$'\033[1;33m'"f10 · 󰚇 $n $noun"$'\033[0m'
   fi
 }
 
@@ -180,11 +187,13 @@ render() {
     fi
   fi
 
-  asks_segment
+  # the session first: it names the project whose asks count
   find_sid "$want" || {
+    asks_segment
     printf '%s' "$_asks"
     return 0
   }
+  asks_segment
   remember_model "$model"
   load || {
     printf '%s' "$_asks"

@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"path/filepath"
 	"slices"
 	"strings"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/agents"
 	"github.com/amberpixels/f10/cli/internal/asknotify"
 	"github.com/amberpixels/f10/cli/internal/asks"
 )
@@ -78,14 +80,15 @@ func (in *DriveInput) taken(key string) {
 
 // claimSent closes the task's open ask with the answer this drive sends, so
 // every other way in shows it answered.
-func (in *DriveInput) claimSent(r *DriveRun, answer string) {
+func (in *DriveInput) claimSent(ctx context.Context, r *DriveRun, answer string) {
 	if in.InboxDir == "" {
 		return
 	}
 
 	key := asks.Key(in.Root, r.Task.Ref.ID)
-	if _, err := asks.Claim(in.InboxDir, key, asks.ByDrive, answer, true, in.Now()); err == nil {
+	if a, err := asks.Claim(in.InboxDir, key, asks.ByDrive, answer, true, in.Now()); err == nil {
 		in.taken(key)
+		agents.ReleasePane(ctx, in.Out, a)
 	}
 }
 
@@ -122,16 +125,17 @@ func (in *DriveInput) resumeAnswered(tasks []DriveTask) bool {
 
 // CloseDriveAsks closes drive n's open asks: a cancelled drive leaves
 // nothing waiting in the inbox.
-func CloseDriveAsks(dir, root string, n int, now time.Time) {
-	open, _ := asks.Open(dir)
+func CloseDriveAsks(ctx context.Context, w io.Writer, dir, root string, n int, now time.Time) {
+	open, _ := asks.OpenIn(dir, root)
 
 	for _, a := range open {
-		if a.Root != root || a.Drive != n {
+		if a.Drive != n {
 			continue
 		}
 
-		if _, err := asks.Claim(dir, a.Key(), asks.ByCancelled, "", false, now); err == nil {
+		if closed, err := asks.Claim(dir, a.Key(), asks.ByCancelled, "", false, now); err == nil {
 			_ = asks.Update(dir, a.Key(), func(x *asks.Ask) { x.TakenAt = now })
+			agents.ReleasePane(ctx, w, closed)
 		}
 	}
 }

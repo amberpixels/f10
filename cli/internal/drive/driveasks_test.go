@@ -2,6 +2,7 @@ package drive
 
 import (
 	"context"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -200,7 +201,7 @@ func TestCloseDriveAsks(t *testing.T) {
 		}
 	}
 
-	CloseDriveAsks(dir, "/r", 2, now)
+	CloseDriveAsks(t.Context(), io.Discard, dir, "/r", 2, now)
 
 	open, _ := asks.Open(dir)
 	if len(open) != 1 || open[0].Task != "GH-2" {

@@ -236,6 +236,11 @@ func (b Backend) Workspaces(ctx context.Context) ([]agentctl.Workspace, error) {
 	return wss, nil
 }
 
+// ReleaseAgent drops the blocked state an ask reported on pane.
+func (b Backend) ReleaseAgent(ctx context.Context, pane string) error {
+	return ReleaseAgent(b.scope(ctx), b.Dir, pane)
+}
+
 // scope runs the calls under the session WithSession put on ctx, else b's
 // environment, when it has one: a call made for one client runs in that
 // client's session even while another one is the daemon's newest.

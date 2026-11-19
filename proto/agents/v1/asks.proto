@@ -72,6 +72,9 @@ message ListAsksRequest {
   // caller is where a local inbox command runs: with it, view links each
   // ask's task when the caller's output is a terminal.
   CallerContext caller = 2;
+  // project is the storage root whose asks to list; empty lists every
+  // project's.
+  string project = 3;
 }
 
 message ListAsksResponse {
