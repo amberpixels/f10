@@ -16,7 +16,7 @@ export async function enableNotifications() {
 
 /**
  * notifyAsk shows a new ask through the service worker, so it also shows
- * from a background tab and opens the asks screen when tapped.
+ * from a background tab and opens the inbox screen when tapped.
  */
 export async function notifyAsk(ask: Ask) {
   if (permission() !== "granted") return;
@@ -24,7 +24,7 @@ export async function notifyAsk(ask: Ask) {
   const opts: NotificationOptions = {
     body: ask.questions.map((q) => q.text).join("\n") || ask.text,
     tag: `ask-${ask.id}`,
-    data: { url: "/asks" },
+    data: { url: "/inbox" },
   };
   const reg = "serviceWorker" in navigator ? await navigator.serviceWorker.getRegistration() : undefined;
   if (reg) await reg.showNotification(title, opts);

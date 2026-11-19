@@ -87,7 +87,7 @@ func TestInboxServiceAnswersThroughTheDeliverer(t *testing.T) {
 	var resumed []int
 
 	c := serveAgents(t, agentsrpc.Options{
-		AsksDir: func() string { return dir },
+		InboxDir: func() string { return dir },
 		Deliverer: agents.Deliverer{
 			Live: func(asks.Ask) bool { return false },
 			Resume: func(_ context.Context, _ io.Writer, a asks.Ask) error {

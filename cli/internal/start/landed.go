@@ -4,28 +4,27 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/forge"
-	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
 )
 
-// A LandedLookup is the newest request whose head is branch, when it is
-// merged or closed, and false when there is none or the newest is open.
+// A LandedLookup is the request that decides branch (forge.Deciding), when
+// it is merged or closed, and false when there is none or one is open.
 type LandedLookup func(ctx context.Context, branch string) (forge.PR, bool, error)
 
-// LandedVia asks the host's requests by head branch, newest first: an open
-// one means the branch is in use, whatever landed on it before.
+// LandedVia asks the host which request decides the head: an open one means
+// the branch is in use, whatever landed on it before.
 func LandedVia(h forge.Host) LandedLookup {
 	return func(ctx context.Context, branch string) (forge.PR, bool, error) {
-		prs, err := h.PullsByHead(ctx, branch)
-		if err != nil || len(prs) == 0 {
+		p, ok, err := h.DecidingPull(ctx, branch)
+		if err != nil || !ok {
 			return forge.PR{}, false, err
 		}
-
-		p := prs[0]
 
 		return p, p.Status == forge.Merged || p.Status == forge.Closed, nil
 	}
@@ -66,14 +65,22 @@ func avoidLanded(
 		}
 
 		if !existing.Remote {
+			// finish archives the merged PR's plan too, while deleting the
+			// branch alone would leave it live for the next start to ship against
 			return "", existing, "", fmt.Errorf(
 				"%s is %s's branch, which merged, and carries nothing past it: "+
-					"remove it (git branch -D %s, after removing any worktree that has it) and start again",
-				existing.Name, p.URL, existing.Name)
+					"run f10 finish %s to close that PR's work, then start again",
+				existing.Name, p.URL, ref.JoinSuffix(in.Task.ID, in.Suffix))
 		}
 
-		// origin's copy of a landed head is stale: a new name is made below
-		name, existing = existing.Name, stack.FoundBranch{}
+		// Origin's copy of a landed head is stale, so a new name is made below.
+		// A numbered copy is counted on from the plain name (`-rest-3`, never
+		// `-rest-2-2`), so the suffix lookup still finds the new branch.
+		if !numberedOf(existing.Name, name) {
+			name = existing.Name
+		}
+
+		existing = stack.FoundBranch{}
 	}
 
 	took := "" // the url of the request that landed on name itself
@@ -112,9 +119,22 @@ func avoidLanded(
 		name, name, landedMax)
 }
 
+// numberedOf says b is name-<n>, a name start numbered after name landed.
+func numberedOf(b, name string) bool {
+	n, ok := strings.CutPrefix(b, name+"-")
+	if !ok {
+		return false
+	}
+
+	_, err := strconv.Atoi(n)
+
+	return err == nil
+}
+
 // staleLanded says a found branch is a merged request's head with nothing
-// past it: its tip is that head, or an ancestor of it. A closed request's
-// head is in no default branch, so its branch is the only copy and is reused.
+// past it, by stack.WorkPast. A tip that only merged main in is stale too.
+// A closed request's head is in no default branch, so its branch is the only
+// copy and is reused.
 func staleLanded(ctx context.Context, in StartInput, b stack.FoundBranch) (bool, forge.PR, error) {
 	p, landed, err := in.Landed(ctx, b.Name)
 	if err != nil {
@@ -139,7 +159,15 @@ func staleLanded(ctx context.Context, in StartInput, b stack.FoundBranch) (bool,
 		return true, p, nil
 	}
 
-	behind, err := gitx.IsAncestor(ctx, in.Main, tip, p.HeadSHA)
+	def := strings.TrimPrefix(stack.DefaultBranch(ctx, in.Main), "origin/")
+	if def == "" {
+		return false, p, nil // no default branch to compare with: reuse, as before any check
+	}
 
-	return err == nil && behind, p, nil
+	lost, err := stack.WorkPast(ctx, in.Main, def, tip, p.HeadSHA)
+	if err != nil {
+		return false, p, fmt.Errorf("reading what %s holds past %s: %w", b.Name, p.URL, err)
+	}
+
+	return len(lost) == 0, p, nil
 }

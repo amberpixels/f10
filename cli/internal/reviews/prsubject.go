@@ -212,34 +212,25 @@ func OpenPullOf(ctx context.Context, t *target.Target, branch string) (forge.PR,
 		return forge.PR{}, nil //nolint:nilerr // no host is no request
 	}
 
-	prs, err := h.PullsByHead(ctx, branch)
-	if err != nil {
+	p, ok, err := h.DecidingPull(ctx, branch)
+	if err != nil || !ok || p.Status != forge.Open {
 		return forge.PR{}, err
 	}
 
-	for _, p := range prs {
-		if p.Status == forge.Open {
-			return p, nil
-		}
-	}
-
-	return forge.PR{}, nil
+	return p, nil
 }
 
-// LastPullOf is the newest request of any state whose head is branch, or 0;
-// a checkout with no host CLI has none.
+// LastPullOf is the request that decides branch by forge.Deciding, or 0.
+// A checkout with no host CLI has none.
 func LastPullOf(ctx context.Context, t *target.Target, branch string) (forge.PR, error) {
 	h, err := hostops.HostOf(t)
 	if err != nil {
 		return forge.PR{}, nil //nolint:nilerr // no host is no request
 	}
 
-	prs, err := h.PullsByHead(ctx, branch)
-	if err != nil || len(prs) == 0 {
-		return forge.PR{}, err
-	}
+	p, _, err := h.DecidingPull(ctx, branch)
 
-	return prs[0], nil
+	return p, err
 }
 
 // MergedTree is head merged in memory into the newer of base's local and

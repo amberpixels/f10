@@ -26,6 +26,12 @@ export function navigate(to: string) {
   scrollTo(0, 0);
 }
 
+/** redirect replaces an old address with its new one, keeping the query. */
+export function redirect(to: string) {
+  history.replaceState(null, "", to + location.search);
+  route.value = current();
+}
+
 /** onLink lets a plain <a> navigate inside the app. */
 export function onLink(e: MouseEvent) {
   const a = (e.target as Element).closest("a");

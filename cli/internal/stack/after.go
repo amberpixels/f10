@@ -40,9 +40,6 @@ type Tracker struct {
 	AllChildren func(ctx context.Context, task ref.Ref) ([]ChildRow, error)
 	Storage     storage.Root       // where a finished task's plan is archived
 	titles      tasktitle.Template // tracker.title, whose prefix comes off each child's title
-	// stated says a child row's state comes from the tracker, as Info's does.
-	// The host's issues state one, and a driver states none.
-	stated bool
 }
 
 // TrackerFor binds the lookups to this target: the driver's `read` for the
@@ -60,7 +57,6 @@ func TrackerFor(t *target.Target) Tracker {
 		},
 		Storage: t.Layout.StorageRoot,
 		titles:  t.Effective.TitleTemplate,
-		stated:  t.Driver() == nil && t.HostIssues(),
 	}
 
 	children := func(keepClosed bool) func(context.Context, ref.Ref) ([]ChildRow, error) {

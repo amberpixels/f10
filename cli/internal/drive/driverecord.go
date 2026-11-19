@@ -425,9 +425,10 @@ func DriveList(
 	return nil
 }
 
-// RowFinishedFor checks a record's row, an id as typed, by FinishedTask, as
-// drive and status do; a row that names no task, or a git error, reads as
-// unfinished, since a wrong yes hides a halt.
+// RowFinishedFor checks a record's row, an id as typed, by FinishedTask. Drive,
+// status and the board share that rule, so a stated open issue is never
+// finished. A row that names no task, or a git error, reads as unfinished,
+// because a wrong yes hides a halt.
 func RowFinishedFor(ctx context.Context, t *target.Target) func(string) bool {
 	main := cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot)
 	tr := stack.TrackerFor(t)

@@ -115,7 +115,7 @@ func TestJanitorKeepsABranchAheadOfItsRequest(t *testing.T) {
 }
 
 func cherry(tip string) string {
-	return "git cherry -v refs/heads/main " + tip + " abc"
+	return "git cherry -v refs/remotes/origin/main " + tip + " abc"
 }
 
 // A tip past the request's head whose every commit main has by patch (a

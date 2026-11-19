@@ -283,7 +283,7 @@ func (rd *statusReader) finishedRow(ctx context.Context, r ref.Ref) *TaskRow {
 	lt := lookaround.FoldLedger(rd.ledger(ctx, r.ID), r.ID, rd.idOf(ctx))
 
 	if !stack.FinishedTask(info, tr.Storage, r.ID, false) &&
-		!lookaround.LedgerFinishStands(lt.Finished, tr.Storage.PlanLive(r.ID)) {
+		!lookaround.LedgerFinishStands(lt.Finished, tr.Storage.PlanLive(r.ID), info.Stated, info.Closed) {
 		return nil
 	}
 

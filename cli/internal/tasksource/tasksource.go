@@ -480,7 +480,10 @@ func (s HostSource) Children(ctx context.Context, r ref.Ref) ([]RawChild, error)
 	for _, k := range kids {
 		raw = append(
 			raw,
-			RawChild{ID: k.Number, Title: k.Title, URL: k.URL, State: k.State, Body: k.Body, Labels: k.Labels},
+			RawChild{
+				ID: k.Number, Title: k.Title, URL: k.URL, State: k.State, Body: k.Body, Labels: k.Labels,
+				Stated: true,
+			},
 		)
 	}
 

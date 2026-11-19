@@ -177,7 +177,7 @@ func runDrive(ctx context.Context, cmd *cli.Command, argv []string, a drivectl.D
 		StateDir:        state.Dir(),
 		Session:         state.Session(),
 		TTL:             state.TTL(),
-		AsksDir:         asks.Dir(),
+		InboxDir:        asks.Dir(),
 		DefaultParallel: drive.DefaultParallel(),
 		Pull:            pullOf,
 		Checks:          checksOf,

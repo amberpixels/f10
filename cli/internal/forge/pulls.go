@@ -520,6 +520,34 @@ func (h Host) PullsByHead(ctx context.Context, branch string) ([]PR, error) {
 	return out, nil
 }
 
+// Deciding is the request that decides a head: an open one when any is,
+// else the newest. prs is newest first, as PullsByHead returns it.
+func Deciding(prs []PR) (PR, bool) {
+	for _, p := range prs {
+		if p.Status == Open {
+			return p, true
+		}
+	}
+
+	if len(prs) == 0 {
+		return PR{}, false
+	}
+
+	return prs[0], true
+}
+
+// DecidingPull is the request that decides branch, by Deciding.
+func (h Host) DecidingPull(ctx context.Context, branch string) (PR, bool, error) {
+	prs, err := h.PullsByHead(ctx, branch)
+	if err != nil {
+		return PR{}, false, err
+	}
+
+	p, ok := Deciding(prs)
+
+	return p, ok, nil
+}
+
 // DefaultBranchName is the repo's default branch as the host has it.
 func (h Host) DefaultBranchName(ctx context.Context) (string, error) {
 	var repo struct {

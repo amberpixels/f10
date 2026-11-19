@@ -14,7 +14,7 @@ const (
 // holding only the url: a GitLab merge request's path names it, so `!12`,
 // else `#128`.
 func PullNumber(url string) string {
-	if strings.Contains(url, "/merge_requests/") {
+	if strings.Contains(url, "/"+mrSegment+"/") {
 		return mrSigil + path.Base(url)
 	}
 

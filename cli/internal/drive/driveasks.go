@@ -16,11 +16,11 @@ import (
 // raise puts a task's ask in the inbox, naming this drive, so an answer
 // from any way in finds its way back here.
 func (in *DriveInput) raise(ctx context.Context, r *DriveRun, skill, text string) {
-	if in.AsksDir == "" {
+	if in.InboxDir == "" {
 		return
 	}
 
-	asknotify.RaiseAsk(ctx, in.Out, in.AsksDir, asks.Ask{
+	asknotify.RaiseAsk(ctx, in.Out, in.InboxDir, asks.Ask{
 		Task:     r.Task.Ref.ID,
 		Root:     in.Root,
 		Main:     in.Main,
@@ -37,11 +37,11 @@ func (in *DriveInput) raise(ctx context.Context, r *DriveRun, skill, text string
 // that turn; any other joins the answers as an --answer would. The inbox's
 // answer came first, so an --answer for the same task goes unused.
 func (in *DriveInput) takeInbox(tasks []DriveTask) {
-	if in.AsksDir == "" || in.Root == "" {
+	if in.InboxDir == "" || in.Root == "" {
 		return
 	}
 
-	untaken, err := asks.Untaken(in.AsksDir, in.Root)
+	untaken, err := asks.Untaken(in.InboxDir, in.Root)
 	if err != nil {
 		fmt.Fprintf(in.Out, "  reading the inbox: %v\n", err)
 	}
@@ -71,7 +71,7 @@ func (in *DriveInput) takeInbox(tasks []DriveTask) {
 }
 
 func (in *DriveInput) taken(key string) {
-	if err := asks.Update(in.AsksDir, key, func(a *asks.Ask) { a.TakenAt = in.Now() }); err != nil {
+	if err := asks.Update(in.InboxDir, key, func(a *asks.Ask) { a.TakenAt = in.Now() }); err != nil {
 		fmt.Fprintf(in.Out, "  marking %s's answer taken: %v\n", key, err)
 	}
 }
@@ -79,12 +79,12 @@ func (in *DriveInput) taken(key string) {
 // claimSent closes the task's open ask with the answer this drive sends, so
 // every other way in shows it answered.
 func (in *DriveInput) claimSent(r *DriveRun, answer string) {
-	if in.AsksDir == "" {
+	if in.InboxDir == "" {
 		return
 	}
 
 	key := asks.Key(in.Root, r.Task.Ref.ID)
-	if _, err := asks.Claim(in.AsksDir, key, asks.ByDrive, answer, true, in.Now()); err == nil {
+	if _, err := asks.Claim(in.InboxDir, key, asks.ByDrive, answer, true, in.Now()); err == nil {
 		in.taken(key)
 	}
 }
@@ -93,11 +93,11 @@ func (in *DriveInput) claimSent(r *DriveRun, answer string) {
 // which the drive must run again: the answer's claimer saw the drive's lease
 // held and left it here. Outside the daemon it names the command instead.
 func (in *DriveInput) resumeAnswered(tasks []DriveTask) bool {
-	if in.Rec == nil || in.AsksDir == "" || in.Draining.Load() || in.Rec.Cancelled != nil {
+	if in.Rec == nil || in.InboxDir == "" || in.Draining.Load() || in.Rec.Cancelled != nil {
 		return false
 	}
 
-	untaken, _ := asks.Untaken(in.AsksDir, in.Root)
+	untaken, _ := asks.Untaken(in.InboxDir, in.Root)
 
 	for _, a := range untaken {
 		if !slices.ContainsFunc(tasks, func(t DriveTask) bool { return strings.EqualFold(t.Ref.ID, a.Task) }) {

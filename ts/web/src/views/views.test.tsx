@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { AskSchema, QuestionSchema } from "../../../gen/agents/v1/asks_pb";
 import { RunSchema, RunStatusSchema } from "../../../gen/f10/v1/runs_pb";
-import { AskForm, initialAnswers } from "./Asks";
+import { AskForm, initialAnswers } from "./Inbox";
 import { startReply, taskList } from "./Start";
 import { groups } from "./Status";
 

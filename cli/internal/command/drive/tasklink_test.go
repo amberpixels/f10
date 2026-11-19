@@ -96,7 +96,7 @@ func TestTaskIDsPrintThroughLinks(t *testing.T) {
 
 			return out.String()
 		},
-		"asks list": func(t *testing.T, _ bool) string {
+		"inbox list": func(t *testing.T, _ bool) string {
 			dir := t.TempDir()
 			a := testkit.Raised(t, dir, asks.Ask{Task: "FT-1", URL: testkit.IssueURL("FT-1"), Root: "/r", Project: "r"})
 			testkit.Raised(t, dir, asks.Ask{Task: "FT-2", URL: testkit.IssueURL("FT-2"), Root: "/r"})

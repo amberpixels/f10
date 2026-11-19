@@ -37,8 +37,9 @@ func Command() *cli.Command {
 	return noun("inbox")
 }
 
-// AsksAlias is the inbox under its old name, hidden, because an installed
-// plugin's hooks run f10 asks hook until the plugin updates. Drop it in v0.68.
+// AsksAlias is the inbox under its old name, hidden, for a session started
+// before a same-version local rebuild: its hooks.json still runs f10 asks
+// hook against the new binary. Drop it in v0.68.
 func AsksAlias() *cli.Command {
 	c := noun("asks")
 	c.Hidden = true
@@ -54,13 +55,13 @@ func noun(name string) *cli.Command {
 			"any way in: its own pane, f10 inbox, /f10:inbox or f10 start --answer. An answer to a drive's task " +
 			"resumes the drive; one to an agent no drive watches is sent to it. Bare f10 inbox walks the open asks " +
 			"in a terminal and lists them otherwise. ~/.f10/inbox.md sets notify, the command run for each new ask.",
-		Action: runAsks,
+		Action: runInbox,
 		Commands: []*cli.Command{
 			{
 				Name:   "list",
 				Usage:  "the open asks, then those answered in the last day",
 				Flags:  []cli.Flag{ui.JSONFlag("print JSON, for /f10:inbox")},
-				Action: runAsksList,
+				Action: runInboxList,
 			},
 			{
 				Name:      "answer",
@@ -71,28 +72,28 @@ func noun(name string) *cli.Command {
 				Flags: []cli.Flag{
 					&cli.StringFlag{Name: "by", Value: asks.ByAsks, Usage: "the way in to record: asks or skill"},
 				},
-				Action: runAsksAnswer,
+				Action: runInboxAnswer,
 			},
 			{
 				Name:      "resume",
 				Usage:     "resume the drive an answered ask belongs to",
 				ArgsUsage: "<key>",
 				Hidden:    true,
-				Action:    runAsksResume,
+				Action:    runInboxResume,
 			},
 			{
 				Name:   "hook",
 				Usage:  "tell a session the open asks it has not been told; the payload on stdin",
 				Hidden: true,
-				Action: runAsksHook,
+				Action: runInboxHook,
 			},
 		},
 	}
 }
 
-func runAsks(ctx context.Context, cmd *cli.Command) error {
+func runInbox(ctx context.Context, cmd *cli.Command) error {
 	if !ui.Interactive() {
-		return runAsksList(ctx, cmd)
+		return runInboxList(ctx, cmd)
 	}
 
 	c, err := apiclient.Dial(ctx)
@@ -100,7 +101,7 @@ func runAsks(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	return walk(ctx, cmd.Writer, bufio.NewReader(os.Stdin), c.Asks, c.AgentsCaller(cmd))
+	return walk(ctx, cmd.Writer, bufio.NewReader(os.Stdin), c.Inbox, c.AgentsCaller(cmd))
 }
 
 type askView struct {
@@ -138,19 +139,19 @@ func viewOf(a asks.Ask) askView {
 	return v
 }
 
-func runAsksList(ctx context.Context, cmd *cli.Command) error {
+func runInboxList(ctx context.Context, cmd *cli.Command) error {
 	c, err := apiclient.Dial(ctx)
 	if err != nil {
 		return err
 	}
 
-	return list(ctx, cmd.Writer, c.Asks, c.AgentsCaller(cmd), time.Now(), cmd.Bool("json"))
+	return list(ctx, cmd.Writer, c.Inbox, c.AgentsCaller(cmd), time.Now(), cmd.Bool("json"))
 }
 
 // ListAsks prints the inbox in dir, served in process: the inbox command's
 // list for a test's inbox.
 func ListAsks(ctx context.Context, w io.Writer, dir string, now time.Time, asJSON bool) error {
-	return list(ctx, w, apiclient.AsksIn(dir, Deliverer{}), nil, now, asJSON)
+	return list(ctx, w, apiclient.InboxIn(dir, Deliverer{}), nil, now, asJSON)
 }
 
 func list(
@@ -272,7 +273,7 @@ func printAsk(w io.Writer, links *render.TaskLinks, a asks.Ask, now time.Time) {
 // A Deliverer moves a claimed answer on (agents.Deliverer).
 type Deliverer = agents.Deliverer
 
-func runAsksAnswer(ctx context.Context, cmd *cli.Command) error {
+func runInboxAnswer(ctx context.Context, cmd *cli.Command) error {
 	args := cmd.Args().Slice()
 	if len(args) == 0 {
 		return errors.New("answer needs a task: f10 inbox answer <task> [N=VALUE ...]")
@@ -288,13 +289,13 @@ func runAsksAnswer(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	return answer(ctx, cmd.Writer, c.Asks, c.AgentsCaller(cmd), args[0], args[1:], by)
+	return answer(ctx, cmd.Writer, c.Inbox, c.AgentsCaller(cmd), args[0], args[1:], by)
 }
 
 // AnswerAsk answers token's open ask in the inbox in dir with d moving it
 // on, served in process: the inbox command's answer for a test's inbox.
 func AnswerAsk(ctx context.Context, w io.Writer, dir, token string, values []string, by string, d Deliverer) error {
-	return answer(ctx, w, apiclient.AsksIn(dir, d), nil, token, values, by)
+	return answer(ctx, w, apiclient.InboxIn(dir, d), nil, token, values, by)
 }
 
 func answer(
@@ -316,7 +317,7 @@ func answer(
 // WalkAsks walks the inbox in dir with d moving answers on, served in
 // process: the inbox command's walk for a test's inbox.
 func WalkAsks(ctx context.Context, w io.Writer, in *bufio.Reader, dir string, d Deliverer) error {
-	return walk(ctx, w, in, apiclient.AsksIn(dir, d), nil)
+	return walk(ctx, w, in, apiclient.InboxIn(dir, d), nil)
 }
 
 // walk puts each open ask's questions to the person at the terminal, and

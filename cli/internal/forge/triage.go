@@ -28,20 +28,14 @@ func actionsRun(u string) string {
 // OpenChecks reads the checks on branch's open request, with its url; a
 // branch with none open gives "" and no checks.
 func (h Host) OpenChecks(ctx context.Context, branch string) (HeadChecks, string, error) {
-	pulls, err := h.PullsByHead(ctx, branch)
-	if err != nil {
+	p, ok, err := h.DecidingPull(ctx, branch)
+	if err != nil || !ok || p.Status != Open {
 		return HeadChecks{}, "", err
 	}
 
-	for _, p := range pulls {
-		if p.Status == Open {
-			hc, err := h.HeadChecks(ctx, p)
+	hc, err := h.HeadChecks(ctx, p)
 
-			return hc, p.URL, err
-		}
-	}
-
-	return HeadChecks{}, "", nil
+	return hc, p.URL, err
 }
 
 // jobID is the job id at the end of a check's log url: GitHub's

@@ -17,6 +17,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/drivectl"
 	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
@@ -506,6 +507,63 @@ func TestFinishAlreadyMerged(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("report missing %q:\n%s", want, out)
 		}
+	}
+}
+
+// A merged PR's branch that holds a commit made after the merge's head, one
+// the default branch lacks, is refused before anything moves: deleting it
+// would lose the commit. A branch past the head only by main merged in, as
+// git cherry reads it, finishes as usual.
+func TestFinishAlreadyMergedRefusesWorkPastTheHead(t *testing.T) {
+	merged := `{"state":"MERGED","url":"https://gh/pr/9","number":9,"baseRefName":"main",` +
+		`"headRefOid":"hhh","mergeCommit":{"oid":"m3rge"}}`
+	cherry := "git cherry -v refs/remotes/origin/main ttt hhh"
+
+	for _, wt := range []bool{true, false} {
+		fx := newFinishFixture(t)
+		if !wt {
+			fx.f.Script(testkit.Worktrees, testkit.Porcelain())
+		}
+
+		fx.f.Script(testkit.GhView, merged)
+		fx.f.Script(testkit.LsRem, "")
+		fx.f.Script("git rev-parse --verify --quiet refs/heads/GH-1", "ttt")
+		fx.f.Script(cherry, "- 111 main merged in\n+ 222 a follow-up")
+
+		out, err := fx.run(t)
+		if err == nil || !strings.Contains(err.Error(), "222 a follow-up") {
+			t.Errorf("worktree %v: err = %v, want the follow-up named\n%s", wt, err, out)
+		}
+
+		if fx.f.Called("git branch -D") || fx.f.Called("git worktree remove") {
+			t.Errorf("worktree %v: the branch was removed: %v", wt, fx.f.Calls)
+		}
+	}
+
+	fx := newFinishFixture(t)
+	fx.f.Script(testkit.GhView, merged)
+	fx.f.Script(testkit.LsRem, "")
+	fx.f.Script("git rev-parse --verify --quiet refs/heads/GH-1", "ttt")
+	fx.f.Script(cherry, "- 111 main merged in")
+
+	if out, err := fx.run(t); err != nil {
+		t.Errorf("main merged in only: %v\n%s", err, out)
+	}
+}
+
+// The refusal names start with the attempt's suffix, so following it reaches
+// the branch that holds the follow-up and not another attempt.
+func TestRefuseWorkPastMergeNamesTheSuffixedAttempt(t *testing.T) {
+	f := testkit.NewFakes(t)
+	f.Script("git rev-parse --verify --quiet refs/heads/GH-1/slug-rest", "ttt")
+	f.Script("git cherry -v refs/remotes/origin/main ttt hhh", "+ 222 a follow-up")
+
+	in := FinishInput{Main: "/code/repo", Task: testkit.Gh1, Suffix: "rest"}
+	p := forge.PR{URL: "https://gh/pr/9", Status: forge.Merged, HeadSHA: "hhh"}
+
+	err := refuseWorkPastMerge(t.Context(), in, "main", "GH-1/slug-rest", p)
+	if err == nil || !strings.Contains(err.Error(), "f10 start GH-1-rest)") {
+		t.Errorf("err = %v, want start named with the suffix", err)
 	}
 }
 

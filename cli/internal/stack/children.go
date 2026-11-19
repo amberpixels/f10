@@ -32,6 +32,9 @@ type ChildRow struct {
 	Phase  string `json:"-"` // where its drive's record says it stands, a drivestore.Phase name
 	// OnChecks: a waiting Phase holds finish on running checks, not on a base
 	OnChecks bool `json:"-"`
+	// Stated: State comes from the tracker, so an open one outranks a
+	// ledger finish
+	Stated bool `json:"-"`
 }
 
 // RawChildrenFor is the task's subtasks as the tracker holds them;
@@ -66,6 +69,7 @@ func ShapeChildren(
 			URL:    c.URL,
 			State:  c.State,
 			Labels: c.Labels,
+			Stated: c.Stated,
 		}
 		if row.Labels == nil {
 			row.Labels = []string{}
@@ -94,7 +98,7 @@ func ShapeChildren(
 			return nil, err
 		}
 
-		row.Finished = FinishedTask(tasksource.TaskInfo{Stated: tr.stated}, tr.Storage, r.ID, branched)
+		row.Finished = FinishedTask(tasksource.TaskInfo{Stated: row.Stated}, tr.Storage, r.ID, branched)
 		rows = append(rows, row)
 	}
 

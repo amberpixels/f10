@@ -271,7 +271,9 @@ What the start does, case by case:
 - a new branch never takes a name a merged or closed PR used as its head.
   Finish, the watcher and the drive look PRs up by head branch, so each would read that PR as the new branch's and finish the task at once.
   The task's next PR gets `<name>-2`, `-3` and so on, and a note beneath the report says so.
-  A local branch at a merged PR's head with nothing past it is refused, naming the PR, until it is removed.
+  A local branch at a merged PR's head with nothing past it is refused, naming the PR and `f10 finish <id>`, which archives that PR's plan with the branch.
+  A branch whose only commits past the head are main merged in, or one recreated at main's tip, has nothing past it.
+  A suffixed attempt whose plain name landed resumes its newest numbered branch (`<name>-rest-2`) instead of making another.
   Origin's copy of one is left alone, and a branch whose PR closed without a merge is reused, because it holds the only copy of that work
 - a suffix glued to the id (`42-attempt2`, `42_v2`) salts the branch and the agent name, so a second worktree for one task can live beside the first
 - the agent is named `<id>` lowercased, with the suffix, then six hex characters hashed from the worktree path (`gh-12-3e78d4`): Herdr's agent names are one namespace across every project, so the same id in two repositories never collides
@@ -404,6 +406,8 @@ There finish merges as usual, brings the default branch up to the merge, switche
    `gh pr view <branch>` / `glab mr view <branch>` by the branch.
    Open: merged through `gh pr merge` / `glab mr merge`, never with `--admin`; when the host refuses (red CI, a required review, conflicts) its reason is the error and nothing has changed.
    Already merged: confirmed.
+   A branch that holds commits made after the merged head, ones the default branch lacks, is refused before anything moves.
+   The refusal names the first commit, so a follow-up is never deleted.
    Closed without a merge: a refusal.
    `f10 lore check` runs on the change the merge closes (`<id>`, or `<id>.<n>` for the task's `n`-th PR).
    It runs right before an open request merges, or before a branch never pushed lands (below).
@@ -621,7 +625,7 @@ It applies only to the tree; a run's block prints as without it.
 
 | stage | when | color |
 |---|---|---|
-| `done` | finished (finish ran, the issue closed, the plan archived) or the PR merged | green |
+| `done` | finished (the issue closed; for a tracker that reports no state, finish ran or the plan archived) or the PR merged | green |
 | `shipped` | the ship pipeline ended, the PR not merged yet | faint green |
 | `asking` | a driven run stopped on a question; the `ask:` line under it holds the question | red |
 | `halted` | a phase failed, partial or blocked, or drive halted the task itself (an idle agent, a refused finish) after its run's last word; `halt:` and `next:` lines under it | red |
@@ -822,6 +826,7 @@ A drive that is not running, a cancelled one included, has each row not yet fini
 The check is the rule drive and status use.
 A task with no branch here or on origin and no live plan reads `finished` when its issue is closed.
 An archived plan counts only for a tracker that reports no state, because an open issue may ship another PR.
+A finish the ledger recorded counts the same way, so `f10 status` never calls a task done while `f10 start` would open its next PR.
 The tracker is asked only when no branch or live plan decides.
 Finish's own `already finished` is narrower, because it asks whether finish got as far as archiving the plan.
 The corrected row is saved when the drive's lease is free, and only shown when another process holds it.
@@ -1184,7 +1189,7 @@ Then it prints each watched project: its last pass, that pass's exit, and its lo
   Once the certificate is in place, the `http://` address redirects to the `https://` one. The browser keeps the token per address, so you sign in once more there.
   The app has these screens:
   - **Runs**: every live run, grouped by project, with why a run stopped and its PR's checks.
-  - **Asks**: the open asks, answered in place by tapping an option.
+  - **Inbox** (`/inbox`): the open asks, answered in place by tapping an option. The old `/asks` address redirects there until v0.68.
   - **A task**: its flow and a box that sends a command or a note to its agent, as `f10 forward` does (`Forward`). It also shows the plan, the spike report and the handoff. It shows the verdicts, the findings and the demo report. The files are read through `ListArtifacts` and `GetArtifact`, by kind and name, never by path.
   - **Board**, **Start** (start one task or several, a range, a plan-only run or a discussion) and **Capture** (create a task).
 
@@ -1841,7 +1846,8 @@ On GitHub, requests to GitHub's own hosts carry the `gh` token, so a private rep
 `f10 finish` removes the task's images from the shared root and from main's `.f10/`; a worktree's go with the worktree.
 `--no-images` keeps the links as they are, for a read that only wants the title.
 `search` prints a table to a terminal and JSON to a pipe.
-`children` prints a tree to a terminal and JSON to a pipe or with `--json`; `--plain` prints the tree into a pipe too, with no urls (they stay in `--json`), and `--open` leaves out the finished rows as well (merged, or the plan archived), a dependent of a finished base moving up to its base's level.
+`children` prints a tree to a terminal and JSON to a pipe or with `--json`; `--plain` prints the tree into a pipe too, with no urls (they stay in `--json`), and `--open` leaves out the finished rows as well, a dependent of a finished base moving up to its base's level.
+A row is finished when its issue closed, or, for a tracker that reports no state, when its plan is archived.
 
 ## Stale
 

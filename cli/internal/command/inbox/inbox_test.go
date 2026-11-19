@@ -211,22 +211,22 @@ func TestListAsksJSON(t *testing.T) {
 }
 
 // A session is told each open ask once, never the one its own agent asks.
-func TestAsksContextOncePerSession(t *testing.T) {
+func TestInboxContextOncePerSession(t *testing.T) {
 	dir, stateDir := t.TempDir(), t.TempDir()
 	testkit.Raised(t, dir, asks.Ask{Task: "FT-1", Root: "/r", Worktree: "/w1", Skill: "review"})
 	testkit.Raised(t, dir, asks.Ask{Task: "FT-2", Root: "/r", Worktree: "/w2"})
 
-	out := string(inboxcmd.AsksContext(dir, stateDir, "s1", "UserPromptSubmit", "/w2"))
+	out := string(inboxcmd.InboxContext(dir, stateDir, "s1", "UserPromptSubmit", "/w2"))
 	if !strings.Contains(out, "FT-1 asks at review") || strings.Contains(out, "FT-2") ||
 		!strings.Contains(out, `"hookEventName":"UserPromptSubmit"`) {
 		t.Errorf("first prompt:\n%s", out)
 	}
 
-	if out := inboxcmd.AsksContext(dir, stateDir, "s1", "UserPromptSubmit", "/w2"); out != nil {
+	if out := inboxcmd.InboxContext(dir, stateDir, "s1", "UserPromptSubmit", "/w2"); out != nil {
 		t.Errorf("told twice:\n%s", out)
 	}
 
-	if out := string(inboxcmd.AsksContext(dir, stateDir, "s2", "SessionStart", "")); !strings.Contains(out, "FT-2") {
+	if out := string(inboxcmd.InboxContext(dir, stateDir, "s2", "SessionStart", "")); !strings.Contains(out, "FT-2") {
 		t.Errorf("another session was not told:\n%s", out)
 	}
 }

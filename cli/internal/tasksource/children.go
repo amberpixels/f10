@@ -12,4 +12,7 @@ type RawChild struct {
 	Labels []string `json:"labels"`
 	After  string   `json:"after"`
 	Body   string   `json:"body"`
+	// Stated: State is the tracker's own, as Info reports it. Only the host's
+	// issues set it. A driver's rows never claim it, whatever their state.
+	Stated bool `json:"-"`
 }

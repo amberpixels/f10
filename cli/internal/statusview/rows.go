@@ -305,7 +305,8 @@ func (src rowSource) Gather(ctx context.Context, k stack.ChildRow) (TaskRow, loo
 		}
 	}
 
-	f.AddLedger(lookaround.FoldLedger(src.eventsOf(ctx, k.ID, branch), k.ID, src.idOf), src.storage.PlanLive(k.ID))
+	f.AddLedger(lookaround.FoldLedger(src.eventsOf(ctx, k.ID, branch), k.ID, src.idOf), src.storage.PlanLive(k.ID),
+		k.Stated, strings.EqualFold(k.State, "closed"))
 
 	// another row may share the id's requests, so they are sorted as a copy;
 	// a task with a branch reads that branch's requests only, since an older

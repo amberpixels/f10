@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/worktree"
@@ -197,6 +198,10 @@ func decideFinish(ctx context.Context, in FinishInput) (finishDecision, error) {
 		d.kind = landingUnpushed
 	default:
 		d.kind = landingPull
+
+		if err := refuseWorkPastMerge(ctx, in, d.def, name, d.pull); err != nil {
+			return d, err
+		}
 	}
 
 	// before anything leaves the machine: a block refuses with nothing changed
@@ -235,11 +240,42 @@ func decideGone(ctx context.Context, in FinishInput, gone goneError) (finishDeci
 		return finishDecision{}, err
 	}
 
+	if err := refuseWorkPastMerge(ctx, in, def, gone.branch, p); err != nil {
+		return finishDecision{}, err
+	}
+
 	d := finishDecision{kind: landingGone, place: noWorktree, name: gone.branch, def: def, pull: p}
 
 	err = settleClose(in, &d, false)
 
 	return d, err
+}
+
+// refuseWorkPastMerge keeps a branch whose PR already merged from being
+// deleted while it holds commits made after that merge's head. Deleting it
+// would lose a follow-up made on a reused branch.
+func refuseWorkPastMerge(ctx context.Context, in FinishInput, def, name string, p forge.PR) error {
+	if p.Status != forge.Merged || p.HeadSHA == "" {
+		return nil
+	}
+
+	tip := stack.RefSHA(ctx, in.Main, "refs/heads/"+name)
+	if tip == "" {
+		return nil
+	}
+
+	lost, err := stack.WorkPast(ctx, in.Main, def, tip, p.HeadSHA)
+	if err != nil {
+		return fmt.Errorf("reading what %s holds past %s: %w", name, p.URL, err)
+	}
+
+	if len(lost) == 0 {
+		return nil
+	}
+
+	return fmt.Errorf("%s holds %d commit(s) past %s, which merged (first: %s %s), and finish would delete them: "+
+		"ship them in a new PR (f10 start %s), or delete the branch yourself if they are not wanted",
+		name, len(lost), p.URL, gitx.ShortSHA(lost[0].SHA), lost[0].Subject, ref.JoinSuffix(in.Task.ID, in.Suffix))
 }
 
 // settleClose decides which riders a bundle's merge closes: --close when

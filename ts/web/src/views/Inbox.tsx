@@ -100,7 +100,7 @@ async function send(id: string, answers: { n: number; value: string }[]) {
   return res.delivered;
 }
 
-export function Asks() {
+export function Inbox() {
   const open = openAsks.value;
   const canAnswer = can(caller.value, P.answerAsk);
   return (
