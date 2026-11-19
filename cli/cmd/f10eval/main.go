@@ -552,7 +552,7 @@ func runEnv(environ []string, tmp string) []string {
 	return append(env,
 		"F10_LEDGER="+filepath.Join(tmp, "f10.db"),
 		"F10_STATE_DIR="+filepath.Join(tmp, "state"),
-		"F10_ASKS_DIR="+filepath.Join(tmp, "asks"),
+		"F10_INBOX_DIR="+filepath.Join(tmp, "inbox"),
 		"F10_RUN_DIR="+filepath.Join(tmp, "run"),
 		"F10_USER_DIR="+filepath.Join(tmp, "user"),
 	)

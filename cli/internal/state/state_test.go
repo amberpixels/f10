@@ -347,7 +347,7 @@ func TestRenderParity(t *testing.T) {
 
 		// an empty inbox: the user's open asks would add a count
 		cmd := exec.Command(script, "render", r.Session)
-		cmd.Env = append(os.Environ(), dirEnv+"="+dir, "NO_COLOR=1", "F10_ASKS_DIR="+t.TempDir())
+		cmd.Env = append(os.Environ(), dirEnv+"="+dir, "NO_COLOR=1", "F10_INBOX_DIR="+t.TempDir())
 
 		out, err := cmd.Output()
 		if err != nil {
@@ -743,7 +743,7 @@ func TestRenderCountsAsks(t *testing.T) {
 
 	for session, want := range map[string]string{"asks": " 󱊴 ○○○ f10 · 2 asks", "none": " f10 · 2 asks"} {
 		cmd := exec.Command(script, "render", session)
-		cmd.Env = append(os.Environ(), dirEnv+"="+dir, "NO_COLOR=1", "F10_ASKS_DIR="+asks)
+		cmd.Env = append(os.Environ(), dirEnv+"="+dir, "NO_COLOR=1", "F10_INBOX_DIR="+asks)
 
 		out, err := cmd.Output()
 		if err != nil {
@@ -776,7 +776,7 @@ func TestRenderRecordsModel(t *testing.T) {
 
 	for _, model := range []string{"claude-opus-5-5", "claude-sonnet-5-5"} {
 		cmd := exec.Command(script, "render")
-		cmd.Env = append(os.Environ(), dirEnv+"="+dir, "NO_COLOR=1", "F10_ASKS_DIR="+t.TempDir())
+		cmd.Env = append(os.Environ(), dirEnv+"="+dir, "NO_COLOR=1", "F10_INBOX_DIR="+t.TempDir())
 		cmd.Stdin = strings.NewReader(`{"session_id":"s1","model":{"id":"` + model + `","display_name":"x"}}`)
 
 		if out, err := cmd.CombinedOutput(); err != nil {

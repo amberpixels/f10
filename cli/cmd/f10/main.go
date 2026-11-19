@@ -19,7 +19,6 @@ import (
 	"github.com/amberpixels/f10/cli/internal/api"
 	"github.com/amberpixels/f10/cli/internal/apiclient"
 	"github.com/amberpixels/f10/cli/internal/buildinfo"
-	askscmd "github.com/amberpixels/f10/cli/internal/command/asks"
 	atlascmd "github.com/amberpixels/f10/cli/internal/command/atlas"
 	auditcmd "github.com/amberpixels/f10/cli/internal/command/audit"
 	boardcmd "github.com/amberpixels/f10/cli/internal/command/board"
@@ -29,6 +28,7 @@ import (
 	finishcmd "github.com/amberpixels/f10/cli/internal/command/finish"
 	historycmd "github.com/amberpixels/f10/cli/internal/command/history"
 	hookcmd "github.com/amberpixels/f10/cli/internal/command/hook"
+	inboxcmd "github.com/amberpixels/f10/cli/internal/command/inbox"
 	ledgercmd "github.com/amberpixels/f10/cli/internal/command/ledger"
 	lorecmd "github.com/amberpixels/f10/cli/internal/command/lore"
 	mcpcmd "github.com/amberpixels/f10/cli/internal/command/mcp"
@@ -98,7 +98,8 @@ func newApp() *cli.Command {
 			daemoncmd.Command(),
 			remotecmd.Command(),
 			mcpcmd.Command(),
-			askscmd.Command(),
+			inboxcmd.Command(),
+			inboxcmd.AsksAlias(),
 			drivecmd.WatchCommand(),
 			finishcmd.Command(),
 			finishcmd.JanitorCommand(),

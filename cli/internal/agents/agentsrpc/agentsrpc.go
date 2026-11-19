@@ -37,7 +37,7 @@ type Options struct {
 	Links func(ctx context.Context, all []asks.Ask) map[string]map[string]string
 }
 
-// Mount adds AgentService and AskService to mux.
+// Mount adds AgentService and InboxService to mux.
 func Mount(mux *http.ServeMux, o Options, opts ...connect.HandlerOption) {
 	if o.AsksDir == nil {
 		o.AsksDir = asks.Dir
@@ -52,7 +52,7 @@ func Mount(mux *http.ServeMux, o Options, opts ...connect.HandlerOption) {
 	}
 
 	mux.Handle(agentsv1connect.NewAgentServiceHandler(agentService{o: o}, opts...))
-	mux.Handle(agentsv1connect.NewAskServiceHandler(askService{o: o}, opts...))
+	mux.Handle(agentsv1connect.NewInboxServiceHandler(inboxService{o: o}, opts...))
 }
 
 type agentService struct{ o Options }
@@ -247,9 +247,9 @@ func statusOf(s agentctl.Status) agentsv1.AgentStatus {
 	return agentsv1.AgentStatus_AGENT_STATUS_UNKNOWN
 }
 
-type askService struct{ o Options }
+type inboxService struct{ o Options }
 
-func (s askService) ListAsks(
+func (s inboxService) ListAsks(
 	ctx context.Context,
 	req *connect.Request[agentsv1.ListAsksRequest],
 ) (*connect.Response[agentsv1.ListAsksResponse], error) {
@@ -291,7 +291,7 @@ func (s askService) ListAsks(
 	return connect.NewResponse(out), nil
 }
 
-func (s askService) AnswerAsk(
+func (s inboxService) AnswerAsk(
 	ctx context.Context,
 	req *connect.Request[agentsv1.AnswerAskRequest],
 ) (*connect.Response[agentsv1.AnswerAskResponse], error) {
@@ -347,7 +347,7 @@ func (s askService) AnswerAsk(
 // answerAsCommand answers the open ask match finds, else the one id keys,
 // as the asks command does: its refusals and what it prints read the same
 // as in process.
-func (s askService) answerAsCommand(
+func (s inboxService) answerAsCommand(
 	ctx context.Context,
 	req *connect.Request[agentsv1.AnswerAskRequest],
 ) (*connect.Response[agentsv1.AnswerAskResponse], error) {

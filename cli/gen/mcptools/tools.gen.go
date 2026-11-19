@@ -34,12 +34,12 @@ type Tool struct {
 var Tools = []Tool{
 	{
 		Name:        "list_asks",
-		Procedure:   "/agents.v1.AskService/ListAsks",
+		Procedure:   "/agents.v1.InboxService/ListAsks",
 		Description: "ListAsks lists the questions agents are waiting on, and with answered_since also the ones answered since then.",
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"answered_since\":{\"description\":\"answered_since adds the asks answered after it; unset lists open asks only.\",\"format\":\"date-time\",\"type\":\"string\"}},\"type\":\"object\"}",
 		NewRequest:  func() proto.Message { return &v1.ListAsksRequest{} },
 		Call: func(ctx context.Context, hc connect.HTTPClient, baseURL string, req proto.Message, opts ...connect.ClientOption) (proto.Message, error) {
-			res, err := agentsv1connect.NewAskServiceClient(hc, baseURL, opts...).ListAsks(ctx, connect.NewRequest(req.(*v1.ListAsksRequest)))
+			res, err := agentsv1connect.NewInboxServiceClient(hc, baseURL, opts...).ListAsks(ctx, connect.NewRequest(req.(*v1.ListAsksRequest)))
 			if err != nil {
 				return nil, err
 			}
@@ -49,12 +49,12 @@ var Tools = []Tool{
 	},
 	{
 		Name:        "answer_ask",
-		Procedure:   "/agents.v1.AskService/AnswerAsk",
+		Procedure:   "/agents.v1.InboxService/AnswerAsk",
 		Description: "AnswerAsk answers an open ask by its id, one value per numbered question, and delivers the answer to the agent that asked.",
-		InputSchema: "{\"$defs\":{\"agents.v1.Answer\":{\"additionalProperties\":false,\"description\":\"An Answer is the value given to one question, by its number.\",\"properties\":{\"n\":{\"type\":\"integer\"},\"value\":{\"type\":\"string\"}},\"type\":\"object\"}},\"additionalProperties\":false,\"properties\":{\"answered_by\":{\"description\":\"answered_by is the way in to record, asks or skill; empty is the API.\",\"type\":\"string\"},\"answers\":{\"description\":\"answers names questions by number; a question not named takes its default.\",\"items\":{\"$ref\":\"#/$defs/agents.v1.Answer\"},\"type\":\"array\"},\"id\":{\"type\":\"string\"},\"match\":{\"description\":\"match finds the open ask by its task, or project:task, as the asks command takes it, in place of id.\",\"type\":\"string\"},\"values\":{\"description\":\"values are the answers as the asks command takes them, N=VALUE each, in place of answers.\",\"items\":{\"type\":\"string\"},\"type\":\"array\"}},\"type\":\"object\"}",
+		InputSchema: "{\"$defs\":{\"agents.v1.Answer\":{\"additionalProperties\":false,\"description\":\"An Answer is the value given to one question, by its number.\",\"properties\":{\"n\":{\"type\":\"integer\"},\"value\":{\"type\":\"string\"}},\"type\":\"object\"}},\"additionalProperties\":false,\"properties\":{\"answered_by\":{\"description\":\"answered_by is the way in to record, asks or skill; empty is the API.\",\"type\":\"string\"},\"answers\":{\"description\":\"answers names questions by number; a question not named takes its default.\",\"items\":{\"$ref\":\"#/$defs/agents.v1.Answer\"},\"type\":\"array\"},\"id\":{\"type\":\"string\"},\"match\":{\"description\":\"match finds the open ask by its task, or project:task, as the inbox command takes it, in place of id.\",\"type\":\"string\"},\"values\":{\"description\":\"values are the answers as the inbox command takes them, N=VALUE each, in place of answers.\",\"items\":{\"type\":\"string\"},\"type\":\"array\"}},\"type\":\"object\"}",
 		NewRequest:  func() proto.Message { return &v1.AnswerAskRequest{} },
 		Call: func(ctx context.Context, hc connect.HTTPClient, baseURL string, req proto.Message, opts ...connect.ClientOption) (proto.Message, error) {
-			res, err := agentsv1connect.NewAskServiceClient(hc, baseURL, opts...).AnswerAsk(ctx, connect.NewRequest(req.(*v1.AnswerAskRequest)))
+			res, err := agentsv1connect.NewInboxServiceClient(hc, baseURL, opts...).AnswerAsk(ctx, connect.NewRequest(req.(*v1.AnswerAskRequest)))
 			if err != nil {
 				return nil, err
 			}

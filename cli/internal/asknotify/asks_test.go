@@ -67,11 +67,32 @@ func TestNotifyTemplateRunsNoQuestion(t *testing.T) {
 	}
 }
 
+// Notify reads its command from ~/.f10/inbox.md.
+func TestNotifyReadsInboxConfig(t *testing.T) {
+	user, out := t.TempDir(), t.TempDir()
+	t.Setenv("F10_USER_DIR", user)
+
+	marker := out + "/notified"
+	cfg := "---\nnotify: printf '%s' {task} > '" + marker + "'\n---\n"
+
+	if err := os.WriteFile(user+"/inbox.md", []byte(cfg), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := asknotify.Notify(context.Background(), asks.Ask{Task: "FT-1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if got, err := os.ReadFile(marker); err != nil || string(got) != "FT-1" {
+		t.Errorf("notify wrote %q, %v", got, err)
+	}
+}
+
 // A prompt typed in the asking agent's checkout answers its ask; one typed
 // in another checkout does not.
 func TestPaneAnswered(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("F10_ASKS_DIR", dir)
+	t.Setenv("F10_INBOX_DIR", dir)
 
 	repo := t.TempDir()
 	testkit.Git(t, repo, "init", "-q")

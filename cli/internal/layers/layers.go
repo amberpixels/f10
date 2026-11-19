@@ -88,7 +88,7 @@ var Table = []Rule{
 	{Prefix: "internal/command/ledger", Rank: 3},
 	{Prefix: "internal/command/state", Rank: 3},
 	{Prefix: "internal/command/hook", Rank: 3},
-	{Prefix: "internal/command/asks", Rank: 3},
+	{Prefix: "internal/command/inbox", Rank: 3},
 	{Prefix: "internal/command/stats", Rank: 3},
 	{Prefix: "internal/command/history", Rank: 3},
 	{Prefix: "internal/command/audit", Rank: 3},

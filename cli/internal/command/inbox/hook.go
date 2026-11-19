@@ -1,4 +1,4 @@
-package asks
+package inbox
 
 import (
 	"context"
@@ -75,7 +75,7 @@ func resumeAskDrive(ctx context.Context, w io.Writer, a asks.Ask) error {
 	}
 
 	var extra []string
-	if t, err := target.At(ctx, a.Main, false, "asks"); err == nil {
+	if t, err := target.At(ctx, a.Main, false, "inbox"); err == nil {
 		extra = t.Effective.DriveEnv
 	}
 
@@ -146,7 +146,7 @@ func AsksContext(dir, stateDir, session, event, root string) []byte {
 		return nil
 	}
 
-	markPath := state.AsksPath(stateDir, session)
+	markPath := state.InboxPath(stateDir, session)
 	raw, _ := os.ReadFile(markPath)
 	told := strings.Fields(string(raw))
 
@@ -179,7 +179,7 @@ func AsksContext(dir, stateDir, session, event, root string) []byte {
 	_ = os.WriteFile(markPath, []byte(strings.Join(marks, "\n")+"\n"), 0o600)
 
 	text := "f10: driven agents are waiting on these questions. Tell the user about them once; " +
-		"/f10:asks answers them here, or `f10 asks answer <task> N=VALUE` in a terminal.\n" + strings.Join(lines, "\n")
+		"/f10:inbox answers them here, or `f10 inbox answer <task> N=VALUE` in a terminal.\n" + strings.Join(lines, "\n")
 
 	out, err := json.Marshal(map[string]any{
 		"hookSpecificOutput": map[string]any{

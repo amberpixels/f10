@@ -55,7 +55,7 @@ func FindOpen(dir, token string) (asks.Ask, error) {
 			}
 		}
 
-		return asks.Ask{}, fmt.Errorf("%s has no open ask: f10 asks list shows them", token)
+		return asks.Ask{}, fmt.Errorf("%s has no open ask: f10 inbox list shows them", token)
 	}
 
 	names := make([]string, len(hits))

@@ -42,15 +42,15 @@ func (e ClosedError) Error() string {
 	return "already answered " + Way(e.By) + " at " + e.At.Local().Format("15:04")
 }
 
-// Way names a way in for a sentence: `in its pane`, `with f10 asks`.
+// Way names a way in for a sentence: `in its pane`, `with f10 inbox`.
 func Way(by string) string {
 	switch by {
 	case ByPane:
 		return "in its pane"
 	case ByAsks:
-		return "with f10 asks"
+		return "with f10 inbox"
 	case BySkill:
-		return "with /f10:asks"
+		return "with /f10:inbox"
 	case ByDrive:
 		return "with f10 start --answer"
 	case ByCancelled:
@@ -62,10 +62,10 @@ func Way(by string) string {
 	return "by " + by
 }
 
-// Dir is the inbox: F10_ASKS_DIR, else ~/.claude/f10/asks, beside the run
+// Dir is the inbox: F10_INBOX_DIR, else ~/.claude/f10/inbox, beside the run
 // state and outside every project.
 func Dir() string {
-	if d := os.Getenv("F10_ASKS_DIR"); d != "" {
+	if d := os.Getenv("F10_INBOX_DIR"); d != "" {
 		return d
 	}
 
@@ -74,7 +74,7 @@ func Dir() string {
 		return ""
 	}
 
-	return filepath.Join(home, ".claude", "f10", "asks")
+	return filepath.Join(home, ".claude", "f10", "inbox")
 }
 
 // Key names a task's ask: the storage root's hash, so two projects' FT-1

@@ -100,22 +100,22 @@ func TestPruneReclaimsAsks(t *testing.T) {
 	old := now.Add(-pruneAge - time.Hour)
 
 	for _, session := range []string{"old", "new"} {
-		if err := os.WriteFile(AsksPath(dir, session), []byte("x\n"), 0o600); err != nil {
+		if err := os.WriteFile(InboxPath(dir, session), []byte("x\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	if err := os.Chtimes(AsksPath(dir, "old"), old, old); err != nil {
+	if err := os.Chtimes(InboxPath(dir, "old"), old, old); err != nil {
 		t.Fatal(err)
 	}
 
 	Prune(dir, now)
 
-	if _, err := os.Stat(AsksPath(dir, "old")); !os.IsNotExist(err) {
+	if _, err := os.Stat(InboxPath(dir, "old")); !os.IsNotExist(err) {
 		t.Fatalf("old asks mark kept: %v", err)
 	}
 
-	if _, err := os.Stat(AsksPath(dir, "new")); err != nil {
+	if _, err := os.Stat(InboxPath(dir, "new")); err != nil {
 		t.Fatalf("new asks mark pruned: %v", err)
 	}
 }

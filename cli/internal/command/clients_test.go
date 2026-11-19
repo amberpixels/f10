@@ -12,7 +12,7 @@ import (
 
 // clientFiles are the files of the control-plane verbs, which the daemon's
 // API serves: each parses its flags, calls the API and prints the reply.
-// The verbs left in process (janitor, the asks hook and resume, start's
+// The verbs left in process (janitor, the inbox hook and resume, start's
 // drives and drive plan) live in other files.
 var clientFiles = []string{
 	"status/status.go",
@@ -21,7 +21,7 @@ var clientFiles = []string{
 	"finish/finish.go",
 	"board/board.go",
 	"task/taskclient.go",
-	"asks/asks.go",
+	"inbox/inbox.go",
 }
 
 // controlPlane are the packages that read or change a project's state, which

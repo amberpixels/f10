@@ -155,7 +155,7 @@ func (in WatchInput) sendTriage(ctx context.Context, task WatchedTask, sha strin
 	defer lease.Release()
 
 	text := launch.Driven("/f10:ci "+task.ID) + " && sent by the watcher at " + gitx.ShortSHA(sha) +
-		": nobody follows up in this pane, so a question goes through f10 asks"
+		": nobody follows up in this pane, so a question goes through f10 inbox"
 	if err := in.Prompt(ctx, task, text); err != nil {
 		return false, err
 	}

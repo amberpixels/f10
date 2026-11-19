@@ -1,4 +1,4 @@
-package asks_test
+package inbox_test
 
 import (
 	"testing"

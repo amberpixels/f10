@@ -21,8 +21,8 @@ import (
 const _ = connect.IsAtLeastVersion1_13_0
 
 const (
-	// AskServiceName is the fully-qualified name of the AskService service.
-	AskServiceName = "agents.v1.AskService"
+	// InboxServiceName is the fully-qualified name of the InboxService service.
+	InboxServiceName = "agents.v1.InboxService"
 )
 
 // These constants are the fully-qualified names of the RPCs defined in this package. They're
@@ -33,14 +33,14 @@ const (
 // reflection-formatted method names, remove the leading slash and convert the remaining slash to a
 // period.
 const (
-	// AskServiceListAsksProcedure is the fully-qualified name of the AskService's ListAsks RPC.
-	AskServiceListAsksProcedure = "/agents.v1.AskService/ListAsks"
-	// AskServiceAnswerAskProcedure is the fully-qualified name of the AskService's AnswerAsk RPC.
-	AskServiceAnswerAskProcedure = "/agents.v1.AskService/AnswerAsk"
+	// InboxServiceListAsksProcedure is the fully-qualified name of the InboxService's ListAsks RPC.
+	InboxServiceListAsksProcedure = "/agents.v1.InboxService/ListAsks"
+	// InboxServiceAnswerAskProcedure is the fully-qualified name of the InboxService's AnswerAsk RPC.
+	InboxServiceAnswerAskProcedure = "/agents.v1.InboxService/AnswerAsk"
 )
 
-// AskServiceClient is a client for the agents.v1.AskService service.
-type AskServiceClient interface {
+// InboxServiceClient is a client for the agents.v1.InboxService service.
+type InboxServiceClient interface {
 	// ListAsks lists the questions agents are waiting on, and with
 	// answered_since also the ones answered since then.
 	ListAsks(context.Context, *connect.Request[v1.ListAsksRequest]) (*connect.Response[v1.ListAsksResponse], error)
@@ -49,50 +49,50 @@ type AskServiceClient interface {
 	AnswerAsk(context.Context, *connect.Request[v1.AnswerAskRequest]) (*connect.Response[v1.AnswerAskResponse], error)
 }
 
-// NewAskServiceClient constructs a client for the agents.v1.AskService service. By default, it uses
-// the Connect protocol with the binary Protobuf Codec, asks for gzipped responses, and sends
+// NewInboxServiceClient constructs a client for the agents.v1.InboxService service. By default, it
+// uses the Connect protocol with the binary Protobuf Codec, asks for gzipped responses, and sends
 // uncompressed requests. To use the gRPC or gRPC-Web protocols, supply the connect.WithGRPC() or
 // connect.WithGRPCWeb() options.
 //
 // The URL supplied here should be the base URL for the Connect or gRPC server (for example,
 // http://api.acme.com or https://acme.com/grpc).
-func NewAskServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) AskServiceClient {
+func NewInboxServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) InboxServiceClient {
 	baseURL = strings.TrimRight(baseURL, "/")
-	askServiceMethods := v1.File_agents_v1_asks_proto.Services().ByName("AskService").Methods()
-	return &askServiceClient{
+	inboxServiceMethods := v1.File_agents_v1_asks_proto.Services().ByName("InboxService").Methods()
+	return &inboxServiceClient{
 		listAsks: connect.NewClient[v1.ListAsksRequest, v1.ListAsksResponse](
 			httpClient,
-			baseURL+AskServiceListAsksProcedure,
-			connect.WithSchema(askServiceMethods.ByName("ListAsks")),
+			baseURL+InboxServiceListAsksProcedure,
+			connect.WithSchema(inboxServiceMethods.ByName("ListAsks")),
 			connect.WithClientOptions(opts...),
 		),
 		answerAsk: connect.NewClient[v1.AnswerAskRequest, v1.AnswerAskResponse](
 			httpClient,
-			baseURL+AskServiceAnswerAskProcedure,
-			connect.WithSchema(askServiceMethods.ByName("AnswerAsk")),
+			baseURL+InboxServiceAnswerAskProcedure,
+			connect.WithSchema(inboxServiceMethods.ByName("AnswerAsk")),
 			connect.WithClientOptions(opts...),
 		),
 	}
 }
 
-// askServiceClient implements AskServiceClient.
-type askServiceClient struct {
+// inboxServiceClient implements InboxServiceClient.
+type inboxServiceClient struct {
 	listAsks  *connect.Client[v1.ListAsksRequest, v1.ListAsksResponse]
 	answerAsk *connect.Client[v1.AnswerAskRequest, v1.AnswerAskResponse]
 }
 
-// ListAsks calls agents.v1.AskService.ListAsks.
-func (c *askServiceClient) ListAsks(ctx context.Context, req *connect.Request[v1.ListAsksRequest]) (*connect.Response[v1.ListAsksResponse], error) {
+// ListAsks calls agents.v1.InboxService.ListAsks.
+func (c *inboxServiceClient) ListAsks(ctx context.Context, req *connect.Request[v1.ListAsksRequest]) (*connect.Response[v1.ListAsksResponse], error) {
 	return c.listAsks.CallUnary(ctx, req)
 }
 
-// AnswerAsk calls agents.v1.AskService.AnswerAsk.
-func (c *askServiceClient) AnswerAsk(ctx context.Context, req *connect.Request[v1.AnswerAskRequest]) (*connect.Response[v1.AnswerAskResponse], error) {
+// AnswerAsk calls agents.v1.InboxService.AnswerAsk.
+func (c *inboxServiceClient) AnswerAsk(ctx context.Context, req *connect.Request[v1.AnswerAskRequest]) (*connect.Response[v1.AnswerAskResponse], error) {
 	return c.answerAsk.CallUnary(ctx, req)
 }
 
-// AskServiceHandler is an implementation of the agents.v1.AskService service.
-type AskServiceHandler interface {
+// InboxServiceHandler is an implementation of the agents.v1.InboxService service.
+type InboxServiceHandler interface {
 	// ListAsks lists the questions agents are waiting on, and with
 	// answered_since also the ones answered since then.
 	ListAsks(context.Context, *connect.Request[v1.ListAsksRequest]) (*connect.Response[v1.ListAsksResponse], error)
@@ -101,44 +101,44 @@ type AskServiceHandler interface {
 	AnswerAsk(context.Context, *connect.Request[v1.AnswerAskRequest]) (*connect.Response[v1.AnswerAskResponse], error)
 }
 
-// NewAskServiceHandler builds an HTTP handler from the service implementation. It returns the path
-// on which to mount the handler and the handler itself.
+// NewInboxServiceHandler builds an HTTP handler from the service implementation. It returns the
+// path on which to mount the handler and the handler itself.
 //
 // By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
 // and JSON codecs. They also support gzip compression.
-func NewAskServiceHandler(svc AskServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
-	askServiceMethods := v1.File_agents_v1_asks_proto.Services().ByName("AskService").Methods()
-	askServiceListAsksHandler := connect.NewUnaryHandler(
-		AskServiceListAsksProcedure,
+func NewInboxServiceHandler(svc InboxServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
+	inboxServiceMethods := v1.File_agents_v1_asks_proto.Services().ByName("InboxService").Methods()
+	inboxServiceListAsksHandler := connect.NewUnaryHandler(
+		InboxServiceListAsksProcedure,
 		svc.ListAsks,
-		connect.WithSchema(askServiceMethods.ByName("ListAsks")),
+		connect.WithSchema(inboxServiceMethods.ByName("ListAsks")),
 		connect.WithHandlerOptions(opts...),
 	)
-	askServiceAnswerAskHandler := connect.NewUnaryHandler(
-		AskServiceAnswerAskProcedure,
+	inboxServiceAnswerAskHandler := connect.NewUnaryHandler(
+		InboxServiceAnswerAskProcedure,
 		svc.AnswerAsk,
-		connect.WithSchema(askServiceMethods.ByName("AnswerAsk")),
+		connect.WithSchema(inboxServiceMethods.ByName("AnswerAsk")),
 		connect.WithHandlerOptions(opts...),
 	)
-	return "/agents.v1.AskService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return "/agents.v1.InboxService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case AskServiceListAsksProcedure:
-			askServiceListAsksHandler.ServeHTTP(w, r)
-		case AskServiceAnswerAskProcedure:
-			askServiceAnswerAskHandler.ServeHTTP(w, r)
+		case InboxServiceListAsksProcedure:
+			inboxServiceListAsksHandler.ServeHTTP(w, r)
+		case InboxServiceAnswerAskProcedure:
+			inboxServiceAnswerAskHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
 	})
 }
 
-// UnimplementedAskServiceHandler returns CodeUnimplemented from all methods.
-type UnimplementedAskServiceHandler struct{}
+// UnimplementedInboxServiceHandler returns CodeUnimplemented from all methods.
+type UnimplementedInboxServiceHandler struct{}
 
-func (UnimplementedAskServiceHandler) ListAsks(context.Context, *connect.Request[v1.ListAsksRequest]) (*connect.Response[v1.ListAsksResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agents.v1.AskService.ListAsks is not implemented"))
+func (UnimplementedInboxServiceHandler) ListAsks(context.Context, *connect.Request[v1.ListAsksRequest]) (*connect.Response[v1.ListAsksResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agents.v1.InboxService.ListAsks is not implemented"))
 }
 
-func (UnimplementedAskServiceHandler) AnswerAsk(context.Context, *connect.Request[v1.AnswerAskRequest]) (*connect.Response[v1.AnswerAskResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agents.v1.AskService.AnswerAsk is not implemented"))
+func (UnimplementedInboxServiceHandler) AnswerAsk(context.Context, *connect.Request[v1.AnswerAskRequest]) (*connect.Response[v1.AnswerAskResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("agents.v1.InboxService.AnswerAsk is not implemented"))
 }
