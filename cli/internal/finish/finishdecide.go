@@ -197,6 +197,10 @@ func decideFinish(ctx context.Context, in FinishInput) (finishDecision, error) {
 		d.kind = landingUnpushed
 	default:
 		d.kind = landingPull
+
+		if err := refuseWorkPastMerge(ctx, in, d.def, name, d.pull); err != nil {
+			return d, err
+		}
 	}
 
 	// before anything leaves the machine: a block refuses with nothing changed
@@ -235,11 +239,42 @@ func decideGone(ctx context.Context, in FinishInput, gone goneError) (finishDeci
 		return finishDecision{}, err
 	}
 
+	if err := refuseWorkPastMerge(ctx, in, def, gone.branch, p); err != nil {
+		return finishDecision{}, err
+	}
+
 	d := finishDecision{kind: landingGone, place: noWorktree, name: gone.branch, def: def, pull: p}
 
 	err = settleClose(in, &d, false)
 
 	return d, err
+}
+
+// refuseWorkPastMerge keeps a branch whose PR already merged from being
+// deleted while it holds commits made after that merge's head, which the
+// default branch lacks: a follow-up on a reused branch would be lost.
+func refuseWorkPastMerge(ctx context.Context, in FinishInput, def, name string, p forge.PR) error {
+	if p.Status != forge.Merged || p.HeadSHA == "" {
+		return nil
+	}
+
+	tip := stack.RefSHA(ctx, in.Main, "refs/heads/"+name)
+	if tip == "" || tip == p.HeadSHA {
+		return nil
+	}
+
+	lost, err := gitx.UnlandedPast(ctx, in.Main, "refs/remotes/origin/"+def, tip, p.HeadSHA)
+	if err != nil {
+		return fmt.Errorf("reading what %s holds past %s: %w", name, p.URL, err)
+	}
+
+	if len(lost) == 0 {
+		return nil
+	}
+
+	return fmt.Errorf("%s holds %d commit(s) past %s, which merged (first: %s %s), and finish would delete them: "+
+		"ship them in a new PR (f10 start %s), or delete the branch yourself if they are not wanted",
+		name, len(lost), p.URL, gitx.ShortSHA(lost[0].SHA), lost[0].Subject, in.Task.ID)
 }
 
 // settleClose decides which riders a bundle's merge closes: --close when

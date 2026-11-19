@@ -275,22 +275,16 @@ type Sweeper struct {
 // Request is the request that decides b: an open one when any is, else
 // the newest; nil when there is none.
 func (j *Sweeper) Request(ctx context.Context, b staleBranch) (*forge.PR, error) {
-	prs, err := j.In.Host.PullsByHead(ctx, b.Name)
+	p, ok, err := j.In.Host.DecidingPull(ctx, b.Name)
 	if err != nil {
 		return nil, fmt.Errorf("%s did not list its requests: %w", j.In.Host.Name, err)
 	}
 
-	if len(prs) == 0 {
+	if !ok {
 		return nil, nil
 	}
 
-	for _, p := range prs[1:] {
-		if p.Status == forge.Open {
-			return &p, nil
-		}
-	}
-
-	return &prs[0], nil
+	return &p, nil
 }
 
 // SweepUnpushed removes a branch finish would read as never pushed once its
@@ -411,22 +405,8 @@ func (j *Sweeper) keep(ctx context.Context, b staleBranch, p *forge.PR) string {
 
 // unlanded is what tip has beyond the request's head that the default branch
 // lacks too: a commit made after the last push, which the merge left behind.
-// A tip that only merged main in, or one behind a head a colleague pushed, has
-// none. A head the clone never saw (its branch deleted on origin after
-// someone else's push) is fetched by sha first.
 func (j *Sweeper) unlanded(ctx context.Context, tip string, p *forge.PR) ([]gitx.Cherry, error) {
-	def := "refs/heads/" + j.Def
-
-	lost, err := gitx.Unlanded(ctx, j.In.Main, def, tip, p.HeadSHA)
-	if err == nil || !gitx.UnknownObject(err) {
-		return lost, err
-	}
-
-	if err := gitx.FetchCommit(ctx, j.In.Main, p.HeadSHA); err != nil {
-		return nil, fmt.Errorf("fetching its head %s: %w", gitx.ShortSHA(p.HeadSHA), err)
-	}
-
-	return gitx.Unlanded(ctx, j.In.Main, def, tip, p.HeadSHA)
+	return gitx.UnlandedPast(ctx, j.In.Main, "refs/heads/"+j.Def, tip, p.HeadSHA)
 }
 
 // remove drops origin's copy only for the user's own request. A step failing

@@ -97,3 +97,29 @@ func TestLinkedBranchCountsForAfter(t *testing.T) {
 		t.Errorf("hasTaskBranch on a linked branch = %v, %v", ok, err)
 	}
 }
+
+// A suffixed attempt whose request landed is resumed under its numbered
+// name: GH-1/slug-rest-2 is found for suffix rest, and the highest number
+// wins once the plain name is gone, so a second start never makes -3.
+func TestFindResumesANumberedSuffix(t *testing.T) {
+	f := testkit.NewFakes(t)
+	f.Script(testkit.RefsLocal, testkit.Heads("GH-1/slug-rest-2"))
+
+	got, err := testkit.IndexOf(t).Find(t.Context(), "GH-1/slug-rest", "GH-1", "rest", stack.PolicyLocalOrOrigin)
+	if err != nil || got != (stack.FoundBranch{Name: "GH-1/slug-rest-2"}) {
+		t.Errorf("one numbered attempt = %+v, %v; want GH-1/slug-rest-2", got, err)
+	}
+
+	f.Script(testkit.RefsLocal, testkit.Heads("GH-1/slug-rest-2", "GH-1/slug-rest-3"))
+
+	got, err = testkit.IndexOf(t).Find(t.Context(), "GH-1/slug-rest", "GH-1", "rest", stack.PolicyLocalOrOrigin)
+	if err != nil || got.Name != "GH-1/slug-rest-3" {
+		t.Errorf("two numbered attempts = %+v, %v; want the newest, -3", got, err)
+	}
+
+	f.Script(testkit.RefsLocal, testkit.Heads("GH-1/slug-rest-2", "GH-1/slug-other"))
+
+	if _, err = testkit.IndexOf(t).Find(t.Context(), "GH-1/slug", "GH-1", "", stack.PolicyLocalOrOrigin); err == nil {
+		t.Error("two unrelated branches were not an error")
+	}
+}

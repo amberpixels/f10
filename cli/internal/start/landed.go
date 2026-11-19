@@ -12,20 +12,18 @@ import (
 	"github.com/amberpixels/f10/cli/internal/target"
 )
 
-// A LandedLookup is the newest request whose head is branch, when it is
-// merged or closed, and false when there is none or the newest is open.
+// A LandedLookup is the request that decides branch (forge.Deciding), when
+// it is merged or closed, and false when there is none or one is open.
 type LandedLookup func(ctx context.Context, branch string) (forge.PR, bool, error)
 
-// LandedVia asks the host's requests by head branch, newest first: an open
-// one means the branch is in use, whatever landed on it before.
+// LandedVia asks the host which request decides the head: an open one means
+// the branch is in use, whatever landed on it before.
 func LandedVia(h forge.Host) LandedLookup {
 	return func(ctx context.Context, branch string) (forge.PR, bool, error) {
-		prs, err := h.PullsByHead(ctx, branch)
-		if err != nil || len(prs) == 0 {
+		p, ok, err := h.DecidingPull(ctx, branch)
+		if err != nil || !ok {
 			return forge.PR{}, false, err
 		}
-
-		p := prs[0]
 
 		return p, p.Status == forge.Merged || p.Status == forge.Closed, nil
 	}
@@ -66,10 +64,12 @@ func avoidLanded(
 		}
 
 		if !existing.Remote {
+			// finish archives the merged PR's plan too; deleting the branch
+			// alone would leave it live for the next start to ship against
 			return "", existing, "", fmt.Errorf(
 				"%s is %s's branch, which merged, and carries nothing past it: "+
-					"remove it (git branch -D %s, after removing any worktree that has it) and start again",
-				existing.Name, p.URL, existing.Name)
+					"run f10 finish %s to close that PR's work, then start again",
+				existing.Name, p.URL, in.Task.ID)
 		}
 
 		// origin's copy of a landed head is stale: a new name is made below
@@ -113,8 +113,10 @@ func avoidLanded(
 }
 
 // staleLanded says a found branch is a merged request's head with nothing
-// past it: its tip is that head, or an ancestor of it. A closed request's
-// head is in no default branch, so its branch is the only copy and is reused.
+// past it that the default branch lacks, as the janitor reads it: a tip that
+// only merged main in, or was recreated at main's tip, is stale too. A closed
+// request's head is in no default branch, so its branch is the only copy and
+// is reused.
 func staleLanded(ctx context.Context, in StartInput, b stack.FoundBranch) (bool, forge.PR, error) {
 	p, landed, err := in.Landed(ctx, b.Name)
 	if err != nil {
@@ -139,7 +141,19 @@ func staleLanded(ctx context.Context, in StartInput, b stack.FoundBranch) (bool,
 		return true, p, nil
 	}
 
-	behind, err := gitx.IsAncestor(ctx, in.Main, tip, p.HeadSHA)
+	if behind, err := gitx.IsAncestor(ctx, in.Main, tip, p.HeadSHA); err == nil && behind {
+		return true, p, nil
+	}
 
-	return err == nil && behind, p, nil
+	def := stack.DefaultBranch(ctx, in.Main)
+	if def == "" {
+		return false, p, nil
+	}
+
+	lost, err := gitx.UnlandedPast(ctx, in.Main, def, tip, p.HeadSHA)
+	if err != nil {
+		return false, p, fmt.Errorf("reading what %s holds past %s: %w", b.Name, p.URL, err)
+	}
+
+	return len(lost) == 0, p, nil
 }

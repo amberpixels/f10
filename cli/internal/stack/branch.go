@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
@@ -204,7 +205,43 @@ func (x *BranchIndex) Under(ctx context.Context, root, id, suffix string) ([]str
 		return refs, nil
 	}
 
-	return slices.DeleteFunc(refs, func(r string) bool { return !strings.HasSuffix(r, "-"+suffix) }), nil
+	return slices.DeleteFunc(refs, func(r string) bool { return !hasSuffix(r, suffix) }), nil
+}
+
+// hasSuffix says r ends in -suffix, or in -suffix-<n>: the numbered name
+// start gives a suffixed branch whose plain name a landed request used.
+func hasSuffix(r, suffix string) bool {
+	if strings.HasSuffix(r, "-"+suffix) {
+		return true
+	}
+
+	i := strings.LastIndex(r, "-")
+
+	return i > 0 && numeric(r[i+1:]) && strings.HasSuffix(r[:i], "-"+suffix)
+}
+
+func numeric(s string) bool {
+	return s != "" && strings.Trim(s, "0123456789") == ""
+}
+
+// newestNumbered is the highest numbered name of want among refs when every
+// ref is want-<n>, the names start made after want's request landed; ""
+// otherwise.
+func newestNumbered(refs []string, want string) string {
+	best, top := "", 0
+
+	for _, r := range refs {
+		n, ok := strings.CutPrefix(r, want+"-")
+		if !ok || !numeric(n) {
+			return ""
+		}
+
+		if v, _ := strconv.Atoi(n); v > top {
+			best, top = r, v
+		}
+	}
+
+	return best
 }
 
 // Find is the branch to reuse, or none when the task has none yet. Several
@@ -236,6 +273,12 @@ func (x *BranchIndex) Find(ctx context.Context, want, id, suffix string, roots B
 
 		if slices.Contains(refs, want) {
 			return FoundBranch{Name: want, Remote: remote}, nil
+		}
+
+		// want's request landed and was finished: resume its newest numbered
+		// attempt, rather than calling several a conflict
+		if n := newestNumbered(refs, want); n != "" {
+			return FoundBranch{Name: n, Remote: remote}, nil
 		}
 
 		switch len(refs) {

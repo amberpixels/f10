@@ -509,6 +509,47 @@ func TestFinishAlreadyMerged(t *testing.T) {
 	}
 }
 
+// A merged PR's branch that holds a commit made after the merge's head, one
+// the default branch lacks, is refused before anything moves: deleting it
+// would lose the commit. A branch past the head only by main merged in, as
+// git cherry reads it, finishes as usual.
+func TestFinishAlreadyMergedRefusesWorkPastTheHead(t *testing.T) {
+	merged := `{"state":"MERGED","url":"https://gh/pr/9","number":9,"baseRefName":"main",` +
+		`"headRefOid":"hhh","mergeCommit":{"oid":"m3rge"}}`
+	cherry := "git cherry -v refs/remotes/origin/main ttt hhh"
+
+	for _, wt := range []bool{true, false} {
+		fx := newFinishFixture(t)
+		if !wt {
+			fx.f.Script(testkit.Worktrees, testkit.Porcelain())
+		}
+
+		fx.f.Script(testkit.GhView, merged)
+		fx.f.Script(testkit.LsRem, "")
+		fx.f.Script("git rev-parse --verify --quiet refs/heads/GH-1", "ttt")
+		fx.f.Script(cherry, "- 111 main merged in\n+ 222 a follow-up")
+
+		out, err := fx.run(t)
+		if err == nil || !strings.Contains(err.Error(), "222 a follow-up") {
+			t.Errorf("worktree %v: err = %v, want the follow-up named\n%s", wt, err, out)
+		}
+
+		if fx.f.Called("git branch -D") || fx.f.Called("git worktree remove") {
+			t.Errorf("worktree %v: the branch was removed: %v", wt, fx.f.Calls)
+		}
+	}
+
+	fx := newFinishFixture(t)
+	fx.f.Script(testkit.GhView, merged)
+	fx.f.Script(testkit.LsRem, "")
+	fx.f.Script("git rev-parse --verify --quiet refs/heads/GH-1", "ttt")
+	fx.f.Script(cherry, "- 111 main merged in")
+
+	if out, err := fx.run(t); err != nil {
+		t.Errorf("main merged in only: %v\n%s", err, out)
+	}
+}
+
 // The host's refusal is the error, and nothing local moves after it.
 func TestFinishStopsOnHostRefusal(t *testing.T) {
 	fx := newFinishFixture(t)

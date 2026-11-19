@@ -241,6 +241,33 @@ func TestPullCommitsKeepTheEmail(t *testing.T) {
 	}
 }
 
+// The request deciding a head is an open one when any is, else the newest:
+// an older open request outranks a newer merged one.
+func TestDeciding(t *testing.T) {
+	merged := PR{Number: 5, Status: Merged}
+	open := PR{Number: 3, Status: Open}
+	closed := PR{Number: 2, Status: Closed}
+
+	for _, tc := range []struct {
+		name string
+		prs  []PR
+		want int
+		ok   bool
+	}{
+		{name: "none"},
+		{name: "one", prs: []PR{merged}, want: 5, ok: true},
+		{name: "older open behind newer merged", prs: []PR{merged, open, closed}, want: 3, ok: true},
+		{name: "none open", prs: []PR{merged, closed}, want: 5, ok: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := Deciding(tc.prs)
+			if ok != tc.ok || got.Number != tc.want {
+				t.Errorf("Deciding = %d, %v; want %d, %v", got.Number, ok, tc.want, tc.ok)
+			}
+		})
+	}
+}
+
 // Both hosts list a branch's requests in any state, newest first, with the
 // head sha the janitor compares the branch's tip to.
 func TestPullsByHead(t *testing.T) {

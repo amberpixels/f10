@@ -353,6 +353,23 @@ func Unlanded(ctx context.Context, dir, upstream, head, limit string) ([]Cherry,
 	return cs, nil
 }
 
+// UnlandedPast is Unlanded for a merged request's head: what tip holds
+// beyond head that upstream lacks too. A tip that only merged upstream in has
+// none. A head the clone never saw (its branch deleted on origin after
+// someone else's push) is fetched by sha first.
+func UnlandedPast(ctx context.Context, dir, upstream, tip, head string) ([]Cherry, error) {
+	lost, err := Unlanded(ctx, dir, upstream, tip, head)
+	if err == nil || !UnknownObject(err) {
+		return lost, err
+	}
+
+	if err := FetchCommit(ctx, dir, head); err != nil {
+		return nil, fmt.Errorf("fetching its head %s: %w", ShortSHA(head), err)
+	}
+
+	return Unlanded(ctx, dir, upstream, tip, head)
+}
+
 // MergesCleanly tries the merge in memory, nothing checked out or written.
 // git exits 1 both for a conflict (on stdout) and for a ref it cannot merge
 // (on stderr), which is an error. Not --quiet: git 2.56 exits 0 with it.
