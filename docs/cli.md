@@ -48,6 +48,7 @@ f10 doctor [--json]      # check the plugin, the binary and the environment; cha
 f10 task read [id]       # the task as markdown; a bundle (id+id) reads every member
 f10 task current         # the id a bare skill call stands for: the branch's task, else this session's (exit 1: none)
 f10 task ref <id>... [--md] [--fresh]   # `<id> (<title>)` per task, a markdown link with --md, `[closed]` after a closed one; from what f10 already read
+f10 refs check|link <file>   # name, or link in place, the first mention of each task id left bare in a markdown or HTML file
 f10 task report <id>... [--children]  # a report's facts block: one task's rows, else a row per task, a parent's subtasks under it
 f10 task stale [id] [--created YYYY-MM-DD]   # the stale step's check: fresh, judged <verdict file>, needs judge or undated
 f10 task regression [id] --repro R --confidence C [--commit SHA --lines PATH:A-B ...]   # record a bug task's origin task and how review let it through
@@ -55,8 +56,8 @@ f10 task regression [id] --claimed ORIGIN [--text PHRASE]   # record the origin 
 f10 task open [id]       # in the browser, no id the task list (--link writes the url, --print the item or the list's first page, ranked by priority)
 f10 task search <query>  # rows, not a picker
 f10 task children [id] [--json | --plain] [--open]   # the task's open subtasks, in After: order
-f10 task create [--status s] [--priority p] [--label l]... [--parent id] [--set k=v]... < task.md   # through the driver, else as a host issue; prints the new id
-f10 task comment [id] [--closed] < comment.md   # a comment on the task; prints its url when the tracker gives one; a closed task needs --closed
+f10 task create [--status s] [--priority p] [--label l]... [--parent id] [--set k=v]... < task.md   # through the driver, else as a host issue; prints the new id; the body's first bare mention of each task id is linked
+f10 task comment [id] [--closed] < comment.md   # a comment on the task; prints its url when the tracker gives one; a closed task needs --closed; the first bare mention of each task id is linked
 f10 task update [id] [--status s] [--priority p] [--label l]... [--assignee a] [--parent id] [--after id | none] [--set k=v]...   # absolute values
 f10 task retitle [id | --all] [--dry-run]   # write tracker.title onto the host's issue titles
 f10 plan read [id]       # the plan saved for that task
@@ -69,9 +70,9 @@ f10 pr checks [PR | id] [--json]      # the open PR's head checks: green, red, p
 f10 pr checks [--brief | --triage | --log]   # one line; or with what a triage decides by: the first real failure, that job on the default branch, what was tried; or that failure's log
 f10 pr checks --rerun | --record fix|left  # rerun a red head's failed jobs, record a fix round, or record a head left red; each refused once spent (see Checks triage)
 f10 pr view [PR | id] [--comments]    # branch, base, task and open PR (head sha, target, mine) with its description; says so when there is no PR
-f10 pr create --title T --body-file F [--label L]... [--assignee A]... [--draft]   # open a PR for the branch here against pr base; prints its url, or an open one's; the title carries the task id in the tracker.title form (else `<id>: `) unless it already does, and a bundle's names its riders after the lead id
-f10 pr edit [PR | id] [--title T] [--body-file F]   # rewrite the open PR's title or body; base, labels and assignees stay; the title gets the task id and a bundle's riders as pr create's does
-f10 pr comment [PR | id] [--reply-to URL [--quote T]] < text    # comment, or reply in a review's thread; prints the url, never posts the same text twice
+f10 pr create --title T --body-file F [--label L]... [--assignee A]... [--draft]   # open a PR for the branch here against pr base; prints its url, or an open one's; the title carries the task id in the tracker.title form (else `<id>: `) unless it already does, and a bundle's names its riders after the lead id; the body's first bare mention of each task id is linked
+f10 pr edit [PR | id] [--title T] [--body-file F]   # rewrite the open PR's title or body; base, labels and assignees stay; the title gets the task id and a bundle's riders as pr create's does, and the body is linked as pr create's is
+f10 pr comment [PR | id] [--reply-to URL [--quote T]] < text    # comment, or reply in a review's thread; prints the url, never posts the same text twice; the first bare mention of each task id is linked
 f10 pr status [PR | id] --name N --state S -m TEXT [--sha SHA]   # a commit status on the open PR's head; one set the same way is left alone
 f10 pr catchup [--guard implement|pr|judge] [--no-fetch] | --mark '<key> <value>'   # what a catchup of the current branch brings in: base, how found, method and why, the conflict mark; --mark writes that mark on the branch
 f10 review pick [n] [--latest] [--json]               # the latest unhandled remote review, as markdown
@@ -1951,6 +1952,37 @@ Otherwise it is closed when the ledger records an `f10 finish` of it that still 
 The state is never kept, so a task closed outside f10 shows closed only once f10 reads it again (`--fresh`).
 Text that leaves the machine never carries the marker.
 `task create` warns on stderr when the body's `After:` line names a closed task, and links it anyway.
+
+## Links on the way out
+
+`pr create`, `pr edit`, `pr comment`, `task create` and `task comment` send text that renders links.
+Each one links the first mention of every task id in that text as `task ref --md` would, the PR's own task included.
+A task id is a token in the project's id format, such as `FT-109` in any case, that stands on its own.
+An id inside a longer token stays as written, because it is part of that token.
+Such tokens are paths, urls, branch names, file names and bundles, as in `plans/FT-109.md`, `FT-109/fix` or `FT-109+FT-110`.
+Later mentions stay bare.
+So does every mention in these places, because code or a parser reads them:
+- an inline code span or a code block
+- an HTML comment, which holds the hidden state block
+- an `After:` line, or a `Task:`, `Step:` or `Review:` trailer
+- a closing line such as `Closes #12`
+A mention already inside a link counts as the first.
+An image's alt text and a reference link's label (`[FT-109]`, `[FT-109]: <url>`) stay as written.
+They do not count as the first mention either, because a link there would break the image or the reference.
+A mention already followed by its title (`FT-109: <title>` or `FT-109 (<title>)`) becomes the link, title included, so the title does not appear twice.
+`task create` never links the title line, and `pr create` and `pr edit` never link the title, because a title renders nothing.
+An id f10 cannot title stays bare, with the note `task ref` prints, and the command goes on.
+Stderr names the ids linked.
+To keep an id bare, put it in a code span.
+
+`f10 refs check <file>` and `f10 refs link <file>` do the same for a file f10 never sends, such as a demo page or a PR body a skill adapter sends.
+`check` prints `<file>:<line>: <ID> is not linked` for each first mention it could link, and exits 1 when there is one.
+An id it cannot title is a note on stderr, not a failure.
+`link` rewrites the file in place and prints each id it linked.
+A file ending in `.html` or `.htm` is read as HTML.
+Its head, its `script`, `style`, `pre` and `code` elements and every tag's attributes are skipped.
+An anchor counts as a link, and a new link is written as `<a href="<url>"><ID>: <title></a>`.
+Any other file is read as markdown.
 
 ## Report
 

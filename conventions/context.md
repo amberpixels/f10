@@ -115,11 +115,14 @@ Every committing step, the ship skill's catchup guard included, commits this way
 
 ## Task references
 
-Text that leaves the machine names any task other than its own by its title, never a bare id, because an id does not autolink on most trackers.
+Text that leaves the machine names a task by its title, never a bare id, because an id does not autolink on most trackers.
 
-- **Text that renders links**, such as a PR or task body, links the first mention as `<ID>: <title>`.
-  The link is markdown, or the tracker's native form.
-- **Text that renders nothing** (titles, commit messages): `<ID> (<title>)`.
+- **Text that renders links** links the first mention of every id as `<ID>: <title>`, the work's own task included.
+  Such text is a PR or task body, a comment or a published page.
+  Later mentions may stay bare, and code spans, `After:` lines and trailers stay as written.
+- **The binary links on the way out.** The commands that send such text link a first mention left bare: `f10 pr create`, `pr edit`, `pr comment`, `task create` and `task comment`.
+  Text f10 does not send, such as a page or a skill adapter's PR body, runs `f10 refs link <file>` first.
+- **Text that renders nothing**, such as a title or a commit message, names a task other than the work's own as `<ID> (<title>)`.
 - Each body, reply and commit message names the task in full once, and may use the bare id after.
 - **One `f10 task ref <id>... --md`** gives every title and url, and without `--md` it prints `<ID> (<title>)`.
   A trailing `[closed]` is for you, never for the text.
@@ -127,4 +130,4 @@ Text that leaves the machine names any task other than its own by its title, nev
 - An unknown id, or a failed read, stays bare with no invented title.
   It does not fail the step.
 - An `After:` line holds one id, bare or as the markdown link `f10 task ref` prints, because the binary parses it.
-- The task the work belongs to keeps the form its host needs, such as `Closes #83`.
+- A closing line keeps the form its host needs, such as `Closes #83`.
