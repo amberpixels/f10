@@ -13,6 +13,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/archive"
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/worktree"
@@ -274,7 +275,7 @@ func refuseWorkPastMerge(ctx context.Context, in FinishInput, def, name string, 
 
 	return fmt.Errorf("%s holds %d commit(s) past %s, which merged (first: %s %s), and finish would delete them: "+
 		"ship them in a new PR (f10 start %s), or delete the branch yourself if they are not wanted",
-		name, len(lost), p.URL, gitx.ShortSHA(lost[0].SHA), lost[0].Subject, in.Task.ID)
+		name, len(lost), p.URL, gitx.ShortSHA(lost[0].SHA), lost[0].Subject, ref.JoinSuffix(in.Task.ID, in.Suffix))
 }
 
 // settleClose decides which riders a bundle's merge closes: --close when

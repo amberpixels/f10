@@ -8,6 +8,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/hostops"
+	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
 )
@@ -69,7 +70,7 @@ func avoidLanded(
 			return "", existing, "", fmt.Errorf(
 				"%s is %s's branch, which merged, and carries nothing past it: "+
 					"run f10 finish %s to close that PR's work, then start again",
-				existing.Name, p.URL, startToken(in))
+				existing.Name, p.URL, ref.JoinSuffix(in.Task.ID, in.Suffix))
 		}
 
 		// origin's copy of a landed head is stale: a new name is made below,
@@ -116,16 +117,6 @@ func avoidLanded(
 
 	return "", existing, "", fmt.Errorf("%s and %s-2 to -%d are all heads of landed requests: pass a suffix",
 		name, name, landedMax)
-}
-
-// startToken is the task as start was given it, its suffix kept, so the
-// command a message names reaches this attempt and not another.
-func startToken(in StartInput) string {
-	if in.Suffix == "" {
-		return in.Task.ID
-	}
-
-	return in.Task.ID + "-" + in.Suffix
 }
 
 // numberedOf says b is name-<n>, a name start numbered after name landed.

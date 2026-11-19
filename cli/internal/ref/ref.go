@@ -237,6 +237,16 @@ func (r Lookup) exhausted(ctx context.Context) error {
 // beside the first.
 var suffixRE = regexp.MustCompile(`^(` + taskid.Reference + `)[-_]([A-Za-z0-9][A-Za-z0-9_-]*)$`)
 
+// JoinSuffix is SplitSuffix's inverse: id salted with suffix, as a command
+// names one attempt of a task, or id alone with none.
+func JoinSuffix(id, suffix string) string {
+	if suffix == "" {
+		return id
+	}
+
+	return id + "-" + suffix
+}
+
 // SplitSuffix separates a salted reference into the reference and its
 // suffix. A token without one, or a url, comes back whole with "".
 func SplitSuffix(token string) (string, string) {

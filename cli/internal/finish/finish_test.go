@@ -17,6 +17,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/drivectl"
 	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/facts"
+	"github.com/amberpixels/f10/cli/internal/forge"
 	"github.com/amberpixels/f10/cli/internal/fsx"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
@@ -547,6 +548,22 @@ func TestFinishAlreadyMergedRefusesWorkPastTheHead(t *testing.T) {
 
 	if out, err := fx.run(t); err != nil {
 		t.Errorf("main merged in only: %v\n%s", err, out)
+	}
+}
+
+// The refusal names start with the attempt's suffix, so following it reaches
+// the branch that holds the follow-up and not another attempt.
+func TestRefuseWorkPastMergeNamesTheSuffixedAttempt(t *testing.T) {
+	f := testkit.NewFakes(t)
+	f.Script("git rev-parse --verify --quiet refs/heads/GH-1/slug-rest", "ttt")
+	f.Script("git cherry -v refs/remotes/origin/main ttt hhh", "+ 222 a follow-up")
+
+	in := FinishInput{Main: "/code/repo", Task: testkit.Gh1, Suffix: "rest"}
+	p := forge.PR{URL: "https://gh/pr/9", Status: forge.Merged, HeadSHA: "hhh"}
+
+	err := refuseWorkPastMerge(t.Context(), in, "main", "GH-1/slug-rest", p)
+	if err == nil || !strings.Contains(err.Error(), "f10 start GH-1-rest)") {
+		t.Errorf("err = %v, want start named with the suffix", err)
 	}
 }
 
