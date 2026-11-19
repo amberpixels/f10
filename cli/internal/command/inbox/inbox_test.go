@@ -188,8 +188,8 @@ func TestWalkAsksKeepsANumericOption(t *testing.T) {
 }
 
 // An ask whose one question holds its background and an "Options:" list
-// shows them as context, a question and lettered options, the recommended
-// one the default; the answer goes back as the chosen option's text.
+// shows them as context, a question and lettered options. The recommended
+// option is the default, and the answer goes back as the option's text.
 func TestWalkAsksRecoversProseOptions(t *testing.T) {
 	text := "Tests are red on PR #61 for a reason from main. Cause: config/pages.yml lost the key. " +
 		"What should happen with the red tests? Options: 1) fix it in this PR, " +

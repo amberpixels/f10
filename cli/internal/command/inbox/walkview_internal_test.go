@@ -28,9 +28,8 @@ const (
 	sampleSHA = "8057a977c1d2"
 )
 
-// At any width no word is split and every line fits unless it holds a
-// single word wider than the line; continuation lines hang under the
-// question's text and the option's.
+// At any width no word is split, and every line fits unless it holds a
+// word wider than the line. Continuation lines hang under the text.
 func TestWalkViewWraps(t *testing.T) {
 	t.Parallel()
 
@@ -96,8 +95,8 @@ func TestWalkViewLabelRows(t *testing.T) {
 	}
 }
 
-// Linked, a long url shows as its last path segments inside the link;
-// piped, it prints whole.
+// Linked, a long url shows as its last path segments inside the link.
+// Piped, it prints whole.
 func TestWalkViewShortensLinkedURL(t *testing.T) {
 	t.Parallel()
 

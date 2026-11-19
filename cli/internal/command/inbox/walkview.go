@@ -90,7 +90,7 @@ func (v walkView) ask(a asks.Ask, qs []shownQuestion, name string, now time.Time
 		v.println(" " + v.faint.Render(a.URL))
 	}
 
-	// question 1's recovered background reads as the ask's own; a later
+	// question 1's recovered background reads as the ask's own, and a later
 	// question's stays beside that question
 	v.context(a.Context)
 
@@ -134,7 +134,7 @@ func (v walkView) ask(a asks.Ask, qs []shownQuestion, name string, now time.Time
 // labelled is a context sentence opening with a one-word label, "Log: ...".
 var labelled = regexp.MustCompile(`^([A-Za-z][\w-]{0,11}):\s+(\S.*)$`)
 
-// context prints one sentence per line; labelled sentences become rows
+// context prints one sentence per line. Labelled sentences become rows
 // with their labels in a column.
 func (v walkView) context(text string) {
 	sentences := asks.Sentences(text)
@@ -160,7 +160,7 @@ func (v walkView) context(text string) {
 	}
 }
 
-// a word is one token as shown (for width) and as printed (styled, linked);
+// a word is one token as shown, which sets its width, and as printed.
 // gap is the spaces before it on a line it does not open.
 type word struct {
 	shown, styled string
@@ -178,9 +178,9 @@ func (v walkView) words(text string, style lipgloss.Style) []word {
 	return out
 }
 
-// lines prints words at the terminal's width, never breaking inside a word,
-// so a url stays whole and clickable: lead opens the first line, indent the
-// rest. A word wider than a line gets a line of its own.
+// lines prints words at the terminal's width and never breaks inside a word,
+// so a url stays whole and clickable. lead opens the first line and indent
+// the rest. A word wider than a line gets a line of its own.
 func (v walkView) lines(words []word, lead, indent string, style lipgloss.Style) {
 	var line strings.Builder
 
@@ -231,8 +231,8 @@ const (
 )
 
 // token is a word as shown, and as printed with its style and link. A sha
-// shows shortened; a long url shows as its last path segments, but only
-// linked, since a pipe needs the whole address.
+// shows shortened. A long url shows as its last path segments only when
+// linked, because a pipe needs the whole address.
 func (v walkView) token(w string, style lipgloss.Style) (string, string) {
 	if m := shaToken.FindStringSubmatch(w); len(m) == 3 && hasDigit.MatchString(m[1]) && hasHexAZ.MatchString(m[1]) {
 		shown := m[1][:min(len(m[1]), shaShown)] + m[2]

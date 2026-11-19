@@ -9,8 +9,8 @@ import (
 )
 
 // Recovered is a question whose choices were written as prose, laid out as
-// the walk shows it: its background, the question with lettered options
-// (the recommended one first, as the default) and that option's note.
+// the walk shows it. The recommended option comes first as the default, and
+// Note keeps why it is recommended.
 type Recovered struct {
 	Context  string
 	Question Question
@@ -30,9 +30,9 @@ var (
 	joiner    = regexp.MustCompile(`(?i)[\s,;.]+(?:or|and)?$`)
 )
 
-// Recover finds the choices a question without options lists in its text,
-// "Options: 1) x, 2) y" or "(a) x (b) y", so the walk can offer them. It
-// recovers every shape Lint warns about, and the stored ask stays as it was.
+// Recover finds the choices that a question without options lists in its
+// text, so the walk can offer them. It recovers every shape Lint warns
+// about. The stored ask stays as it was.
 func Recover(q Question) (Recovered, bool) {
 	if len(q.Options) > 0 {
 		return Recovered{}, false
@@ -55,9 +55,9 @@ func Recover(q Question) (Recovered, bool) {
 	return Recovered{}, false
 }
 
-// listFrom splits text, which opens with item 1 (or a), into its items:
-// each next marker in the same form, counting up, the last running to the
-// end. A last item asking something is prose after the list, not a choice.
+// listFrom splits text that opens with item 1 or a into its items. Each
+// next marker has the same form and counts up, and the last item runs to the
+// end. It also reports whether the last item closed the question with "?".
 func listFrom(text string, paren bool, first, closer byte) ([]string, bool, bool) {
 	marker := func(i int) string {
 		m := strconv.Itoa(i+1) + string(closer)
@@ -93,7 +93,7 @@ func listFrom(text string, paren bool, first, closer byte) ([]string, bool, bool
 	}
 
 	// "Should I (a) rebase or (b) merge?" ends its question on the last
-	// item; a last item that goes on asking is prose after the list
+	// item. A last item that goes on asking is prose after the list.
 	last := strings.TrimSpace(items[len(items)-1])
 
 	asked := strings.HasSuffix(last, "?")
@@ -120,8 +120,8 @@ func listFrom(text string, paren bool, first, closer byte) ([]string, bool, bool
 func recovered(n int, prose string, items []string, asked bool) Recovered {
 	r := Recovered{Question: Question{N: n, Text: prose}}
 
-	// the question is the prose from its last sentence asking something;
-	// what comes before is background
+	// the question is the prose from its last sentence asking something,
+	// and what comes before is background
 	sentences := Sentences(prose)
 	for i, s := range slices.Backward(sentences) {
 		if strings.HasSuffix(s, "?") {
