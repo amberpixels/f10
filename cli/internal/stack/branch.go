@@ -225,8 +225,8 @@ func numeric(s string) bool {
 }
 
 // newestNumbered is the highest numbered name of want among refs when every
-// ref is want-<n>, the names start made after want's request landed; ""
-// otherwise.
+// ref is want-<n>, the names start made after want's request landed.
+// Otherwise it is "".
 func newestNumbered(refs []string, want string) string {
 	best, top := "", 0
 

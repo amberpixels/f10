@@ -220,8 +220,8 @@ func OpenPullOf(ctx context.Context, t *target.Target, branch string) (forge.PR,
 	return p, nil
 }
 
-// LastPullOf is the request that decides branch (forge.Deciding: an open
-// one, else the newest), or 0; a checkout with no host CLI has none.
+// LastPullOf is the request that decides branch by forge.Deciding, or 0.
+// A checkout with no host CLI has none.
 func LastPullOf(ctx context.Context, t *target.Target, branch string) (forge.PR, error) {
 	h, err := hostops.HostOf(t)
 	if err != nil {

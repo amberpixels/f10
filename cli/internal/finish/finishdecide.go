@@ -252,8 +252,8 @@ func decideGone(ctx context.Context, in FinishInput, gone goneError) (finishDeci
 }
 
 // refuseWorkPastMerge keeps a branch whose PR already merged from being
-// deleted while it holds commits made after that merge's head, which the
-// default branch lacks: a follow-up on a reused branch would be lost.
+// deleted while it holds commits made after that merge's head. Deleting it
+// would lose a follow-up made on a reused branch.
 func refuseWorkPastMerge(ctx context.Context, in FinishInput, def, name string, p forge.PR) error {
 	if p.Status != forge.Merged || p.HeadSHA == "" {
 		return nil

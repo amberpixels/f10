@@ -65,17 +65,17 @@ func avoidLanded(
 		}
 
 		if !existing.Remote {
-			// finish archives the merged PR's plan too; deleting the branch
-			// alone would leave it live for the next start to ship against
+			// finish archives the merged PR's plan too, while deleting the
+			// branch alone would leave it live for the next start to ship against
 			return "", existing, "", fmt.Errorf(
 				"%s is %s's branch, which merged, and carries nothing past it: "+
 					"run f10 finish %s to close that PR's work, then start again",
 				existing.Name, p.URL, ref.JoinSuffix(in.Task.ID, in.Suffix))
 		}
 
-		// origin's copy of a landed head is stale: a new name is made below,
-		// counted on from the plain name when the copy is already numbered, so
-		// the suffix lookup still finds it (`-rest-3`, never `-rest-2-2`)
+		// Origin's copy of a landed head is stale, so a new name is made below.
+		// A numbered copy is counted on from the plain name (`-rest-3`, never
+		// `-rest-2-2`), so the suffix lookup still finds the new branch.
 		if !numberedOf(existing.Name, name) {
 			name = existing.Name
 		}
@@ -132,10 +132,9 @@ func numberedOf(b, name string) bool {
 }
 
 // staleLanded says a found branch is a merged request's head with nothing
-// past it that the default branch lacks, as the janitor reads it: a tip that
-// only merged main in, or was recreated at main's tip, is stale too. A closed
-// request's head is in no default branch, so its branch is the only copy and
-// is reused.
+// past it, by stack.WorkPast. A tip that only merged main in is stale too.
+// A closed request's head is in no default branch, so its branch is the only
+// copy and is reused.
 func staleLanded(ctx context.Context, in StartInput, b stack.FoundBranch) (bool, forge.PR, error) {
 	p, landed, err := in.Landed(ctx, b.Name)
 	if err != nil {
