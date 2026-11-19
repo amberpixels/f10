@@ -136,7 +136,25 @@ func (h Host) Issue(ctx context.Context, number string) (Issue, error) {
 
 // IssueWithComments is Issue with the issue's comments read too.
 func (h Host) IssueWithComments(ctx context.Context, number string) (Issue, error) {
-	return h.mustIssue(h.readIssue(ctx, number, issueCommentsFields))
+	iss, err := h.mustIssue(h.readIssue(ctx, number, issueCommentsFields))
+	if err != nil || !h.glab() {
+		return iss, err
+	}
+
+	// the notes API defaults to newest first; gh gives comments oldest first
+	notes, err := decodePages[note](ctx, h,
+		"projects/:fullpath/issues/"+iss.Number+"/notes?per_page=100&sort=asc&order_by=created_at")
+	if err != nil {
+		return Issue{}, err
+	}
+
+	for _, n := range notes {
+		if !n.System {
+			iss.Comments = append(iss.Comments, IssueComment{Author: n.Author.name(), Body: n.Body})
+		}
+	}
+
+	return iss, nil
 }
 
 func (h Host) mustIssue(iss Issue, err error) (Issue, error) {
@@ -151,7 +169,8 @@ func (h Host) mustIssue(iss Issue, err error) (Issue, error) {
 	return iss, nil
 }
 
-// readIssue: glab has no field selection, so fields shape gh's call alone.
+// readIssue: glab has no field selection, so fields shape gh's call alone;
+// IssueWithComments reads glab's comments from the notes API.
 func (h Host) readIssue(ctx context.Context, number, fields string) (Issue, error) {
 	var iss issue
 

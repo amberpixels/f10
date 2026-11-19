@@ -97,6 +97,7 @@ func TestHostIssueDocLabels(t *testing.T) {
 	f.Script("glab issue view 7 -F json",
 		`{"iid":7,"title":"Crash","state":"opened","labels":["bug"],"created_at":"2026-10-01T08:00:00Z",`+
 			`"web_url":"https://gitlab.com/g/p/-/issues/7"}`)
+	f.Script("glab api --paginate projects/:fullpath/issues/7/notes?per_page=100&sort=asc&order_by=created_at", `[]`)
 
 	tests := []struct {
 		host   string
