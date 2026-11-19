@@ -403,10 +403,9 @@ func (j *Sweeper) keep(ctx context.Context, b staleBranch, p *forge.PR) string {
 	return ""
 }
 
-// unlanded is what tip has beyond the request's head that the default branch
-// lacks too: a commit made after the last push, which the merge left behind.
+// unlanded is what tip has beyond the request's head (stack.WorkPast).
 func (j *Sweeper) unlanded(ctx context.Context, tip string, p *forge.PR) ([]gitx.Cherry, error) {
-	return gitx.UnlandedPast(ctx, j.In.Main, "refs/heads/"+j.Def, tip, p.HeadSHA)
+	return stack.WorkPast(ctx, j.In.Main, j.Def, tip, p.HeadSHA)
 }
 
 // remove drops origin's copy only for the user's own request. A step failing

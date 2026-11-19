@@ -10,6 +10,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/testkit"
 )
@@ -119,5 +120,42 @@ func TestShapeChildrenKeepsClosedForStatus(t *testing.T) {
 	if len(kept) != 2 || kept[0].ID != "FT-1" || kept[1].ID != "FT-2" || kept[1].Depth != 1 ||
 		!kept[0].Finished || !kept[1].Finished {
 		t.Errorf("status rows = %+v, want FT-1 then FT-2 under it, both finished", kept)
+	}
+}
+
+// An open child with an archived plan is finished only when its state is
+// not the tracker's own: the host's issues state it, so a later PR is due,
+// and a driver's row never claims it, so the archive decides, as drive's
+// Info reads the same task.
+func TestShapeChildrenStatedFromTheRowsSource(t *testing.T) {
+	f := testkit.NewFakes(t)
+	testkit.ScriptNoBranch(f, "FT-1", "FT-2")
+
+	root := t.TempDir()
+	tr := stack.Tracker{
+		Resolve: func(ctx context.Context, tok string) (ref.Ref, error) {
+			return ref.Lookup{Prefix: "FT"}.Find(ctx, tok)
+		},
+		Storage: storage.InRepo(root),
+	}
+
+	if err := os.MkdirAll(tr.Storage.Archive(), 0o750); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, id := range []string{"FT-1", "FT-2"} {
+		if err := os.WriteFile(filepath.Join(tr.Storage.Archive(), id+".md"), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	raw := []tasksource.RawChild{
+		{ID: "FT-1", Title: "host", State: "open", Stated: true},
+		{ID: "FT-2", Title: "driver", State: "open"},
+	}
+
+	rows, err := stack.ShapeChildren(t.Context(), tr, root, raw, false)
+	if err != nil || len(rows) != 2 || rows[0].Finished || !rows[1].Finished {
+		t.Errorf("rows = %+v, %v; want the host's open row pending and the driver's finished", rows, err)
 	}
 }

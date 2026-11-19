@@ -69,7 +69,7 @@ func ShapeChildren(
 			URL:    c.URL,
 			State:  c.State,
 			Labels: c.Labels,
-			Stated: tr.stated,
+			Stated: c.Stated,
 		}
 		if row.Labels == nil {
 			row.Labels = []string{}

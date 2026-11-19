@@ -117,15 +117,51 @@ func TestAvoidLandedFoundBranch(t *testing.T) {
 	t.Run("only main merged in past the landed head", func(t *testing.T) {
 		f := testkit.NewFakes(t)
 		f.Script("git rev-parse --verify --quiet refs/heads/GH-1/slug", "ccc")
-		f.Fail("git merge-base --is-ancestor ccc aaa", testkit.Missing)
 		f.Script("git symbolic-ref --short refs/remotes/origin/HEAD", "origin/main")
-		f.Script("git cherry -v origin/main ccc aaa", "- 111 a commit main has")
+		f.Script("git cherry -v refs/remotes/origin/main ccc aaa", "- 111 a commit main has")
 
 		in := StartInput{Main: "/code/repo", Task: ref.Ref{ID: "GH-1"}, Landed: landedOn(heads)}
 
 		_, _, _, err := avoidLanded(t.Context(), in, "GH-1/slug", stack.FoundBranch{Name: "GH-1/slug"})
 		if err == nil || !strings.Contains(err.Error(), "which merged") {
 			t.Errorf("err = %v, want the merged-main-in leftover refused", err)
+		}
+	})
+
+	// the refusal names the attempt as typed, so finish reaches this branch
+	t.Run("suffixed local leftover", func(t *testing.T) {
+		f := testkit.NewFakes(t)
+		f.Script("git rev-parse --verify --quiet refs/heads/GH-1/slug-rest", "aaa")
+
+		in := StartInput{
+			Main: "/code/repo", Task: ref.Ref{ID: "GH-1"}, Suffix: "rest",
+			Landed: landedOn(map[string]forge.PR{"GH-1/slug-rest": merged}),
+		}
+
+		_, _, _, err := avoidLanded(t.Context(), in, "GH-1/slug-rest", stack.FoundBranch{Name: "GH-1/slug-rest"})
+		if err == nil || !strings.Contains(err.Error(), "f10 finish GH-1-rest ") {
+			t.Errorf("err = %v, want finish named with the suffix", err)
+		}
+	})
+
+	// origin's landed -rest-2 is counted on from the plain name, so the next
+	// start's suffix lookup still finds the new branch
+	t.Run("origin's stale numbered copy", func(t *testing.T) {
+		f := testkit.NewFakes(t)
+		f.Fail("git rev-parse --verify --quiet refs/heads/GH-1/slug-rest-2", testkit.Missing)
+		f.Script("git rev-parse --verify --quiet refs/remotes/origin/GH-1/slug-rest-2", "bbb")
+		f.Fail("git rev-parse --verify --quiet refs/heads/GH-1/slug-rest-3", testkit.Missing)
+		f.Fail("git rev-parse --verify --quiet refs/remotes/origin/GH-1/slug-rest-3", testkit.Missing)
+
+		second := forge.PR{URL: "https://x/pull/590", Status: forge.Merged, HeadSHA: "bbb"}
+		in := StartInput{Main: "/code/repo", Landed: landedOn(map[string]forge.PR{
+			"GH-1/slug-rest": merged, "GH-1/slug-rest-2": second,
+		})}
+
+		got, existing, _, err := avoidLanded(t.Context(), in, "GH-1/slug-rest",
+			stack.FoundBranch{Name: "GH-1/slug-rest-2", Remote: true})
+		if err != nil || got != "GH-1/slug-rest-3" || existing.Name != "" {
+			t.Errorf("avoidLanded = %q, %+v, %v; want a new GH-1/slug-rest-3", got, existing, err)
 		}
 	})
 
@@ -146,9 +182,8 @@ func TestAvoidLandedFoundBranch(t *testing.T) {
 	t.Run("work past the landed head", func(t *testing.T) {
 		f := testkit.NewFakes(t)
 		f.Script("git rev-parse --verify --quiet refs/heads/GH-1/slug", "ccc")
-		f.Fail("git merge-base --is-ancestor ccc aaa", testkit.Missing)
 		f.Script("git symbolic-ref --short refs/remotes/origin/HEAD", "origin/main")
-		f.Script("git cherry -v origin/main ccc aaa", "+ 222 a follow-up")
+		f.Script("git cherry -v refs/remotes/origin/main ccc aaa", "+ 222 a follow-up")
 
 		in := StartInput{Main: "/code/repo", Landed: landedOn(heads)}
 

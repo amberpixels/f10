@@ -467,3 +467,16 @@ func LocalDefault(ctx context.Context, dir string) (string, error) {
 
 	return strings.TrimPrefix(def, "origin/"), nil
 }
+
+// WorkPast is what tip holds past a request's head that origin's default
+// branch def lacks: commits made after the last push, which a merge left
+// behind. A tip at the head or behind it, one that only merged main in, and
+// one recreated at main's tip hold none. Start, finish and the janitor all
+// read a landed branch by it, so they agree on the same branch.
+func WorkPast(ctx context.Context, dir, def, tip, head string) ([]gitx.Cherry, error) {
+	if tip == head {
+		return nil, nil
+	}
+
+	return gitx.UnlandedPast(ctx, dir, "refs/remotes/origin/"+def, tip, head)
+}

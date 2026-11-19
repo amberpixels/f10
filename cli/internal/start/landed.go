@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/forge"
-	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
@@ -69,11 +69,17 @@ func avoidLanded(
 			return "", existing, "", fmt.Errorf(
 				"%s is %s's branch, which merged, and carries nothing past it: "+
 					"run f10 finish %s to close that PR's work, then start again",
-				existing.Name, p.URL, in.Task.ID)
+				existing.Name, p.URL, startToken(in))
 		}
 
-		// origin's copy of a landed head is stale: a new name is made below
-		name, existing = existing.Name, stack.FoundBranch{}
+		// origin's copy of a landed head is stale: a new name is made below,
+		// counted on from the plain name when the copy is already numbered, so
+		// the suffix lookup still finds it (`-rest-3`, never `-rest-2-2`)
+		if !numberedOf(existing.Name, name) {
+			name = existing.Name
+		}
+
+		existing = stack.FoundBranch{}
 	}
 
 	took := "" // the url of the request that landed on name itself
@@ -112,6 +118,28 @@ func avoidLanded(
 		name, name, landedMax)
 }
 
+// startToken is the task as start was given it, its suffix kept, so the
+// command a message names reaches this attempt and not another.
+func startToken(in StartInput) string {
+	if in.Suffix == "" {
+		return in.Task.ID
+	}
+
+	return in.Task.ID + "-" + in.Suffix
+}
+
+// numberedOf says b is name-<n>, a name start numbered after name landed.
+func numberedOf(b, name string) bool {
+	n, ok := strings.CutPrefix(b, name+"-")
+	if !ok {
+		return false
+	}
+
+	_, err := strconv.Atoi(n)
+
+	return err == nil
+}
+
 // staleLanded says a found branch is a merged request's head with nothing
 // past it that the default branch lacks, as the janitor reads it: a tip that
 // only merged main in, or was recreated at main's tip, is stale too. A closed
@@ -141,16 +169,12 @@ func staleLanded(ctx context.Context, in StartInput, b stack.FoundBranch) (bool,
 		return true, p, nil
 	}
 
-	if behind, err := gitx.IsAncestor(ctx, in.Main, tip, p.HeadSHA); err == nil && behind {
-		return true, p, nil
-	}
-
-	def := stack.DefaultBranch(ctx, in.Main)
+	def := strings.TrimPrefix(stack.DefaultBranch(ctx, in.Main), "origin/")
 	if def == "" {
-		return false, p, nil
+		return false, p, nil // no default branch to compare with: reuse, as before any check
 	}
 
-	lost, err := gitx.UnlandedPast(ctx, in.Main, def, tip, p.HeadSHA)
+	lost, err := stack.WorkPast(ctx, in.Main, def, tip, p.HeadSHA)
 	if err != nil {
 		return false, p, fmt.Errorf("reading what %s holds past %s: %w", b.Name, p.URL, err)
 	}

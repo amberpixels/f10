@@ -271,7 +271,9 @@ What the start does, case by case:
 - a new branch never takes a name a merged or closed PR used as its head.
   Finish, the watcher and the drive look PRs up by head branch, so each would read that PR as the new branch's and finish the task at once.
   The task's next PR gets `<name>-2`, `-3` and so on, and a note beneath the report says so.
-  A local branch at a merged PR's head with nothing past it is refused, naming the PR, until it is removed.
+  A local branch at a merged PR's head with nothing past it is refused, naming the PR and `f10 finish <id>`, which archives that PR's plan with the branch.
+  A branch whose only commits past the head are main merged in, or one recreated at main's tip, has nothing past it.
+  A suffixed attempt whose plain name landed resumes its newest numbered branch (`<name>-rest-2`) instead of making another.
   Origin's copy of one is left alone, and a branch whose PR closed without a merge is reused, because it holds the only copy of that work
 - a suffix glued to the id (`42-attempt2`, `42_v2`) salts the branch and the agent name, so a second worktree for one task can live beside the first
 - the agent is named `<id>` lowercased, with the suffix, then six hex characters hashed from the worktree path (`gh-12-3e78d4`): Herdr's agent names are one namespace across every project, so the same id in two repositories never collides
@@ -403,7 +405,7 @@ There finish merges as usual, brings the default branch up to the merge, switche
 2. **The merge.**
    `gh pr view <branch>` / `glab mr view <branch>` by the branch.
    Open: merged through `gh pr merge` / `glab mr merge`, never with `--admin`; when the host refuses (red CI, a required review, conflicts) its reason is the error and nothing has changed.
-   Already merged: confirmed.
+   Already merged: confirmed, unless the branch holds commits made after the merged head that the default branch lacks: finish then refuses before anything moves, naming the first commit, so a follow-up is never deleted.
    Closed without a merge: a refusal.
    `f10 lore check` runs on the change the merge closes (`<id>`, or `<id>.<n>` for the task's `n`-th PR).
    It runs right before an open request merges, or before a branch never pushed lands (below).

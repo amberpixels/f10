@@ -259,11 +259,11 @@ func refuseWorkPastMerge(ctx context.Context, in FinishInput, def, name string, 
 	}
 
 	tip := stack.RefSHA(ctx, in.Main, "refs/heads/"+name)
-	if tip == "" || tip == p.HeadSHA {
+	if tip == "" {
 		return nil
 	}
 
-	lost, err := gitx.UnlandedPast(ctx, in.Main, "refs/remotes/origin/"+def, tip, p.HeadSHA)
+	lost, err := stack.WorkPast(ctx, in.Main, def, tip, p.HeadSHA)
 	if err != nil {
 		return fmt.Errorf("reading what %s holds past %s: %w", name, p.URL, err)
 	}
