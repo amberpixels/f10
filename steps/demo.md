@@ -92,7 +92,8 @@ A static report also carries the script and the live url.
     When the run wrote a report file, close with `f10 demo open <TASK-ID>`.
 
     On disk, write `report.html` in the evidence directory, in **both** modes.
-    It opens with what changed.
+    Its header links the task and the PR, and it opens with what changed.
+    Run `f10 refs link <report.html>` once the page is written, before it is published, so every task id's first mention is a link.
     A static report puts each shot under its claim, with before and after side by side.
     A hands-on report holds the script as a checklist.
     The page is self-contained: inline styles, images by relative path, legible in light and dark, with no build step and no server.

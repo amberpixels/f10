@@ -12,6 +12,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/hostops"
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/reflink"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/target"
@@ -51,6 +52,11 @@ func Create(ctx context.Context, warn io.Writer, t *target.Target, n New) (ref.R
 	}
 
 	doc = LinkBodyAfter(ctx, t, doc, warn)
+
+	// the title line renders nothing, so only the body below it is linked
+	if title, body, ok := strings.Cut(doc, "\n"); ok {
+		doc = title + "\n" + LinkMentions(ctx, t, body, warn)
+	}
 
 	nt := tasksource.NewTask{Doc: doc, Props: n.Props}
 
@@ -103,12 +109,63 @@ func DocTitle(id, doc string) string {
 	return tasktitle.Clean(hostops.TaskTitle(strings.TrimLeft(doc, " \t\r\n")), id)
 }
 
-// MdLink is the task as a markdown link, brackets in the title escaped so
-// the link text always ends where the link does.
-func MdLink(id, title, url string) string {
-	title = strings.NewReplacer("[", `\[`, "]", `\]`).Replace(title)
+// MdLink is reflink.MarkdownLink.
+func MdLink(id, title, url string) string { return reflink.MarkdownLink(id, title, url) }
 
-	return "[" + id + ": " + title + "](" + url + ")"
+// LinkMentions links the first bare mention of each task id in a markdown
+// body that renders links, from the titles f10 already read.
+func LinkMentions(ctx context.Context, t *target.Target, body string, warn io.Writer) string {
+	out, _ := LinkWith(ctx, t, reflink.Markdown, body, warn)
+
+	return out
+}
+
+// LinkWith runs scan once to find the bare ids, resolves them in one lookup,
+// and runs it again to link them; it names each linked id on warn. An id it
+// cannot title stays bare.
+func LinkWith(
+	ctx context.Context,
+	t *target.Target,
+	scan reflink.Scan,
+	text string,
+	warn io.Writer,
+) (string, []reflink.Mention) {
+	prefix := t.Effective.IDPrefix
+
+	_, bare := scan(text, prefix, reflink.None)
+	if len(bare) == 0 {
+		return text, nil
+	}
+
+	refs := make([]ref.Ref, 0, len(bare))
+
+	for _, m := range bare {
+		if r, err := t.Reference(ctx, m.ID); err == nil {
+			refs = append(refs, r)
+		}
+	}
+
+	known := statusview.TaskRefsFor(t, ctx, refs, true, false, warn)
+
+	out, mentions := scan(text, prefix, func(id string) (string, string, bool) {
+		k, ok := known[id]
+
+		return k.Title, k.URL, ok
+	})
+
+	var ids []string
+
+	for _, m := range mentions {
+		if m.Linked {
+			ids = append(ids, m.ID)
+		}
+	}
+
+	if len(ids) > 0 {
+		ui.Warnf(warn, "linked %s", strings.Join(ids, ", "))
+	}
+
+	return out, mentions
 }
 
 // LinkBodyAfter turns the body's `After: <id>` line into a link titled with

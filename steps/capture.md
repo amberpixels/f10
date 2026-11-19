@@ -20,6 +20,7 @@ Context: `project.md → Tracker`, for the id format and the **Properties** a ne
    - **Altitude:** write for the engineer who picks it up.
      A snippet goes in only when its shape is the ask, reproduction stops at what reproduces it, and there are no estimates.
    - **Other tasks** named in the body carry their titles from one `f10 task ref` call (`conventions/context.md` → Task references).
+     `f10 task create` links a first mention still bare, but never the title line, because a title renders nothing.
      A closed task the description asks to change gets a new follow-up task, never its own body.
    - **A dependency** is the body's last line, `After: <id>`, written only when the order is known.
      Check with a fresh `f10 task ref` that the task is open, because a `[closed]` one gets no line and becomes shipped work in the prose.

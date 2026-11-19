@@ -43,7 +43,9 @@ Any commit this step makes follows `conventions/context.md` → Commits, with `-
    Opening and refreshing draft them the same way.
    - Write the draft to a temp file outside the repo.
    - In stealth mode, the branch name, the commits and the PR text carry no f10 traces.
-   - Another task named in the PR text is a link carrying its title, from `f10 task ref <id>... --md` (`conventions/context.md` → Task references).
+   - The first mention of every task id in the PR text is a link carrying its title, the PR's own task included (`conventions/context.md` → Task references).
+     `f10 task ref <id>... --md` gives a link to write into a sentence, and `f10 pr create` and `f10 pr edit` link any first mention still bare.
+     A skill adapter sends the body itself, so run `f10 refs link <file>` on the draft before passing it to the skill.
    - **The title carries the task id**, in the `tracker.title` form, else as `<id>: <title>`.
      With the plain commands, draft the task's title alone, because `f10 pr create` and `f10 pr edit` write the id onto any title that does not carry it.
      A skill adapter opens and refreshes the PR itself, so its draft carries the id in that form.
