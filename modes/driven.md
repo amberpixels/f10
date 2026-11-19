@@ -31,7 +31,8 @@ Examples are a judge's rethink, a resolve `ask` and a deploy confirmation.
    Run `f10-state.sh ask "<questions>" ["<context>"]`, each argument on one line.
    Number the questions, put each one's options in brackets, and list the default or recommended answer first: `1. Reuse the saved plan? [reuse | re-plan] 2. Deploy to staging? [yes | no]`.
    Choices go in the brackets, never as "Options: 1) ..." in the question, because the inbox offers only bracketed options as choices.
-   Background the user needs, such as what failed, a log url or the shas involved, goes in the second argument, so `f10 inbox` and `/f10:inbox` show it apart from the questions.
+   Background the user needs, such as what failed, a log url or the shas involved, goes in the second argument.
+   That way `f10 inbox` and `/f10:inbox` show it apart from the questions.
    The banner leaves the context out, so keep the one fact the answer turns on in the question itself.
    If the command warns that a question lists choices in its text, run the ask again with them in brackets, because the new ask replaces the first.
 2. **Stop blocked, in the same call.**

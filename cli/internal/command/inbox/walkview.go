@@ -37,8 +37,8 @@ func newWalkView(w io.Writer, links bool) walkView {
 	}
 }
 
-// ask prints a's header, its context and its questions with lettered
-// options, the default marked; name is the task as the list labels it.
+// ask prints a's header, its context and its questions, each option
+// lettered and the default marked. name is the task as the list labels it.
 func (v walkView) ask(a asks.Ask, name string, now time.Time) {
 	header := name
 	if a.Skill != "" {
@@ -87,9 +87,8 @@ var (
 // shaShown is how many characters of a full sha the context shows.
 const shaShown = 8
 
-// wrap breaks text into faint lines under indent at the terminal's width,
-// never inside a word, so a url stays whole and clickable; a full sha shows
-// shortened, and a url is a link on a terminal.
+// wrap breaks text into faint lines at the terminal's width, never inside a
+// word, so a url stays whole and clickable. A full sha shows shortened.
 func (v walkView) wrap(text, indent string) []string {
 	var (
 		lines []string

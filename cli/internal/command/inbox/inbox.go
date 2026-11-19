@@ -445,8 +445,8 @@ func wireValue(q asks.Question, resolved string) string {
 	return resolved
 }
 
-// askLine reads one question's answer until it resolves: a letter, a number
-// or an option's text; Enter is the default, s skips the ask.
+// askLine reads one question's answer until it resolves to an option, by
+// letter, number or text. Enter takes the default, and s skips the ask.
 func askLine(w io.Writer, in *bufio.Reader, q asks.Question) (string, error) {
 	for {
 		// the default is option a, as the walk letters them

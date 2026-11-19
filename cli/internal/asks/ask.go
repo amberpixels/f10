@@ -75,8 +75,8 @@ var numbered = regexp.MustCompile(`(?:^|\s)(\d+)\.\s`)
 
 var options = regexp.MustCompile(`\[([^\[\]]*\|[^\[\]]*|[^\[\]|]+)\]\s*$`)
 
-// Parse splits `1. Reuse the plan? [reuse | re-plan] 2. ...` into questions;
-// text with no question numbered 1 is one free-text question, so an odd ask
+// Parse splits `1. Reuse the plan? [reuse | re-plan] 2. ...` into questions.
+// Text with no question numbered 1 is one free-text question, so an odd ask
 // still reaches the user whole. Split also keeps the prose before question 1.
 func Parse(text string) []Question {
 	_, qs := Split(text)
@@ -146,8 +146,8 @@ func choicesOnly(qs []Question) bool {
 	return true
 }
 
-// choiceList is a list of choices written in a question's prose, which Parse
-// cannot offer: an "Options:" label, or "1) ... 2)", "1. ... 2." and "a) ... b)" runs.
+// choiceList matches choices written in a question's prose, which Parse
+// cannot offer. It finds an "Options:" label and "1) 2)", "1. 2." or "a) b)" runs.
 var choiceList = regexp.MustCompile(
 	`(?i)\boptions?\s*:|(?:^|\s)\(?1[.)]\s.*\s\(?2[.)]\s|(?:^|\s)\(?a\)\s.*\s\(?b\)\s`,
 )
