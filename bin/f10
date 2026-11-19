@@ -20,6 +20,7 @@
 #   f10 --shim-rebuild    build this checkout's cli/ into its cache slot (`just install`)
 #   f10 --shim-hook       the SessionStart hook, from hooks/hooks.json only
 #   f10 hook              every other hook: the cached binary only, nothing when there is none
+#   f10 inbox hook        the inbox's own hook, cached-only the same way
 #
 # F10_SHIM_CACHED_ONLY=1 fails fast instead of downloading or building, for hooks with a short
 # timeout.
@@ -235,6 +236,14 @@ case "${1:-}" in
     # session start's background resolve lands a binary, a hook is a silent no-op.
     cached || exit 0
     F10_PLUGIN_ROOT="$root" exec "$bin" "$@"
+    ;;
+  inbox)
+    if [ "${2:-}" = hook ]; then
+      cached || exit 0
+      F10_PLUGIN_ROOT="$root" exec "$bin" "$@"
+    fi
+    resolve
+    exec "$bin" "$@"
     ;;
   *)
     resolve

@@ -11,7 +11,7 @@ import (
 
 var (
 	issueURL = regexp.MustCompile(`https?://\S+?/` + forge.IssuePath + `\d+`)
-	prURL    = regexp.MustCompile(`https?://\S+?/(?:pull|(?:-/)?merge_requests)/\d+`)
+	prURL    = regexp.MustCompile(`https?://\S+?/` + forge.PullPath + `\d+`)
 	// `[main 1a2b3c4] subject`, `[main (root-commit) 1a2b3c4] subject`,
 	// `[detached HEAD 1a2b3c4] subject`
 	commitLine = regexp.MustCompile(`(?m)^\[(.+?) ([0-9a-f]{7,40})\] (.*)$`)

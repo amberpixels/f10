@@ -108,7 +108,7 @@ func (i issue) issue() Issue {
 		Body:      cmp.Or(i.Body, i.Description),
 		Labels:    i.Labels,
 		CreatedAt: cmp.Or(i.CreatedAt, i.CreatedAtGL),
-		Pull:      strings.Contains(i.URL, "/pull/") || strings.Contains(i.WebURL, "/merge_requests/"),
+		Pull:      pullPathRe.MatchString(i.URL) || pullPathRe.MatchString(i.WebURL),
 	}
 
 	for _, a := range i.Assignees {
@@ -375,6 +375,16 @@ func (h Host) SetIssueOpen(ctx context.Context, number string, open bool) error 
 // IssuePath is an issue's url path before its number, on GitHub and on GitLab,
 // which prints work items where it used to print issues.
 const IssuePath = `(?:-/)?(?:issues|work_items)/`
+
+// The path segment before a request's number: GitHub's pull, GitLab's
+// merge_requests. PullPath is the regexp of either, as IssuePath is.
+const (
+	pullSegment = "pull"
+	mrSegment   = "merge_requests"
+	PullPath    = `(?:-/)?(?:` + pullSegment + `|` + mrSegment + `)/`
+)
+
+var pullPathRe = regexp.MustCompile(`/` + PullPath + `\d`)
 
 var issueNumberRe = regexp.MustCompile(`/` + IssuePath + `(\d+)\b`)
 
