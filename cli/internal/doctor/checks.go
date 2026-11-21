@@ -522,8 +522,8 @@ func titleDefaulted(eff *facts.Effective) string {
 
 	for _, f := range eff.Facts {
 		if f.Key == "tracker.title" && f.Origin.Kind == facts.OriginDefault {
-			return "; tracker.title defaults to \"" + f.Value + "\": older issues stay bare until " +
-				"f10 task retitle --all (--dry-run lists them); declare it, or none, to settle"
+			return "; tracker.title defaults to \"" + f.Value + "\": older issues stay bare until f10 updates " +
+				"them or f10 task retitle --all backfills them (--dry-run lists them); declare it, or none, to settle"
 		}
 	}
 

@@ -544,7 +544,7 @@ Only a template that opens with `{id}`, `{n}` or `#{n}` is stripped; one like `x
 With nothing declared, the host's issues take `{id}: {title}` and `f10 config` shows it with origin `default`; `f10 init` writes the key out, so the choice is visible in `project.md`.
 `title: none` (or `"{title}"`) keeps issue titles bare.
 A driver tracker takes no default, because its titles are its own.
-A project that predates the default starts prefixing new issues while its old ones stay bare; `f10 doctor` says so, and `f10 task retitle --all` backfills them.
+A project that predates the default starts prefixing new issues, and an old issue takes the prefix only when `f10 task update` touches it; `f10 doctor` says so, and `f10 task retitle --all` backfills the rest.
 `f10 pr create` and `f10 pr edit` write the lead task's id onto every PR title through the same template, else as `<id>: <title>`.
 A title that already carries the id is left alone, and a bundle's riders follow the id.
 
