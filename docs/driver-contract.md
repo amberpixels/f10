@@ -101,6 +101,7 @@ Print the new task's id alone on stdout, the number or the prefixed id: f10 prin
 Exit `4` when `create` fails before any write, because then no task exists and running it again is safe ([Exit codes](#exit-codes)).
 That covers a call you reject yourself, such as an option the property does not have, a missing title or a config error.
 It also covers one the tracker rejected before acting, such as a validation error or a 429.
+A driver tracker takes no `tracker.title` default, unlike the host's issues.
 With `tracker.title` declared, f10 takes a leading id off the titles in your `list`, `search` and `children` rows, and collapses a doubled id in your `read` document's `# ` heading to one; on the host's issues, it writes the template onto the title after your `create` and `update`, since a driver has no title verb.
 
 ## Commenting on and updating a task

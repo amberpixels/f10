@@ -233,7 +233,8 @@ func runTaskRetitle(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if t.Effective.TitleTemplate == "" {
-		ui.Warnf(cmd.ErrWriter, "project.md declares no tracker.title; nothing to retitle")
+		ui.Warnf(cmd.ErrWriter,
+			"no tracker.title applies here (it is none, or undeclared on a driver tracker); nothing to retitle")
 
 		return nil
 	}

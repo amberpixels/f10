@@ -64,3 +64,26 @@ func TestConfigShowsAgentsPerKey(t *testing.T) {
 		t.Errorf("a refused user file is a problem: %+v", v.Problems)
 	}
 }
+
+// tracker.title shows its effective template and origin: the default on the
+// host's issues, none as declared, with the JSON template left empty.
+func TestConfigShowsTitleTemplate(t *testing.T) {
+	for _, c := range []struct {
+		decl, value, origin, tmpl string
+	}{
+		{"tracker: {kind: github, id: FT-###}\n", "{id}: {title}", "default", "{id}: {title}"},
+		{"tracker: {kind: github, id: FT-###, title: none}\n", "none", "declared (main, frontmatter)", ""},
+	} {
+		var v configcmd.View
+
+		out := runApp(t, "-C", paceRepo(t, c.decl, ""), "config", "--json").must(t)
+		if err := json.Unmarshal([]byte(out), &v); err != nil {
+			t.Fatal(err)
+		}
+
+		i := slices.IndexFunc(v.Facts, func(f facts.Fact) bool { return f.Key == "tracker.title" })
+		if i < 0 || v.Facts[i].Value != c.value || v.Facts[i].Origin.String() != c.origin || v.TitleTemplate != c.tmpl {
+			t.Errorf("%q: facts %+v, titleTemplate %q", c.decl, v.Facts, v.TitleTemplate)
+		}
+	}
+}

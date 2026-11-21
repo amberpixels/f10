@@ -9,7 +9,8 @@ The task goes through the create adapter `project.md → Tracker` declares: a sk
   - Jira Cloud: not markdown
   - unknown: plain paragraphs, with no markup that reads as noise
 - **The `After:` line** is what `f10 task ref <id> --md` prints on a GFM tracker, and the bare id on any other.
-- **The title**: when the frontmatter declares `tracker.title`, run `f10 task retitle <id>` right after the adapter creates the task.
+- **The title**: when `f10 config` shows a `tracker.title` other than `none`, run `f10 task retitle <id>` right after the adapter creates the task.
+  The host's issues take `{id}: {title}` by default, so the key need not be declared.
   A failed retitle is reported, and the task is never created again.
 - **Properties** are set by the adapter's own means.
 - **A split** links each subtask through the tracker's native parent link, or the **parent** adapter the project declares.

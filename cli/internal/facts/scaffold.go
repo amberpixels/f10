@@ -36,6 +36,11 @@ func Scaffold(lay *layout.Layout, pb *probe.Probes, eff *Effective) (*Draft, err
 	// no CLI settled: which tracker this repo uses is a human's answer
 	if eff.TrackerKind != "" && eff.IDPrefix != "" {
 		decl.Tracker = TrackerDecl{Kind: string(eff.TrackerKind), ID: eff.IDPrefix + "-###"}
+
+		// written out so the default is visible and edited in place
+		if eff.TrackerKind.HostIssues() && eff.TitleTemplate != "" {
+			decl.Tracker.Title = string(eff.TitleTemplate)
+		}
 		d.Keys = append(d.Keys, "tracker")
 	}
 

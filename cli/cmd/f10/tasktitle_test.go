@@ -14,7 +14,7 @@ import (
 func TestTaskRetitleRefuses(t *testing.T) {
 	_, errOut, err := runAppStdin(t, strings.NewReader(""), "-C", createRepo(t, ""), "task", "retitle",
 		"FT-12").streams()
-	if err != nil || !strings.Contains(errOut, "declares no tracker.title") {
+	if err != nil || !strings.Contains(errOut, "no tracker.title applies here") {
 		t.Errorf("no template: err = %v, stderr %q", err, errOut)
 	}
 
