@@ -381,7 +381,7 @@ func checkStatusline(env *Env, set settings) Result {
 
 // checkHerdr is scoped: without Herdr only the commands that open
 // workspaces and reach agents stop working.
-func checkHerdr(env *Env) Result {
+func checkHerdr(ctx context.Context, env *Env) Result {
 	r := Result{Name: CheckHerdr, Scope: herdrScope}
 
 	path, err := env.LookPath("herdr")
@@ -396,12 +396,84 @@ func checkHerdr(env *Env) Result {
 	r.Status = StatusOK
 	r.Scope = nil
 
-	r.Detail = path
+	r.Detail = path + herdrInfo(ctx, env, path)
 	if env.Getenv("HERDR_ENV") != "1" {
 		r.Detail += "; not inside a Herdr pane, where " + strings.Join(herdrScope, ", ") + " must run"
 	}
 
 	return r
+}
+
+// herdrPlugin is the herdr plugin behind f10's file-view popup (herdr-f10).
+const herdrPlugin = "amberpixels.f10"
+
+// herdrInfo tells a fork build from an upstream one and says whether the
+// f10 plugin is linked. It is information only, so a probe that fails or
+// times out drops its part and never changes the status.
+func herdrInfo(ctx context.Context, env *Env, exe string) string {
+	ctx, cancel := context.WithTimeout(ctx, versionTimeout)
+	defer cancel()
+
+	var info string
+
+	if res, err := env.Run(ctx, env.Layout.CheckoutRoot, exe, "--version"); err == nil && res.Code == 0 {
+		if v := firstLine(res.Stdout); v != "" {
+			info += " (" + v + ")"
+		}
+	}
+
+	res, err := env.Run(ctx, env.Layout.CheckoutRoot, exe, "plugin", "list", "--json", "--plugin="+herdrPlugin)
+	if err == nil && res.Code == 0 {
+		if plugin, ok := herdrPluginState(res.Stdout); ok {
+			info += "; " + plugin
+		}
+	}
+
+	return info
+}
+
+func firstLine(s string) string {
+	line, _, _ := strings.Cut(strings.TrimSpace(s), "\n")
+
+	return strings.TrimSpace(line)
+}
+
+// herdrPluginState reads `herdr plugin list --json`. Only a local source
+// counts as linked, because `herdr plugin link` is what gives a plugin one.
+func herdrPluginState(out string) (string, bool) {
+	var list struct {
+		Result struct {
+			Plugins []struct {
+				ID      string `json:"plugin_id"`
+				Enabled bool   `json:"enabled"`
+				Source  struct {
+					Kind string `json:"kind"`
+				} `json:"source"`
+			} `json:"plugins"`
+		} `json:"result"`
+	}
+	if json.Unmarshal([]byte(out), &list) != nil {
+		return "", false
+	}
+
+	for _, p := range list.Result.Plugins {
+		if p.ID != herdrPlugin {
+			continue
+		}
+
+		line := herdrPlugin + " plugin installed"
+		if p.Source.Kind == "local" {
+			line = herdrPlugin + " plugin linked"
+		}
+
+		if !p.Enabled {
+			line += ", disabled"
+		}
+
+		return line, true
+	}
+
+	return herdrPlugin + " plugin not linked", true
 }
 
 func checkHost(ctx context.Context, env *Env) Result {
@@ -545,7 +617,7 @@ var driverScope = []string{"task create --set"}
 // steps still read the task through project.md's fetch adapter.
 var noDriverScope = []string{"task", "start"}
 
-// versionTimeout bounds `f10-drivers --version`, so a hung executable never hangs doctor.
+// versionTimeout bounds `f10-drivers --version` and the herdr probes, so a hung executable never hangs doctor.
 const versionTimeout = 5 * time.Second
 
 // checkDriver reads the version off the f10-drivers the shim runs, not the

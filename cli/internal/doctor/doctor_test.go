@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,7 +31,8 @@ type fixture struct {
 	env      map[string]string
 	path     map[string]string // LookPath answers
 	authCode int
-	drivers  string // what `f10-drivers --version` prints
+	drivers  string                  // what `f10-drivers --version` prints
+	herdr    map[string]shell.Result // herdr's answers, by its joined args
 	e        *Env
 }
 
@@ -43,6 +45,10 @@ func newFixture(t *testing.T) *fixture {
 		root: t.TempDir(),
 		env:  map[string]string{"CLAUDECODE": "1", "HERDR_ENV": "1"},
 		path: map[string]string{"herdr": "/usr/local/bin/herdr", "gh": "/usr/local/bin/gh"},
+		herdr: map[string]shell.Result{
+			"--version": {Stdout: "herdr 0.9.5\n"},
+			"plugin list --json --plugin=amberpixels.f10": {Stdout: `{"result":{"plugins":[]}}`},
+		},
 		install: map[string]any{
 			"scope": "user", "version": "0.34.0", "lastUpdated": "2020-01-01T00:00:00Z",
 		},
@@ -91,7 +97,16 @@ func newFixture(t *testing.T) *fixture {
 
 			return "", errors.New("not found")
 		},
-		Run: func(_ context.Context, _, _ string, args ...string) (shell.Result, error) {
+		Run: func(_ context.Context, _, name string, args ...string) (shell.Result, error) {
+			if name == f.path["herdr"] {
+				res, ok := f.herdr[strings.Join(args, " ")]
+				if !ok {
+					return shell.Result{}, errors.New("herdr: no answer")
+				}
+
+				return res, nil
+			}
+
 			if len(args) == 1 && args[0] == "--version" {
 				if f.drivers == "" {
 					return shell.Result{Code: 2}, nil
@@ -312,6 +327,73 @@ func TestChecks(t *testing.T) {
 
 			if c.want != StatusProblem && r.Remedy != "" {
 				t.Errorf("remedy on a %s check: %q", r.Status, r.Remedy)
+			}
+		})
+	}
+}
+
+func TestHerdrDetail(t *testing.T) {
+	t.Parallel()
+
+	const key = "plugin list --json --plugin=amberpixels.f10"
+
+	plugin := func(enabled bool, kind string) shell.Result {
+		return shell.Result{Stdout: fmt.Sprintf(
+			`{"result":{"plugins":[{"plugin_id":"amberpixels.f10","name":"f10 disabled","enabled":%t,"source":{"kind":%q}}]}}`,
+			enabled,
+			kind,
+		)}
+	}
+
+	cases := []struct {
+		label  string
+		mutate func(*fixture)
+		want   string
+	}{
+		{
+			"upstream, plugin not linked", nil,
+			"/usr/local/bin/herdr (herdr 0.9.5); amberpixels.f10 plugin not linked",
+		},
+		{"fork, plugin linked", func(f *fixture) {
+			f.herdr["--version"] = shell.Result{Stdout: "herdr 0.9.5-fork.2026-11-21\n"}
+			f.herdr[key] = plugin(true, "local")
+		}, "/usr/local/bin/herdr (herdr 0.9.5-fork.2026-11-21); amberpixels.f10 plugin linked"},
+		{"plugin disabled", func(f *fixture) {
+			f.herdr[key] = plugin(false, "local")
+		}, "/usr/local/bin/herdr (herdr 0.9.5); amberpixels.f10 plugin linked, disabled"},
+		{"plugin installed from GitHub", func(f *fixture) {
+			f.herdr[key] = plugin(true, "github")
+		}, "/usr/local/bin/herdr (herdr 0.9.5); amberpixels.f10 plugin installed"},
+		{"plugin list not JSON", func(f *fixture) {
+			f.herdr[key] = shell.Result{Stdout: "1 plugin installed:\n"}
+		}, "/usr/local/bin/herdr (herdr 0.9.5)"},
+		{"version fails", func(f *fixture) {
+			f.herdr["--version"] = shell.Result{Code: 2}
+		}, "/usr/local/bin/herdr; amberpixels.f10 plugin not linked"},
+		{"plugin list fails", func(f *fixture) {
+			delete(f.herdr, key)
+		}, "/usr/local/bin/herdr (herdr 0.9.5)"},
+		{"both fail", func(f *fixture) {
+			f.herdr = nil
+		}, "/usr/local/bin/herdr"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.label, func(t *testing.T) {
+			t.Parallel()
+
+			f := newFixture(t)
+			if tc.mutate != nil {
+				tc.mutate(f)
+			}
+
+			r := f.run(CheckHerdr)
+			if r.Status != StatusOK || r.Remedy != "" {
+				t.Errorf("status = %v, remedy = %q", r.Status, r.Remedy)
+			}
+
+			if r.Detail != tc.want {
+				t.Errorf("detail = %q, want %q", r.Detail, tc.want)
 			}
 		})
 	}
