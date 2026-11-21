@@ -66,7 +66,7 @@ func Run(ctx context.Context, env *Env) []Result {
 		checkScripts(env, p, reason),
 		checkHooks(env, p, in, reason, set),
 		checkStatusline(env, set),
-		checkHerdr(env),
+		checkHerdr(ctx, env),
 		checkRemote(env),
 		checkHost(ctx, env),
 	}
