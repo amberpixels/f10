@@ -597,8 +597,8 @@ func TestRemoteProblemIsScopedAndDoesNotFail(t *testing.T) {
 	}
 }
 
-// a defaulted tracker.title names the backfill on an OK check; a declared
-// one says nothing
+// a defaulted tracker.title names the backfill on an OK check, and a
+// declared one says nothing
 func TestProjectNamesTitleDefault(t *testing.T) {
 	t.Parallel()
 

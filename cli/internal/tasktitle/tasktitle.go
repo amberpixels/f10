@@ -11,7 +11,7 @@ import (
 	"unicode/utf8"
 )
 
-// Template is tracker.title; the zero value changes nothing, so titles stay
+// Template is tracker.title. The zero value changes nothing, so titles stay
 // bare.
 type Template string
 
@@ -26,8 +26,8 @@ var placeholder = regexp.MustCompile(`\{[^{}]*\}`)
 
 // Parse refuses a template without exactly one {title} and a placeholder
 // other than {id}, {n} and {title}. None and a bare "{title}" both parse to
-// the zero template, because a literal "{title}" would read as already
-// applied to every title, and a PR title would then lose its id.
+// the zero template. A literal "{title}" would read as already applied to
+// every title, so a PR title would lose its id.
 func Parse(raw string) (Template, error) {
 	if trimmed := strings.TrimSpace(raw); trimmed == None || trimmed == "{title}" {
 		return "", nil
