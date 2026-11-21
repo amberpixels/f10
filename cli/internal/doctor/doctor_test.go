@@ -596,3 +596,26 @@ func TestRemoteProblemIsScopedAndDoesNotFail(t *testing.T) {
 		t.Errorf("scope = %v, failed = %v; want remote, not failed", r.Scope, Failed([]Result{r}))
 	}
 }
+
+// a defaulted tracker.title names the backfill on an OK check; a declared
+// one says nothing
+func TestProjectNamesTitleDefault(t *testing.T) {
+	t.Parallel()
+
+	for _, c := range []struct {
+		origin facts.OriginKind
+		want   bool
+	}{{facts.OriginDefault, true}, {facts.OriginDeclared, false}} {
+		f := newFixture(t)
+		f.e.Facts.Facts = []facts.Fact{{Key: "tracker.title", Value: "{id}: {title}", Origin: facts.OriginOf(c.origin)}}
+
+		r := f.run(CheckProject)
+		if r.Status != StatusOK || r.Remedy != "" {
+			t.Fatalf("%s: status %q, remedy %q; want OK", c.origin, r.Status, r.Remedy)
+		}
+
+		if got := strings.Contains(r.Detail, "f10 task retitle --all"); got != c.want {
+			t.Errorf("%s: detail %q names the backfill = %v, want %v", c.origin, r.Detail, got, c.want)
+		}
+	}
+}

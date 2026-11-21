@@ -11,14 +11,28 @@ import (
 	"unicode/utf8"
 )
 
-// Template is a declared tracker.title; the zero value changes nothing.
+// Template is tracker.title; the zero value changes nothing, so titles stay
+// bare.
 type Template string
+
+// Default is the template a host tracker takes when tracker.title is not
+// declared, because the host shows the id only as small text under the title.
+const Default Template = "{id}: {title}"
+
+// None is the declared word for bare titles.
+const None = "none"
 
 var placeholder = regexp.MustCompile(`\{[^{}]*\}`)
 
 // Parse refuses a template without exactly one {title} and a placeholder
-// other than {id}, {n} and {title}.
+// other than {id}, {n} and {title}. None and a bare "{title}" both parse to
+// the zero template, because a literal "{title}" would read as already
+// applied to every title, and a PR title would then lose its id.
 func Parse(raw string) (Template, error) {
+	if trimmed := strings.TrimSpace(raw); trimmed == None || trimmed == "{title}" {
+		return "", nil
+	}
+
 	titles := 0
 
 	for _, p := range placeholder.FindAllString(raw, -1) {

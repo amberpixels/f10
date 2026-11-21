@@ -207,13 +207,23 @@ func (e *Effective) resolveTracker(
 		})
 	}
 
-	// a template check() refuses stays unset, so nothing writes through it
-	if t, err := tasktitle.Parse(fm.Tracker.Title); fm.Tracker.Title != "" && err == nil {
+	// a template check() refuses stays unset, so nothing writes through it.
+	// The default needs the kind settled above, and a driver gets none
+	// because its titles are its own.
+	switch t, err := tasktitle.Parse(fm.Tracker.Title); {
+	case fm.Tracker.Title != "" && err == nil:
 		e.TitleTemplate = t
 		e.Facts = append(e.Facts, Fact{
 			Key:    "tracker.title",
 			Value:  fm.Tracker.Title,
 			Origin: DeclaredFrontmatter(fm.origin["tracker"]),
+		})
+	case fm.Tracker.Title == "" && e.TrackerKind.HostIssues():
+		e.TitleTemplate = tasktitle.Default
+		e.Facts = append(e.Facts, Fact{
+			Key:    "tracker.title",
+			Value:  string(tasktitle.Default),
+			Origin: OriginOf(OriginDefault),
 		})
 	}
 

@@ -10,6 +10,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/probe"
+	"github.com/amberpixels/f10/cli/internal/tasktitle"
 )
 
 func TestDecodeDeclared(t *testing.T) {
@@ -553,8 +554,23 @@ func TestTrackerTitle(t *testing.T) {
 		t.Errorf("a template without {title} passed: %q, %+v", bad.TitleTemplate, bad.Problems)
 	}
 
-	if none := buildWith(t, "---\ntracker: {id: FT-###}\n---\n", ""); none.TitleTemplate != "" {
-		t.Errorf("no key gave template %q", none.TitleTemplate)
+	// undeclared on the host's issues: the default, shown with its origin
+	def := buildWith(t, "---\ntracker: {id: FT-###}\n---\n", "")
+	if f := factFor(t, def, "tracker.title"); def.TitleTemplate != tasktitle.Default ||
+		f.Origin.Kind != OriginDefault || f.Value != "{id}: {title}" {
+		t.Errorf("no key gave template %q, fact %+v", def.TitleTemplate, f)
+	}
+
+	bare := buildWith(t, "---\ntracker: {id: FT-###, title: none}\n---\n", "")
+	if f := factFor(t, bare, "tracker.title"); bare.TitleTemplate != "" || bare.Errors() != "" ||
+		f.Origin.Kind != OriginDeclared || f.Value != "none" {
+		t.Errorf("none gave template %q, fact %+v, errors %q", bare.TitleTemplate, f, bare.Errors())
+	}
+
+	driver := buildWith(t, "---\ntracker: {kind: jira, id: FT-###}\n---\n", "")
+	hasTitle := slices.ContainsFunc(driver.Facts, func(f Fact) bool { return f.Key == "tracker.title" })
+	if driver.TitleTemplate != "" || hasTitle {
+		t.Errorf("a driver tracker took template %q", driver.TitleTemplate)
 	}
 }
 

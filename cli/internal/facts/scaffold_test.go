@@ -2,6 +2,7 @@ package facts
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/amberpixels/f10/cli/internal/layout"
@@ -218,6 +219,12 @@ func TestScaffoldRoundTrip(t *testing.T) {
 	if after.TrackerKind != before.TrackerKind || after.IDPrefix != before.IDPrefix {
 		t.Errorf("tracker sub-facts drifted: %q/%q, want %q/%q",
 			after.TrackerKind, after.IDPrefix, before.TrackerKind, before.IDPrefix)
+	}
+
+	if f := factFor(t, after, "tracker.title"); after.TitleTemplate != "{id}: {title}" ||
+		f.Origin.Kind != OriginDeclared || !strings.Contains(d.Markdown, `title: '{id}: {title}'`) &&
+		!strings.Contains(d.Markdown, `title: "{id}: {title}"`) {
+		t.Errorf("tracker.title reads %q (%+v) after init wrote:\n%s", after.TitleTemplate, f, d.Markdown)
 	}
 
 	if after.Review != before.Review {

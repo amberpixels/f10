@@ -61,6 +61,7 @@
   "idPrefix": "DEM",
   "idPrefixOrigin": "derived from project name demo",
   "idPrefixDerived": true,
+  "titleTemplate": "{id}: {title}",
   "catchup": "rebase",
   "catchupStacked": "merge",
   "traces": false,
@@ -149,6 +150,11 @@
       "key": "tracker.id",
       "value": "DEM",
       "origin": "derived from project name demo"
+    },
+    {
+      "key": "tracker.title",
+      "value": "{id}: {title}",
+      "origin": "default"
     },
     {
       "key": "catchup",

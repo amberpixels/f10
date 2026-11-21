@@ -48,7 +48,8 @@ type Effective struct {
 	PriorityLabels map[string]string `json:"priorityLabels,omitempty"`
 
 	// TitleTemplate is tracker.title, the template a task's title is written
-	// through on the tracker; "" when none is declared, and titles stay bare.
+	// through on the tracker: tasktitle.Default on the host's issues when none
+	// is declared, and "" for bare titles (declared none, or a driver).
 	TitleTemplate tasktitle.Template `json:"titleTemplate,omitempty"`
 
 	// TrackerStatus is tracker.status: `started` and `shipped` to the

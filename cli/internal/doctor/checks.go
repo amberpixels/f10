@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/amberpixels/f10/cli/internal/facts"
 	"github.com/amberpixels/f10/cli/internal/gitx"
 	"github.com/amberpixels/f10/cli/internal/layout"
 	"github.com/amberpixels/f10/cli/internal/state"
@@ -506,7 +507,27 @@ func checkProject(env *Env) Result {
 		r.Detail += ", " + strconv.Itoa(len(warnings)) + " warning(s) in f10 config"
 	}
 
+	r.Detail += titleDefaulted(env.Facts)
+
 	return r
+}
+
+// titleDefaulted names the tracker.title default a project never declared:
+// one upgraded from an f10 without it prefixes new issues and leaves its
+// old ones bare until the backfill runs.
+func titleDefaulted(eff *facts.Effective) string {
+	if eff == nil {
+		return ""
+	}
+
+	for _, f := range eff.Facts {
+		if f.Key == "tracker.title" && f.Origin.Kind == facts.OriginDefault {
+			return "; tracker.title defaults to \"" + f.Value + "\": older issues stay bare until " +
+				"f10 task retitle --all (--dry-run lists them); declare it, or none, to settle"
+		}
+	}
+
+	return ""
 }
 
 // projectFile is the project.md of the layer that wins.

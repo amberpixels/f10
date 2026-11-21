@@ -527,7 +527,7 @@ With nothing declared, host issues have no priority and the list is in the host'
 ## Title template
 
 On GitHub and GitLab the task id is small grey text under a bare title.
-`tracker.title` writes it into the title itself:
+`tracker.title` writes it into the title itself, and on the host's issues it defaults to `{id}: {title}`:
 
 ```yaml
 tracker:
@@ -541,7 +541,10 @@ The placeholders are `{id}` (`FT-132`), `{n}` (`132`) and `{title}`, which must 
 Every read (`task read`, `search`, `children`, the board, status, a default branch name) takes a leading id and the punctuation after it back off, so f10 shows the id once.
 Only a template that opens with `{id}`, `{n}` or `#{n}` is stripped; one like `x--{id}--{title}` is written but read as is.
 `f10 task retitle --all` backfills the existing issues (`--dry-run` lists them first); a second run changes nothing.
-With nothing declared, issue titles stay bare.
+With nothing declared, the host's issues take `{id}: {title}` and `f10 config` shows it with origin `default`; `f10 init` writes the key out, so the choice is visible in `project.md`.
+`title: none` (or `"{title}"`) keeps issue titles bare.
+A driver tracker takes no default, because its titles are its own.
+A project that predates the default starts prefixing new issues while its old ones stay bare; `f10 doctor` says so, and `f10 task retitle --all` backfills them.
 `f10 pr create` and `f10 pr edit` write the lead task's id onto every PR title through the same template, else as `<id>: <title>`.
 A title that already carries the id is left alone, and a bundle's riders follow the id.
 

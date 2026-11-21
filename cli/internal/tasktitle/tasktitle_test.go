@@ -23,6 +23,22 @@ func TestParse(t *testing.T) {
 	}
 }
 
+// the opt-out words parse to the zero template, so PR titles keep their
+// <id>: fallback; any other word is still refused
+func TestParseBare(t *testing.T) {
+	t.Parallel()
+
+	for _, raw := range []string{"none", " none ", "{title}"} {
+		if got, err := Parse(raw); err != nil || got != "" {
+			t.Errorf("Parse(%q) = %q, %v; want the zero template", raw, got, err)
+		}
+	}
+
+	if _, err := Parse("bare"); err == nil {
+		t.Error(`Parse("bare") passed`)
+	}
+}
+
 func TestRender(t *testing.T) {
 	t.Parallel()
 
