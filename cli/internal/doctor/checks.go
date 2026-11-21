@@ -422,8 +422,11 @@ func herdrInfo(ctx context.Context, env *Env, exe string) string {
 		}
 	}
 
-	if res, err := env.Run(ctx, env.Layout.CheckoutRoot, exe, "plugin", "list"); err == nil && res.Code == 0 {
-		info += "; " + herdrPluginState(res.Stdout)
+	res, err := env.Run(ctx, env.Layout.CheckoutRoot, exe, "plugin", "list", "--json", "--plugin="+herdrPlugin)
+	if err == nil && res.Code == 0 {
+		if plugin, ok := herdrPluginState(res.Stdout); ok {
+			info += "; " + plugin
+		}
 	}
 
 	return info
@@ -435,23 +438,42 @@ func firstLine(s string) string {
 	return strings.TrimSpace(line)
 }
 
-// herdrPluginState reads `herdr plugin list`, whose rows read
-// `- <id> (<name>) enabled|disabled [<source>]`.
-func herdrPluginState(list string) string {
-	for line := range strings.Lines(list) {
-		fields := strings.Fields(strings.TrimPrefix(strings.TrimSpace(line), "- "))
-		if len(fields) == 0 || fields[0] != herdrPlugin {
+// herdrPluginState reads `herdr plugin list --json`; only a local source is
+// linked, since `herdr plugin link` is what gives a plugin one.
+func herdrPluginState(out string) (string, bool) {
+	var list struct {
+		Result struct {
+			Plugins []struct {
+				ID      string `json:"plugin_id"`
+				Enabled bool   `json:"enabled"`
+				Source  struct {
+					Kind string `json:"kind"`
+				} `json:"source"`
+			} `json:"plugins"`
+		} `json:"result"`
+	}
+	if json.Unmarshal([]byte(out), &list) != nil {
+		return "", false
+	}
+
+	for _, p := range list.Result.Plugins {
+		if p.ID != herdrPlugin {
 			continue
 		}
 
-		if slices.Contains(fields, "disabled") {
-			return herdrPlugin + " plugin linked, disabled"
+		line := herdrPlugin + " plugin installed"
+		if p.Source.Kind == "local" {
+			line = herdrPlugin + " plugin linked"
 		}
 
-		return herdrPlugin + " plugin linked"
+		if !p.Enabled {
+			line += ", disabled"
+		}
+
+		return line, true
 	}
 
-	return herdrPlugin + " plugin not linked"
+	return herdrPlugin + " plugin not linked", true
 }
 
 func checkHost(ctx context.Context, env *Env) Result {

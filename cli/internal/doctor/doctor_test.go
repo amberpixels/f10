@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,9 +47,7 @@ func newFixture(t *testing.T) *fixture {
 		path: map[string]string{"herdr": "/usr/local/bin/herdr", "gh": "/usr/local/bin/gh"},
 		herdr: map[string]shell.Result{
 			"--version": {Stdout: "herdr 0.9.5\n"},
-			"plugin list": {
-				Stdout: "1 plugin installed:\n- amberpixels.sidebar-plus (Sidebar Plus) enabled [local:/p]\n",
-			},
+			"plugin list --json --plugin=amberpixels.f10": {Stdout: `{"result":{"plugins":[]}}`},
 		},
 		install: map[string]any{
 			"scope": "user", "version": "0.34.0", "lastUpdated": "2020-01-01T00:00:00Z",
@@ -336,7 +335,15 @@ func TestChecks(t *testing.T) {
 func TestHerdrDetail(t *testing.T) {
 	t.Parallel()
 
-	const f10Linked = "1 plugin installed:\n- amberpixels.f10 (f10) enabled [local:/p]\n  config: /c\n"
+	const key = "plugin list --json --plugin=amberpixels.f10"
+
+	plugin := func(enabled bool, kind string) shell.Result {
+		return shell.Result{Stdout: fmt.Sprintf(
+			`{"result":{"plugins":[{"plugin_id":"amberpixels.f10","name":"f10 disabled","enabled":%t,"source":{"kind":%q}}]}}`,
+			enabled,
+			kind,
+		)}
+	}
 
 	cases := []struct {
 		label  string
@@ -349,16 +356,22 @@ func TestHerdrDetail(t *testing.T) {
 		},
 		{"fork, plugin linked", func(f *fixture) {
 			f.herdr["--version"] = shell.Result{Stdout: "herdr 0.9.5-fork.2026-11-21\n"}
-			f.herdr["plugin list"] = shell.Result{Stdout: f10Linked}
+			f.herdr[key] = plugin(true, "local")
 		}, "/usr/local/bin/herdr (herdr 0.9.5-fork.2026-11-21); amberpixels.f10 plugin linked"},
 		{"plugin disabled", func(f *fixture) {
-			f.herdr["plugin list"] = shell.Result{Stdout: "- amberpixels.f10 (f10) disabled [local:/p]\n"}
+			f.herdr[key] = plugin(false, "local")
 		}, "/usr/local/bin/herdr (herdr 0.9.5); amberpixels.f10 plugin linked, disabled"},
+		{"plugin installed from GitHub", func(f *fixture) {
+			f.herdr[key] = plugin(true, "github")
+		}, "/usr/local/bin/herdr (herdr 0.9.5); amberpixels.f10 plugin installed"},
+		{"plugin list not JSON", func(f *fixture) {
+			f.herdr[key] = shell.Result{Stdout: "1 plugin installed:\n"}
+		}, "/usr/local/bin/herdr (herdr 0.9.5)"},
 		{"version fails", func(f *fixture) {
 			f.herdr["--version"] = shell.Result{Code: 2}
 		}, "/usr/local/bin/herdr; amberpixels.f10 plugin not linked"},
 		{"plugin list fails", func(f *fixture) {
-			delete(f.herdr, "plugin list")
+			delete(f.herdr, key)
 		}, "/usr/local/bin/herdr (herdr 0.9.5)"},
 		{"both fail", func(f *fixture) {
 			f.herdr = nil
