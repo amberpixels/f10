@@ -438,8 +438,8 @@ func firstLine(s string) string {
 	return strings.TrimSpace(line)
 }
 
-// herdrPluginState reads `herdr plugin list --json`; only a local source is
-// linked, since `herdr plugin link` is what gives a plugin one.
+// herdrPluginState reads `herdr plugin list --json`. Only a local source
+// counts as linked, because `herdr plugin link` is what gives a plugin one.
 func herdrPluginState(out string) (string, bool) {
 	var list struct {
 		Result struct {

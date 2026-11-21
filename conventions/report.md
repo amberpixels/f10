@@ -24,7 +24,8 @@ If a value would break the highlighting, print it untagged.
 
 1. **Urls are bare.**
    Never `[text](url)`, `<url>`, backticks, or a trailing comma or period.
-   **Paths are absolute**, as the storage root gives them, because upstream herdr and most terminals open only an absolute path on click, and a relative one resolves against the pane's directory, which may not be where f10 wrote the file.
+   **Paths are absolute**, as the storage root gives them, because upstream herdr and most terminals open only an absolute path on click.
+   A relative path would resolve against the pane's directory, which may not be where f10 wrote the file.
 2. **Facts in the block, prose beneath it.**
    Rows carry addressable values only: task id, url, plan path, branch, commit sha, environment.
    The one exception is a `title` row right under `task`: the task's title as the tracker holds it, so the reader recognises the id without opening it.
