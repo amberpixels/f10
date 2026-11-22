@@ -61,9 +61,9 @@ knows_host() {
   grep -qE "^[[:space:]]*${esc}:" "$1"
 }
 
-# spell_digits <name> - each run of digits as the initials of its English words, each its own
-# segment: a two-digit run from 10 reads as a number (44 -> -f-f-, 10 -> -t-), any other run digit
-# by digit (07 -> -z-s-). Must match facts.spellDigits in cli/.
+# spell_digits <name> - each run of digits as the initials of its English words, one segment each.
+# A two-digit run from 10 reads as a number (44 -> -f-f-). Any other run reads digit by digit
+# (07 -> -z-s-). Must match facts.spellDigits in cli/.
 spell_digits() {
   local name="$1" out="" run c i k
   local digits=zottffssen teens=tettffssen tens="  ttffssen"
@@ -101,9 +101,9 @@ spell_digits() {
 # project_prefix <name> - the task id prefix for a project with no declared id format: a short
 # name with a digit as is (r3 -> R3), initials across segments (git-undo -> GU), else the first
 # three characters (herdr -> HER). A prefix with two digits would run into the task number, so the
-# name is derived again with its digits spelled (f10 -> FT, p44 -> PFF). One letter or a leading
-# digit prints nothing. Must match facts.ProjectPrefix in cli/; a parity test there holds both to
-# the same names.
+# name is derived again with its digits spelled (p44 -> PFF). One letter or a leading digit prints
+# nothing. Must match facts.ProjectPrefix in cli/, and a parity test there holds both to the same
+# names.
 project_prefix() {
   local lower seg n=0 first="" initials="" out=""
   lower="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -- '-_.' '   ')"

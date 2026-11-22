@@ -328,9 +328,8 @@ func ProjectPrefix(name string) string {
 
 	prefix := strings.ToUpper(derived.String())
 
-	// two digits run into the task number (P44-49), so derive again with the
-	// digits read as words, as a person says the name: p44 is p-forty-four.
-	// A leading digit stays invalid, however many digits follow it.
+	// Two digits run into the task number (P44-49), so derive again with the
+	// digits read as words: p44 is p-forty-four. A leading digit stays invalid.
 	if countDigits(prefix) >= 2 && !isDigit(rune(prefix[0])) {
 		return ProjectPrefix(spellDigits(name))
 	}
@@ -364,9 +363,9 @@ func countDigits(s string) int {
 
 func isDigit(r rune) bool { return r >= '0' && r <= '9' }
 
-// spellDigits replaces each run of digits with the initials of its words, each
-// its own segment: a two-digit run from 10 reads as a number (44 is f-f, 10 is
-// t), any other run digit by digit (07 is z-s, 2026 is t-z-t-s).
+// spellDigits replaces each run of digits with its words' initials, one segment
+// each. A two-digit run from 10 reads as a number (44 is f-f). Any other run
+// reads digit by digit (07 is z-s).
 func spellDigits(name string) string {
 	var out strings.Builder
 

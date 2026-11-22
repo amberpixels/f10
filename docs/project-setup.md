@@ -22,7 +22,9 @@ The origins are `detected`, `declared (main)`, `declared (worktree)`, `default` 
 `--json` prints it for scripts.
 
 Run it before the first plan.
-With nothing declared, task ids take a prefix derived from the checkout's name (`r3` → `R3`, `git-undo` → `GU`, `herdr` → `HER`, and `p44` → `PFF` because a prefix with two digits reads them as words), and that prefix names every plan file and is how a branch is searched for its task.
+With nothing declared, task ids take a prefix derived from the checkout's name (`r3` → `R3`, `git-undo` → `GU`, `herdr` → `HER`).
+A prefix with two digits reads them as words instead, so `p44` gives `PFF`.
+That prefix names every plan file and is how a branch is searched for its task.
 `f10 init` writes it down, so a rename or a changed rule later cannot leave two eras of plan files side by side.
 A two-letter abbreviation of a one-word name is your choice to make, in `tracker.id`.
 

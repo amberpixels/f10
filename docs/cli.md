@@ -2036,5 +2036,6 @@ Anything else goes through an executable at `.f10/driver`, per [the driver contr
 A driver that declines a verb falls back to the host's issues.
 
 Task ids take the prefix `project.md` declares, else one derived from the main checkout's name: a short name with a digit as is (`r3` → `R3`), initials across hyphens, underscores or dots (`git-undo` → `GU`, `notion-sdk-go` → `NSG`), the first three characters of one word (`herdr` → `HER`).
-A prefix never carries two digits, because they would run into the task number: the name is derived again with each run of digits read as English words, their initials joined in (`f10` → `FT`, `p44` → `PFF`).
+A prefix never carries two digits, because they would run into the task number.
+Such a name is derived again with each run of digits read as English words, so `f10` gives `FT` and `p44` gives `PFF`.
 The prefix names plan files and is how a branch is searched for its task, so it must not move once used: `f10 init` writes it into `project.md`, and `f10 config` shows which it is and where it came from.
