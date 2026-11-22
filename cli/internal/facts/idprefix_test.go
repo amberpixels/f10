@@ -44,7 +44,6 @@ func TestProjectPrefix(t *testing.T) {
 
 	cases := []struct{ name, want string }{
 		// a short name with a digit is already an abbreviation
-		{name: "f10", want: "F10"},
 		{name: "r3", want: "R3"},
 		{name: "k1", want: "K1"},
 		// segments give initials
@@ -57,9 +56,18 @@ func TestProjectPrefix(t *testing.T) {
 		{name: "herdr", want: "HER"},
 		{name: "d3rtyjson", want: "D3R"},
 		{name: "go", want: "GO"},
+		// a prefix never carries two digits, so they are read as words and
+		// give their initials: p-forty-four, f-ten
+		{name: "p44", want: "PFF"},
+		{name: "f10", want: "FT"},
+		{name: "ab12", want: "AT"},
+		{name: "x99yz", want: "XNNY"},
+		{name: "app-2-3", want: "ATT"},
+		{name: "v07", want: "VZS"},
+		{name: "y2026", want: "YTZTS"},
 		// non-ASCII letters are not part of the alphabet an id uses, so a
 		// segment made of them drops out
-		{name: "f10-плагин", want: "F10"},
+		{name: "f10-плагин", want: "FT"},
 		// nothing usable derives nothing: too short, or a leading digit
 		{name: "x", want: ""},
 		{name: "3d-tool", want: ""},
