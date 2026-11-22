@@ -78,7 +78,7 @@ func runHook(ctx context.Context, cmd *cli.Command) error {
 			for _, a := range asknotify.PaneAnswered(ctx, cwd, prompt) {
 				agents.ReleasePane(ctx, io.Discard, a)
 
-				// the user typed letters: name the options they chose
+				// the reply picked options: name them, so the agent need not map them
 				if a.Answer != strings.TrimSpace(prompt) {
 					told = append(told, "f10: this reply answers your ask: "+a.Answer)
 				}

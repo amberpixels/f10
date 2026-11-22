@@ -185,7 +185,7 @@ func AskFromRun(ctx context.Context, r *state.Run, cwd string) (asks.Ask, bool) 
 }
 
 // PaneAnswered claims the open ask of the checkout at cwd for a prompt
-// typed in its pane, a reply of letters resolved to the options they name.
+// typed in its pane, a reply that picks options stored as the options it names.
 // It starts the resume of its drive apart from this hook, which has
 // seconds to live. It returns the asks it closed.
 func PaneAnswered(ctx context.Context, cwd, prompt string) []asks.Ask {
