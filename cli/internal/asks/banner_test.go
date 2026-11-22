@@ -15,9 +15,8 @@ import (
 // testkit sits above asks, so its -update flag is declared here too
 var updateGolden = flag.Bool("update", false, "rewrite the golden files")
 
-// BannerCases are the asks the banner's goldens draw. The inbox's parity
-// test draws the same asks through the walk.
-func BannerCases() map[string]asks.Ask {
+// bannerCases are the asks the banner's goldens draw.
+func bannerCases() map[string]asks.Ask {
 	// in the local zone, so the clock the header prints is stable
 	at := time.Date(2026, 11, 22, 16, 0, 0, 0, time.Local)
 
@@ -56,7 +55,7 @@ func BannerCases() map[string]asks.Ask {
 func TestBannerGolden(t *testing.T) {
 	t.Parallel()
 
-	for name, a := range BannerCases() {
+	for name, a := range bannerCases() {
 		got := asks.Banner(a, "")
 
 		if strings.Contains(got, "\x1b") {

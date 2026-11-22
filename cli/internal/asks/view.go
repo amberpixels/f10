@@ -73,16 +73,13 @@ func Mark(q Shown) string {
 
 // ResolveReply maps a reply typed in the asking agent's pane to the answer
 // the inbox would send: a letter, a number or an option's text for a lone
-// question, "1. a 2. b" or one token per question for several. A question a
-// numbered reply leaves out takes its default. Anything else is not a
-// choice, so the reply stays the user's own words.
+// question, "1. a 2. b" or one token per question for several. A numbered
+// reply also answers a free-text question with its words, and a question
+// with options it leaves out takes its default. Anything else stays the
+// user's own words.
 func ResolveReply(qs []Shown, reply string) (string, bool) {
 	reply = strings.TrimSpace(reply)
 	if reply == "" || len(qs) == 0 {
-		return "", false
-	}
-
-	if !allOptions(qs) {
 		return "", false
 	}
 
@@ -90,6 +87,9 @@ func ResolveReply(qs []Shown, reply string) (string, bool) {
 
 	switch {
 	case ok:
+	case !allOptions(qs):
+		// unnumbered, a free-text question's words cannot be told apart
+		return "", false
 	case len(qs) == 1:
 		values = map[int]string{qs[0].N: reply}
 	default:
@@ -111,6 +111,11 @@ func ResolveReply(qs []Shown, reply string) (string, bool) {
 		stored[i] = q.Stored
 
 		v, given := values[q.N]
+		if !given && len(q.Options) == 0 {
+			// a free-text question has no default to fall back on
+			return "", false
+		}
+
 		if !given {
 			// a recovered default goes as its text, which the stored question takes
 			answers[q.N] = q.Default()

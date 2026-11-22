@@ -118,8 +118,9 @@ The task halts only in these cases:
 
 An answer arrives as your **next prompt**, in plain text, numbered the way the ask was.
 It may be typed in this pane, sent by the drive, or sent from anywhere by `f10 inbox answer` or `/f10:inbox`.
-A reply typed in this pane may be only the options' letters, such as `b` or `1. a 2. b`.
-f10 then adds a context line on that prompt naming the options they chose (`f10: this reply answers your ask: 1. merge now`), and that line is the answer.
+A reply typed in this pane may pick options by letter, number or text, such as `b`, `1. a 2. b` or `1. b 2. 8080` for a free-text second question.
+f10 then adds a context line on that prompt naming the options it chose (`f10: this reply answers your ask: 1. merge now`), and that line is the answer.
+A reply with no such line is the user's own words.
 The first answer to arrive closes the ask in the inbox, whichever way it came.
 
 When the answer arrives:

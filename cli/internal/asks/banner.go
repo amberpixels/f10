@@ -97,19 +97,18 @@ func Banner(a Ask, name string) string {
 }
 
 // bannerFooter tells the user what to type, by the shape of the questions.
+// Only a reply in the asking agent's pane answers, wherever the banner shows.
 func bannerFooter(qs []Shown) string {
-	reply := "Reply in your own words"
+	reply := "Reply"
 
 	switch {
-	case len(qs) > 1 && allOptions(qs):
-		reply = "Reply " + replyExample(qs) + ", or in your own words"
 	case len(qs) > 1:
-		reply = "Reply to each by its number"
+		reply += " " + replyExample(qs)
 	case len(qs) == 1 && len(qs[0].Options) > 0:
-		reply = "Reply " + choices(len(qs[0].Options)) + ", or in your own words"
+		reply += " " + choices(len(qs[0].Options))
 	}
 
-	return reply + " · " + BannerInbox
+	return reply + " in the asking pane · " + BannerInbox
 }
 
 func allOptions(qs []Shown) bool {
@@ -122,11 +121,17 @@ func allOptions(qs []Shown) bool {
 	return true
 }
 
-// replyExample is "1. a 2. b": question i picks option i, or the last.
+// replyExample is "1. a 2. b": question i picks option i, or the last, and
+// a question without options takes "...".
 func replyExample(qs []Shown) string {
 	parts := make([]string, len(qs))
 	for i, q := range qs {
-		parts[i] = strconv.Itoa(q.N) + ". " + string(rune('a'+min(i, len(q.Options)-1)))
+		v := "..."
+		if len(q.Options) > 0 {
+			v = string(rune('a' + min(i, len(q.Options)-1)))
+		}
+
+		parts[i] = strconv.Itoa(q.N) + ". " + v
 	}
 
 	return strings.Join(parts, " ")

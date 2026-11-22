@@ -32,7 +32,9 @@ func TestResolveReply(t *testing.T) {
 		{"numbered partial", two, "2. b", "1. reuse 2. no", true},
 		{"too few tokens", two, "b", "", false},
 		{"bad letter", two, "1. z", "", false},
-		{"free question", mixed, "1. a 2. 8080", "", false},
+		{"free question", mixed, "1. b 2. 8080", "1. re-plan 2. 8080", true},
+		{"free question unnumbered", mixed, "b 8080", "", false},
+		{"free question left out", mixed, "1. b", "", false},
 		// a recovered option goes as its text: the stored question has none
 		{"recovered", recovered, "b", "1. wait", true},
 		{"recovered default", recovered, "a", "1. merge now", true},
