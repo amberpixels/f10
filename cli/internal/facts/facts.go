@@ -329,8 +329,9 @@ func ProjectPrefix(name string) string {
 	prefix := strings.ToUpper(derived.String())
 
 	// two digits run into the task number (P44-49), so derive again with the
-	// digits read as words, as a person says the name: p44 is p-forty-four
-	if countDigits(prefix) >= 2 {
+	// digits read as words, as a person says the name: p44 is p-forty-four.
+	// A leading digit stays invalid, however many digits follow it.
+	if countDigits(prefix) >= 2 && !isDigit(rune(prefix[0])) {
 		return ProjectPrefix(spellDigits(name))
 	}
 

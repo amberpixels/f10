@@ -20,7 +20,7 @@ func TestProjectPrefixParity(t *testing.T) {
 	for _, name := range []string{
 		"f10", "r3", "git-undo", "notion-sdk-go", "lantern", "herdr", "d3rtyjson",
 		"obsidian_daily.orbit", "go", "x", "3d-tool", "f10-плагин",
-		"k1", "p44", "ab12", "x99yz", "app-2-3", "v07", "y2026",
+		"k1", "p44", "ab12", "x99yz", "app-2-3", "v07", "y2026", "10x",
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := filepath.Join(t.TempDir(), name)

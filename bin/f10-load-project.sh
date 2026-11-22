@@ -123,7 +123,7 @@ project_prefix() {
     out="$initials"
   fi
   out="$(printf '%s' "$out" | tr '[:lower:]' '[:upper:]')"
-  if [ "$(printf '%s' "$out" | tr -cd '0-9' | wc -c)" -ge 2 ]; then
+  if [[ "$out" == [A-Z]* ]] && [ "$(printf '%s' "$out" | tr -cd '0-9' | wc -c)" -ge 2 ]; then
     project_prefix "$(spell_digits "$1")"
     return
   fi

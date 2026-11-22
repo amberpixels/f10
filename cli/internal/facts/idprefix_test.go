@@ -71,6 +71,7 @@ func TestProjectPrefix(t *testing.T) {
 		// nothing usable derives nothing: too short, or a leading digit
 		{name: "x", want: ""},
 		{name: "3d-tool", want: ""},
+		{name: "10x", want: ""},
 		{name: "", want: ""},
 		{name: "---", want: ""},
 	}
