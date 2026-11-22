@@ -185,8 +185,9 @@ func AskFromRun(ctx context.Context, r *state.Run, cwd string) (asks.Ask, bool) 
 }
 
 // PaneAnswered claims the open ask of the checkout at cwd for a prompt
-// typed in its pane. It starts the resume of its drive apart from this
-// hook, which has seconds to live. It returns the asks it closed.
+// typed in its pane, a reply of letters resolved to the options they name.
+// It starts the resume of its drive apart from this hook, which has
+// seconds to live. It returns the asks it closed.
 func PaneAnswered(ctx context.Context, cwd, prompt string) []asks.Ask {
 	root := layout.Locate(ctx, cwd).CheckoutRoot
 	if root == "" {
@@ -208,7 +209,12 @@ func PaneAnswered(ctx context.Context, cwd, prompt string) []asks.Ask {
 			continue
 		}
 
-		claimed, err := asks.Claim(dir, a.Key(), asks.ByPane, strings.TrimSpace(prompt), true, time.Now())
+		answer := strings.TrimSpace(prompt)
+		if resolved, ok := asks.ResolveReply(asks.ShownQuestions(a), answer); ok {
+			answer = resolved
+		}
+
+		claimed, err := asks.Claim(dir, a.Key(), asks.ByPane, answer, true, time.Now())
 		if err != nil {
 			continue
 		}

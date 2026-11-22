@@ -55,8 +55,9 @@ type Env struct {
 	// project's id format; empty when it cannot tell.
 	TaskID func(ctx context.Context, cwd, url string) string
 	// PromptTyped is told of every prompt submitted, with the session's
-	// cwd: one typed in an asking agent's pane answers its ask.
-	PromptTyped func(ctx context.Context, cwd, prompt string)
+	// cwd: one typed in an asking agent's pane answers its ask. What it
+	// returns reaches the model as context on that prompt.
+	PromptTyped func(ctx context.Context, cwd, prompt string) string
 	// StatusText is what `f10 status [token]` prints for a session, and
 	// whether the model must take the turn: a question to relay, or a token
 	// that names no task.
@@ -104,7 +105,9 @@ func Dispatch(ctx context.Context, raw []byte, env *Env) []byte {
 		}
 
 		if env.PromptTyped != nil && p.Cwd != "" {
-			env.PromptTyped(ctx, p.Cwd, p.Prompt)
+			if text := env.PromptTyped(ctx, p.Cwd, p.Prompt); text != "" {
+				return promptContext(p.Event, text)
+			}
 		}
 	case "UserPromptExpansion":
 		// the typed path, which the Skill tool never sees. A status for this
@@ -492,4 +495,16 @@ func titled(text string) string {
 	pad := max(w-25, 2) // 12 columns of title, 13 of tag
 
 	return "f10 · status" + strings.Repeat(" ", pad) + "no model turn\n" + strings.Repeat("─", w) + "\n" + text
+}
+
+// promptContext is the hook output that adds text to the model's context.
+func promptContext(event, text string) []byte {
+	out, err := json.Marshal(map[string]any{
+		"hookSpecificOutput": map[string]any{"hookEventName": event, "additionalContext": text},
+	})
+	if err != nil {
+		return nil
+	}
+
+	return append(out, '\n')
 }

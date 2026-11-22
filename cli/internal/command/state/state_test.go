@@ -162,7 +162,7 @@ func TestAskWarnsOnChoicesInProse(t *testing.T) {
 		t.Fatalf("inbox = %+v, %v; want one ask with its context", open, err)
 	}
 
-	if !bytes.Contains(out.Bytes(), []byte("ASK · FT-12")) {
+	if !bytes.Contains(out.Bytes(), []byte(asks.AskIcon+" FT-12")) {
 		t.Errorf("stdout = %q, want the banner", out.String())
 	}
 }

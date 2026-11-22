@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/urfave/cli/v3"
 
@@ -71,10 +72,19 @@ func runHook(ctx context.Context, cmd *cli.Command) error {
 		StorageRoot: func(ctx context.Context, cwd string) string { return layout.Locate(ctx, cwd).StorageRoot.Path() },
 		TaskID:      hookTaskID,
 		StatusText:  HookStatusText,
-		PromptTyped: func(ctx context.Context, cwd, prompt string) {
+		PromptTyped: func(ctx context.Context, cwd, prompt string) string {
+			var told []string
+
 			for _, a := range asknotify.PaneAnswered(ctx, cwd, prompt) {
 				agents.ReleasePane(ctx, io.Discard, a)
+
+				// the user typed letters: name the options they chose
+				if a.Answer != strings.TrimSpace(prompt) {
+					told = append(told, "f10: this reply answers your ask: "+a.Answer)
+				}
 			}
+
+			return strings.Join(told, "\n")
 		},
 		Profile:   hookProfile,
 		Observers: []observe.Observer{recorder},

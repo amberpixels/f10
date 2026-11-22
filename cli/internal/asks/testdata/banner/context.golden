@@ -1,0 +1,12 @@
+󱜸 FT-30 · asked at ci · 4:00 PM
+────────────────────────────────────────────────────────────────────────
+Tests are red on the pull request for a reason that comes from main, not
+from this change, so a fix here would be reverted by the next catchup.
+· cause  the fixture key was removed on main.
+· log    https://github.com/amberpixels/app/actions/runs/4455/job/1356.
+
+What should happen with the red tests?
+  a) leave them red until main is fixed  (default)
+  b) fix them here
+
+Reply a or b, or in your own words · /f10:inbox from the main session

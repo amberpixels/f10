@@ -1,0 +1,10 @@
+󱜸 FT-50 · asked at ship · 4:00 PM
+────────────────────────────────────────────────────────────────────────
+The pull request is a draft and must not merge until the new volume exists
+and the data is copied to /mnt/data.
+
+Hold the drive's merge until you finish the cutover?
+  a) hold, I merge after the cutover  (default, recommended)
+  b) merge now
+
+Reply a or b, or in your own words · /f10:inbox from the main session

@@ -293,7 +293,7 @@ func TestListAsksShowsContext(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		want := " Checks are green.\n"
+		want := "\nChecks are green.\n"
 		if asJSON {
 			want = `"context": "Checks are green."`
 		}
@@ -371,7 +371,7 @@ func TestInboxContextOncePerSession(t *testing.T) {
 	testkit.Raised(t, dir, asks.Ask{Task: "FT-2", Root: "/r", Worktree: "/w2"})
 
 	out := string(inboxcmd.InboxContext(dir, stateDir, "s1", "UserPromptSubmit", "/w2", "/r"))
-	if !strings.Contains(out, "ASK · FT-1 · at review") || strings.Contains(out, "FT-2") ||
+	if !strings.Contains(out, "FT-1 · asked at review") || strings.Contains(out, "FT-2") ||
 		!strings.Contains(out, `"hookEventName":"UserPromptSubmit"`) {
 		t.Errorf("first prompt:\n%s", out)
 	}
@@ -403,7 +403,7 @@ func TestInboxContextKeepsToTheProject(t *testing.T) {
 	}
 
 	out = string(inboxcmd.InboxContext(dir, t.TempDir(), "s1", "UserPromptSubmit", "", ""))
-	if !strings.Contains(out, "ASK · a:FT-1") || !strings.Contains(out, "ASK · b:FT-2") {
+	if !strings.Contains(out, asks.AskIcon+" a:FT-1") || !strings.Contains(out, asks.AskIcon+" b:FT-2") {
 		t.Errorf("outside any project:\n%s", out)
 	}
 }

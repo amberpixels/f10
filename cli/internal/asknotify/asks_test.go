@@ -118,6 +118,18 @@ func TestPaneAnswered(t *testing.T) {
 		t.Errorf("ask = %+v, open %v", got, isOpen)
 	}
 
+	// a letter typed in the pane is stored as the option it names
+	b := testkit.Raised(
+		t,
+		dir,
+		asks.Ask{Task: "FT-3", Root: "/r", Worktree: root, Text: "1. Merge? [wait | merge now]"},
+	)
+	asknotify.PaneAnswered(context.Background(), repo, "b")
+
+	if got, _, _ := asks.Get(dir, b.Key()); got.Answer != "1. merge now" {
+		t.Errorf("letter stored as %q", got.Answer)
+	}
+
 	// finish's question is the drive's: a prompt in the pane leaves it open
 	if open, _ := asks.Open(dir); len(open) != 1 || open[0].Task != "FT-2" {
 		t.Errorf("open = %+v", open)
