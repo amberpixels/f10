@@ -32,8 +32,10 @@ Examples are a judge's rethink, a resolve `ask` and a deploy confirmation.
    Number the questions, put each one's options in brackets, and list the default or recommended answer first: `1. Reuse the saved plan? [reuse | re-plan] 2. Deploy to staging? [yes | no]`.
    Choices go in the brackets, never as "Options: 1) ..." in the question, because the inbox offers only bracketed options as choices.
    Background the user needs, such as what failed, a log url or the shas involved, goes in the second argument.
-   That way `f10 inbox` and `/f10:inbox` show it apart from the questions.
-   The banner leaves the context out, so keep the one fact the answer turns on in the question itself.
+   That way the banner and the inbox show it above the questions, one sentence per line.
+   Still keep the one fact the answer turns on in the question itself, because the inbox walk asks each question on its own.
+   Each option says what happens when it is chosen, such as `merge now - the app reads an empty volume until the copy runs`, because no layout can make a vague option clear.
+   The context and the options name things as the user knows them, never by a shorthand you coined during the run.
    If the command warns that a question lists choices in its text, run the ask again with them in brackets, because the new ask replaces the first.
 2. **Stop blocked, in the same call.**
    Append `; f10-state.sh set <phase> blocked [<leaf>]`.
@@ -42,9 +44,9 @@ Examples are a judge's rethink, a resolve `ask` and a deploy confirmation.
 3. **End the turn.**
    `f10-state.sh ask` prints the ask as a banner, rendered by f10.
    Print that banner verbatim as the final message, under a facts block that carries the task, inside a code fence.
-   Claude Code collapses Bash output, so the banner shows only when you print it, and the fence keeps its `━` rules from rendering as a heading.
+   Claude Code collapses Bash output, so the banner shows only when you print it, and the fence keeps its rule and its indents as f10 drew them.
    Never type the banner by hand, because a hand-typed one drifts from the text the answers are read against.
-   The banner ends with where an answer goes, so add nothing after it.
+   The banner ends with what to type and where, so add nothing after it.
    Never add a command meant for another session, such as `f10 forward`, `f10 status` or `f10 start --answer`.
    The driving session reads the ask through `f10 status <task-id>` and already knows its own way back.
 
@@ -116,6 +118,9 @@ The task halts only in these cases:
 
 An answer arrives as your **next prompt**, in plain text, numbered the way the ask was.
 It may be typed in this pane, sent by the drive, or sent from anywhere by `f10 inbox answer` or `/f10:inbox`.
+A reply typed in this pane may pick options by letter, number or text, such as `b`, `1. a 2. b` or `1. b 2. 8080` for a free-text second question.
+f10 then adds a context line on that prompt naming the options it chose (`f10: this reply answers your ask: 1. merge now`), and that line is the answer.
+A reply with no such line is the user's own words.
 The first answer to arrive closes the ask in the inbox, whichever way it came.
 
 When the answer arrives:

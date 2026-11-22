@@ -16,36 +16,6 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
-// shownQuestion is a question as the walk puts it: the stored one, or the
-// one recovered from its prose. Stored is what the answer is sent against.
-type shownQuestion struct {
-	asks.Question
-
-	Stored    asks.Question
-	Recovered bool
-	Context   string // background recovered from the question's prose
-	Note      string // why the default is the default, from the prose
-}
-
-// shownQuestions are a's questions as the walk shows and asks them, the
-// same list for both.
-func shownQuestions(a asks.Ask) []shownQuestion {
-	qs := a.Questions
-	if len(qs) == 0 {
-		qs = asks.Parse(a.Text)
-	}
-
-	out := make([]shownQuestion, len(qs))
-	for i, q := range qs {
-		out[i] = shownQuestion{Question: q, Stored: q}
-		if r, ok := asks.Recover(q); ok {
-			out[i] = shownQuestion{Question: r.Question, Stored: q, Recovered: true, Context: r.Context, Note: r.Note}
-		}
-	}
-
-	return out
-}
-
 // walkView draws an ask for the walk. Its styles come from a renderer bound
 // to the writer, so a pipe or NO_COLOR gets the same layout as plain text.
 type walkView struct {
@@ -76,7 +46,7 @@ const (
 
 // ask prints a's header, its context and its questions, each option
 // lettered and the default marked. name is the task as the list labels it.
-func (v walkView) ask(a asks.Ask, qs []shownQuestion, name string, now time.Time) {
+func (v walkView) ask(a asks.Ask, qs []asks.Shown, name string, now time.Time) {
 	header := name
 	if a.Skill != "" {
 		header += v.faint.Render(" · at " + a.Skill)
@@ -90,19 +60,13 @@ func (v walkView) ask(a asks.Ask, qs []shownQuestion, name string, now time.Time
 		v.println(" " + v.faint.Render(a.URL))
 	}
 
-	// question 1's recovered background reads as the ask's own, and a later
-	// question's stays beside that question
-	v.context(a.Context)
+	v.context(asks.ContextOf(a, qs))
 
 	for i, q := range qs {
-		if i == 0 {
-			v.context(q.Context)
-		}
-
 		fmt.Fprintln(v.w)
 
 		if i > 0 {
-			v.context(q.Context)
+			v.context(asks.Sentences(q.Context))
 		}
 
 		lead := " " + strconv.Itoa(q.N) + ". "
@@ -115,12 +79,7 @@ func (v walkView) ask(a asks.Ask, qs []shownQuestion, name string, now time.Time
 		for i, o := range q.Options {
 			words := v.words(o, v.plain)
 			if i == 0 {
-				mark := "(default)"
-				if q.Note != "" {
-					mark = "(default, " + q.Note + ")"
-				}
-
-				marked := v.words(mark, v.faint)
+				marked := v.words(asks.Mark(q), v.faint)
 				marked[0].gap = 2
 				words = append(words, marked...)
 			}
@@ -131,32 +90,27 @@ func (v walkView) ask(a asks.Ask, qs []shownQuestion, name string, now time.Time
 	}
 }
 
-// labelled is a context sentence opening with a one-word label, "Log: ...".
-var labelled = regexp.MustCompile(`^([A-Za-z][\w-]{0,11}):\s+(\S.*)$`)
-
 // context prints one sentence per line. Labelled sentences become rows
 // with their labels in a column.
-func (v walkView) context(text string) {
-	sentences := asks.Sentences(text)
-
+func (v walkView) context(sentences []string) {
 	col := 0
 
 	for _, s := range sentences {
-		if m := labelled.FindStringSubmatch(s); m != nil {
-			col = max(col, len(m[1]))
+		if label, _, ok := asks.Labelled(s); ok {
+			col = max(col, len(label))
 		}
 	}
 
 	for _, s := range sentences {
-		m := labelled.FindStringSubmatch(s)
-		if m == nil {
+		label, rest, ok := asks.Labelled(s)
+		if !ok {
 			v.lines(v.words(s, v.faint), contextIndent, contextIndent, v.faint)
 
 			continue
 		}
 
-		lead := contextIndent + "· " + fmt.Sprintf("%-*s", col, strings.ToLower(m[1])) + "  "
-		v.lines(v.words(m[2], v.faint), lead, strings.Repeat(" ", render.VisibleWidth(lead)), v.faint)
+		lead := contextIndent + "· " + fmt.Sprintf("%-*s", col, strings.ToLower(label)) + "  "
+		v.lines(v.words(rest, v.faint), lead, strings.Repeat(" ", render.VisibleWidth(lead)), v.faint)
 	}
 }
 

@@ -1,0 +1,12 @@
+󱜸 FT-12 · asked at resolve · 4:00 PM
+────────────────────────────────────────────────────────────────────────
+1. Reuse the saved plan?
+     a) reuse  (default)
+     b) re-plan
+
+2. Deploy to staging once the pull request is green, before the review
+   settles?
+     a) yes  (default)
+     b) no - wait for the review
+
+Reply 1. a 2. b in the asking pane · /f10:inbox from the main session

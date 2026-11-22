@@ -276,20 +276,13 @@ func linksOf(w io.Writer, inbox asks.Inbox) *render.TaskLinks {
 	return links
 }
 
-// printAsk draws a as its banner, then how long it waited, its task's url
-// and its context, which the banner leaves out.
+// printAsk draws a as its banner, then how long it waited and its task's url.
 func printAsk(w io.Writer, links *render.TaskLinks, a asks.Ask, named bool, now time.Time) {
 	fmt.Fprint(w, asks.Banner(a, askName(links, a, named)))
-	fmt.Fprintf(w, " asked %s ago\n", now.Sub(a.AskedAt).Round(time.Minute))
+	fmt.Fprintf(w, "asked %s ago\n", now.Sub(a.AskedAt).Round(time.Minute))
 
 	if a.URL != "" {
-		fmt.Fprintf(w, " %s\n", a.URL)
-	}
-
-	if a.Context != "" {
-		for _, line := range render.Wrap(a.Context, max(0, ui.Width(w)-1)) {
-			fmt.Fprintf(w, " %s\n", line)
-		}
+		fmt.Fprintf(w, "%s\n", a.URL)
 	}
 }
 
@@ -390,7 +383,7 @@ func walk(
 			fmt.Fprintln(w)
 		}
 
-		qs := shownQuestions(a)
+		qs := asks.ShownQuestions(a)
 		view.ask(a, qs, askName(links, a, project == ""), time.Now())
 
 		var values []string
@@ -451,7 +444,7 @@ func wireValue(q asks.Question, resolved string) string {
 // askLine reads one question's answer until it resolves to an option, by
 // letter, number or text. Enter takes the default, and s skips the ask. A
 // recovered question takes free text too, its options being a guess.
-func askLine(w io.Writer, in *bufio.Reader, q shownQuestion) (string, error) {
+func askLine(w io.Writer, in *bufio.Reader, q asks.Shown) (string, error) {
 	for {
 		// the default is option a, as the walk letters them
 		prompt := fmt.Sprintf("%d> ", q.N)

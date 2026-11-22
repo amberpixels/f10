@@ -45,7 +45,7 @@ func TestWalkViewWraps(t *testing.T) {
 
 	for _, width := range []int{40, 80} {
 		v, out := viewAt(width, false)
-		v.ask(a, shownQuestions(a), "FT-1", time.Now())
+		v.ask(a, asks.ShownQuestions(a), "FT-1", time.Now())
 
 		text := out.String()
 		words := strings.Fields(a.Context + " " + a.Questions[0].Text + " " + strings.Join(a.Questions[0].Options, " "))
@@ -85,7 +85,7 @@ func TestWalkViewLabelRows(t *testing.T) {
 	t.Parallel()
 
 	v, out := viewAt(0, false)
-	v.context("Red for a reason from main. Cause: the key is gone. Log: see the run.")
+	v.context(asks.Sentences("Red for a reason from main. Cause: the key is gone. Log: see the run."))
 
 	want := "   Red for a reason from main.\n" +
 		"   · cause  the key is gone.\n" +
@@ -101,7 +101,7 @@ func TestWalkViewShortensLinkedURL(t *testing.T) {
 	t.Parallel()
 
 	v, out := viewAt(0, true)
-	v.context("Log: " + longURL)
+	v.context([]string{"Log: " + longURL})
 
 	got := out.String()
 	plain := ansi.ReplaceAllString(got, "")
@@ -110,7 +110,7 @@ func TestWalkViewShortensLinkedURL(t *testing.T) {
 	}
 
 	v, out = viewAt(0, false)
-	v.context("Log: " + longURL)
+	v.context([]string{"Log: " + longURL})
 
 	if !strings.Contains(out.String(), longURL) {
 		t.Errorf("piped url printed %q", out.String())
@@ -132,7 +132,7 @@ func TestWalkViewContextPerQuestion(t *testing.T) {
 	}
 
 	v, out := viewAt(0, false)
-	v.ask(a, shownQuestions(a), "FT-1", time.Now())
+	v.ask(a, asks.ShownQuestions(a), "FT-1", time.Now())
 
 	got := out.String()
 	for _, want := range []string{
@@ -142,6 +142,53 @@ func TestWalkViewContextPerQuestion(t *testing.T) {
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("walk printed:\n%s\nwant it to hold %q", got, want)
+		}
+	}
+}
+
+// The walk and the banner show the same context, question texts, letters
+// and default for one ask, a recovered one included.
+func TestWalkMatchesBanner(t *testing.T) {
+	t.Parallel()
+
+	for _, a := range []asks.Ask{
+		{
+			Task: "FT-1", Context: "Lint is red. Cause: main.",
+			Text: "1. Reuse the plan? [reuse | re-plan] 2. Deploy? [yes | no - wait]",
+		},
+		{Task: "FT-2", Text: "1. The draft must not merge yet. Hold it? Options: 1) hold (recommended) 2) merge now"},
+	} {
+		v, out := viewAt(0, false)
+		v.ask(a, asks.ShownQuestions(a), a.Task, time.Now())
+
+		walk := strings.Join(strings.Fields(ansi.ReplaceAllString(out.String(), "")), " ")
+		banner := strings.Join(strings.Fields(asks.Banner(a, "")), " ")
+
+		qs := asks.ShownQuestions(a)
+
+		var parts []string
+
+		for _, s := range asks.ContextOf(a, qs) {
+			if _, rest, ok := asks.Labelled(s); ok {
+				s = rest
+			}
+
+			parts = append(parts, s)
+		}
+
+		for _, q := range qs {
+			parts = append(parts, q.Text)
+			for i, o := range q.Options {
+				parts = append(parts, string(rune('a'+i))+") "+o)
+			}
+
+			parts = append(parts, asks.Mark(q))
+		}
+
+		for _, p := range parts {
+			if !strings.Contains(walk, p) || !strings.Contains(banner, p) {
+				t.Errorf("%s: %q missing:\nwalk:   %s\nbanner: %s", a.Task, p, walk, banner)
+			}
 		}
 	}
 }

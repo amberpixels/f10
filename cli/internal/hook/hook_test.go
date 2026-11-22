@@ -605,13 +605,34 @@ func TestPromptSubmitTellsPromptTyped(t *testing.T) {
 	cwd := t.TempDir()
 
 	var got []string
-	env.PromptTyped = func(_ context.Context, dir, prompt string) { got = append(got, dir, prompt) }
+	env.PromptTyped = func(_ context.Context, dir, prompt string) string {
+		got = append(got, dir, prompt)
+
+		return ""
+	}
 
 	raw := []byte(`{"hook_event_name":"UserPromptSubmit","session_id":"s9","cwd":"` + cwd + `","prompt":"1. yes"}`)
-	Dispatch(context.Background(), raw, env)
+	if out := Dispatch(context.Background(), raw, env); out != nil {
+		t.Errorf("a prompt that answers nothing printed %s", out)
+	}
 
 	if len(got) != 2 || got[0] != cwd || got[1] != "1. yes" {
 		t.Errorf("PromptTyped got %q", got)
+	}
+
+	// what it returns reaches the model as context on that prompt
+	env.PromptTyped = func(context.Context, string, string) string { return "f10: this reply answers your ask: 1. yes" }
+
+	var out struct {
+		Specific struct {
+			Event   string `json:"hookEventName"`
+			Context string `json:"additionalContext"`
+		} `json:"hookSpecificOutput"`
+	}
+
+	if err := json.Unmarshal(Dispatch(context.Background(), raw, env), &out); err != nil ||
+		out.Specific.Event != "UserPromptSubmit" || !strings.Contains(out.Specific.Context, "1. yes") {
+		t.Errorf("hook printed %+v, %v", out, err)
 	}
 }
 
