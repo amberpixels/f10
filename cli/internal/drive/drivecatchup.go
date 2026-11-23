@@ -344,17 +344,29 @@ func (in *DriveInput) verified(ctx context.Context, r *DriveRun, job *verifyJob)
 // the drive record so a resumed drive leases its push the same way. A branch
 // origin is ahead of is refused: the lease is read after those commits
 // landed, so a rebase would push over them. Ahead of origin is the drive's
-// own unpushed work, and fine.
+// own unpushed work, and fine. An unspent record whose origin has not moved
+// keeps its lease, because only the drive's catchup turns rewrote the branch since.
 func (in *DriveInput) recordCatchup(ctx context.Context, r *DriveRun, key branchmeta.Key) error {
 	rec, err := stack.CatchupRecord(ctx, in.Main, r.O.Path, r.O.Branch, key, in.Now(), &in.view().fetch)
 	if err != nil {
 		return err
 	}
 
-	if rec.Origin != "" {
+	prior := r.LastCatchup
+	if prior != nil && !prior.Spent && prior.Origin == rec.Origin {
+		rec.Integrated = prior.Integrated
+	} else if rec.Origin != "" {
 		held, err := gitx.IsAncestor(ctx, r.O.Path, rec.Origin, "refs/heads/"+r.O.Branch)
 		if err != nil {
 			return fmt.Errorf("reading whether %s holds origin/%s: %w", r.O.Branch, r.O.Branch, err)
+		}
+
+		// a pull would merge the commits the drive's rebase rewrote back in, and
+		// a cherry-pick alone never puts origin's tip in the branch, so the push is the user's
+		if !held && prior != nil && !prior.Spent && prior.Integrated && prior.Origin != "" {
+			return fmt.Errorf("origin/%s moved since the catchup read it at %s: cherry-pick %s..%s into %s, "+
+				"push it with --force-with-lease=refs/heads/%s:%s yourself, then rerun the drive",
+				r.O.Branch, gitx.ShortSHA(prior.Origin), prior.Origin, rec.Origin, r.O.Path, r.O.Branch, rec.Origin)
 		}
 
 		if !held {
