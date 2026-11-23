@@ -628,32 +628,48 @@ func TestDriveFinishesItsOwnConflictedCatchupOnAPushedBranch(t *testing.T) {
 }
 
 // The same pass with origin moved since the catchup read it: someone pushed
-// to the PR, so the drive halts, naming the commits to bring in rather than
-// a pull that would merge the rewritten ones back.
+// to the PR. Over the drive's own rewrite the halt names the commits to
+// cherry-pick and the leased push, because a pull would merge the rewritten
+// commits back in and a cherry-pick alone never puts origin's tip in the
+// branch. A branch the drive never rewrote keeps the advice to bring origin in.
 func TestDriveRefusesItsOwnCatchupOnceOriginMoved(t *testing.T) {
-	fx := newDriveFixture(t, "GH-1", "ship")
-	fx.adoptsGH1()
-	b := &binaryCatchupFake{stops: []bool{false}, method: stack.MethodNone}
-	fx.binaryCatchup(t, b, t.TempDir())
-	fx.savesCatchup(t, drivestore.Catchup{Target: "main0", Origin: "p1", Base: "main", Integrated: true})
-	fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
+	for name, tc := range map[string]struct {
+		integrated bool
+		want       string
+	}{
+		"rewritten by the drive": {
+			integrated: true,
+			want: "origin/GH-1 moved since the catchup read it at p1: cherry-pick p1..p2 into /code/repo.GH-1, " +
+				"push it with --force-with-lease=refs/heads/GH-1:p2 yourself",
+		},
+		"never rewritten": {want: "bring origin/GH-1 into /code/repo.GH-1"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			fx := newDriveFixture(t, "GH-1", "ship")
+			fx.adoptsGH1()
+			b := &binaryCatchupFake{stops: []bool{false}, method: stack.MethodNone}
+			fx.binaryCatchup(t, b, t.TempDir())
+			fx.savesCatchup(t, drivestore.Catchup{
+				Target: "main0", Origin: "p1", Base: "main", Integrated: tc.integrated,
+			})
+			fx.writeShipStop(t, "partial", "pr", 4, catchupNext)
 
-	fx.f.Script("git rev-parse -q --verify refs/remotes/origin/GH-1", "p2")
-	fx.f.Script("git fetch origin", "")
-	fx.f.Fail("git merge-base --is-ancestor p2 refs/heads/GH-1", shell.Result{Code: 1})
-	fx.f.Script(testkit.WsList, unopened, listing("GH-1", "idle"))
+			fx.f.Script("git rev-parse -q --verify refs/remotes/origin/GH-1", "p2")
+			fx.f.Script("git fetch origin", "")
+			fx.f.Fail("git merge-base --is-ancestor p2 refs/heads/GH-1", shell.Result{Code: 1})
+			fx.f.Script(testkit.WsList, unopened, listing("GH-1", "idle"))
 
-	err := fx.drive(t)
-	out := fx.out.String()
+			err := fx.drive(t)
+			out := fx.out.String()
 
-	if testkit.ExitCode(err) != ui.ExitHalted ||
-		!strings.Contains(out, "origin/GH-1 moved since the catchup read it") ||
-		!strings.Contains(out, "cherry-pick p1..origin/GH-1 into /code/repo.GH-1") {
-		t.Errorf("err = %v\n%s", err, out)
-	}
+			if testkit.ExitCode(err) != ui.ExitHalted || !strings.Contains(out, tc.want) {
+				t.Errorf("err = %v\n%s", err, out)
+			}
 
-	if b.integrals != 0 || fx.f.Called("git push") {
-		t.Errorf("integrated %d times, calls %q", b.integrals, fx.f.Calls)
+			if b.integrals != 0 || fx.f.Called("git push") {
+				t.Errorf("integrated %d times, calls %q", b.integrals, fx.f.Calls)
+			}
+		})
 	}
 }
 

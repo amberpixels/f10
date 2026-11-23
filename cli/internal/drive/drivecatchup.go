@@ -361,11 +361,12 @@ func (in *DriveInput) recordCatchup(ctx context.Context, r *DriveRun, key branch
 			return fmt.Errorf("reading whether %s holds origin/%s: %w", r.O.Branch, r.O.Branch, err)
 		}
 
-		// a pull would merge the commits the drive's rebase rewrote back in
-		if !held && prior != nil && !prior.Spent && prior.Origin != "" {
-			return fmt.Errorf("origin/%s moved since the catchup read it at %s: cherry-pick %s..origin/%s "+
-				"into %s, then rerun the drive", r.O.Branch, gitx.ShortSHA(prior.Origin), prior.Origin,
-				r.O.Branch, r.O.Path)
+		// a pull would merge the commits the drive's rebase rewrote back in, and
+		// a cherry-pick alone never puts origin's tip in the branch, so the push is the user's
+		if !held && prior != nil && !prior.Spent && prior.Integrated && prior.Origin != "" {
+			return fmt.Errorf("origin/%s moved since the catchup read it at %s: cherry-pick %s..%s into %s, "+
+				"push it with --force-with-lease=refs/heads/%s:%s yourself, then rerun the drive",
+				r.O.Branch, gitx.ShortSHA(prior.Origin), prior.Origin, rec.Origin, r.O.Path, r.O.Branch, rec.Origin)
 		}
 
 		if !held {
