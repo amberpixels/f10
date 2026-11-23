@@ -103,13 +103,13 @@ Judging the process itself is not the audit's job.
    There is no cap per question, because an audit's value is the whole picture, and the merge controls the volume.
 6. **Merge and verify**, done by the main agent.
    - Findings that several reviewers raised about the same code merge into one, keeping the best-cited evidence.
-   - Findings that share a target design group into a **theme**.
+   - Findings that share a target design group into a **cluster**.
    - Re-read every claimed bug and every `high` finding at its `where:`, and mark it `verified` when the code shows it, or `reported` when one link could not be traced.
    - Drop a finding with no `file:line`.
      Drop one whose only evidence is a process metric, such as rounds, halts or minutes.
      Drop one the code at HEAD already settles.
      List each of these drops with the finding's id and the reason.
-   - Order the themes into **phases**: a theme goes after the themes its findings depend on, and within a phase the cheaper or riskier-to-postpone theme goes first.
+   - Order the clusters into **phases**: a cluster goes after the clusters its findings depend on, and within a phase the cheaper or riskier-to-postpone cluster goes first.
    - No findings is a valid result, so never pad the report to fill it.
      A reviewer that reports nothing in its area has reported, and it has not failed.
 7. **Write the report.**
@@ -123,7 +123,7 @@ Judging the process itself is not the audit's job.
    - `## Verdict`: a few lines on the state of the code over the window.
    - `## Bugs`: one block per bug, each marked `verified` or `reported`.
    - `## Pain map`: the pain map's lines as `f10 audit map` printed them, so a reader sees why the partition looks as it does.
-   - `## Phases`: one `### Phase <n>` per phase, its themes beneath, and each theme's findings with every field from point 5.
+   - `## Phases`: one `### Phase <n>` per phase, its clusters beneath, and each cluster's findings with every field from point 5.
    - `## Dropped as deliberate`: one line per drop, with its `file:line` and the plan or lore citation.
    - `## Dropped at merge`: one line per finding point 6 dropped, with its id and the reason.
      The reason is one of no `file:line`, a metric only, or settled at HEAD.
@@ -133,35 +133,35 @@ Judging the process itself is not the audit's job.
    A section with nothing in it is written as its heading with `- none` (`## Bugs - none`).
 
 Report per `conventions/report.md` with an `audit` row, the report's path.
-Under the block, give the count of bugs (verified and reported), themes and phases.
+Under the block, give the count of bugs (verified and reported), clusters and phases.
 
 ## Capture
 
-The capture's size follows the findings' weight, because a task per minor theme costs more to plan, ship and later audit than the fixes themselves.
-A theme is **heavy** when it holds a `high` finding or a finding of size `large`.
-Every other theme is **minor**.
+The capture's size follows the findings' weight, because a task per minor cluster costs more to plan, ship and later audit than the fixes themselves.
+A cluster is **heavy** when it holds a `high` finding or a finding of size `large`.
+Every other cluster is **minor**.
 
 - **No findings**: offer no capture, and say so in one line under the report.
-- **Only minor themes**, the default case: offer one task, or nothing.
-- **At least one heavy theme**: offer one task per heavy theme plus one task for all the minor themes, under a parent, or one task for everything, or nothing.
+- **Only minor clusters**, the default case: offer one task, or nothing.
+- **At least one heavy cluster**: offer one task per heavy cluster plus one task for all the minor clusters, under a parent, or one task for everything, or nothing.
 
 Make the offer once, with `AskUserQuestion`.
 
 **One task** holds the verdict, a checklist of about 3 to 7 items, and the not-recommended list as its out-of-scope.
-Each item is one theme or one bug, with its `where:` lines.
-If more than 7 items would remain, merge the cheapest themes into one item (cosmetic prose and comment fixes, for example).
+Each item is one cluster or one bug, with its `where:` lines.
+If more than 7 items would remain, merge the cheapest clusters into one item (cosmetic prose and comment fixes, for example).
 Items go in phase order, so the checklist reads top to bottom.
 Run the **capture** step with this body as its description, as one task, never split.
 
 **A parent with subtasks** runs the **capture** step with the report as its description, split as that step's point 1 describes:
 
 - The parent holds the verdict, the bugs, and the not-recommended list as its out-of-scope.
-- The minor themes, and any bug in no heavy theme, go into one subtask shaped like the single task above.
+- The minor clusters, and any bug in no heavy cluster, go into one subtask shaped like the single task above.
   That subtask is created first, in phase 1.
-- Each heavy theme becomes its own subtask, with its findings and their `where:` lines in its body.
-- A phase-1 subtask carries no `After:` line, unless its theme depends on another phase-1 theme.
-- A later subtask's `After:` names the theme its findings depend on, else the last subtask created in the phase before.
-  `After:` holds one id, so a theme that depends on several names the one created last and lists the others in its body.
+- Each heavy cluster becomes its own subtask, with its findings and their `where:` lines in its body.
+- A phase-1 subtask carries no `After:` line, unless its cluster depends on another phase-1 cluster.
+- A later subtask's `After:` names the cluster its findings depend on, else the last subtask created in the phase before.
+  `After:` holds one id, so a cluster that depends on several names the one created last and lists the others in its body.
 - Create the subtasks in phase order, so every `After:` names a task that already exists.
 
 `/f10:start` on a parent starts each subtask once the task its `After:` names has a commit.
