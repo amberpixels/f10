@@ -587,10 +587,10 @@ func (fx *driveFixture) savesCatchup(t *testing.T, rec drivestore.Catchup) {
 	fx.in.Args.Resume = fx.in.Rec.Number
 }
 
-// The drive's next pass after a conflicted catchup on a pushed branch: the
-// agent finished the rebase, so origin's copy (p1) is no longer in the
-// branch, but origin has not moved since the catchup read it. The rewrite is
-// the drive's own, so it verifies and pushes leased on p1 instead of halting.
+// The drive's next pass after a conflicted catchup on a pushed branch. The
+// agent finished the rebase, so origin's copy (p1) is no longer in the branch.
+// Origin has not moved since the catchup read it, so the rewrite is the
+// drive's own: it verifies and pushes leased on p1 instead of halting.
 func TestDriveFinishesItsOwnConflictedCatchupOnAPushedBranch(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "ship")
 	fx.adoptsGH1()
@@ -628,10 +628,10 @@ func TestDriveFinishesItsOwnConflictedCatchupOnAPushedBranch(t *testing.T) {
 }
 
 // The same pass with origin moved since the catchup read it: someone pushed
-// to the PR. Over the drive's own rewrite the halt names the commits to
-// cherry-pick and the leased push, because a pull would merge the rewritten
-// commits back in and a cherry-pick alone never puts origin's tip in the
-// branch. A branch the drive never rewrote keeps the advice to bring origin in.
+// to the PR. Over the drive's own rewrite, the halt names the commits to
+// cherry-pick and the leased push. A pull would merge the rewritten commits
+// back in, and a cherry-pick alone never puts origin's tip in the branch.
+// A branch the drive never rewrote keeps the advice to bring origin in.
 func TestDriveRefusesItsOwnCatchupOnceOriginMoved(t *testing.T) {
 	for name, tc := range map[string]struct {
 		integrated bool
