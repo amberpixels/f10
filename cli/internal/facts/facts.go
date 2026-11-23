@@ -327,11 +327,90 @@ func ProjectPrefix(name string) string {
 	}
 
 	prefix := strings.ToUpper(derived.String())
+
+	// Two digits run into the task number (P44-49), so derive again with the
+	// digits read as words: p44 is p-forty-four. A leading digit stays invalid.
+	if countDigits(prefix) >= 2 && !isDigit(rune(prefix[0])) {
+		return ProjectPrefix(spellDigits(name))
+	}
+
 	if !taskid.ValidPrefix(prefix) {
 		return ""
 	}
 
 	return prefix
+}
+
+// The first letters of the English words for digits, teens and tens: only
+// initials reach a prefix, so the words themselves are not needed.
+const (
+	digitInitials = "zottffssen" // zero one two ... nine
+	teenInitials  = "tettffssen" // ten eleven twelve ... nineteen
+	tensInitials  = "  ttffssen" // _ _ twenty thirty ... ninety
+)
+
+func countDigits(s string) int {
+	n := 0
+
+	for _, r := range s {
+		if isDigit(r) {
+			n++
+		}
+	}
+
+	return n
+}
+
+func isDigit(r rune) bool { return r >= '0' && r <= '9' }
+
+// spellDigits replaces each run of digits with its words' initials, one segment
+// each. A two-digit run from 10 reads as a number (44 is f-f). Any other run
+// reads digit by digit (07 is z-s).
+func spellDigits(name string) string {
+	var out strings.Builder
+
+	for i := 0; i < len(name); {
+		if !isDigit(rune(name[i])) {
+			out.WriteByte(name[i])
+			i++
+
+			continue
+		}
+
+		j := i
+		for j < len(name) && isDigit(rune(name[j])) {
+			j++
+		}
+
+		run := name[i:j]
+
+		var initials []byte
+
+		switch {
+		case len(run) == 2 && run[0] == '1':
+			initials = []byte{teenInitials[run[1]-'0']}
+		case len(run) == 2 && run[0] != '0':
+			initials = []byte{tensInitials[run[0]-'0']}
+			if run[1] != '0' {
+				initials = append(initials, digitInitials[run[1]-'0'])
+			}
+		default:
+			for k := range len(run) {
+				initials = append(initials, digitInitials[run[k]-'0'])
+			}
+		}
+
+		for _, c := range initials {
+			out.WriteByte('-')
+			out.WriteByte(c)
+		}
+
+		out.WriteByte('-')
+
+		i = j
+	}
+
+	return out.String()
 }
 
 // fallbackFor answers for a contract field no layer declared: detection,

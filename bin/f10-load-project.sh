@@ -61,10 +61,49 @@ knows_host() {
   grep -qE "^[[:space:]]*${esc}:" "$1"
 }
 
+# spell_digits <name> - each run of digits as the initials of its English words, one segment each.
+# A two-digit run from 10 reads as a number (44 -> -f-f-). Any other run reads digit by digit
+# (07 -> -z-s-). Must match facts.spellDigits in cli/.
+spell_digits() {
+  local name="$1" out="" run c i k
+  local digits=zottffssen teens=tettffssen tens="  ttffssen"
+  i=0
+  while [ "$i" -lt "${#name}" ]; do
+    c="${name:i:1}"
+    case "$c" in
+      [0-9])
+        run=""
+        while [ "$i" -lt "${#name}" ] && [[ "${name:i:1}" == [0-9] ]]; do
+          run="$run${name:i:1}"
+          i=$((i + 1))
+        done
+        if [ "${#run}" = 2 ] && [ "${run:0:1}" = 1 ]; then
+          out="$out-${teens:${run:1:1}:1}"
+        elif [ "${#run}" = 2 ] && [ "${run:0:1}" != 0 ]; then
+          out="$out-${tens:${run:0:1}:1}"
+          [ "${run:1:1}" = 0 ] || out="$out-${digits:${run:1:1}:1}"
+        else
+          for ((k = 0; k < ${#run}; k++)); do
+            out="$out-${digits:${run:k:1}:1}"
+          done
+        fi
+        out="$out-"
+        ;;
+      *)
+        out="$out$c"
+        i=$((i + 1))
+        ;;
+    esac
+  done
+  printf '%s' "$out"
+}
+
 # project_prefix <name> - the task id prefix for a project with no declared id format: a short
-# name with a digit as is (f10 -> F10), initials across segments (git-undo -> GU), else the first
-# three characters (herdr -> HER). One letter or a leading digit prints nothing. Must match
-# facts.projectPrefix in cli/; a parity test there holds both to the same names.
+# name with a digit as is (r3 -> R3), initials across segments (git-undo -> GU), else the first
+# three characters (herdr -> HER). A prefix with two digits would run into the task number, so the
+# name is derived again with its digits spelled (p44 -> PFF). One letter or a leading digit prints
+# nothing. Must match facts.ProjectPrefix in cli/, and a parity test there holds both to the same
+# names.
 project_prefix() {
   local lower seg n=0 first="" initials="" out=""
   lower="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -- '-_.' '   ')"
@@ -84,6 +123,10 @@ project_prefix() {
     out="$initials"
   fi
   out="$(printf '%s' "$out" | tr '[:lower:]' '[:upper:]')"
+  if [[ "$out" == [A-Z]* ]] && [ "$(printf '%s' "$out" | tr -cd '0-9' | wc -c)" -ge 2 ]; then
+    project_prefix "$(spell_digits "$1")"
+    return
+  fi
   printf '%s' "$out" | grep -qE '^[A-Z][A-Z0-9]{1,9}$' && printf '%s\n' "$out"
 }
 
