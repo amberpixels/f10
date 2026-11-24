@@ -15,7 +15,7 @@ import (
 // changes a grade without a diff here.
 const graderModel = "claude-sonnet-5-5"
 
-// graderBudget caps one grading call; a few files of prose cost cents.
+// graderBudget caps one grading call. A few files of prose cost cents.
 const graderBudget = "0.5"
 
 const graderInstruction = `You grade an output against numbered rubric lines.
@@ -28,8 +28,8 @@ const graderSchema = `{"type":"object","properties":{"lines":{"type":"array","it
 	`"properties":{"line":{"type":"integer"},"pass":{"type":"boolean"},"reason":{"type":"string"}},` +
 	`"required":["line","pass","reason"]}}},"required":["lines"]}`
 
-// A Rubric is what a scenario's rubric check grades: the run's final reply,
-// files in the repo, or both, against each of Lines.
+// A Rubric grades the run's final reply, files in the repo or both against
+// each of Lines.
 type Rubric struct {
 	Lines []string `json:"lines"`
 	Reply bool     `json:"reply"`

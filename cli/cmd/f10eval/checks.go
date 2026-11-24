@@ -16,8 +16,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
-// A Check is one assertion on what a scenario's run left in its repo. All
-// but rubric check artifacts by rule; rubric has a model grade wording.
+// A Check is one assertion on what a scenario's run left in its repo. Every
+// check reads artifacts by rule, except rubric, where a model grades wording.
 type Check struct {
 	Name   string        `json:"name"`
 	Pass   bool          `json:"pass"`

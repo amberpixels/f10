@@ -3,7 +3,8 @@
 Skills, steps, modes and conventions make up half of what f10 does, and `just test` checks none of it.
 A model update or a prose edit can change what `plan`, `ship`, `review` or `judge` produce, and no test fails.
 `just eval` runs real sessions against small fixture repos and checks the artifacts they leave behind, not their wording.
-The exception is the `rubric` check: a pinned model grades the wording against lines the scenario states, for output that is prose, such as a brainstorm reply or a plan's quality.
+The one exception is the `rubric` check, in which a pinned model grades the wording against lines the scenario states.
+It covers output that is prose, such as a brainstorm reply or a plan's quality.
 
 It costs model spend and several minutes per scenario. Run it on demand and before a release, never in CI.
 
@@ -65,9 +66,9 @@ A history scenario gives the run a past to plan against:
 
 A rubric scenario lists `rubric` in its `checks` and grades prose against lines it states:
 
-- `rubric`: `{lines, reply, files}`. `lines` are the statements the output must meet, each graded on its own. `reply: true` grades the run's final reply, and `files` grades files by their path in the fixture repo (`.f10/plans/EV-1.md`). A scenario needs at least one of the two.
-- The runner loads a scenario only when the check and the `rubric` field come together, so a rubric that would never run, or a check with nothing to grade, fails before any spend.
-- The grader is one `claude -p` call on a pinned model (`graderModel` in `cli/cmd/f10eval/rubric.go`), a full id rather than an alias, so a model release never changes a grade without a diff. It runs in an empty directory with no tools, settings, MCP servers or skills, and its own system prompt. Its prompt holds only the rubric lines and the graded output, so a change in the grader's context never reads as a change in the skill. `--bare` would isolate it further, but it signs in only with an API key.
+- `rubric`: `{lines, reply, files}`. `lines` are the statements the output must meet, each graded on its own. `reply: true` grades the run's final reply. `files` grades files by their path in the fixture repo, such as `.f10/plans/EV-1.md`. A scenario needs at least one of the two.
+- The runner loads a scenario only when the check and the `rubric` field come together. So a rubric that would never run fails before any spend, and so does a check with nothing to grade.
+- The grader is one `claude -p` call on a pinned model, `graderModel` in `cli/cmd/f10eval/rubric.go`. It is a full id rather than an alias, so a model release never changes a grade without a diff. It runs in an empty directory with no tools, settings, MCP servers or skills, and its own system prompt. Its prompt holds only the rubric lines and the graded output, so a change in the grader's context never reads as a change in the skill. `--bare` would isolate it further, but it signs in only with an API key.
 - A missing reply or file fails the check by name, without a grader call.
 - Unlike every other check, a rubric can pass one run and fail the next on the same output. Read the reasons in the report before calling a flipped line a regression.
 

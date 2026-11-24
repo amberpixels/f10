@@ -589,9 +589,9 @@ func claudeArgs(root string, o options, prompt string, p agentctl.Profile) []str
 	return append(args, prompt)
 }
 
-// droppedEnv is unset for every claude call the runner makes: CLAUDECODE so
-// a run started inside a session is not refused as nested, and
-// ANTHROPIC_API_KEY so claude uses the logged-in subscription, never the API.
+// droppedEnv is unset for every claude call the runner makes. CLAUDECODE goes
+// so a run started inside a session is not refused as nested.
+// ANTHROPIC_API_KEY goes so claude uses the subscription, never the API.
 var droppedEnv = []string{"CLAUDECODE=", "ANTHROPIC_API_KEY="}
 
 func claudeEnv(environ []string) []string {
