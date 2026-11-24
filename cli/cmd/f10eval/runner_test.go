@@ -72,10 +72,12 @@ func TestReportNameAndArgs(t *testing.T) {
 func TestRunEnv(t *testing.T) {
 	t.Parallel()
 
-	env := runEnv([]string{"HOME=/h", "CLAUDECODE=1", "PATH=/bin"}, "/tmp/x")
+	env := runEnv([]string{"HOME=/h", "CLAUDECODE=1", "ANTHROPIC_API_KEY=sk-x", "PATH=/bin"}, "/tmp/x")
 
-	if slices.ContainsFunc(env, func(kv string) bool { return strings.HasPrefix(kv, "CLAUDECODE=") }) {
-		t.Errorf("CLAUDECODE kept: %q", env)
+	for _, dropped := range []string{"CLAUDECODE=", "ANTHROPIC_API_KEY="} {
+		if slices.ContainsFunc(env, func(kv string) bool { return strings.HasPrefix(kv, dropped) }) {
+			t.Errorf("%s kept: %q", dropped, env)
+		}
 	}
 
 	for _, want := range []string{"HOME=/h", "PATH=/bin", "F10_USER_DIR=/tmp/x/user", "F10_LEDGER=/tmp/x/f10.db"} {
