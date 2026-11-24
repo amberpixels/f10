@@ -54,7 +54,7 @@ func TestReportNameAndArgs(t *testing.T) {
 	}
 
 	o := options{permission: "acceptEdits", budget: "5"}
-	args := claudeArgs("/root", o, "/f10:plan T-1", high)
+	args := claudeArgs("/root", o, "/f10:plan T-1", high, "")
 	want := []string{
 		"-p", "--plugin-dir", "/root", "--output-format", "json", "--permission-mode", "acceptEdits",
 		"--max-budget-usd", "5", "--model", "opus", "--effort", "high", "/f10:plan T-1",
@@ -64,7 +64,8 @@ func TestReportNameAndArgs(t *testing.T) {
 		t.Errorf("args %q, want %q", args, want)
 	}
 
-	if args := claudeArgs("/root", o, "p", def); slices.Contains(args, "--model") || slices.Contains(args, "--effort") {
+	args = claudeArgs("/root", o, "p", def, "")
+	if slices.Contains(args, "--model") || slices.Contains(args, "--effort") {
 		t.Errorf("the default passes no flag: %q", args)
 	}
 }

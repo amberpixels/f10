@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -122,7 +123,7 @@ func TestScenariosLoad(t *testing.T) {
 	root := filepath.Join("..", "..", "..", "evals", "scenarios")
 
 	for _, s := range list {
-		if s.Task == "" || s.Prompt == "" {
+		if s.Task == "" || slices.Contains(s.turns(), "") {
 			t.Errorf("%s: no task or prompt", s.Name)
 		}
 

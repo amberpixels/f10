@@ -37,6 +37,7 @@ var checks = map[string]func(ctx context.Context, dir string, s Scenario) Check{
 	"lore":     checkLore,
 	"history":  checkHistory,
 	"rubric":   checkRubric,
+	"captured": checkCaptured,
 }
 
 func result(name string, problems []string) Check {
@@ -249,6 +250,11 @@ func checkVerdict(_ context.Context, dir string, s Scenario) Check {
 
 	var problems []string
 
+	// the newest file is the highest n, which a lexical glob misorders past 9
+	slices.SortFunc(files, func(a, b string) int { return cmp.Compare(verdictNumber(a), verdictNumber(b)) })
+
+	last := ""
+
 	for _, f := range files {
 		found := ""
 
@@ -261,9 +267,154 @@ func checkVerdict(_ context.Context, dir string, s Scenario) Check {
 		if !slices.Contains(verdicts, found) {
 			problems = append(problems, fmt.Sprintf("%s: verdict %q", filepath.Base(f), found))
 		}
+
+		last = found
+	}
+
+	if s.WantVerdict != "" && last != s.WantVerdict {
+		problems = append(problems, fmt.Sprintf("verdict %q, want %q", last, s.WantVerdict))
 	}
 
 	return result("verdict", problems)
+}
+
+func verdictNumber(path string) int {
+	n, _ := strconv.Atoi(strings.TrimSuffix(filepath.Base(path), ".md"))
+
+	return n
+}
+
+// Captured is the shape a capture run's tasks must have: how many it made,
+// how many of them are parents and subtasks, and how many carry After:.
+type Captured struct {
+	Tasks    int `json:"tasks"`
+	Parents  int `json:"parents"`
+	Subtasks int `json:"subtasks"`
+	After    int `json:"after"`
+}
+
+var (
+	parentRE = regexp.MustCompile(`^Parent:\s*([A-Z]+-\d+)`)
+	afterRE  = regexp.MustCompile(`^After:\s*\[?([A-Z]+-\d+)`)
+)
+
+// A capturedTask is one task file the fixture driver wrote.
+type capturedTask struct {
+	id, parent, after string
+}
+
+// checkCaptured reads the task files the run added to the fixture tracker,
+// never the tracker through f10, so it does not depend on the binary under
+// test. A dependent must wait on a sibling that waits on nothing, which is
+// what makes a split three levels deep.
+func checkCaptured(ctx context.Context, dir string, s Scenario) Check {
+	if s.Captured == nil {
+		return result("captured", []string{"the scenario has no captured field"})
+	}
+
+	tasks, err := capturedTasks(ctx, dir)
+	if err != nil {
+		return result("captured", []string{err.Error()})
+	}
+
+	byID := map[string]capturedTask{}
+	parents := map[string]bool{}
+	subtasks, after := 0, 0
+
+	for _, c := range tasks {
+		byID[c.id] = c
+
+		if c.parent != "" {
+			parents[c.parent] = true
+			subtasks++
+		}
+
+		if c.after != "" {
+			after++
+		}
+	}
+
+	var problems []string
+
+	want, got := *s.Captured, Captured{Tasks: len(tasks), Parents: len(parents), Subtasks: subtasks, After: after}
+	if got != want {
+		problems = append(problems, "want "+describeCaptured(want))
+	}
+
+	for _, c := range tasks {
+		if c.parent != "" && byID[c.parent].id == "" {
+			problems = append(problems, fmt.Sprintf("%s: parent %s is not a task the run made", c.id, c.parent))
+		}
+
+		if c.after == "" {
+			continue
+		}
+
+		base, ok := byID[c.after]
+
+		switch {
+		case !ok:
+			problems = append(problems, fmt.Sprintf("%s: After: %s is not a task the run made", c.id, c.after))
+		case base.parent != c.parent:
+			problems = append(problems, fmt.Sprintf("%s: After: %s sits under another parent", c.id, c.after))
+		case base.after != "":
+			problems = append(problems,
+				fmt.Sprintf("%s: After: %s, which waits on %s itself", c.id, c.after, base.after))
+		}
+	}
+
+	// what was found goes in the detail on a pass too, so two reports compare
+	problems = append(problems, "found "+describeCaptured(got))
+	c := result("captured", problems)
+	c.Pass = len(problems) == 1
+
+	return c
+}
+
+func describeCaptured(c Captured) string {
+	return fmt.Sprintf("%d tasks, %d parents, %d subtasks, %d After:", c.Tasks, c.Parents, c.Subtasks, c.After)
+}
+
+// capturedTasks is every tasks/*.md the fixture's initial commit did not
+// hold. The initial commit, not the index, because a ship later in the
+// same run may commit the task files.
+func capturedTasks(ctx context.Context, dir string) ([]capturedTask, error) {
+	fixture := map[string]bool{}
+
+	out, err := git(ctx, dir, "log", "--max-parents=0", "--format=", "--name-only", "--", "tasks").Output()
+	if err != nil {
+		return nil, fmt.Errorf("git log: %w", err)
+	}
+
+	for name := range strings.FieldsSeq(string(out)) {
+		fixture[filepath.Base(name)] = true
+	}
+
+	files, _ := filepath.Glob(filepath.Join(dir, "tasks", "*.md"))
+
+	var tasks []capturedTask
+
+	for _, f := range files {
+		if fixture[filepath.Base(f)] {
+			continue
+		}
+
+		c := capturedTask{id: strings.TrimSuffix(filepath.Base(f), ".md")}
+
+		eachLine(f, func(line string) {
+			if m := parentRE.FindStringSubmatch(line); m != nil && c.parent == "" {
+				c.parent = m[1]
+			}
+
+			if m := afterRE.FindStringSubmatch(line); m != nil {
+				c.after = m[1]
+			}
+		})
+
+		tasks = append(tasks, c)
+	}
+
+	return tasks, nil
 }
 
 // checkIntent checks presence only; the schema is checkLore's.
