@@ -229,6 +229,7 @@ var Steps = map[string]StepClass{
 	"audit":           Own,
 	"brainstorm":      Own,
 	"explain":         Own,
+	"propose":         Own,
 	"standup":         Own,
 }
 

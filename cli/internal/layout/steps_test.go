@@ -32,7 +32,7 @@ var (
 	}
 	nonFlowSteps = []string{
 		"audit", "brainstorm", "capture", "capture-adapter", "ci", "debug", "explain",
-		"fetch", "investigate", "plan", "review-ci", "review-host", "review-local", "stale", "standup",
+		"fetch", "investigate", "plan", "propose", "review-ci", "review-host", "review-local", "stale", "standup",
 	}
 )
 
