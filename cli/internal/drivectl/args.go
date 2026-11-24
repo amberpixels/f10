@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
+	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/textx"
 )
@@ -156,8 +157,11 @@ func flagList(flags []DriveFlag) string {
 type DriveArgs struct {
 	Tasks    []string // as typed, any :profile cut off; with span, the two ends of a range
 	Profiles []string // each task's :profile as typed, indexed like tasks, "" for none
-	Agent    string   // --agent as typed, or --model as a model-only profile: every task's unless its own names one
-	model    string   // --model as typed, kept apart so both flags on one line are refused
+	// Bases are each task's typed bases, indexed like tasks, nil for none.
+	// They are the entry before it in a chain, then each @base, as typed.
+	Bases    [][]string
+	Agent    string // --agent as typed, or --model as a model-only profile: every task's unless its own names one
+	model    string // --model as typed, kept apart so both flags on one line are refused
 	Span     bool
 	Flow     string   // --flow, or local for --local; "" for default
 	Pace     string   // --pace, "" for the branch's or the project's
@@ -178,6 +182,11 @@ type PlanArgs struct {
 	JSON  bool     // --json
 	Hint  bool     // --hint: one line, or nothing
 	Pass  []string // the start flags to carry onto the proposed command
+}
+
+// Ordered reports a typed base on any task: a chain's , or an @.
+func (a *DriveArgs) Ordered() bool {
+	return slices.ContainsFunc(a.Bases, func(b []string) bool { return len(b) > 0 })
 }
 
 func (a *DriveArgs) set(name, value string) error {
@@ -339,12 +348,15 @@ func ParseDriveArgs(args []string) (DriveArgs, error) {
 		case strings.HasPrefix(tok, "-"):
 			return DriveArgs{}, fmt.Errorf("unknown flag %s: start takes %s", tok, flagList(DriveFlags))
 		default:
-			task, p, err := splitProfile(tok)
+			entries, err := parseEntries(tok)
 			if err != nil {
 				return DriveArgs{}, err
 			}
 
-			a.Tasks, a.Profiles = append(a.Tasks, task), append(a.Profiles, p)
+			for _, e := range entries {
+				a.Tasks, a.Profiles = append(a.Tasks, e.task), append(a.Profiles, e.profile)
+				a.Bases = append(a.Bases, e.bases)
+			}
 		}
 	}
 
@@ -379,6 +391,10 @@ func ParseDriveArgs(args []string) (DriveArgs, error) {
 		return DriveArgs{}, RefusePairs(a.Flow, "plan", "", "")
 	case (a.After != "" || a.Base != "") && (len(a.Tasks) != 1 || a.Span):
 		return DriveArgs{}, errors.New("--after and --base set one task's base: start that task alone")
+	case (a.After != "" || a.Base != "") && a.Ordered():
+		return DriveArgs{}, fmt.Errorf("--after, --base and @ each name %s's base: give it one way", a.Tasks[0])
+	case a.Span && a.Ordered():
+		return DriveArgs{}, errors.New("a range takes no order: list the ids, A,B or C@A")
 	case a.Span && len(a.Tasks) != 2:
 		return DriveArgs{}, errors.New("a range is one id, --, one id: GH-12 -- GH-15")
 	case a.Span && slices.ContainsFunc(a.Profiles, func(p string) bool { return p != "" }):
@@ -452,6 +468,8 @@ func ParsePropose(args []string) (DriveArgs, error) {
 	switch {
 	case a.Span:
 		return DriveArgs{}, errors.New("start --propose takes ids or a parent, not a range")
+	case a.Ordered():
+		return DriveArgs{}, errors.New("start --propose sets the order itself: list the ids with spaces, no , or @")
 	case a.Resume > 0, len(a.Answers) > 0, a.Fore, a.Every != DefaultEvery,
 		a.PlanOnly, a.After != "", a.Base != "":
 		return DriveArgs{}, errors.New("start --propose takes ids or a parent, --facts, --json, --hint " +
@@ -536,6 +554,72 @@ func DriveNumber(s string) (int, error) {
 	}
 
 	return n, nil
+}
+
+// An entry is one task of a token, with its profile and its typed bases.
+type entry struct {
+	task, profile string
+	bases         []string
+}
+
+// parseEntries reads a token as a chain of entries, each one shaped
+// <task>[-suffix][@<base>...][:profile]. A comma stacks an entry on the one
+// before it, and each @ names one more base. A url is taken whole, because
+// it may hold either mark.
+func parseEntries(tok string) ([]entry, error) {
+	if strings.Contains(tok, "://") {
+		task, p, err := splitProfile(tok)
+
+		return []entry{{task: task, profile: p}}, err
+	}
+
+	var (
+		out  []entry
+		prev string
+	)
+
+	for link := range strings.SplitSeq(tok, ",") {
+		if link == "" {
+			return nil, fmt.Errorf("%s: an empty entry beside a comma: A,B stacks B on A", tok)
+		}
+
+		head, p, err := splitProfile(link)
+		if err != nil {
+			return nil, err
+		}
+
+		if prof, bases, ok := strings.Cut(p, "@"); ok {
+			return nil, fmt.Errorf("%s: the profile comes last: %s@%s:%s", link, head, bases, prof)
+		}
+
+		parts := strings.Split(head, "@")
+		if parts[0] == "" {
+			return nil, fmt.Errorf("%s names no task before @: C@A", link)
+		}
+
+		var bases []string
+		if prev != "" {
+			bases = append(bases, prev)
+		}
+
+		for _, b := range parts[1:] {
+			switch _, suffix := ref.SplitSuffix(b); {
+			case b == "":
+				return nil, fmt.Errorf("%s: an @ names no base: C@A", link)
+			case suffix != "":
+				return nil, fmt.Errorf("%s: a base is a task id, with no -%s", link, suffix)
+			case slices.ContainsFunc(bases, func(x string) bool { return strings.EqualFold(x, b) }):
+				return nil, fmt.Errorf("%s names %s as a base twice", link, b)
+			}
+
+			bases = append(bases, b)
+		}
+
+		prev, _ = ref.SplitSuffix(parts[0])
+		out = append(out, entry{task: parts[0], profile: p, bases: bases})
+	}
+
+	return out, nil
 }
 
 // splitProfile cuts a task token's :profile off: the first colon whose

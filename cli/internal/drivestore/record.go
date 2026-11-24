@@ -39,11 +39,13 @@ type Record struct {
 
 // A Task is one task of a drive, as typed, and where it stands.
 type Task struct {
-	ID     string `yaml:"id"`               // as typed, a suffix included
-	Agent  string `yaml:"agent,omitempty"`  // its own :profile as typed
-	After  string `yaml:"after,omitempty"`  // the base its body's After: line named, as an id
-	Skill  string `yaml:"skill,omitempty"`  // in flight, "" for none
-	Queued bool   `yaml:"queued,omitempty"` // held back by the drive's cap; Phase says it too, for older readers
+	ID    string `yaml:"id"`              // as typed, a suffix included
+	Agent string `yaml:"agent,omitempty"` // its own :profile as typed
+	After string `yaml:"after,omitempty"` // its one base as an id, typed or from its body
+	// Join is a join's bases, as ids: it waits for each to merge
+	Join   []string `yaml:"join,omitempty"`
+	Skill  string   `yaml:"skill,omitempty"`  // in flight, "" for none
+	Queued bool     `yaml:"queued,omitempty"` // held back by the drive's cap; Phase says it too, for older readers
 	// Phase is where the task stands: one of the Phase names, "" in a record
 	// written before it was kept
 	Phase   string   `yaml:"phase,omitempty"`

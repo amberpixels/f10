@@ -114,6 +114,19 @@ func ParseStart(argv []string) (StartArgs, error) {
 		}
 	}
 
+	if kind == DiscussStart {
+		for _, w := range words {
+			if ordered(w) {
+				return StartArgs{}, errors.New(
+					"--discuss proposes the order itself: list the ids with spaces, no , or @")
+			}
+
+			if !ref.IsID(w) {
+				break
+			}
+		}
+	}
+
 	once.Token, words = words[0], words[1:]
 
 	// a shape is enough here, because the API resolves each id
@@ -143,6 +156,22 @@ func listed(words []string) int {
 	}
 
 	return len(words)
+}
+
+// ordered reports a word that is ids joined by , or @, an order a flow
+// start reads.
+func ordered(w string) bool {
+	if !strings.ContainsAny(w, ",@") {
+		return false
+	}
+
+	for part := range strings.FieldsFuncSeq(w, func(r rune) bool { return r == ',' || r == '@' }) {
+		if !ref.IsID(part) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // errDriveFlag is a flag only a flow start takes.

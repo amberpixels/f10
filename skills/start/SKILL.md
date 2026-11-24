@@ -1,8 +1,8 @@
 ---
 name: start
-description: "f10 start skill - start tasks without leaving this session, each in its own worktree, Herdr workspace and agent, run through the project's flow by the f10 daemon: plan, ship, then finish when the flow ends in it; a list, a range or a parent runs every task, a dependent once its base has a commit (under --plan, once its base's plan is saved), pausing once an agent asks and nothing else can move; --discuss or a PR link opens one agent that summarises and waits. Use when the user says \"/f10:start <task-id | ids | id -- id | parent | PR url | #n> [--plan | --discuss | --local | --flow <name>] [--pace <name>] [--after <task-id> | --base <branch>] [--task <id>] [--agent <profile> | --model <model>] [--parallel N]\", asks to start, run or ship one or several tasks in new worktrees, to run a parent's subtasks, to discuss a task before planning, to pick up someone else's PR, or asks what to bundle, run in parallel or order before starting a set of tasks, which --discuss answers: its agent reads the tasks and proposes it."
+description: "f10 start skill - start tasks without leaving this session, each in its own worktree, Herdr workspace and agent, run through the project's flow by the f10 daemon: plan, ship, then finish when the flow ends in it; a list, a range or a parent runs every task, ordered by the body's After: lines or typed on the line (A,B stacks B on A, C@A@B waits for A and B to merge), a dependent once its base has a commit (under --plan, once its base's plan is saved), pausing once an agent asks and nothing else can move; --discuss or a PR link opens one agent that summarises and waits. Use when the user says \"/f10:start <task-id | ids | id -- id | parent | PR url | #n> [--plan | --discuss | --local | --flow <name>] [--pace <name>] [--after <task-id> | --base <branch>] [--task <id>] [--agent <profile> | --model <model>] [--parallel N]\", asks to start, run or ship one or several tasks in new worktrees, to run a parent's subtasks, to discuss a task before planning, to pick up someone else's PR, or asks what to bundle, run in parallel or order before starting a set of tasks, which --discuss answers: its agent reads the tasks and proposes it."
 allowed-tools: Bash, AskUserQuestion, Read, Grep
-argument-hint: "<id>[:profile]... | <id> -- <id> | <PR url> [--plan | --discuss] [--pace <name>]"
+argument-hint: "<id>[@<base>...][:profile]... | <id>,<id>... | <id> -- <id> | <PR url> [--plan | --discuss] [--pace <name>]"
 ---
 
 # f10 · start
@@ -33,6 +33,12 @@ It runs no step.
   It is keyed on the lead, and any member's id reopens it.
   Its finish leaves every rider open, and the report names them.
   `<id> -- <id>` is a range.
+  It ships the members in one PR under the lead's branch, and nothing orders the work inside it.
+- **An order** on the line, which wins over the tasks' `After:` lines and is never written to the tracker:
+  - `A,B` stacks B on A, and `A,B,C` is a chain, the same as `A B@A C@B`.
+  - `C@A` names A as C's base, so `A,B C@A` puts two entries on one base.
+  - `C@A@B` is a **join**: it waits until A and B have both merged, then branches from the default branch, and its flow must end in finish.
+  - A space means no dependency, and a profile comes last: `C@A:opus`.
 - `<id>:<profile>`: that task's agent profile, which wins over `--agent`.
 - `<PR url>` or `#n`: pick that PR up; its branch is checked out tracking origin's and linked to its task, and the agent summarises it and waits.
   A merged or closed PR is picked up the same way, for a post-merge review: checked out at the commit it landed as, on a local-only branch named for the task, the agent told the PR's state; `--plan` is refused on it.
@@ -89,6 +95,7 @@ With no draft among them, the parent goes to `f10 start` as typed, which runs ev
    Other ids and flags stay as given.
    Nothing left to start: say so in one line and stop.
 7. **The hint**: with two ids or more, or a parent, in the arguments as typed, run `f10 start <the arguments as typed> --hint` in the same Bash call as point 1.
+   Skip it when the arguments carry an order (`,` or `@`), because a proposal sets the order itself and refuses one.
    It runs before point 6 builds the expanded list, so it reads the typed arguments, and the proposal expands a parent itself.
    It prints one line only when bundling would save a CI wait, with the command that saves it.
    The rules read saved plans (a small plan's size, its `Areas:` line), because a plain start reads no code.

@@ -27,7 +27,8 @@ func StartCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "start",
 		Usage: "start tasks: each in a worktree, a Herdr workspace and an agent, run through the flow",
-		ArgsUsage: "<id>[-suffix][:profile]... | <id>+<id>... | <id> -- <id> | <PR url | #n> [note...]  " +
+		ArgsUsage: "<id>[-suffix][@<base>...][:profile]... | <id>+<id>... | <id>,<id>... | <id> -- <id> | " +
+			"<PR url | #n> [note...]  " +
 			drive.DriveUsage() + " [--discuss] [--task TASK-ID]\n" +
 			"   f10 start <id>... | <parent> --propose [--facts FILE] [--json] [--hint]",
 		Description: "Each task runs the default flow, or the one --flow or --local names (f10 flow lists them): " +
@@ -37,9 +38,12 @@ func StartCommand() *cli.Command {
 			"A parent runs its subtasks in After: order, its open drafts left out.\n" +
 			"--pace NAME runs every task at that pace (f10 config lists them), recorded on each branch so a rerun keeps it; " +
 			"a pace skips or tunes the flow's entries and never adds one.\n" +
-			"A task's base is --after or --base, for one task, else its branch's recorded --after, else its body's After: line; " +
-			"every task whose base branch has a commit runs, its finish waits for the base's, " +
+			"A task's base is --after or --base, for one task, else its branch's recorded base, else the order typed, " +
+			"else its body's After: line; every task whose base branch has a commit runs, its finish waits for the base's, " +
 			"and a halt stops only its dependents.\n" +
+			"The order typed: A,B stacks B on A (A,B,C is A B@A C@B), C@A names A as C's base, and a space means none. " +
+			"C@A@B is a join: it waits until A and B have merged, then branches from the default branch, " +
+			"and a flow without finish refuses it. A profile comes last (C@A:opus). Nothing is written to the tracker.\n" +
 			"--parallel N caps the tasks running a skill at once (default: half the CPU cores, 2 to 8), " +
 			"and the agents open to twice N; the rest queue in the start's order. A task on an ask, its base or " +
 			"its finish frees its slot. A rerun or f10 resume keeps the cap unless it passes a new one.\n" +
@@ -52,7 +56,7 @@ func StartCommand() *cli.Command {
 			"The batch runs in the per-user f10 daemon, started when none runs: this command prints its progress, " +
 			"Ctrl+C stops only that, and rerunning it follows the batch again. --foreground runs it in this process.\n" +
 			"--propose starts nothing: it prints a proposal for the tasks, which is the bundles, the order, " +
-			"the After: lines to add and the one command to run. Small tasks of one kind sharing files or an area " +
+			"the After: lines to add and the one command to run; it takes no typed order. Small tasks of one kind sharing files or an area " +
 			"are bundled under bundle_max_lines, and the rest stay alone with the reason. --facts FILE lays the " +
 			"start skill's estimates on top, --json prints the proposal for the skill, and --hint prints one line " +
 			"when a bundle saves a CI wait, else nothing.\n" +

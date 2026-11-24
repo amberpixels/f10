@@ -156,12 +156,13 @@ Each word has one meaning, in the commands, the messages and the docs.
   A unit of a flow is always written "flow entry", so "entry" alone never means that.
 - **bundle**: several tasks in one entry, typed `A+B`.
   The first task is the lead, and the others are its riders.
+  The members ship in one PR, and nothing orders the work inside it.
 - **base**: what an entry comes after, which is another entry or a branch.
-- **stack**: an entry on one base.
+- **stack**: an entry on one base, typed `B@A`.
   It is opened at the base's first commit, and its finish waits for the base's.
-- **chain**: a line of stacks, each one's base the entry before it.
-- **join**: the word for an entry with several bases, which would wait until every base has merged and then branch from the default branch.
-  No start takes one yet, because a task has one base today.
+- **chain**: a line of stacks, each one's base the entry before it, typed `A,B,C`.
+- **join**: an entry with several bases, typed `C@A@B`.
+  It waits until every base has merged, then branches from the default branch.
 - **proposal**: what `f10 start <ids> --propose` prints, which is the bundles, the order and the one command to run.
   It starts nothing.
 - **level**: one row group of a proposal, holding the entries whose bases all sit in earlier levels.

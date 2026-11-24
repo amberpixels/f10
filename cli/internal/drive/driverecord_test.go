@@ -566,11 +566,11 @@ func TestOpenRecordKeepsTheCap(t *testing.T) {
 }
 
 func TestTaskStandingQueued(t *testing.T) {
-	if got := taskStanding(drivestore.Task{Queued: true}, true); got != "queued" {
+	if got := taskStanding(drivestore.Task{Queued: true}, true, nil, nil); got != "queued" {
 		t.Errorf("a queued task in a running drive stands %q", got)
 	}
 
-	if got := taskStanding(drivestore.Task{Queued: true}, false); got != "not reached" {
+	if got := taskStanding(drivestore.Task{Queued: true}, false, nil, nil); got != "not reached" {
 		t.Errorf("a queued task in a stopped drive stands %q", got)
 	}
 }
@@ -579,16 +579,16 @@ func TestTaskStandingQueued(t *testing.T) {
 // running the skill it last had in flight.
 func TestTaskStandingWaiting(t *testing.T) {
 	parked := drivestore.Task{Skill: "ship", Phase: drivestore.PhaseParked}
-	if got := taskStanding(parked, true); got != "waiting on its base" {
+	if got := taskStanding(parked, true, nil, nil); got != "waiting on its base" {
 		t.Errorf("a parked task stands %q", got)
 	}
 
 	held := drivestore.Task{Skill: "finish", Phase: drivestore.PhaseWaiting}
-	if got := taskStanding(held, true); got != "waiting to finish after its base" {
+	if got := taskStanding(held, true, nil, nil); got != "waiting to finish after its base" {
 		t.Errorf("a finish held for its base stands %q", got)
 	}
 
-	if got := taskStanding(parked, false); got != "stopped at ship" {
+	if got := taskStanding(parked, false, nil, nil); got != "stopped at ship" {
 		t.Errorf("a parked task in a stopped drive stands %q", got)
 	}
 }

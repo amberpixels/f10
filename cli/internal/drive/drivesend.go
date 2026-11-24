@@ -140,7 +140,7 @@ func (in *DriveInput) prompt(
 		return halt(id, skill, err.Error())
 	}
 
-	p := steered(skillPrompt(skill, r.Task.Ref.Label(), r.O.Dep, r.Flow, r.Finishes), steering)
+	p := steered(in.withJoin(r, skill, skillPrompt(skill, r.Task.Ref.Label(), r.O.Dep, r.Flow, r.Finishes)), steering)
 	if err := in.deliver(ctx, r, p); err != nil {
 		return err
 	}
@@ -183,6 +183,27 @@ func (in *DriveInput) retryEnter(ctx context.Context, r *DriveRun) {
 	if note := launch.RetryEnter(ctx, agents.Agents(r.O.Path), r.typedTo, r.Typed); note != "" {
 		fmt.Fprintf(in.Out, "%s %s: %s\n", in.id(r.Task.Ref.ID), r.Skill, note)
 	}
+}
+
+// withJoin adds a join's bases and their plans to a plan-only join's plan
+// prompt. Without --plan its bases merged before it branched, so their
+// code is in the default branch and the prompt needs nothing more.
+func (in *DriveInput) withJoin(r *DriveRun, skill, prompt string) string {
+	if skill != "plan" || !in.Args.PlanOnly || len(r.Task.Join) == 0 {
+		return prompt
+	}
+
+	deps := make([]launch.Dependency, 0, len(r.Task.Join))
+	for _, id := range r.Task.Join {
+		deps = append(deps, launch.Dependency{Task: id, Plan: in.Storage.Plan(id), Planned: in.Storage.PlanLive(id)})
+	}
+
+	clause := launch.JoinClause(r.Task.Ref.Label(), deps)
+	if base, ok := strings.CutSuffix(prompt, " "+launch.DrivenMarker); ok {
+		return base + " && " + clause + " " + launch.DrivenMarker
+	}
+
+	return prompt + " && " + clause
 }
 
 // steered puts steering after the skill's subject, before any chained
