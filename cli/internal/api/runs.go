@@ -513,7 +513,7 @@ func resumable(ctx context.Context, t *target.Target, task string) (*drivestore.
 	case errors.As(err, &several):
 		leads := make([]string, 0, len(several.Stopped))
 		for _, l := range several.Stopped {
-			leads = append(leads, l.Lead())
+			leads = append(leads, l.Name(t.Layout.StorageRoot.Path()))
 		}
 
 		return nil, connect.NewError(connect.CodeFailedPrecondition,

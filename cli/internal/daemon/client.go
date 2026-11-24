@@ -142,6 +142,17 @@ func GetStatus(ctx context.Context, dir, version string) (Status, error) {
 		})
 	}
 
+	// status asks whatever daemon runs, and one a release older fills only
+	// the old field
+	if len(st.Runs) == 0 {
+		for _, d := range res.Msg.GetDrives() { //nolint:staticcheck // read from an older daemon
+			st.Runs = append(st.Runs, Run{
+				Root: d.GetRoot(), Dir: d.GetDir(), Drive: int(d.GetDrive()), PID: int(d.GetPid()),
+				Since: d.GetSince().AsTime(), Log: d.GetLog(),
+			})
+		}
+	}
+
 	for _, w := range res.Msg.GetWatches() {
 		wt := Watch{Root: w.GetRoot(), Dir: w.GetDir(), Exit: int(w.GetExit()), Log: w.GetLog()}
 		if w.GetLastPassAt() != nil {

@@ -137,7 +137,8 @@ func resumeNumber(ctx context.Context, cmd *cli.Command, t *target.Target, token
 				ids = append(ids, task.ID)
 			}
 
-			fmt.Fprintf(cmd.Writer, "f10 resume %s   batch %d: %s\n", l.Lead(), l.Number, strings.Join(ids, " "))
+			fmt.Fprintf(cmd.Writer, "f10 resume %s   batch %d: %s\n",
+				l.Name(t.Layout.StorageRoot.Path()), l.Number, strings.Join(ids, " "))
 		}
 
 		return 0, cli.Exit(err.Error(), 1)

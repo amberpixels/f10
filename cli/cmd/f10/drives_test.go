@@ -132,6 +132,32 @@ func TestOldSpellingsStillWork(t *testing.T) {
 		t.Errorf("batch 1 = %+v, %v; want stop 1 to have stopped it", rec, err)
 	}
 
+	// the two resume spellings read the number and reach the record: batch 9
+	// does not exist, so each ends on that refusal, after its notice
+	for _, args := range [][]string{{"resume", "9"}, {"start", "--resume", "9"}} {
+		_, errOut, err := runApp(t, append([]string{"-C", dir}, args...)...).streams()
+		if err == nil || !strings.Contains(errOut, "still works for one release") {
+			t.Errorf("%q = %v, stderr %q; want the notice, then a refusal", args, err, errOut)
+		}
+	}
+
+	// the daemon's own child passes --resume with --foreground, and its
+	// stderr is the batch's log, so it gets no notice
+	if _, errOut, _ := runApp(
+		t,
+		"-C",
+		dir,
+		"start",
+		"--foreground",
+		"--resume",
+		"9",
+	).streams(); strings.Contains(
+		errOut,
+		"still works",
+	) {
+		t.Errorf("the daemon's own spelling printed a notice: %q", errOut)
+	}
+
 	// the new spelling prints no notice
 	if _, errOut, err := runApp(t, "-C", dir, "status", "--batches").streams(); err != nil ||
 		strings.Contains(errOut, "still works") {

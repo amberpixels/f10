@@ -80,3 +80,41 @@ func TestHoldingNamesABatchByAnyTask(t *testing.T) {
 		t.Errorf("Stopped = %+v, want only batch 1, led by FT-1", stopped)
 	}
 }
+
+// One task in two live records is named to the newest. Once f10 stop ends
+// that one, the task names nothing, and the older record is not resumed in
+// its place. A record a newer batch shadows whole is no stopped batch.
+func TestTheNewestRecordHoldingATaskDecides(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+
+	for _, rec := range []*Record{
+		{Tasks: []Task{{ID: "R3-1"}}},
+		{Tasks: []Task{{ID: "R3-1"}, {ID: "R3-2"}}},
+		{Tasks: []Task{{ID: "R3-2"}, {ID: "R3-12"}}},
+	} {
+		if err := Create(root, rec); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// a prefix that ends in a digit is still no task id
+	if _, ok := Holding(root, "R3"); ok {
+		t.Error("Holding took the prefix R3 as a task")
+	}
+
+	stopped := Stopped(root)
+	if len(stopped) != 2 || stopped[0].Name(root) != "R3-2" || stopped[1].Name(root) != "R3-1" {
+		t.Fatalf("Stopped = %+v, want batch 3 named R3-2 and batch 2 named R3-1, batch 1 shadowed", stopped)
+	}
+
+	now := time.Now()
+	if _, err := Update(root, 2, func(r *Record) { r.Cancelled = &now }); err != nil {
+		t.Fatal(err)
+	}
+
+	if l, ok := Holding(root, "R3-1"); ok {
+		t.Errorf("Holding(R3-1) = batch %d after its newest batch was stopped, want none", l.Number)
+	}
+}

@@ -1,6 +1,7 @@
 package drive
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -123,7 +124,7 @@ func leadOf(root string, n int) string {
 		return ""
 	}
 
-	return rec.Lead()
+	return cmp.Or(rec.Name(root), rec.Lead())
 }
 
 // resumeHint is the command that goes on with batch n.

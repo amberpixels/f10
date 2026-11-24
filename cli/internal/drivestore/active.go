@@ -1,6 +1,7 @@
 package drivestore
 
 import (
+	"regexp"
 	"slices"
 	"strings"
 )
@@ -55,15 +56,30 @@ func live(root string, r *Record) (Live, bool) {
 
 // Holding is the newest live record holding task id: as a task, as any
 // member of a bundle, or with a -suffix. A batch is addressed by it, so no
-// command needs the record's number.
+// command needs the record's number. The newest record holding the task
+// decides: once f10 stop ended it, an older live one is not picked up in its
+// place, because the user was told the stop is for good.
 func Holding(root, id string) (Live, bool) {
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return Live{}, false
 	}
 
-	for _, l := range Active(root) {
-		if l.Holds(id) {
+	recs, err := List(root)
+	if err != nil {
+		return Live{}, false
+	}
+
+	for _, r := range recs {
+		if !r.Holds(id) {
+			continue
+		}
+
+		if r.Cancelled != nil {
+			return Live{}, false
+		}
+
+		if l, ok := live(root, r); ok {
 			return l, true
 		}
 	}
@@ -71,11 +87,14 @@ func Holding(root, id string) (Live, bool) {
 	return Live{}, false
 }
 
+// wholeID is a task id, as against a tracker prefix cut short: it ends in a
+// number that starts the id or follows a separator, so FT and R3 are none.
+var wholeID = regexp.MustCompile(`(^|[-#])\d+$`)
+
 // holds reports typed, a task as a record keeps it, naming id. A typed
-// -suffix is matched only under an id ending in a digit, so a tracker
-// prefix alone (FT for FT-12) names nothing.
+// -suffix is matched only under a whole id, so a prefix alone names nothing.
 func holds(typed, id string) bool {
-	whole := id != "" && id[len(id)-1] >= '0' && id[len(id)-1] <= '9'
+	whole := wholeID.MatchString(id)
 
 	for m := range strings.SplitSeq(typed, "+") {
 		if strings.EqualFold(m, id) {
@@ -90,14 +109,28 @@ func holds(typed, id string) bool {
 	return false
 }
 
-// Stopped is every live record no process runs, newest first: what a bare
-// resume picks from.
+// Stopped is every live record no process runs and a task id still names,
+// newest first: what a bare resume picks from. A record whose every task a
+// newer batch holds is left out, because no task id reaches it.
 func Stopped(root string) []Live {
-	return slices.DeleteFunc(Active(root), func(l Live) bool { return l.Running })
+	return slices.DeleteFunc(Active(root), func(l Live) bool { return l.Running || l.Name(root) == "" })
 }
 
-// Lead is the record's first task as typed, "" for none: the id a message
-// names the batch by.
+// Name is the task id that names this record to a command: its first task
+// that Holding resolves to it, "" when a newer batch holds them all.
+func (r *Record) Name(root string) string {
+	for _, t := range r.Tasks {
+		for m := range strings.SplitSeq(t.ID, "+") {
+			if l, ok := Holding(root, m); ok && l.Number == r.Number {
+				return m
+			}
+		}
+	}
+
+	return ""
+}
+
+// Lead is the record's first task as typed, "" for none.
 func (r *Record) Lead() string {
 	if len(r.Tasks) == 0 {
 		return ""

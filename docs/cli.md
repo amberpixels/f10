@@ -346,7 +346,8 @@ After its report, start runs the [janitor](#janitor) when its last run is 6 hour
 A batch is the tasks one `f10 start` started, kept as a record.
 
 - **Any task id of the batch names it**, a bundle's rider included, and a task typed with a suffix by its plain id too.
-  The newest record holding the task that is neither cancelled nor done is the one resumed.
+  The newest record holding the task decides.
+  A live one is resumed, and one that `f10 stop` ended is refused as stopped for good, even when an older batch still holds the task.
 - **With no task id**, the one stopped batch in the project resumes.
   When several are stopped, it resumes none: it prints one line per batch, `f10 resume <lead>   batch <n>: <its tasks>`, and exits **1**.
   When none is stopped, it says so and exits non-zero.
