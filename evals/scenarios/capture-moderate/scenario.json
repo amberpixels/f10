@@ -1,0 +1,18 @@
+{
+  "description": "capture of an idea touching two places with one decision in it: one task with a normal body",
+  "task": "EV-1",
+  "fixture": "capture-simple",
+  "prompt": "/f10:capture Log every request the notes server handles: method, path, status and duration, one line per request to stderr. Wrap the handler routes() returns, in main.go, so every route is logged. A -quiet flag turns the log off. GET /health is left out, because the load balancer probes it every few seconds and would flood the log.",
+  "checks": ["captured", "rubric"],
+  "captured": {"tasks": 1, "parents": 0, "subtasks": 0, "after": 0},
+  "rubric": {
+    "files": ["tasks/EV-1.md"],
+    "lines": [
+      "The body states the problem the task solves, not only the change to make",
+      "The body says what is in scope: the fields logged, where the log goes and the -quiet flag",
+      "The body says GET /health is left out of the log, and why",
+      "The body has an Areas note naming the parts of the codebase the task touches",
+      "The body holds no code snippet and no effort estimate"
+    ]
+  }
+}

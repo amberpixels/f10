@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+# Eval fixture driver: a tracker kept in tasks/EV-<n>.md, offline. It creates
+# tasks and links subtasks, so a capture run leaves files a check can read.
+# Verbs the run does not need exit 3, the contract's "not implemented".
+set -euo pipefail
+
+verb="${1:-}"
+shift || true
+
+file() { echo "tasks/EV-$1.md"; }
+
+json() {
+  local s="${1//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  printf '"%s"' "$s"
+}
+
+# set_line <file> <key> <value>: replace the key's line, add it under the
+# status line, or drop it for an empty value
+set_line() {
+  local f="$1" key="$2" value="$3" tmp
+  tmp="$(mktemp)"
+  awk -v key="$key" -v value="$value" '
+    index($0, key ": ") == 1 { if (value != "") print key ": " value; done = 1; next }
+    { print }
+    NR == 3 && !done && value != "" && key == "Parent" { print key ": " value; done = 1 }
+    END { if (!done && value != "" && key == "After") print "\n" key ": " value }
+  ' "$f" >"$tmp"
+  mv "$tmp" "$f"
+}
+
+case "$verb" in
+  read)
+    cat "$(file "$1")"
+    ;;
+  url)
+    echo "file://$PWD/$(file "$1")"
+    ;;
+  comment)
+    cat >/dev/null
+    ;;
+  create)
+    parent=""
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --parent)
+          parent="$2"
+          shift 2
+          ;;
+        --*) shift 2 ;;
+        *) shift ;;
+      esac
+    done
+
+    body="$(cat)"
+    title="$(printf '%s\n' "$body" | head -n 1)"
+    case "$title" in
+      "# "?*) title="${title#\# }" ;;
+      *)
+        echo "create: the first line must be '# <title>'" >&2
+        exit 4
+        ;;
+    esac
+
+    n=0
+    for f in tasks/EV-*.md; do
+      [ -e "$f" ] || continue
+      m="${f#tasks/EV-}"
+      m="${m%.md}"
+      if [ "$m" -gt "$n" ]; then n="$m"; fi
+    done
+    n=$((n + 1))
+
+    {
+      echo "# EV-$n: $title"
+      echo
+      echo "OPEN · created $(date +%F)"
+      if [ -n "$parent" ]; then echo "Parent: EV-$parent"; fi
+      printf '%s\n' "$body" | tail -n +2
+    } >"$(file "$n")"
+    echo "EV-$n"
+    ;;
+  children)
+    first=1
+    printf '['
+    for f in tasks/EV-*.md; do
+      [ -e "$f" ] || continue
+      grep -qx "Parent: EV-$1" "$f" || continue
+      id="${f#tasks/}"
+      id="${id%.md}"
+      title="$(head -n 1 "$f")"
+      title="${title#\# "$id": }"
+      after="$(sed -n 's/^After: *\[\{0,1\}\(EV-[0-9][0-9]*\).*/\1/p' "$f" | head -n 1)"
+      if [ "$first" -ne 1 ]; then printf ','; fi
+      first=0
+      printf '{"id":%s,"title":%s,"url":%s,"state":"open"' "$(json "$id")" "$(json "$title")" "$(json "file://$PWD/$f")"
+      if [ -n "$after" ]; then printf ',"after":%s' "$(json "$after")"; fi
+      printf '}'
+    done
+    printf ']\n'
+    ;;
+  update)
+    n="$1"
+    shift
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --parent)
+          set_line "$(file "$n")" Parent "${2:+EV-$2}"
+          shift 2
+          ;;
+        --after)
+          set_line "$(file "$n")" After "${2:+EV-$2}"
+          shift 2
+          ;;
+        --*) shift 2 ;;
+        *) shift ;;
+      esac
+    done
+    ;;
+  *)
+    exit 3
+    ;;
+esac

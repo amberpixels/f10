@@ -1,0 +1,8 @@
+{
+  "description": "a judge on a task whose right verdict is proceed with changes: a sound delete that joins the name unchecked, as read does, where save already validates it",
+  "task": "EV-2",
+  "prompt": "/f10:judge EV-2 --driven",
+  "fixture": "judge-proceed",
+  "checks": ["verdict", "lore"],
+  "want_verdict": "proceed with changes"
+}

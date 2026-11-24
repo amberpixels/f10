@@ -1,0 +1,7 @@
+{
+  "description": "capture of a one-place idea: one task, no parent, no After:",
+  "task": "EV-1",
+  "prompt": "/f10:capture Add a -read-timeout flag to the notes server. It sets the http.Server's ReadTimeout in main.go, defaults to 30s, and 0 turns the timeout off.",
+  "checks": ["captured"],
+  "captured": {"tasks": 1, "parents": 0, "subtasks": 0, "after": 0}
+}

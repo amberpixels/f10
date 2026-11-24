@@ -1,0 +1,74 @@
+diff --git a/listing.js b/listing.js
+new file mode 100644
+index 0000000..a85595a
+--- /dev/null
++++ b/listing.js
+@@ -0,0 +1,41 @@
++// Listing, reading and importing notes.
++import fs from "node:fs";
++import path from "node:path";
++import { Notes } from "./notes.js";
++
++export class NotFound extends Error {}
++export class TooLarge extends Error {}
++
++const pageSize = 10;
++const maxNote = 1 << 20;
++
++// page lists one page of notes, each as its name and its first line.
++Notes.prototype.page = function (n) {
++  if (!(n >= 1)) n = 1;
++  const slice = this.names().slice(n * pageSize, (n + 1) * pageSize);
++
++  return slice.map((name) => {
++    const fd = fs.openSync(this.path(name), "r");
++    const buf = Buffer.alloc(256);
++    const read = fs.readSync(fd, buf, 0, buf.length, 0);
++    return `${name}: ${buf.toString("utf8", 0, read).split("\n")[0]}`;
++  });
++};
++
++// read returns one note's text.
++Notes.prototype.read = function (name) {
++  const full = path.join(this.dir, `${name}.txt`);
++  if (!fs.existsSync(full)) throw new NotFound(name);
++
++  return fs.readFileSync(full, "utf8");
++};
++
++// import stores what stream yields as the note, refusing one over maxNote.
++Notes.prototype.import = async function (name, stream) {
++  const chunks = [];
++  for await (const chunk of stream) chunks.push(Buffer.from(chunk));
++  const data = Buffer.concat(chunks);
++  if (data.length > maxNote) throw new TooLarge(name);
++
++  this.save(name, data);
++};
+diff --git a/listing.test.js b/listing.test.js
+new file mode 100644
+index 0000000..ed5fbd3
+--- /dev/null
++++ b/listing.test.js
+@@ -0,0 +1,21 @@
++import assert from "node:assert/strict";
++import fs from "node:fs";
++import os from "node:os";
++import path from "node:path";
++import { Readable } from "node:stream";
++import { test } from "node:test";
++import { NotFound } from "./listing.js";
++import { Notes } from "./notes.js";
++
++const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "notes-"));
++
++test("import and read", async () => {
++  const notes = new Notes(tmp());
++  await notes.import("todo", Readable.from(["milk\n", "eggs\n"]));
++
++  assert.equal(notes.read("todo"), "milk\neggs\n");
++});
++
++test("read a missing note", () => {
++  assert.throws(() => new Notes(tmp()).read("nope"), NotFound);
++});

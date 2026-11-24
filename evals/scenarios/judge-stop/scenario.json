@@ -1,0 +1,8 @@
+{
+  "description": "a judge on a task whose right verdict is stop: a health endpoint the server already serves as GET /health",
+  "task": "EV-4",
+  "prompt": "/f10:judge EV-4 --driven",
+  "fixture": "judge-proceed",
+  "checks": ["verdict", "lore"],
+  "want_verdict": "stop"
+}

@@ -1,0 +1,17 @@
+{
+  "description": "a brainstorm on three ideas: one to build as asked, one to shape into options, one not to build; only the first reply is graded",
+  "task": "EV-1",
+  "fixture": "capture-simple",
+  "prompt": "/f10:brainstorm Three ideas for the notes server; take each in turn, I am away until tomorrow so give me your full view in one reply. One: shut down gracefully on SIGTERM, so a save in flight finishes before the process exits; today main.go runs ListenAndServe under log.Fatal. Two: what would it take to let people search their notes? Three: add a health-check endpoint so the load balancer can probe the server.",
+  "checks": ["rubric"],
+  "rubric": {
+    "reply": true,
+    "lines": [
+      "For graceful shutdown, the reply recommends building it largely as proposed (for example signal.NotifyContext with http.Server.Shutdown), not dropping or reshaping it",
+      "For search, the reply offers at least two concrete shapes (for example a scan over the note files and an index), and states a trade-off or variation for each",
+      "For the health check, the reply recommends not building it, because the server already serves GET /health",
+      "The reply grounds its points in the notes server's own code, naming a file, function or route from it, not general advice only",
+      "The reply ends by saying what is settled and what, if anything, is still open"
+    ]
+  }
+}

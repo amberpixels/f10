@@ -1,0 +1,5 @@
+lint:
+    for f in *.js; do node --check "$f"; done
+
+test:
+    node --test

@@ -1,0 +1,17 @@
+{
+  "description": "implement alone, in JavaScript: a frozen plan for a search method, shipped on an implement commit flow",
+  "task": "EV-1",
+  "prompt": "/f10:ship EV-1 --driven",
+  "verify": ["just lint", "just test"],
+  "checks": ["verify", "accept", "commit"],
+  "accept": [
+    {
+      "run": "node --input-type=module -e 'import fs from \"node:fs\"; import os from \"node:os\"; import path from \"node:path\"; import { Notes } from \"./notes.js\"; const n = new Notes(fs.mkdtempSync(path.join(os.tmpdir(), \"a-\"))); n.save(\"b\", \"Hello World\"); n.save(\"a\", \"hello there\"); n.save(\"c\", \"bye\"); console.log(n.search(\"HELLO\").join(\",\"))'",
+      "want": "a,b"
+    },
+    {
+      "run": "node --input-type=module -e 'import fs from \"node:fs\"; import os from \"node:os\"; import path from \"node:path\"; import { Notes } from \"./notes.js\"; const n = new Notes(fs.mkdtempSync(path.join(os.tmpdir(), \"a-\"))); n.save(\"a\", \"hello\"); console.log(JSON.stringify(n.search(\"\")))'",
+      "want": "[]"
+    }
+  ]
+}

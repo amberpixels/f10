@@ -1,0 +1,17 @@
+{
+  "description": "implement alone, in Ruby: a frozen plan for a search method, shipped on an implement commit flow",
+  "task": "EV-1",
+  "prompt": "/f10:ship EV-1 --driven",
+  "verify": ["just lint", "just test"],
+  "checks": ["verify", "accept", "commit"],
+  "accept": [
+    {
+      "run": "ruby -Ilib -rnotes -rtmpdir -e 'Dir.mktmpdir { |d| n = Notes.new(d); n.save(\"b\", \"Hello World\"); n.save(\"a\", \"hello there\"); n.save(\"c\", \"bye\"); puts n.search(\"HELLO\").join(\",\") }'",
+      "want": "a,b"
+    },
+    {
+      "run": "ruby -Ilib -rnotes -rtmpdir -e 'Dir.mktmpdir { |d| n = Notes.new(d); n.save(\"a\", \"hello\"); p n.search(\"\") }'",
+      "want": "[]"
+    }
+  ]
+}
