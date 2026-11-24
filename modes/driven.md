@@ -51,7 +51,8 @@ Examples are a judge's rethink, a resolve `ask` and a deploy confirmation.
    The driving session reads the ask through `f10 status <task-id>` and already knows its own way back.
 
 `f10-state.sh ask` also puts the ask in the user's inbox (`f10 inbox`), and inside Herdr it shows this pane as blocked until the ask is answered.
-The inbox counts the ask on the status line of this project's sessions, tells this project's other sessions about it, and notifies the user.
+The status line of this project's sessions shows the asking task's id, and the inbox notifies the user.
+No other session is told the ask in its conversation, because the user answers it in this pane, or asks for it with `/f10:inbox`.
 A drive's agents are never told another agent's ask, because they could only print it into their pane.
 
 Six kinds of open question never become an ask:

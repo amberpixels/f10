@@ -128,12 +128,13 @@ Rerunning the same arguments follows the drive already running; from another ses
 2. **Exit 0**: every task went through its flow.
    Print the report block (one row per task) in a fenced `yaml` block and any line beneath it, and stop.
    A finished task's `<id> handoff:` lines are markdown: relay them verbatim beneath the block, outside the fence.
-3. **Exit 4**: one or more agents asked, and the other tasks went as far as they can.
-   Each ask waits in the inbox from the moment it was asked, so it can also be answered in the agent's pane, with `f10 inbox` or from another session.
-   First print the `<id> handoff:` lines of the tasks that finished, verbatim and outside a fence.
-   Print them now, because a rerun reports those tasks as already finished, with their handoffs archived and not printed again.
-   Then follow `${CLAUDE_PLUGIN_ROOT}/skills/inbox/SKILL.md` for this drive's asking tasks: the questions in one `AskUserQuestion`, then `f10 inbox answer`, which resumes the drive through the daemon.
-   Then rerun the same arguments in the background to follow the resumed drive, and act on its exit as above; an ask already answered elsewhere resumes the drive the same way.
+   A drive that waited on an ask prints a report each time it stops, and a task that finished before the ask has its handoff only in that earlier report, so relay the handoff lines from the whole output.
+3. **The command waits through asks.**
+   When an agent asks and nothing else can move, the command prints the drive's report and keeps following: an answer resumes the drive, and the command follows it on.
+   The question waits in the asking agent's pane, on the status line and in the inbox, so print nothing about it and open no questionnaire.
+   The user answers in that pane, with `f10 inbox`, or here with `/f10:inbox` when they ask for it.
+   **Exit 4** comes only when the drive was stopped (`f10 stop`) while it waited on its asks.
+   Print the report block and the line beneath it that says so, and stop.
 4. **Exit 5**: a task halted; the lines beneath the report say which and why.
    Print the report block and those lines verbatim, and stop.
    A row `owned by drive <n> (pid …)` is a task another drive holds: name that drive; `f10 status --drives` shows it and `f10 stop <n>` stops it.
