@@ -184,6 +184,17 @@ func TestResumeNamesItsBatch(t *testing.T) {
 		!strings.Contains(err.Error(), "no stopped batch in this project") {
 		t.Errorf("a bare resume with nothing stopped = %v", err)
 	}
+
+	// f10 stop ends a batch for good, and a resume by its task says so
+	if _, _, err := runApp(t, "-C", dir, "resume", "GH-1").streams(); err == nil ||
+		!strings.Contains(err.Error(), "batch 1 was stopped for good") {
+		t.Errorf("resume GH-1 after its stop = %v, want the batch named as stopped for good", err)
+	}
+
+	// a tracker prefix alone names no batch
+	if _, _, err := runApp(t, "-C", dir, "stop", "GH").streams(); err == nil {
+		t.Error("stop GH took a bare prefix as a task")
+	}
 }
 
 // f10 daemon logs names a batch by a task, and still reads a number as one

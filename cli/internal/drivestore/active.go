@@ -71,10 +71,18 @@ func Holding(root, id string) (Live, bool) {
 	return Live{}, false
 }
 
-// holds reports typed, a task as a record keeps it, naming id.
+// holds reports typed, a task as a record keeps it, naming id. A typed
+// -suffix is matched only under an id ending in a digit, so a tracker
+// prefix alone (FT for FT-12) names nothing.
 func holds(typed, id string) bool {
+	whole := id != "" && id[len(id)-1] >= '0' && id[len(id)-1] <= '9'
+
 	for m := range strings.SplitSeq(typed, "+") {
-		if strings.EqualFold(m, id) || (len(m) > len(id) && strings.EqualFold(m[:len(id)+1], id+"-")) {
+		if strings.EqualFold(m, id) {
+			return true
+		}
+
+		if whole && len(m) > len(id) && strings.EqualFold(m[:len(id)+1], id+"-") {
 			return true
 		}
 	}

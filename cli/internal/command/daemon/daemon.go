@@ -22,7 +22,6 @@ import (
 	"github.com/amberpixels/f10/cli/internal/daemon"
 	"github.com/amberpixels/f10/cli/internal/drive"
 	"github.com/amberpixels/f10/cli/internal/drivectl"
-	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/remote"
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/target"
@@ -196,26 +195,14 @@ func runDaemonLogs(ctx context.Context, cmd *cli.Command) error {
 }
 
 // logBatch is the number of the batch a task names. A finished batch still
-// has a log, so every record is read, newest first, not only the live ones.
+// has a log, so any record holding the task counts, the newest first.
 func logBatch(ctx context.Context, t *target.Target, token string) (int, error) {
 	if l, ok := drive.BatchOf(ctx, t, token); ok {
 		return l.Number, nil
 	}
 
-	id := token
-	if r, err := t.Reference(ctx, token); err == nil {
-		id = r.Head().ID
-	}
-
-	recs, err := drivestore.List(t.Layout.StorageRoot.Path())
-	if err != nil {
-		return 0, err
-	}
-
-	for _, rec := range recs {
-		if rec.Holds(id) {
-			return rec.Number, nil
-		}
+	if rec, ok := drive.RecordOf(ctx, t, token); ok {
+		return rec.Number, nil
 	}
 
 	return 0, fmt.Errorf("no batch holds %s: f10 status --batches lists every batch", token)

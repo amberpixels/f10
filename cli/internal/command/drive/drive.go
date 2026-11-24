@@ -117,33 +117,9 @@ func runResume(ctx context.Context, cmd *cli.Command) error {
 // resumeNumber is the record a resume names: by a task id, by the one
 // stopped batch, or by its number for one more release.
 func resumeNumber(ctx context.Context, cmd *cli.Command, t *target.Target, token string) (int, error) {
-	root := t.Layout.StorageRoot.Path()
-
-	if token == "" {
-		stopped := drivestore.Stopped(root)
-
-		switch len(stopped) {
-		case 0:
-			return 0, errors.New("no stopped batch in this project: f10 status --batches lists every batch")
-		case 1:
-			return stopped[0].Number, nil
-		}
-
-		for _, l := range stopped {
-			ids := make([]string, 0, len(l.Tasks))
-			for _, task := range l.Tasks {
-				ids = append(ids, task.ID)
-			}
-
-			fmt.Fprintf(cmd.Writer, "f10 resume %s   batch %d: %s\n", l.Lead(), l.Number, strings.Join(ids, " "))
-		}
-
-		return 0, cli.Exit(fmt.Sprintf("%d batches are stopped: name one by a task id", len(stopped)), 1)
-	}
-
 	if n, ok := drivectl.OldNumber(token); ok {
 		lead := "<task-id>"
-		if rec, err := drivestore.Read(root, n); err == nil && rec.Lead() != "" {
+		if rec, err := drivestore.Read(t.Layout.StorageRoot.Path(), n); err == nil && rec.Lead() != "" {
 			lead = rec.Lead()
 		}
 
@@ -152,11 +128,26 @@ func resumeNumber(ctx context.Context, cmd *cli.Command, t *target.Target, token
 		return n, nil
 	}
 
-	if l, ok := drive.BatchOf(ctx, t, token); ok {
-		return l.Number, nil
+	rec, err := drive.Resumable(ctx, t, token)
+
+	if several, ok := errors.AsType[drive.SeveralStoppedError](err); ok {
+		for _, l := range several.Stopped {
+			ids := make([]string, 0, len(l.Tasks))
+			for _, task := range l.Tasks {
+				ids = append(ids, task.ID)
+			}
+
+			fmt.Fprintf(cmd.Writer, "f10 resume %s   batch %d: %s\n", l.Lead(), l.Number, strings.Join(ids, " "))
+		}
+
+		return 0, cli.Exit(err.Error(), 1)
 	}
 
-	return 0, fmt.Errorf("no batch to resume holds %s: f10 status --batches lists every batch", token)
+	if err != nil {
+		return 0, err
+	}
+
+	return rec.Number, nil
 }
 
 // Run is f10 start for tasks run through their flow: the drive, in the

@@ -498,38 +498,31 @@ func (s *runService) Resume(
 	}), nil
 }
 
-// resumable is the batch a resume names: the one holding the task, or with
-// no task the project's one stopped batch.
+// resumable is drive.Resumable with its refusals as the API's codes.
 func resumable(ctx context.Context, t *target.Target, task string) (*drivestore.Record, error) {
-	root := t.Layout.StorageRoot.Path()
+	rec, err := drive.Resumable(ctx, t, strings.TrimSpace(task))
 
-	if task = strings.TrimSpace(task); task != "" {
-		l, ok := drive.BatchOf(ctx, t, task)
-		if !ok {
-			return nil, connect.NewError(connect.CodeNotFound,
-				fmt.Errorf("no batch to resume holds %s: f10 status --batches lists every batch", task))
+	var (
+		several drive.SeveralStoppedError
+		none    drive.NotResumableError
+	)
+
+	switch {
+	case err == nil:
+		return rec, nil
+	case errors.As(err, &several):
+		leads := make([]string, 0, len(several.Stopped))
+		for _, l := range several.Stopped {
+			leads = append(leads, l.Lead())
 		}
 
-		return l.Record, nil
+		return nil, connect.NewError(connect.CodeFailedPrecondition,
+			fmt.Errorf("%w (%s)", err, strings.Join(leads, ", ")))
+	case errors.As(err, &none) && none.Ended != nil:
+		return nil, connect.NewError(connect.CodeFailedPrecondition, err)
 	}
 
-	stopped := drivestore.Stopped(root)
-
-	switch len(stopped) {
-	case 0:
-		return nil, connect.NewError(connect.CodeNotFound,
-			errors.New("no stopped batch in this project: f10 status --batches lists every batch"))
-	case 1:
-		return stopped[0].Record, nil
-	}
-
-	leads := make([]string, 0, len(stopped))
-	for _, l := range stopped {
-		leads = append(leads, l.Lead())
-	}
-
-	return nil, connect.NewError(connect.CodeFailedPrecondition,
-		fmt.Errorf("%d batches are stopped: name one by a task id (%s)", len(stopped), strings.Join(leads, ", ")))
+	return nil, connect.NewError(connect.CodeNotFound, err)
 }
 
 // driveArgv is the command line f10 start takes for a batch given as fields:

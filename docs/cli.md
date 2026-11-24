@@ -1105,6 +1105,7 @@ Out of scope: more than one base per task, and ordering tasks by anything but th
 Each of these still works for one release and prints one line on stderr naming its replacement: `f10 start --resume <n>` (now `f10 resume <task-id>`), `f10 drive plan <ids>` (now `f10 start <ids> --propose`), `f10 status --drives` (now `f10 status --batches`), the frontmatter key `drive_env` (now `batch_env`), and a batch number given to `f10 stop`, `f10 resume` or `f10 daemon logs` (now any task id of the batch).
 Until then a bare positive number given to those three commands is read as a batch number, never as a task id.
 `drive_env` beside `batch_env` in one frontmatter is an error.
+What a program reads is renamed with no alias, because the plugin's skills are its readers and ship with the binary: the proposal's `--json` keys `proposal` and `levels`, the `batch` key of `f10 inbox list --json`, `batchEnv` in `f10 config --json`, the `batches` key of `f10 standup --json` (schema 3), and the MCP tools `start_batch`, `list_batches` and `stop_batch`.
 
 ### Proposal
 

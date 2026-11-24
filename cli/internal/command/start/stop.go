@@ -20,7 +20,7 @@ import (
 func StopCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "stop",
-		Usage:     "stop the batch a task belongs to: no agent is prompted further, and f10 resume <task-id> goes on with it",
+		Usage:     "stop the batch a task belongs to, for good: no agent is prompted further, and its f10 start line starts a new one",
 		ArgsUsage: "<task-id>",
 		Action:    runStop,
 	}

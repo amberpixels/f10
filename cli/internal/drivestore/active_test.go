@@ -58,7 +58,11 @@ func TestHoldingNamesABatchByAnyTask(t *testing.T) {
 		}
 	}
 
-	for id, want := range map[string]int{"FT-1": 1, "ft-2": 3, "FT-3": 1, "FT-3-retry": 1, "FT-12": 3, "FT-4": 0, "FT-9": 0, "": 0} {
+	for id, want := range map[string]int{
+		"FT-1": 1, "ft-2": 3, "FT-3": 1, "FT-3-retry": 1, "FT-12": 3, "FT-4": 0, "FT-9": 0, "": 0,
+		// a tracker prefix alone is no task id
+		"FT": 0, "ft": 0,
+	} {
 		l, ok := Holding(root, id)
 		if got := l.Record; (got == nil) != (want == 0) || ok != (want != 0) || (got != nil && got.Number != want) {
 			t.Errorf("Holding(%q) = %+v, %v; want batch %d", id, got, ok, want)

@@ -1,6 +1,8 @@
 package facts
 
 import (
+	"maps"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -617,5 +619,173 @@ func TestOldDriveEnvKeyStillReads(t *testing.T) {
 
 	if eff := buildWith(t, "---\ndrive_env: [\"A-B\"]\n---\n", ""); !strings.Contains(eff.Errors(), "drive_env") {
 		t.Errorf("a bad name under the old key passed: %q", eff.Errors())
+	}
+}
+
+func TestWatch(t *testing.T) {
+	t.Parallel()
+
+	if eff := buildWith(t, "", ""); eff.Watch != "finish" {
+		t.Errorf("default watch = %q, want finish", eff.Watch)
+	}
+
+	eff := buildWith(t, "---\nwatch: report\n---\n", "")
+	if eff.Watch != "report" || eff.Errors() != "" {
+		t.Errorf("watch %q, errors %q", eff.Watch, eff.Errors())
+	}
+
+	if f := factFor(t, eff, "watch"); f.Value != "report" {
+		t.Errorf("fact = %+v", f)
+	}
+
+	if eff := buildWith(t, "---\nwatch: always\n---\n", ""); !strings.Contains(eff.Errors(), "watch") {
+		t.Errorf("a bad value passed: %q", eff.Errors())
+	}
+}
+
+// watch_catchup is off unless declared, and takes only on or off.
+func TestWatchCatchup(t *testing.T) {
+	t.Parallel()
+
+	none := buildWith(t, "", "")
+	if f := factFor(t, none, "watch_catchup"); none.WatchCatchup || f.Origin.Kind != OriginDefault {
+		t.Errorf("undeclared = %v, %+v", none.WatchCatchup, f)
+	}
+
+	on := buildWith(t, "---\nwatch_catchup: on\n---\n", "")
+	if f := factFor(t, on, "watch_catchup"); !on.WatchCatchup || on.Errors() != "" ||
+		f.Origin.String() != "declared (main, frontmatter)" {
+		t.Errorf("declared on = %v, errors %q, %+v", on.WatchCatchup, on.Errors(), f)
+	}
+
+	if bad := buildWith(t, "---\nwatch_catchup: yes\n---\n", ""); !strings.Contains(bad.Errors(), "watch_catchup") {
+		t.Errorf("errors = %q", bad.Errors())
+	}
+}
+
+// lore_gate warns unless declared and takes only warn or block.
+func TestLoreGate(t *testing.T) {
+	t.Parallel()
+
+	none := buildWith(t, "# demo\n", "")
+	if f := factFor(t, none, "lore_gate"); none.LoreGate != "warn" || f.Origin.Kind != OriginDefault {
+		t.Errorf("undeclared = %q, %+v", none.LoreGate, f)
+	}
+
+	block := buildWith(t, "---\nlore_gate: block\n---\n# demo\n", "")
+	if f := factFor(
+		t,
+		block,
+		"lore_gate",
+	); block.LoreGate != "block" ||
+		f.Origin.String() != "declared (main, frontmatter)" {
+		t.Errorf("declared block = %q, %+v", block.LoreGate, f)
+	}
+
+	bad := buildWith(t, "---\nlore_gate: off\n---\n", "")
+	if !strings.Contains(bad.Errors(), "lore_gate") {
+		t.Errorf("errors = %q", bad.Errors())
+	}
+}
+
+func TestAgents(t *testing.T) {
+	t.Parallel()
+
+	eff := buildWith(t, "---\nflows:\n  default: plan judge implement cleanup pr review:local judge pr\n"+
+		"agents:\n  default: opus:high\n  review: opus:high\n  cleanup: sonnet:low\n  plan.bug: opus:medium\n---\n",
+		"---\nagents:\n  cleanup: haiku:low\n  judge: opus:max\n---\n")
+	if eff.Errors() != "" {
+		t.Fatalf("errors: %s", eff.Errors())
+	}
+
+	want := map[string]string{
+		"default": "opus:high", "review": "opus:high", "cleanup": "haiku:low",
+		"plan.bug": "opus:medium", "judge": "opus:max",
+	}
+	if !maps.Equal(eff.Agents, want) {
+		t.Errorf("agents %v, want %v", eff.Agents, want)
+	}
+
+	for key, origin := range map[string]string{
+		"default": "declared (main, frontmatter)",
+		"cleanup": "declared (worktree, frontmatter)",
+		"judge":   "declared (worktree, frontmatter)",
+	} {
+		if eff.AgentsOrigin[key].String() != origin {
+			t.Errorf("agents.%s origin %q, want %q", key, eff.AgentsOrigin[key], origin)
+		}
+	}
+
+	if f := factFor(t, eff, "agents.cleanup"); f.Origin.String() != "declared (worktree, frontmatter)" ||
+		f.Value != "haiku:low" {
+		t.Errorf("agents.cleanup fact %+v", f)
+	}
+
+	for _, c := range []struct{ block, want string }{
+		{"agents:\n  reveiw: opus:high\n", "agents.reveiw: no flow has a reveiw entry"},
+		{"agents:\n  plan.feature.x: opus\n", "agents.plan.feature.x: feature.x is not a task kind"},
+		{"agents:\n  implement.huge: opus\n", "huge is not a task kind (feature, bug, refactor, spike)"},
+		{"agents:\n  implement: opus:huge\n", "agents.implement: \"opus:huge\": huge is not an effort claude knows"},
+		{"agents:\n  implement: opencode:opus:high\n", "opencode is not an agent kind"},
+		{"agents:\n  --agent: opus:high\n", "agents.--agent: a key is default, a step, or step.kind"},
+	} {
+		if eff := buildWith(t, "---\n"+c.block+"---\n", ""); !strings.Contains(eff.Errors(), c.want) {
+			t.Errorf("%q: errors %q, want %q", c.block, eff.Errors(), c.want)
+		}
+	}
+
+	flowSteps := "---\nagents:\n  pr: sonnet:low\n  implement.bug: opus:medium\n---\n"
+	if eff := buildWith(t, flowSteps, ""); eff.Errors() != "" {
+		t.Errorf("the default flow's steps are keys: %s", eff.Errors())
+	}
+
+	// each spawning step also runs as a skill, with no flow entry behind it
+	standalone := "---\nflows:\n  default: implement pr\nagents:\n  audit: opus:high\n  judge: opus:max\n" +
+		"  cleanup: sonnet:low\n  review: opus:high\n---\n"
+	if eff := buildWith(t, standalone, ""); eff.Errors() != "" {
+		t.Errorf("spawning steps are keys without a flow entry: %s", eff.Errors())
+	}
+
+	if eff := buildWith(t, "---\nvisibility: public\n---\n", ""); eff.Agents != nil {
+		t.Errorf("no map declared leaves agents nil: %v", eff.Agents)
+	}
+}
+
+// Every single-word key is in the scalar registry, since check, merge,
+// scaffold and resolve only see the keys it lists.
+func TestScalarKeysCoverDeclared(t *testing.T) {
+	t.Parallel()
+
+	for f := range reflect.TypeFor[Declared]().Fields() {
+		if f.Type.Kind() != reflect.String {
+			continue
+		}
+
+		key, _, _ := strings.Cut(f.Tag.Get("yaml"), ",")
+		if !slices.ContainsFunc(scalarKeys, func(k scalarKey) bool { return k.key == key }) {
+			t.Errorf("%s (%s) is a string key the scalar registry lacks", key, f.Name)
+		}
+	}
+}
+
+func TestBundleMaxLines(t *testing.T) {
+	t.Parallel()
+
+	none := buildWith(t, "# demo\n", "")
+	if f := factFor(t, none, "bundle_max_lines"); none.BundleMaxLines != DefaultBundleMaxLines ||
+		f.Origin.Kind != OriginDefault || f.Value != "300" {
+		t.Errorf("undeclared = %d, %+v", none.BundleMaxLines, f)
+	}
+
+	if eff := buildWith(t, "---\nbundle_max_lines: 500\n---\n", ""); eff.BundleMaxLines != 500 || eff.Errors() != "" {
+		t.Errorf("500: bundle_max_lines %d, errors %q", eff.BundleMaxLines, eff.Errors())
+	}
+
+	for _, v := range []string{"0", "-5", "lots", "1.5"} {
+		if eff := buildWith(t, "---\nbundle_max_lines: \""+v+"\"\n---\n", ""); !strings.Contains(
+			eff.Errors(), "bundle_max_lines",
+		) {
+			t.Errorf("%s: want a bundle_max_lines error, got %q", v, eff.Errors())
+		}
 	}
 }
