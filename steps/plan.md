@@ -22,8 +22,9 @@ Badge: `f10-state.sh set plan running` on entry, unless `fetch` already opened t
      `/f10:ship` picks the flow from it when it runs on the plan alone.
    - **Regression of** follows for a bug whose attribution named the task that introduced it (`steps/debug.md` → Attribute).
      It holds the line `f10 task regression` printed, such as `Regression of: FT-414 (missed, confirmed)`.
-   - **Depends on** follows when the task has a base task, which is when the steering names one (`f10 start --after`) or the task body ends in an `After:` line.
+   - **Depends on** follows when the task has a base task, which is when the steering names one (`f10 start --after`, or an order such as `B@A`) or the task body ends in an `After:` line.
      It holds the base task's id and the path of its plan.
+     A join started under `--plan` names several bases, and the line holds each id with its plan's path.
      The plan designs against the base task's plan, or the base task itself when that plan is not written yet, never against this checkout.
      There is no fallback when the base task is absent.
    - **Bundle** follows when the plan covers several tasks (`Bundle: ABC-1+ABC-2`).

@@ -140,16 +140,16 @@ func TestDriveTriagesARedHead(t *testing.T) {
 
 func TestTaskStandingWaitingOnChecks(t *testing.T) {
 	waiting := drivestore.Task{Phase: drivestore.PhaseWaiting, Checks: "h3ad"}
-	if got := taskStanding(waiting, true); got != "waiting on checks" {
+	if got := taskStanding(waiting, true, nil); got != "waiting on checks" {
 		t.Errorf("standing = %q, want waiting on checks", got)
 	}
 
 	waiting.Checks = ""
-	if got := taskStanding(waiting, true); got != "waiting to finish after its base" {
+	if got := taskStanding(waiting, true, nil); got != "waiting to finish after its base" {
 		t.Errorf("standing = %q, want the base wait", got)
 	}
 
-	if got := taskStanding(drivestore.Task{Skill: "ci"}, true); got != "triaging checks" {
+	if got := taskStanding(drivestore.Task{Skill: "ci"}, true, nil); got != "triaging checks" {
 		t.Errorf("standing = %q, want triaging checks", got)
 	}
 }

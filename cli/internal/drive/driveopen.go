@@ -67,10 +67,11 @@ func (in *DriveInput) KeepFlow(ctx context.Context, branch string) (runplan.Ship
 func (in *DriveInput) open(ctx context.Context, r *DriveRun) error {
 	task := r.Task
 
-	// a typed --after or --base wins over the body, which is then not read,
-	// because its base may be a task not started
+	// a typed --after, --base or order wins over the body, which is then not
+	// read, because its base may be a task not started; a join opens with no
+	// base task, so it branches from the default branch
 	after, note := task.after, ""
-	if in.Args.After == "" && in.Args.Base == "" {
+	if in.Args.After == "" && in.Args.Base == "" && !task.typed {
 		var err error
 		if after, note, err = stack.BodyAfter(ctx, in.Tracker, in.Main, task.Ref, task.info.Body); err != nil {
 			return err
@@ -114,6 +115,12 @@ func (in *DriveInput) open(ctx context.Context, r *DriveRun) error {
 
 	if o.Fresh {
 		o.Notes = append(o.Notes, start.MarkStarted(ctx, in.Started, o.Task)...)
+	}
+
+	if len(task.Join) > 0 {
+		if err := branchmeta.Set(ctx, in.Main, o.Branch, branchmeta.Join, strings.Join(task.Join, " ")); err != nil {
+			return fmt.Errorf("recording the bases: %w", err)
+		}
 	}
 
 	fl, flowNote, err := in.KeepFlow(ctx, o.Branch)

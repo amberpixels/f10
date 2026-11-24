@@ -74,6 +74,13 @@ func TestStageOf(t *testing.T) {
 		{"base done", facts{Base: "FT-1"}, true, stageNotStarted, ""},
 		{"queued", facts{Queued: true, Base: "FT-1"}, false, stageQueued, ""},
 		{
+			"a join waiting on its bases",
+			facts{JoinWaits: []string{"FT-1", "FT-2"}, Driven: true},
+			false,
+			stageWaiting,
+			"for FT-1 and FT-2 to merge",
+		},
+		{
 			"parked by its drive",
 			facts{Run: run("skipped", "done", "upcoming", ""), Base: "FT-1", DrivePhase: drivestore.PhaseParked},
 			false, stageWaiting, "on FT-1",

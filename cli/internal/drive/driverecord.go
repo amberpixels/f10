@@ -22,6 +22,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/tasktree"
+	"github.com/amberpixels/f10/cli/internal/textx"
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
@@ -123,7 +124,7 @@ func (in *DriveInput) openRecord(tasks []DriveTask) error {
 			}
 
 			in.Rec.Tasks = append(in.Rec.Tasks, drivestore.Task{
-				ID: t.Ref.Label() + worktree.SuffixOf(t.Suffix), Agent: profile, After: t.after,
+				ID: t.Ref.Label() + worktree.SuffixOf(t.Suffix), Agent: profile, After: t.after, Join: t.Join,
 			})
 		}
 
@@ -409,7 +410,7 @@ func DriveList(
 			id := links.ID(project, t.ID) + ":"
 			nodes[j] = tasktree.Node{Cells: []tasktree.Cell{
 				{Text: t.ID + ":", Render: func(string) string { return id }},
-				{Text: taskStanding(t, running)},
+				{Text: taskStanding(t, running, rec.Tasks)},
 			}}
 		}
 
@@ -475,10 +476,12 @@ func finishedLazily(root storage.Root, id string, branched func() (bool, error),
 	return stack.FinishedTask(ti, root, id, false)
 }
 
-func taskStanding(t drivestore.Task, running bool) string {
-	switch {
+func taskStanding(t drivestore.Task, running bool, tasks []drivestore.Task) string {
+	switch waits := drivectl.JoinWaits(t, tasks); {
 	case t.Outcome != nil:
 		return t.Outcome.Row
+	case len(waits) > 0 && t.Skill == "" && (t.Phase == "" || t.Phase == drivestore.PhasePending):
+		return "waiting for " + textx.JoinAnd(waits) + " to merge"
 	case running && t.Queued:
 		return "queued"
 	case running && t.Phase == drivestore.PhaseParked:

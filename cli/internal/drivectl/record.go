@@ -2,8 +2,11 @@ package drivectl
 
 import (
 	"errors"
+	"slices"
+	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/drivestore"
+	"github.com/amberpixels/f10/cli/internal/ref"
 )
 
 // The rows a finished task ends on: finished by the drive or outside it, or
@@ -15,6 +18,27 @@ const (
 
 func RowDone(t drivestore.Task) bool {
 	return t.Outcome != nil && (t.Outcome.Row == RowFinished || t.Outcome.Row == RowAlreadyFinished)
+}
+
+// JoinWaits is a join's bases its batch's record has not seen finish, nil
+// for a task that is no join. A base outside the record was finished when
+// the batch started, since a join refuses any other.
+func JoinWaits(t drivestore.Task, tasks []drivestore.Task) []string {
+	var out []string
+
+	for _, id := range t.Join {
+		i := slices.IndexFunc(tasks, func(o drivestore.Task) bool {
+			lead, _, _ := strings.Cut(o.ID, ref.Separator)
+			lead, _ = ref.SplitSuffix(lead)
+
+			return strings.EqualFold(lead, id)
+		})
+		if i >= 0 && !RowDone(tasks[i]) {
+			out = append(out, id)
+		}
+	}
+
+	return out
 }
 
 func SetFinished(t *drivestore.Task) {

@@ -158,14 +158,20 @@ type driveState struct {
 
 // A DriveTask is one task of the list, as the validation pass found it.
 type DriveTask struct {
-	Ref      ref.Ref
-	Suffix   string
-	info     tasksource.TaskInfo
-	profile  agentctl.Profile // what the agent starts on, resolved
-	flagged  bool             // the command line chose it, over the branch's record
-	Branch   string           // the task's local branch, or "" before it started
-	after    string           // the base the body's After: line names, as an id
-	Base     string           // the base the drive waits for: the branch's record, else after
+	Ref     ref.Ref
+	Suffix  string
+	info    tasksource.TaskInfo
+	profile agentctl.Profile // what the agent starts on, resolved
+	flagged bool             // the command line chose it, over the branch's record
+	Branch  string           // the task's local branch, or "" before it started
+	after   string           // the base the body's After: line names, as an id
+	Base    string           // the base the drive waits for: the branch's record, else after
+	// typed is set when the command line ordered the task, a chain's , or
+	// an @, which wins over its body's After: line as --after does
+	typed bool
+	// Join is a join's bases as ids: two or more, which must all merge
+	// before it branches from the default branch; Base is then ""
+	Join     []string
 	finished bool
 }
 
@@ -196,14 +202,18 @@ type DriveRun struct {
 	turn
 	catchupState
 
-	Task     DriveTask
-	Base     *DriveRun // the listed base, or nil for none or one outside the list
-	O        start.OpenedTask
-	Phase    runPhase
-	Flow     runplan.ShipFlow // the flow this task ships through: its branch's record, else the run's
-	Finishes bool             // drive ends the task with finish: the flow's finish entry, or a spike closes
-	Pos      int              // the index in its skills of the skill in flight, or the next one
-	End      *driveResult
+	Task DriveTask
+	Base *DriveRun // the listed base, or nil for none or one outside the list
+	// Join is a join's listed bases; one outside the list is finished
+	Join []*DriveRun
+	// joinWaits names the join's bases not yet through, as last printed
+	joinWaits string
+	O         start.OpenedTask
+	Phase     runPhase
+	Flow      runplan.ShipFlow // the flow this task ships through: its branch's record, else the run's
+	Finishes  bool             // drive ends the task with finish: the flow's finish entry, or a spike closes
+	Pos       int              // the index in its skills of the skill in flight, or the next one
+	End       *driveResult
 	// freshAt is when this drive opened the task to start its agent: run
 	// state older than it was written by an agent that is gone, and is not read
 	freshAt time.Time

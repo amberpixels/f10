@@ -94,7 +94,7 @@ f10 audit map <range | all> [--json]                    # churn, tasks and pain 
 f10 ledger dump [--json] [--project p] [--task id] [--session s]   # the recorded events, oldest first
 f10 ledger schema        # the JSON Schema of each event kind's payload, by version (docs/ledger.schema.json)
 
-f10 start <id | id+id>[-suffix][:profile]... | <id> -- <id> [--plan] [--flow <name> | --local] [--pace <name>] [--after <id> | --base <branch>] [--agent <profile> | --model <model>] [--parallel <n>] [--answer [<id>=]<text>] [--every 30s] [--foreground]   # each task in a worktree, a Herdr workspace and an agent, run through the flow as one batch, which the daemon prompts
+f10 start <id | id+id>[-suffix][@<base>...][:profile]... | <id>,<id>... | <id> -- <id> [--plan] [--flow <name> | --local] [--pace <name>] [--after <id> | --base <branch>] [--agent <profile> | --model <model>] [--parallel <n>] [--answer [<id>=]<text>] [--every 30s] [--foreground]   # each task in a worktree, a Herdr workspace and an agent, run through the flow as one batch, which the daemon prompts
 f10 start <id | parent> [<id>...] --discuss [note...] | <PR url | #n> [--plan] [--task <id>] [note...]   # one agent in one worktree, prompted once, that reads the tasks and waits
 f10 start <parent | id | id+id>[:profile]... --propose [--flow | --local | --pace | --agent | --parallel] [--facts F] [--json | --hint]   # print a proposal of what to bundle, run in parallel and order; starts nothing
 f10 resume [<id>] [--answer [<id>=]<text>] [--every 30s] [--parallel <n>] [--foreground]   # go on with the stopped batch holding the task, or the one stopped batch in the project
@@ -308,6 +308,33 @@ What the start does, case by case:
 - a fresh pane whose shell is still running its rc files refuses the agent as busy; start retries every 200ms for up to 5s before failing with Herdr's error, and prints a line to stderr at least every second while it waits
 - `--flow` and `--local` refuse before creating anything when `project.md` declares no such flow, printing the list `f10 flow` prints, since ship never picks a flow unasked
 
+**Order.**
+The command line can order its entries itself, with three marks read left to right:
+
+- `A,B` stacks B on A, and `A,B,C` is a chain: it means `A B@A C@B`.
+  An entry of a chain may be a bundle, so `A1+A2,A3` stacks A3 on the branch that holds A1 and A2.
+- `C@A` names A as C's base.
+  It says what a chain cannot: two entries on one base (`A,B C@A`), and an entry with several bases (`C@A@B`).
+- A space means no dependency, so `f10 start A1,A3 B1,B2 C1@A3@B2` is two independent chains and one entry after both.
+
+An entry reads `<id>[-suffix][@<base>...][:profile]`.
+The profile comes last because it is the entry's, never a base's, and `C:opus@A` is refused with the right spelling.
+A base is a task id or a bundle, with no suffix and no profile.
+No part of the notation needs quoting in bash or zsh, extendedglob included.
+
+One base is a stack, the same as `--after` or a body's `After:` line: the entry branches from the base's branch, opens at the base's first commit (under `--plan`, once its plan is saved), and its PR targets the base's branch.
+Several bases are a **join**, because a branch has one base.
+A join waits until every base has merged, then branches from the default branch and records its bases as `branch.<name>.f10-join`.
+Under `--plan` it opens once every base's plan is saved, and its plan prompt names each base with its plan's path.
+A flow that does not end in finish refuses a join before anything is created, because nothing would merge its bases.
+So does a base outside the list that is not finished, under `--plan` one with no saved plan.
+A base that halts, or ends at its PR without merging, halts the join before it opens.
+
+A typed base wins over the body's `After:` line, as `--after` does, and is never written to the tracker.
+The order is kept in the batch's record until an entry starts, and on its branch after, so `f10 resume` brings a stopped batch back in the same order.
+A parent cannot be ordered or named as a base, because its subtasks keep their own `After:` order: name the subtasks.
+`--after` or `--base` beside an `@` on the same entry, an order on a range, `--propose` and `--discuss` refuse the notation, because a proposal and a discussion set the order themselves.
+
 **Bundles.**
 `f10 start ABC-1+ABC-2` ships several tasks as one branch, one worktree, one agent and one PR.
 The first id is the **lead** and keeps everything keyed on a task (plan file, findings, verdicts, agent name, run state, ledger); the others are **riders**.
@@ -317,6 +344,7 @@ A bundle branch fetched from origin has no local record; start reads its riders 
 Before anything is created, start refuses a parent among the members, a rider already on another branch (naming it), a branch that exists with other riders (riders are fixed at start) and a suffix.
 The bundle's base is the one `After:` its members name outside it; a line naming another member is dropped, and two different bases are refused.
 A batch takes a bundle as one entry; a task `After:` a rider waits for the whole bundle.
+The members ship in one PR, and nothing orders the work inside it: `A+B` does not mean A then B.
 A bundle's PR title names the riders after the lead id, up to two and then a count (`ABC-1 (+ABC-2, ABC-3, 2 more): <lead title>`), because GitHub cuts long commit subjects from the end.
 `f10 pr create` and `f10 pr edit` add that tag to the drafted title, and replace one already there.
 The board shows such a PR under its lead with the lead's title.
@@ -660,7 +688,7 @@ It applies only to the tree; a run's block prints as without it.
 | `reviewing`, `resolving` | ship running review, resolve | orange |
 | `judging`, `planning` | ship running judge; capture or plan under way | blue |
 | `planned` | the plan is saved, ship not begun | faint blue |
-| `waiting` | no run yet, its `After:` base is not done, and a running batch lists it (a bundle's riders included), so the batch holds it for that base; or the record of a running batch this session launched says it parked the task for its base's code or its push (step `on <id>`) or holds its finish until the base is through (step `to finish after <id>`) | faint |
+| `waiting` | a join its batch has not opened, its step naming the bases not merged yet (`for <id> and <id> to merge`); or no run yet, its `After:` base is not done, and a running batch lists it (a bundle's riders included), so the batch holds it for that base; or the record of a running batch this session launched says it parked the task for its base's code or its push (step `on <id>`) or holds its finish until the base is through (step `to finish after <id>`) | faint |
 | `not started` | nothing recorded; a task no batch lists keeps `after <id>` as its step while its base is not done | faint |
 
 Color is off when stdout is not a terminal or `NO_COLOR` is set.
@@ -899,7 +927,8 @@ A cancelled record is never picked up again: the same command line starts a new 
    A bundle member with unfinished subtasks is refused, since one branch would ship the whole umbrella.
    `--after` and `--base` set one task's base, so a list, a range or a parent that expands to several tasks refuses them.
 3. **The graph.**
-   Each task has at most one base: the `branch.<name>.f10-after` its branch recorded once started, else the `After:` line in its body.
+   Each task has at most one base, except a join: the `branch.<name>.f10-after` its branch recorded once started, else the base typed on the command line, else the `After:` line in its body.
+   A join's bases are its branch's `f10-join`, else the typed ones, and it is ordered after all of them ([Order](#start)).
    Where the two disagree, the branch wins, with a note.
    The map is rebuilt on every run, and nothing about it is stored.
    A base outside the list is stacked on when it has a branch, and is refused when it has none and is not finished.

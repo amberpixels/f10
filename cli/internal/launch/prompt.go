@@ -147,6 +147,23 @@ func noteClause(note string) string {
 	return " Then, as the user asks: " + strings.TrimRight(note, ".") + "."
 }
 
+// JoinClause names a join's bases and their plans, for a plan that designs
+// against all of them: a join branches from the default branch, which holds
+// none of their code while they are only planned.
+func JoinClause(id string, deps []Dependency) string {
+	parts := make([]string, 0, len(deps))
+
+	for _, d := range deps {
+		if d.Planned {
+			parts = append(parts, fmt.Sprintf("%s, whose plan is at %s", d.Task, d.Plan))
+		} else {
+			parts = append(parts, fmt.Sprintf("%s, whose plan is not written yet (expected at %s)", d.Task, d.Plan))
+		}
+	}
+
+	return fmt.Sprintf("%s depends on %s", id, strings.Join(parts, ", and on "))
+}
+
 // DependencyClause names the base task and where its plan is. What to do
 // with that (design against the plan, not this checkout, with no fallback
 // for its absence) is the plan step's rule, so the prompt does not repeat it.

@@ -128,6 +128,8 @@ func (in *DriveInput) resolveTasks(ctx context.Context) ([]DriveTask, []string, 
 		return tasks, notes, nil
 	}
 
+	parents := map[string]bool{}
+
 	for i, tok := range in.Args.Tasks {
 		id, suffix := ref.SplitSuffix(tok)
 
@@ -135,6 +137,8 @@ func (in *DriveInput) resolveTasks(ctx context.Context) ([]DriveTask, []string, 
 		if err != nil {
 			return nil, nil, err
 		}
+
+		typed := in.typedBases(i)
 
 		if suffix != "" && r.Bundle != nil {
 			return nil, nil, fmt.Errorf("%s ships in bundle %s, which takes no suffix", r.ID, r.Label())
@@ -146,6 +150,15 @@ func (in *DriveInput) resolveTasks(ctx context.Context) ([]DriveTask, []string, 
 		}
 
 		notes = append(notes, left...)
+
+		if subs != nil {
+			if len(typed) > 0 {
+				return nil, nil, fmt.Errorf("%s is a parent, whose subtasks keep their After: order: "+
+					"name the subtasks to order them", r.ID)
+			}
+
+			parents[r.ID] = true
+		}
 
 		for _, sub := range subs {
 			if err := add(sub, "", i); err != nil {
@@ -161,9 +174,70 @@ func (in *DriveInput) resolveTasks(ctx context.Context) ([]DriveTask, []string, 
 		if err := add(r.Head(), suffix, i); err != nil {
 			return nil, nil, err
 		}
+
+		if err := in.typedOrder(ctx, &tasks[len(tasks)-1], typed, parents); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	for _, t := range tasks {
+		for _, b := range append([]string{t.after}, t.Join...) {
+			if t.typed && parents[b] {
+				return nil, nil, fmt.Errorf("%s: base %s is a parent, whose subtasks keep their After: order: "+
+					"name the subtask it builds on", t.Ref.ID, b)
+			}
+		}
 	}
 
 	return tasks, notes, in.typedBase(ctx, tasks)
+}
+
+// typedBases is the i-th listed token's typed bases, nil for none.
+func (in *DriveInput) typedBases(i int) []string {
+	if i < len(in.Args.Bases) {
+		return in.Args.Bases[i]
+	}
+
+	return nil
+}
+
+// typedOrder lays a token's typed bases over its body's After: line: one
+// base stacks the task, as --after does, and several make it a join.
+func (in *DriveInput) typedOrder(ctx context.Context, t *DriveTask, typed []string, parents map[string]bool) error {
+	if len(typed) == 0 {
+		return nil
+	}
+
+	var ids []string
+
+	for _, b := range typed {
+		base, err := in.Tracker.Resolve(ctx, b)
+		if err != nil {
+			return fmt.Errorf("%s@%s: %w", t.Ref.ID, b, err)
+		}
+
+		id := base.Head().ID
+
+		switch {
+		case parents[id]:
+			return fmt.Errorf("%s: base %s is a parent, whose subtasks keep their After: order: "+
+				"name the subtask it builds on", t.Ref.ID, id)
+		case slices.ContainsFunc(ids, func(x string) bool { return strings.EqualFold(x, id) }):
+			return fmt.Errorf("%s names %s as a base twice", t.Ref.ID, id)
+		}
+
+		ids = append(ids, id)
+	}
+
+	t.typed = true
+
+	if len(ids) == 1 {
+		t.after, t.Join = ids[0], nil
+	} else {
+		t.after, t.Join = "", ids
+	}
+
+	return nil
 }
 
 // typedBase lays --after or --base over the one task's body: --after names

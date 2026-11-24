@@ -30,6 +30,9 @@ const (
 	After       Key = "f10-after"
 	AfterBranch Key = "f10-after-branch"
 	Landed      Key = "f10-landed"
+	// Join lists, space-separated, the bases a join waited for: tasks that
+	// merged before it branched from the default branch.
+	Join Key = "f10-join"
 	// Moved is drive's note that the base's head moved past the branch, for
 	// the next catchup, which clears it and Landed.
 	Moved Key = "f10-base-moved"
@@ -82,6 +85,7 @@ var keys = []Key{
 	Watch,
 	CI,
 	Discuss,
+	Join,
 }
 
 // For is the full config name of the key on branch, as git and its errors
@@ -201,6 +205,7 @@ type Record struct {
 	Watch       string
 	CI          Triage
 	Discuss     []string
+	Join        []string
 }
 
 func (r *Record) set(key Key, value string) {
@@ -239,6 +244,8 @@ func (r *Record) set(key Key, value string) {
 		r.CI = ParseTriage(value)
 	case Discuss:
 		r.Discuss = strings.Fields(value)
+	case Join:
+		r.Join = strings.Fields(value)
 	case Chain: // an older drive's, which only the drive's unset reads
 	}
 }

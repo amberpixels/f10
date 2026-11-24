@@ -65,7 +65,8 @@ func launchKids(ctx context.Context, warn io.Writer, t *target.Target, sid strin
 	// a start's task has a branch from the start: none left is done with
 	type token struct {
 		text    string
-		after   string // the base the drive recorded
+		after   string   // the base the drive recorded
+		waits   []string // a join's bases the drive's record has not seen finish
 		started bool
 		queued  bool
 		phase   string
@@ -83,11 +84,17 @@ func launchKids(ctx context.Context, warn io.Writer, t *target.Target, sid strin
 		case state.LaunchDrive:
 			tasks, unopened := driveTasks(t.Layout.StorageRoot.Path(), l.Value)
 			for i, task := range tasks {
+				waits := drivectl.JoinWaits(task, tasks)
+				if !unopened[i] {
+					waits = nil
+				}
+
 				tokens = append(
 					tokens,
 					token{
 						text:    task.ID,
 						after:   task.After,
+						waits:   waits,
 						queued:  task.Queued,
 						phase:   task.Phase,
 						checks:  task.Checks != "",
@@ -127,7 +134,9 @@ func launchKids(ctx context.Context, warn io.Writer, t *target.Target, sid strin
 		}
 
 		r = r.Head()
-		k := stack.ChildRow{ID: r.ID, Suffix: suffix, Queued: tok.queued, Phase: tok.phase, OnChecks: tok.checks}
+		k := stack.ChildRow{
+			ID: r.ID, Suffix: suffix, Queued: tok.queued, Phase: tok.phase, OnChecks: tok.checks, Waits: tok.waits,
+		}
 
 		if slices.ContainsFunc(
 			kids,

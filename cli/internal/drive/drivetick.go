@@ -23,6 +23,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/textx"
 	"github.com/amberpixels/f10/cli/internal/ui"
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
@@ -111,6 +112,12 @@ func Drive(ctx context.Context, w io.Writer, in *DriveInput) (err error) {
 	// a base outside the list was refused unless started or finished, and leaves Base nil
 	for _, r := range runs {
 		r.Base = byID[r.Task.Base]
+
+		for _, id := range r.Task.Join {
+			if b := byID[id]; b != nil {
+				r.Join = append(r.Join, b)
+			}
+		}
 	}
 
 	in.Runs = runs
@@ -204,9 +211,7 @@ func (in *DriveInput) LoadLinks(ctx context.Context, tasks []DriveTask) {
 	ids := make([]string, 0, 2*len(tasks))
 	for _, t := range tasks {
 		ids = append(ids, t.Ref.Members()...)
-		if t.Base != "" {
-			ids = append(ids, t.Base)
-		}
+		ids = append(ids, t.bases()...)
 	}
 
 	in.links.Load(ctx, in.project, ids...)
@@ -293,6 +298,18 @@ func (in *DriveInput) startRunnable(
 			continue
 		}
 
+		if len(r.Join) > 0 {
+			if res := in.joinWait(r); res != nil {
+				in.end(ctx, r, *res)
+
+				continue
+			}
+
+			if r.joinWaits != "" {
+				continue
+			}
+		}
+
 		if !gate.Admit(in, r) {
 			in.Queue(r)
 
@@ -336,6 +353,69 @@ func (in *DriveInput) released(ctx context.Context, b *DriveRun) bool {
 	}
 
 	return stack.BaseHasCode(ctx, in.Main, b.O.Branch, def)
+}
+
+// joinWait reads a join's bases before it opens: it opens once each has
+// merged, or under --plan once each has a saved plan. It sets joinWaits to
+// the bases still out, printing them when they change, and ends the join
+// when a base ended without what it waits for, since nothing would follow.
+// planReleased decides both the release and the halt, as it does for a
+// stack, so a base that halted after saving its plan still releases.
+func (in *DriveInput) joinWait(r *DriveRun) *driveResult {
+	var out []string
+
+	for _, b := range r.Join {
+		switch id := b.Task.Ref.ID; {
+		case merged(b), in.Args.PlanOnly && in.planReleased(b):
+		case b.End != nil:
+			return joinHalted(r, b, in.Args.PlanOnly)
+		default:
+			out = append(out, in.id(id))
+		}
+	}
+
+	waits := textx.JoinAnd(out)
+	if waits != "" && waits != r.joinWaits {
+		what := "merge"
+		if in.Args.PlanOnly {
+			what = "save a plan"
+		}
+
+		fmt.Fprintf(in.Out, "%s: waiting for %s to %s\n", in.id(r.Task.Ref.ID), waits, what)
+	}
+
+	r.joinWaits = waits
+
+	return nil
+}
+
+// merged: the base's code is in the default branch, which a join branches
+// from: this batch finished it, or it was finished when the batch started.
+func merged(b *DriveRun) bool {
+	return b.End != nil && (b.End.Row == drivectl.RowFinished || b.End.Row == drivectl.RowAlreadyFinished)
+}
+
+// joinHalted ends a join whose base ended short of what it waits for, before
+// the join opened: a halt, or under --plan an end with no saved plan, or a
+// base that ended at its PR, which nothing in this batch will merge.
+func joinHalted(r, b *DriveRun, planOnly bool) *driveResult {
+	id, base := r.Task.Ref.ID, b.Task.Ref.ID
+
+	reason := fmt.Sprintf("base %s ended (%s) without merging", base, b.End.Row)
+
+	switch {
+	case planOnly:
+		reason = fmt.Sprintf("base %s ended (%s) without a saved plan", base, b.End.Row)
+	case b.End.Code != 0:
+		reason = fmt.Sprintf("base %s halted", base)
+	}
+
+	return &driveResult{
+		Row:    "halted: " + reason,
+		Code:   ui.ExitHalted,
+		Lines:  []string{fmt.Sprintf("%s halted before it started: %s", id, reason)},
+		Reason: reason,
+	}
 }
 
 // planReleased: under --plan, an opened base with a saved plan, ended or

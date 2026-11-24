@@ -149,6 +149,7 @@ func TestSplit(t *testing.T) {
 	}{
 		"branch.GH-1.f10-after-branch": {"GH-1", branchmeta.AfterBranch, true},
 		"branch.GH-1.f10-after":        {"GH-1", branchmeta.After, true},
+		"branch.GH-1.f10-join":         {"GH-1", branchmeta.Join, true},
 		"branch.v1.2/x.f10-tasks":      {"v1.2/x", branchmeta.Riders, true},
 		"branch.GH-1.f10-task":         {"GH-1", branchmeta.Task, true},
 		"branch.GH-1.merge":            {"", "", false},

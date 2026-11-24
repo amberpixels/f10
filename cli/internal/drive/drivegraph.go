@@ -6,11 +6,14 @@ import (
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/stack"
+	"github.com/amberpixels/f10/cli/internal/textx"
 )
 
-// Each task has at most one base: the f10-after its branch records once
-// started, else its body's After: line. The graph is rebuilt every run from
-// those, so nothing is stored and a resume reads the same answer.
+// A task's base is the f10-after its branch records once started, else the
+// command line's typed base, else its body's After: line. A join has several
+// bases (f10-join, else the typed ones) and no single base. The graph is
+// rebuilt every run from those, so a resume reads the same answer.
 
 // graph refuses a base outside the list that is neither started nor
 // finished, and a cycle, before anything is created.
@@ -26,6 +29,17 @@ func (in *DriveInput) graph(ctx context.Context, tasks []DriveTask) ([]int, []st
 		t.Base = t.after
 
 		if t.Branch == "" {
+			continue
+		}
+
+		join, err := branchmeta.Get(ctx, in.Main, t.Branch, branchmeta.Join)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%s: reading its recorded bases: %w", t.Ref.ID, err)
+		}
+
+		if join != "" {
+			t.Base, t.Join = "", strings.Fields(join)
+
 			continue
 		}
 
@@ -53,6 +67,10 @@ func (in *DriveInput) graph(ctx context.Context, tasks []DriveTask) ([]int, []st
 	}
 
 	index := listIndex(tasks)
+
+	if err := in.refuseJoins(ctx, tasks, index); err != nil {
+		return nil, nil, err
+	}
 
 	for _, t := range tasks {
 		if t.finished || t.Base == "" {
@@ -107,9 +125,17 @@ func topoOrder(tasks []DriveTask, index map[string]int) ([]int, error) {
 	order := make([]int, 0, len(tasks))
 
 	ready := func(t DriveTask) bool {
-		b, listed := index[t.Base]
+		if t.finished {
+			return true
+		}
 
-		return t.finished || t.Base == "" || !listed || placed[b]
+		for _, id := range append([]string{t.Base}, t.Join...) {
+			if b, listed := index[id]; id != "" && listed && !placed[b] {
+				return false
+			}
+		}
+
+		return true
 	}
 
 	for len(order) < len(tasks) {
@@ -128,7 +154,7 @@ func topoOrder(tasks []DriveTask, index map[string]int) ([]int, error) {
 
 			for i, t := range tasks {
 				if !placed[i] {
-					stuck = append(stuck, t.Ref.ID+" after "+t.Base)
+					stuck = append(stuck, t.Ref.ID+" after "+strings.Join(t.bases(), ", "))
 				}
 			}
 
@@ -140,4 +166,76 @@ func topoOrder(tasks []DriveTask, index map[string]int) ([]int, error) {
 	}
 
 	return order, nil
+}
+
+// bases is every base the task waits for: its one base, or a join's.
+func (t DriveTask) bases() []string {
+	if t.Base != "" {
+		return []string{t.Base}
+	}
+
+	return t.Join
+}
+
+// refuseJoins refuses, before anything is created, a join nothing in this
+// batch would let start: one under a flow that does not finish, since only
+// finish merges its bases, and one on a base outside the list that has not
+// merged. Under --plan a join opens on its bases' plans, so neither applies
+// the same way: an outside base needs a saved plan, or to be finished.
+func (in *DriveInput) refuseJoins(ctx context.Context, tasks []DriveTask, index map[string]int) error {
+	for _, t := range tasks {
+		if t.finished || len(t.Join) == 0 || t.Branch != "" {
+			continue
+		}
+
+		if !in.Args.PlanOnly && (!in.Flow.Finishes || in.Flow.Mixed) {
+			return fmt.Errorf("%s waits for %s to merge, and the %s flow does not end in finish, "+
+				"so nothing would merge them: run a flow that finishes, or stack it on one base",
+				t.Ref.ID, textx.JoinAnd(t.Join), in.Flow.Label())
+		}
+
+		for _, id := range t.Join {
+			if _, listed := index[id]; listed {
+				continue
+			}
+
+			ok, err := in.joinOutside(ctx, id)
+			if err != nil {
+				return err
+			}
+
+			if !ok {
+				return fmt.Errorf("%s waits for %s to merge, which is not in the list and not finished, "+
+					"so nothing in this batch would merge it: add %s to the list, or finish it first",
+					t.Ref.ID, id, id)
+			}
+		}
+	}
+
+	return nil
+}
+
+// joinOutside says a join's base the list does not hold is no wait: it is
+// finished, or under --plan its plan is saved.
+func (in *DriveInput) joinOutside(ctx context.Context, id string) (bool, error) {
+	base, err := in.Tracker.Resolve(ctx, id)
+	if err != nil {
+		return false, err
+	}
+
+	if in.Args.PlanOnly && in.Storage.PlanLive(base.ID) {
+		return true, nil
+	}
+
+	branched, err := stack.HasTaskBranch(ctx, in.Main, base.ID)
+	if err != nil {
+		return false, err
+	}
+
+	info, err := in.Tracker.Info(ctx, base)
+	if err != nil {
+		return false, fmt.Errorf("%s: %w", base.ID, err)
+	}
+
+	return stack.FinishedTask(info, in.Tracker.Storage, base.ID, branched), nil
 }
