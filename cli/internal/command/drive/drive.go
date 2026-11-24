@@ -294,8 +294,8 @@ func runDrive(ctx context.Context, cmd *cli.Command, argv []string, a drivectl.D
 	return drive.Drive(ctx, cmd.Writer, in)
 }
 
-// runPropose prints a proposal and changes nothing, so the daemon, a hook
-// or a status line may call it: no agents, no daemon, no record.
+// runPropose prints a proposal and changes nothing. It needs no agents, no
+// daemon and no record, so a hook or a status line may call it.
 func runPropose(ctx context.Context, cmd *cli.Command, a drivectl.DriveArgs) error {
 	t, err := target.For(ctx, cmd)
 	if err != nil {

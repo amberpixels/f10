@@ -349,7 +349,8 @@ A batch is the tasks one `f10 start` started, kept as a record.
   The newest record holding the task decides.
   A live one is resumed, and one that `f10 stop` ended is refused as stopped for good, even when an older batch still holds the task.
 - **With no task id**, the one stopped batch in the project resumes.
-  When several are stopped, it resumes none: it prints one line per batch, `f10 resume <lead>   batch <n>: <its tasks>`, and exits **1**.
+  When several are stopped, it resumes none and exits **1**.
+  It prints one line per batch, `f10 resume <id>   batch <n>: <its tasks>`, where `<id>` is a task id that names that batch.
   When none is stopped, it says so and exits non-zero.
 - **It resumes wherever each task stopped**, the finish included.
   Each task's position is read from its own branch and run state, so a batch whose tasks all shipped has only its finishes left to run.
@@ -357,7 +358,8 @@ A batch is the tasks one `f10 start` started, kept as a record.
 - **A batch still running is followed**, as rerunning its `f10 start` line follows it.
 - **The flags** are the ones that change how a batch runs, never what it runs.
   `--answer` answers the batch's open asks, `--every` sets how often the tasks are polled, `--parallel` rewrites the cap, and `--foreground` runs the batch in this process.
-  Any other flag, or a second task id, is refused, because a resume runs the batch's own tasks, flow and agent profiles.
+  Any other flag is refused, because a resume runs the batch's own tasks, flow and agent profiles.
+  So is a second task id.
 - **A batch stopped for good** with `f10 stop` is never resumed: its `f10 start` line starts a new one.
 
 The exit codes are a start's (**Batches**, point 7).
@@ -1103,10 +1105,20 @@ A task halted for another reason stays halted until its run changes: settle it i
 Out of scope: more than one base per task, and ordering tasks by anything but their recorded dependencies.
 
 **Old spellings.**
-Each of these still works for one release and prints one line on stderr naming its replacement: `f10 start --resume <n>` (now `f10 resume <task-id>`), `f10 drive plan <ids>` (now `f10 start <ids> --propose`), `f10 status --drives` (now `f10 status --batches`), the frontmatter key `drive_env` (now `batch_env`), and a batch number given to `f10 stop`, `f10 resume` or `f10 daemon logs` (now any task id of the batch).
-Until then a bare positive number given to those three commands is read as a batch number, never as a task id.
-`drive_env` beside `batch_env` in one frontmatter is an error.
-What a program reads is renamed with no alias, because the plugin's skills are its readers and ship with the binary: the proposal's `--json` keys `proposal` and `levels`, the `batch` key of `f10 inbox list --json`, `batchEnv` in `f10 config --json`, the `batches` key of `f10 standup --json` (schema 3), and the MCP tools `start_batch`, `list_batches` and `stop_batch`.
+Each of these still works for one release and prints one line on stderr naming its replacement:
+- `f10 start --resume <n>` is now `f10 resume <task-id>`.
+- `f10 drive plan <ids>` is now `f10 start <ids> --propose`.
+- `f10 status --drives` is now `f10 status --batches`.
+- The frontmatter key `drive_env` is now `batch_env`, and both in one frontmatter are an error.
+- A batch number given to `f10 stop`, `f10 resume` or `f10 daemon logs` is now any task id of the batch.
+  Until the number goes, a bare positive number given to those three commands is read as a batch number, never as a task id.
+
+What a program reads is renamed with no alias, because the plugin's skills are its readers and ship with the binary:
+- the proposal's `--json` keys `proposal` and `levels`
+- the `batch` key of `f10 inbox list --json`
+- `batchEnv` in `f10 config --json`
+- the `batches` key of `f10 standup --json`, which is schema 3
+- the MCP tools `start_batch`, `list_batches` and `stop_batch`
 
 ### Proposal
 

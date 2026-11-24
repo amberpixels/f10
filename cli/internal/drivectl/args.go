@@ -483,8 +483,8 @@ func ParsePropose(args []string) (DriveArgs, error) {
 	return a, nil
 }
 
-// ResumeArgs is `f10 resume`'s command line: the batch, by a task id or,
-// for one more release, its number, and the flags a resume takes.
+// ResumeArgs is `f10 resume`'s command line. A task id names the batch, and
+// for one more release so does its number.
 type ResumeArgs struct {
 	Token string   // "" for the one stopped batch
 	Flags []string // as typed, to put after --resume N

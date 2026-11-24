@@ -11,7 +11,8 @@ Start tasks beside this one.
 `f10 start` gives each task a branch, a worktree, a Herdr workspace and a claude agent.
 The per-user f10 daemon then prompts each agent one skill at a time, marked `--driven` (`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`).
 The tasks one `f10 start` started are a **batch**, and any of its task ids names it to `f10 stop`, `f10 resume` and `f10 daemon logs`.
-An **entry** is a task or a bundle, which is one branch, one agent and one PR, and `docs/concepts.md` → Start vocabulary defines the other words (base, stack, chain, proposal).
+An **entry** is a task or a bundle, which is one branch, one agent and one PR.
+`docs/concepts.md` → Start vocabulary defines the other words: base, stack, chain and proposal.
 The first skill is `/f10:plan` when the flow leads with a `plan` the pace keeps and the task has no plan file.
 Then comes `/f10:ship`, which runs every other entry.
 Then comes finish, when the flow ends in a `finish` entry.

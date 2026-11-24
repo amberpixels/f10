@@ -54,11 +54,9 @@ func live(root string, r *Record) (Live, bool) {
 	return Live{Record: r, Running: running}, true
 }
 
-// Holding is the newest live record holding task id: as a task, as any
-// member of a bundle, or with a -suffix. A batch is addressed by it, so no
-// command needs the record's number. The newest record holding the task
-// decides: once f10 stop ended it, an older live one is not picked up in its
-// place, because the user was told the stop is for good.
+// Holding is the live record a task id names, so no command needs a
+// record's number. The newest record holding the task decides. Once f10
+// stop ended that one, no older record takes its place.
 func Holding(root, id string) (Live, bool) {
 	id = strings.TrimSpace(id)
 	if id == "" {
@@ -87,8 +85,8 @@ func Holding(root, id string) (Live, bool) {
 	return Live{}, false
 }
 
-// wholeID is a task id, as against a tracker prefix cut short: it ends in a
-// number that starts the id or follows a separator, so FT and R3 are none.
+// wholeID is a task id, not a tracker prefix cut short. Its last number
+// starts the id or follows a separator, so FT and R3 are none.
 var wholeID = regexp.MustCompile(`(^|[-#])\d+$`)
 
 // holds reports typed, a task as a record keeps it, naming id. A typed
