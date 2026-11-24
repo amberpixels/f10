@@ -143,6 +143,7 @@ func TestFollowDriveEndsWithItsCode(t *testing.T) {
 		&out,
 		dir,
 		"0.1.0",
+		"/r",
 		runReq("echo drive 3; echo asks; exit 4"),
 		serving(t.Context(), dir, "0.1.0"),
 	)
@@ -169,7 +170,7 @@ func TestFollowDriveStopsWithAStop(t *testing.T) {
 
 	done := make(chan error, 1)
 
-	go func() { done <- followDrive(t.Context(), &out, dir, "0.1.0", runReq(waitsForDrain), counted) }()
+	go func() { done <- followDrive(t.Context(), &out, dir, "0.1.0", "/r", runReq(waitsForDrain), counted) }()
 
 	awaitDrive(t, dir, 5)
 
@@ -209,7 +210,7 @@ func TestFollowDriveFollowsAnUpgrade(t *testing.T) {
 
 	done := make(chan error, 1)
 
-	go func() { done <- followDrive(t.Context(), &out, dir, "0.1.0", runReq(waitsForDrain), old) }()
+	go func() { done <- followDrive(t.Context(), &out, dir, "0.1.0", "/r", runReq(waitsForDrain), old) }()
 
 	awaitDrive(t, dir, 5)
 
@@ -255,6 +256,7 @@ func TestFollowDriveFollowsAResume(t *testing.T) {
 		&out,
 		dir,
 		"0.1.0",
+		"/r",
 		runReq(`echo 5 > "$F10_DRIVE_FILE"; echo drive 5; sleep 0.3; exit 8`),
 		serving(t.Context(), dir, "0.1.0"),
 	)
@@ -264,5 +266,79 @@ func TestFollowDriveFollowsAResume(t *testing.T) {
 
 	if got := out.String(); !strings.Contains(got, "drive 5\n") || !strings.Contains(got, "resumed\n") {
 		t.Errorf("output = %q, want both runs", got)
+	}
+}
+
+// asking is a drive that stops on its asks once the daemon read its number.
+const asking = `echo 5 > "$F10_DRIVE_FILE"; echo drive 5 asks; sleep 0.3; exit 4`
+
+// waitAsks shortens the wait for a resumed run and fixes whether the
+// drive's record is gone.
+func waitAsks(t *testing.T, gone bool) {
+	t.Helper()
+
+	poll, was := askPoll, driveGone
+	askPoll, driveGone = 10*time.Millisecond, func(string, int) bool { return gone }
+
+	t.Cleanup(func() { askPoll, driveGone = poll, was })
+}
+
+// A drive stopped on its asks is waited on, not left: the run an answer
+// resumes is followed, and the follower ends with that run's code.
+func TestFollowDriveWaitsThroughAnAsk(t *testing.T) {
+	waitAsks(t, false)
+
+	dir := shortRunDir(t)
+
+	var out syncBuffer
+
+	done := make(chan error, 1)
+	go func() {
+		done <- followDrive(t.Context(), &out, dir, "0.1.0", "/r", runReq(asking), serving(t.Context(), dir, "0.1.0"))
+	}()
+
+	for deadline := time.Now().Add(5 * time.Second); !strings.Contains(out.String(), "waits on its asks"); {
+		if time.Now().After(deadline) {
+			t.Fatalf("the follower never waited: %q", out.String())
+		}
+
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// the answer resumes the drive, as f10 inbox answer does
+	if _, err := daemon.RunDrive(t.Context(), dir, daemon.ResumeCall("/", nil, 5)); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("err = %v\n%s", err, out.String())
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatalf("the follower never followed the resumed run: %q", out.String())
+	}
+
+	if got := out.String(); !strings.Contains(got, "drive 5 asks\n") || !strings.Contains(got, "resumed\n") {
+		t.Errorf("output = %q, want both runs", got)
+	}
+}
+
+// A drive stopped while it waited on its asks ends the follower with the
+// ask's code.
+func TestFollowDriveEndsWhenAnAskingDriveStops(t *testing.T) {
+	waitAsks(t, true)
+
+	dir := shortRunDir(t)
+
+	var out syncBuffer
+
+	err := followDrive(t.Context(), &out, dir, "0.1.0", "/r", runReq(asking), serving(t.Context(), dir, "0.1.0"))
+	if testkit.ExitCode(err) != ui.ExitAsk {
+		t.Fatalf("err = %v, want exit %d\n%s", err, ui.ExitAsk, out.String())
+	}
+
+	if !strings.Contains(out.String(), "drive 5 was stopped while it waited on its asks") {
+		t.Errorf("output = %q", out.String())
 	}
 }

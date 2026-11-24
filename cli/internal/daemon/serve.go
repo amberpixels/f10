@@ -91,10 +91,11 @@ type Server struct {
 type child struct {
 	Run
 
-	key  string // the record's command line, joined
-	env  []string
-	cmd  *exec.Cmd
-	done chan struct{}
+	key     string // the record's command line, joined
+	env     []string
+	cmd     *exec.Cmd
+	done    chan struct{}
+	indexed bool // its log is in the logs index; guarded by mu
 }
 
 // drained is a drive a drain stopped, for the next daemon to resume.
@@ -408,8 +409,11 @@ func (s *Server) run(req DriveSpec, key string) (Started, error) {
 	}
 
 	c.key = key
+	// a resume's number is known now: indexed at once, a run that ends
+	// before it prints its number is still found by FindLog
 	if req.Resume > 0 {
 		c.Drive = req.Resume
+		s.index(c)
 	}
 
 	return Started{Log: c.Log, Drive: c.Drive}, nil
@@ -491,19 +495,30 @@ func (s *Server) numbered(c *child, n int) {
 	key := liveKey(c.Root, n)
 
 	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	c.Drive = n
 	if key != "" {
 		c.key = key
 	}
-	s.mu.Unlock()
+
+	s.index(c)
+}
+
+// index appends c's log to the logs index once; the caller holds mu.
+func (s *Server) index(c *child) {
+	if c.indexed {
+		return
+	}
 
 	idx, err := os.OpenFile(filepath.Join(logsDir(s.Dir), "index"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		return
 	}
 
-	_, _ = fmt.Fprintf(idx, "%s\t%d\t%s\n", c.Root, n, c.Log)
+	_, _ = fmt.Fprintf(idx, "%s\t%d\t%s\n", c.Root, c.Drive, c.Log)
 	_ = idx.Close()
+	c.indexed = true
 }
 
 func (s *Server) reap(c *child, f *os.File) {

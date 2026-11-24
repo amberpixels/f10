@@ -20,6 +20,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/render"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/target"
+	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // WriteDaemonStatus prints what the daemon runs and watches.
@@ -168,7 +169,7 @@ func ThroughDaemon(
 	// a task the drive leaves unfinished is watched once the drive ends
 	drivectl.WatchProject(ctx, w, t)
 
-	return followDrive(ctx, w, dir, ver, req, nil)
+	return followDrive(ctx, w, dir, ver, t.Layout.StorageRoot.Path(), req, nil)
 }
 
 // setDriveParallel writes a given --parallel into the record --resume names
@@ -199,11 +200,13 @@ func setDriveParallel(w io.Writer, root string, argv []string, a drivectl.DriveA
 }
 
 // followDrive follows the drive until it exits, into the next daemon when
-// an upgrade drained it. spawn starts a daemon; nil is this binary's.
+// an upgrade drained it, and through its asks into the run an answer
+// resumes. root is the storage root the daemon keys the drive's logs by.
+// spawn starts a daemon; nil is this binary's.
 func followDrive(
 	ctx context.Context,
 	w io.Writer,
-	dir, ver string,
+	dir, ver, root string,
 	req daemon.DriveCall,
 	spawn func(context.Context) error,
 ) error {
@@ -236,14 +239,8 @@ func followDrive(
 			fmt.Fprintln(w, "following the drive the daemon already runs")
 		}
 
-		exit, err := TailLog(ctx, w, rep.Log)
+		exit, err := followAsks(ctx, w, dir, root, rep.Log)
 		if errors.Is(err, context.Canceled) {
-			if n := runningDrive(dir, rep.Log); n > 0 {
-				fmt.Fprintf(w, "\ndrive %d keeps running in the f10 daemon: f10 daemon logs %d -f\n", n, n)
-			} else {
-				fmt.Fprintln(w, "\nthe drive keeps running in the f10 daemon: f10 daemon status")
-			}
-
 			return cli.Exit("", 130)
 		}
 
@@ -273,6 +270,82 @@ func followDrive(
 		// it there, whatever that daemon's version
 		follow = true
 		req = daemon.ResumeCall(req.Dir, req.Env, exit.Drive)
+	}
+}
+
+// askPoll is how often a drive stopped on its asks is checked for the run
+// an answer resumes; tests shorten it.
+var askPoll = 2 * time.Second
+
+// driveGone reports a drive no answer can resume: f10 stop cancelled its
+// record, or the record is gone. Tests swap it.
+var driveGone = func(root string, n int) bool {
+	rec, err := drivestore.Read(root, n)
+
+	return err != nil || rec.Cancelled != nil
+}
+
+// followAsks tails log, and when the drive stops on its asks, waits for
+// the run an answer resumes and tails that one too, since a rerun would
+// only stop on the same asks again. It returns the last run's exit.
+func followAsks(ctx context.Context, w io.Writer, dir, root, log string) (daemon.Exit, error) {
+	for {
+		exit, err := TailLog(ctx, w, log)
+		if errors.Is(err, context.Canceled) {
+			keepsRunning(w, dir, log)
+		}
+
+		if err != nil || exit.Code != ui.ExitAsk || exit.Drive == 0 {
+			return exit, err
+		}
+
+		fmt.Fprintf(w, "\ndrive %d waits on its asks: answer them in the asking agent's pane, "+
+			"with f10 inbox or /f10:inbox; this follows the drive once it resumes\n", exit.Drive)
+
+		next, err := awaitResume(ctx, dir, root, exit.Drive, log)
+		if errors.Is(err, context.Canceled) {
+			fmt.Fprintf(w, "\ndrive %d still waits on its asks: f10 status --drives shows it\n", exit.Drive)
+		}
+
+		if err != nil {
+			return exit, err
+		}
+
+		if next == "" {
+			fmt.Fprintf(w, "drive %d was stopped while it waited on its asks\n", exit.Drive)
+
+			return exit, nil
+		}
+
+		log = next
+	}
+}
+
+// awaitResume waits for drive n to run again after last, and returns the
+// new run's log; "" once the drive is gone. It reads the daemon's log index,
+// not its live runs, so a resumed run that ends between two looks is
+// followed all the same.
+func awaitResume(ctx context.Context, dir, root string, n int, last string) (string, error) {
+	for {
+		if log := daemon.FindLog(dir, root, n); log != "" && log != last {
+			return log, nil
+		}
+
+		if driveGone(root, n) {
+			return "", nil
+		}
+
+		if err := sleepCtx(ctx, askPoll); err != nil {
+			return "", err
+		}
+	}
+}
+
+func keepsRunning(w io.Writer, dir, log string) {
+	if n := runningDrive(dir, log); n > 0 {
+		fmt.Fprintf(w, "\ndrive %d keeps running in the f10 daemon: f10 daemon logs %d -f\n", n, n)
+	} else {
+		fmt.Fprintln(w, "\nthe drive keeps running in the f10 daemon: f10 daemon status")
 	}
 }
 
