@@ -118,7 +118,7 @@ func TestPlanFromAParent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := []string{"GH-11+GH-12+GH-13", "GH-14", "GH-15", "GH-16", "GH-19", "GH-20", "GH-17+GH-18", "--parallel", "4"}
+	want := []string{"GH-11+GH-12+GH-13", "GH-14,GH-17+GH-18", "GH-15", "GH-16", "GH-19", "GH-20", "--parallel", "4"}
 	if !slices.Equal(res.Plan.Args, want) {
 		t.Errorf("args %v, want %v", res.Plan.Args, want)
 	}
@@ -173,8 +173,53 @@ func TestPlanWithoutASheet(t *testing.T) {
 		t.Errorf("GH-30 = %+v", bug)
 	}
 
-	if !slices.Equal(res.Plan.Args, []string{"GH-14", "GH-30"}) {
-		t.Errorf("args %v, want the base first", res.Plan.Args)
+	if !slices.Equal(res.Plan.Args, []string{"GH-14,GH-30"}) {
+		t.Errorf("args %v, want GH-30 stacked on GH-14", res.Plan.Args)
+	}
+}
+
+// the printed command is read back by the start's own parser, so the order
+// the proposal sets is the order a start runs; buildsOn reads one id or a list
+func TestPlanCommandParsesBackToItsOrder(t *testing.T) {
+	t.Parallel()
+
+	in := planFixture(t)
+	in.Joins = true
+	info := in.Tracker.Info
+	in.Tracker.Info = func(ctx context.Context, r ref.Ref) (tasksource.TaskInfo, error) {
+		if r.ID == "GH-15" || r.ID == "GH-16" {
+			return tasksource.TaskInfo{Body: r.ID}, nil
+		}
+
+		return info(ctx, r)
+	}
+	sheet := writeSheet(t, `{
+		"GH-15": {"alone": true, "files": ["x.go"]},
+		"GH-16": {"alone": true, "buildsOn": "GH-15"},
+		"GH-30": {"alone": true, "files": ["x.go"], "buildsOn": ["GH-16"]}
+	}`)
+
+	res, err := Plan(context.Background(), in, planArgs(t, "GH-15", "GH-16", "GH-30", "--facts", sheet))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := drivectl.ParseDriveArgs(res.Plan.Args)
+	if err != nil {
+		t.Fatalf("start refuses %v: %v", res.Plan.Args, err)
+	}
+
+	bases := map[string][]string{}
+	for i, id := range got.Tasks {
+		bases[id] = got.Bases[i]
+	}
+
+	// GH-30's body names GH-14, outside the list; GH-15 is reached through GH-16
+	want := map[string][]string{"GH-15": nil, "GH-16": {"GH-15"}, "GH-30": {"GH-14", "GH-16"}}
+	for id, w := range want {
+		if !slices.Equal(bases[id], w) {
+			t.Errorf("%s: bases %v, want %v (args %v)", id, bases[id], w, res.Plan.Args)
+		}
 	}
 }
 

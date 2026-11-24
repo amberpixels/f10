@@ -28,6 +28,7 @@ type PlanInput struct {
 	FlowByArea      map[string]string
 	MaxLines        int
 	DefaultParallel int
+	Joins           bool // the run's flow finishes, so an entry may wait on several bases
 }
 
 // PlanResult is a proposal.
@@ -38,7 +39,7 @@ type PlanResult struct {
 	Extra []string // the drive flags carried onto the command
 }
 
-// A SheetTask is one task's row in the facts sheet the drive skill writes:
+// A SheetTask is one task's row in the facts sheet the propose step writes:
 // what only a read of the task against the code can tell, and the user's
 // edits to the proposal.
 type SheetTask struct {
@@ -46,11 +47,36 @@ type SheetTask struct {
 	Areas    []string `json:"areas,omitempty"`
 	Files    []string `json:"files,omitempty"`
 	Lines    int      `json:"lines,omitempty"`
-	BuildsOn string   `json:"buildsOn,omitempty"`
+	BuildsOn IDList   `json:"buildsOn,omitempty"`
 	Risky    string   `json:"risky,omitempty"`
 	Alone    bool     `json:"alone,omitempty"`
 	With     string   `json:"with,omitempty"`
-	After    string   `json:"after,omitempty"`
+	After    IDList   `json:"after,omitempty"`
+}
+
+// IDList is a list of task ids that also reads a single id, since a model
+// writing the sheet gives "FT-44" as readily as ["FT-44"].
+type IDList []string
+
+func (l *IDList) UnmarshalJSON(data []byte) error {
+	var one string
+	if err := json.Unmarshal(data, &one); err == nil {
+		*l = nil
+		if one != "" {
+			*l = IDList{one}
+		}
+
+		return nil
+	}
+
+	var many []string
+	if err := json.Unmarshal(data, &many); err != nil {
+		return fmt.Errorf("want a task id or a list of them: %w", err)
+	}
+
+	*l = many
+
+	return nil
 }
 
 // Labels that name a kind, as fetch reads them.
@@ -88,6 +114,7 @@ func Plan(ctx context.Context, in PlanInput, a drivectl.DriveArgs) (PlanResult, 
 		Tasks:    tasks,
 		MaxLines: in.MaxLines,
 		Parallel: cmp.Or(a.Parallel, in.DefaultParallel),
+		Joins:    in.Joins,
 	})
 	if err != nil {
 		return PlanResult{}, err

@@ -163,7 +163,7 @@ Each word has one meaning, in the commands, the messages and the docs.
 - **chain**: a line of stacks, each one's base the entry before it, typed `A,B,C`.
 - **join**: an entry with several bases, typed `C@A@B`.
   It waits until every base has merged, then branches from the default branch.
-- **proposal**: what `f10 start <ids> --propose` prints, which is the bundles, the order and the one command to run.
+- **proposal**: what `f10 start <ids> --propose` prints, which is the bundles, the order and the one command to run, the order spelled in it.
   It starts nothing.
 - **level**: one row group of a proposal, holding the entries whose bases all sit in earlier levels.
   It is not a stage, which is a unit of a task's plan.

@@ -302,12 +302,24 @@ func runPropose(ctx context.Context, cmd *cli.Command, a drivectl.DriveArgs) err
 		return err
 	}
 
+	// the flow the start would run: a join needs one that finishes
+	run, err := runplan.ResolveRun(ctx, t.Effective, runplan.RunInput{Pace: a.Pace})
+	if err != nil {
+		return err
+	}
+
+	fl, err := run.Flow(a.Flow)
+	if err != nil {
+		return err
+	}
+
 	res, err := drive.Plan(ctx, drive.PlanInput{
 		Storage:         t.Layout.StorageRoot,
 		Tracker:         stack.TrackerFor(t),
 		FlowByArea:      t.Effective.FlowByArea,
 		MaxLines:        t.Effective.BundleMaxLines,
 		DefaultParallel: drive.DefaultParallel(),
+		Joins:           fl.Finishes && !fl.Mixed,
 	}, a)
 	if err != nil {
 		return err

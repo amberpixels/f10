@@ -1,6 +1,7 @@
-// Package driveplan proposes how to drive a set of tasks: which to bundle on
-// one branch, which to leave alone, and which After: lines to add. It reads
-// nothing itself, so every rule is a table test; gathering lives in drive.
+// Package driveplan proposes how to start a set of tasks: which to bundle on
+// one branch, which to leave alone, and which entry waits for which, spelled
+// in the start command. It reads nothing itself, so every rule is a table
+// test; gathering lives in drive.
 package driveplan
 
 import (
@@ -28,36 +29,49 @@ type Task struct {
 	Files []string `json:"files,omitempty"`
 	Lines int      `json:"lines,omitempty"` // changed lines; 0 is not sized
 	// Estimated marks Lines as a model's guess rather than a measured diff
-	Estimated bool   `json:"estimated,omitempty"`
-	Base      string `json:"after,omitempty"`     // the body's After: line
-	BuildsOn  string `json:"buildsOn,omitempty"`  // a task whose code this one builds on, with no After: saying so
-	Flow      string `json:"flow,omitempty"`      // the flow its areas map to, "" for the drive's
-	Profile   string `json:"profile,omitempty"`   // its :profile as typed
-	Risky     string `json:"risky,omitempty"`     // the word that marks it risky (migration), "" for none
-	Alone     bool   `json:"alone,omitempty"`     // the user kept it alone
-	With      string `json:"with,omitempty"`      // the user bundled it with this task
-	After     string `json:"afterEdit,omitempty"` // the user's After: for it, "none" to drop the body's
+	Estimated bool     `json:"estimated,omitempty"`
+	Base      string   `json:"after,omitempty"`     // the body's After: line
+	BuildsOn  []string `json:"buildsOn,omitempty"`  // tasks whose code this one builds on, with no After: saying so
+	Flow      string   `json:"flow,omitempty"`      // the flow its areas map to, "" for the batch's
+	Profile   string   `json:"profile,omitempty"`   // its :profile as typed
+	Risky     string   `json:"risky,omitempty"`     // the word that marks it risky (migration), "" for none
+	Alone     bool     `json:"alone,omitempty"`     // the user kept it alone
+	With      string   `json:"with,omitempty"`      // the user bundled it with this task
+	After     []string `json:"afterEdit,omitempty"` // the user's bases for it, ["none"] to drop every base
 }
+
+// NoOrder is the user's After: that drops every base of a task.
+const NoOrder = "none"
 
 // Input is the candidates in the parent's order, with the caps.
 type Input struct {
 	Tasks    []Task
 	MaxLines int // bundle_max_lines
 	Parallel int // the ceiling on --parallel, 0 for none
+	// Joins says the run's flow finishes, so an entry may wait on several
+	// bases; f10 start refuses a join otherwise, so only the first is kept
+	Joins bool
 }
 
-// An Entry is one item of the drive command: a task or a bundle.
+// An Entry is one item of the start command: a task or a bundle.
 type Entry struct {
 	IDs     []string `json:"ids"`
 	Reason  string   `json:"reason"`
-	Base    string   `json:"after,omitempty"` // the one base outside the entry
+	Bases   []Base   `json:"bases,omitempty"` // the tasks outside the entry it waits for
 	Lines   int      `json:"lines,omitempty"`
 	Profile string   `json:"profile,omitempty"`
 	spike   bool
 	named   bool // holds a pair the user bundled, so the rules did not form it
 }
 
-// Token is how the drive command names the entry.
+// A Base is one task an entry waits for, and why.
+type Base struct {
+	ID      string `json:"id"`
+	Reason  string `json:"reason"`
+	Dropped bool   `json:"dropped,omitempty"` // the flow does not finish, so the join was cut to one base
+}
+
+// Token is how the proposal's rows name the entry; the command adds its bases.
 func (e Entry) Token() string {
 	tok := strings.Join(e.IDs, "+")
 	if e.Profile != "" {
@@ -67,17 +81,23 @@ func (e Entry) Token() string {
 	return tok
 }
 
-// A Level is the entries at one depth of the After: graph: every base of
-// an entry sits in an earlier level.
-type Level struct {
-	Entries []Entry `json:"entries"`
+// waits is the ids of the bases the entry keeps.
+func (e Entry) waits() []string {
+	var out []string
+
+	for _, b := range e.Bases {
+		if !b.Dropped {
+			out = append(out, b.ID)
+		}
+	}
+
+	return out
 }
 
-// An Edit is an After: line the proposal adds to a task, applied only on a yes.
-type Edit struct {
-	Task   string `json:"task"`
-	After  string `json:"after"` // "none" drops the line
-	Reason string `json:"reason"`
+// A Level is the entries at one depth of the base graph: every base of an
+// entry sits in an earlier level.
+type Level struct {
+	Entries []Entry `json:"entries"`
 }
 
 // Formed is a saving the rules found by themselves.
@@ -90,8 +110,7 @@ type Formed struct {
 // A Plan is the proposal.
 type Plan struct {
 	Levels   []Level  `json:"levels"`
-	Edits    []Edit   `json:"edits,omitempty"`
-	Args     []string `json:"args"` // the start command's arguments
+	Args     []string `json:"args"` // the start command's arguments, the order spelled with , and @
 	Parallel int      `json:"parallel"`
 	Waits    int      `json:"ciWaitsSaved"`
 	Finishes int      `json:"finishesSaved"`
@@ -103,7 +122,7 @@ type Plan struct {
 }
 
 // Propose applies the rules: alone first, then bundles within a class by
-// shared files or areas, split at the cap, then levels by After: depth.
+// shared files or areas, split at the cap, then the bases and levels.
 func Propose(in Input) (Plan, error) {
 	if in.MaxLines <= 0 {
 		return Plan{}, errors.New("the bundle cap must be a positive number of lines")
@@ -121,34 +140,9 @@ func Propose(in Input) (Plan, error) {
 		byID[key] = i
 	}
 
-	var edits []Edit
-
-	base := make([]string, len(tasks))
-
+	base := make([][]Base, len(tasks))
 	for i, t := range tasks {
-		base[i] = t.Base
-
-		switch {
-		case strings.EqualFold(t.After, "none"):
-			base[i] = ""
-
-			if t.Base != "" {
-				edits = append(edits, Edit{Task: t.ID, After: "none", Reason: "you dropped its order"})
-			}
-		case t.After != "":
-			base[i] = t.After
-
-			if !strings.EqualFold(t.After, t.Base) {
-				edits = append(edits, Edit{Task: t.ID, After: t.After, Reason: "you ordered it"})
-			}
-		case t.Base == "" && t.BuildsOn != "":
-			base[i] = t.BuildsOn
-			edits = append(edits, Edit{
-				Task:   t.ID,
-				After:  t.BuildsOn,
-				Reason: "builds on " + t.BuildsOn + "'s code",
-			})
-		}
+		base[i] = basesOf(t)
 	}
 
 	alone := make([]string, len(tasks))
@@ -176,37 +170,43 @@ func Propose(in Input) (Plan, error) {
 		entries = append(entries, entryOf(tasks, base, alone, groupLines, g, in.MaxLines))
 	}
 
-	edits = append(edits, conflictOrders(tasks, entries, base, byID)...)
+	conflictOrders(tasks, entries, byID)
+
+	if !in.Joins {
+		for k := range entries {
+			cutJoin(&entries[k])
+		}
+	}
 
 	levels, err := levelsOf(entries)
 	if err != nil {
 		return Plan{}, err
 	}
 
-	p := Plan{Levels: levels, Edits: edits}
+	p := Plan{Levels: levels, Args: commandArgs(levels)}
 
 	for _, st := range levels {
 		p.Parallel = max(p.Parallel, len(st.Entries))
 
 		for _, e := range st.Entries {
-			p.Args = append(p.Args, e.Token())
+			if len(e.IDs) < 2 {
+				continue
+			}
 
-			if len(e.IDs) > 1 {
-				p.Bundles++
-				p.Bundled += len(e.IDs)
-				p.Finishes += len(e.IDs) - 1
+			p.Bundles++
+			p.Bundled += len(e.IDs)
+			p.Finishes += len(e.IDs) - 1
+
+			if !e.spike {
+				p.Waits += len(e.IDs) - 1
+			}
+
+			if !e.named {
+				p.Formed.Bundles++
+				p.Formed.Bundled += len(e.IDs)
 
 				if !e.spike {
-					p.Waits += len(e.IDs) - 1
-				}
-
-				if !e.named {
-					p.Formed.Bundles++
-					p.Formed.Bundled += len(e.IDs)
-
-					if !e.spike {
-						p.Formed.Waits += len(e.IDs) - 1
-					}
+					p.Formed.Waits += len(e.IDs) - 1
 				}
 			}
 		}
@@ -221,6 +221,70 @@ func Propose(in Input) (Plan, error) {
 	}
 
 	return p, nil
+}
+
+// basesOf is a task's bases: the user's, else its After: line and the tasks
+// it builds on. An id named twice keeps its first reason.
+func basesOf(t Task) []Base {
+	if len(t.After) > 0 {
+		if dropsOrder(t) {
+			return nil
+		}
+
+		var out []Base
+		for _, id := range t.After {
+			out = addBase(out, Base{ID: id, Reason: "you ordered it"})
+		}
+
+		return out
+	}
+
+	var out []Base
+	if t.Base != "" {
+		out = addBase(out, Base{ID: t.Base, Reason: "its After: line"})
+	}
+
+	for _, id := range t.BuildsOn {
+		out = addBase(out, Base{ID: id, Reason: "builds on " + id + "'s code"})
+	}
+
+	return out
+}
+
+func dropsOrder(t Task) bool {
+	return len(t.After) == 1 && strings.EqualFold(t.After[0], NoOrder)
+}
+
+func addBase(list []Base, b Base) []Base {
+	if b.ID == "" || slices.ContainsFunc(list, func(o Base) bool { return strings.EqualFold(o.ID, b.ID) }) {
+		return list
+	}
+
+	return append(list, b)
+}
+
+func baseIDs(list []Base) []string {
+	out := make([]string, 0, len(list))
+	for _, b := range list {
+		out = append(out, b.ID)
+	}
+
+	return out
+}
+
+// sameSet compares two id lists, ignoring order and case.
+func sameSet(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	for _, x := range a {
+		if !slices.ContainsFunc(b, func(y string) bool { return strings.EqualFold(x, y) }) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // aloneReason is why a task never bundles, "" when it may.
@@ -289,9 +353,10 @@ func common(a, b []string) []string {
 }
 
 // bundle joins tasks of one class that share a file or an area, then cuts
-// each joined set into bundles with one outside base each, under the cap.
+// each joined set into bundles with one set of outside bases each, under
+// the cap.
 // Groups come back in the parent's order of their first member.
-func bundle(tasks []Task, base, alone []string, byID map[string]int, maxLines int) [][]int {
+func bundle(tasks []Task, base [][]Base, alone []string, byID map[string]int, maxLines int) [][]int {
 	parent := make([]int, len(tasks))
 	for i := range parent {
 		parent[i] = i
@@ -360,17 +425,18 @@ func bundle(tasks []Task, base, alone []string, byID map[string]int, maxLines in
 	return groups
 }
 
-// split cuts one joined set: a member joins the first bundle it shares its
-// base with (none, or a member already in it) and fits under the cap. Only
-// a pair the user named passes the cap; a task the rules joined never does.
-func split(tasks []Task, base []string, members []int, byID map[string]int, maxLines int) [][]int {
+// split cuts one joined set: a member joins the first bundle whose outside
+// bases are its own outside bases, or that holds every base it has, and
+// fits under the cap. Only a pair the user named passes the cap; a task the
+// rules joined never does.
+func split(tasks []Task, base [][]Base, members []int, byID map[string]int, maxLines int) [][]int {
 	if len(members) == 1 {
 		return [][]int{members}
 	}
 
 	type part struct {
 		ids   []int
-		ext   string
+		ext   []string
 		lines int
 	}
 
@@ -393,14 +459,21 @@ func split(tasks []Task, base []string, members []int, byID map[string]int, maxL
 		for k := range parts {
 			p := &parts[k]
 
-			b := base[i]
+			var outside []string
+
+			for _, b := range base[i] {
+				if !inPart(*p, b.ID) {
+					outside = append(outside, b.ID)
+				}
+			}
+
 			fits := named(*p, i) || p.lines+tasks[i].Lines <= maxLines
 
 			switch {
 			case !fits:
 				continue
-			case b != "" && inPart(*p, b):
-			case strings.EqualFold(p.ext, b):
+			case len(base[i]) > 0 && len(outside) == 0:
+			case sameSet(p.ext, outside):
 			default:
 				continue
 			}
@@ -413,7 +486,7 @@ func split(tasks []Task, base []string, members []int, byID map[string]int, maxL
 		}
 
 		if !placed {
-			parts = append(parts, part{ids: []int{i}, ext: base[i], lines: tasks[i].Lines})
+			parts = append(parts, part{ids: []int{i}, ext: baseIDs(base[i]), lines: tasks[i].Lines})
 		}
 	}
 
@@ -426,7 +499,7 @@ func split(tasks []Task, base []string, members []int, byID map[string]int, maxL
 }
 
 // entryOf names a group's reason: why it is bundled, or why it stands alone.
-func entryOf(tasks []Task, base, alone []string, groupLines, g []int, maxLines int) Entry {
+func entryOf(tasks []Task, base [][]Base, alone []string, groupLines, g []int, maxLines int) Entry {
 	e := Entry{Profile: tasks[g[0]].Profile}
 	estimated := false
 
@@ -439,11 +512,10 @@ func entryOf(tasks []Task, base, alone []string, groupLines, g []int, maxLines i
 	}
 
 	for _, i := range g {
-		if b := base[i]; b != "" &&
-			!slices.ContainsFunc(e.IDs, func(id string) bool { return strings.EqualFold(id, b) }) {
-			e.Base = b
-
-			break
+		for _, b := range base[i] {
+			if !slices.ContainsFunc(e.IDs, func(id string) bool { return strings.EqualFold(id, b.ID) }) {
+				e.Bases = addBase(e.Bases, b)
+			}
 		}
 	}
 
@@ -465,10 +537,6 @@ func entryOf(tasks []Task, base, alone []string, groupLines, g []int, maxLines i
 	}
 
 	e.Reason += ", " + linesOf(e.Lines, estimated) + " together"
-
-	if e.Base != "" {
-		e.Reason += ", After: " + e.Base
-	}
 
 	return e
 }
@@ -515,7 +583,7 @@ func dedupe(list []string) []string {
 
 // loneReason is why a task that may bundle stands alone: the task beside it
 // it could have joined, else what it touches.
-func loneReason(tasks []Task, base, alone []string, groupLines []int, i, maxLines int) string {
+func loneReason(tasks []Task, base [][]Base, alone []string, groupLines []int, i, maxLines int) string {
 	t := tasks[i]
 
 	for j, o := range tasks {
@@ -534,8 +602,8 @@ func loneReason(tasks []Task, base, alone []string, groupLines []int, i, maxLine
 			return "alone: other agent profile than " + o.ID
 		case (kindOf(t) == KindBug) != (kindOf(o) == KindBug):
 			return "alone: a bug fix keeps its own PR"
-		case !strings.EqualFold(base[i], base[j]):
-			return "alone: its After: differs from " + o.ID + "'s"
+		case !sameSet(baseIDs(base[i]), baseIDs(base[j])):
+			return "alone: its bases differ from " + o.ID + "'s"
 		default:
 			return fmt.Sprintf("split: %d lines with %s's group, over the cap of %d",
 				t.Lines+groupLines[j], o.ID, maxLines)
@@ -559,39 +627,38 @@ func linesOf(n int, estimated bool) string {
 
 // conflictOrders orders two entries that share a file but cannot bundle,
 // the later after the earlier, since run side by side they would conflict.
-// Only an entry with no base of its own takes one.
-func conflictOrders(tasks []Task, entries []Entry, base []string, byID map[string]int) []Edit {
-	var edits []Edit
-
+// It walks the earlier entries nearest first, so an entry already reached
+// through another base adds nothing.
+func conflictOrders(tasks []Task, entries []Entry, byID map[string]int) {
 	for b := range entries {
-		// a base, or an order the user set or dropped, is not second-guessed
-		if entries[b].Base != "" || slices.ContainsFunc(entries[b].IDs, func(id string) bool {
-			i := byID[strings.ToUpper(id)]
-
-			return base[i] != "" || tasks[i].After != ""
+		// an order the user set or dropped is not second-guessed
+		if slices.ContainsFunc(entries[b].IDs, func(id string) bool {
+			return len(tasks[byID[strings.ToUpper(id)]].After) > 0
 		}) {
 			continue
 		}
 
-		for a := range b {
+		for a := b - 1; a >= 0; a-- {
 			file := sharedFile(tasks, entries[a], entries[b], byID)
-			if file == "" || dependsOn(entries, a, b) {
+			if file == "" || dependsOn(entries, b, a) || dependsOn(entries, a, b) {
 				continue
 			}
 
 			lead := entries[a].IDs[0]
-			entries[b].Base = lead
-			edits = append(edits, Edit{
-				Task:   entries[b].IDs[0],
-				After:  lead,
+			entries[b].Bases = append(entries[b].Bases, Base{
+				ID:     lead,
 				Reason: "shares " + file + " with " + lead + ": run side by side they would conflict",
 			})
-
-			break
 		}
 	}
+}
 
-	return edits
+// cutJoin keeps an entry's first base when the flow does not finish, since
+// f10 start refuses a join that nothing would merge; the rest stay named.
+func cutJoin(e *Entry) {
+	for k := 1; k < len(e.Bases); k++ {
+		e.Bases[k].Dropped = true
+	}
 }
 
 func sharedFile(tasks []Task, a, b Entry, byID map[string]int) string {
@@ -609,18 +676,28 @@ func sharedFile(tasks []Task, a, b Entry, byID map[string]int) string {
 // dependsOn says entry a already waits, directly or not, for entry b.
 func dependsOn(entries []Entry, a, b int) bool {
 	of := entryIndex(entries)
+	seen := make([]bool, len(entries))
+	todo := []int{a}
 
-	for seen := 0; a >= 0 && seen <= len(entries); seen++ {
-		if a == b {
+	for len(todo) > 0 {
+		k := todo[len(todo)-1]
+		todo = todo[:len(todo)-1]
+
+		if k == b {
 			return true
 		}
 
-		next, ok := of[strings.ToUpper(entries[a].Base)]
-		if !ok {
-			return false
+		if seen[k] {
+			continue
 		}
 
-		a = next
+		seen[k] = true
+
+		for _, id := range entries[k].waits() {
+			if next, ok := of[strings.ToUpper(id)]; ok {
+				todo = append(todo, next)
+			}
+		}
 	}
 
 	return false
@@ -638,7 +715,7 @@ func entryIndex(entries []Entry) map[string]int {
 	return of
 }
 
-// levelsOf puts each entry at its depth in the After: graph; a base outside
+// levelsOf puts each entry one level below its deepest base; a base outside
 // the list counts as done. Inside a level, entries keep the parent's order.
 func levelsOf(entries []Entry) ([]Level, error) {
 	of := entryIndex(entries)
@@ -660,12 +737,17 @@ func levelsOf(entries []Entry) ([]Level, error) {
 
 		state[k] = 1
 
-		if b, ok := of[strings.ToUpper(entries[k].Base)]; ok && entries[k].Base != "" {
+		for _, id := range entries[k].waits() {
+			b, ok := of[strings.ToUpper(id)]
+			if !ok {
+				continue
+			}
+
 			if err := visit(b, append(path, entries[k].Token())); err != nil {
 				return err
 			}
 
-			depth[k] = depth[b] + 1
+			depth[k] = max(depth[k], depth[b]+1)
 		}
 
 		state[k] = 2
@@ -690,4 +772,62 @@ func levelsOf(entries []Entry) ([]Level, error) {
 	}
 
 	return levels, nil
+}
+
+// commandArgs spells the levels as f10 start's arguments. An entry whose one
+// base ends a chain not yet extended joins it with a comma (A,B); any other
+// base is @ and the lead of the base's entry (C@A), a profile last.
+func commandArgs(levels []Level) []string {
+	var all []Entry
+	for _, st := range levels {
+		all = append(all, st.Entries...)
+	}
+
+	of := entryIndex(all)
+
+	var chains [][]string
+
+	tail := map[int]int{} // an entry ending a chain -> that chain
+
+	for k, e := range all {
+		waits := e.waits()
+
+		if len(waits) == 1 {
+			if b, ok := of[strings.ToUpper(waits[0])]; ok {
+				if c, open := tail[b]; open {
+					chains[c] = append(chains[c], e.Token())
+					delete(tail, b)
+					tail[k] = c
+
+					continue
+				}
+			}
+		}
+
+		var link strings.Builder
+
+		link.WriteString(strings.Join(e.IDs, "+"))
+
+		for _, id := range waits {
+			if b, ok := of[strings.ToUpper(id)]; ok {
+				id = all[b].IDs[0]
+			}
+
+			link.WriteString("@" + id)
+		}
+
+		if e.Profile != "" {
+			link.WriteString(":" + e.Profile)
+		}
+
+		chains = append(chains, []string{link.String()})
+		tail[k] = len(chains) - 1
+	}
+
+	args := make([]string, 0, len(chains))
+	for _, c := range chains {
+		args = append(args, strings.Join(c, ","))
+	}
+
+	return args
 }

@@ -88,8 +88,9 @@ func TestFixtureParent(t *testing.T) {
 		t.Errorf("migration reason %q", r)
 	}
 
-	if e := got["FT-47+FT-48"]; e.Base != "FT-44" || !strings.Contains(e.Reason, "After: FT-44") {
-		t.Errorf("FT-47+FT-48 = %+v, want After: FT-44", e)
+	want44 := driveplan.Base{ID: "FT-44", Reason: "its After: line"}
+	if e := got["FT-47+FT-48"]; len(e.Bases) != 1 || e.Bases[0] != want44 {
+		t.Errorf("FT-47+FT-48 = %+v, want one base FT-44", e)
 	}
 
 	if p.Waits != 3 || p.Finishes != 3 || p.Parallel != 4 {
@@ -101,7 +102,7 @@ func TestFixtureParent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, want := range []string{"level 1", "level 2", "f10 start FT-41+FT-42+FT-43", "saves about 3 CI waits and 3 finishes", driveplan.Tradeoff} {
+	for _, want := range []string{"level 1", "level 2", "f10 start FT-41+FT-42+FT-43", "FT-44,FT-47+FT-48", "FT-47+FT-48 after FT-44", "saves about 3 CI waits and 3 finishes", driveplan.Tradeoff} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("output lacks %q:\n%s", want, out.String())
 		}
@@ -178,7 +179,7 @@ func TestProposedOrders(t *testing.T) {
 	t.Parallel()
 
 	builds := small("FT-2", "status", 20)
-	builds.BuildsOn = "FT-1"
+	builds.BuildsOn = []string{"FT-1"}
 
 	// a bug and a feature on one file cannot bundle, and side by side they conflict
 	bug, feat := small("FT-3", "forge", 20), small("FT-4", "forge", 20)
@@ -186,25 +187,192 @@ func TestProposedOrders(t *testing.T) {
 	bug.Files, feat.Files = []string{"forge.go"}, []string{"forge.go"}
 
 	p := propose(t, small("FT-1", "ledger", 50), builds, bug, feat)
+	got := entries(p)
 
-	want := []driveplan.Edit{
-		{Task: "FT-2", After: "FT-1", Reason: "builds on FT-1's code"},
-		{Task: "FT-4", After: "FT-3", Reason: "shares forge.go with FT-3: run side by side they would conflict"},
+	if b := got["FT-2"].Bases; !slices.Equal(b, []driveplan.Base{{ID: "FT-1", Reason: "builds on FT-1's code"}}) {
+		t.Errorf("FT-2 bases %+v", b)
 	}
-	if !slices.Equal(p.Edits, want) {
-		t.Errorf("edits %+v, want %+v", p.Edits, want)
+
+	want := driveplan.Base{ID: "FT-3", Reason: "shares forge.go with FT-3: run side by side they would conflict"}
+	if b := got["FT-4"].Bases; !slices.Equal(b, []driveplan.Base{want}) {
+		t.Errorf("FT-4 bases %+v", b)
 	}
 
 	if stageOf(p, "FT-2") != 2 || stageOf(p, "FT-4") != 2 {
 		t.Errorf("stages %+v", p.Levels)
 	}
 
+	if !slices.Equal(p.Args, []string{"FT-1,FT-2", "FT-3,FT-4", "--parallel", "2"}) {
+		t.Errorf("args %v", p.Args)
+	}
+
 	// an order the user declined is not proposed again
-	feat.After = "none"
+	feat.After = []string{driveplan.NoOrder}
 
 	p = propose(t, bug, feat)
-	if len(p.Edits) != 0 || stageOf(p, "FT-4") != 1 {
-		t.Errorf("declined order came back: %+v", p.Edits)
+	if len(entries(p)["FT-4"].Bases) != 0 || stageOf(p, "FT-4") != 1 {
+		t.Errorf("declined order came back: %+v", p.Levels)
+	}
+}
+
+// order is the command's entries, the --parallel flag cut
+func order(p driveplan.Plan) []string {
+	if k := slices.Index(p.Args, "--parallel"); k >= 0 {
+		return p.Args[:k]
+	}
+
+	return p.Args
+}
+
+func proposeJoins(t *testing.T, tasks ...driveplan.Task) driveplan.Plan {
+	t.Helper()
+
+	p, err := driveplan.Propose(driveplan.Input{Tasks: tasks, MaxLines: 300, Joins: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return p
+}
+
+// alone keeps a task out of every bundle, so the order alone is tested
+func alone(id string, files ...string) driveplan.Task {
+	t := small(id, id, 20)
+	t.Alone, t.Files = true, files
+
+	return t
+}
+
+func TestSeveralBases(t *testing.T) {
+	t.Parallel()
+
+	// two tasks it builds on make a join
+	c := alone("FT-3")
+	c.BuildsOn = []string{"FT-1", "FT-2"}
+
+	p := proposeJoins(t, alone("FT-1"), alone("FT-2"), c)
+	if !slices.Equal(order(p), []string{"FT-1", "FT-2", "FT-3@FT-1@FT-2"}) || stageOf(p, "FT-3") != 2 {
+		t.Errorf("join: args %v, levels %+v", order(p), p.Levels)
+	}
+
+	// a body base and a shared file make a join, the file's base second
+	d := alone("FT-4", "x.go")
+	d.Base = "FT-1"
+
+	p = proposeJoins(t, alone("FT-1"), alone("FT-2", "x.go"), d)
+	if !slices.Equal(order(p), []string{"FT-1", "FT-2", "FT-4@FT-1@FT-2"}) {
+		t.Errorf("body and file: args %v", order(p))
+	}
+
+	// three on one file stay a chain: the nearest base reaches the farther
+	p = proposeJoins(t, alone("FT-1", "x.go"), alone("FT-2", "x.go"), alone("FT-3", "x.go"))
+	if !slices.Equal(order(p), []string{"FT-1,FT-2,FT-3"}) {
+		t.Errorf("chain: args %v", order(p))
+	}
+
+	// a shared file with an entry that already waits on this one adds nothing
+	e := alone("FT-5", "y.go")
+	e.Base = "FT-6"
+
+	p = proposeJoins(t, e, alone("FT-6", "y.go"))
+	if !slices.Equal(order(p), []string{"FT-6,FT-5"}) {
+		t.Errorf("reverse: args %v", order(p))
+	}
+
+	// the user's bases replace the rest
+	f := alone("FT-7", "x.go")
+	f.Base, f.After = "FT-9", []string{"FT-1", "FT-2"}
+
+	p = proposeJoins(t, alone("FT-1", "x.go"), alone("FT-2"), f)
+	if !slices.Equal(order(p), []string{"FT-1", "FT-2", "FT-7@FT-1@FT-2"}) {
+		t.Errorf("user's bases: args %v", order(p))
+	}
+}
+
+func TestNoJoinWithoutFinish(t *testing.T) {
+	t.Parallel()
+
+	c := alone("FT-3")
+	c.BuildsOn = []string{"FT-1", "FT-2"}
+
+	p := propose(t, alone("FT-1"), alone("FT-2"), c)
+	if !slices.Contains(p.Args, "FT-1,FT-3") || stageOf(p, "FT-3") != 2 {
+		t.Errorf("args %v", p.Args)
+	}
+
+	b := entries(p)["FT-3"].Bases
+	if len(b) != 2 || b[0].Dropped || !b[1].Dropped {
+		t.Fatalf("bases %+v, want FT-1 kept and FT-2 dropped", b)
+	}
+
+	var out bytes.Buffer
+	if err := p.Write(&out, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	if text := out.String(); !strings.Contains(text, "FT-3 not after FT-2") ||
+		!strings.Contains(text, "a join needs a flow that finishes") {
+		t.Errorf("output:\n%s", out.String())
+	}
+}
+
+func TestCommandSpelling(t *testing.T) {
+	t.Parallel()
+
+	// two dependents on one base: the first chains, the second names it
+	b, c := alone("FT-2"), alone("FT-3")
+	b.Base, c.Base = "FT-1", "FT-1"
+
+	if p := proposeJoins(t, alone("FT-1"), b, c); !slices.Equal(order(p), []string{"FT-1,FT-2", "FT-3@FT-1"}) {
+		t.Errorf("two dependents: %v", order(p))
+	}
+
+	// a base inside a bundle is spelled as the bundle's lead, a profile last
+	r1, r2 := small("FT-4", "ui", 20), small("FT-5", "ui", 20)
+	d, e := alone("FT-6"), alone("FT-7")
+	d.Base, d.Profile = "FT-5", "opus"
+	e.Base = "FT-5"
+
+	p := proposeJoins(t, r1, r2, d, e)
+	if !slices.Equal(order(p), []string{"FT-4+FT-5,FT-6:opus", "FT-7@FT-4"}) {
+		t.Errorf("bundle base: %v", order(p))
+	}
+
+	// a base outside the list is spelled as it is
+	f := alone("FT-8")
+	f.Base = "FT-99"
+
+	if p := proposeJoins(t, f); !slices.Equal(order(p), []string{"FT-8@FT-99"}) {
+		t.Errorf("outside base: %v", order(p))
+	}
+}
+
+func TestBundleSplitsOnDifferentBases(t *testing.T) {
+	t.Parallel()
+
+	a, b := small("FT-1", "ui", 20), small("FT-2", "ui", 20)
+	a.Base, b.Base = "FT-8", "FT-9"
+
+	got := entries(proposeJoins(t, a, b))
+	if _, ok := got["FT-1+FT-2"]; ok {
+		t.Errorf("bundled two tasks on different bases: %+v", got)
+	}
+
+	if r := got["FT-2"].Reason; r != "alone: its bases differ from FT-1's" {
+		t.Errorf("FT-2 reason %q", r)
+	}
+}
+
+func TestCycleThroughTwoBases(t *testing.T) {
+	t.Parallel()
+
+	a, b, c := alone("FT-1"), alone("FT-2"), alone("FT-3")
+	a.BuildsOn = []string{"FT-3"}
+	c.BuildsOn = []string{"FT-2", "FT-1"}
+
+	_, err := driveplan.Propose(driveplan.Input{Tasks: []driveplan.Task{a, b, c}, MaxLines: 300, Joins: true})
+	if err == nil || !strings.Contains(err.Error(), "circle") {
+		t.Errorf("want a cycle error, got %v", err)
 	}
 }
 
@@ -213,7 +381,7 @@ func TestOverrides(t *testing.T) {
 
 	kept, freed := small("FT-2", "ui", 20), small("FT-3", "ui", 20)
 	kept.Alone = true
-	freed.Base, freed.After = "FT-9", "none"
+	freed.Base, freed.After = "FT-9", []string{driveplan.NoOrder}
 
 	p := propose(t, small("FT-1", "ui", 20), kept, freed)
 	got := entries(p)
@@ -226,8 +394,8 @@ func TestOverrides(t *testing.T) {
 		t.Errorf("FT-2 reason %q", got["FT-2"].Reason)
 	}
 
-	if !slices.Contains(p.Edits, driveplan.Edit{Task: "FT-3", After: "none", Reason: "you dropped its order"}) {
-		t.Errorf("edits %+v", p.Edits)
+	if b := got["FT-1+FT-3"].Bases; len(b) != 0 {
+		t.Errorf("dropped order kept bases %+v", b)
 	}
 
 	with := small("FT-5", "docs", 20)

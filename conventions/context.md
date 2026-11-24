@@ -5,7 +5,7 @@ f10 is generic, and everything project-specific lives under `.f10/instructions/`
 ## Vocabulary
 
 - **skill** - an entry point the user invokes (`/f10:*`), which runs one or more steps.
-  `/f10:start`, `/f10:finish`, `/f10:status`, `/f10:board`, `/f10:read` and `/f10:inbox` run the binary and no step.
+  `/f10:start` (bar `--propose`), `/f10:finish`, `/f10:status`, `/f10:board`, `/f10:read` and `/f10:inbox` run the binary and no step.
 - **step** - a unit of work in `steps/*.md`, named by its file.
   The skill owns the invocation: the argument, the modes, the authorization and where the session stops.
   The step owns the work, and each wins on its own side when they disagree.
