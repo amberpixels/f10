@@ -37,7 +37,7 @@ type CallerContext struct {
 	// workspace_id is the Herdr workspace the command runs in.
 	WorkspaceId string `protobuf:"bytes,4,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
 	// env is the command's environment. The daemon keeps the allowlisted
-	// part a drive passes on, and runs the call's Herdr commands in its
+	// part a batch passes on, and runs the call's Herdr commands in its
 	// session.
 	Env []string `protobuf:"bytes,5,rep,name=env,proto3" json:"env,omitempty"`
 	// terminal is true when the command's output is a terminal, so the

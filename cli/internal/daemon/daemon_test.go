@@ -84,7 +84,7 @@ func TestServeRunsAndAttaches(t *testing.T) {
 
 	req := request{
 		Op:   opRun,
-		Argv: []string{`echo 3 > "$F10_DRIVE_FILE"; echo drive 3; sleep 0.3; echo done; exit 4`},
+		Argv: []string{`echo 3 > "$F10_DRIVE_FILE"; echo batch 3; sleep 0.3; echo done; exit 4`},
 		Dir:  "/",
 		Root: "/r",
 		Key:  "GH-1",
@@ -112,11 +112,11 @@ func TestServeRunsAndAttaches(t *testing.T) {
 	}
 
 	if exit := waitExit(t, first.Log); exit != (Exit{Code: 4, Drive: 3}) {
-		t.Errorf("exit = %+v, want 4 of drive 3", exit)
+		t.Errorf("exit = %+v, want 4 of batch 3", exit)
 	}
 
 	raw, _ := os.ReadFile(first.Log)
-	if string(raw) != "drive 3\ndone\n" {
+	if string(raw) != "batch 3\ndone\n" {
 		t.Errorf("log = %q", raw)
 	}
 
@@ -676,7 +676,7 @@ func TestDrainReadsADriveNumberedLate(t *testing.T) {
 		t.Fatal("the drive that ignores the drain kept the daemon up")
 	}
 
-	if !strings.Contains(logged.String(), "drive 7 did not drain") {
+	if !strings.Contains(logged.String(), "batch 7 did not drain") {
 		t.Errorf("log:\n%s", logged.String())
 	}
 }
@@ -718,7 +718,7 @@ func TestServeResumesADriveThatAsksIt(t *testing.T) {
 	}
 
 	if exit := waitExit(t, first.Log); exit != (Exit{Code: ExitResume, Drive: 5, Reason: ReasonResumed}) {
-		t.Fatalf("exit = %+v, want drive 5 resumed", exit)
+		t.Fatalf("exit = %+v, want batch 5 resumed", exit)
 	}
 
 	follow, err := call(t.Context(), dir, resumeRequest("/r", "/", nil, 5), 0)
@@ -781,7 +781,7 @@ func TestDrainKeepsADriveThatAsksToResume(t *testing.T) {
 	}
 
 	if exit := waitExit(t, rep.Log); exit != (Exit{Code: ExitResume, Drive: 5, Reason: ReasonUpgrade}) {
-		t.Fatalf("exit = %+v, want drive 5 kept for the upgrade", exit)
+		t.Fatalf("exit = %+v, want batch 5 kept for the upgrade", exit)
 	}
 
 	if raw, err := os.ReadFile(drainedPath(dir)); err != nil || !strings.Contains(string(raw), `"drive":5`) {

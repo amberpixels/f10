@@ -1332,7 +1332,7 @@ type StartRequest struct {
 	// names the task a picked-up PR belongs to.
 	Token string `protobuf:"bytes,13,opt,name=token,proto3" json:"token,omitempty"`
 	// tasks are the other ids, after token. A discussion opens token's
-	// worktree and reads them all, and a flow start runs them in one drive.
+	// worktree and reads them all, and a flow start runs them in one batch.
 	Tasks []string `protobuf:"bytes,14,rep,name=tasks,proto3" json:"tasks,omitempty"`
 	// chain makes a flow start a range: token, then the one id in tasks, and
 	// every id between, as `f10 start A -- B` runs them.
@@ -1489,7 +1489,7 @@ func (x *StartRequest) GetParallel() int32 {
 type StartResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// task, branch, worktree, workspace_id and agent are a discussion's or a
-	// pickup's; a drive opens its task after the call returns.
+	// pickup's; a batch opens its task after the call returns.
 	Task        string `protobuf:"bytes,1,opt,name=task,proto3" json:"task,omitempty"`
 	Branch      string `protobuf:"bytes,2,opt,name=branch,proto3" json:"branch,omitempty"`
 	Worktree    string `protobuf:"bytes,3,opt,name=worktree,proto3" json:"worktree,omitempty"`
@@ -1497,13 +1497,19 @@ type StartResponse struct {
 	Agent       string `protobuf:"bytes,5,opt,name=agent,proto3" json:"agent,omitempty"`
 	// printed is the report f10 start prints, and the waits it reported.
 	Printed *Printed `protobuf:"bytes,6,opt,name=printed,proto3" json:"printed,omitempty"`
-	// drive is the drive a flow start runs in, 0 for a discussion or a pickup.
+	// drive is the old name of batch, still filled for clients built
+	// against it.
+	//
+	// Deprecated: Marked as deprecated in f10/v1/runs.proto.
 	Drive int32 `protobuf:"varint,7,opt,name=drive,proto3" json:"drive,omitempty"`
-	// log is that drive's log file, which grows until the drive exits.
+	// log is the batch's log file, which grows until the batch exits.
 	Log string `protobuf:"bytes,8,opt,name=log,proto3" json:"log,omitempty"`
-	// attached is true when the daemon already ran that drive and the call
+	// attached is true when the daemon already ran that batch and the call
 	// followed it instead of starting another.
-	Attached      bool `protobuf:"varint,9,opt,name=attached,proto3" json:"attached,omitempty"`
+	Attached bool `protobuf:"varint,9,opt,name=attached,proto3" json:"attached,omitempty"`
+	// batch is the number of the batch a flow start runs in, 0 for a
+	// discussion or a pickup.
+	Batch         int32 `protobuf:"varint,10,opt,name=batch,proto3" json:"batch,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1580,6 +1586,7 @@ func (x *StartResponse) GetPrinted() *Printed {
 	return nil
 }
 
+// Deprecated: Marked as deprecated in f10/v1/runs.proto.
 func (x *StartResponse) GetDrive() int32 {
 	if x != nil {
 		return x.Drive
@@ -1601,7 +1608,15 @@ func (x *StartResponse) GetAttached() bool {
 	return false
 }
 
-// A DriveTask is one task of a drive, with its own agent profile.
+func (x *StartResponse) GetBatch() int32 {
+	if x != nil {
+		return x.Batch
+	}
+	return 0
+}
+
+// A DriveTask is one task of DriveRequest's field form, with its own agent
+// profile.
 type DriveTask struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -1654,10 +1669,10 @@ func (x *DriveTask) GetAgent() string {
 	return ""
 }
 
-// DriveRequest starts or resumes a drive. f10 start sends args. The field
-// form (args unset) is kept for older clients only: a new client calls
-// Start, which runs the same flow start with its closed-task check and
-// plan-only mode. The field form refuses a start of closed tasks.
+// DriveRequest is the old form of StartBatchRequest. Its field form (args
+// unset) is kept for older clients only: a new client calls Start, which
+// runs the same flow start with its closed-task check and plan-only mode.
+// The field form refuses a start of closed tasks.
 type DriveRequest struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Project string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
@@ -1674,21 +1689,21 @@ type DriveRequest struct {
 	//
 	// Deprecated: Marked as deprecated in f10/v1/runs.proto.
 	PlanFirst bool `protobuf:"varint,9,opt,name=plan_first,json=planFirst,proto3" json:"plan_first,omitempty"`
-	// args are the drive's arguments as `f10 start` takes them. When set they
-	// win over the fields above, so a rerun of a typed command line keys to
-	// the record it opened.
+	// args are the arguments as `f10 start` takes them. When set they win
+	// over the fields above, so a rerun of a typed command line keys to the
+	// record it opened.
 	Args []string `protobuf:"bytes,10,rep,name=args,proto3" json:"args,omitempty"`
-	// dir is the checkout the drive runs from.
+	// dir is the checkout the batch runs from.
 	Dir string `protobuf:"bytes,11,opt,name=dir,proto3" json:"dir,omitempty"`
-	// env is the allowlisted environment the drive runs with. Honored only on
+	// env is the allowlisted environment the batch runs with. Honored only on
 	// the unix socket, because a remote client has no local session to pass.
 	Env []string `protobuf:"bytes,12,rep,name=env,proto3" json:"env,omitempty"`
-	// resume picks up the drive record with this number.
+	// resume picks up the record with this number.
 	Resume int32 `protobuf:"varint,13,opt,name=resume,proto3" json:"resume,omitempty"`
-	// answers are the answers to the drive's open asks, `ID=text` for one
+	// answers are the answers to the batch's open asks, `ID=text` for one
 	// task or bare text.
 	Answers []string `protobuf:"bytes,14,rep,name=answers,proto3" json:"answers,omitempty"`
-	// every is how often the drive polls its tasks; unset keeps the default.
+	// every is how often the tasks are polled; unset keeps the default.
 	Every         *durationpb.Duration `protobuf:"bytes,15,opt,name=every,proto3" json:"every,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1830,14 +1845,14 @@ func (x *DriveRequest) GetEvery() *durationpb.Duration {
 	return nil
 }
 
+// DriveResponse is the old form of StartBatchResponse.
 type DriveResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// drive is the drive's number in the project, 0 until the drive opened
-	// its record.
+	// drive is the batch's number in the project, 0 until its record opened.
 	Drive int32 `protobuf:"varint,1,opt,name=drive,proto3" json:"drive,omitempty"`
-	// log is the drive's log file, which grows until the drive exits.
+	// log is the batch's log file, which grows until the batch exits.
 	Log string `protobuf:"bytes,2,opt,name=log,proto3" json:"log,omitempty"`
-	// attached is true when the daemon already ran this drive and the call
+	// attached is true when the daemon already ran this batch and the call
 	// joined it instead of starting another.
 	Attached      bool `protobuf:"varint,3,opt,name=attached,proto3" json:"attached,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -1895,6 +1910,319 @@ func (x *DriveResponse) GetAttached() bool {
 	return false
 }
 
+// StartBatchRequest starts a batch from a command line, or picks up the
+// batch that command line already started.
+type StartBatchRequest struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Project string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
+	// args are the arguments as `f10 start` takes them, so a rerun of a typed
+	// command line keys to the record it opened.
+	Args []string `protobuf:"bytes,2,rep,name=args,proto3" json:"args,omitempty"`
+	// dir is the checkout the batch runs from; empty takes the project's.
+	Dir string `protobuf:"bytes,3,opt,name=dir,proto3" json:"dir,omitempty"`
+	// env is the allowlisted environment the batch runs with. Honored only on
+	// the unix socket, because a remote client has no local session to pass.
+	Env []string `protobuf:"bytes,4,rep,name=env,proto3" json:"env,omitempty"`
+	// resume picks up the batch record with this number, for a client that
+	// already resolved it; Resume takes a task id instead.
+	Resume        int32 `protobuf:"varint,5,opt,name=resume,proto3" json:"resume,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StartBatchRequest) Reset() {
+	*x = StartBatchRequest{}
+	mi := &file_f10_v1_runs_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartBatchRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartBatchRequest) ProtoMessage() {}
+
+func (x *StartBatchRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_f10_v1_runs_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartBatchRequest.ProtoReflect.Descriptor instead.
+func (*StartBatchRequest) Descriptor() ([]byte, []int) {
+	return file_f10_v1_runs_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *StartBatchRequest) GetProject() string {
+	if x != nil {
+		return x.Project
+	}
+	return ""
+}
+
+func (x *StartBatchRequest) GetArgs() []string {
+	if x != nil {
+		return x.Args
+	}
+	return nil
+}
+
+func (x *StartBatchRequest) GetDir() string {
+	if x != nil {
+		return x.Dir
+	}
+	return ""
+}
+
+func (x *StartBatchRequest) GetEnv() []string {
+	if x != nil {
+		return x.Env
+	}
+	return nil
+}
+
+func (x *StartBatchRequest) GetResume() int32 {
+	if x != nil {
+		return x.Resume
+	}
+	return 0
+}
+
+type StartBatchResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// batch is the batch's number in the project, 0 until its record opened.
+	Batch int32 `protobuf:"varint,1,opt,name=batch,proto3" json:"batch,omitempty"`
+	// log is the batch's log file, which grows until the batch exits.
+	Log string `protobuf:"bytes,2,opt,name=log,proto3" json:"log,omitempty"`
+	// attached is true when the daemon already ran this batch and the call
+	// joined it instead of starting another.
+	Attached      bool `protobuf:"varint,3,opt,name=attached,proto3" json:"attached,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StartBatchResponse) Reset() {
+	*x = StartBatchResponse{}
+	mi := &file_f10_v1_runs_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartBatchResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartBatchResponse) ProtoMessage() {}
+
+func (x *StartBatchResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_f10_v1_runs_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartBatchResponse.ProtoReflect.Descriptor instead.
+func (*StartBatchResponse) Descriptor() ([]byte, []int) {
+	return file_f10_v1_runs_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *StartBatchResponse) GetBatch() int32 {
+	if x != nil {
+		return x.Batch
+	}
+	return 0
+}
+
+func (x *StartBatchResponse) GetLog() string {
+	if x != nil {
+		return x.Log
+	}
+	return ""
+}
+
+func (x *StartBatchResponse) GetAttached() bool {
+	if x != nil {
+		return x.Attached
+	}
+	return false
+}
+
+// ResumeRequest names a stopped batch by one of its tasks. With no task, the
+// project's one stopped batch resumes, and several are refused by name.
+type ResumeRequest struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Project string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
+	// task is any task id of the batch, a bundle's rider included.
+	Task string `protobuf:"bytes,2,opt,name=task,proto3" json:"task,omitempty"`
+	// answers are the answers to the batch's open asks, `ID=text` for one
+	// task or bare text.
+	Answers []string `protobuf:"bytes,3,rep,name=answers,proto3" json:"answers,omitempty"`
+	// every is how often the tasks are polled; unset keeps the record's.
+	Every *durationpb.Duration `protobuf:"bytes,4,opt,name=every,proto3" json:"every,omitempty"`
+	// parallel caps the tasks running a skill at once; 0 keeps the record's.
+	Parallel      int32          `protobuf:"varint,5,opt,name=parallel,proto3" json:"parallel,omitempty"`
+	Caller        *CallerContext `protobuf:"bytes,6,opt,name=caller,proto3" json:"caller,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResumeRequest) Reset() {
+	*x = ResumeRequest{}
+	mi := &file_f10_v1_runs_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResumeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResumeRequest) ProtoMessage() {}
+
+func (x *ResumeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_f10_v1_runs_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResumeRequest.ProtoReflect.Descriptor instead.
+func (*ResumeRequest) Descriptor() ([]byte, []int) {
+	return file_f10_v1_runs_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *ResumeRequest) GetProject() string {
+	if x != nil {
+		return x.Project
+	}
+	return ""
+}
+
+func (x *ResumeRequest) GetTask() string {
+	if x != nil {
+		return x.Task
+	}
+	return ""
+}
+
+func (x *ResumeRequest) GetAnswers() []string {
+	if x != nil {
+		return x.Answers
+	}
+	return nil
+}
+
+func (x *ResumeRequest) GetEvery() *durationpb.Duration {
+	if x != nil {
+		return x.Every
+	}
+	return nil
+}
+
+func (x *ResumeRequest) GetParallel() int32 {
+	if x != nil {
+		return x.Parallel
+	}
+	return 0
+}
+
+func (x *ResumeRequest) GetCaller() *CallerContext {
+	if x != nil {
+		return x.Caller
+	}
+	return nil
+}
+
+type ResumeResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// batch is the number of the batch resumed.
+	Batch int32 `protobuf:"varint,1,opt,name=batch,proto3" json:"batch,omitempty"`
+	// log is the batch's log file, which grows until the batch exits.
+	Log string `protobuf:"bytes,2,opt,name=log,proto3" json:"log,omitempty"`
+	// attached is true when the batch was still running and the call joined
+	// it.
+	Attached bool `protobuf:"varint,3,opt,name=attached,proto3" json:"attached,omitempty"`
+	// printed is what f10 resume prints for the call.
+	Printed       *Printed `protobuf:"bytes,4,opt,name=printed,proto3" json:"printed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResumeResponse) Reset() {
+	*x = ResumeResponse{}
+	mi := &file_f10_v1_runs_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResumeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResumeResponse) ProtoMessage() {}
+
+func (x *ResumeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_f10_v1_runs_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResumeResponse.ProtoReflect.Descriptor instead.
+func (*ResumeResponse) Descriptor() ([]byte, []int) {
+	return file_f10_v1_runs_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *ResumeResponse) GetBatch() int32 {
+	if x != nil {
+		return x.Batch
+	}
+	return 0
+}
+
+func (x *ResumeResponse) GetLog() string {
+	if x != nil {
+		return x.Log
+	}
+	return ""
+}
+
+func (x *ResumeResponse) GetAttached() bool {
+	if x != nil {
+		return x.Attached
+	}
+	return false
+}
+
+func (x *ResumeResponse) GetPrinted() *Printed {
+	if x != nil {
+		return x.Printed
+	}
+	return nil
+}
+
 type FinishRequest struct {
 	state        protoimpl.MessageState `protogen:"open.v1"`
 	Project      string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
@@ -1917,7 +2245,7 @@ type FinishRequest struct {
 
 func (x *FinishRequest) Reset() {
 	*x = FinishRequest{}
-	mi := &file_f10_v1_runs_proto_msgTypes[17]
+	mi := &file_f10_v1_runs_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1929,7 +2257,7 @@ func (x *FinishRequest) String() string {
 func (*FinishRequest) ProtoMessage() {}
 
 func (x *FinishRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_f10_v1_runs_proto_msgTypes[17]
+	mi := &file_f10_v1_runs_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1942,7 +2270,7 @@ func (x *FinishRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FinishRequest.ProtoReflect.Descriptor instead.
 func (*FinishRequest) Descriptor() ([]byte, []int) {
-	return file_f10_v1_runs_proto_rawDescGZIP(), []int{17}
+	return file_f10_v1_runs_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *FinishRequest) GetProject() string {
@@ -2031,7 +2359,7 @@ type FinishResponse struct {
 
 func (x *FinishResponse) Reset() {
 	*x = FinishResponse{}
-	mi := &file_f10_v1_runs_proto_msgTypes[18]
+	mi := &file_f10_v1_runs_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2043,7 +2371,7 @@ func (x *FinishResponse) String() string {
 func (*FinishResponse) ProtoMessage() {}
 
 func (x *FinishResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_f10_v1_runs_proto_msgTypes[18]
+	mi := &file_f10_v1_runs_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2056,7 +2384,7 @@ func (x *FinishResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FinishResponse.ProtoReflect.Descriptor instead.
 func (*FinishResponse) Descriptor() ([]byte, []int) {
-	return file_f10_v1_runs_proto_rawDescGZIP(), []int{18}
+	return file_f10_v1_runs_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *FinishResponse) GetTask() string {
@@ -2136,7 +2464,7 @@ type ForwardRequest struct {
 
 func (x *ForwardRequest) Reset() {
 	*x = ForwardRequest{}
-	mi := &file_f10_v1_runs_proto_msgTypes[19]
+	mi := &file_f10_v1_runs_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2148,7 +2476,7 @@ func (x *ForwardRequest) String() string {
 func (*ForwardRequest) ProtoMessage() {}
 
 func (x *ForwardRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_f10_v1_runs_proto_msgTypes[19]
+	mi := &file_f10_v1_runs_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2161,7 +2489,7 @@ func (x *ForwardRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForwardRequest.ProtoReflect.Descriptor instead.
 func (*ForwardRequest) Descriptor() ([]byte, []int) {
-	return file_f10_v1_runs_proto_rawDescGZIP(), []int{19}
+	return file_f10_v1_runs_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ForwardRequest) GetProject() string {
@@ -2208,7 +2536,7 @@ type ForwardResponse struct {
 
 func (x *ForwardResponse) Reset() {
 	*x = ForwardResponse{}
-	mi := &file_f10_v1_runs_proto_msgTypes[20]
+	mi := &file_f10_v1_runs_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2220,7 +2548,7 @@ func (x *ForwardResponse) String() string {
 func (*ForwardResponse) ProtoMessage() {}
 
 func (x *ForwardResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_f10_v1_runs_proto_msgTypes[20]
+	mi := &file_f10_v1_runs_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2233,7 +2561,7 @@ func (x *ForwardResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForwardResponse.ProtoReflect.Descriptor instead.
 func (*ForwardResponse) Descriptor() ([]byte, []int) {
-	return file_f10_v1_runs_proto_rawDescGZIP(), []int{20}
+	return file_f10_v1_runs_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ForwardResponse) GetWorkspace() string {
@@ -2264,10 +2592,11 @@ func (x *ForwardResponse) GetPrinted() *Printed {
 	return nil
 }
 
+// ListDrivesRequest is the old form of ListBatchesRequest.
 type ListDrivesRequest struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Project string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
-	// all lists finished and cancelled drives too.
+	// all lists every record, not only the newest.
 	All           bool           `protobuf:"varint,2,opt,name=all,proto3" json:"all,omitempty"`
 	Caller        *CallerContext `protobuf:"bytes,3,opt,name=caller,proto3" json:"caller,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -2276,7 +2605,7 @@ type ListDrivesRequest struct {
 
 func (x *ListDrivesRequest) Reset() {
 	*x = ListDrivesRequest{}
-	mi := &file_f10_v1_runs_proto_msgTypes[21]
+	mi := &file_f10_v1_runs_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2288,7 +2617,7 @@ func (x *ListDrivesRequest) String() string {
 func (*ListDrivesRequest) ProtoMessage() {}
 
 func (x *ListDrivesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_f10_v1_runs_proto_msgTypes[21]
+	mi := &file_f10_v1_runs_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2301,7 +2630,7 @@ func (x *ListDrivesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDrivesRequest.ProtoReflect.Descriptor instead.
 func (*ListDrivesRequest) Descriptor() ([]byte, []int) {
-	return file_f10_v1_runs_proto_rawDescGZIP(), []int{21}
+	return file_f10_v1_runs_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ListDrivesRequest) GetProject() string {
@@ -2325,11 +2654,11 @@ func (x *ListDrivesRequest) GetCaller() *CallerContext {
 	return nil
 }
 
-// A DriveRecord is one drive a project ran, by its number.
+// A DriveRecord is the old form of Batch.
 type DriveRecord struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	Number int32                  `protobuf:"varint,1,opt,name=number,proto3" json:"number,omitempty"`
-	// args are the drive's arguments as f10 start took them.
+	// args are the arguments as f10 start took them.
 	Args []string `protobuf:"bytes,2,rep,name=args,proto3" json:"args,omitempty"`
 	// state is running, stopped, done or cancelled.
 	State         string                 `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty"`
@@ -2340,7 +2669,7 @@ type DriveRecord struct {
 
 func (x *DriveRecord) Reset() {
 	*x = DriveRecord{}
-	mi := &file_f10_v1_runs_proto_msgTypes[22]
+	mi := &file_f10_v1_runs_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2352,7 +2681,7 @@ func (x *DriveRecord) String() string {
 func (*DriveRecord) ProtoMessage() {}
 
 func (x *DriveRecord) ProtoReflect() protoreflect.Message {
-	mi := &file_f10_v1_runs_proto_msgTypes[22]
+	mi := &file_f10_v1_runs_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2365,7 +2694,7 @@ func (x *DriveRecord) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DriveRecord.ProtoReflect.Descriptor instead.
 func (*DriveRecord) Descriptor() ([]byte, []int) {
-	return file_f10_v1_runs_proto_rawDescGZIP(), []int{22}
+	return file_f10_v1_runs_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *DriveRecord) GetNumber() int32 {
@@ -2396,10 +2725,11 @@ func (x *DriveRecord) GetStarted() *timestamppb.Timestamp {
 	return nil
 }
 
+// ListDrivesResponse is the old form of ListBatchesResponse.
 type ListDrivesResponse struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	Drives []*DriveRecord         `protobuf:"bytes,1,rep,name=drives,proto3" json:"drives,omitempty"`
-	// printed is the table f10 status --drives prints.
+	// printed is the table f10 status --batches prints.
 	Printed       *Printed `protobuf:"bytes,2,opt,name=printed,proto3" json:"printed,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -2407,7 +2737,7 @@ type ListDrivesResponse struct {
 
 func (x *ListDrivesResponse) Reset() {
 	*x = ListDrivesResponse{}
-	mi := &file_f10_v1_runs_proto_msgTypes[23]
+	mi := &file_f10_v1_runs_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2419,7 +2749,7 @@ func (x *ListDrivesResponse) String() string {
 func (*ListDrivesResponse) ProtoMessage() {}
 
 func (x *ListDrivesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_f10_v1_runs_proto_msgTypes[23]
+	mi := &file_f10_v1_runs_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2432,7 +2762,7 @@ func (x *ListDrivesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListDrivesResponse.ProtoReflect.Descriptor instead.
 func (*ListDrivesResponse) Descriptor() ([]byte, []int) {
-	return file_f10_v1_runs_proto_rawDescGZIP(), []int{23}
+	return file_f10_v1_runs_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *ListDrivesResponse) GetDrives() []*DriveRecord {
@@ -2449,11 +2779,12 @@ func (x *ListDrivesResponse) GetPrinted() *Printed {
 	return nil
 }
 
+// CancelDriveRequest is the old form of StopBatchRequest.
 type CancelDriveRequest struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Project string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
-	// drive is the drive's number; task, when set instead, is a task id whose
-	// drive is stopped.
+	// drive is the batch's number; task, when set instead, is a task id whose
+	// batch is stopped.
 	Drive         int32          `protobuf:"varint,2,opt,name=drive,proto3" json:"drive,omitempty"`
 	Caller        *CallerContext `protobuf:"bytes,3,opt,name=caller,proto3" json:"caller,omitempty"`
 	Task          string         `protobuf:"bytes,4,opt,name=task,proto3" json:"task,omitempty"`
@@ -2463,7 +2794,7 @@ type CancelDriveRequest struct {
 
 func (x *CancelDriveRequest) Reset() {
 	*x = CancelDriveRequest{}
-	mi := &file_f10_v1_runs_proto_msgTypes[24]
+	mi := &file_f10_v1_runs_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2475,7 +2806,7 @@ func (x *CancelDriveRequest) String() string {
 func (*CancelDriveRequest) ProtoMessage() {}
 
 func (x *CancelDriveRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_f10_v1_runs_proto_msgTypes[24]
+	mi := &file_f10_v1_runs_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2488,7 +2819,7 @@ func (x *CancelDriveRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelDriveRequest.ProtoReflect.Descriptor instead.
 func (*CancelDriveRequest) Descriptor() ([]byte, []int) {
-	return file_f10_v1_runs_proto_rawDescGZIP(), []int{24}
+	return file_f10_v1_runs_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *CancelDriveRequest) GetProject() string {
@@ -2519,6 +2850,7 @@ func (x *CancelDriveRequest) GetTask() string {
 	return ""
 }
 
+// CancelDriveResponse is the old form of StopBatchResponse.
 type CancelDriveResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// printed is what f10 stop prints.
@@ -2529,7 +2861,7 @@ type CancelDriveResponse struct {
 
 func (x *CancelDriveResponse) Reset() {
 	*x = CancelDriveResponse{}
-	mi := &file_f10_v1_runs_proto_msgTypes[25]
+	mi := &file_f10_v1_runs_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2541,7 +2873,7 @@ func (x *CancelDriveResponse) String() string {
 func (*CancelDriveResponse) ProtoMessage() {}
 
 func (x *CancelDriveResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_f10_v1_runs_proto_msgTypes[25]
+	mi := &file_f10_v1_runs_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2554,10 +2886,312 @@ func (x *CancelDriveResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelDriveResponse.ProtoReflect.Descriptor instead.
 func (*CancelDriveResponse) Descriptor() ([]byte, []int) {
-	return file_f10_v1_runs_proto_rawDescGZIP(), []int{25}
+	return file_f10_v1_runs_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *CancelDriveResponse) GetPrinted() *Printed {
+	if x != nil {
+		return x.Printed
+	}
+	return nil
+}
+
+type ListBatchesRequest struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Project string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
+	// all lists every batch, not only the newest 20.
+	All           bool           `protobuf:"varint,2,opt,name=all,proto3" json:"all,omitempty"`
+	Caller        *CallerContext `protobuf:"bytes,3,opt,name=caller,proto3" json:"caller,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListBatchesRequest) Reset() {
+	*x = ListBatchesRequest{}
+	mi := &file_f10_v1_runs_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListBatchesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListBatchesRequest) ProtoMessage() {}
+
+func (x *ListBatchesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_f10_v1_runs_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListBatchesRequest.ProtoReflect.Descriptor instead.
+func (*ListBatchesRequest) Descriptor() ([]byte, []int) {
+	return file_f10_v1_runs_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *ListBatchesRequest) GetProject() string {
+	if x != nil {
+		return x.Project
+	}
+	return ""
+}
+
+func (x *ListBatchesRequest) GetAll() bool {
+	if x != nil {
+		return x.All
+	}
+	return false
+}
+
+func (x *ListBatchesRequest) GetCaller() *CallerContext {
+	if x != nil {
+		return x.Caller
+	}
+	return nil
+}
+
+// A Batch is the tasks one f10 start started, kept as a record so it can be
+// stopped and resumed.
+type Batch struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Number int32                  `protobuf:"varint,1,opt,name=number,proto3" json:"number,omitempty"`
+	// args are the arguments as f10 start took them.
+	Args []string `protobuf:"bytes,2,rep,name=args,proto3" json:"args,omitempty"`
+	// state is running, stopped, done or cancelled.
+	State   string                 `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty"`
+	Started *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=started,proto3" json:"started,omitempty"`
+	// tasks are the batch's tasks as typed, a bundle joined by +. Any of
+	// them names the batch to Resume and StopBatch.
+	Tasks         []string `protobuf:"bytes,5,rep,name=tasks,proto3" json:"tasks,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Batch) Reset() {
+	*x = Batch{}
+	mi := &file_f10_v1_runs_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Batch) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Batch) ProtoMessage() {}
+
+func (x *Batch) ProtoReflect() protoreflect.Message {
+	mi := &file_f10_v1_runs_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Batch.ProtoReflect.Descriptor instead.
+func (*Batch) Descriptor() ([]byte, []int) {
+	return file_f10_v1_runs_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *Batch) GetNumber() int32 {
+	if x != nil {
+		return x.Number
+	}
+	return 0
+}
+
+func (x *Batch) GetArgs() []string {
+	if x != nil {
+		return x.Args
+	}
+	return nil
+}
+
+func (x *Batch) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
+func (x *Batch) GetStarted() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Started
+	}
+	return nil
+}
+
+func (x *Batch) GetTasks() []string {
+	if x != nil {
+		return x.Tasks
+	}
+	return nil
+}
+
+type ListBatchesResponse struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Batches []*Batch               `protobuf:"bytes,1,rep,name=batches,proto3" json:"batches,omitempty"`
+	// printed is the table f10 status --batches prints.
+	Printed       *Printed `protobuf:"bytes,2,opt,name=printed,proto3" json:"printed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListBatchesResponse) Reset() {
+	*x = ListBatchesResponse{}
+	mi := &file_f10_v1_runs_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListBatchesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListBatchesResponse) ProtoMessage() {}
+
+func (x *ListBatchesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_f10_v1_runs_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListBatchesResponse.ProtoReflect.Descriptor instead.
+func (*ListBatchesResponse) Descriptor() ([]byte, []int) {
+	return file_f10_v1_runs_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *ListBatchesResponse) GetBatches() []*Batch {
+	if x != nil {
+		return x.Batches
+	}
+	return nil
+}
+
+func (x *ListBatchesResponse) GetPrinted() *Printed {
+	if x != nil {
+		return x.Printed
+	}
+	return nil
+}
+
+type StopBatchRequest struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Project string                 `protobuf:"bytes,1,opt,name=project,proto3" json:"project,omitempty"`
+	// task is any task id of the batch to stop, a bundle's rider included.
+	Task          string         `protobuf:"bytes,2,opt,name=task,proto3" json:"task,omitempty"`
+	Caller        *CallerContext `protobuf:"bytes,3,opt,name=caller,proto3" json:"caller,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StopBatchRequest) Reset() {
+	*x = StopBatchRequest{}
+	mi := &file_f10_v1_runs_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StopBatchRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StopBatchRequest) ProtoMessage() {}
+
+func (x *StopBatchRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_f10_v1_runs_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StopBatchRequest.ProtoReflect.Descriptor instead.
+func (*StopBatchRequest) Descriptor() ([]byte, []int) {
+	return file_f10_v1_runs_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *StopBatchRequest) GetProject() string {
+	if x != nil {
+		return x.Project
+	}
+	return ""
+}
+
+func (x *StopBatchRequest) GetTask() string {
+	if x != nil {
+		return x.Task
+	}
+	return ""
+}
+
+func (x *StopBatchRequest) GetCaller() *CallerContext {
+	if x != nil {
+		return x.Caller
+	}
+	return nil
+}
+
+type StopBatchResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// printed is what f10 stop prints.
+	Printed       *Printed `protobuf:"bytes,1,opt,name=printed,proto3" json:"printed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StopBatchResponse) Reset() {
+	*x = StopBatchResponse{}
+	mi := &file_f10_v1_runs_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StopBatchResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StopBatchResponse) ProtoMessage() {}
+
+func (x *StopBatchResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_f10_v1_runs_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StopBatchResponse.ProtoReflect.Descriptor instead.
+func (*StopBatchResponse) Descriptor() ([]byte, []int) {
+	return file_f10_v1_runs_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *StopBatchResponse) GetPrinted() *Printed {
 	if x != nil {
 		return x.Printed
 	}
@@ -2681,17 +3315,19 @@ const file_f10_v1_runs_proto_rawDesc = "" +
 	"\x05token\x18\r \x01(\tR\x05token\x12\x14\n" +
 	"\x05tasks\x18\x0e \x03(\tR\x05tasks\x12\x14\n" +
 	"\x05chain\x18\x0f \x01(\bR\x05chain\x12\x1a\n" +
-	"\bparallel\x18\x10 \x01(\x05R\bparallel\"\xff\x01\n" +
+	"\bparallel\x18\x10 \x01(\x05R\bparallel\"\x99\x02\n" +
 	"\rStartResponse\x12\x12\n" +
 	"\x04task\x18\x01 \x01(\tR\x04task\x12\x16\n" +
 	"\x06branch\x18\x02 \x01(\tR\x06branch\x12\x1a\n" +
 	"\bworktree\x18\x03 \x01(\tR\bworktree\x12!\n" +
 	"\fworkspace_id\x18\x04 \x01(\tR\vworkspaceId\x12\x14\n" +
 	"\x05agent\x18\x05 \x01(\tR\x05agent\x12)\n" +
-	"\aprinted\x18\x06 \x01(\v2\x0f.f10.v1.PrintedR\aprinted\x12\x14\n" +
-	"\x05drive\x18\a \x01(\x05R\x05drive\x12\x10\n" +
+	"\aprinted\x18\x06 \x01(\v2\x0f.f10.v1.PrintedR\aprinted\x12\x18\n" +
+	"\x05drive\x18\a \x01(\x05B\x02\x18\x01R\x05drive\x12\x10\n" +
 	"\x03log\x18\b \x01(\tR\x03log\x12\x1a\n" +
-	"\battached\x18\t \x01(\bR\battached\"1\n" +
+	"\battached\x18\t \x01(\bR\battached\x12\x14\n" +
+	"\x05batch\x18\n" +
+	" \x01(\x05R\x05batch\"1\n" +
 	"\tDriveTask\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05agent\x18\x02 \x01(\tR\x05agent\"\x95\x03\n" +
@@ -2716,7 +3352,29 @@ const file_f10_v1_runs_proto_rawDesc = "" +
 	"\rDriveResponse\x12\x14\n" +
 	"\x05drive\x18\x01 \x01(\x05R\x05drive\x12\x10\n" +
 	"\x03log\x18\x02 \x01(\tR\x03log\x12\x1a\n" +
-	"\battached\x18\x03 \x01(\bR\battached\"\x8c\x02\n" +
+	"\battached\x18\x03 \x01(\bR\battached\"}\n" +
+	"\x11StartBatchRequest\x12\x18\n" +
+	"\aproject\x18\x01 \x01(\tR\aproject\x12\x12\n" +
+	"\x04args\x18\x02 \x03(\tR\x04args\x12\x10\n" +
+	"\x03dir\x18\x03 \x01(\tR\x03dir\x12\x10\n" +
+	"\x03env\x18\x04 \x03(\tR\x03env\x12\x16\n" +
+	"\x06resume\x18\x05 \x01(\x05R\x06resume\"X\n" +
+	"\x12StartBatchResponse\x12\x14\n" +
+	"\x05batch\x18\x01 \x01(\x05R\x05batch\x12\x10\n" +
+	"\x03log\x18\x02 \x01(\tR\x03log\x12\x1a\n" +
+	"\battached\x18\x03 \x01(\bR\battached\"\xd3\x01\n" +
+	"\rResumeRequest\x12\x18\n" +
+	"\aproject\x18\x01 \x01(\tR\aproject\x12\x12\n" +
+	"\x04task\x18\x02 \x01(\tR\x04task\x12\x18\n" +
+	"\aanswers\x18\x03 \x03(\tR\aanswers\x12/\n" +
+	"\x05every\x18\x04 \x01(\v2\x19.google.protobuf.DurationR\x05every\x12\x1a\n" +
+	"\bparallel\x18\x05 \x01(\x05R\bparallel\x12-\n" +
+	"\x06caller\x18\x06 \x01(\v2\x15.f10.v1.CallerContextR\x06caller\"\x7f\n" +
+	"\x0eResumeResponse\x12\x14\n" +
+	"\x05batch\x18\x01 \x01(\x05R\x05batch\x12\x10\n" +
+	"\x03log\x18\x02 \x01(\tR\x03log\x12\x1a\n" +
+	"\battached\x18\x03 \x01(\bR\battached\x12)\n" +
+	"\aprinted\x18\x04 \x01(\v2\x0f.f10.v1.PrintedR\aprinted\"\x8c\x02\n" +
 	"\rFinishRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x12\n" +
 	"\x04task\x18\x02 \x01(\tR\x04task\x12'\n" +
@@ -2765,6 +3423,25 @@ const file_f10_v1_runs_proto_rawDesc = "" +
 	"\x06caller\x18\x03 \x01(\v2\x15.f10.v1.CallerContextR\x06caller\x12\x12\n" +
 	"\x04task\x18\x04 \x01(\tR\x04task\"@\n" +
 	"\x13CancelDriveResponse\x12)\n" +
+	"\aprinted\x18\x01 \x01(\v2\x0f.f10.v1.PrintedR\aprinted\"o\n" +
+	"\x12ListBatchesRequest\x12\x18\n" +
+	"\aproject\x18\x01 \x01(\tR\aproject\x12\x10\n" +
+	"\x03all\x18\x02 \x01(\bR\x03all\x12-\n" +
+	"\x06caller\x18\x03 \x01(\v2\x15.f10.v1.CallerContextR\x06caller\"\x95\x01\n" +
+	"\x05Batch\x12\x16\n" +
+	"\x06number\x18\x01 \x01(\x05R\x06number\x12\x12\n" +
+	"\x04args\x18\x02 \x03(\tR\x04args\x12\x14\n" +
+	"\x05state\x18\x03 \x01(\tR\x05state\x124\n" +
+	"\astarted\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\astarted\x12\x14\n" +
+	"\x05tasks\x18\x05 \x03(\tR\x05tasks\"i\n" +
+	"\x13ListBatchesResponse\x12'\n" +
+	"\abatches\x18\x01 \x03(\v2\r.f10.v1.BatchR\abatches\x12)\n" +
+	"\aprinted\x18\x02 \x01(\v2\x0f.f10.v1.PrintedR\aprinted\"o\n" +
+	"\x10StopBatchRequest\x12\x18\n" +
+	"\aproject\x18\x01 \x01(\tR\aproject\x12\x12\n" +
+	"\x04task\x18\x02 \x01(\tR\x04task\x12-\n" +
+	"\x06caller\x18\x03 \x01(\v2\x15.f10.v1.CallerContextR\x06caller\">\n" +
+	"\x11StopBatchResponse\x12)\n" +
 	"\aprinted\x18\x01 \x01(\v2\x0f.f10.v1.PrintedR\aprinted*\xf6\x01\n" +
 	"\vPhaseStatus\x12\x1c\n" +
 	"\x18PHASE_STATUS_UNSPECIFIED\x10\x00\x12\x18\n" +
@@ -2786,17 +3463,22 @@ const file_f10_v1_runs_proto_rawDesc = "" +
 	"\rMERGE_MODE_PR\x10\x01\x12\x14\n" +
 	"\x10MERGE_MODE_FORCE\x10\x02\x12\x14\n" +
 	"\x10MERGE_MODE_LOCAL\x10\x03\x12\x14\n" +
-	"\x10MERGE_MODE_CLOSE\x10\x042\xc5\x03\n" +
+	"\x10MERGE_MODE_CLOSE\x10\x042\xdc\x05\n" +
 	"\n" +
 	"RunService\x12I\n" +
 	"\fGetRunStatus\x12\x1b.f10.v1.GetRunStatusRequest\x1a\x1c.f10.v1.GetRunStatusResponse\x124\n" +
-	"\x05Start\x12\x14.f10.v1.StartRequest\x1a\x15.f10.v1.StartResponse\x124\n" +
-	"\x05Drive\x12\x14.f10.v1.DriveRequest\x1a\x15.f10.v1.DriveResponse\x127\n" +
-	"\x06Finish\x12\x15.f10.v1.FinishRequest\x1a\x16.f10.v1.FinishResponse\x12:\n" +
-	"\aForward\x12\x16.f10.v1.ForwardRequest\x1a\x17.f10.v1.ForwardResponse\x12C\n" +
+	"\x05Start\x12\x14.f10.v1.StartRequest\x1a\x15.f10.v1.StartResponse\x129\n" +
+	"\x05Drive\x12\x14.f10.v1.DriveRequest\x1a\x15.f10.v1.DriveResponse\"\x03\x88\x02\x01\x12C\n" +
 	"\n" +
-	"ListDrives\x12\x19.f10.v1.ListDrivesRequest\x1a\x1a.f10.v1.ListDrivesResponse\x12F\n" +
-	"\vCancelDrive\x12\x1a.f10.v1.CancelDriveRequest\x1a\x1b.f10.v1.CancelDriveResponseB\x81\x01\n" +
+	"StartBatch\x12\x19.f10.v1.StartBatchRequest\x1a\x1a.f10.v1.StartBatchResponse\x127\n" +
+	"\x06Resume\x12\x15.f10.v1.ResumeRequest\x1a\x16.f10.v1.ResumeResponse\x127\n" +
+	"\x06Finish\x12\x15.f10.v1.FinishRequest\x1a\x16.f10.v1.FinishResponse\x12:\n" +
+	"\aForward\x12\x16.f10.v1.ForwardRequest\x1a\x17.f10.v1.ForwardResponse\x12H\n" +
+	"\n" +
+	"ListDrives\x12\x19.f10.v1.ListDrivesRequest\x1a\x1a.f10.v1.ListDrivesResponse\"\x03\x88\x02\x01\x12K\n" +
+	"\vCancelDrive\x12\x1a.f10.v1.CancelDriveRequest\x1a\x1b.f10.v1.CancelDriveResponse\"\x03\x88\x02\x01\x12F\n" +
+	"\vListBatches\x12\x1a.f10.v1.ListBatchesRequest\x1a\x1b.f10.v1.ListBatchesResponse\x12@\n" +
+	"\tStopBatch\x12\x18.f10.v1.StopBatchRequest\x1a\x19.f10.v1.StopBatchResponseB\x81\x01\n" +
 	"\n" +
 	"com.f10.v1B\tRunsProtoP\x01Z/github.com/amberpixels/f10/cli/gen/f10/v1;f10v1\xa2\x02\x03FXX\xaa\x02\x06F10.V1\xca\x02\x06F10\\V1\xe2\x02\x12F10\\V1\\GPBMetadata\xea\x02\aF10::V1b\x06proto3"
 
@@ -2813,7 +3495,7 @@ func file_f10_v1_runs_proto_rawDescGZIP() []byte {
 }
 
 var file_f10_v1_runs_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_f10_v1_runs_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
+var file_f10_v1_runs_proto_msgTypes = make([]protoimpl.MessageInfo, 35)
 var file_f10_v1_runs_proto_goTypes = []any{
 	(PhaseStatus)(0),              // 0: f10.v1.PhaseStatus
 	(StartMode)(0),                // 1: f10.v1.StartMode
@@ -2835,26 +3517,35 @@ var file_f10_v1_runs_proto_goTypes = []any{
 	(*DriveTask)(nil),             // 17: f10.v1.DriveTask
 	(*DriveRequest)(nil),          // 18: f10.v1.DriveRequest
 	(*DriveResponse)(nil),         // 19: f10.v1.DriveResponse
-	(*FinishRequest)(nil),         // 20: f10.v1.FinishRequest
-	(*FinishResponse)(nil),        // 21: f10.v1.FinishResponse
-	(*ForwardRequest)(nil),        // 22: f10.v1.ForwardRequest
-	(*ForwardResponse)(nil),       // 23: f10.v1.ForwardResponse
-	(*ListDrivesRequest)(nil),     // 24: f10.v1.ListDrivesRequest
-	(*DriveRecord)(nil),           // 25: f10.v1.DriveRecord
-	(*ListDrivesResponse)(nil),    // 26: f10.v1.ListDrivesResponse
-	(*CancelDriveRequest)(nil),    // 27: f10.v1.CancelDriveRequest
-	(*CancelDriveResponse)(nil),   // 28: f10.v1.CancelDriveResponse
-	(*timestamppb.Timestamp)(nil), // 29: google.protobuf.Timestamp
-	(*CallerContext)(nil),         // 30: f10.v1.CallerContext
-	(*Printed)(nil),               // 31: f10.v1.Printed
-	(*durationpb.Duration)(nil),   // 32: google.protobuf.Duration
+	(*StartBatchRequest)(nil),     // 20: f10.v1.StartBatchRequest
+	(*StartBatchResponse)(nil),    // 21: f10.v1.StartBatchResponse
+	(*ResumeRequest)(nil),         // 22: f10.v1.ResumeRequest
+	(*ResumeResponse)(nil),        // 23: f10.v1.ResumeResponse
+	(*FinishRequest)(nil),         // 24: f10.v1.FinishRequest
+	(*FinishResponse)(nil),        // 25: f10.v1.FinishResponse
+	(*ForwardRequest)(nil),        // 26: f10.v1.ForwardRequest
+	(*ForwardResponse)(nil),       // 27: f10.v1.ForwardResponse
+	(*ListDrivesRequest)(nil),     // 28: f10.v1.ListDrivesRequest
+	(*DriveRecord)(nil),           // 29: f10.v1.DriveRecord
+	(*ListDrivesResponse)(nil),    // 30: f10.v1.ListDrivesResponse
+	(*CancelDriveRequest)(nil),    // 31: f10.v1.CancelDriveRequest
+	(*CancelDriveResponse)(nil),   // 32: f10.v1.CancelDriveResponse
+	(*ListBatchesRequest)(nil),    // 33: f10.v1.ListBatchesRequest
+	(*Batch)(nil),                 // 34: f10.v1.Batch
+	(*ListBatchesResponse)(nil),   // 35: f10.v1.ListBatchesResponse
+	(*StopBatchRequest)(nil),      // 36: f10.v1.StopBatchRequest
+	(*StopBatchResponse)(nil),     // 37: f10.v1.StopBatchResponse
+	(*timestamppb.Timestamp)(nil), // 38: google.protobuf.Timestamp
+	(*CallerContext)(nil),         // 39: f10.v1.CallerContext
+	(*Printed)(nil),               // 40: f10.v1.Printed
+	(*durationpb.Duration)(nil),   // 41: google.protobuf.Duration
 }
 var file_f10_v1_runs_proto_depIdxs = []int32{
 	0,  // 0: f10.v1.Run.capture:type_name -> f10.v1.PhaseStatus
 	0,  // 1: f10.v1.Run.plan:type_name -> f10.v1.PhaseStatus
 	0,  // 2: f10.v1.Run.ship:type_name -> f10.v1.PhaseStatus
-	29, // 3: f10.v1.Run.done_at:type_name -> google.protobuf.Timestamp
-	29, // 4: f10.v1.Run.updated:type_name -> google.protobuf.Timestamp
+	38, // 3: f10.v1.Run.done_at:type_name -> google.protobuf.Timestamp
+	38, // 4: f10.v1.Run.updated:type_name -> google.protobuf.Timestamp
 	5,  // 5: f10.v1.ReviewHalf.rounds:type_name -> f10.v1.ReviewRound
 	4,  // 6: f10.v1.Gate.outcome:type_name -> f10.v1.JudgeOutcome
 	6,  // 7: f10.v1.Gate.local:type_name -> f10.v1.ReviewHalf
@@ -2867,44 +3558,61 @@ var file_f10_v1_runs_proto_depIdxs = []int32{
 	3,  // 14: f10.v1.RunStatus.run:type_name -> f10.v1.Run
 	7,  // 15: f10.v1.RunStatus.gates:type_name -> f10.v1.Gate
 	11, // 16: f10.v1.RunStatus.shipment:type_name -> f10.v1.Shipment
-	30, // 17: f10.v1.GetRunStatusRequest.caller:type_name -> f10.v1.CallerContext
+	39, // 17: f10.v1.GetRunStatusRequest.caller:type_name -> f10.v1.CallerContext
 	12, // 18: f10.v1.GetRunStatusResponse.runs:type_name -> f10.v1.RunStatus
-	31, // 19: f10.v1.GetRunStatusResponse.printed:type_name -> f10.v1.Printed
+	40, // 19: f10.v1.GetRunStatusResponse.printed:type_name -> f10.v1.Printed
 	1,  // 20: f10.v1.StartRequest.mode:type_name -> f10.v1.StartMode
-	30, // 21: f10.v1.StartRequest.caller:type_name -> f10.v1.CallerContext
-	31, // 22: f10.v1.StartResponse.printed:type_name -> f10.v1.Printed
+	39, // 21: f10.v1.StartRequest.caller:type_name -> f10.v1.CallerContext
+	40, // 22: f10.v1.StartResponse.printed:type_name -> f10.v1.Printed
 	17, // 23: f10.v1.DriveRequest.tasks:type_name -> f10.v1.DriveTask
-	32, // 24: f10.v1.DriveRequest.every:type_name -> google.protobuf.Duration
-	2,  // 25: f10.v1.FinishRequest.merge:type_name -> f10.v1.MergeMode
-	30, // 26: f10.v1.FinishRequest.caller:type_name -> f10.v1.CallerContext
-	31, // 27: f10.v1.FinishResponse.printed:type_name -> f10.v1.Printed
-	30, // 28: f10.v1.ForwardRequest.caller:type_name -> f10.v1.CallerContext
-	31, // 29: f10.v1.ForwardResponse.printed:type_name -> f10.v1.Printed
-	30, // 30: f10.v1.ListDrivesRequest.caller:type_name -> f10.v1.CallerContext
-	29, // 31: f10.v1.DriveRecord.started:type_name -> google.protobuf.Timestamp
-	25, // 32: f10.v1.ListDrivesResponse.drives:type_name -> f10.v1.DriveRecord
-	31, // 33: f10.v1.ListDrivesResponse.printed:type_name -> f10.v1.Printed
-	30, // 34: f10.v1.CancelDriveRequest.caller:type_name -> f10.v1.CallerContext
-	31, // 35: f10.v1.CancelDriveResponse.printed:type_name -> f10.v1.Printed
-	13, // 36: f10.v1.RunService.GetRunStatus:input_type -> f10.v1.GetRunStatusRequest
-	15, // 37: f10.v1.RunService.Start:input_type -> f10.v1.StartRequest
-	18, // 38: f10.v1.RunService.Drive:input_type -> f10.v1.DriveRequest
-	20, // 39: f10.v1.RunService.Finish:input_type -> f10.v1.FinishRequest
-	22, // 40: f10.v1.RunService.Forward:input_type -> f10.v1.ForwardRequest
-	24, // 41: f10.v1.RunService.ListDrives:input_type -> f10.v1.ListDrivesRequest
-	27, // 42: f10.v1.RunService.CancelDrive:input_type -> f10.v1.CancelDriveRequest
-	14, // 43: f10.v1.RunService.GetRunStatus:output_type -> f10.v1.GetRunStatusResponse
-	16, // 44: f10.v1.RunService.Start:output_type -> f10.v1.StartResponse
-	19, // 45: f10.v1.RunService.Drive:output_type -> f10.v1.DriveResponse
-	21, // 46: f10.v1.RunService.Finish:output_type -> f10.v1.FinishResponse
-	23, // 47: f10.v1.RunService.Forward:output_type -> f10.v1.ForwardResponse
-	26, // 48: f10.v1.RunService.ListDrives:output_type -> f10.v1.ListDrivesResponse
-	28, // 49: f10.v1.RunService.CancelDrive:output_type -> f10.v1.CancelDriveResponse
-	43, // [43:50] is the sub-list for method output_type
-	36, // [36:43] is the sub-list for method input_type
-	36, // [36:36] is the sub-list for extension type_name
-	36, // [36:36] is the sub-list for extension extendee
-	0,  // [0:36] is the sub-list for field type_name
+	41, // 24: f10.v1.DriveRequest.every:type_name -> google.protobuf.Duration
+	41, // 25: f10.v1.ResumeRequest.every:type_name -> google.protobuf.Duration
+	39, // 26: f10.v1.ResumeRequest.caller:type_name -> f10.v1.CallerContext
+	40, // 27: f10.v1.ResumeResponse.printed:type_name -> f10.v1.Printed
+	2,  // 28: f10.v1.FinishRequest.merge:type_name -> f10.v1.MergeMode
+	39, // 29: f10.v1.FinishRequest.caller:type_name -> f10.v1.CallerContext
+	40, // 30: f10.v1.FinishResponse.printed:type_name -> f10.v1.Printed
+	39, // 31: f10.v1.ForwardRequest.caller:type_name -> f10.v1.CallerContext
+	40, // 32: f10.v1.ForwardResponse.printed:type_name -> f10.v1.Printed
+	39, // 33: f10.v1.ListDrivesRequest.caller:type_name -> f10.v1.CallerContext
+	38, // 34: f10.v1.DriveRecord.started:type_name -> google.protobuf.Timestamp
+	29, // 35: f10.v1.ListDrivesResponse.drives:type_name -> f10.v1.DriveRecord
+	40, // 36: f10.v1.ListDrivesResponse.printed:type_name -> f10.v1.Printed
+	39, // 37: f10.v1.CancelDriveRequest.caller:type_name -> f10.v1.CallerContext
+	40, // 38: f10.v1.CancelDriveResponse.printed:type_name -> f10.v1.Printed
+	39, // 39: f10.v1.ListBatchesRequest.caller:type_name -> f10.v1.CallerContext
+	38, // 40: f10.v1.Batch.started:type_name -> google.protobuf.Timestamp
+	34, // 41: f10.v1.ListBatchesResponse.batches:type_name -> f10.v1.Batch
+	40, // 42: f10.v1.ListBatchesResponse.printed:type_name -> f10.v1.Printed
+	39, // 43: f10.v1.StopBatchRequest.caller:type_name -> f10.v1.CallerContext
+	40, // 44: f10.v1.StopBatchResponse.printed:type_name -> f10.v1.Printed
+	13, // 45: f10.v1.RunService.GetRunStatus:input_type -> f10.v1.GetRunStatusRequest
+	15, // 46: f10.v1.RunService.Start:input_type -> f10.v1.StartRequest
+	18, // 47: f10.v1.RunService.Drive:input_type -> f10.v1.DriveRequest
+	20, // 48: f10.v1.RunService.StartBatch:input_type -> f10.v1.StartBatchRequest
+	22, // 49: f10.v1.RunService.Resume:input_type -> f10.v1.ResumeRequest
+	24, // 50: f10.v1.RunService.Finish:input_type -> f10.v1.FinishRequest
+	26, // 51: f10.v1.RunService.Forward:input_type -> f10.v1.ForwardRequest
+	28, // 52: f10.v1.RunService.ListDrives:input_type -> f10.v1.ListDrivesRequest
+	31, // 53: f10.v1.RunService.CancelDrive:input_type -> f10.v1.CancelDriveRequest
+	33, // 54: f10.v1.RunService.ListBatches:input_type -> f10.v1.ListBatchesRequest
+	36, // 55: f10.v1.RunService.StopBatch:input_type -> f10.v1.StopBatchRequest
+	14, // 56: f10.v1.RunService.GetRunStatus:output_type -> f10.v1.GetRunStatusResponse
+	16, // 57: f10.v1.RunService.Start:output_type -> f10.v1.StartResponse
+	19, // 58: f10.v1.RunService.Drive:output_type -> f10.v1.DriveResponse
+	21, // 59: f10.v1.RunService.StartBatch:output_type -> f10.v1.StartBatchResponse
+	23, // 60: f10.v1.RunService.Resume:output_type -> f10.v1.ResumeResponse
+	25, // 61: f10.v1.RunService.Finish:output_type -> f10.v1.FinishResponse
+	27, // 62: f10.v1.RunService.Forward:output_type -> f10.v1.ForwardResponse
+	30, // 63: f10.v1.RunService.ListDrives:output_type -> f10.v1.ListDrivesResponse
+	32, // 64: f10.v1.RunService.CancelDrive:output_type -> f10.v1.CancelDriveResponse
+	35, // 65: f10.v1.RunService.ListBatches:output_type -> f10.v1.ListBatchesResponse
+	37, // 66: f10.v1.RunService.StopBatch:output_type -> f10.v1.StopBatchResponse
+	56, // [56:67] is the sub-list for method output_type
+	45, // [45:56] is the sub-list for method input_type
+	45, // [45:45] is the sub-list for extension type_name
+	45, // [45:45] is the sub-list for extension extendee
+	0,  // [0:45] is the sub-list for field type_name
 }
 
 func init() { file_f10_v1_runs_proto_init() }
@@ -2919,7 +3627,7 @@ func file_f10_v1_runs_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_f10_v1_runs_proto_rawDesc), len(file_f10_v1_runs_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   26,
+			NumMessages:   35,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

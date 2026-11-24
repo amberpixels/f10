@@ -9,7 +9,7 @@ import (
 )
 
 // A base whose only commit is a merge of its own base's newer head, as the
-// catchup guard before implement leaves one, has no code: drive 6 released
+// catchup guard before implement leaves one, has no code: batch 6 released
 // two dependents on such a merge.
 func TestBaseHasCodeIgnoresMerges(t *testing.T) {
 	r := testkit.NewCatchupRepo(t)

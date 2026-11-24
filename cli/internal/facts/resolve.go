@@ -305,15 +305,19 @@ func (e *Effective) resolveHosting(fm *layered) {
 		e.BundleMaxLines = n
 	}
 
-	if len(fm.DriveEnv) > 0 {
+	if len(fm.BatchEnv) > 0 {
 		e.Facts = append(e.Facts, Fact{
-			Key:    "drive_env",
-			Value:  strings.Join(fm.DriveEnv, ", "),
-			Origin: DeclaredFrontmatter(fm.origin["drive_env"]),
+			Key:    "batch_env",
+			Value:  strings.Join(fm.BatchEnv, ", "),
+			Origin: DeclaredFrontmatter(fm.origin["batch_env"]),
 		})
 	}
 
-	e.DriveEnv = fm.DriveEnv
+	if fm.OldBatchEnv != nil {
+		e.problem(false, "drive_env is now batch_env: rename the key; the old one is read for one more release")
+	}
+
+	e.BatchEnv = fm.BatchEnv
 }
 
 func (e *Effective) resolveReview(

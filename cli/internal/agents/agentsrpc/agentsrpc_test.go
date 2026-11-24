@@ -119,7 +119,7 @@ func TestInboxServiceAnswersThroughTheDeliverer(t *testing.T) {
 
 	if got := res.Msg.GetAsk(); got.GetAnsweredBy() != agentsv1.AnswerSource_ANSWER_SOURCE_API ||
 		got.GetAnswer() == "" || len(resumed) != 1 || resumed[0] != 3 {
-		t.Errorf("answered %v, resumed %v; want the API's answer and drive 3 resumed", got, resumed)
+		t.Errorf("answered %v, resumed %v; want the API's answer and batch 3 resumed", got, resumed)
 	}
 
 	_, err = c.asks.AnswerAsk(t.Context(), connect.NewRequest(&agentsv1.AnswerAskRequest{Id: a.Key()}))

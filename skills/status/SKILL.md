@@ -1,6 +1,6 @@
 ---
 name: status
-description: "f10 status skill - where an f10 run is (this session's, a task's in its own worktree, each child's of a parent, or everything this session started or drove), why it stopped, and the question a driven agent is waiting on, shown and answered when the user replies. Use when the user says \"/f10:status\" or \"/f10:status <task-id>\", asks where a run is, why it stopped, how a parent's subtasks are going, what the status-line badge means, or what an agent in another workspace is asking."
+description: "f10 status skill - where an f10 run is (this session's, a task's in its own worktree, each child's of a parent, or everything this session started), why it stopped, and the question a driven agent is waiting on, shown and answered when the user replies. Use when the user says \"/f10:status\" or \"/f10:status <task-id>\", asks where a run is, why it stopped, how a parent's subtasks are going, what the status-line badge means, or what an agent in another workspace is asking."
 allowed-tools: Bash
 argument-hint: "[task-id]"
 ---
@@ -17,7 +17,7 @@ Never reorder it, summarise it, or turn it into a table, because the binary alre
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
 - No argument: the answer is below, already run: the current task's (the session's, else the branch's), as `f10 status <task-id>` prints it, or the session's run when no task is named.
-  In a checkout whose branch names no task, the main one, a session that started or drove tasks gets a `launched here` tree instead: a row per task still live, each start's and each running drive's, nested by `After:` as a parent's tree is.
+  In a checkout whose branch names no task, the main one, a session that started tasks gets a `launched here` tree instead: a row per task still live, each start's and each running batch's, nested by `After:` as a parent's tree is.
   Print it as point 1 does, then follow points 2-4 with the task the output names; a `launched here` tree is followed as point 3 follows a parent's.
   The hook answers a bare call itself, with no model turn.
   The exception is output that holds a question, which is an `ask` row in a block or an `asking` row in a tree.
@@ -50,7 +50,7 @@ Never reorder it, summarise it, or turn it into a table, because the binary alre
    f10 inbox answer <task-id> --by skill 1=<answer> 2=<answer>
    ```
 
-   Print one line saying where the answer went, as the command printed it (sent to the agent, a drive resumed), and stop.
+   Print one line saying where the answer went, as the command printed it (sent to the agent, a batch resumed), and stop.
    An `already answered ...` refusal is a normal end: name who answered.
    The agent resumes in its own tab; this session's badge stays as it is.
 3. **A parent, or the session's launches, prints a tree** instead of a block, with a row per child.

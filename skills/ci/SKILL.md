@@ -18,7 +18,7 @@ Running this skill authorizes three actions, for this task's PR only:
 - `--dry-run`: follow `${CLAUDE_PLUGIN_ROOT}/modes/dry-run.md` instead of running anything, and stop.
 - `--driven`: follow `${CLAUDE_PLUGIN_ROOT}/modes/driven.md`.
   Everything below still runs.
-  The drive and the watcher send it this way.
+  The daemon and the watcher send it this way.
 - `<task-id>`: follow `${CLAUDE_PLUGIN_ROOT}/modes/forward.md` first, before loading anything.
   Stop if it forwards the task.
   Otherwise the subject is the PR of the branch checked out here.
@@ -33,4 +33,4 @@ Running this skill authorizes three actions, for this task's PR only:
 **Exit**
 - Stop at the step's report.
   The report shows a fix pushed, jobs rerun, an ask, or checks no longer red.
-  Unless the step asked, run `f10-state.sh done ci` before the report, because the drive and the watcher read it as the end of the turn they sent.
+  Unless the step asked, run `f10-state.sh done ci` before the report, because the daemon and the watcher read it as the end of the turn they sent.

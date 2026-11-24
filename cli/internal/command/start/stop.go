@@ -3,7 +3,7 @@ package start
 import (
 	"context"
 	"errors"
-	"strconv"
+	"fmt"
 	"strings"
 
 	"connectrpc.com/connect"
@@ -11,32 +11,24 @@ import (
 
 	f10v1 "github.com/amberpixels/f10/cli/gen/f10/v1"
 	"github.com/amberpixels/f10/cli/internal/apiclient"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
 )
 
-// StopCommand is the stop verb: it stops a drive from prompting further and
-// closes its asks. A task id stops the drive holding it, whole, since a
-// drive's tasks wait on one another.
+// StopCommand is the stop verb: it stops a batch from prompting further and
+// closes its asks. A task id stops the batch holding it, whole, since a
+// batch's tasks wait on one another.
 func StopCommand() *cli.Command {
 	return &cli.Command{
 		Name:      "stop",
-		Usage:     "stop a drive f10 start runs, by its number or a task it holds; f10 start --resume N goes on with it",
-		ArgsUsage: "<task-id | drive number>",
+		Usage:     "stop the batch a task belongs to, for good: no agent is prompted further, and its f10 start line starts a new one",
+		ArgsUsage: "<task-id>",
 		Action:    runStop,
 	}
 }
 
 func runStop(ctx context.Context, cmd *cli.Command) error {
 	if cmd.Args().Len() != 1 {
-		return errors.New("stop takes one task id or drive number: f10 stop 3")
-	}
-
-	req := &f10v1.CancelDriveRequest{}
-
-	token := strings.TrimSpace(cmd.Args().First())
-	if n, err := strconv.Atoi(token); err == nil && n > 0 {
-		req.Drive = int32(n) //nolint:gosec // a drive number
-	} else {
-		req.Task = token
+		return errors.New("stop takes one task id, any task of the batch: f10 stop GH-12")
 	}
 
 	c, err := apiclient.Dial(ctx)
@@ -44,16 +36,37 @@ func runStop(ctx context.Context, cmd *cli.Command) error {
 		return err
 	}
 
-	if req.Caller, err = c.Caller(cmd); err != nil {
+	caller, err := c.Caller(cmd)
+	if err != nil {
 		return err
 	}
 
-	res, err := c.Runs.CancelDrive(ctx, connect.NewRequest(req))
-	if err != nil {
-		return apiclient.Err(err, cmd.Writer, cmd.ErrWriter)
+	token := strings.TrimSpace(cmd.Args().First())
+
+	var printed *f10v1.Printed
+
+	if n, ok := drivectl.OldNumber(token); ok {
+		fmt.Fprintln(cmd.ErrWriter, drivectl.Renamed("a batch number", "f10 stop <task-id>"))
+
+		//nolint:staticcheck // the old spelling, by number, for one release
+		res, err := c.Runs.CancelDrive(ctx, connect.NewRequest(&f10v1.CancelDriveRequest{
+			Drive: int32(n), Caller: caller, //nolint:gosec // a batch number
+		}))
+		if err != nil {
+			return apiclient.Err(err, cmd.Writer, cmd.ErrWriter)
+		}
+
+		printed = res.Msg.GetPrinted()
+	} else {
+		res, err := c.Runs.StopBatch(ctx, connect.NewRequest(&f10v1.StopBatchRequest{Task: token, Caller: caller}))
+		if err != nil {
+			return apiclient.Err(err, cmd.Writer, cmd.ErrWriter)
+		}
+
+		printed = res.Msg.GetPrinted()
 	}
 
-	apiclient.Print(cmd.Writer, cmd.ErrWriter, res.Msg.GetPrinted())
+	apiclient.Print(cmd.Writer, cmd.ErrWriter, printed)
 
 	return nil
 }

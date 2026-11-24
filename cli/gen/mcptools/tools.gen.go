@@ -230,7 +230,7 @@ var Tools = []Tool{
 	{
 		Name:        "get_daemon_status",
 		Procedure:   "/f10.v1.DaemonService/GetDaemonStatus",
-		Description: "GetDaemonStatus is who the daemon is, the drives it runs, the projects it watches and its tailnet listener.",
+		Description: "GetDaemonStatus is who the daemon is, the batches it runs, the projects it watches and its tailnet listener.",
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}",
 		NewRequest:  func() proto.Message { return &v11.GetDaemonStatusRequest{} },
 		Call: func(ctx context.Context, hc connect.HTTPClient, baseURL string, req proto.Message, opts ...connect.ClientOption) (proto.Message, error) {
@@ -246,7 +246,7 @@ var Tools = []Tool{
 		Name:        "stop_daemon",
 		Procedure:   "/f10.v1.DaemonService/StopDaemon",
 		Description: "StopDaemon stops the daemon; a second call without drain cuts a drain short.",
-		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"drain\":{\"description\":\"drain lets each drive reach its next tick before it stops.\",\"type\":\"boolean\"},\"upgrade\":{\"description\":\"upgrade says a newer daemon follows and resumes the drained drives.\",\"type\":\"boolean\"}},\"type\":\"object\"}",
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"drain\":{\"description\":\"drain lets each batch reach its next tick before it stops.\",\"type\":\"boolean\"},\"upgrade\":{\"description\":\"upgrade says a newer daemon follows and resumes the drained batches.\",\"type\":\"boolean\"}},\"type\":\"object\"}",
 		NewRequest:  func() proto.Message { return &v11.StopDaemonRequest{} },
 		Call: func(ctx context.Context, hc connect.HTTPClient, baseURL string, req proto.Message, opts ...connect.ClientOption) (proto.Message, error) {
 			res, err := f10v1connect.NewDaemonServiceClient(hc, baseURL, opts...).StopDaemon(ctx, connect.NewRequest(req.(*v11.StopDaemonRequest)))
@@ -275,7 +275,7 @@ var Tools = []Tool{
 	{
 		Name:        "list_projects",
 		Procedure:   "/f10.v1.ProjectService/ListProjects",
-		Description: "ListProjects lists the projects the daemon watches or runs a drive in, with the id every other request's project field takes.",
+		Description: "ListProjects lists the projects the daemon watches or runs a batch in, with the id every other request's project field takes.",
 		InputSchema: "{\"additionalProperties\":false,\"properties\":{},\"type\":\"object\"}",
 		NewRequest:  func() proto.Message { return &v11.ListProjectsRequest{} },
 		Call: func(ctx context.Context, hc connect.HTTPClient, baseURL string, req proto.Message, opts ...connect.ClientOption) (proto.Message, error) {
@@ -305,8 +305,8 @@ var Tools = []Tool{
 	{
 		Name:        "start",
 		Procedure:   "/f10.v1.RunService/Start",
-		Description: "Start runs a task through its flow in a drive, as f10 start does. A discussion or a picked-up PR opens the worktree, workspace and agent, prompted once, since nothing steers an agent that waits for a person.",
-		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"after\":{\"description\":\"after is the task this one builds on; base is a branch to start from.\",\"type\":\"string\"},\"agent\":{\"description\":\"agent is a profile name; model overrides only the model.\",\"type\":\"string\"},\"base\":{\"type\":\"string\"},\"chain\":{\"description\":\"chain makes a flow start a range: token, then the one id in tasks, and every id between, as `f10 start A -- B` runs them.\",\"type\":\"boolean\"},\"flow\":{\"description\":\"flow names a declared flow; empty lets the project's rules pick it.\",\"type\":\"string\"},\"mode\":{\"description\":\"START_MODE_SHIP: ship the task through its flow; START_MODE_PLAN: plan the task and stop; START_MODE_DISCUSS: read the task and wait to discuss it\",\"enum\":[\"START_MODE_UNSPECIFIED\",\"START_MODE_SHIP\",\"START_MODE_PLAN\",\"START_MODE_DISCUSS\"],\"type\":\"string\"},\"model\":{\"type\":\"string\"},\"note\":{\"description\":\"note is extra text a discussion's or a pickup's prompt carries. A flow start refuses one, because a driven run takes its instructions from the task.\",\"type\":\"string\"},\"pace\":{\"type\":\"string\"},\"parallel\":{\"description\":\"parallel caps a flow start's tasks running a skill at once; 0 keeps the record's or the default.\",\"type\":\"integer\"},\"pr\":{\"type\":\"string\"},\"project\":{\"type\":\"string\"},\"task\":{\"description\":\"task is the task id; pr picks up an existing PR instead, by url or number.\",\"type\":\"string\"},\"tasks\":{\"description\":\"tasks are the other ids, after token. A discussion opens token's worktree and reads them all, and a flow start runs them in one drive.\",\"items\":{\"type\":\"string\"},\"type\":\"array\"},\"token\":{\"description\":\"token is the argument as f10 start takes it: a task id with its -suffix, a PR url or #n. When set it wins over task and pr, and task names the task a picked-up PR belongs to.\",\"type\":\"string\"}},\"type\":\"object\"}",
+		Description: "Start runs a task through its flow in a batch, as f10 start does. A discussion or a picked-up PR opens the worktree, workspace and agent, prompted once, since nothing steers an agent that waits for a person.",
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"after\":{\"description\":\"after is the task this one builds on; base is a branch to start from.\",\"type\":\"string\"},\"agent\":{\"description\":\"agent is a profile name; model overrides only the model.\",\"type\":\"string\"},\"base\":{\"type\":\"string\"},\"chain\":{\"description\":\"chain makes a flow start a range: token, then the one id in tasks, and every id between, as `f10 start A -- B` runs them.\",\"type\":\"boolean\"},\"flow\":{\"description\":\"flow names a declared flow; empty lets the project's rules pick it.\",\"type\":\"string\"},\"mode\":{\"description\":\"START_MODE_SHIP: ship the task through its flow; START_MODE_PLAN: plan the task and stop; START_MODE_DISCUSS: read the task and wait to discuss it\",\"enum\":[\"START_MODE_UNSPECIFIED\",\"START_MODE_SHIP\",\"START_MODE_PLAN\",\"START_MODE_DISCUSS\"],\"type\":\"string\"},\"model\":{\"type\":\"string\"},\"note\":{\"description\":\"note is extra text a discussion's or a pickup's prompt carries. A flow start refuses one, because a driven run takes its instructions from the task.\",\"type\":\"string\"},\"pace\":{\"type\":\"string\"},\"parallel\":{\"description\":\"parallel caps a flow start's tasks running a skill at once; 0 keeps the record's or the default.\",\"type\":\"integer\"},\"pr\":{\"type\":\"string\"},\"project\":{\"type\":\"string\"},\"task\":{\"description\":\"task is the task id; pr picks up an existing PR instead, by url or number.\",\"type\":\"string\"},\"tasks\":{\"description\":\"tasks are the other ids, after token. A discussion opens token's worktree and reads them all, and a flow start runs them in one batch.\",\"items\":{\"type\":\"string\"},\"type\":\"array\"},\"token\":{\"description\":\"token is the argument as f10 start takes it: a task id with its -suffix, a PR url or #n. When set it wins over task and pr, and task names the task a picked-up PR belongs to.\",\"type\":\"string\"}},\"type\":\"object\"}",
 		NewRequest:  func() proto.Message { return &v11.StartRequest{} },
 		Call: func(ctx context.Context, hc connect.HTTPClient, baseURL string, req proto.Message, opts ...connect.ClientOption) (proto.Message, error) {
 			res, err := f10v1connect.NewRunServiceClient(hc, baseURL, opts...).Start(ctx, connect.NewRequest(req.(*v11.StartRequest)))
@@ -318,13 +318,28 @@ var Tools = []Tool{
 		},
 	},
 	{
-		Name:        "drive",
-		Procedure:   "/f10.v1.RunService/Drive",
-		Description: "Drive runs a list of tasks through a flow, each once its base has a commit, as f10 start does with several tasks.",
-		InputSchema: "{\"$defs\":{\"f10.v1.DriveTask\":{\"additionalProperties\":false,\"description\":\"A DriveTask is one task of a drive, with its own agent profile.\",\"properties\":{\"agent\":{\"type\":\"string\"},\"id\":{\"type\":\"string\"}},\"type\":\"object\"}},\"additionalProperties\":false,\"description\":\"DriveRequest starts or resumes a drive. f10 start sends args. The field form (args unset) is kept for older clients only: a new client calls Start, which runs the same flow start with its closed-task check and plan-only mode. The field form refuses a start of closed tasks.\",\"properties\":{\"agent\":{\"type\":\"string\"},\"answers\":{\"description\":\"answers are the answers to the drive's open asks, `ID=text` for one task or bare text.\",\"items\":{\"type\":\"string\"},\"type\":\"array\"},\"args\":{\"description\":\"args are the drive's arguments as `f10 start` takes them. When set they win over the fields above, so a rerun of a typed command line keys to the record it opened.\",\"items\":{\"type\":\"string\"},\"type\":\"array\"},\"chain\":{\"description\":\"chain runs the tasks one after another, each based on the one before.\",\"type\":\"boolean\"},\"dir\":{\"description\":\"dir is the checkout the drive runs from.\",\"type\":\"string\"},\"env\":{\"description\":\"env is the allowlisted environment the drive runs with. Honored only on the unix socket, because a remote client has no local session to pass.\",\"items\":{\"type\":\"string\"},\"type\":\"array\"},\"every\":{\"description\":\"every is how often the drive polls its tasks; unset keeps the default. (a duration in seconds, such as 90s or 1.5s)\",\"type\":\"string\"},\"flow\":{\"type\":\"string\"},\"model\":{\"type\":\"string\"},\"pace\":{\"type\":\"string\"},\"parallel\":{\"type\":\"integer\"},\"plan_first\":{\"description\":\"plan_first is refused: a plan-only start is StartRequest with mode START_MODE_PLAN.\",\"type\":\"boolean\"},\"project\":{\"type\":\"string\"},\"resume\":{\"description\":\"resume picks up the drive record with this number.\",\"type\":\"integer\"},\"tasks\":{\"items\":{\"$ref\":\"#/$defs/f10.v1.DriveTask\"},\"type\":\"array\"}},\"type\":\"object\"}",
-		NewRequest:  func() proto.Message { return &v11.DriveRequest{} },
+		Name:        "start_batch",
+		Procedure:   "/f10.v1.RunService/StartBatch",
+		Description: "StartBatch runs a list of tasks through a flow as one batch, each once its base has a commit, as f10 start does with a typed command line.",
+		InputSchema: "{\"additionalProperties\":false,\"description\":\"StartBatchRequest starts a batch from a command line, or picks up the batch that command line already started.\",\"properties\":{\"args\":{\"description\":\"args are the arguments as `f10 start` takes them, so a rerun of a typed command line keys to the record it opened.\",\"items\":{\"type\":\"string\"},\"type\":\"array\"},\"dir\":{\"description\":\"dir is the checkout the batch runs from; empty takes the project's.\",\"type\":\"string\"},\"env\":{\"description\":\"env is the allowlisted environment the batch runs with. Honored only on the unix socket, because a remote client has no local session to pass.\",\"items\":{\"type\":\"string\"},\"type\":\"array\"},\"project\":{\"type\":\"string\"},\"resume\":{\"description\":\"resume picks up the batch record with this number, for a client that already resolved it; Resume takes a task id instead.\",\"type\":\"integer\"}},\"type\":\"object\"}",
+		NewRequest:  func() proto.Message { return &v11.StartBatchRequest{} },
 		Call: func(ctx context.Context, hc connect.HTTPClient, baseURL string, req proto.Message, opts ...connect.ClientOption) (proto.Message, error) {
-			res, err := f10v1connect.NewRunServiceClient(hc, baseURL, opts...).Drive(ctx, connect.NewRequest(req.(*v11.DriveRequest)))
+			res, err := f10v1connect.NewRunServiceClient(hc, baseURL, opts...).StartBatch(ctx, connect.NewRequest(req.(*v11.StartBatchRequest)))
+			if err != nil {
+				return nil, err
+			}
+
+			return res.Msg, nil
+		},
+	},
+	{
+		Name:        "resume",
+		Procedure:   "/f10.v1.RunService/Resume",
+		Description: "Resume goes on with a stopped batch wherever each task stopped, the finish included, as f10 resume does. Any task of the batch names it.",
+		InputSchema: "{\"additionalProperties\":false,\"description\":\"ResumeRequest names a stopped batch by one of its tasks. With no task, the project's one stopped batch resumes, and several are refused by name.\",\"properties\":{\"answers\":{\"description\":\"answers are the answers to the batch's open asks, `ID=text` for one task or bare text.\",\"items\":{\"type\":\"string\"},\"type\":\"array\"},\"every\":{\"description\":\"every is how often the tasks are polled; unset keeps the record's. (a duration in seconds, such as 90s or 1.5s)\",\"type\":\"string\"},\"parallel\":{\"description\":\"parallel caps the tasks running a skill at once; 0 keeps the record's.\",\"type\":\"integer\"},\"project\":{\"type\":\"string\"},\"task\":{\"description\":\"task is any task id of the batch, a bundle's rider included.\",\"type\":\"string\"}},\"type\":\"object\"}",
+		NewRequest:  func() proto.Message { return &v11.ResumeRequest{} },
+		Call: func(ctx context.Context, hc connect.HTTPClient, baseURL string, req proto.Message, opts ...connect.ClientOption) (proto.Message, error) {
+			res, err := f10v1connect.NewRunServiceClient(hc, baseURL, opts...).Resume(ctx, connect.NewRequest(req.(*v11.ResumeRequest)))
 			if err != nil {
 				return nil, err
 			}
@@ -363,13 +378,13 @@ var Tools = []Tool{
 		},
 	},
 	{
-		Name:        "list_drives",
-		Procedure:   "/f10.v1.RunService/ListDrives",
-		Description: "ListDrives lists a project's drive records, as f10 status --drives does.",
-		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"all\":{\"description\":\"all lists finished and cancelled drives too.\",\"type\":\"boolean\"},\"project\":{\"type\":\"string\"}},\"type\":\"object\"}",
-		NewRequest:  func() proto.Message { return &v11.ListDrivesRequest{} },
+		Name:        "list_batches",
+		Procedure:   "/f10.v1.RunService/ListBatches",
+		Description: "ListBatches lists a project's batches, each the tasks one f10 start started, as f10 status --batches does.",
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"all\":{\"description\":\"all lists every batch, not only the newest 20.\",\"type\":\"boolean\"},\"project\":{\"type\":\"string\"}},\"type\":\"object\"}",
+		NewRequest:  func() proto.Message { return &v11.ListBatchesRequest{} },
 		Call: func(ctx context.Context, hc connect.HTTPClient, baseURL string, req proto.Message, opts ...connect.ClientOption) (proto.Message, error) {
-			res, err := f10v1connect.NewRunServiceClient(hc, baseURL, opts...).ListDrives(ctx, connect.NewRequest(req.(*v11.ListDrivesRequest)))
+			res, err := f10v1connect.NewRunServiceClient(hc, baseURL, opts...).ListBatches(ctx, connect.NewRequest(req.(*v11.ListBatchesRequest)))
 			if err != nil {
 				return nil, err
 			}
@@ -378,13 +393,13 @@ var Tools = []Tool{
 		},
 	},
 	{
-		Name:        "cancel_drive",
-		Procedure:   "/f10.v1.RunService/CancelDrive",
-		Description: "CancelDrive stops a drive from prompting further and closes its asks, as f10 stop does.",
-		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"drive\":{\"description\":\"drive is the drive's number; task, when set instead, is a task id whose drive is stopped.\",\"type\":\"integer\"},\"project\":{\"type\":\"string\"},\"task\":{\"type\":\"string\"}},\"type\":\"object\"}",
-		NewRequest:  func() proto.Message { return &v11.CancelDriveRequest{} },
+		Name:        "stop_batch",
+		Procedure:   "/f10.v1.RunService/StopBatch",
+		Description: "StopBatch stops a batch from prompting further and closes its asks, as f10 stop does. Any task of the batch names it.",
+		InputSchema: "{\"additionalProperties\":false,\"properties\":{\"project\":{\"type\":\"string\"},\"task\":{\"description\":\"task is any task id of the batch to stop, a bundle's rider included.\",\"type\":\"string\"}},\"type\":\"object\"}",
+		NewRequest:  func() proto.Message { return &v11.StopBatchRequest{} },
 		Call: func(ctx context.Context, hc connect.HTTPClient, baseURL string, req proto.Message, opts ...connect.ClientOption) (proto.Message, error) {
-			res, err := f10v1connect.NewRunServiceClient(hc, baseURL, opts...).CancelDrive(ctx, connect.NewRequest(req.(*v11.CancelDriveRequest)))
+			res, err := f10v1connect.NewRunServiceClient(hc, baseURL, opts...).StopBatch(ctx, connect.NewRequest(req.(*v11.StopBatchRequest)))
 			if err != nil {
 				return nil, err
 			}

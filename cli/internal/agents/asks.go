@@ -146,7 +146,7 @@ type Deliverer struct {
 func (d Deliverer) Deliver(ctx context.Context, w io.Writer, dir string, a asks.Ask) (bool, error) {
 	switch {
 	case a.Drive > 0 && d.Live(a):
-		fmt.Fprintf(w, "drive %d takes it as it stops\n", a.Drive)
+		fmt.Fprintf(w, "batch %d takes it as it stops\n", a.Drive)
 
 		return false, nil
 	case a.Drive > 0:

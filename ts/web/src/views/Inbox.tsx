@@ -38,7 +38,9 @@ export function AskForm(props: {
     }
   }
 
-  const where = [ask.labels.task, ask.labels.project, ask.labels.drive && `drive ${ask.labels.drive}`]
+  // an ask raised before the label was renamed carries it as drive
+  const batch = ask.labels.batch ?? ask.labels.drive;
+  const where = [ask.labels.task, ask.labels.project, batch && `batch ${batch}`]
     .filter(Boolean)
     .join(" · ");
 

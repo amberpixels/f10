@@ -39,13 +39,13 @@ export function taskList(raw: string): { ids: string[]; chain: boolean } {
 }
 
 /** startReply is what a start says it did. */
-export function startReply(r: { drive: number; attached: boolean; task: string; branch: string }, typed: string) {
-  if (r.attached) return `Joined drive ${r.drive}`;
-  return r.drive ? `Drive ${r.drive} runs ${typed}` : `Started ${r.task} on ${r.branch}`;
+export function startReply(r: { batch: number; attached: boolean; task: string; branch: string }, typed: string) {
+  if (r.attached) return `Joined batch ${r.batch}`;
+  return r.batch ? `Batch ${r.batch} runs ${typed}` : `Started ${r.task} on ${r.branch}`;
 }
 
 // StartForm is f10 start's: one id or several, a range with --, and how far
-// the agents run. A flow start runs as a drive, which opens its tasks after
+// the agents run. A flow start runs as a batch, which opens its tasks after
 // the call. A discussion opens one agent.
 function StartForm() {
   const [project, setProject] = useState(projects.value[0]?.id ?? "");

@@ -2,7 +2,7 @@
 //
 // Source: f10/v1/events.proto
 
-// f10.v1 is the task flow: tasks, runs, drives, the board and the event log.
+// f10.v1 is the task flow: tasks, runs, batches, the board and the event log.
 // It reaches agents only through agents.v1.
 package f10v1connect
 

@@ -95,7 +95,7 @@ func (in *DriveInput) openRecord(tasks []DriveTask) error {
 	case in.Args.Resume > 0:
 		in.Rec, err = drivestore.Read(in.Root, in.Args.Resume)
 		if err == nil && in.Rec.Cancelled != nil {
-			err = fmt.Errorf("drive %d was cancelled: run the same command without --resume to start a new one",
+			err = fmt.Errorf("batch %d was stopped for good: run its f10 start line again to start a new one",
 				in.Rec.Number)
 		}
 	default:
@@ -134,8 +134,8 @@ func (in *DriveInput) openRecord(tasks []DriveTask) error {
 
 	own, err := drivestore.Acquire(in.Root, drivestore.DriveKey(in.Rec.Number), in.Rec.Number)
 	if held := (drivestore.HeldError{}); errors.As(err, &held) {
-		return fmt.Errorf("drive %d is running (pid %d): f10 stop %d stops it", in.Rec.Number,
-			held.Holder.PID, in.Rec.Number)
+		return fmt.Errorf("batch %d is running (pid %d): f10 stop %s stops it", in.Rec.Number,
+			held.Holder.PID, in.Rec.Lead())
 	}
 
 	if err != nil {
@@ -202,7 +202,7 @@ func (in *DriveInput) save(change func(*drivestore.Record)) {
 
 	rec, err := drivestore.Update(in.Root, in.Rec.Number, change)
 	if err != nil {
-		fmt.Fprintf(in.Out, "  recording drive %d: %v\n", in.Rec.Number, err)
+		fmt.Fprintf(in.Out, "  recording batch %d: %v\n", in.Rec.Number, err)
 
 		return
 	}
@@ -333,7 +333,7 @@ func (in *DriveInput) number() int {
 
 func (in *DriveInput) resumeLine() string {
 	if in.Rec != nil {
-		return "f10 start --resume " + strconv.Itoa(in.Rec.Number)
+		return "f10 resume " + in.Rec.Lead()
 	}
 
 	return resumeCommand(in.Argv)
@@ -359,7 +359,7 @@ func DriveList(
 	}
 
 	if len(recs) == 0 {
-		fmt.Fprintln(w, "no drives recorded")
+		fmt.Fprintln(w, "no batches recorded")
 
 		return nil
 	}
@@ -401,7 +401,7 @@ func DriveList(
 			status = "done"
 		}
 
-		fmt.Fprintf(w, "drive %d  %s  %s\n", rec.Number, rec.Created.Local().Format(time.DateTime), status)
+		fmt.Fprintf(w, "batch %d  %s  %s\n", rec.Number, rec.Created.Local().Format(time.DateTime), status)
 		fmt.Fprintf(w, "  f10 start %s\n", strings.Join(rec.Args, " "))
 
 		nodes := make([]tasktree.Node, len(rec.Tasks))
@@ -419,7 +419,7 @@ func DriveList(
 	}
 
 	if more > 0 {
-		fmt.Fprintf(w, "\n%d older drives not shown: --all lists them\n", more)
+		fmt.Fprintf(w, "\n%d older batches not shown: --all lists them\n", more)
 	}
 
 	return nil
@@ -516,13 +516,13 @@ func DriveCancel(w io.Writer, root string, n int, now time.Time) error {
 	}
 
 	if holder, running := drivestore.Probe(root, drivestore.DriveKey(n)); running {
-		fmt.Fprintf(w, "drive %d stopped (%s): pid %d stops at its next poll, after any finish it is running\n",
+		fmt.Fprintf(w, "batch %d stopped (%s): pid %d stops at its next poll, after any finish it is running\n",
 			rec.Number, strings.Join(ids, ", "), holder.PID)
 
 		return nil
 	}
 
-	fmt.Fprintf(w, "drive %d stopped (%s): it was not running\n", rec.Number, strings.Join(ids, ", "))
+	fmt.Fprintf(w, "batch %d stopped (%s): it was not running\n", rec.Number, strings.Join(ids, ", "))
 
 	return nil
 }

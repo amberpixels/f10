@@ -34,7 +34,7 @@ func TestLeaseIsExclusive(t *testing.T) {
 		t.Errorf("holder = %+v, want %+v", held.Holder, want)
 	}
 
-	if got := err.Error(); got != "GH-1 is owned by drive 3 (pid "+strconv.Itoa(os.Getpid())+")" {
+	if got := err.Error(); got != "GH-1 is owned by batch 3 (pid "+strconv.Itoa(os.Getpid())+")" {
 		t.Errorf("error = %q", got)
 	}
 

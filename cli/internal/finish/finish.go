@@ -56,7 +56,7 @@ func Lease(root, id string) (*drivestore.Lease, error) {
 	lease, err := drivestore.Acquire(root, id, 0)
 	if held := (drivestore.HeldError{}); errors.As(err, &held) {
 		if held.Holder.Drive > 0 {
-			return nil, fmt.Errorf("%w: f10 stop %d stops it, or let it finish", held, held.Holder.Drive)
+			return nil, fmt.Errorf("%w: f10 stop %s stops it, or let it finish", held, id)
 		}
 
 		return nil, fmt.Errorf("%w: wait for it to end", held)

@@ -67,8 +67,9 @@ func (e Entry) Token() string {
 	return tok
 }
 
-// A Stage is the entries at one depth of the After: graph.
-type Stage struct {
+// A Level is the entries at one depth of the After: graph: every base of
+// an entry sits in an earlier level.
+type Level struct {
 	Entries []Entry `json:"entries"`
 }
 
@@ -88,9 +89,9 @@ type Formed struct {
 
 // A Plan is the proposal.
 type Plan struct {
-	Stages   []Stage  `json:"stages"`
+	Levels   []Level  `json:"levels"`
 	Edits    []Edit   `json:"edits,omitempty"`
-	Args     []string `json:"args"` // the drive command's arguments
+	Args     []string `json:"args"` // the start command's arguments
 	Parallel int      `json:"parallel"`
 	Waits    int      `json:"ciWaitsSaved"`
 	Finishes int      `json:"finishesSaved"`
@@ -102,7 +103,7 @@ type Plan struct {
 }
 
 // Propose applies the rules: alone first, then bundles within a class by
-// shared files or areas, split at the cap, then stages by After: depth.
+// shared files or areas, split at the cap, then levels by After: depth.
 func Propose(in Input) (Plan, error) {
 	if in.MaxLines <= 0 {
 		return Plan{}, errors.New("the bundle cap must be a positive number of lines")
@@ -177,14 +178,14 @@ func Propose(in Input) (Plan, error) {
 
 	edits = append(edits, conflictOrders(tasks, entries, base, byID)...)
 
-	stages, err := stagesOf(entries)
+	levels, err := levelsOf(entries)
 	if err != nil {
 		return Plan{}, err
 	}
 
-	p := Plan{Stages: stages, Edits: edits}
+	p := Plan{Levels: levels, Edits: edits}
 
-	for _, st := range stages {
+	for _, st := range levels {
 		p.Parallel = max(p.Parallel, len(st.Entries))
 
 		for _, e := range st.Entries {
@@ -637,9 +638,9 @@ func entryIndex(entries []Entry) map[string]int {
 	return of
 }
 
-// stagesOf puts each entry at its depth in the After: graph; a base outside
-// the list counts as done. Inside a stage, entries keep the parent's order.
-func stagesOf(entries []Entry) ([]Stage, error) {
+// levelsOf puts each entry at its depth in the After: graph; a base outside
+// the list counts as done. Inside a level, entries keep the parent's order.
+func levelsOf(entries []Entry) ([]Level, error) {
 	of := entryIndex(entries)
 	depth := make([]int, len(entries))
 	state := make([]int, len(entries)) // 0 new, 1 on the path, 2 done
@@ -678,15 +679,15 @@ func stagesOf(entries []Entry) ([]Stage, error) {
 		}
 	}
 
-	var stages []Stage
+	var levels []Level
 
 	for k, e := range entries {
-		for len(stages) <= depth[k] {
-			stages = append(stages, Stage{})
+		for len(levels) <= depth[k] {
+			levels = append(levels, Level{})
 		}
 
-		stages[depth[k]].Entries = append(stages[depth[k]].Entries, e)
+		levels[depth[k]].Entries = append(levels[depth[k]].Entries, e)
 	}
 
-	return stages, nil
+	return levels, nil
 }

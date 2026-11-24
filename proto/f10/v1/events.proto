@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-// f10.v1 is the task flow: tasks, runs, drives, the board and the event log.
+// f10.v1 is the task flow: tasks, runs, batches, the board and the event log.
 // It reaches agents only through agents.v1.
 package f10.v1;
 
@@ -137,7 +137,7 @@ message StepEntered {
 }
 
 // TaskFinished is ledger kind task_finished: a finish call's arguments, and
-// who ran it when it ran in-process (drive, watch).
+// who ran it when it ran in-process (`drive` for a batch, or `watch`).
 message TaskFinished {
   repeated string args = 1;
   string by = 2;
@@ -260,7 +260,7 @@ message JudgeVerdict {
   string parse_error = 11;
 }
 
-// TaskHalted is ledger kind task_halted: a task a drive stopped, with the
+// TaskHalted is ledger kind task_halted: a task its batch stopped, with the
 // attempts it counted.
 message TaskHalted {
   string skill = 1;

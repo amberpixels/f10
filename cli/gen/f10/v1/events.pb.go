@@ -4,7 +4,7 @@
 // 	protoc        (unknown)
 // source: f10/v1/events.proto
 
-// f10.v1 is the task flow: tasks, runs, drives, the board and the event log.
+// f10.v1 is the task flow: tasks, runs, batches, the board and the event log.
 // It reaches agents only through agents.v1.
 
 package f10v1
@@ -1046,7 +1046,7 @@ func (x *StepEntered) GetSteps() []string {
 }
 
 // TaskFinished is ledger kind task_finished: a finish call's arguments, and
-// who ran it when it ran in-process (drive, watch).
+// who ran it when it ran in-process (`drive` for a batch, or `watch`).
 type TaskFinished struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Args          []string               `protobuf:"bytes,1,rep,name=args,proto3" json:"args,omitempty"`
@@ -2077,7 +2077,7 @@ func (x *JudgeVerdict) GetParseError() string {
 	return ""
 }
 
-// TaskHalted is ledger kind task_halted: a task a drive stopped, with the
+// TaskHalted is ledger kind task_halted: a task its batch stopped, with the
 // attempts it counted.
 type TaskHalted struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`

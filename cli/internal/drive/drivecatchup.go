@@ -98,7 +98,7 @@ func (in *DriveInput) catchupHere(
 	if stopped {
 		paths, _ := gitx.Unmerged(ctx, dir)
 
-		return in.catchupPrompt(ctx, r, ws, in.Catchup.ConflictSteering(p, r.O.Branch, "the drive", paths))
+		return in.catchupPrompt(ctx, r, ws, in.Catchup.ConflictSteering(p, r.O.Branch, "f10", paths))
 	}
 
 	if p.Method == stack.MethodNone || p.Method == stack.MethodSkip {
@@ -173,7 +173,10 @@ func (in *DriveInput) catchupPrompt(
 // catchupHalt is the end a catchup that fails its last attempt gives.
 func catchupHalt(r *DriveRun, reason string) driveResult {
 	halt := halted(r.Task.Ref.ID, "catchup", reason)
-	halt.Lines = append(halt.Lines, "next: settle it with /f10:catchup in "+r.O.Path+", then rerun the drive")
+	halt.Lines = append(
+		halt.Lines,
+		"next: settle it with /f10:catchup in "+r.O.Path+", then run f10 resume "+r.Task.Ref.ID,
+	)
 
 	return halt
 }
@@ -365,13 +368,15 @@ func (in *DriveInput) recordCatchup(ctx context.Context, r *DriveRun, key branch
 		// a cherry-pick alone never puts origin's tip in the branch, so the push is the user's
 		if !held && prior != nil && !prior.Spent && prior.Integrated && prior.Origin != "" {
 			return fmt.Errorf("origin/%s moved since the catchup read it at %s: cherry-pick %s..%s into %s, "+
-				"push it with --force-with-lease=refs/heads/%s:%s yourself, then rerun the drive",
-				r.O.Branch, gitx.ShortSHA(prior.Origin), prior.Origin, rec.Origin, r.O.Path, r.O.Branch, rec.Origin)
+				"push it with --force-with-lease=refs/heads/%s:%s yourself, then run f10 resume %s",
+				r.O.Branch, gitx.ShortSHA(prior.Origin), prior.Origin, rec.Origin, r.O.Path, r.O.Branch, rec.Origin,
+				r.Task.Ref.ID)
 		}
 
 		if !held {
 			return fmt.Errorf("origin/%s has commits %s lacks, so a catchup would push over them: "+
-				"bring origin/%s into %s, then rerun the drive", r.O.Branch, r.O.Branch, r.O.Branch, r.O.Path)
+				"bring origin/%s into %s, then run f10 resume %s",
+				r.O.Branch, r.O.Branch, r.O.Branch, r.O.Path, r.Task.Ref.ID)
 		}
 	}
 
@@ -419,7 +424,10 @@ func (in *DriveInput) conflictAttempt(
 
 	err = in.attemptAt(r, "catchup", fp, halted(r.Task.Ref.ID, skill, reason))
 	if res, ok := endOf(err); ok {
-		res.Lines = append(res.Lines, "next: settle it with /f10:catchup in "+r.O.Path+", then rerun the drive")
+		res.Lines = append(
+			res.Lines,
+			"next: settle it with /f10:catchup in "+r.O.Path+", then run f10 resume "+r.Task.Ref.ID,
+		)
 
 		return endWith(res)
 	}
@@ -469,13 +477,13 @@ func pushHalted(id, skill string, err error) driveResult {
 
 	switch {
 	case !errors.As(err, &moved):
-		res.Lines = append(res.Lines, "next: rerun the drive")
+		res.Lines = append(res.Lines, "next: run f10 resume "+id)
 	case moved.Unseen:
 		res.Lines = append(res.Lines, "next: check origin/"+moved.Branch+" holds nothing "+moved.Path+
-			" lacks, push it with --force-with-lease yourself, then rerun the drive")
+			" lacks, push it with --force-with-lease yourself, then run f10 resume "+id)
 	default:
 		res.Lines = append(res.Lines, "next: bring origin/"+moved.Branch+" into "+moved.Path+
-			", then /f10:catchup there, then rerun the drive")
+			", then /f10:catchup there, then run f10 resume "+id)
 	}
 
 	return res

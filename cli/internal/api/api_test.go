@@ -110,7 +110,7 @@ func TestDriveRunsTheTypedArguments(t *testing.T) {
 
 	c := f10v1connect.NewRunServiceClient(srv.Client(), srv.URL)
 
-	res, err := c.Drive(t.Context(), connect.NewRequest(&f10v1.DriveRequest{
+	res, err := c.StartBatch(t.Context(), connect.NewRequest(&f10v1.StartBatchRequest{
 		Args: []string{"FT-1", "--pace", "fast"},
 		Dir:  t.TempDir(),
 		Env:  []string{"A=1"},
@@ -130,7 +130,10 @@ func TestDriveRunsTheTypedArguments(t *testing.T) {
 		t.Errorf("env = %v, want the session's for a non-socket peer", sup.drives[0].Env)
 	}
 
-	_, err = c.Drive(t.Context(), connect.NewRequest(&f10v1.DriveRequest{Args: []string{"--parallel", "x"}, Dir: "/"}))
+	_, err = c.StartBatch(
+		t.Context(),
+		connect.NewRequest(&f10v1.StartBatchRequest{Args: []string{"--parallel", "x"}, Dir: "/"}),
+	)
 	if connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Errorf("a bad flag = %v, want InvalidArgument", err)
 	}
@@ -269,7 +272,7 @@ func TestDriveWithAnswersNeverAttaches(t *testing.T) {
 
 	c := f10v1connect.NewRunServiceClient(srv.Client(), srv.URL)
 
-	if _, err := c.Drive(t.Context(), connect.NewRequest(&f10v1.DriveRequest{
+	if _, err := c.StartBatch(t.Context(), connect.NewRequest(&f10v1.StartBatchRequest{
 		Args:   []string{"--resume", "4", "--answer", "FT-1=yes"},
 		Dir:    t.TempDir(),
 		Resume: 4,

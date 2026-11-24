@@ -178,7 +178,10 @@ func checkFlow(name string, written []string, others ...string) []string {
 		case step == "finish" && arg != "":
 			bad = append(bad, fmt.Sprintf("flows.%s: %q: finish takes no argument", name, e))
 		case step == "finish" && i < len(parsed)-1:
-			bad = append(bad, fmt.Sprintf("flows.%s: finish comes last, since drive runs it once ship is done", name))
+			bad = append(
+				bad,
+				fmt.Sprintf("flows.%s: finish comes last, since the daemon runs it once ship is done", name),
+			)
 		case step == "finish" && !slices.ContainsFunc(parsed[:i], func(e flow.Entry) bool { return e.Step == "pr" }):
 			bad = append(bad, fmt.Sprintf("flows.%s: finish merges an open PR, so a pr entry comes before it", name))
 		case step == "judge" && !parsed.Plans() && parsed.JudgeKind(i) == "plan":

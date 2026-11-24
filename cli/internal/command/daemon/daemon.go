@@ -31,11 +31,11 @@ import (
 func Command() *cli.Command {
 	return &cli.Command{
 		Name:  "daemon",
-		Usage: "the per-user process that runs drives and watches started tasks; f10 start starts it when needed",
+		Usage: "the per-user process that runs batches and watches started tasks; f10 start starts it when needed",
 		Description: "Bare, it serves in the foreground: what f10 start starts, detached. " +
-			"It exits after ten minutes with no drive, no watched project and no call, unless f10 remote on " +
+			"It exits after ten minutes with no batch, no watched project and no call, unless f10 remote on " +
 			"turned the tailnet listener on or it runs as the service f10 remote install set up. A client of a " +
-			"newer release replaces it: each drive stops at its next tick and the new daemon resumes it.",
+			"newer release replaces it: each batch stops at its next tick and the new daemon resumes it.",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:  "service",
@@ -46,21 +46,21 @@ func Command() *cli.Command {
 		Commands: []*cli.Command{
 			{
 				Name:   "status",
-				Usage:  "pid, version, the drives it runs and the projects it watches",
+				Usage:  "pid, version, the batches it runs and the projects it watches",
 				Action: runDaemonStatus,
 			},
 			{
 				Name:   "stop",
-				Usage:  "stop the daemon; each drive stops at its next tick, and f10 start --resume N goes on",
-				Flags:  []cli.Flag{&cli.BoolFlag{Name: "now", Usage: "stop each drive at once, not at its next tick"}},
+				Usage:  "stop the daemon; each batch stops at its next tick, and f10 resume goes on",
+				Flags:  []cli.Flag{&cli.BoolFlag{Name: "now", Usage: "stop each batch at once, not at its next tick"}},
 				Action: runDaemonStop,
 			},
 			{
 				Name:      "logs",
-				Usage:     "the daemon's log, or a drive's newest log in this project",
-				ArgsUsage: "[<drive>]",
+				Usage:     "the daemon's log, or the newest log of the batch a task belongs to",
+				ArgsUsage: "[<task-id>]",
 				Flags: []cli.Flag{
-					&cli.BoolFlag{Name: "follow", Aliases: []string{"f"}, Usage: "keep printing until the drive exits"},
+					&cli.BoolFlag{Name: "follow", Aliases: []string{"f"}, Usage: "keep printing until the batch exits"},
 				},
 				Action: runDaemonLogs,
 			},
@@ -140,10 +140,10 @@ func runDaemonStop(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	if cmd.Bool("now") {
-		fmt.Fprintln(cmd.Writer, "f10 daemon stopping: each drive stops now; f10 start --resume <n> goes on with one")
+		fmt.Fprintln(cmd.Writer, "f10 daemon stopping: each batch stops now; f10 resume <task-id> goes on with one")
 	} else {
 		fmt.Fprintln(cmd.Writer,
-			"f10 daemon stopping: each drive stops at its next tick; f10 start --resume <n> goes on with one")
+			"f10 daemon stopping: each batch stops at its next tick; f10 resume <task-id> goes on with one")
 	}
 
 	return nil
@@ -154,18 +154,20 @@ func runDaemonLogs(ctx context.Context, cmd *cli.Command) error {
 	path := daemon.LogPath(dir)
 
 	if arg := cmd.Args().First(); arg != "" {
-		n, err := drivectl.DriveNumber(arg)
-		if err != nil {
-			return err
-		}
-
 		t, err := target.For(ctx, cmd)
 		if err != nil {
 			return err
 		}
 
+		n, old := drivectl.OldNumber(arg)
+		if old {
+			fmt.Fprintln(cmd.ErrWriter, drivectl.Renamed("a batch number", "f10 daemon logs <task-id>"))
+		} else if n, err = logBatch(ctx, t, arg); err != nil {
+			return err
+		}
+
 		if path = daemon.FindLog(dir, t.Layout.StorageRoot.Path(), n); path == "" {
-			return fmt.Errorf("no daemon log for drive %d in this project", n)
+			return fmt.Errorf("no daemon log for batch %d in this project", n)
 		}
 	}
 
@@ -190,4 +192,18 @@ func runDaemonLogs(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	return err
+}
+
+// logBatch is the number of the batch a task names. A finished batch still
+// has a log, so any record holding the task counts, the newest first.
+func logBatch(ctx context.Context, t *target.Target, token string) (int, error) {
+	if l, ok := drive.BatchOf(ctx, t, token); ok {
+		return l.Number, nil
+	}
+
+	if rec, ok := drive.RecordOf(ctx, t, token); ok {
+		return rec.Number, nil
+	}
+
+	return 0, fmt.Errorf("no batch holds %s: f10 status --batches lists every batch", token)
 }

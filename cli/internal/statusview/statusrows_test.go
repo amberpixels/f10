@@ -629,7 +629,7 @@ func TestRowStepNamesDriveFinish(t *testing.T) {
 	}
 	row.Finish(f, false)
 
-	if row.Stage != stageShipped || row.Step != "finish: running (drive): merging #204" {
+	if row.Stage != stageShipped || row.Step != "finish: running (batch): merging #204" {
 		t.Errorf("row = %s / %q, want shipped / the finish action", row.Stage, row.Step)
 	}
 

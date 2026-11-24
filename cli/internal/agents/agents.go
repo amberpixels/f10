@@ -146,7 +146,7 @@ func IsOutside(err error) bool { return errors.Is(err, herdr.ErrNotInside) }
 type outsideHerdrError struct{ err error }
 
 func (outsideHerdrError) Error() string {
-	return "f10 start, forward, drive and finish run inside a Herdr session: " +
+	return "f10 start, resume, forward and finish run inside a Herdr session: " +
 		"open a pane there, or install it from https://herdr.dev"
 }
 

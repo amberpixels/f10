@@ -201,7 +201,7 @@ func TestOldDrivesCountByActivity(t *testing.T) {
 
 	r := Group(in)
 	if want := []Drive{{Number: 4, Tasks: 1, Shipped: 1}}; !slices.Equal(r.Drives, want) {
-		t.Errorf("drives = %+v, want drive 4 alone", r.Drives)
+		t.Errorf("drives = %+v, want batch 4 alone", r.Drives)
 	}
 
 	if task := taskByID(t, r, "FT-21"); task.Driven != 4 {

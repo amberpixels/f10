@@ -108,7 +108,7 @@ export type Ask = Message<"agents.v1.Ask"> & {
   deliveredAt?: Timestamp | undefined;
 
   /**
-   * labels is the owner's own context, such as the task, project and drive
+   * labels is the owner's own context, such as the task, project and batch
    * f10 records, so this package never grows owner-specific fields.
    *
    * @generated from field: map<string, string> labels = 11;
@@ -417,14 +417,14 @@ export enum AnswerSource {
   SKILL = 3,
 
   /**
-   * a drive's own answer flag
+   * f10 start --answer or f10 resume --answer
    *
    * @generated from enum value: ANSWER_SOURCE_DRIVE = 4;
    */
   DRIVE = 4,
 
   /**
-   * the asking drive was cancelled
+   * the asking batch was cancelled
    *
    * @generated from enum value: ANSWER_SOURCE_CANCELLED = 5;
    */

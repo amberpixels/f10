@@ -75,7 +75,7 @@ func TestDiscussionPrompt(t *testing.T) {
 		"`f10 task read GH-1` and `f10 task read GH-2+GH-3`",
 		"`f10 task children GH-1 --plain`",
 		"from their After: lines",
-		"`f10 drive plan GH-1 GH-2+GH-3`",
+		"`f10 start GH-1 GH-2+GH-3 --propose`",
 		"its first group continues in this worktree",
 		"Then, as the user asks: judge it.",
 	} {

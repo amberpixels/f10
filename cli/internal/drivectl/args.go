@@ -128,7 +128,7 @@ func RefusePairs(flow, mode, after, base string) error {
 
 var errAfterAndBase = errors.New("--after and --base are exclusive: one names a task to depend on, the other a git ref")
 
-// ResumeTunes are the flags --resume N takes to change a drive: the ones
+// ResumeTunes are the flags a resume takes to change a batch: the ones
 // that tune it and take a value.
 func ResumeTunes() []DriveFlag {
 	var out []DriveFlag
@@ -172,12 +172,12 @@ type DriveArgs struct {
 	Plan     *PlanArgs
 }
 
-// PlanArgs is `drive plan`'s own flags; the rest parse as a drive's.
+// PlanArgs is `start --propose`'s own flags; the rest parse as a start's.
 type PlanArgs struct {
 	Facts string   // --facts: the facts sheet the skill wrote
 	JSON  bool     // --json
 	Hint  bool     // --hint: one line, or nothing
-	Pass  []string // the drive flags to carry onto the proposed command
+	Pass  []string // the start flags to carry onto the proposed command
 }
 
 func (a *DriveArgs) set(name, value string) error {
@@ -369,8 +369,8 @@ func ParseDriveArgs(args []string) (DriveArgs, error) {
 	case a.Resume > 0 && (len(a.Tasks) > 0 || slices.ContainsFunc(DriveFlags, func(f DriveFlag) bool {
 		return seen[f.Name] && !f.Resume
 	})):
-		return DriveArgs{}, fmt.Errorf("--resume %d runs the drive's own tasks, flow and agent profiles: "+
-			"it takes only %s", a.Resume, flagList(ResumeTunes()))
+		return DriveArgs{}, fmt.Errorf("a resume runs the batch's own tasks, flow and agent profiles: "+
+			"it takes only %s", flagList(ResumeTunes()))
 	case a.Resume > 0:
 		return a, nil
 	case len(a.Tasks) == 0:
@@ -388,10 +388,32 @@ func ParseDriveArgs(args []string) (DriveArgs, error) {
 	return a, nil
 }
 
-// ParseDrivePlan reads `drive plan`'s arguments after the word plan: ids or
-// a parent, the drive flags that shape the proposed command, and the plan's
-// own flags. f10 start never parses them, so `f10 start plan` is a task word.
-func ParseDrivePlan(args []string) (DriveArgs, error) {
+// Proposes reports a command line asking for a proposal, which starts
+// nothing: --propose asks for one, and --hint alone for its one line.
+// --facts and --json alone are refused, because they shape a proposal
+// nobody asked for.
+func Proposes(args []string) (bool, error) {
+	asked, shaped := false, ""
+
+	for _, tok := range args {
+		switch name, _, _ := strings.Cut(strings.TrimSpace(tok), "="); name {
+		case "--propose", "--hint":
+			asked = true
+		case "--facts", "--json":
+			shaped = name
+		}
+	}
+
+	if shaped != "" && !asked {
+		return false, fmt.Errorf("%s shapes a proposal: add --propose", shaped)
+	}
+
+	return asked, nil
+}
+
+// ParsePropose reads a proposal's command line: ids or a parent, the start
+// flags that shape the proposed command, and the proposal's own flags.
+func ParsePropose(args []string) (DriveArgs, error) {
 	pa := &PlanArgs{}
 
 	var rest []string
@@ -401,6 +423,7 @@ func ParseDrivePlan(args []string) (DriveArgs, error) {
 		name, value, inline := strings.Cut(tok, "=")
 
 		switch name {
+		case "--propose":
 		case "--json":
 			pa.JSON = true
 		case "--hint":
@@ -423,16 +446,16 @@ func ParseDrivePlan(args []string) (DriveArgs, error) {
 
 	a, err := ParseDriveArgs(rest)
 	if err != nil {
-		return DriveArgs{}, fmt.Errorf("drive plan: %w", err)
+		return DriveArgs{}, fmt.Errorf("start --propose: %w", err)
 	}
 
 	switch {
 	case a.Span:
-		return DriveArgs{}, errors.New("drive plan takes ids or a parent, not a range")
+		return DriveArgs{}, errors.New("start --propose takes ids or a parent, not a range")
 	case a.Resume > 0, len(a.Answers) > 0, a.Fore, a.Every != DefaultEvery,
 		a.PlanOnly, a.After != "", a.Base != "":
-		return DriveArgs{}, errors.New("drive plan takes ids or a parent, --facts, --json, --hint " +
-			"and the flags that shape a drive: --flow, --local, --pace, --agent, --model and --parallel")
+		return DriveArgs{}, errors.New("start --propose takes ids or a parent, --facts, --json, --hint " +
+			"and the flags that shape a start: --flow, --local, --pace, --agent, --model and --parallel")
 	}
 
 	for i := 0; i < len(rest); i++ {
@@ -460,10 +483,56 @@ func ParseDrivePlan(args []string) (DriveArgs, error) {
 	return a, nil
 }
 
+// ResumeArgs is `f10 resume`'s command line. A task id names the batch, and
+// for one more release so does its number.
+type ResumeArgs struct {
+	Token string   // "" for the one stopped batch
+	Flags []string // as typed, to put after --resume N
+	Fore  bool
+}
+
+// ParseResume reads `f10 resume`'s arguments. It takes the flags --resume
+// took, so the two never drift.
+func ParseResume(args []string) (ResumeArgs, error) {
+	var r ResumeArgs
+
+	for i := 0; i < len(args); i++ {
+		tok := strings.TrimSpace(args[i])
+		name, _, inline := strings.Cut(tok, "=")
+
+		f, ok := DriveFlagNamed(name)
+
+		switch {
+		case tok == "":
+		case ok && f.Resume && f.Tunes && name != "--resume":
+			r.Flags = append(r.Flags, tok)
+			r.Fore = r.Fore || name == "--foreground"
+
+			if f.Value != "" && !inline {
+				if i+1 >= len(args) {
+					return ResumeArgs{}, fmt.Errorf("%s needs a value", name)
+				}
+
+				i++
+				r.Flags = append(r.Flags, args[i])
+			}
+		case strings.HasPrefix(tok, "-"):
+			return ResumeArgs{}, fmt.Errorf("resume runs the batch's own tasks, flow and agent profiles: "+
+				"it takes only %s and --foreground", flagList(ResumeTunes()))
+		case r.Token != "":
+			return ResumeArgs{}, errors.New("resume takes one task id: any task of the batch names it")
+		default:
+			r.Token = tok
+		}
+	}
+
+	return r, nil
+}
+
 func DriveNumber(s string) (int, error) {
 	n, err := strconv.Atoi(strings.TrimSpace(s))
 	if err != nil || n <= 0 {
-		return 0, fmt.Errorf("%q is not a drive number: f10 status --drives shows them", s)
+		return 0, fmt.Errorf("%q is not a batch number: f10 status --batches shows them", s)
 	}
 
 	return n, nil
@@ -486,4 +555,19 @@ func splitProfile(tok string) (string, string, error) {
 	}
 
 	return tok, "", nil
+}
+
+// Renamed is the one line an old spelling prints on stderr, for the one
+// release it still works.
+func Renamed(old, now string) string {
+	return fmt.Sprintf("%s still works for one release: use %s", old, now)
+}
+
+// OldNumber reads a token as a batch number, the old way to name a batch.
+// A task id names it now, so a positive integer is read this way for one
+// more release only.
+func OldNumber(token string) (int, bool) {
+	n, err := strconv.Atoi(strings.TrimSpace(token))
+
+	return n, err == nil && n > 0
 }

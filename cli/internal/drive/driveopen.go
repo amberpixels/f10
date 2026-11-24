@@ -142,7 +142,7 @@ func (in *DriveInput) open(ctx context.Context, r *DriveRun) error {
 	case fl.NoFinish:
 		o.Notes = append(
 			o.Notes,
-			"no finish: the flow has no finish entry, so drive stops at ship; add finish to the flow to merge",
+			"no finish: the flow has no finish entry, so the batch stops at ship; add finish to the flow to merge",
 		)
 	}
 
@@ -241,7 +241,7 @@ func (in *DriveInput) position(ctx context.Context, o start.OpenedTask, skills [
 
 	last, err := branchmeta.Get(ctx, in.Main, o.Branch, branchmeta.Drive)
 	if err != nil {
-		return 0, fmt.Errorf("reading where the drive left %s: %w", o.Branch, err)
+		return 0, fmt.Errorf("reading where the batch left %s: %w", o.Branch, err)
 	}
 
 	if last != "" {
@@ -500,7 +500,7 @@ func (in *DriveInput) parkForOrigin(ctx context.Context, r *DriveRun) error {
 	if b.through() {
 		if r.WaitHead == "through" {
 			return halt(r.Task.Ref.ID, r.Skill,
-				fmt.Sprintf("%s ended in this drive, yet its pr step still found %s not on origin",
+				fmt.Sprintf("%s ended in this batch, yet its pr step still found %s not on origin",
 					in.id(b.Task.Ref.ID), b.O.Branch))
 		}
 
@@ -614,7 +614,7 @@ func skillPrompt(skill, id string, dep *launch.Dependency, fl runplan.ShipFlow, 
 }
 
 // finishClause tells a driven ship that drive finishes the task after it.
-const finishClause = "drive finishes it after ship and removes this worktree"
+const finishClause = "f10 finishes it after ship and removes this worktree"
 
 // onProfile is the open line's tail naming the profile a fresh agent
 // started on, "" for the kind's default or an agent left as it was.
@@ -658,7 +658,7 @@ func outsideStack(r *DriveRun, o start.OpenedTask, fl runplan.ShipFlow, planOnly
 	fl.Finishes = false
 
 	return fl, fmt.Sprintf(
-		"no finish: stacked on %s, which this drive does not hold; finish %s first, then f10 finish %s",
+		"no finish: stacked on %s, which this batch does not hold; finish %s first, then f10 finish %s",
 		o.Dep.Task, o.Dep.Task, r.Task.Ref.ID,
 	)
 }

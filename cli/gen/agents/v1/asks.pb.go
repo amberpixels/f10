@@ -33,9 +33,9 @@ const (
 	AnswerSource_ANSWER_SOURCE_ASKS AnswerSource = 2
 	// the inbox skill in an agent session
 	AnswerSource_ANSWER_SOURCE_SKILL AnswerSource = 3
-	// a drive's own answer flag
+	// f10 start --answer or f10 resume --answer
 	AnswerSource_ANSWER_SOURCE_DRIVE AnswerSource = 4
-	// the asking drive was cancelled
+	// the asking batch was cancelled
 	AnswerSource_ANSWER_SOURCE_CANCELLED AnswerSource = 5
 	// a client of this API
 	AnswerSource_ANSWER_SOURCE_API AnswerSource = 6
@@ -168,7 +168,7 @@ type Ask struct {
 	AnsweredAt *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=answered_at,json=answeredAt,proto3" json:"answered_at,omitempty"`
 	// delivered_at is when the answer reached the agent.
 	DeliveredAt *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=delivered_at,json=deliveredAt,proto3" json:"delivered_at,omitempty"`
-	// labels is the owner's own context, such as the task, project and drive
+	// labels is the owner's own context, such as the task, project and batch
 	// f10 records, so this package never grows owner-specific fields.
 	Labels        map[string]string `protobuf:"bytes,11,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields

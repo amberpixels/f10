@@ -49,15 +49,15 @@ func TestClosedDiscussionPrompt(t *testing.T) {
 	got := launch.DiscussionPrompt(launch.Discussion{
 		Tasks: []string{"GH-1", "GH-3"}, Closed: []launch.Closed{closedGH1},
 	}, "")
-	if !strings.Contains(got, "`f10 drive plan GH-3`") || !strings.Contains(got, "GH-1 is closed.") {
+	if !strings.Contains(got, "`f10 start GH-3 --propose`") || !strings.Contains(got, "GH-1 is closed.") {
 		t.Errorf("mixed discussion:\n%s", got)
 	}
 
 	all := launch.DiscussionPrompt(launch.Discussion{
 		Tasks: []string{"GH-1"}, Parents: []string{"GH-1"}, Closed: []launch.Closed{closedGH1},
 	}, "")
-	if strings.Contains(all, "drive plan") {
-		t.Errorf("an all-closed discussion proposes a drive:\n%s", all)
+	if strings.Contains(all, "--propose") {
+		t.Errorf("an all-closed discussion asks for a proposal:\n%s", all)
 	}
 }
 

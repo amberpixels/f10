@@ -23,7 +23,7 @@ import (
 // The drives these tests run: a script typed as the argv's first word, and
 // a resume that names itself and ends.
 const (
-	waitsForDrain = `trap 'exit 6' USR1; echo 5 > "$F10_DRIVE_FILE"; echo drive 5; while :; do sleep 0.05; done`
+	waitsForDrain = `trap 'exit 6' USR1; echo 5 > "$F10_DRIVE_FILE"; echo batch 5; while :; do sleep 0.05; done`
 	resumed       = `echo 5 > "$F10_DRIVE_FILE"; echo resumed; exit 0`
 )
 
@@ -77,10 +77,10 @@ type testRuns struct {
 	s *daemon.Server
 }
 
-func (r testRuns) Drive(
+func (r testRuns) StartBatch(
 	_ context.Context,
-	req *connect.Request[f10v1.DriveRequest],
-) (*connect.Response[f10v1.DriveResponse], error) {
+	req *connect.Request[f10v1.StartBatchRequest],
+) (*connect.Response[f10v1.StartBatchResponse], error) {
 	m := req.Msg
 
 	st, err := r.s.RunDrive(daemon.DriveSpec{
@@ -90,7 +90,7 @@ func (r testRuns) Drive(
 		return nil, err
 	}
 
-	return connect.NewResponse(&f10v1.DriveResponse{Log: st.Log, Attached: st.Attach}), nil
+	return connect.NewResponse(&f10v1.StartBatchResponse{Log: st.Log, Attached: st.Attach}), nil
 }
 
 func serving(ctx context.Context, dir, version string) func(context.Context) error {
@@ -144,14 +144,14 @@ func TestFollowDriveEndsWithItsCode(t *testing.T) {
 		dir,
 		"0.1.0",
 		"/r",
-		runReq("echo drive 3; echo asks; exit 4"),
+		runReq("echo batch 3; echo asks; exit 4"),
 		serving(t.Context(), dir, "0.1.0"),
 	)
 	if testkit.ExitCode(err) != ui.ExitAsk {
 		t.Fatalf("err = %v, want exit %d", err, ui.ExitAsk)
 	}
 
-	if out.String() != "drive 3\nasks\n" {
+	if out.String() != "batch 3\nasks\n" {
 		t.Errorf("output = %q", out.String())
 	}
 }
@@ -187,7 +187,7 @@ func TestFollowDriveStopsWithAStop(t *testing.T) {
 		t.Fatal("the follower did not end on a stop")
 	}
 
-	if !strings.Contains(out.String(), "f10 start --resume 5 goes on") {
+	if !strings.Contains(out.String(), "f10 resume goes on") {
 		t.Errorf("output = %q", out.String())
 	}
 
@@ -257,20 +257,20 @@ func TestFollowDriveFollowsAResume(t *testing.T) {
 		dir,
 		"0.1.0",
 		"/r",
-		runReq(`echo 5 > "$F10_DRIVE_FILE"; echo drive 5; sleep 0.3; exit 8`),
+		runReq(`echo 5 > "$F10_DRIVE_FILE"; echo batch 5; sleep 0.3; exit 8`),
 		serving(t.Context(), dir, "0.1.0"),
 	)
 	if err != nil {
 		t.Fatalf("err = %v\n%s", err, out.String())
 	}
 
-	if got := out.String(); !strings.Contains(got, "drive 5\n") || !strings.Contains(got, "resumed\n") {
+	if got := out.String(); !strings.Contains(got, "batch 5\n") || !strings.Contains(got, "resumed\n") {
 		t.Errorf("output = %q, want both runs", got)
 	}
 }
 
 // asking is a drive that stops on its asks once the daemon read its number.
-const asking = `echo 5 > "$F10_DRIVE_FILE"; echo drive 5 asks; sleep 0.3; exit 4`
+const asking = `echo 5 > "$F10_DRIVE_FILE"; echo batch 5 asks; sleep 0.3; exit 4`
 
 // waitAsks shortens the wait for a resumed run and fixes whether the
 // drive's record is gone.
@@ -319,7 +319,7 @@ func TestFollowDriveWaitsThroughAnAsk(t *testing.T) {
 		t.Fatalf("the follower never followed the resumed run: %q", out.String())
 	}
 
-	if got := out.String(); !strings.Contains(got, "drive 5 asks\n") || !strings.Contains(got, "resumed\n") {
+	if got := out.String(); !strings.Contains(got, "batch 5 asks\n") || !strings.Contains(got, "resumed\n") {
 		t.Errorf("output = %q, want both runs", got)
 	}
 }
@@ -338,7 +338,7 @@ func TestFollowDriveEndsWhenAnAskingDriveStops(t *testing.T) {
 		t.Fatalf("err = %v, want exit %d\n%s", err, ui.ExitAsk, out.String())
 	}
 
-	if !strings.Contains(out.String(), "drive 5 was stopped while it waited on its asks") {
+	if !strings.Contains(out.String(), "batch 5 was stopped while it waited on its asks") {
 		t.Errorf("output = %q", out.String())
 	}
 }

@@ -48,7 +48,7 @@ The session start hook writes the project to `<session>.project` beside the run 
 A session with no such record, such as one outside git, shows every project's asks.
 The rest, the task, the reason, what unblocks it, and the question a driven agent is waiting on (`ask`), is `f10 status`; `f10 status <task-id>` reads the same for a task running in its own worktree, from the task's own run only; when the agent there has moved on to another task, it names that task and falls back to the task's plan file and PR.
 For a finished task, its worktree gone, it prints the same block from what `f10 finish` archived.
-Bare `f10 status` in a checkout whose branch names no task prints a `launched here` tree, a row per live task this session started or drove.
+Bare `f10 status` in a checkout whose branch names no task prints a `launched here` tree, a row per live task this session started.
 Otherwise it is `f10 status <task-id>` for the task this session's run records, else the one the branch or worktree name carries; with neither, it prints the session's run, or this repo's live runs.
 
 Each state has its own shape, and color only reinforces it, because red and green look the same in a daltonized theme.
@@ -122,7 +122,7 @@ Steps report precisely, and hooks report reliably.
     The issue capture creates names the task.
   - `PreToolUse` on `Bash`, `Monitor` and `Agent` runs async and records background work a turn launches.
     The turn's `Stop` keeps the record.
-    A drive reads an agent whose turn ended on that work as working, not stalled, until a later turn clears the record.
+    The daemon reads an agent whose turn ended on that work as working, not stalled, until a later turn clears the record.
   - `Stop` closes out whatever is still running, such as a run whose last badge call the agent dropped.
   - `SessionStart` prunes dead state and refreshes the symlink.
 - **Steps**: each step makes one `f10-state.sh set` call as each phase opens and closes.
@@ -132,7 +132,7 @@ Steps report precisely, and hooks report reliably.
 A phase left `upcoming` means that nobody reported on it.
 
 Both writers also append to a local [ledger](ledger.md), `~/.f10/f10.db`, a SQLite file outside every repo.
-It records what the hooks observed, what the artifacts hold, every badge call as the model claimed it, and every halt and finish a drive made itself.
+It records what the hooks observed, what the artifacts hold, every badge call as the model claimed it, and every halt and finish the daemon made itself.
 Each row is tagged with its source.
 A write that fails goes to `~/.f10/ledger.spool`, and the next write replays it.
 `f10 ledger dump` prints the rows.

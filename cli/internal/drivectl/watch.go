@@ -58,7 +58,7 @@ var WatchProject = func(ctx context.Context, w io.Writer, t *target.Target) {
 		dir,
 		t.Layout.StorageRoot.Path(),
 		cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot),
-		daemon.DriveEnv(os.Environ(), t.Effective.DriveEnv),
+		daemon.DriveEnv(os.Environ(), t.Effective.BatchEnv),
 	)
 	if err != nil {
 		fmt.Fprintf(w, "watch: warning: %v\n", err)

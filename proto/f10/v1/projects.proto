@@ -5,12 +5,12 @@ package f10.v1;
 // ProjectService names the projects this machine works on, so a client can
 // pick one by id instead of knowing its checkout.
 service ProjectService {
-  // ListProjects lists the projects the daemon watches or runs a drive in,
+  // ListProjects lists the projects the daemon watches or runs a batch in,
   // with the id every other request's project field takes.
   rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
 }
 
-// A KnownProject is a project the daemon watches or runs a drive in.
+// A KnownProject is a project the daemon watches or runs a batch in.
 message KnownProject {
   // id is the project id, such as github.com/acme/widgets; every request's
   // project field takes it.

@@ -37,7 +37,7 @@ Deploy has its own confirmation (the **deploy** step).
   Missing: load `f10-load-project.sh investigate plan`, or `investigate` alone on a planless flow, then run the **investigate** step.
   Under `stale_after` it judges an old task first and may end the run blocked, which `anyway` in the steering skips.
   Then run the **plan** step when the flow leads with `plan`.
-  With `flow_by_area`, start and drive leave planning to ship.
+  With `flow_by_area`, `f10 start` leaves planning to ship.
   A **planless** flow (below) never runs it, and the investigation brief becomes the inline plan.
   Then the flow.
 - `<description>`: free text, which the **capture** step makes a task.
@@ -48,7 +48,7 @@ Deploy has its own confirmation (the **deploy** step).
 - Extra text beside the subject is steering.
   For a bug, `no repro` skips the reproduction, and `with repro` runs it in full.
   `as a feature` plans the task as a feature, with no debug pass (`steps/debug.md`).
-  `resume at <entry>` (sent by the drive once a catchup settled the stop) starts the flow at that entry and counts the ones before it done; `(entry <n>)` picks the `n`th entry of the badge's pipeline where the flow names it twice.
+  `resume at <entry>` (sent by the daemon once a catchup settled the stop) starts the flow at that entry and counts the ones before it done; `(entry <n>)` picks the `n`th entry of the badge's pipeline where the flow names it twice.
   The badge walks to that place: after `pipeline`, one call runs `set ship running` on each entry before it, in order, then on the entry itself.
 
 **Run**
@@ -86,8 +86,8 @@ It reaches only a judge that spawns an agent (`--blind`), whose profile comes fr
 That call takes `--pace <name>` when the argument gave one.
 An inline judge runs on the task agent's profile.
 A leading `plan` the pace skips makes the run planless, as a flow with no `plan` is.
-A trailing `finish` entry belongs to the drive, so ship never runs it and leaves it out of the badge's `pipeline`.
-With it in the flow, the report's `Next:` names `/f10:finish <id> --merge`, unless drive finishes the task (`modes/driven.md`).
+A trailing `finish` entry belongs to the daemon, so ship never runs it and leaves it out of the badge's `pipeline`.
+With it in the flow, the report's `Next:` names `/f10:finish <id> --merge`, unless f10 finishes the task (`modes/driven.md`).
 A `finish` the pace skips adds no `Next:` line.
 With no pace, the list is the declared flow, with an optional CI review (`ci?`) already settled.
 An `f10 flow` too old to take a name fails on it: run the declared flow, and say in one line that the pace was not applied.
@@ -136,7 +136,7 @@ A `demo` entry with nothing to show skips in one line (the **demo** step), a nor
 **A spike ends after implement**, whatever the flow: a `Kind: spike` plan answers a question, and its code never leaves the machine.
 No step after implement runs (no cleanup, commit, push, pr, review, judge or deploy); the shipment is the spike report.
 The final report ends with its close: `f10 finish <id>`, which archives the plan and the report, discards the experiment code and removes the worktree, branch and workspace; `--keep` keeps the experiment, committed on a `kept/` branch.
-A driven spike needs no close in the report: the drive closes it after ship.
+A driven spike needs no close in the report: the daemon closes it after ship.
 In the main checkout, discard the experiment code by the paths the report names before `f10 finish`, which refuses a dirty main checkout.
 Its report back (below) carries the question, the answer and the recommendation; it names the spike report's path only under `visibility: public`, since stealth keeps `.f10/` paths off the tracker.
 The kind is known from the plan, or a planless run's inline plan, before the flow starts, so the badge declares `f10-state.sh pipeline implement`, and a dry run prints the path cut at implement.
@@ -145,27 +145,27 @@ The kind is known from the plan, or a planless run's inline plan, before the flo
 Catchup is never a flow entry.
 
 - **Before implement**, only where `f10 start --after` or `f10 finish` recorded a base on the branch (`f10-after-branch` or `f10-landed`); `f10 pr catchup --guard implement` prints `method: skip` otherwise.
-  A base with no code yet is the guard's `code: none` line, the rule the drive releases dependents by, for a base held locally or only on origin. Before integrating, ask once (AskUserQuestion) **wait**, or **proceed on the plan's assumption**.
+  A base with no code yet is the guard's `code: none` line, the rule the daemon releases dependents by, for a base held locally or only on origin. Before integrating, ask once (AskUserQuestion) **wait**, or **proceed on the plan's assumption**.
   Wait ends the run blocked (`f10-state.sh set ship blocked implement`, a `note` naming the base task).
   Proceed builds against the base task's plan as the plan file records it, with no fallback if it is absent.
-  **Driven**, nothing is asked and ship never proceeds: `f10-state.sh set ship blocked implement; f10-state.sh wait <base-id>; f10-state.sh note "waiting on <base-id>: its branch has no code yet" "rerun ship once <base-id> commits; the drive does it by itself"`, then the report.
-  The drive holds the task as `waiting on <base-id>` and sends ship again, `resume at implement`, once the base commits; other tasks keep moving.
+  **Driven**, nothing is asked and ship never proceeds: `f10-state.sh set ship blocked implement; f10-state.sh wait <base-id>; f10-state.sh note "waiting on <base-id>: its branch has no code yet" "rerun ship once <base-id> commits; the daemon does it by itself"`, then the report.
+  The daemon holds the task as `waiting on <base-id>` and sends ship again, `resume at implement`, once the base commits; other tasks keep moving.
 - **Before every `pr` entry**, the first and each refresh: `f10 pr catchup --guard pr` first, which fetches and checks ancestry; only when its `method` is `merge`, `rebase` or `onto`, commit what the tree holds as the pr step would (`conventions/context.md` → Commits, `--step implement`) and integrate, so the push carries it.
   `skip` or `none` leaves the commit to pr and its adapter.
   A base not yet on origin stops the run in the pr step (its point 4).
   In a driven run, that stop is a wait.
-  The drive holds that task as `waiting on <base-id>` until the base is on origin or has finished, then sends ship again, `resume at pr`.
+  The daemon holds that task as `waiting on <base-id>` until the base is on origin or has finished, then sends ship again, `resume at pr`.
 - **Before a change judge** (a `judge` after `implement`; the plan judge has no code): with uncommitted work in the tree (implement leaves its work uncommitted, so `implement judge pr` always has some), skip it in one line: that judge sees the branch on its old base, and a later `pr` entry's guard, when the flow has one, brings the base in before the code leaves.
   After a `pr` entry, push the integration, never forcing, so the PR head is the code judged and the judge's status lands on it.
 
 The guard runs under the badge of the entry it guards, from its own `catchup` load.
 A failure is `set ship failed <entry>`, or `partial` once the run left something durable, the guard's own commit or an open PR (`conventions/failure.md` rule 7), its `state` row naming that commit and its `note` naming catchup and `/f10:catchup`.
-In the same call, after that `set`, run `f10-state.sh stop guard`, because the drive tells the guard's stop from any other failure by that kind alone.
+In the same call, after that `set`, run `f10-state.sh stop guard`, because the daemon tells the guard's stop from any other failure by that kind alone.
 The guard marks the branch before failing (the **catchup** step).
-The drive catches a marked branch up by itself, again each time the base moves, then prompts ship again at this entry.
+The daemon catches a marked branch up by itself, again each time the base moves, then prompts ship again at this entry.
 It halts, naming the files, when three catchups in a row meet the same conflict with the same base.
-A driven run's `next` is `run /f10:catchup --driven in the worktree, then rerun the drive`: the rerun prompts ship again at this entry.
-The `next` is for a person, and the drive never reads it.
+A driven run's `next` is `run /f10:catchup --driven in the worktree, then run f10 resume <id>`: the resume prompts ship again at this entry.
+The `next` is for a person, and the daemon never reads it.
 
 Run the flow's entries **in the declared order**, each from its own load.
 A plan written this run needs no re-confirming.
@@ -226,4 +226,4 @@ A driven run reports back too; nothing is asked.
   After the facts block comes review status ("stopped at PR" is a normal end), then deploy status.
   Then comes a bug's or refactor's proof, or a spike's answer (implement's line) and its close.
   Then come what changed, the decisions and lessons lines, and a one-line reminder of gaps left on their defaults.
-  A driven ship that drive finishes ends with the `Next:` line `modes/driven.md` gives.
+  A driven ship that f10 finishes ends with the `Next:` line `modes/driven.md` gives.

@@ -14,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file f10/v1/runs.proto.
  */
 export const file_f10_v1_runs: GenFile = /*@__PURE__*/
-  fileDesc("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DAoEdGFzaxgCIAEoCRIgCgVtZXJnZRgDIAEoDjIRLmYxMC52MS5NZXJnZU1vZGUSFQoNaWdub3JlX2NoZWNrcxgEIAEoCBIMCgRrZWVwGAUgASgIEiUKBmNhbGxlchgGIAEoCzIVLmYxMC52MS5DYWxsZXJDb250ZXh0EgsKA3llcxgHIAEoCBINCgVlbXB0eRgIIAEoCBINCgVjbG9zZRgJIAEoCSLgAQoORmluaXNoUmVzcG9uc2USDAoEdGFzaxgBIAEoCRIKCgJwchgCIAEoCRIOCgZjb21taXQYAyABKAkSGAoQcmVtb3ZlZF93b3JrdHJlZRgEIAEoCBIWCg5yZW1vdmVkX2JyYW5jaBgFIAEoCBIYChBjbG9zZWRfd29ya3NwYWNlGAYgASgIEiAKB3ByaW50ZWQYByABKAsyDy5mMTAudjEuUHJpbnRlZBIaChJjbG9zZV93b3Jrc3BhY2VfaWQYCCABKAkSGgoSZm9jdXNfd29ya3NwYWNlX2lkGAkgASgJImQKDkZvcndhcmRSZXF1ZXN0Eg8KB3Byb2plY3QYASABKAkSDAoEdGFzaxgCIAEoCRIMCgR0ZXh0GAMgASgJEiUKBmNhbGxlchgEIAEoCzIVLmYxMC52MS5DYWxsZXJDb250ZXh0ImIKD0ZvcndhcmRSZXNwb25zZRIRCgl3b3Jrc3BhY2UYASABKAkSDAoEc2VudBgCIAEoCRIMCgRub3RlGAMgASgJEiAKB3ByaW50ZWQYBCABKAsyDy5mMTAudjEuUHJpbnRlZCJYChFMaXN0RHJpdmVzUmVxdWVzdBIPCgdwcm9qZWN0GAEgASgJEgsKA2FsbBgCIAEoCBIlCgZjYWxsZXIYAyABKAsyFS5mMTAudjEuQ2FsbGVyQ29udGV4dCJnCgtEcml2ZVJlY29yZBIOCgZudW1iZXIYASABKAUSDAoEYXJncxgCIAMoCRINCgVzdGF0ZRgDIAEoCRIrCgdzdGFydGVkGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJbChJMaXN0RHJpdmVzUmVzcG9uc2USIwoGZHJpdmVzGAEgAygLMhMuZjEwLnYxLkRyaXZlUmVjb3JkEiAKB3ByaW50ZWQYAiABKAsyDy5mMTAudjEuUHJpbnRlZCJpChJDYW5jZWxEcml2ZVJlcXVlc3QSDwoHcHJvamVjdBgBIAEoCRINCgVkcml2ZRgCIAEoBRIlCgZjYWxsZXIYAyABKAsyFS5mMTAudjEuQ2FsbGVyQ29udGV4dBIMCgR0YXNrGAQgASgJIjcKE0NhbmNlbERyaXZlUmVzcG9uc2USIAoHcHJpbnRlZBgBIAEoCzIPLmYxMC52MS5QcmludGVkKvYBCgtQaGFzZVN0YXR1cxIcChhQSEFTRV9TVEFUVVNfVU5TUEVDSUZJRUQQABIYChRQSEFTRV9TVEFUVVNfUlVOTklORxABEhUKEVBIQVNFX1NUQVRVU19ET05FEAISFwoTUEhBU0VfU1RBVFVTX0ZBSUxFRBADEhgKFFBIQVNFX1NUQVRVU19QQVJUSUFMEAQSFgoSUEhBU0VfU1RBVFVTX1BSSU9SEAUSGAoUUEhBU0VfU1RBVFVTX0JMT0NLRUQQBhIYChRQSEFTRV9TVEFUVVNfU0tJUFBFRBAHEhkKFVBIQVNFX1NUQVRVU19VUENPTUlORxAIKmkKCVN0YXJ0TW9kZRIaChZTVEFSVF9NT0RFX1VOU1BFQ0lGSUVEEAASEwoPU1RBUlRfTU9ERV9TSElQEAESEwoPU1RBUlRfTU9ERV9QTEFOEAISFgoSU1RBUlRfTU9ERV9ESVNDVVNTEAMqfAoJTWVyZ2VNb2RlEhoKFk1FUkdFX01PREVfVU5TUEVDSUZJRUQQABIRCg1NRVJHRV9NT0RFX1BSEAESFAoQTUVSR0VfTU9ERV9GT1JDRRACEhQKEE1FUkdFX01PREVfTE9DQUwQAxIUChBNRVJHRV9NT0RFX0NMT1NFEAQyxQMKClJ1blNlcnZpY2USSQoMR2V0UnVuU3RhdHVzEhsuZjEwLnYxLkdldFJ1blN0YXR1c1JlcXVlc3QaHC5mMTAudjEuR2V0UnVuU3RhdHVzUmVzcG9uc2USNAoFU3RhcnQSFC5mMTAudjEuU3RhcnRSZXF1ZXN0GhUuZjEwLnYxLlN0YXJ0UmVzcG9uc2USNAoFRHJpdmUSFC5mMTAudjEuRHJpdmVSZXF1ZXN0GhUuZjEwLnYxLkRyaXZlUmVzcG9uc2USNwoGRmluaXNoEhUuZjEwLnYxLkZpbmlzaFJlcXVlc3QaFi5mMTAudjEuRmluaXNoUmVzcG9uc2USOgoHRm9yd2FyZBIWLmYxMC52MS5Gb3J3YXJkUmVxdWVzdBoXLmYxMC52MS5Gb3J3YXJkUmVzcG9uc2USQwoKTGlzdERyaXZlcxIZLmYxMC52MS5MaXN0RHJpdmVzUmVxdWVzdBoaLmYxMC52MS5MaXN0RHJpdmVzUmVzcG9uc2USRgoLQ2FuY2VsRHJpdmUSGi5mMTAudjEuQ2FuY2VsRHJpdmVSZXF1ZXN0GhsuZjEwLnYxLkNhbmNlbERyaXZlUmVzcG9uc2VCgQEKCmNvbS5mMTAudjFCCVJ1bnNQcm90b1ABWi9naXRodWIuY29tL2FtYmVycGl4ZWxzL2YxMC9jbGkvZ2VuL2YxMC92MTtmMTB2MaICA0ZYWKoCBkYxMC5WMcoCBkYxMFxWMeICEkYxMFxWMVxHUEJNZXRhZGF0YeoCB0YxMDo6VjFiBnByb3RvMw", [file_f10_v1_caller, file_google_protobuf_duration, file_google_protobuf_timestamp]);
+  fileDesc("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EiUKBmNhbGxlchgEIAEoCzIVLmYxMC52MS5DYWxsZXJDb250ZXh0ImIKD0ZvcndhcmRSZXNwb25zZRIRCgl3b3Jrc3BhY2UYASABKAkSDAoEc2VudBgCIAEoCRIMCgRub3RlGAMgASgJEiAKB3ByaW50ZWQYBCABKAsyDy5mMTAudjEuUHJpbnRlZCJYChFMaXN0RHJpdmVzUmVxdWVzdBIPCgdwcm9qZWN0GAEgASgJEgsKA2FsbBgCIAEoCBIlCgZjYWxsZXIYAyABKAsyFS5mMTAudjEuQ2FsbGVyQ29udGV4dCJnCgtEcml2ZVJlY29yZBIOCgZudW1iZXIYASABKAUSDAoEYXJncxgCIAMoCRINCgVzdGF0ZRgDIAEoCRIrCgdzdGFydGVkGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCJbChJMaXN0RHJpdmVzUmVzcG9uc2USIwoGZHJpdmVzGAEgAygLMhMuZjEwLnYxLkRyaXZlUmVjb3JkEiAKB3ByaW50ZWQYAiABKAsyDy5mMTAudjEuUHJpbnRlZCJpChJDYW5jZWxEcml2ZVJlcXVlc3QSDwoHcHJvamVjdBgBIAEoCRINCgVkcml2ZRgCIAEoBRIlCgZjYWxsZXIYAyABKAsyFS5mMTAudjEuQ2FsbGVyQ29udGV4dBIMCgR0YXNrGAQgASgJIjcKE0NhbmNlbERyaXZlUmVzcG9uc2USIAoHcHJpbnRlZBgBIAEoCzIPLmYxMC52MS5QcmludGVkIlkKEkxpc3RCYXRjaGVzUmVxdWVzdBIPCgdwcm9qZWN0GAEgASgJEgsKA2FsbBgCIAEoCBIlCgZjYWxsZXIYAyABKAsyFS5mMTAudjEuQ2FsbGVyQ29udGV4dCJwCgVCYXRjaBIOCgZudW1iZXIYASABKAUSDAoEYXJncxgCIAMoCRINCgVzdGF0ZRgDIAEoCRIrCgdzdGFydGVkGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBINCgV0YXNrcxgFIAMoCSJXChNMaXN0QmF0Y2hlc1Jlc3BvbnNlEh4KB2JhdGNoZXMYASADKAsyDS5mMTAudjEuQmF0Y2gSIAoHcHJpbnRlZBgCIAEoCzIPLmYxMC52MS5QcmludGVkIlgKEFN0b3BCYXRjaFJlcXVlc3QSDwoHcHJvamVjdBgBIAEoCRIMCgR0YXNrGAIgASgJEiUKBmNhbGxlchgDIAEoCzIVLmYxMC52MS5DYWxsZXJDb250ZXh0IjUKEVN0b3BCYXRjaFJlc3BvbnNlEiAKB3ByaW50ZWQYASABKAsyDy5mMTAudjEuUHJpbnRlZCr2AQoLUGhhc2VTdGF0dXMSHAoYUEhBU0VfU1RBVFVTX1VOU1BFQ0lGSUVEEAASGAoUUEhBU0VfU1RBVFVTX1JVTk5JTkcQARIVChFQSEFTRV9TVEFUVVNfRE9ORRACEhcKE1BIQVNFX1NUQVRVU19GQUlMRUQQAxIYChRQSEFTRV9TVEFUVVNfUEFSVElBTBAEEhYKElBIQVNFX1NUQVRVU19QUklPUhAFEhgKFFBIQVNFX1NUQVRVU19CTE9DS0VEEAYSGAoUUEhBU0VfU1RBVFVTX1NLSVBQRUQQBxIZChVQSEFTRV9TVEFUVVNfVVBDT01JTkcQCCppCglTdGFydE1vZGUSGgoWU1RBUlRfTU9ERV9VTlNQRUNJRklFRBAAEhMKD1NUQVJUX01PREVfU0hJUBABEhMKD1NUQVJUX01PREVfUExBThACEhYKElNUQVJUX01PREVfRElTQ1VTUxADKnwKCU1lcmdlTW9kZRIaChZNRVJHRV9NT0RFX1VOU1BFQ0lGSUVEEAASEQoNTUVSR0VfTU9ERV9QUhABEhQKEE1FUkdFX01PREVfRk9SQ0UQAhIUChBNRVJHRV9NT0RFX0xPQ0FMEAMSFAoQTUVSR0VfTU9ERV9DTE9TRRAEMtwFCgpSdW5TZXJ2aWNlEkkKDEdldFJ1blN0YXR1cxIbLmYxMC52MS5HZXRSdW5TdGF0dXNSZXF1ZXN0GhwuZjEwLnYxLkdldFJ1blN0YXR1c1Jlc3BvbnNlEjQKBVN0YXJ0EhQuZjEwLnYxLlN0YXJ0UmVxdWVzdBoVLmYxMC52MS5TdGFydFJlc3BvbnNlEjkKBURyaXZlEhQuZjEwLnYxLkRyaXZlUmVxdWVzdBoVLmYxMC52MS5Ecml2ZVJlc3BvbnNlIgOIAgESQwoKU3RhcnRCYXRjaBIZLmYxMC52MS5TdGFydEJhdGNoUmVxdWVzdBoaLmYxMC52MS5TdGFydEJhdGNoUmVzcG9uc2USNwoGUmVzdW1lEhUuZjEwLnYxLlJlc3VtZVJlcXVlc3QaFi5mMTAudjEuUmVzdW1lUmVzcG9uc2USNwoGRmluaXNoEhUuZjEwLnYxLkZpbmlzaFJlcXVlc3QaFi5mMTAudjEuRmluaXNoUmVzcG9uc2USOgoHRm9yd2FyZBIWLmYxMC52MS5Gb3J3YXJkUmVxdWVzdBoXLmYxMC52MS5Gb3J3YXJkUmVzcG9uc2USSAoKTGlzdERyaXZlcxIZLmYxMC52MS5MaXN0RHJpdmVzUmVxdWVzdBoaLmYxMC52MS5MaXN0RHJpdmVzUmVzcG9uc2UiA4gCARJLCgtDYW5jZWxEcml2ZRIaLmYxMC52MS5DYW5jZWxEcml2ZVJlcXVlc3QaGy5mMTAudjEuQ2FuY2VsRHJpdmVSZXNwb25zZSIDiAIBEkYKC0xpc3RCYXRjaGVzEhouZjEwLnYxLkxpc3RCYXRjaGVzUmVxdWVzdBobLmYxMC52MS5MaXN0QmF0Y2hlc1Jlc3BvbnNlEkAKCVN0b3BCYXRjaBIYLmYxMC52MS5TdG9wQmF0Y2hSZXF1ZXN0GhkuZjEwLnYxLlN0b3BCYXRjaFJlc3BvbnNlQoEBCgpjb20uZjEwLnYxQglSdW5zUHJvdG9QAVovZ2l0aHViLmNvbS9hbWJlcnBpeGVscy9mMTAvY2xpL2dlbi9mMTAvdjE7ZjEwdjGiAgNGWFiqAgZGMTAuVjHKAgZGMTBcVjHiAhJGMTBcVjFcR1BCTWV0YWRhdGHqAgdGMTA6OlYxYgZwcm90bzM", [file_f10_v1_caller, file_google_protobuf_duration, file_google_protobuf_timestamp]);
 
 /**
  * A Run is one session's run: its three phases and the ship pipeline.
@@ -700,7 +700,7 @@ export type StartRequest = Message<"f10.v1.StartRequest"> & {
 
   /**
    * tasks are the other ids, after token. A discussion opens token's
-   * worktree and reads them all, and a flow start runs them in one drive.
+   * worktree and reads them all, and a flow start runs them in one batch.
    *
    * @generated from field: repeated string tasks = 14;
    */
@@ -736,7 +736,7 @@ export const StartRequestSchema: GenMessage<StartRequest> = /*@__PURE__*/
 export type StartResponse = Message<"f10.v1.StartResponse"> & {
   /**
    * task, branch, worktree, workspace_id and agent are a discussion's or a
-   * pickup's; a drive opens its task after the call returns.
+   * pickup's; a batch opens its task after the call returns.
    *
    * @generated from field: string task = 1;
    */
@@ -770,26 +770,36 @@ export type StartResponse = Message<"f10.v1.StartResponse"> & {
   printed?: Printed | undefined;
 
   /**
-   * drive is the drive a flow start runs in, 0 for a discussion or a pickup.
+   * drive is the old name of batch, still filled for clients built
+   * against it.
    *
-   * @generated from field: int32 drive = 7;
+   * @generated from field: int32 drive = 7 [deprecated = true];
+   * @deprecated
    */
   drive: number;
 
   /**
-   * log is that drive's log file, which grows until the drive exits.
+   * log is the batch's log file, which grows until the batch exits.
    *
    * @generated from field: string log = 8;
    */
   log: string;
 
   /**
-   * attached is true when the daemon already ran that drive and the call
+   * attached is true when the daemon already ran that batch and the call
    * followed it instead of starting another.
    *
    * @generated from field: bool attached = 9;
    */
   attached: boolean;
+
+  /**
+   * batch is the number of the batch a flow start runs in, 0 for a
+   * discussion or a pickup.
+   *
+   * @generated from field: int32 batch = 10;
+   */
+  batch: number;
 };
 
 /**
@@ -800,7 +810,8 @@ export const StartResponseSchema: GenMessage<StartResponse> = /*@__PURE__*/
   messageDesc(file_f10_v1_runs, 13);
 
 /**
- * A DriveTask is one task of a drive, with its own agent profile.
+ * A DriveTask is one task of DriveRequest's field form, with its own agent
+ * profile.
  *
  * @generated from message f10.v1.DriveTask
  */
@@ -824,10 +835,10 @@ export const DriveTaskSchema: GenMessage<DriveTask> = /*@__PURE__*/
   messageDesc(file_f10_v1_runs, 14);
 
 /**
- * DriveRequest starts or resumes a drive. f10 start sends args. The field
- * form (args unset) is kept for older clients only: a new client calls
- * Start, which runs the same flow start with its closed-task check and
- * plan-only mode. The field form refuses a start of closed tasks.
+ * DriveRequest is the old form of StartBatchRequest. Its field form (args
+ * unset) is kept for older clients only: a new client calls Start, which
+ * runs the same flow start with its closed-task check and plan-only mode.
+ * The field form refuses a start of closed tasks.
  *
  * @generated from message f10.v1.DriveRequest
  */
@@ -884,23 +895,23 @@ export type DriveRequest = Message<"f10.v1.DriveRequest"> & {
   planFirst: boolean;
 
   /**
-   * args are the drive's arguments as `f10 start` takes them. When set they
-   * win over the fields above, so a rerun of a typed command line keys to
-   * the record it opened.
+   * args are the arguments as `f10 start` takes them. When set they win
+   * over the fields above, so a rerun of a typed command line keys to the
+   * record it opened.
    *
    * @generated from field: repeated string args = 10;
    */
   args: string[];
 
   /**
-   * dir is the checkout the drive runs from.
+   * dir is the checkout the batch runs from.
    *
    * @generated from field: string dir = 11;
    */
   dir: string;
 
   /**
-   * env is the allowlisted environment the drive runs with. Honored only on
+   * env is the allowlisted environment the batch runs with. Honored only on
    * the unix socket, because a remote client has no local session to pass.
    *
    * @generated from field: repeated string env = 12;
@@ -908,14 +919,14 @@ export type DriveRequest = Message<"f10.v1.DriveRequest"> & {
   env: string[];
 
   /**
-   * resume picks up the drive record with this number.
+   * resume picks up the record with this number.
    *
    * @generated from field: int32 resume = 13;
    */
   resume: number;
 
   /**
-   * answers are the answers to the drive's open asks, `ID=text` for one
+   * answers are the answers to the batch's open asks, `ID=text` for one
    * task or bare text.
    *
    * @generated from field: repeated string answers = 14;
@@ -923,7 +934,7 @@ export type DriveRequest = Message<"f10.v1.DriveRequest"> & {
   answers: string[];
 
   /**
-   * every is how often the drive polls its tasks; unset keeps the default.
+   * every is how often the tasks are polled; unset keeps the default.
    *
    * @generated from field: google.protobuf.Duration every = 15;
    */
@@ -938,26 +949,27 @@ export const DriveRequestSchema: GenMessage<DriveRequest> = /*@__PURE__*/
   messageDesc(file_f10_v1_runs, 15);
 
 /**
+ * DriveResponse is the old form of StartBatchResponse.
+ *
  * @generated from message f10.v1.DriveResponse
  */
 export type DriveResponse = Message<"f10.v1.DriveResponse"> & {
   /**
-   * drive is the drive's number in the project, 0 until the drive opened
-   * its record.
+   * drive is the batch's number in the project, 0 until its record opened.
    *
    * @generated from field: int32 drive = 1;
    */
   drive: number;
 
   /**
-   * log is the drive's log file, which grows until the drive exits.
+   * log is the batch's log file, which grows until the batch exits.
    *
    * @generated from field: string log = 2;
    */
   log: string;
 
   /**
-   * attached is true when the daemon already ran this drive and the call
+   * attached is true when the daemon already ran this batch and the call
    * joined it instead of starting another.
    *
    * @generated from field: bool attached = 3;
@@ -971,6 +983,186 @@ export type DriveResponse = Message<"f10.v1.DriveResponse"> & {
  */
 export const DriveResponseSchema: GenMessage<DriveResponse> = /*@__PURE__*/
   messageDesc(file_f10_v1_runs, 16);
+
+/**
+ * StartBatchRequest starts a batch from a command line, or picks up the
+ * batch that command line already started.
+ *
+ * @generated from message f10.v1.StartBatchRequest
+ */
+export type StartBatchRequest = Message<"f10.v1.StartBatchRequest"> & {
+  /**
+   * @generated from field: string project = 1;
+   */
+  project: string;
+
+  /**
+   * args are the arguments as `f10 start` takes them, so a rerun of a typed
+   * command line keys to the record it opened.
+   *
+   * @generated from field: repeated string args = 2;
+   */
+  args: string[];
+
+  /**
+   * dir is the checkout the batch runs from; empty takes the project's.
+   *
+   * @generated from field: string dir = 3;
+   */
+  dir: string;
+
+  /**
+   * env is the allowlisted environment the batch runs with. Honored only on
+   * the unix socket, because a remote client has no local session to pass.
+   *
+   * @generated from field: repeated string env = 4;
+   */
+  env: string[];
+
+  /**
+   * resume picks up the batch record with this number, for a client that
+   * already resolved it; Resume takes a task id instead.
+   *
+   * @generated from field: int32 resume = 5;
+   */
+  resume: number;
+};
+
+/**
+ * Describes the message f10.v1.StartBatchRequest.
+ * Use `create(StartBatchRequestSchema)` to create a new message.
+ */
+export const StartBatchRequestSchema: GenMessage<StartBatchRequest> = /*@__PURE__*/
+  messageDesc(file_f10_v1_runs, 17);
+
+/**
+ * @generated from message f10.v1.StartBatchResponse
+ */
+export type StartBatchResponse = Message<"f10.v1.StartBatchResponse"> & {
+  /**
+   * batch is the batch's number in the project, 0 until its record opened.
+   *
+   * @generated from field: int32 batch = 1;
+   */
+  batch: number;
+
+  /**
+   * log is the batch's log file, which grows until the batch exits.
+   *
+   * @generated from field: string log = 2;
+   */
+  log: string;
+
+  /**
+   * attached is true when the daemon already ran this batch and the call
+   * joined it instead of starting another.
+   *
+   * @generated from field: bool attached = 3;
+   */
+  attached: boolean;
+};
+
+/**
+ * Describes the message f10.v1.StartBatchResponse.
+ * Use `create(StartBatchResponseSchema)` to create a new message.
+ */
+export const StartBatchResponseSchema: GenMessage<StartBatchResponse> = /*@__PURE__*/
+  messageDesc(file_f10_v1_runs, 18);
+
+/**
+ * ResumeRequest names a stopped batch by one of its tasks. With no task, the
+ * project's one stopped batch resumes, and several are refused by name.
+ *
+ * @generated from message f10.v1.ResumeRequest
+ */
+export type ResumeRequest = Message<"f10.v1.ResumeRequest"> & {
+  /**
+   * @generated from field: string project = 1;
+   */
+  project: string;
+
+  /**
+   * task is any task id of the batch, a bundle's rider included.
+   *
+   * @generated from field: string task = 2;
+   */
+  task: string;
+
+  /**
+   * answers are the answers to the batch's open asks, `ID=text` for one
+   * task or bare text.
+   *
+   * @generated from field: repeated string answers = 3;
+   */
+  answers: string[];
+
+  /**
+   * every is how often the tasks are polled; unset keeps the record's.
+   *
+   * @generated from field: google.protobuf.Duration every = 4;
+   */
+  every?: Duration | undefined;
+
+  /**
+   * parallel caps the tasks running a skill at once; 0 keeps the record's.
+   *
+   * @generated from field: int32 parallel = 5;
+   */
+  parallel: number;
+
+  /**
+   * @generated from field: f10.v1.CallerContext caller = 6;
+   */
+  caller?: CallerContext | undefined;
+};
+
+/**
+ * Describes the message f10.v1.ResumeRequest.
+ * Use `create(ResumeRequestSchema)` to create a new message.
+ */
+export const ResumeRequestSchema: GenMessage<ResumeRequest> = /*@__PURE__*/
+  messageDesc(file_f10_v1_runs, 19);
+
+/**
+ * @generated from message f10.v1.ResumeResponse
+ */
+export type ResumeResponse = Message<"f10.v1.ResumeResponse"> & {
+  /**
+   * batch is the number of the batch resumed.
+   *
+   * @generated from field: int32 batch = 1;
+   */
+  batch: number;
+
+  /**
+   * log is the batch's log file, which grows until the batch exits.
+   *
+   * @generated from field: string log = 2;
+   */
+  log: string;
+
+  /**
+   * attached is true when the batch was still running and the call joined
+   * it.
+   *
+   * @generated from field: bool attached = 3;
+   */
+  attached: boolean;
+
+  /**
+   * printed is what f10 resume prints for the call.
+   *
+   * @generated from field: f10.v1.Printed printed = 4;
+   */
+  printed?: Printed | undefined;
+};
+
+/**
+ * Describes the message f10.v1.ResumeResponse.
+ * Use `create(ResumeResponseSchema)` to create a new message.
+ */
+export const ResumeResponseSchema: GenMessage<ResumeResponse> = /*@__PURE__*/
+  messageDesc(file_f10_v1_runs, 20);
 
 /**
  * @generated from message f10.v1.FinishRequest
@@ -1036,7 +1228,7 @@ export type FinishRequest = Message<"f10.v1.FinishRequest"> & {
  * Use `create(FinishRequestSchema)` to create a new message.
  */
 export const FinishRequestSchema: GenMessage<FinishRequest> = /*@__PURE__*/
-  messageDesc(file_f10_v1_runs, 17);
+  messageDesc(file_f10_v1_runs, 21);
 
 /**
  * @generated from message f10.v1.FinishResponse
@@ -1102,7 +1294,7 @@ export type FinishResponse = Message<"f10.v1.FinishResponse"> & {
  * Use `create(FinishResponseSchema)` to create a new message.
  */
 export const FinishResponseSchema: GenMessage<FinishResponse> = /*@__PURE__*/
-  messageDesc(file_f10_v1_runs, 18);
+  messageDesc(file_f10_v1_runs, 22);
 
 /**
  * @generated from message f10.v1.ForwardRequest
@@ -1138,7 +1330,7 @@ export type ForwardRequest = Message<"f10.v1.ForwardRequest"> & {
  * Use `create(ForwardRequestSchema)` to create a new message.
  */
 export const ForwardRequestSchema: GenMessage<ForwardRequest> = /*@__PURE__*/
-  messageDesc(file_f10_v1_runs, 19);
+  messageDesc(file_f10_v1_runs, 23);
 
 /**
  * @generated from message f10.v1.ForwardResponse
@@ -1178,9 +1370,11 @@ export type ForwardResponse = Message<"f10.v1.ForwardResponse"> & {
  * Use `create(ForwardResponseSchema)` to create a new message.
  */
 export const ForwardResponseSchema: GenMessage<ForwardResponse> = /*@__PURE__*/
-  messageDesc(file_f10_v1_runs, 20);
+  messageDesc(file_f10_v1_runs, 24);
 
 /**
+ * ListDrivesRequest is the old form of ListBatchesRequest.
+ *
  * @generated from message f10.v1.ListDrivesRequest
  */
 export type ListDrivesRequest = Message<"f10.v1.ListDrivesRequest"> & {
@@ -1190,7 +1384,7 @@ export type ListDrivesRequest = Message<"f10.v1.ListDrivesRequest"> & {
   project: string;
 
   /**
-   * all lists finished and cancelled drives too.
+   * all lists every record, not only the newest.
    *
    * @generated from field: bool all = 2;
    */
@@ -1207,10 +1401,10 @@ export type ListDrivesRequest = Message<"f10.v1.ListDrivesRequest"> & {
  * Use `create(ListDrivesRequestSchema)` to create a new message.
  */
 export const ListDrivesRequestSchema: GenMessage<ListDrivesRequest> = /*@__PURE__*/
-  messageDesc(file_f10_v1_runs, 21);
+  messageDesc(file_f10_v1_runs, 25);
 
 /**
- * A DriveRecord is one drive a project ran, by its number.
+ * A DriveRecord is the old form of Batch.
  *
  * @generated from message f10.v1.DriveRecord
  */
@@ -1221,7 +1415,7 @@ export type DriveRecord = Message<"f10.v1.DriveRecord"> & {
   number: number;
 
   /**
-   * args are the drive's arguments as f10 start took them.
+   * args are the arguments as f10 start took them.
    *
    * @generated from field: repeated string args = 2;
    */
@@ -1245,9 +1439,11 @@ export type DriveRecord = Message<"f10.v1.DriveRecord"> & {
  * Use `create(DriveRecordSchema)` to create a new message.
  */
 export const DriveRecordSchema: GenMessage<DriveRecord> = /*@__PURE__*/
-  messageDesc(file_f10_v1_runs, 22);
+  messageDesc(file_f10_v1_runs, 26);
 
 /**
+ * ListDrivesResponse is the old form of ListBatchesResponse.
+ *
  * @generated from message f10.v1.ListDrivesResponse
  */
 export type ListDrivesResponse = Message<"f10.v1.ListDrivesResponse"> & {
@@ -1257,7 +1453,7 @@ export type ListDrivesResponse = Message<"f10.v1.ListDrivesResponse"> & {
   drives: DriveRecord[];
 
   /**
-   * printed is the table f10 status --drives prints.
+   * printed is the table f10 status --batches prints.
    *
    * @generated from field: f10.v1.Printed printed = 2;
    */
@@ -1269,9 +1465,11 @@ export type ListDrivesResponse = Message<"f10.v1.ListDrivesResponse"> & {
  * Use `create(ListDrivesResponseSchema)` to create a new message.
  */
 export const ListDrivesResponseSchema: GenMessage<ListDrivesResponse> = /*@__PURE__*/
-  messageDesc(file_f10_v1_runs, 23);
+  messageDesc(file_f10_v1_runs, 27);
 
 /**
+ * CancelDriveRequest is the old form of StopBatchRequest.
+ *
  * @generated from message f10.v1.CancelDriveRequest
  */
 export type CancelDriveRequest = Message<"f10.v1.CancelDriveRequest"> & {
@@ -1281,8 +1479,8 @@ export type CancelDriveRequest = Message<"f10.v1.CancelDriveRequest"> & {
   project: string;
 
   /**
-   * drive is the drive's number; task, when set instead, is a task id whose
-   * drive is stopped.
+   * drive is the batch's number; task, when set instead, is a task id whose
+   * batch is stopped.
    *
    * @generated from field: int32 drive = 2;
    */
@@ -1304,9 +1502,11 @@ export type CancelDriveRequest = Message<"f10.v1.CancelDriveRequest"> & {
  * Use `create(CancelDriveRequestSchema)` to create a new message.
  */
 export const CancelDriveRequestSchema: GenMessage<CancelDriveRequest> = /*@__PURE__*/
-  messageDesc(file_f10_v1_runs, 24);
+  messageDesc(file_f10_v1_runs, 28);
 
 /**
+ * CancelDriveResponse is the old form of StopBatchResponse.
+ *
  * @generated from message f10.v1.CancelDriveResponse
  */
 export type CancelDriveResponse = Message<"f10.v1.CancelDriveResponse"> & {
@@ -1323,7 +1523,155 @@ export type CancelDriveResponse = Message<"f10.v1.CancelDriveResponse"> & {
  * Use `create(CancelDriveResponseSchema)` to create a new message.
  */
 export const CancelDriveResponseSchema: GenMessage<CancelDriveResponse> = /*@__PURE__*/
-  messageDesc(file_f10_v1_runs, 25);
+  messageDesc(file_f10_v1_runs, 29);
+
+/**
+ * @generated from message f10.v1.ListBatchesRequest
+ */
+export type ListBatchesRequest = Message<"f10.v1.ListBatchesRequest"> & {
+  /**
+   * @generated from field: string project = 1;
+   */
+  project: string;
+
+  /**
+   * all lists every batch, not only the newest 20.
+   *
+   * @generated from field: bool all = 2;
+   */
+  all: boolean;
+
+  /**
+   * @generated from field: f10.v1.CallerContext caller = 3;
+   */
+  caller?: CallerContext | undefined;
+};
+
+/**
+ * Describes the message f10.v1.ListBatchesRequest.
+ * Use `create(ListBatchesRequestSchema)` to create a new message.
+ */
+export const ListBatchesRequestSchema: GenMessage<ListBatchesRequest> = /*@__PURE__*/
+  messageDesc(file_f10_v1_runs, 30);
+
+/**
+ * A Batch is the tasks one f10 start started, kept as a record so it can be
+ * stopped and resumed.
+ *
+ * @generated from message f10.v1.Batch
+ */
+export type Batch = Message<"f10.v1.Batch"> & {
+  /**
+   * @generated from field: int32 number = 1;
+   */
+  number: number;
+
+  /**
+   * args are the arguments as f10 start took them.
+   *
+   * @generated from field: repeated string args = 2;
+   */
+  args: string[];
+
+  /**
+   * state is running, stopped, done or cancelled.
+   *
+   * @generated from field: string state = 3;
+   */
+  state: string;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp started = 4;
+   */
+  started?: Timestamp | undefined;
+
+  /**
+   * tasks are the batch's tasks as typed, a bundle joined by +. Any of
+   * them names the batch to Resume and StopBatch.
+   *
+   * @generated from field: repeated string tasks = 5;
+   */
+  tasks: string[];
+};
+
+/**
+ * Describes the message f10.v1.Batch.
+ * Use `create(BatchSchema)` to create a new message.
+ */
+export const BatchSchema: GenMessage<Batch> = /*@__PURE__*/
+  messageDesc(file_f10_v1_runs, 31);
+
+/**
+ * @generated from message f10.v1.ListBatchesResponse
+ */
+export type ListBatchesResponse = Message<"f10.v1.ListBatchesResponse"> & {
+  /**
+   * @generated from field: repeated f10.v1.Batch batches = 1;
+   */
+  batches: Batch[];
+
+  /**
+   * printed is the table f10 status --batches prints.
+   *
+   * @generated from field: f10.v1.Printed printed = 2;
+   */
+  printed?: Printed | undefined;
+};
+
+/**
+ * Describes the message f10.v1.ListBatchesResponse.
+ * Use `create(ListBatchesResponseSchema)` to create a new message.
+ */
+export const ListBatchesResponseSchema: GenMessage<ListBatchesResponse> = /*@__PURE__*/
+  messageDesc(file_f10_v1_runs, 32);
+
+/**
+ * @generated from message f10.v1.StopBatchRequest
+ */
+export type StopBatchRequest = Message<"f10.v1.StopBatchRequest"> & {
+  /**
+   * @generated from field: string project = 1;
+   */
+  project: string;
+
+  /**
+   * task is any task id of the batch to stop, a bundle's rider included.
+   *
+   * @generated from field: string task = 2;
+   */
+  task: string;
+
+  /**
+   * @generated from field: f10.v1.CallerContext caller = 3;
+   */
+  caller?: CallerContext | undefined;
+};
+
+/**
+ * Describes the message f10.v1.StopBatchRequest.
+ * Use `create(StopBatchRequestSchema)` to create a new message.
+ */
+export const StopBatchRequestSchema: GenMessage<StopBatchRequest> = /*@__PURE__*/
+  messageDesc(file_f10_v1_runs, 33);
+
+/**
+ * @generated from message f10.v1.StopBatchResponse
+ */
+export type StopBatchResponse = Message<"f10.v1.StopBatchResponse"> & {
+  /**
+   * printed is what f10 stop prints.
+   *
+   * @generated from field: f10.v1.Printed printed = 1;
+   */
+  printed?: Printed | undefined;
+};
+
+/**
+ * Describes the message f10.v1.StopBatchResponse.
+ * Use `create(StopBatchResponseSchema)` to create a new message.
+ */
+export const StopBatchResponseSchema: GenMessage<StopBatchResponse> = /*@__PURE__*/
+  messageDesc(file_f10_v1_runs, 34);
 
 /**
  * PhaseStatus is where one phase of a run stands.
@@ -1477,7 +1825,7 @@ export const MergeModeSchema: GenEnum<MergeMode> = /*@__PURE__*/
   enumDesc(file_f10_v1_runs, 2);
 
 /**
- * RunService starts, drives and finishes tasks, and reports where each run is.
+ * RunService starts, resumes and finishes tasks, and reports where each run is.
  *
  * @generated from service f10.v1.RunService
  */
@@ -1494,7 +1842,7 @@ export const RunService: GenService<{
     output: typeof GetRunStatusResponseSchema;
   },
   /**
-   * Start runs a task through its flow in a drive, as f10 start does. A
+   * Start runs a task through its flow in a batch, as f10 start does. A
    * discussion or a picked-up PR opens the worktree, workspace and agent,
    * prompted once, since nothing steers an agent that waits for a person.
    *
@@ -1506,15 +1854,37 @@ export const RunService: GenService<{
     output: typeof StartResponseSchema;
   },
   /**
-   * Drive runs a list of tasks through a flow, each once its base has a
-   * commit, as f10 start does with several tasks.
+   * Drive is the old name of StartBatch, kept for clients built against it.
    *
    * @generated from rpc f10.v1.RunService.Drive
+   * @deprecated
    */
   drive: {
     methodKind: "unary";
     input: typeof DriveRequestSchema;
     output: typeof DriveResponseSchema;
+  },
+  /**
+   * StartBatch runs a list of tasks through a flow as one batch, each once
+   * its base has a commit, as f10 start does with a typed command line.
+   *
+   * @generated from rpc f10.v1.RunService.StartBatch
+   */
+  startBatch: {
+    methodKind: "unary";
+    input: typeof StartBatchRequestSchema;
+    output: typeof StartBatchResponseSchema;
+  },
+  /**
+   * Resume goes on with a stopped batch wherever each task stopped, the
+   * finish included, as f10 resume does. Any task of the batch names it.
+   *
+   * @generated from rpc f10.v1.RunService.Resume
+   */
+  resume: {
+    methodKind: "unary";
+    input: typeof ResumeRequestSchema;
+    output: typeof ResumeResponseSchema;
   },
   /**
    * Finish merges a task's PR and removes its worktree, branch and workspace.
@@ -1537,9 +1907,11 @@ export const RunService: GenService<{
     output: typeof ForwardResponseSchema;
   },
   /**
-   * ListDrives lists a project's drive records, as f10 status --drives does.
+   * ListDrives is the old name of ListBatches, kept for clients built
+   * against it.
    *
    * @generated from rpc f10.v1.RunService.ListDrives
+   * @deprecated
    */
   listDrives: {
     methodKind: "unary";
@@ -1547,15 +1919,38 @@ export const RunService: GenService<{
     output: typeof ListDrivesResponseSchema;
   },
   /**
-   * CancelDrive stops a drive from prompting further and closes its asks,
-   * as f10 stop does.
+   * CancelDrive is the old name of StopBatch, kept for clients built
+   * against it.
    *
    * @generated from rpc f10.v1.RunService.CancelDrive
+   * @deprecated
    */
   cancelDrive: {
     methodKind: "unary";
     input: typeof CancelDriveRequestSchema;
     output: typeof CancelDriveResponseSchema;
+  },
+  /**
+   * ListBatches lists a project's batches, each the tasks one f10 start
+   * started, as f10 status --batches does.
+   *
+   * @generated from rpc f10.v1.RunService.ListBatches
+   */
+  listBatches: {
+    methodKind: "unary";
+    input: typeof ListBatchesRequestSchema;
+    output: typeof ListBatchesResponseSchema;
+  },
+  /**
+   * StopBatch stops a batch from prompting further and closes its asks, as
+   * f10 stop does. Any task of the batch names it.
+   *
+   * @generated from rpc f10.v1.RunService.StopBatch
+   */
+  stopBatch: {
+    methodKind: "unary";
+    input: typeof StopBatchRequestSchema;
+    output: typeof StopBatchResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_f10_v1_runs, 0);

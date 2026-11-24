@@ -165,7 +165,7 @@ func TestDriveResumesForLateAnswer(t *testing.T) {
 	}
 
 	out := fx.out.String()
-	if !strings.Contains(out, "GH-1 was answered") || !strings.Contains(out, "drive 1 resumes for it") {
+	if !strings.Contains(out, "GH-1 was answered") || !strings.Contains(out, "batch 1 resumes for it") {
 		t.Errorf("out = %s", out)
 	}
 
@@ -183,7 +183,7 @@ func TestDriveResumesForLateAnswer(t *testing.T) {
 		t.Fatalf("foreground err = %v\n%s", err, fx2.out.String())
 	}
 
-	if !strings.Contains(fx2.out.String(), "f10 start --resume 1 takes the answer") {
+	if !strings.Contains(fx2.out.String(), "f10 resume GH-1 takes the answer") {
 		t.Errorf("foreground out = %s", fx2.out.String())
 	}
 }

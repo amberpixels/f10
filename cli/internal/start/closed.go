@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/daemon"
@@ -74,7 +73,7 @@ type Switch struct {
 // daemon's own drive process is not switched either, because its caller
 // already checked.
 func ClosedSwitch(ctx context.Context, t *target.Target, a drivectl.DriveArgs) *Switch {
-	if a.Resume > 0 || a.Span || len(a.Answers) > 0 || len(a.Tasks) == 0 || os.Getenv(daemon.ResumeEnv) != "" {
+	if a.Resume > 0 || a.Span || len(a.Answers) > 0 || len(a.Tasks) == 0 || daemon.EnvOf(daemon.ResumeEnv) != "" {
 		return nil
 	}
 

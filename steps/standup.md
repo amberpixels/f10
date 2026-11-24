@@ -36,7 +36,7 @@ A project's overlay is loaded only for a project in the report, and only from th
 **`f10 standup` builds the report, and this step only renders it.**
 The grouping, the states, the split between work and upkeep, and the days all come from `f10 standup --json`, whose schema is in `docs/cli.md` § Standup.
 So do the ledger's additions.
-They are what a task is blocked on, the steps that left no commit, its precise stage, its drive and its active minutes.
+They are what a task is blocked on, the steps that left no commit, its precise stage, its batch and its active minutes.
 Never re-read git, the host or the ledger to second-guess them.
 Never re-read them as a fallback when the command fails either.
 The command already retries a host 5xx once per call, so a 5xx it still reports is not rerun, because a rerun repeats every call it made.
@@ -78,7 +78,7 @@ Any other failure follows `conventions/failure.md`, whose one retry still applie
        Its `stage`, else its `state` when it has no `stage`, goes only on the task's last line in the report, whether that is a work line or the upkeep line.
        It goes there only, because either one is where the task ended the period, not where it stood each day.
        Its `activity` entries for that day follow on the same line, in a short phrase each (`plan saved`, `review round 2: 3 fixed, 1 skipped`).
-       A task with `driven` names its drive (`drive 12`) on its last work day.
+       A task with `driven` names its batch (`batch 12`) on its last work day.
      - **Every task whose class that day is `upkeep`** shares one line, such as `kept up to date: FT-12, FT-14 (in review)`.
        A task whose last line in the report is this one carries its `stage`, else its `state`, in parentheses.
      - **Each reviewed PR whose `days` carry that date** gets one line: its number linked, its title and its author.
@@ -87,7 +87,7 @@ Any other failure follows `conventions/failure.md`, whose one retry still applie
    - **Blocked**: the tasks with `blocked`, each with what it waits on and since when (`FT-12: question since Tue`, `FT-14: halted at review: no progress`).
      They go where the person's prose places them, and with no instruction, in their own section after the days, because what is stuck is what a standup reader most needs.
      An ask with `later_commit` adds that a commit after it may have settled it, naming the short sha, because the ledger still holds the ask open.
-   - **Drives**: one line per entry in a project's `drives`, such as `drive 12: 5 tasks, 4 shipped, 1 needs you`, after that project's days.
+   - **Batches**: one line per entry in a project's `batches`, such as `batch 12: 5 tasks, 4 shipped, 1 needs you`, after that project's days.
    - **Active minutes** render only when the person's prose or the project's overlay asks for them, because minutes in a manager's report can backfire and a timesheet is a choice.
      Without that instruction, `active_minutes` stays out of the report.
    - **`other`** appears only when asked for, as one section after the days, with its PRs linked and its commits counted.

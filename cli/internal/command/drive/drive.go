@@ -1,5 +1,5 @@
-// Package drive runs f10 start's drives, serves the hidden f10 drive plan,
-// and is the f10 watch command.
+// Package drive is the f10 start, f10 resume and f10 watch commands, and
+// serves a start's proposal.
 package drive
 
 import (
@@ -9,9 +9,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/urfave/cli/v3"
@@ -39,17 +40,13 @@ import (
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
-// Command is the hidden drive verb: only `drive plan`, which proposes how to
-// start tasks and changes nothing. The tasks themselves run through f10 start.
+// Command is the hidden drive verb, kept for one release: `drive plan` is
+// now `f10 start <ids> --propose`, and runs as it.
 func Command() *cli.Command {
 	return &cli.Command{
-		Name:   "drive",
-		Hidden: true,
-		Usage:  "plumbing: drive plan proposes how to start tasks, and changes nothing",
-		Description: "plan proposes how to start the tasks and changes nothing: small tasks of one kind sharing files or an area " +
-			"bundled under bundle_max_lines, the rest alone with the reason, After: lines to add, and --parallel; " +
-			"--facts FILE lays the start skill's estimates on top, --json prints it for the skill, " +
-			"--hint prints one line when a plan saves a CI wait.",
+		Name:            "drive",
+		Hidden:          true,
+		Usage:           "plumbing: the old spelling of f10 start <ids> --propose",
 		SkipFlagParsing: true,
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			argv := cmd.Args().Slice()
@@ -58,18 +55,100 @@ func Command() *cli.Command {
 			case len(argv) == 0 || slices.Contains(argv, "--help") || slices.Contains(argv, "-h"):
 				return cli.ShowSubcommandHelp(cmd)
 			case argv[0] != "plan":
-				return errors.New("f10 drive is gone: f10 start runs tasks, " +
-					"f10 status --drives lists drives, f10 stop stops one")
+				return errors.New("this command is gone: f10 start runs tasks, " +
+					"f10 status --batches lists batches, f10 stop stops one, f10 resume goes on with one")
 			}
 
-			a, err := drivectl.ParseDrivePlan(argv[1:])
+			fmt.Fprintln(cmd.ErrWriter, drivectl.Renamed("f10 drive plan", "f10 start <ids> --propose"))
+
+			a, err := drivectl.ParsePropose(argv[1:])
 			if err != nil {
 				return err
 			}
 
-			return runDrivePlan(ctx, cmd, a)
+			return runPropose(ctx, cmd, a)
 		},
 	}
+}
+
+// ResumeCommand is the resume verb: it goes on with a stopped batch,
+// wherever each task stopped. It is no flag of start, because a resume may
+// only have a finish left to run.
+func ResumeCommand() *cli.Command {
+	return &cli.Command{
+		Name: "resume",
+		Usage: "go on with a stopped batch, wherever each task stopped, the finish included: " +
+			"named by any of its tasks, or the one stopped batch in this project",
+		ArgsUsage: "[<task-id>] " + drive.ResumeUsage() + " [--foreground]",
+		Description: "A batch is the tasks one f10 start started, kept as a record. " +
+			"Any task id of the batch names it, a bundle's rider included. " +
+			"With no task id, the one stopped batch in the project resumes, and several are listed. " +
+			"--answer answers the batch's open asks, --every and --parallel change how it runs, " +
+			"and --foreground runs it in this process. A batch still running is followed.",
+		SkipFlagParsing: true,
+		Action:          runResume,
+	}
+}
+
+func runResume(ctx context.Context, cmd *cli.Command) error {
+	argv := cmd.Args().Slice()
+	if slices.Contains(argv, "--help") || slices.Contains(argv, "-h") {
+		return cli.ShowSubcommandHelp(cmd)
+	}
+
+	ra, err := drivectl.ParseResume(argv)
+	if err != nil {
+		return err
+	}
+
+	t, err := target.For(ctx, cmd)
+	if err != nil {
+		return err
+	}
+
+	n, err := resumeNumber(ctx, cmd, t, ra.Token)
+	if err != nil {
+		return err
+	}
+
+	return Run(ctx, cmd, append([]string{"--resume", strconv.Itoa(n)}, ra.Flags...))
+}
+
+// resumeNumber is the record a resume names: by a task id, by the one
+// stopped batch, or by its number for one more release.
+func resumeNumber(ctx context.Context, cmd *cli.Command, t *target.Target, token string) (int, error) {
+	if n, ok := drivectl.OldNumber(token); ok {
+		lead := "<task-id>"
+		if rec, err := drivestore.Read(t.Layout.StorageRoot.Path(), n); err == nil && rec.Lead() != "" {
+			lead = rec.Lead()
+		}
+
+		fmt.Fprintln(cmd.ErrWriter, drivectl.Renamed("a batch number", "f10 resume "+lead))
+
+		return n, nil
+	}
+
+	rec, err := drive.Resumable(ctx, t, token)
+
+	if several, ok := errors.AsType[drive.SeveralStoppedError](err); ok {
+		for _, l := range several.Stopped {
+			ids := make([]string, 0, len(l.Tasks))
+			for _, task := range l.Tasks {
+				ids = append(ids, task.ID)
+			}
+
+			fmt.Fprintf(cmd.Writer, "f10 resume %s   batch %d: %s\n",
+				l.Name(t.Layout.StorageRoot.Path()), l.Number, strings.Join(ids, " "))
+		}
+
+		return 0, cli.Exit(err.Error(), 1)
+	}
+
+	if err != nil {
+		return 0, err
+	}
+
+	return rec.Number, nil
 }
 
 // Run is f10 start for tasks run through their flow: the drive, in the
@@ -117,7 +196,7 @@ func runDrive(ctx context.Context, cmd *cli.Command, argv []string, a drivectl.D
 
 		given := a
 		if a, err = drivectl.ParseDriveArgs(rec.Args); err != nil {
-			return fmt.Errorf("drive %d: %w", rec.Number, err)
+			return fmt.Errorf("batch %d: %w", rec.Number, err)
 		}
 
 		a.Resume, a.Answers, a.Every, a.Fore = given.Resume, given.Answers, given.Every, given.Fore
@@ -199,7 +278,7 @@ func runDrive(ctx context.Context, cmd *cli.Command, argv []string, a drivectl.D
 		Notify: asknotify.Notify,
 	}
 	in.Sleep = in.Wake
-	in.DaemonRun = os.Getenv(daemon.ResumeEnv) != ""
+	in.DaemonRun = daemon.EnvOf(daemon.ResumeEnv) != ""
 
 	spec, why := drive.VerifySpecOf(t.Effective)
 	in.Catchup = stack.NewCatchupEngine(stack.CatchupPolicy(t.Effective), spec, why, t.Effective.Traces, main)
@@ -215,9 +294,9 @@ func runDrive(ctx context.Context, cmd *cli.Command, argv []string, a drivectl.D
 	return drive.Drive(ctx, cmd.Writer, in)
 }
 
-// runDrivePlan prints a proposal and changes nothing, so the daemon, a hook
-// or a status line may call it: no agents, no daemon, no record.
-func runDrivePlan(ctx context.Context, cmd *cli.Command, a drivectl.DriveArgs) error {
+// runPropose prints a proposal and changes nothing. It needs no agents, no
+// daemon and no record, so a hook or a status line may call it.
+func runPropose(ctx context.Context, cmd *cli.Command, a drivectl.DriveArgs) error {
 	t, err := target.For(ctx, cmd)
 	if err != nil {
 		return err
@@ -255,7 +334,7 @@ func runDrivePlan(ctx context.Context, cmd *cli.Command, a drivectl.DriveArgs) e
 func writePlanJSON(w io.Writer, res drive.PlanResult) error {
 	out := struct {
 		Command string           `json:"command"`
-		Plan    *driveplan.Plan  `json:"plan,omitempty"`
+		Plan    *driveplan.Plan  `json:"proposal,omitempty"`
 		Tasks   []driveplan.Task `json:"tasks,omitempty"`
 		Notes   []string         `json:"notes,omitempty"`
 		Saving  string           `json:"saving,omitempty"`
@@ -274,7 +353,7 @@ func writePlanJSON(w io.Writer, res drive.PlanResult) error {
 func WatchCommand() *cli.Command {
 	return &cli.Command{
 		Name: "watch",
-		Usage: "what the f10 daemon watches in this project: tasks no drive owns, " +
+		Usage: "what the f10 daemon watches in this project: tasks no batch owns, " +
 			"their merged PRs, stalled agents and stopped runs",
 		Description: "Bare, it lists each task the last pass saw and what it reported. " +
 			"f10 start hands the project to the daemon, which runs a pass every few minutes; " +
@@ -492,7 +571,7 @@ func runWatchPass(ctx context.Context, cmd *cli.Command, t *target.Target) error
 // drive prompts this worktree's agent, whose turn runs this command.
 func handOver(ctx context.Context, w io.Writer, t *target.Target, argv []string, a drivectl.DriveArgs) (bool, error) {
 	// the daemon's own drive process runs in this worktree after the hand-off
-	if a.Resume > 0 || len(a.Tasks) == 0 || os.Getenv(daemon.ResumeEnv) != "" {
+	if a.Resume > 0 || len(a.Tasks) == 0 || daemon.EnvOf(daemon.ResumeEnv) != "" {
 		return false, nil
 	}
 
@@ -502,7 +581,7 @@ func handOver(ctx context.Context, w io.Writer, t *target.Target, argv []string,
 	}
 
 	if a.Fore || !daemon.Supported {
-		return true, errors.New("this worktree holds a discussion, and the drive prompts its agent once this turn " +
+		return true, errors.New("this worktree holds a discussion, and the daemon prompts its agent once this turn " +
 			"ends: run f10 start through the daemon, without --foreground")
 	}
 

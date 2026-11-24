@@ -435,7 +435,7 @@ func (s *Server) start(root, dir string, argv, env []string) (*child, error) {
 
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
-		return nil, fmt.Errorf("drive log: %w", err)
+		return nil, fmt.Errorf("batch log: %w", err)
 	}
 
 	name, args := s.Child(argv)
@@ -447,18 +447,19 @@ func (s *Server) start(root, dir string, argv, env []string) (*child, error) {
 	cmd := exec.CommandContext(context.WithoutCancel(s.ctx), name, args...)
 	numberFile := path + ".drive"
 	cmd.Dir, cmd.Stdout, cmd.Stderr = dir, f, f
-	cmd.Env = append(slices.Clone(env), NumberFileEnv+"="+numberFile, ResumeEnv+"=1")
+	cmd.Env = append(slices.Clone(env), NumberFileEnv+"="+numberFile, ResumeEnv+"=1",
+		OldNumberFileEnv+"="+numberFile, OldResumeEnv+"=1")
 
 	if err := cmd.Start(); err != nil {
 		_ = f.Close()
 		_ = os.Remove(path)
 
-		return nil, fmt.Errorf("starting the drive: %w", err)
+		return nil, fmt.Errorf("starting the batch: %w", err)
 	}
 
 	c.cmd, c.PID = cmd, cmd.Process.Pid
 	s.runs = append(s.runs, c)
-	s.Log.Printf("drive started in %s, pid %d, log %s", dir, c.PID, path)
+	s.Log.Printf("batch started in %s, pid %d, log %s", dir, c.PID, path)
 
 	go s.reap(c, f)
 	go s.awaitNumber(c, numberFile)
@@ -549,7 +550,7 @@ func (s *Server) reap(c *child, f *os.File) {
 			if err := s.startResume(c.Root, c.Dir, c.env, c.Drive); err == nil {
 				exit.Reason = ReasonResumed
 			} else {
-				s.Log.Printf("resuming drive %d in %s: %v", c.Drive, c.Dir, err)
+				s.Log.Printf("resuming batch %d in %s: %v", c.Drive, c.Dir, err)
 			}
 		}
 	}
@@ -559,7 +560,7 @@ func (s *Server) reap(c *child, f *os.File) {
 
 	_ = writeExit(c.Log, exit)
 
-	s.Log.Printf("drive %d (pid %d) exited %d", n, c.PID, code)
+	s.Log.Printf("batch %d (pid %d) exited %d", n, c.PID, code)
 	close(c.done)
 }
 
@@ -643,7 +644,7 @@ func (s *Server) shutdown(mode stopMode) {
 		n := c.Drive
 		s.mu.Unlock()
 
-		s.Log.Printf("drive %d did not drain: stopping it", n)
+		s.Log.Printf("batch %d did not drain: stopping it", n)
 		_ = c.cmd.Process.Signal(syscall.SIGTERM)
 		<-c.done
 	}
@@ -661,7 +662,7 @@ func (s *Server) shutdown(mode stopMode) {
 	}
 
 	if err != nil {
-		s.Log.Printf("keeping drained drives: %v", err)
+		s.Log.Printf("keeping drained batches: %v", err)
 	}
 }
 
@@ -691,7 +692,7 @@ func (s *Server) resumeDrained() {
 
 	var list []drained
 	if err := json.Unmarshal(raw, &list); err != nil {
-		s.Log.Printf("drained drives unreadable: %v", err)
+		s.Log.Printf("drained batches unreadable: %v", err)
 
 		return
 	}
@@ -701,7 +702,7 @@ func (s *Server) resumeDrained() {
 
 	for _, d := range list {
 		if err := s.startResume(d.Root, d.Dir, d.Env, d.Drive); err != nil {
-			s.Log.Printf("resuming drive %d in %s: %v", d.Drive, d.Dir, err)
+			s.Log.Printf("resuming batch %d in %s: %v", d.Drive, d.Dir, err)
 		}
 	}
 }

@@ -171,7 +171,7 @@ func TestWatchCatchesUpAnOpenPR(t *testing.T) {
 		}, warned: "no route to host"},
 		"lease held":  {key: true, script: conflicting, lease: true},
 		"handed back": {key: true, task: func(w *WatchedTask) { w.Off = true }},
-		"owned":       {key: true, task: func(w *WatchedTask) { w.Owner = "drive 2" }},
+		"owned":       {key: true, task: func(w *WatchedTask) { w.Owner = "batch 2" }},
 	}
 
 	for name, tc := range cases {

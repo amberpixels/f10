@@ -111,7 +111,7 @@ func (in *DriveInput) poll(
 		// Herdr shows no agent yet: the start window bounds this wait too
 		if !r.begun && now.Sub(r.SentAt) > startWindow {
 			return halt(id, skill, fmt.Sprintf("workspace %s shows no agent %s after the prompt: "+
-				"check its pane, then rerun this drive", workspaceName(ws), startWindow))
+				"check its pane, then run f10 resume %s", workspaceName(ws), startWindow, id))
 		}
 
 		return nil

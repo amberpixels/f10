@@ -37,7 +37,7 @@ Any commit this step makes follows `conventions/context.md` → Commits, with `-
    A `found: f10-after-branch gone` line under the branch means the base task finished and its branch was deleted, so its code is already in the default branch.
    In that case, run `git config --unset` on both `f10-after` and `f10-after-branch`, and open against the default branch the command printed.
    **Driven**, a base not on origin is a wait, not a failure, because the base's own flow pushes it or its finish retargets this PR.
-   Run `f10-state.sh set ship blocked pr; f10-state.sh wait <base-id>; f10-state.sh note "waiting on <base-id>: its branch is not on origin yet" "rerun ship once <base-id> is pushed or finished; the drive does it by itself"`, then report.
+   Run `f10-state.sh set ship blocked pr; f10-state.sh wait <base-id>; f10-state.sh note "waiting on <base-id>: its branch is not on origin yet" "rerun ship once <base-id> is pushed or finished; the daemon does it by itself"`, then report.
    `<base-id>` is the branch's `f10-after` config, the base task's id.
 5. **Draft the title and body.**
    Opening and refreshing draft them the same way.
@@ -57,7 +57,7 @@ Any commit this step makes follows `conventions/context.md` → Commits, with `-
    - On a host that closes issues on merge, the body carries one line per member, each on a line of its own.
      The lead and each rider the PR delivers get `Closes #12`.
      A rider the PR delivers only in part gets `Part of #12`, judged against that rider's criteria in the plan's `## Riders` section.
-     A drive's or the watcher's finish follows these lines unasked: a rider under `Closes` closes on merge, and one under `Part of` stays open.
+     A batch's or the watcher's finish follows these lines unasked: a rider under `Closes` closes on merge, and one under `Part of` stays open.
      An interactive `f10 finish` offers the same choice as its default and asks for it with `--close` (exit 7 without it).
    - **A regression.** When the plan has a `Regression of:` line, the body carries one line saying the same for a reader.
      The line gives the origin task as a link carrying its title, how its review let the fault through, and how sure the attribution is.

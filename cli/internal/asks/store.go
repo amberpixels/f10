@@ -54,7 +54,7 @@ func Way(by string) string {
 	case ByDrive:
 		return "with f10 start --answer"
 	case ByCancelled:
-		return "by cancelling its drive"
+		return "by stopping its batch"
 	case ByAPI:
 		return "through the f10 API"
 	}

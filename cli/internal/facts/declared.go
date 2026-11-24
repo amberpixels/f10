@@ -43,7 +43,8 @@ type Declared struct {
 	BundleMaxLines string            `yaml:"bundle_max_lines,omitempty"` // the changed lines a proposed bundle may reach
 	Flows          map[string]Flow   `yaml:"flows,omitempty"`
 	FlowByArea     map[string]string `yaml:"flow_by_area,omitempty"`  // an area, in Roles' plain words, to the flow its tasks run
-	DriveEnv       []string          `yaml:"drive_env,omitempty"`     // environment keys a drive passes to its commands, beyond the built-in ones
+	BatchEnv       []string          `yaml:"batch_env,omitempty"`     // environment keys a batch passes to its commands, beyond the built-in ones
+	OldBatchEnv    []string          `yaml:"drive_env,omitempty"`     // batch_env's old key, read for one more release
 	Watch          string            `yaml:"watch,omitempty"`         // what the daemon does for tasks no drive owns
 	WatchCatchup   string            `yaml:"watch_catchup,omitempty"` // the watcher also catches an undriven open PR up with its target
 	WatchCI        string            `yaml:"watch_ci,omitempty"`      // the watcher also sends a red undriven PR to its agent to triage
@@ -145,12 +146,12 @@ func trimSteps(list []string) []string {
 // a retired key alone can change behavior: without drive_finish: off, a
 // drive merges.
 var retiredKeys = map[string]string{
-	"drive_finish":     "declare `ceiling: { finish: off }` to keep drives from merging, or `paces.<name>.finish` for one pace",
+	"drive_finish":     "declare `ceiling: { finish: off }` to keep f10 start from merging, or `paces.<name>.finish` for one pace",
 	"review_traces":    "rename it to `traces`",
 	"pipelines":        "declare each pipeline under `flows`, led by `plan` unless it was planless",
 	"planless":         "drop `plan` from those `flows`",
 	"pipeline_by_area": "rename it to `flow_by_area`",
-	"drive_chain":      "fold its steps into `flows.default`, ending in `finish` if drive should merge",
+	"drive_chain":      "fold its steps into `flows.default`, ending in `finish` if f10 start should merge",
 }
 
 // decodeDeclared reads one frontmatter block with unknown keys refused, and
@@ -339,7 +340,7 @@ func checkPaceName(value string) error {
 	return nil
 }
 
-// envKeyRE is an environment variable name, as drive_env lists them.
+// envKeyRE is an environment variable name, as batch_env lists them.
 var envKeyRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // ParseStaleAfter reads a stale_after value, `10d` or `3w`.
@@ -405,9 +406,15 @@ func (d Declared) check() []string {
 		bad = append(bad, fmt.Sprintf("tracker.kind: %q is not one of %s", kind, strings.Join(words, ", ")))
 	}
 
-	for _, key := range d.DriveEnv {
-		if !envKeyRE.MatchString(key) {
-			bad = append(bad, fmt.Sprintf("drive_env: %q is not an environment variable name", key))
+	if d.BatchEnv != nil && d.OldBatchEnv != nil {
+		bad = append(bad, "drive_env is the old key of batch_env: keep batch_env and drop drive_env")
+	}
+
+	for key, list := range map[string][]string{"batch_env": d.BatchEnv, "drive_env": d.OldBatchEnv} {
+		for _, name := range list {
+			if !envKeyRE.MatchString(name) {
+				bad = append(bad, fmt.Sprintf("%s: %q is not an environment variable name", key, name))
+			}
 		}
 	}
 
@@ -579,7 +586,9 @@ func (l *layered) merge(d Declared, label string) {
 	set("tracker", !d.Tracker.empty(), func() { l.Tracker = d.Tracker })
 	set("flows", d.Flows != nil, func() { l.Flows = d.Flows })
 	set("flow_by_area", d.FlowByArea != nil, func() { l.FlowByArea = d.FlowByArea })
-	set("drive_env", d.DriveEnv != nil, func() { l.DriveEnv = d.DriveEnv })
+	set("batch_env", d.BatchEnv != nil, func() { l.BatchEnv, l.OldBatchEnv = d.BatchEnv, nil })
+	// the old key sets the same list, and stays set so resolve can say so
+	set("batch_env", d.OldBatchEnv != nil, func() { l.BatchEnv, l.OldBatchEnv = d.OldBatchEnv, d.OldBatchEnv })
 	set("review", d.Review != ReviewDecl{}, func() { l.Review = d.Review })
 	set("standup", d.Standup.Upkeep != nil, func() { l.Standup = d.Standup })
 	set("verify", d.Verify != nil, func() { l.Verify = d.Verify })

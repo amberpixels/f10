@@ -43,10 +43,19 @@ func (d *daemonService) GetDaemonStatus(
 	out := &f10v1.GetDaemonStatusResponse{}
 
 	for _, r := range st.Runs {
+		out.Batches = append(out.Batches, &f10v1.SupervisedBatch{
+			Root:  r.Root,
+			Dir:   r.Dir,
+			Batch: int32(r.Drive), //nolint:gosec // a batch number
+			Pid:   int32(r.PID),   //nolint:gosec // a process id
+			Since: timestamppb.New(r.Since),
+			Log:   r.Log,
+		})
+		//nolint:staticcheck // the old name, for clients built against it
 		out.Drives = append(out.Drives, &f10v1.SupervisedDrive{
 			Root:  r.Root,
 			Dir:   r.Dir,
-			Drive: int32(r.Drive), //nolint:gosec // a drive number
+			Drive: int32(r.Drive), //nolint:gosec // a batch number
 			Pid:   int32(r.PID),   //nolint:gosec // a process id
 			Since: timestamppb.New(r.Since),
 			Log:   r.Log,

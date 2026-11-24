@@ -295,7 +295,7 @@ func runUninstall(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	fmt.Fprintln(cmd.Writer,
-		"service removed: the daemon stopped each drive at its next tick; f10 start --resume <n> goes on with one")
+		"service removed: the daemon stopped each batch at its next tick; f10 resume <task-id> goes on with one")
 
 	return nil
 }

@@ -73,7 +73,7 @@ type Effective struct {
 	BundleMaxLines int                  `json:"bundleMaxLines"`        // bundle_max_lines: the changed lines a proposed bundle may reach
 	Flows          map[string]flow.Flow `json:"flows"`                 // a flow's name to its entries, written as declared
 	FlowByArea     map[string]string    `json:"flowByArea,omitempty"`  // flow_by_area: an area to the flow its tasks run
-	DriveEnv       []string             `json:"driveEnv,omitempty"`    // drive_env: environment keys a drive passes on, beyond the built-in ones
+	BatchEnv       []string             `json:"batchEnv,omitempty"`    // batch_env: environment keys a batch passes on, beyond the built-in ones
 	Watch          string               `json:"watch"`                 // watch: report, finish or off, for tasks no drive owns; finish unless declared
 	WatchCatchup   bool                 `json:"watchCatchup"`          // watch_catchup: on; a watch pass also catches an undriven open PR up with its target and pushes it
 	WatchCI        bool                 `json:"watchCI"`               // watch_ci: on; a watch pass also sends a red undriven PR to its agent to triage

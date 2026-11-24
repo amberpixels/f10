@@ -109,24 +109,104 @@ func TestParseDriveArgs(t *testing.T) {
 	}
 }
 
-// f10 start never reads a leading plan as drive plan's: the word is a task
-// word, and only ParseDrivePlan takes drive plan's flags.
-func TestStartPlanIsATaskWord(t *testing.T) {
+// plan is a task word to f10 start, and a proposal is asked for by flag:
+// --propose, or --hint alone. --json and --facts only shape one.
+func TestStartProposesByFlag(t *testing.T) {
 	a, err := drivectl.ParseDriveArgs([]string{"plan", "FT-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if a.Plan != nil || strings.Join(a.Tasks, " ") != "plan FT-1" {
-		t.Errorf("args = %+v, want plan and FT-1 as tasks and no plan arguments", a)
+		t.Errorf("args = %+v, want plan and FT-1 as tasks and no proposal arguments", a)
 	}
 
-	if _, err := drivectl.ParseDriveArgs([]string{"FT-1", "--hint"}); err == nil {
-		t.Error("start took drive plan's --hint")
+	for _, line := range [][]string{
+		{"FT-1", "FT-2", "--propose"},
+		{"--propose", "FT-1", "--json", "--flow", "direct"},
+		{"FT-1", "--hint"},
+		{"FT-1", "--propose", "--facts=sheet.json"},
+	} {
+		sa, err := drivectl.ParseStart(line)
+		if err != nil || sa.Kind != drivectl.ProposeStart || sa.Drive.Plan == nil {
+			t.Errorf("%q = %+v, %v; want a proposal", line, sa, err)
+		}
 	}
 
-	p, err := drivectl.ParseDrivePlan([]string{"FT-1", "--hint"})
-	if err != nil || p.Plan == nil || !p.Plan.Hint {
-		t.Errorf("drive plan = %+v, %v; want the hint set", p, err)
+	sa, err := drivectl.ParseStart([]string{"FT-1", "--propose", "--json", "--flow", "direct", "--parallel", "3"})
+	if err != nil || !sa.Drive.Plan.JSON || strings.Join(sa.Drive.Plan.Pass, " ") != "--flow direct" {
+		t.Errorf("proposal = %+v, %v; want --json set and --flow carried onto the command", sa.Drive.Plan, err)
+	}
+
+	for line, want := range map[string]string{
+		"FT-1 --json":                    "add --propose",
+		"FT-1 --facts f.json":            "add --propose",
+		"FT-1 -- FT-4 --propose":         "not a range",
+		"FT-1 --propose --answer yes":    "start --propose takes",
+		"FT-1 --propose --resume 2":      "a resume runs",
+		"--propose":                      "needs the tasks",
+		"FT-1 --propose --facts":         "needs the facts sheet",
+		"FT-1 --propose --discuss":       "unknown flag",
+		"FT-1 --propose --after FT-2":    "start --propose takes",
+		"FT-1 FT-2 --hint --plan":        "start --propose takes",
+		"FT-1 --propose --every 5s":      "start --propose takes",
+		"FT-1 --propose --foreground":    "start --propose takes",
+		"FT-1 --propose --base main":     "start --propose takes",
+		"FT-1 --propose --flow":          "needs a value",
+		"FT-1 --propose --parallel many": "a positive number",
+	} {
+		if _, err := drivectl.ParseStart(strings.Fields(line)); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%q: err = %v, want %q", line, err, want)
+		}
+	}
+
+	// a plain start still parses as one
+	if sa, err := drivectl.ParseStart([]string{"FT-1", "FT-2"}); err != nil || sa.Kind != drivectl.FlowStart {
+		t.Errorf("a plain start = %+v, %v", sa, err)
+	}
+}
+
+// f10 resume takes one task id, or none, and the flags --resume took.
+func TestParseResume(t *testing.T) {
+	r, err := drivectl.ParseResume(
+		[]string{"FT-1", "--answer", "1. yes", "--every=5s", "--parallel", "2", "--foreground"},
+	)
+	if err != nil || r.Token != "FT-1" || !r.Fore ||
+		strings.Join(r.Flags, "|") != "--answer|1. yes|--every=5s|--parallel|2|--foreground" {
+		t.Errorf("resume = %+v, %v", r, err)
+	}
+
+	if r, err := drivectl.ParseResume(nil); err != nil || r.Token != "" || len(r.Flags) != 0 {
+		t.Errorf("a bare resume = %+v, %v", r, err)
+	}
+
+	for line, want := range map[string]string{
+		"FT-1 FT-2":         "one task id",
+		"FT-1 --flow fast":  "it takes only",
+		"FT-1 --resume 3":   "it takes only",
+		"FT-1 --answer":     "needs a value",
+		"FT-1 --propose":    "it takes only",
+		"--parallel":        "needs a value",
+		"FT-1 --agent opus": "it takes only",
+	} {
+		if _, err := drivectl.ParseResume(strings.Fields(line)); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%q: err = %v, want %q", line, err, want)
+		}
+	}
+
+	// the flags resume passes on parse as --resume's own did
+	if a, err := drivectl.ParseDriveArgs(append([]string{"--resume", "3"}, r.Flags...)); err != nil || a.Resume != 3 ||
+		a.Parallel != 2 || !a.Fore {
+		t.Errorf("the resumed line = %+v, %v", a, err)
+	}
+
+	if n, ok := drivectl.OldNumber(" 3 "); !ok || n != 3 {
+		t.Errorf("OldNumber = %d, %v", n, ok)
+	}
+
+	for _, tok := range []string{"FT-3", "0", "-1", ""} {
+		if _, ok := drivectl.OldNumber(tok); ok {
+			t.Errorf("OldNumber took %q", tok)
+		}
 	}
 }

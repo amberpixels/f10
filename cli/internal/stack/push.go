@@ -113,7 +113,7 @@ type OriginMovedError struct {
 
 func (e OriginMovedError) Error() string {
 	if e.Unseen {
-		return fmt.Sprintf("%s caught up with %s, not pushed: the drive did not read origin/%s when the catchup "+
+		return fmt.Sprintf("%s caught up with %s, not pushed: f10 did not read origin/%s when the catchup "+
 			"went out, so a force-push could drop commits pushed since", e.Branch, e.base, e.Branch)
 	}
 

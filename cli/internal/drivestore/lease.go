@@ -29,7 +29,7 @@ func (h Holder) String() string {
 
 	switch {
 	case h.Drive > 0:
-		who = "drive " + strconv.Itoa(h.Drive)
+		who = "batch " + strconv.Itoa(h.Drive)
 	case h.Watch:
 		who = "the f10 watcher"
 	}

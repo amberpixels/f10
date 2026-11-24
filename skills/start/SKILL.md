@@ -10,6 +10,9 @@ argument-hint: "<id>[:profile]... | <id> -- <id> | <PR url> [--plan | --discuss]
 Start tasks beside this one.
 `f10 start` gives each task a branch, a worktree, a Herdr workspace and a claude agent.
 The per-user f10 daemon then prompts each agent one skill at a time, marked `--driven` (`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`).
+The tasks one `f10 start` started are a **batch**, and any of its task ids names it to `f10 stop`, `f10 resume` and `f10 daemon logs`.
+An **entry** is a task or a bundle, which is one branch, one agent and one PR.
+`docs/concepts.md` → Start vocabulary defines the other words: base, stack, chain and proposal.
 The first skill is `/f10:plan` when the flow leads with a `plan` the pace keeps and the task has no plan file.
 Then comes `/f10:ship`, which runs every other entry.
 Then comes finish, when the flow ends in a `finish` entry.
@@ -51,7 +54,9 @@ It runs no step.
   The default is half the CPU cores, from 2 to 8.
   Tasks past the cap queue in the start's order and show as `queued`.
   A task frees its slot once it asks, waits for its base's first commit, or waits at finish for its base.
-- Everything else (`--task`, `--resume`) goes to `f10 start` verbatim.
+- Everything else (`--task`) goes to `f10 start` verbatim.
+- A request to resume or go on with a stopped batch is `f10 resume <task-id>`, with any task of the batch, or bare when the user names none.
+  It takes `--answer`, `--every` and `--parallel`, and it runs and exits as **Every other start** below says.
 
 **Parents**: a task id whose task has subtasks is never started itself.
 Its unfinished subtasks run instead.
@@ -83,12 +88,12 @@ With no draft among them, the parent goes to `f10 start` as typed, which runs ev
    Each subtask carries the parent's `:profile` suffix.
    Other ids and flags stay as given.
    Nothing left to start: say so in one line and stop.
-7. **The hint**: with two ids or more, or a parent, in the arguments as typed, run `f10 drive plan <the arguments as typed> --hint` in the same Bash call as point 1.
-   It runs before point 6 builds the expanded list, so it reads the typed arguments, and `drive plan` expands a parent itself.
+7. **The hint**: with two ids or more, or a parent, in the arguments as typed, run `f10 start <the arguments as typed> --hint` in the same Bash call as point 1.
+   It runs before point 6 builds the expanded list, so it reads the typed arguments, and the proposal expands a parent itself.
    It prints one line only when bundling would save a CI wait, with the command that saves it.
    The rules read saved plans (a small plan's size, its `Areas:` line), because a plain start reads no code.
    Print that line under the trees, and start as asked.
-   A hint that errors (a flag `drive plan` does not take) prints nothing here.
+   A hint that errors (a flag a proposal does not take) prints nothing here.
 
 **Run**
 
@@ -114,48 +119,48 @@ It prints one line saying so, and the report names, for each closed task, the co
 A PR pickup is unaffected.
 
 **A start inside a discussion's worktree** hands the worktree to the start's first group, renamed to its lead, and opens the other groups as usual.
-Run it in the foreground: it returns once the daemon has the drive, and prints that this agent gets its first prompt when the turn ends.
-Print its output and end the turn there, because the drive's first prompt comes into this pane.
+Run it in the foreground: it returns once the daemon has the batch, and prints that this agent gets its first prompt when the turn ends.
+Print its output and end the turn there, because the daemon's first prompt comes into this pane.
 
 **Every other start** runs the tasks through their flow.
 Run it in the background (`run_in_background`), because a flow can take hours, and the command's exit wakes this session.
-The drive itself runs in the per-user f10 daemon, so closing or clearing this session leaves it running; the command only prints its progress and exits with its code.
-Rerunning the same arguments follows the drive already running; from another session `f10 status --drives` lists the drives, `f10 daemon logs <n> -f` follows one, and `f10 stop <id | n>` stops one.
+The batch runs in the per-user f10 daemon, so closing or clearing this session leaves it running; the command only prints its progress and exits with its code.
+Rerunning the same arguments follows the batch already running; from another session `f10 status --batches` lists the batches, `f10 daemon logs <id> -f` follows one, and `f10 stop <id>` stops one.
 
 1. Run it with the arguments from **Parents**.
-   Its first line is `drive <n>`, the record it keeps; rerunning the same arguments picks that record up.
+   Its first line is `batch <n>`, the record it keeps; rerunning the same arguments picks that record up, and so does `f10 resume <id>`.
    When it exits, read its output and act on the exit code.
    A finished task's `<id> handoff:` lines are markdown: on every exit, relay them verbatim beneath the report block, outside the fence.
-   A drive that waited on an ask prints a report each time it stops.
+   A batch that waited on an ask prints a report each time it stops.
    A task that finished before the ask has its handoff only in that earlier report, so take the handoff lines from the whole output.
 2. **Exit 0**: every task went through its flow.
    Print the report block (one row per task) in a fenced `yaml` block and any line beneath it, and stop.
 3. **The command waits through asks.**
-   When an agent asks and nothing else can move, the command prints the drive's report and keeps following: an answer resumes the drive, and the command follows it on.
+   When an agent asks and nothing else can move, the command prints the batch's report and keeps following: an answer resumes the batch, and the command follows it on.
    The question waits in the asking agent's pane, on the status line and in the inbox, so print nothing about it and open no questionnaire.
    The user answers in that pane, with `f10 inbox`, or here with `/f10:inbox` when they ask for it.
-   **Exit 4** comes only when the drive was stopped (`f10 stop`) while it waited on its asks.
+   **Exit 4** comes only when the batch was stopped (`f10 stop`) while it waited on its asks.
    Print the report block and the line beneath it that says so, and stop.
 4. **Exit 5**: a task halted; the lines beneath the report say which and why.
    A halt wins over an ask, so another task's question may still wait in its pane.
    Print the report block and those lines verbatim, and stop.
-   A row `owned by drive <n> (pid …)` is a task another drive holds: name that drive; `f10 status --drives` shows it and `f10 stop <n>` stops it.
-   The user settles a halt in that workspace, then reruns the same command, which resumes where each task stands.
-   The drive reads each task's state from git, its PR and its files.
+   A row `owned by batch <n> (pid …)` is a task another batch holds: name that batch; `f10 status --batches` shows it and `f10 stop <id>` stops it.
+   The user settles a halt in that workspace, then runs `f10 resume <id>` or reruns the same command, and either one resumes where each task stands.
+   The daemon reads each task's state from git, its PR and its files.
    So a turn typed by hand, a turn shorter than a poll, or an agent that never reported does not halt it.
    A failed or partial turn is sent again.
    The task halts when the same action failed three times in a row with nothing changed, and the lines list each attempt.
    A blocked stop, such as a judge's or a stale task's, halts at once.
    So does a stall the branch does not explain.
-   So does a failure of the drive's own environment (a git read, a workspace gone, a base that halted).
-   A task whose run stopped (a `next:` line under its halt) needs steering through `--answer`.
-   The exception is a task that stopped for a catchup, when a later catchup ended clean: a rerun prompts it again.
+   So does a failure of the batch's own environment (a git read, a workspace gone, a base that halted).
+   A task whose run stopped (a `next:` line under its halt) needs steering through `f10 resume <id> --answer`.
+   The exception is a task that stopped for a catchup, when a later catchup ended clean: a resume prompts it again.
    A run counts as stopped for a catchup if it carries the guard's `stop guard` kind, or if a catchup failed.
-   A ship stopped by its catchup guard gets a catchup from the drive each time its base moves and resumes without a halt.
-   The drive runs a catchup itself (git, then verify, then the push).
+   A ship stopped by its catchup guard gets a catchup from the daemon each time its base moves and resumes without a halt.
+   The daemon runs a catchup itself (git, then verify, then the push).
    It prompts the agent only for a conflict or a red verify, or for verify itself when the project's Verify heading is prose.
    A catchup that git does not show settled after that turn is a failed attempt under the same rule.
-   A task whose branch is on origin is caught up whenever its PR's target moves, at its next skill boundary, and the drive pushes the caught-up branch.
+   A task whose branch is on origin is caught up whenever its PR's target moves, at its next skill boundary, and the daemon pushes the caught-up branch.
 5. **Any other exit**: the command refused; its message names the cause.
-   `drive <n> is running` means another session runs the same tasks: point at `f10 status --drives`, and at `f10 stop <n>` if the user wants to take it over.
+   `batch <n> is running` means another session runs the same tasks: point at `f10 status --batches`, and at `f10 stop <id>` if the user wants to take it over.
    Print it verbatim and stop.

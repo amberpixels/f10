@@ -27,7 +27,7 @@ func settleDiscussion(
 	if req.Mode != launch.ModeDiscuss {
 		if len(req.Also) > 0 {
 			return nil, errors.New(
-				"several ids go to one agent only with --discuss; a flow start takes them as a drive",
+				"several ids go to one agent only with --discuss; a flow start takes them as a batch",
 			)
 		}
 

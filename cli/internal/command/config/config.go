@@ -54,7 +54,7 @@ type View struct {
 	BundleMaxLines  int                  `json:"bundleMaxLines"`
 	Flows           map[string]flow.Flow `json:"flows"`
 	FlowByArea      map[string]string    `json:"flowByArea,omitempty"`
-	DriveEnv        []string             `json:"driveEnv,omitempty"`
+	BatchEnv        []string             `json:"batchEnv,omitempty"`
 	Watch           string               `json:"watch"`
 	WatchCatchup    bool                 `json:"watchCatchup"`
 	WatchCI         bool                 `json:"watchCI"`
@@ -204,7 +204,7 @@ func runConfig(ctx context.Context, cmd *cli.Command) error {
 		BundleMaxLines:  eff.BundleMaxLines,
 		Flows:           eff.Flows,
 		FlowByArea:      eff.FlowByArea,
-		DriveEnv:        eff.DriveEnv,
+		BatchEnv:        eff.BatchEnv,
 		Watch:           eff.Watch,
 		WatchCatchup:    eff.WatchCatchup,
 		WatchCI:         eff.WatchCI,

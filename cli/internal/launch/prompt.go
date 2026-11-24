@@ -96,7 +96,7 @@ func DiscussionPrompt(d Discussion, note string) string {
 
 	// the drive leaves a closed task out, so its proposal covers the open ones
 	if open := d.open(); len(open) > 0 {
-		fmt.Fprintf(&p, " Then run `f10 drive plan %s` and show its proposal as a starting point "+
+		fmt.Fprintf(&p, " Then run `f10 start %s --propose` and show its proposal as a starting point "+
 			"for how they ship: one PR, bundles, or some alone.", strings.Join(open, " "))
 
 		p.WriteString(" The discussion ends in a start command, such as `/f10:start A+B C`: run it in this pane " +

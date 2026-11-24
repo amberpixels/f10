@@ -6,9 +6,9 @@ Output: the branch rebased onto its base or merged with it, every conflict settl
 This step pushes nothing, and it writes no task, no plan and no tracker comment.
 Context: the `catchup` and `catchup_stacked` frontmatter keys, which set the strategy, and the loader's `verify:` line.
 Badge: none.
-This step never writes a phase, because the ship run it may run between owns that state, and the drive reads it to decide what to send next.
+This step never writes a phase, because the ship run it may run between owns that state, and the daemon reads it to decide what to send next.
 `f10 state` refuses `set` and `stop` during a catchup's turn.
-Its `f10-state.sh done catchup` call (point 5) is not a badge: it is the end signal that the drive reads.
+Its `f10-state.sh done catchup` call (point 5) is not a badge: it is the end signal that the daemon reads.
 
 A run that meets no conflict, or finds nothing to bring in, is a **correct run**.
 
@@ -18,7 +18,7 @@ f10 records what a catchup needs as git config keys on the branch, `branch.<bran
 - `f10-after` and `f10-after-branch` are the base task and its branch, which `f10 start --after` records.
 - `f10-landed` says the branch must take in the default branch.
   `f10 finish` sets it when the base task merged.
-  The drive sets it when the branch's pull request falls behind the default branch or conflicts with it.
+  The daemon sets it when the branch's pull request falls behind the default branch or conflicts with it.
   The watcher under `watch_catchup: on` sets it only when the branch conflicts with the default branch or the host will not merge it while behind.
   Ship's guard sets it when bringing the default branch in conflicts.
 - `f10-base-moved` is set in the same ways, for an `f10-after-branch` base that moved past this branch.
@@ -35,7 +35,7 @@ Then set `.f10-base-tip` to the `sha` row when `found` is `f10-after-branch`.
 Otherwise unset `.f10-base-tip`, because the base is now the default branch.
 
 1. **Check the preconditions.**
-   An **operation already in progress** is a merge or a rebase the user started by hand, or one the drive started and stopped on a conflict.
+   An **operation already in progress** is a merge or a rebase the user started by hand, or one the daemon started and stopped on a conflict.
    This step settles it in place.
    The loader prints an `in progress:` line above this step when there is one.
    Without that line, look under `git rev-parse --git-dir`: a `MERGE_HEAD` there is a merge, and a `rebase-merge/` directory or a `rebase-apply/rebasing` file is a rebase.
@@ -74,7 +74,7 @@ Otherwise unset `.f10-base-tip`, because the base is now the default branch.
 3. **Integrate** by the `method` line.
    The `why` line names the frontmatter key that set the method, `catchup:` or, for an `f10-after-branch` base, `catchup_stacked:`, or it says the method is the default.
    `catchup: off` turns off only ship's guard (**As a guard**, below).
-   A run asked for by name, or sent by the drive, still integrates.
+   A run asked for by name, or sent by the daemon, still integrates.
    - `none`: the base is already in the branch, so there is nothing to bring in.
      Clear the marks and write the `done catchup` signal as point 5 does, then report and stop.
    - `merge`: run `f10 trace trailers --step catchup` first (`conventions/context.md` → Commits), then `git merge --no-edit <base> -m "<subject>" -m "$trailers"`, so the merge commit carries the trailers.
@@ -125,12 +125,12 @@ Otherwise unset `.f10-base-tip`, because the base is now the default branch.
    An operation already in progress on entry is the exception: unset a mark only when the operation's other side is the base that mark names.
    For `f10-landed`, that base is the default branch's tip, local or `origin/`.
    For `f10-base-moved`, it is the sha the mark holds, or a commit containing it.
-   Any other mark stays set, because the drive reads a cleared mark as that base brought in, and the report names it.
+   Any other mark stays set, because the daemon reads a cleared mark as that base brought in, and the report names it.
 
-   The `done catchup` signal is how the drive knows the turn ended.
-   Git then tells the drive whether the turn settled (see **Sent by the drive or the watcher**).
+   The `done catchup` signal is how the daemon knows the turn ended.
+   Git then tells the daemon whether the turn settled (see **Sent by the daemon or the watcher**).
    A settled turn has nothing in progress, no conflict marker, the base in the branch and verify green.
-   Verify is green when the drive's own run of it passes, or, where the turn ran verify itself, when the marks are cleared.
+   Verify is green when the daemon's own run of it passes, or, where the turn ran verify itself, when the marks are cleared.
    Every run writes the signal, a run by hand included.
 
 6. **Report** per `conventions/report.md`, with `branch`, `base` and `commit` (the new HEAD) rows.
@@ -166,8 +166,8 @@ The guard differs from the run above in these ways:
   Never write the mark with `git config` by hand, because a stopped rebase detaches HEAD and the branch name then reads as empty.
   Then run `git merge --abort` or `git rebase --abort`, so the branch is as it was, with any mark kept.
   Put `/f10:catchup` in the `next` row.
-  Run `f10-state.sh stop guard` after the failing `set`, so the drive reads the stop as the guard's.
-  The drive reads the mark and that kind, never the note or the `next` row, to decide to send a catchup.
+  Run `f10-state.sh stop guard` after the failing `set`, so the daemon reads the stop as the guard's.
+  The daemon reads the mark and that kind, never the note or the `next` row, to decide to send a catchup.
 - **Verify** runs when commits came in, except before implement, because implement runs its own verify next.
   Red verify is a semantic conflict that the guard leaves to `/f10:catchup`.
   Run `git reset --hard` to the sha read before integrating, which is safe because the tree was clean, then mark and fail as for a conflict, the `stop guard` call included.
@@ -176,11 +176,11 @@ The guard differs from the run above in these ways:
 - **The report** is one line in the ship run, naming the base, the commits brought in and the method.
   A merge commit carries the `--step catchup` trailers, as point 3 says.
 
-**Driven** (`modes/driven.md`): a driven run is one sent by the drive, or by the watcher under `watch_catchup: on`.
+**Driven** (`modes/driven.md`): a driven run is one sent by the daemon, or by the watcher under `watch_catchup: on`.
 The method is point 3's.
 The sender pushes the branch itself once this run ends clean.
 
-**Sent by the drive or the watcher** with steering: the sender integrated the branch itself and prompts this step only for what git or verify could not settle.
+**Sent by the daemon or the watcher** with steering: the sender integrated the branch itself and prompts this step only for what git or verify could not settle.
 The steering says which of four cases it is:
 
 - **A merge or rebase is in progress**, with its conflicted files named.
@@ -195,13 +195,13 @@ The steering says which of four cases it is:
   That means verify, fix a red by the branch's intent, and clear the marks once green.
 
 When the steering also says to run verify and clear the catchup marks (the sender cannot run verify), do so after settling, as point 5 says.
-Otherwise leave the marks as they are, because the drive clears them once its own verify is green.
-Never abort the operation or reset the branch on a failure, because the drive reads the state the run leaves and prompts again naming what is left.
-After the turn, the drive checks the branch from git, runs verify itself where it can, clears the marks and pushes.
+Otherwise leave the marks as they are, because the daemon clears them once its own verify is green.
+Never abort the operation or reset the branch on a failure, because the daemon reads the state the run leaves and prompts again naming what is left.
+After the turn, the daemon checks the branch from git, runs verify itself where it can, clears the marks and pushes.
 A mark still set after a turn that was told to clear it reads as verify not green.
 The run never asks: no `AskUserQuestion` and no `f10-state.sh ask`.
 Verify runs in the foreground, or is waited on in the same turn, and the turn ends only at the report (`modes/driven.md`).
-The drive reads point 5's `done catchup` signal as the run's end.
+The daemon reads point 5's `done catchup` signal as the run's end.
 The watcher reads only git: the mark, the tree, the base in the branch and no conflict marker.
 
 Every question point 4 would put to the user is decided instead by the task's intent.
@@ -224,7 +224,7 @@ Each choice is written down, one per file, so the reviewer and the change judge 
   With no PR, no line is written: lore and the report carry the choice, and the pr step renders the heading from lore when it opens the PR.
 
 Any failure is `f10-state.sh note "<what failed>" "<what is left>"` and then `f10-state.sh done catchup`, never an ask.
-The signal ends the turn, and git tells the drive that it did not settle.
+The signal ends the turn, and git tells the daemon that it did not settle.
 That covers the **On failure** cases below and a conflict the step cannot settle at all, such as a binary file both sides changed or a regenerate that fails.
 
 **Sent by the watcher**: the prompt says so, and names the sha the branch stood at before the watcher integrated.

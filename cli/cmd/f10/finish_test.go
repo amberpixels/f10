@@ -17,7 +17,7 @@ func TestFinishRefusesOutsideHerdr(t *testing.T) {
 		t.Fatalf("err = %v, want ErrNotInside", err)
 	}
 
-	if !strings.Contains(err.Error(), "f10 start, forward, drive and finish run inside a Herdr session") {
+	if !strings.Contains(err.Error(), "f10 start, resume, forward and finish run inside a Herdr session") {
 		t.Errorf("the refusal does not name the commands that need Herdr: %v", err)
 	}
 

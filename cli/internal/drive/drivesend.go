@@ -59,7 +59,7 @@ func (in *DriveInput) send(ctx context.Context, r *DriveRun, skill string) error
 		// may fall in the second before
 		r.SentAt = answeredAt.Add(-time.Second).Truncate(time.Second)
 
-		fmt.Fprintf(in.Out, "%s %s: answered outside this drive, following the turn\n", in.id(id), skill)
+		fmt.Fprintf(in.Out, "%s %s: answered outside this batch, following the turn\n", in.id(id), skill)
 	case skill == "catchup" && !awaitsDecision(run, r.Guarded):
 		// git integrates and verify runs here; the agent gets only what they
 		// could not settle, a resend included

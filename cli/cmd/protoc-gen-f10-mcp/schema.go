@@ -43,7 +43,7 @@ func (b *builder) object(m *protogen.Message) schema {
 	props := schema{}
 
 	for _, f := range m.Fields {
-		if localOnly(f) {
+		if localOnly(f) || deprecated(f.Desc.Options()) {
 			continue
 		}
 

@@ -202,7 +202,7 @@ func (fx *driveFixture) agent(t *testing.T, turn func(prompt string)) {
 // once git shows it settled, verifies and moves on; a rebase the agent left
 // in progress is prompted once more, naming what is left, with no halt.
 func TestDrivePromptsTheAgentOnlyForAConflict(t *testing.T) {
-	conflict := "/f10:catchup the drive rebased GH-1 onto main (main0) and git stopped on conflicts in a.go: " +
+	conflict := "/f10:catchup f10 rebased GH-1 onto main (main0) and git stopped on conflicts in a.go: " +
 		"settle them in place, keeping both sides, then conclude the rebase --driven"
 	left := "/f10:catchup a rebase onto main0 is still in progress in /code/repo.GH-1 at commit 2 of 3, " +
 		"conflicted: a.go: settle it in place, keeping both sides, and conclude it --driven"
@@ -303,7 +303,7 @@ func TestDrivePromptsAgainForWhatATurnLeft(t *testing.T) {
 				": settle it in place, keeping both sides, and commit --driven"
 
 			for _, p := range []string{
-				"/f10:catchup the drive rebased GH-1 onto main (main0) and git stopped on conflicts in a.go: " +
+				"/f10:catchup f10 rebased GH-1 onto main (main0) and git stopped on conflicts in a.go: " +
 					"settle them in place, keeping both sides, then conclude the rebase --driven",
 				again, resumeGH1,
 			} {
@@ -363,7 +363,7 @@ func TestDriveHaltsARebaseNoTurnMoves(t *testing.T) {
 	fx.f.Script("herdr agent prompt "+testkit.AgentOf("GH-1")+" /f10:catchup", "{}")
 
 	for _, p := range []string{
-		"/f10:catchup the drive rebased GH-1 onto main (main0) and git stopped on conflicts in a.go: " +
+		"/f10:catchup f10 rebased GH-1 onto main (main0) and git stopped on conflicts in a.go: " +
 			"settle them in place, keeping both sides, then conclude the rebase --driven",
 		"/f10:catchup a rebase onto main0 is still in progress in /code/repo.GH-1 at commit 2 of 3, " +
 			"conflicted: a.go: settle it in place, keeping both sides, and conclude it --driven",
@@ -380,7 +380,7 @@ func TestDriveHaltsARebaseNoTurnMoves(t *testing.T) {
 	out := fx.out.String()
 
 	if testkit.ExitCode(err) != ui.ExitHalted || !strings.Contains(out, "attempt 3 at") ||
-		!strings.Contains(out, "next: settle it with /f10:catchup in /code/repo.GH-1, then rerun the drive") {
+		!strings.Contains(out, "next: settle it with /f10:catchup in /code/repo.GH-1, then run f10 resume GH-1") {
 		t.Errorf("err = %v\n%s", err, out)
 	}
 }
@@ -535,7 +535,7 @@ func TestDriveNeverForcePushesARewriteItDidNotMake(t *testing.T) {
 	out := fx.out.String()
 
 	if testkit.ExitCode(err) != ui.ExitHalted ||
-		!strings.Contains(out, "the drive did not read origin/GH-1 when the catchup went out") {
+		!strings.Contains(out, "f10 did not read origin/GH-1 when the catchup went out") {
 		t.Errorf("err = %v\n%s", err, out)
 	}
 
@@ -781,7 +781,7 @@ func TestCatchupLeftNamesAMarker(t *testing.T) {
 // explains, is prompted again naming what is left; it halts only on the third
 // attempt with nothing changed, or at once over an open dialog.
 func TestDriveSendsAStalledCatchupBack(t *testing.T) {
-	conflict := "/f10:catchup the drive rebased GH-1 onto main (main0) and git stopped on conflicts in a.go: " +
+	conflict := "/f10:catchup f10 rebased GH-1 onto main (main0) and git stopped on conflicts in a.go: " +
 		"settle them in place, keeping both sides, then conclude the rebase --driven"
 	again := "/f10:catchup the last catchup turn left it unsettled: 1 uncommitted paths in /code/repo.GH-1: " +
 		"settle it in place, keeping both sides, and commit --driven"
@@ -863,7 +863,7 @@ func TestDriveSendsAStalledCatchupBack(t *testing.T) {
 // test, its edit uncommitted, and reports minutes later. The mark the hook
 // left keeps the drive from reading a stall, so nothing is resent.
 func TestDriveWaitsOutACatchupParkedOnBackgroundWork(t *testing.T) {
-	conflict := "/f10:catchup the drive rebased GH-1 onto main (main0) and git stopped on conflicts in a.go: " +
+	conflict := "/f10:catchup f10 rebased GH-1 onto main (main0) and git stopped on conflicts in a.go: " +
 		"settle them in place, keeping both sides, then conclude the rebase --driven"
 
 	fx := newDriveFixture(t, "GH-1", "ship")

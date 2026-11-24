@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/urfave/cli/v3"
@@ -63,34 +62,32 @@ func runInboxResume(ctx context.Context, cmd *cli.Command) error {
 }
 
 func resumeAskDrive(ctx context.Context, w io.Writer, a asks.Ask) error {
-	n := strconv.Itoa(a.Drive)
-
 	if !daemon.Supported {
-		fmt.Fprintf(w, "drive %d is stopped: f10 start --resume %s in %s takes the answer\n", a.Drive, n, a.Main)
+		fmt.Fprintf(w, "batch %d is stopped: f10 resume %s in %s takes the answer\n", a.Drive, a.Task, a.Main)
 
 		return nil
 	}
 
 	var extra []string
 	if t, err := target.At(ctx, a.Main, false, "inbox"); err == nil {
-		extra = t.Effective.DriveEnv
+		extra = t.Effective.BatchEnv
 	}
 
 	dir := daemon.RunDir()
 
 	e := &daemon.Ensurer{Dir: dir, Version: buildinfo.Version()}
 	if _, err := e.Ensure(ctx); err != nil {
-		return fmt.Errorf("resuming drive %d: %w", a.Drive, err)
+		return fmt.Errorf("resuming batch %d: %w", a.Drive, err)
 	}
 
 	call := daemon.ResumeCall(a.Main, daemon.DriveEnv(os.Environ(), extra), a.Drive)
 
 	_, err := daemon.RunDrive(ctx, dir, call)
 	if err != nil {
-		return fmt.Errorf("resuming drive %d: %w", a.Drive, err)
+		return fmt.Errorf("resuming batch %d: %w", a.Drive, err)
 	}
 
-	fmt.Fprintf(w, "drive %d resumed: f10 daemon logs %d -f follows it\n", a.Drive, a.Drive)
+	fmt.Fprintf(w, "batch %d resumed: f10 daemon logs %s -f follows it\n", a.Drive, a.Task)
 
 	return nil
 }

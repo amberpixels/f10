@@ -32,7 +32,7 @@ type Project struct {
 	Tasks    []Task       `json:"tasks"`
 	Other    Other        `json:"other"`
 	Reviewed []ReviewedPR `json:"reviewed"`
-	Drives   []Drive      `json:"drives"`
+	Drives   []Drive      `json:"batches"`
 }
 
 // Standup is the report `f10 standup --json` prints: one period, the

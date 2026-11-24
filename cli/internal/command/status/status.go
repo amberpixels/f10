@@ -5,6 +5,7 @@ package status
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 
 	f10v1 "github.com/amberpixels/f10/cli/gen/f10/v1"
 	"github.com/amberpixels/f10/cli/internal/apiclient"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
 	"github.com/amberpixels/f10/cli/internal/statusview"
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
@@ -23,17 +25,18 @@ import (
 func Command() *cli.Command {
 	return &cli.Command{
 		Name:      "status",
-		Usage:     "where this session's f10 run is, what it started or drove, a task's run in its own worktree, or every live run in this repo",
+		Usage:     "where this session's f10 run is, what it started, a task's run in its own worktree, or every live run in this repo",
 		ArgsUsage: "[task-id]",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:  "all",
-				Usage: "every live run on this machine, not only this repo's; with --drives, every drive record, not only the newest 20",
+				Usage: "every live run on this machine, not only this repo's; with --batches, every batch, not only the newest 20",
 			},
 			&cli.BoolFlag{
-				Name:  "drives",
-				Usage: "this project's drive records, the newest 20, each running, stopped, done or cancelled",
+				Name:  "batches",
+				Usage: "this project's batches, the newest 20, each running, stopped, done or cancelled",
 			},
+			&cli.BoolFlag{Name: "drives", Hidden: true, Usage: "the old spelling of --batches"},
 			ui.JSONFlag("emit the same runs as JSON"),
 			&cli.BoolFlag{
 				Name: "plain",
@@ -50,11 +53,15 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 	token := strings.TrimSpace(cmd.Args().First())
 
 	if cmd.Bool("drives") {
+		fmt.Fprintln(cmd.ErrWriter, drivectl.Renamed("f10 status --drives", "f10 status --batches"))
+	}
+
+	if cmd.Bool("batches") || cmd.Bool("drives") {
 		if token != "" {
-			return errors.New("status --drives lists every drive: it takes no task id")
+			return errors.New("status --batches lists every batch: it takes no task id")
 		}
 
-		return listDrives(ctx, cmd, all)
+		return listBatches(ctx, cmd, all)
 	}
 
 	if token != "" && all {
@@ -91,9 +98,9 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 	)
 }
 
-// listDrives is status --drives: the project's drive records, as the daemon
+// listBatches is status --batches: the project's batches, as the daemon
 // lists them.
-func listDrives(ctx context.Context, cmd *cli.Command, all bool) error {
+func listBatches(ctx context.Context, cmd *cli.Command, all bool) error {
 	c, err := apiclient.Dial(ctx)
 	if err != nil {
 		return err
@@ -104,7 +111,7 @@ func listDrives(ctx context.Context, cmd *cli.Command, all bool) error {
 		return err
 	}
 
-	res, err := c.Runs.ListDrives(ctx, connect.NewRequest(&f10v1.ListDrivesRequest{All: all, Caller: caller}))
+	res, err := c.Runs.ListBatches(ctx, connect.NewRequest(&f10v1.ListBatchesRequest{All: all, Caller: caller}))
 	if err != nil {
 		return apiclient.Err(err, cmd.Writer, cmd.ErrWriter)
 	}
@@ -115,9 +122,9 @@ func listDrives(ctx context.Context, cmd *cli.Command, all bool) error {
 		return nil
 	}
 
-	out := make([]driveJSON, 0, len(res.Msg.GetDrives()))
-	for _, d := range res.Msg.GetDrives() {
-		row := driveJSON{Number: int(d.GetNumber()), Args: d.GetArgs(), State: d.GetState()}
+	out := make([]batchJSON, 0, len(res.Msg.GetBatches()))
+	for _, d := range res.Msg.GetBatches() {
+		row := batchJSON{Number: int(d.GetNumber()), Args: d.GetArgs(), State: d.GetState()}
 		if d.GetStarted() != nil {
 			row.Started = d.GetStarted().AsTime().Format(time.RFC3339)
 		}
@@ -128,8 +135,8 @@ func listDrives(ctx context.Context, cmd *cli.Command, all bool) error {
 	return ui.JSON(cmd.Writer, out)
 }
 
-// driveJSON is one drive record as status --drives --json prints it.
-type driveJSON struct {
+// batchJSON is one batch as status --batches --json prints it.
+type batchJSON struct {
 	Number  int      `json:"number"`
 	Args    []string `json:"args"`
 	State   string   `json:"state"`

@@ -39,6 +39,10 @@ const (
 	RunServiceStartProcedure = "/f10.v1.RunService/Start"
 	// RunServiceDriveProcedure is the fully-qualified name of the RunService's Drive RPC.
 	RunServiceDriveProcedure = "/f10.v1.RunService/Drive"
+	// RunServiceStartBatchProcedure is the fully-qualified name of the RunService's StartBatch RPC.
+	RunServiceStartBatchProcedure = "/f10.v1.RunService/StartBatch"
+	// RunServiceResumeProcedure is the fully-qualified name of the RunService's Resume RPC.
+	RunServiceResumeProcedure = "/f10.v1.RunService/Resume"
 	// RunServiceFinishProcedure is the fully-qualified name of the RunService's Finish RPC.
 	RunServiceFinishProcedure = "/f10.v1.RunService/Finish"
 	// RunServiceForwardProcedure is the fully-qualified name of the RunService's Forward RPC.
@@ -47,6 +51,10 @@ const (
 	RunServiceListDrivesProcedure = "/f10.v1.RunService/ListDrives"
 	// RunServiceCancelDriveProcedure is the fully-qualified name of the RunService's CancelDrive RPC.
 	RunServiceCancelDriveProcedure = "/f10.v1.RunService/CancelDrive"
+	// RunServiceListBatchesProcedure is the fully-qualified name of the RunService's ListBatches RPC.
+	RunServiceListBatchesProcedure = "/f10.v1.RunService/ListBatches"
+	// RunServiceStopBatchProcedure is the fully-qualified name of the RunService's StopBatch RPC.
+	RunServiceStopBatchProcedure = "/f10.v1.RunService/StopBatch"
 )
 
 // RunServiceClient is a client for the f10.v1.RunService service.
@@ -54,22 +62,40 @@ type RunServiceClient interface {
 	// GetRunStatus is where f10 runs stand: one task's, a project's, or every
 	// live run on the machine, with the question a stopped run waits on.
 	GetRunStatus(context.Context, *connect.Request[v1.GetRunStatusRequest]) (*connect.Response[v1.GetRunStatusResponse], error)
-	// Start runs a task through its flow in a drive, as f10 start does. A
+	// Start runs a task through its flow in a batch, as f10 start does. A
 	// discussion or a picked-up PR opens the worktree, workspace and agent,
 	// prompted once, since nothing steers an agent that waits for a person.
 	Start(context.Context, *connect.Request[v1.StartRequest]) (*connect.Response[v1.StartResponse], error)
-	// Drive runs a list of tasks through a flow, each once its base has a
-	// commit, as f10 start does with several tasks.
+	// Drive is the old name of StartBatch, kept for clients built against it.
+	//
+	// Deprecated: do not use.
 	Drive(context.Context, *connect.Request[v1.DriveRequest]) (*connect.Response[v1.DriveResponse], error)
+	// StartBatch runs a list of tasks through a flow as one batch, each once
+	// its base has a commit, as f10 start does with a typed command line.
+	StartBatch(context.Context, *connect.Request[v1.StartBatchRequest]) (*connect.Response[v1.StartBatchResponse], error)
+	// Resume goes on with a stopped batch wherever each task stopped, the
+	// finish included, as f10 resume does. Any task of the batch names it.
+	Resume(context.Context, *connect.Request[v1.ResumeRequest]) (*connect.Response[v1.ResumeResponse], error)
 	// Finish merges a task's PR and removes its worktree, branch and workspace.
 	Finish(context.Context, *connect.Request[v1.FinishRequest]) (*connect.Response[v1.FinishResponse], error)
 	// Forward hands text to the agent working on a task, as f10 forward does.
 	Forward(context.Context, *connect.Request[v1.ForwardRequest]) (*connect.Response[v1.ForwardResponse], error)
-	// ListDrives lists a project's drive records, as f10 status --drives does.
+	// ListDrives is the old name of ListBatches, kept for clients built
+	// against it.
+	//
+	// Deprecated: do not use.
 	ListDrives(context.Context, *connect.Request[v1.ListDrivesRequest]) (*connect.Response[v1.ListDrivesResponse], error)
-	// CancelDrive stops a drive from prompting further and closes its asks,
-	// as f10 stop does.
+	// CancelDrive is the old name of StopBatch, kept for clients built
+	// against it.
+	//
+	// Deprecated: do not use.
 	CancelDrive(context.Context, *connect.Request[v1.CancelDriveRequest]) (*connect.Response[v1.CancelDriveResponse], error)
+	// ListBatches lists a project's batches, each the tasks one f10 start
+	// started, as f10 status --batches does.
+	ListBatches(context.Context, *connect.Request[v1.ListBatchesRequest]) (*connect.Response[v1.ListBatchesResponse], error)
+	// StopBatch stops a batch from prompting further and closes its asks, as
+	// f10 stop does. Any task of the batch names it.
+	StopBatch(context.Context, *connect.Request[v1.StopBatchRequest]) (*connect.Response[v1.StopBatchResponse], error)
 }
 
 // NewRunServiceClient constructs a client for the f10.v1.RunService service. By default, it uses
@@ -101,6 +127,18 @@ func NewRunServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...
 			connect.WithSchema(runServiceMethods.ByName("Drive")),
 			connect.WithClientOptions(opts...),
 		),
+		startBatch: connect.NewClient[v1.StartBatchRequest, v1.StartBatchResponse](
+			httpClient,
+			baseURL+RunServiceStartBatchProcedure,
+			connect.WithSchema(runServiceMethods.ByName("StartBatch")),
+			connect.WithClientOptions(opts...),
+		),
+		resume: connect.NewClient[v1.ResumeRequest, v1.ResumeResponse](
+			httpClient,
+			baseURL+RunServiceResumeProcedure,
+			connect.WithSchema(runServiceMethods.ByName("Resume")),
+			connect.WithClientOptions(opts...),
+		),
 		finish: connect.NewClient[v1.FinishRequest, v1.FinishResponse](
 			httpClient,
 			baseURL+RunServiceFinishProcedure,
@@ -125,6 +163,18 @@ func NewRunServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...
 			connect.WithSchema(runServiceMethods.ByName("CancelDrive")),
 			connect.WithClientOptions(opts...),
 		),
+		listBatches: connect.NewClient[v1.ListBatchesRequest, v1.ListBatchesResponse](
+			httpClient,
+			baseURL+RunServiceListBatchesProcedure,
+			connect.WithSchema(runServiceMethods.ByName("ListBatches")),
+			connect.WithClientOptions(opts...),
+		),
+		stopBatch: connect.NewClient[v1.StopBatchRequest, v1.StopBatchResponse](
+			httpClient,
+			baseURL+RunServiceStopBatchProcedure,
+			connect.WithSchema(runServiceMethods.ByName("StopBatch")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -133,10 +183,14 @@ type runServiceClient struct {
 	getRunStatus *connect.Client[v1.GetRunStatusRequest, v1.GetRunStatusResponse]
 	start        *connect.Client[v1.StartRequest, v1.StartResponse]
 	drive        *connect.Client[v1.DriveRequest, v1.DriveResponse]
+	startBatch   *connect.Client[v1.StartBatchRequest, v1.StartBatchResponse]
+	resume       *connect.Client[v1.ResumeRequest, v1.ResumeResponse]
 	finish       *connect.Client[v1.FinishRequest, v1.FinishResponse]
 	forward      *connect.Client[v1.ForwardRequest, v1.ForwardResponse]
 	listDrives   *connect.Client[v1.ListDrivesRequest, v1.ListDrivesResponse]
 	cancelDrive  *connect.Client[v1.CancelDriveRequest, v1.CancelDriveResponse]
+	listBatches  *connect.Client[v1.ListBatchesRequest, v1.ListBatchesResponse]
+	stopBatch    *connect.Client[v1.StopBatchRequest, v1.StopBatchResponse]
 }
 
 // GetRunStatus calls f10.v1.RunService.GetRunStatus.
@@ -150,8 +204,20 @@ func (c *runServiceClient) Start(ctx context.Context, req *connect.Request[v1.St
 }
 
 // Drive calls f10.v1.RunService.Drive.
+//
+// Deprecated: do not use.
 func (c *runServiceClient) Drive(ctx context.Context, req *connect.Request[v1.DriveRequest]) (*connect.Response[v1.DriveResponse], error) {
 	return c.drive.CallUnary(ctx, req)
+}
+
+// StartBatch calls f10.v1.RunService.StartBatch.
+func (c *runServiceClient) StartBatch(ctx context.Context, req *connect.Request[v1.StartBatchRequest]) (*connect.Response[v1.StartBatchResponse], error) {
+	return c.startBatch.CallUnary(ctx, req)
+}
+
+// Resume calls f10.v1.RunService.Resume.
+func (c *runServiceClient) Resume(ctx context.Context, req *connect.Request[v1.ResumeRequest]) (*connect.Response[v1.ResumeResponse], error) {
+	return c.resume.CallUnary(ctx, req)
 }
 
 // Finish calls f10.v1.RunService.Finish.
@@ -165,13 +231,27 @@ func (c *runServiceClient) Forward(ctx context.Context, req *connect.Request[v1.
 }
 
 // ListDrives calls f10.v1.RunService.ListDrives.
+//
+// Deprecated: do not use.
 func (c *runServiceClient) ListDrives(ctx context.Context, req *connect.Request[v1.ListDrivesRequest]) (*connect.Response[v1.ListDrivesResponse], error) {
 	return c.listDrives.CallUnary(ctx, req)
 }
 
 // CancelDrive calls f10.v1.RunService.CancelDrive.
+//
+// Deprecated: do not use.
 func (c *runServiceClient) CancelDrive(ctx context.Context, req *connect.Request[v1.CancelDriveRequest]) (*connect.Response[v1.CancelDriveResponse], error) {
 	return c.cancelDrive.CallUnary(ctx, req)
+}
+
+// ListBatches calls f10.v1.RunService.ListBatches.
+func (c *runServiceClient) ListBatches(ctx context.Context, req *connect.Request[v1.ListBatchesRequest]) (*connect.Response[v1.ListBatchesResponse], error) {
+	return c.listBatches.CallUnary(ctx, req)
+}
+
+// StopBatch calls f10.v1.RunService.StopBatch.
+func (c *runServiceClient) StopBatch(ctx context.Context, req *connect.Request[v1.StopBatchRequest]) (*connect.Response[v1.StopBatchResponse], error) {
+	return c.stopBatch.CallUnary(ctx, req)
 }
 
 // RunServiceHandler is an implementation of the f10.v1.RunService service.
@@ -179,22 +259,40 @@ type RunServiceHandler interface {
 	// GetRunStatus is where f10 runs stand: one task's, a project's, or every
 	// live run on the machine, with the question a stopped run waits on.
 	GetRunStatus(context.Context, *connect.Request[v1.GetRunStatusRequest]) (*connect.Response[v1.GetRunStatusResponse], error)
-	// Start runs a task through its flow in a drive, as f10 start does. A
+	// Start runs a task through its flow in a batch, as f10 start does. A
 	// discussion or a picked-up PR opens the worktree, workspace and agent,
 	// prompted once, since nothing steers an agent that waits for a person.
 	Start(context.Context, *connect.Request[v1.StartRequest]) (*connect.Response[v1.StartResponse], error)
-	// Drive runs a list of tasks through a flow, each once its base has a
-	// commit, as f10 start does with several tasks.
+	// Drive is the old name of StartBatch, kept for clients built against it.
+	//
+	// Deprecated: do not use.
 	Drive(context.Context, *connect.Request[v1.DriveRequest]) (*connect.Response[v1.DriveResponse], error)
+	// StartBatch runs a list of tasks through a flow as one batch, each once
+	// its base has a commit, as f10 start does with a typed command line.
+	StartBatch(context.Context, *connect.Request[v1.StartBatchRequest]) (*connect.Response[v1.StartBatchResponse], error)
+	// Resume goes on with a stopped batch wherever each task stopped, the
+	// finish included, as f10 resume does. Any task of the batch names it.
+	Resume(context.Context, *connect.Request[v1.ResumeRequest]) (*connect.Response[v1.ResumeResponse], error)
 	// Finish merges a task's PR and removes its worktree, branch and workspace.
 	Finish(context.Context, *connect.Request[v1.FinishRequest]) (*connect.Response[v1.FinishResponse], error)
 	// Forward hands text to the agent working on a task, as f10 forward does.
 	Forward(context.Context, *connect.Request[v1.ForwardRequest]) (*connect.Response[v1.ForwardResponse], error)
-	// ListDrives lists a project's drive records, as f10 status --drives does.
+	// ListDrives is the old name of ListBatches, kept for clients built
+	// against it.
+	//
+	// Deprecated: do not use.
 	ListDrives(context.Context, *connect.Request[v1.ListDrivesRequest]) (*connect.Response[v1.ListDrivesResponse], error)
-	// CancelDrive stops a drive from prompting further and closes its asks,
-	// as f10 stop does.
+	// CancelDrive is the old name of StopBatch, kept for clients built
+	// against it.
+	//
+	// Deprecated: do not use.
 	CancelDrive(context.Context, *connect.Request[v1.CancelDriveRequest]) (*connect.Response[v1.CancelDriveResponse], error)
+	// ListBatches lists a project's batches, each the tasks one f10 start
+	// started, as f10 status --batches does.
+	ListBatches(context.Context, *connect.Request[v1.ListBatchesRequest]) (*connect.Response[v1.ListBatchesResponse], error)
+	// StopBatch stops a batch from prompting further and closes its asks, as
+	// f10 stop does. Any task of the batch names it.
+	StopBatch(context.Context, *connect.Request[v1.StopBatchRequest]) (*connect.Response[v1.StopBatchResponse], error)
 }
 
 // NewRunServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -222,6 +320,18 @@ func NewRunServiceHandler(svc RunServiceHandler, opts ...connect.HandlerOption) 
 		connect.WithSchema(runServiceMethods.ByName("Drive")),
 		connect.WithHandlerOptions(opts...),
 	)
+	runServiceStartBatchHandler := connect.NewUnaryHandler(
+		RunServiceStartBatchProcedure,
+		svc.StartBatch,
+		connect.WithSchema(runServiceMethods.ByName("StartBatch")),
+		connect.WithHandlerOptions(opts...),
+	)
+	runServiceResumeHandler := connect.NewUnaryHandler(
+		RunServiceResumeProcedure,
+		svc.Resume,
+		connect.WithSchema(runServiceMethods.ByName("Resume")),
+		connect.WithHandlerOptions(opts...),
+	)
 	runServiceFinishHandler := connect.NewUnaryHandler(
 		RunServiceFinishProcedure,
 		svc.Finish,
@@ -246,6 +356,18 @@ func NewRunServiceHandler(svc RunServiceHandler, opts ...connect.HandlerOption) 
 		connect.WithSchema(runServiceMethods.ByName("CancelDrive")),
 		connect.WithHandlerOptions(opts...),
 	)
+	runServiceListBatchesHandler := connect.NewUnaryHandler(
+		RunServiceListBatchesProcedure,
+		svc.ListBatches,
+		connect.WithSchema(runServiceMethods.ByName("ListBatches")),
+		connect.WithHandlerOptions(opts...),
+	)
+	runServiceStopBatchHandler := connect.NewUnaryHandler(
+		RunServiceStopBatchProcedure,
+		svc.StopBatch,
+		connect.WithSchema(runServiceMethods.ByName("StopBatch")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/f10.v1.RunService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case RunServiceGetRunStatusProcedure:
@@ -254,6 +376,10 @@ func NewRunServiceHandler(svc RunServiceHandler, opts ...connect.HandlerOption) 
 			runServiceStartHandler.ServeHTTP(w, r)
 		case RunServiceDriveProcedure:
 			runServiceDriveHandler.ServeHTTP(w, r)
+		case RunServiceStartBatchProcedure:
+			runServiceStartBatchHandler.ServeHTTP(w, r)
+		case RunServiceResumeProcedure:
+			runServiceResumeHandler.ServeHTTP(w, r)
 		case RunServiceFinishProcedure:
 			runServiceFinishHandler.ServeHTTP(w, r)
 		case RunServiceForwardProcedure:
@@ -262,6 +388,10 @@ func NewRunServiceHandler(svc RunServiceHandler, opts ...connect.HandlerOption) 
 			runServiceListDrivesHandler.ServeHTTP(w, r)
 		case RunServiceCancelDriveProcedure:
 			runServiceCancelDriveHandler.ServeHTTP(w, r)
+		case RunServiceListBatchesProcedure:
+			runServiceListBatchesHandler.ServeHTTP(w, r)
+		case RunServiceStopBatchProcedure:
+			runServiceStopBatchHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -283,6 +413,14 @@ func (UnimplementedRunServiceHandler) Drive(context.Context, *connect.Request[v1
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("f10.v1.RunService.Drive is not implemented"))
 }
 
+func (UnimplementedRunServiceHandler) StartBatch(context.Context, *connect.Request[v1.StartBatchRequest]) (*connect.Response[v1.StartBatchResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("f10.v1.RunService.StartBatch is not implemented"))
+}
+
+func (UnimplementedRunServiceHandler) Resume(context.Context, *connect.Request[v1.ResumeRequest]) (*connect.Response[v1.ResumeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("f10.v1.RunService.Resume is not implemented"))
+}
+
 func (UnimplementedRunServiceHandler) Finish(context.Context, *connect.Request[v1.FinishRequest]) (*connect.Response[v1.FinishResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("f10.v1.RunService.Finish is not implemented"))
 }
@@ -297,4 +435,12 @@ func (UnimplementedRunServiceHandler) ListDrives(context.Context, *connect.Reque
 
 func (UnimplementedRunServiceHandler) CancelDrive(context.Context, *connect.Request[v1.CancelDriveRequest]) (*connect.Response[v1.CancelDriveResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("f10.v1.RunService.CancelDrive is not implemented"))
+}
+
+func (UnimplementedRunServiceHandler) ListBatches(context.Context, *connect.Request[v1.ListBatchesRequest]) (*connect.Response[v1.ListBatchesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("f10.v1.RunService.ListBatches is not implemented"))
+}
+
+func (UnimplementedRunServiceHandler) StopBatch(context.Context, *connect.Request[v1.StopBatchRequest]) (*connect.Response[v1.StopBatchResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("f10.v1.RunService.StopBatch is not implemented"))
 }

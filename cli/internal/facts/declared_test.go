@@ -574,20 +574,51 @@ func TestTrackerTitle(t *testing.T) {
 	}
 }
 
-func TestDriveEnv(t *testing.T) {
+func TestBatchEnv(t *testing.T) {
 	t.Parallel()
 
-	eff := buildWith(t, "---\ndrive_env: [ZIG, AWS_PROFILE]\n---\n", "")
-	if !slices.Equal(eff.DriveEnv, []string{"ZIG", "AWS_PROFILE"}) || eff.Errors() != "" {
-		t.Errorf("drive_env %v, errors %q", eff.DriveEnv, eff.Errors())
+	eff := buildWith(t, "---\nbatch_env: [ZIG, AWS_PROFILE]\n---\n", "")
+	if !slices.Equal(eff.BatchEnv, []string{"ZIG", "AWS_PROFILE"}) || eff.Errors() != "" || len(eff.Problems) != 0 {
+		t.Errorf("batch_env %v, errors %q, problems %+v", eff.BatchEnv, eff.Errors(), eff.Problems)
 	}
 
-	if f := factFor(t, eff, "drive_env"); f.Value != "ZIG, AWS_PROFILE" {
+	if f := factFor(t, eff, "batch_env"); f.Value != "ZIG, AWS_PROFILE" {
 		t.Errorf("fact = %+v", f)
 	}
 
-	if eff := buildWith(t, "---\ndrive_env: [\"A-B\"]\n---\n", ""); !strings.Contains(eff.Errors(), "drive_env") {
+	if eff := buildWith(t, "---\nbatch_env: [\"A-B\"]\n---\n", ""); !strings.Contains(eff.Errors(), "batch_env") {
 		t.Errorf("a bad key passed: %q", eff.Errors())
+	}
+}
+
+// drive_env is batch_env's old key: read for one more release, with a
+// warning that names the new one, and refused beside it.
+func TestOldDriveEnvKeyStillReads(t *testing.T) {
+	t.Parallel()
+
+	eff := buildWith(t, "---\ndrive_env: [ZIG]\n---\n", "")
+	if !slices.Equal(eff.BatchEnv, []string{"ZIG"}) || eff.Errors() != "" {
+		t.Fatalf("drive_env gave %v, errors %q", eff.BatchEnv, eff.Errors())
+	}
+
+	warned := slices.ContainsFunc(eff.Problems, func(p Problem) bool {
+		return !p.Error && strings.Contains(p.Message, "batch_env")
+	})
+	if !warned {
+		t.Errorf("problems = %+v, want a warning naming batch_env", eff.Problems)
+	}
+
+	if f := factFor(t, eff, "batch_env"); f.Value != "ZIG" {
+		t.Errorf("fact = %+v", f)
+	}
+
+	both := buildWith(t, "---\ndrive_env: [ZIG]\nbatch_env: [ZIG]\n---\n", "")
+	if !strings.Contains(both.Errors(), "keep batch_env") {
+		t.Errorf("both keys passed: %q", both.Errors())
+	}
+
+	if eff := buildWith(t, "---\ndrive_env: [\"A-B\"]\n---\n", ""); !strings.Contains(eff.Errors(), "drive_env") {
+		t.Errorf("a bad name under the old key passed: %q", eff.Errors())
 	}
 }
 
