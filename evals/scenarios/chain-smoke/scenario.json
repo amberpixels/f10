@@ -1,0 +1,22 @@
+{
+  "description": "a release smoke test of the hand-offs: brainstorm, capture, plan, implement and review in one conversation; it checks each stage received the one before it, not its quality",
+  "task": "EV-1",
+  "fixture": "capture-simple",
+  "branch": "EV-1/notes-count",
+  "prompts": [
+    "/f10:brainstorm A dashboard wants to show how many notes the notes server holds. Is an endpoint for that worth adding, and what shape should it take?",
+    "Agreed. Settle it as: GET /notes/count answers the number of .txt notes in the notes directory as plain text, such as 2, and 0 for an empty directory. One task.",
+    "/f10:capture",
+    "/f10:plan EV-1 && /f10:ship EV-1 --driven",
+    "/f10:review EV-1 --driven"
+  ],
+  "verify": ["just lint", "just test"],
+  "checks": ["captured", "plan", "verify", "accept", "commit", "findings"],
+  "captured": {"tasks": 1, "parents": 0, "subtasks": 0, "after": 0},
+  "accept": [
+    {
+      "run": "d=$(mktemp -d) && printf x > \"$d/a.txt\" && printf y > \"$d/b.txt\" && go build -o \"$d/notes\" . && { \"$d/notes\" -addr 127.0.0.1:18765 -dir \"$d\" & p=$!; sleep 1; curl -s --max-time 5 127.0.0.1:18765/notes/count; kill $p; }",
+      "want": "2"
+    }
+  ]
+}

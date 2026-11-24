@@ -1,0 +1,5 @@
+lint:
+    ruby -wc lib/*.rb test/*.rb
+
+test:
+    ruby -Ilib -e 'Dir["test/*_test.rb"].each { |f| require_relative f }'

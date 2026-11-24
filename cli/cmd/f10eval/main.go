@@ -31,12 +31,14 @@ type Scenario struct {
 	Description string    `json:"description"`
 	Task        string    `json:"task"`
 	Prompt      string    `json:"prompt"`
+	Prompts     []string  `json:"prompts"` // in place of prompt: turns of one conversation, each resumed from the last
 	Verify      []string  `json:"verify"`
 	Accept      []Accept  `json:"accept"`
 	Checks      []string  `json:"checks"`
 	Agents      []string  `json:"agents"`  // the profiles the scenario runs on, one run each; none is one run on the kind's default
 	Fixture     string    `json:"fixture"` // another scenario whose repo/ this one runs in; none is its own
 	Change      string    `json:"change"`  // a patch, relative to the scenario's dir, committed on <task>/change for a review to read
+	Branch      string    `json:"branch"`  // a branch checked out before the run, so its commits have main to be reviewed against
 	Planted     []Planted `json:"planted"`
 	MaxExtra    *int      `json:"max_extra"` // findings allowed outside every planted defect; none is defaultMaxExtra
 	// History is commits made on main after the initial one, Reviews the
@@ -45,7 +47,9 @@ type Scenario struct {
 	History      []HistoryCommit `json:"history"`
 	Reviews      []SeedReview    `json:"reviews"`
 	HistoryCites []string        `json:"history_cites"`
-	Rubric       *Rubric         `json:"rubric"` // what the rubric check grades, and against which lines
+	Rubric       *Rubric         `json:"rubric"`       // what the rubric check grades, and against which lines
+	Captured     *Captured       `json:"captured"`     // the shape of the tasks a capture run creates
+	WantVerdict  string          `json:"want_verdict"` // the verdict a judge run must reach, else any of the four
 
 	env   []string // the run's environment, so a check that runs f10 reads the run's state
 	f10   string   // this checkout's bin/f10, the binary the run itself used
@@ -117,7 +121,8 @@ func main() {
 	flag.StringVar(&o.only, "scenario", "", "run only this scenario")
 	flag.StringVar(&o.permission, "permission-mode", "acceptEdits",
 		"claude's --permission-mode for the run; a driven ship runs commands, which acceptEdits may refuse")
-	flag.StringVar(&o.budget, "max-budget-usd", "5", "claude's --max-budget-usd per scenario")
+	flag.StringVar(&o.budget, "max-budget-usd", "5",
+		"claude's --max-budget-usd per turn; a scenario with several prompts may spend it on each")
 	flag.StringVar(&o.agent, "agent", "",
 		"run every scenario on this agent `profile` (kind:model:effort, or a part), not the ones it lists")
 	flag.BoolVar(&o.keep, "keep", false, "keep each scenario's temp dir and print its path")
@@ -216,6 +221,35 @@ func (s Scenario) checkRubricField() error {
 	return nil
 }
 
+// checkFields refuses a scenario whose fields contradict each other, before
+// any spend.
+func (s Scenario) checkFields() error {
+	if err := s.checkRubricField(); err != nil {
+		return err
+	}
+
+	switch {
+	case s.Prompt != "" && len(s.Prompts) > 0:
+		return errors.New("both prompt and prompts")
+	case s.Branch != "" && s.Change != "":
+		return errors.New("both branch and change, which checks out a branch of its own")
+	case slices.Contains(s.Checks, "captured") != (s.Captured != nil):
+		return errors.New("the captured check and the captured field come together")
+	case s.WantVerdict != "" && !slices.Contains(verdicts, s.WantVerdict):
+		return fmt.Errorf("want_verdict %q is none of the four verdicts", s.WantVerdict)
+	}
+
+	return nil
+}
+
+func (s Scenario) turns() []string {
+	if len(s.Prompts) > 0 {
+		return s.Prompts
+	}
+
+	return []string{s.Prompt}
+}
+
 func loadScenarios(dir, only string) ([]Scenario, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -245,7 +279,7 @@ func loadScenarios(dir, only string) ([]Scenario, error) {
 			}
 		}
 
-		if err := s.checkRubricField(); err != nil {
+		if err := s.checkFields(); err != nil {
 			return nil, fmt.Errorf("%s: %w", e.Name(), err)
 		}
 
@@ -299,6 +333,14 @@ func runScenario(ctx context.Context, root string, s Scenario, o options, p agen
 		return rep
 	}
 
+	if s.Branch != "" {
+		if out, err := git(ctx, dir, "checkout", "-q", "-b", s.Branch).CombinedOutput(); err != nil {
+			rep.Error = fmt.Sprintf("git checkout: %v: %s", err, out)
+
+			return rep
+		}
+	}
+
 	if s.Change != "" {
 		if err := applyChange(ctx, dir, s.Task, filepath.Join(scenarios, s.Name, s.Change)); err != nil {
 			rep.Error = err.Error()
@@ -309,33 +351,31 @@ func runScenario(ctx context.Context, root string, s Scenario, o options, p agen
 
 	s.env = runEnv(os.Environ(), tmp)
 
-	args := claudeArgs(root, o, s.Prompt, p)
-	cmd := exec.CommandContext(ctx, "claude", args...)
-	cmd.Dir, cmd.Env = dir, s.env
+	turns, session := s.turns(), ""
 
-	out, err := cmd.Output()
+	for i, prompt := range turns {
+		res, err := runTurn(ctx, dir, s.env, claudeArgs(root, o, prompt, p, session))
+		rep.CostUSD += res.CostUSD
+		rep.DurationMS += res.DurationMS
+		session = res.SessionID
 
-	var res struct {
-		CostUSD    float64 `json:"total_cost_usd"`
-		DurationMS int64   `json:"duration_ms"`
-		IsError    bool    `json:"is_error"`
-		Result     string  `json:"result"`
-	}
+		if err != nil {
+			s.reply, rep.Error = "", err.Error()
+			if len(turns) > 1 {
+				rep.Error = fmt.Sprintf("turn %d: %s", i+1, rep.Error)
+			}
 
-	if jerr := json.Unmarshal(out, &res); jerr == nil {
-		rep.CostUSD, rep.DurationMS = res.CostUSD, res.DurationMS
-		// an errored run's result is claude's error, not a reply worth grading
-		if res.IsError {
-			rep.Error = lastLine(res.Result)
-		} else {
-			s.reply = res.Result
+			break
 		}
-	}
 
-	if err != nil && rep.Error == "" {
-		rep.Error = fmt.Sprintf("claude: %v", err)
-		if exit, ok := errors.AsType[*exec.ExitError](err); ok {
-			rep.Error += ": " + lastLine(string(exit.Stderr))
+		s.reply = res.Result
+
+		// a later turn without a session would start a new conversation
+		// and fail as a later stage's check, not as the runner's error
+		if session == "" && i < len(turns)-1 {
+			rep.Error = fmt.Sprintf("turn %d: claude printed no session id to resume", i+1)
+
+			break
 		}
 	}
 
@@ -346,6 +386,40 @@ func runScenario(ctx context.Context, root string, s Scenario, o options, p agen
 	rep.GraderCostUSD = graderCost(rep.Checks)
 
 	return rep
+}
+
+// A turnResult is the part of claude's JSON output the runner reads.
+type turnResult struct {
+	CostUSD    float64 `json:"total_cost_usd"`
+	DurationMS int64   `json:"duration_ms"`
+	IsError    bool    `json:"is_error"`
+	Result     string  `json:"result"`
+	SessionID  string  `json:"session_id"`
+}
+
+// runTurn runs one claude call. An errored turn's result is claude's error,
+// not a reply worth grading, so it comes back as the error.
+func runTurn(ctx context.Context, dir string, env, args []string) (turnResult, error) {
+	cmd := exec.CommandContext(ctx, "claude", args...)
+	cmd.Dir, cmd.Env = dir, env
+
+	out, err := cmd.Output()
+
+	var res turnResult
+	if jerr := json.Unmarshal(out, &res); jerr == nil && res.IsError {
+		return res, errors.New(lastLine(res.Result))
+	}
+
+	if err != nil {
+		msg := fmt.Sprintf("claude: %v", err)
+		if exit, ok := errors.AsType[*exec.ExitError](err); ok {
+			msg += ": " + lastLine(string(exit.Stderr))
+		}
+
+		return res, errors.New(msg)
+	}
+
+	return res, nil
 }
 
 func graderCost(list []Check) float64 {
@@ -577,14 +651,19 @@ func reportName(scenario string, p agentctl.Profile) string {
 	return scenario + "." + strings.ReplaceAll(p.Short(), ":", "-") + ".json"
 }
 
-// claudeArgs is the command line for one run: the profile's flags through
-// its kind, beside the prompt mode, the plugin and the budget.
-func claudeArgs(root string, o options, prompt string, p agentctl.Profile) []string {
+// claudeArgs is the command line for one turn: the profile's flags through
+// its kind, beside the prompt mode, the plugin and the budget. A session
+// resumes that conversation, for a scenario's later turns.
+func claudeArgs(root string, o options, prompt string, p agentctl.Profile, session string) []string {
 	args := []string{
 		"-p", "--plugin-dir", root, "--output-format", "json",
 		"--permission-mode", o.permission, "--max-budget-usd", o.budget,
 	}
 	args = append(args, p.Args()...)
+
+	if session != "" {
+		args = append(args, "--resume", session)
+	}
 
 	return append(args, prompt)
 }

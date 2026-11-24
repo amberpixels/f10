@@ -1,0 +1,15 @@
+{
+  "description": "a blind review of a Ruby branch with four planted defects, the same four kinds as review-planted",
+  "task": "EV-2",
+  "prompt": "/f10:review EV-2 --driven",
+  "fixture": "implement-ruby",
+  "change": "change.patch",
+  "checks": ["findings", "planted", "lore"],
+  "planted": [
+    {"file": "lib/listing.rb", "from": 14, "to": 17, "what": "pages start at 1, so page 1 skips the first ten notes"},
+    {"file": "lib/listing.rb", "from": 18, "to": 21, "what": "each listed note's file is opened and never closed"},
+    {"file": "lib/listing.rb", "from": 25, "to": 29, "what": "read joins the name unchecked, so ../ escapes the notes directory"},
+    {"file": "lib/listing.rb", "from": 33, "to": 35, "what": "import reads the whole io before the 1 MiB check, so a huge note is held in memory"}
+  ],
+  "max_extra": 2
+}

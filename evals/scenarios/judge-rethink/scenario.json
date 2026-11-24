@@ -1,0 +1,8 @@
+{
+  "description": "a judge on a task whose right verdict is rethink: a lower limit for memory spikes, where the cause is save reading the whole body before the check",
+  "task": "EV-3",
+  "prompt": "/f10:judge EV-3 --driven",
+  "fixture": "judge-proceed",
+  "checks": ["verdict", "lore"],
+  "want_verdict": "rethink"
+}

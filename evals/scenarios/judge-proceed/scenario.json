@@ -1,0 +1,7 @@
+{
+  "description": "a judge on a task whose right verdict is proceed: a small, correct startup check with clear done-when lines",
+  "task": "EV-1",
+  "prompt": "/f10:judge EV-1 --driven",
+  "checks": ["verdict", "lore"],
+  "want_verdict": "proceed"
+}

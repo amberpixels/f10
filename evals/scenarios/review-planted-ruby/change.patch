@@ -1,0 +1,74 @@
+diff --git a/lib/listing.rb b/lib/listing.rb
+new file mode 100644
+index 0000000..2f36f34
+--- /dev/null
++++ b/lib/listing.rb
+@@ -0,0 +1,39 @@
++# frozen_string_literal: true
++
++require 'notes'
++
++# Listing, reading and importing notes.
++class Notes
++  class NotFound < StandardError; end
++  class TooLarge < StandardError; end
++
++  PAGE_SIZE = 10
++  MAX_NOTE = 1 << 20
++
++  # page lists one page of notes, each as its name and its first line.
++  def page(number)
++    number = 1 if number < 1
++    slice = names[number * PAGE_SIZE, PAGE_SIZE] || []
++
++    slice.map do |name|
++      file = File.open(path(name))
++      "#{name}: #{file.gets&.chomp}"
++    end
++  end
++
++  # read returns one note's text.
++  def read(name)
++    full = File.join(@dir, "#{name}.txt")
++    raise NotFound, name unless File.file?(full)
++
++    File.read(full)
++  end
++
++  # import stores what io yields as the note, refusing one over MAX_NOTE.
++  def import(name, io)
++    data = io.read
++    raise TooLarge, name if data.bytesize > MAX_NOTE
++
++    save(name, data)
++  end
++end
+diff --git a/test/listing_test.rb b/test/listing_test.rb
+new file mode 100644
+index 0000000..110fb05
+--- /dev/null
++++ b/test/listing_test.rb
+@@ -0,0 +1,23 @@
++# frozen_string_literal: true
++
++require 'minitest/autorun'
++require 'stringio'
++require 'tmpdir'
++require 'listing'
++
++class ListingTest < Minitest::Test
++  def test_import_and_read
++    Dir.mktmpdir do |dir|
++      notes = Notes.new(dir)
++      notes.import('todo', StringIO.new("milk\neggs\n"))
++
++      assert_equal "milk\neggs\n", notes.read('todo')
++    end
++  end
++
++  def test_read_missing
++    Dir.mktmpdir do |dir|
++      assert_raises(Notes::NotFound) { Notes.new(dir).read('nope') }
++    end
++  end
++end

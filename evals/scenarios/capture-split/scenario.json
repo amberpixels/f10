@@ -1,0 +1,17 @@
+{
+  "description": "capture of an idea whose four pieces ship apart: a parent, two independent subtasks and one dependent under each",
+  "task": "EV-1",
+  "fixture": "capture-simple",
+  "prompt": "/f10:capture Notes need owners and an audit trail. Four pieces, each shippable on its own. First, an API-key middleware: it reads the X-Api-Key header, maps the key to a user name from a keys file given by a -keys flag, and refuses an unknown key with 401. Second, note metadata: each saved note gets a <name>.meta.json sidecar holding its owner and its created and updated times. Third, per-user access, which needs the middleware: a user reads and writes only the notes they own, and anything else is 403. Fourth, an audit endpoint, which needs the metadata: GET /audit lists who last changed each note and when, read from the sidecars. The middleware and the metadata do not depend on each other. Out of scope: sharing a note between users, and key rotation.",
+  "checks": ["captured", "rubric"],
+  "captured": {"tasks": 5, "parents": 1, "subtasks": 4, "after": 2},
+  "rubric": {
+    "files": ["tasks/EV-1.md"],
+    "lines": [
+      "This is the parent task: it describes the whole of note ownership and auditing, not one piece of it",
+      "The body states the problem: notes have no owner and no record of who changed them",
+      "The body states the settled shape: API keys mapped to users, metadata sidecars, per-user access and an audit endpoint",
+      "The body says what is out of scope: sharing notes between users and key rotation"
+    ]
+  }
+}
