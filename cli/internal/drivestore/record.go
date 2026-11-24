@@ -41,7 +41,7 @@ type Record struct {
 type Task struct {
 	ID    string `yaml:"id"`              // as typed, a suffix included
 	Agent string `yaml:"agent,omitempty"` // its own :profile as typed
-	After string `yaml:"after,omitempty"` // its one base, typed or its body's After: line, as an id
+	After string `yaml:"after,omitempty"` // its one base as an id, typed or from its body
 	// Join is a join's bases, as ids: it waits for each to merge
 	Join   []string `yaml:"join,omitempty"`
 	Skill  string   `yaml:"skill,omitempty"`  // in flight, "" for none

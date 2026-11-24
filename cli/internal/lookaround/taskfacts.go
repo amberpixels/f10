@@ -34,9 +34,9 @@ type TaskFacts struct {
 	Queued       bool   // its drive's cap holds it back
 	DrivePhase   string // where its running drive says it stands, a drivestore.Phase name
 	DriveChecks  bool   // a waiting DrivePhase holds finish on running checks
-	// JoinWaits are a join's bases its drive has yet to see merged
+	// JoinWaits are a join's bases its batch has yet to see merged
 	JoinWaits []string
-	JoinPlan  bool // the join's batch runs --plan: its bases owe plans
+	JoinPlan  bool // its batch runs --plan, so the bases owe plans
 	Findings  *Findings
 	Verdict   string
 }

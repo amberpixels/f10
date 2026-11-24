@@ -46,8 +46,8 @@ func JoinWaits(t drivestore.Task, tasks []drivestore.Task, planned func(string) 
 // PlanOnly reports a batch started with --plan, from its command line.
 func PlanOnly(args []string) bool { return slices.Contains(args, "--plan") }
 
-// JoinPlanned is what JoinWaits takes for a batch: under --plan, whether a
-// base's plan is saved under root; else nil, since the join waits for merges.
+// JoinPlanned is what JoinWaits takes for a batch. Under --plan it reports a
+// base's plan saved under root. Otherwise it is nil, as the join waits for merges.
 func JoinPlanned(args []string, root string) func(string) bool {
 	if !PlanOnly(args) {
 		return nil

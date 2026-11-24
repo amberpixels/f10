@@ -308,7 +308,7 @@ func writePlan(t *testing.T, fx *driveFixture, id string) {
 	t.Cleanup(func() { _ = os.Remove(fx.in.Storage.Plan(id)) })
 }
 
-// A plan-only join's plan names both bases and their plans; any other
+// A plan-only join's plan names both bases and their plans. Any other
 // prompt is left alone.
 func TestJoinPlanPrompt(t *testing.T) {
 	fx := newDriveFixture(t, "GH-1", "--plan")

@@ -314,7 +314,8 @@ The command line can order its entries itself, with three marks read left to rig
 - `A,B` stacks B on A, and `A,B,C` is a chain: it means `A B@A C@B`.
   An entry of a chain may be a bundle, so `A1+A2,A3` stacks A3 on the branch that holds A1 and A2.
 - `C@A` names A as C's base.
-  It says what a chain cannot: two entries on one base (`A,B C@A`), and an entry with several bases (`C@A@B`).
+  It says two things a chain cannot.
+  One is two entries on one base (`A,B C@A`), and the other is an entry with several bases (`C@A@B`).
 - A space means no dependency, so `f10 start A1,A3 B1,B2 C1@A3@B2` is two independent chains and one entry after both.
 
 An entry reads `<id>[-suffix][@<base>...][:profile]`.
@@ -322,7 +323,9 @@ The profile comes last because it is the entry's, never a base's, and `C:opus@A`
 A base is a task id or a bundle, with no suffix and no profile.
 No part of the notation needs quoting in bash or zsh, extendedglob included.
 
-One base is a stack, the same as `--after` or a body's `After:` line: the entry branches from the base's branch, opens at the base's first commit (under `--plan`, once its plan is saved), and its PR targets the base's branch.
+One base is a stack, the same as `--after` or a body's `After:` line.
+The entry branches from the base's branch and opens at the base's first commit, or under `--plan` once the base's plan is saved.
+Its PR targets the base's branch.
 Several bases are a **join**, because a branch has one base.
 A join waits until every base has merged, then branches from the default branch and records its bases as `branch.<name>.f10-join`.
 Under `--plan` it opens once every base's plan is saved, and its plan prompt names each base with its plan's path.
@@ -334,7 +337,8 @@ A join started under `--plan` keeps those rules on a later run, because its bran
 A typed base wins over the body's `After:` line, as `--after` does, and is never written to the tracker.
 The order is kept in the batch's record until an entry starts, and on its branch after, so `f10 resume` brings a stopped batch back in the same order.
 A parent cannot be ordered or named as a base, because its subtasks keep their own `After:` order: name the subtasks.
-`--after` or `--base` beside an `@` on the same entry, an order on a range, `--propose` and `--discuss` refuse the notation, because a proposal and a discussion set the order themselves.
+`--after` or `--base` beside an `@` on the same entry is refused, and so is an order on a range.
+`--propose` and `--discuss` refuse the notation too, because a proposal and a discussion set the order themselves.
 
 **Bundles.**
 `f10 start ABC-1+ABC-2` ships several tasks as one branch, one worktree, one agent and one PR.
@@ -928,7 +932,8 @@ A cancelled record is never picked up again: the same command line starts a new 
    A bundle member with unfinished subtasks is refused, since one branch would ship the whole umbrella.
    `--after` and `--base` set one task's base, so a list, a range or a parent that expands to several tasks refuses them.
 3. **The graph.**
-   Each task has at most one base, except a join: the `branch.<name>.f10-after` its branch recorded once started, else the base typed on the command line, else the `After:` line in its body.
+   Each task except a join has at most one base.
+   It is the `branch.<name>.f10-after` its branch recorded once started, else the base typed on the command line, else the `After:` line in its body.
    A join's bases are its branch's `f10-join`, else the typed ones, and it is ordered after all of them ([Order](#start)).
    Where the two disagree, the branch wins, with a note.
    The map is rebuilt on every run, and nothing about it is stored.

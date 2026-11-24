@@ -157,8 +157,8 @@ func flagList(flags []DriveFlag) string {
 type DriveArgs struct {
 	Tasks    []string // as typed, any :profile cut off; with span, the two ends of a range
 	Profiles []string // each task's :profile as typed, indexed like tasks, "" for none
-	// Bases are each task's typed bases, indexed like tasks, nil for none:
-	// the entry before it in a chain, then each @base, as typed
+	// Bases are each task's typed bases, indexed like tasks, nil for none.
+	// They are the entry before it in a chain, then each @base, as typed.
 	Bases    [][]string
 	Agent    string // --agent as typed, or --model as a model-only profile: every task's unless its own names one
 	model    string // --model as typed, kept apart so both flags on one line are refused
@@ -562,8 +562,8 @@ type entry struct {
 	bases         []string
 }
 
-// parseEntries reads a token as a chain of entries, each
-// <task>[-suffix][@<base>...][:profile]: `,` stacks an entry on the one
+// parseEntries reads a token as a chain of entries, each one shaped
+// <task>[-suffix][@<base>...][:profile]. A comma stacks an entry on the one
 // before it, and each @ names one more base. A url is taken whole, because
 // it may hold either mark.
 func parseEntries(tok string) ([]entry, error) {

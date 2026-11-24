@@ -166,11 +166,11 @@ type DriveTask struct {
 	Branch  string           // the task's local branch, or "" before it started
 	after   string           // the base the body's After: line names, as an id
 	Base    string           // the base the drive waits for: the branch's record, else after
-	// typed is set when the command line ordered the task, a chain's , or
-	// an @, which wins over its body's After: line as --after does
+	// typed is set when the command line ordered the task with , or @.
+	// It wins over its body's After: line, as --after does.
 	typed bool
-	// Join is a join's bases as ids: two or more, which must all merge
-	// before it branches from the default branch; Base is then ""
+	// Join is a join's bases as ids, two or more. Each must merge before
+	// the join branches from the default branch, and Base is then empty.
 	Join     []string
 	finished bool
 }
@@ -204,7 +204,7 @@ type DriveRun struct {
 
 	Task DriveTask
 	Base *DriveRun // the listed base, or nil for none or one outside the list
-	// Join is a join's listed bases; one outside the list is finished
+	// Join is a join's listed bases. A base outside the list is finished.
 	Join []*DriveRun
 	// joinWaits names the join's bases not yet through, as last printed
 	joinWaits string

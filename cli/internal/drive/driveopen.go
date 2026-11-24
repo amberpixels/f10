@@ -68,8 +68,8 @@ func (in *DriveInput) open(ctx context.Context, r *DriveRun) error {
 	task := r.Task
 
 	// a typed --after, --base or order wins over the body, which is then not
-	// read, because its base may be a task not started; a join opens with no
-	// base task, so it branches from the default branch
+	// read, because its base may be a task not started. A join opens with no
+	// base task, so it branches from the default branch.
 	after, note := task.after, ""
 	if in.Args.After == "" && in.Args.Base == "" && !task.typed {
 		var err error

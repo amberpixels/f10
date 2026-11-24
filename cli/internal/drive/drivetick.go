@@ -386,15 +386,15 @@ func (in *DriveInput) joinWait(r *DriveRun) *driveResult {
 	return nil
 }
 
-// merged: the base's code is in the default branch, which a join branches
-// from: this batch finished it, or it was finished when the batch started.
+// merged reports the base's code in the default branch, which a join
+// branches from. This batch finished it, or it was finished before.
 func merged(b *DriveRun) bool {
 	return b.End != nil && (b.End.Row == drivectl.RowFinished || b.End.Row == drivectl.RowAlreadyFinished)
 }
 
-// joinHalted ends a join whose base ended short of what it waits for, before
-// the join opened: a halt, or under --plan an end with no saved plan, or a
-// base that ended at its PR, which nothing in this batch will merge.
+// joinHalted ends a join, before it opened, whose base ended short of what
+// the join waits for. That is a halt, an end at a PR nothing here will
+// merge, or under --plan an end with no saved plan.
 func joinHalted(r, b *DriveRun, planOnly bool) *driveResult {
 	id, base := r.Task.Ref.ID, b.Task.Ref.ID
 

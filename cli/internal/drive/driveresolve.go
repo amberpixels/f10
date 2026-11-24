@@ -201,8 +201,8 @@ func (in *DriveInput) typedBases(i int) []string {
 	return nil
 }
 
-// typedOrder lays a token's typed bases over its body's After: line: one
-// base stacks the task, as --after does, and several make it a join.
+// typedOrder lays a token's typed bases over its body's After: line. One
+// base stacks the task as --after does, and several make it a join.
 func (in *DriveInput) typedOrder(ctx context.Context, t *DriveTask, typed []string, parents map[string]bool) error {
 	if len(typed) == 0 {
 		return nil

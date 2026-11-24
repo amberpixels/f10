@@ -148,7 +148,7 @@ func noteClause(note string) string {
 }
 
 // JoinClause names a join's bases and their plans, for a plan that designs
-// against all of them: a join branches from the default branch, which holds
+// against all of them. A join branches from the default branch, which holds
 // none of their code while they are only planned.
 func JoinClause(id string, deps []Dependency) string {
 	parts := make([]string, 0, len(deps))

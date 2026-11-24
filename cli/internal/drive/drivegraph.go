@@ -177,15 +177,14 @@ func (t DriveTask) bases() []string {
 	return t.Join
 }
 
-// refuseJoins refuses, before anything is created, a join nothing in this
-// batch would let start: one under a flow that does not finish, since only
-// finish merges its bases, and one on a base outside the list that has not
-// merged. Under --plan a join opens on its bases' plans, so neither applies
-// the same way: an outside base needs a saved plan, or to be finished.
+// refuseJoins refuses a join nothing in this batch would let start, before
+// anything is created. Only finish merges a join's bases, so a flow without
+// it is refused, and so is an unmerged base outside the list. Under --plan a
+// join opens on its bases' plans, so an outside base needs a saved plan.
 func (in *DriveInput) refuseJoins(ctx context.Context, tasks []DriveTask, index map[string]int) error {
 	for _, t := range tasks {
-		// a started join is checked too: under --plan it branched before its
-		// bases merged, so a later run must still find them merged or listed
+		// a started join is checked too, because under --plan it branched
+		// before its bases merged, and a later run must still find them
 		if t.finished || len(t.Join) == 0 {
 			continue
 		}

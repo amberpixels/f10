@@ -24,7 +24,7 @@ func bases(a drivectl.DriveArgs) string {
 	return strings.Join(out, "|")
 }
 
-// The order notation: , chains, @ names bases, + stays a bundle, and the
+// A comma chains entries and @ names bases. A plus stays a bundle, and the
 // profile comes last.
 func TestParseOrder(t *testing.T) {
 	cases := []struct {

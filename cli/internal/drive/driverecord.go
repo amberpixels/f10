@@ -476,7 +476,7 @@ func finishedLazily(root storage.Root, id string, branched func() (bool, error),
 	return stack.FinishedTask(ti, root, id, false)
 }
 
-// taskStanding is a task's row in a batch listing; planned is JoinPlanned's.
+// taskStanding is a task's row in a batch listing. planned is JoinPlanned's.
 func taskStanding(t drivestore.Task, running bool, tasks []drivestore.Task, planned func(string) bool) string {
 	switch waits := drivectl.JoinWaits(t, tasks, planned); {
 	case t.Outcome != nil:
