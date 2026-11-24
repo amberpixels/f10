@@ -56,7 +56,7 @@ func StartCommand() *cli.Command {
 			"The batch runs in the per-user f10 daemon, started when none runs: this command prints its progress, " +
 			"Ctrl+C stops only that, and rerunning it follows the batch again. --foreground runs it in this process.\n" +
 			"--propose starts nothing: it prints a proposal for the tasks, which is the bundles, the order, " +
-			"the After: lines to add and the one command to run; it takes no typed order. Small tasks of one kind sharing files or an area " +
+			"and the one command to run, the order spelled in it with , and @; it takes no typed order. Small tasks of one kind sharing files or an area " +
 			"are bundled under bundle_max_lines, and the rest stay alone with the reason. --facts FILE lays the " +
 			"start skill's estimates on top, --json prints the proposal for the skill, and --hint prints one line " +
 			"when a bundle saves a CI wait, else nothing.\n" +

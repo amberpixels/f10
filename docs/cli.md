@@ -206,7 +206,7 @@ What the start does, case by case:
 - `--discuss` opens one worktree and one agent, prompted once, and starts no batch.
   The agent waits for you in its own pane, so the prompt is plain text with no `--driven` marker.
   - One task: the agent summarises it and waits.
-  - A parent: the worktree is the parent's. The agent prints the subtask tree, each row marking what it waits on, a draft and a finished subtask, then the [proposal](#proposal) `f10 start <ids> --propose` prints, and waits.
+  - A parent: the worktree is the parent's. The agent prints the subtask tree, each row marking what it waits on, a draft and a finished subtask, then the [proposal](#proposal) that `/f10:start <ids> --propose` prints. That skill reads the tasks against the code first. Then the agent waits.
   - Several ids (`f10 start A B C --discuss`): the worktree is the first id's. The agent reads every task, shows how they depend on each other, shows the same proposal, and waits. A listed id with subtasks also gets its tree.
 
   The leading words shaped as task ids are the tasks, and the note starts at the first word that is not one.
@@ -1157,8 +1157,12 @@ What a program reads is renamed with no alias, because the plugin's skills are i
 
 ### Proposal
 
-`f10 start <parent | id>... --propose` prints a proposal of how to start the tasks: the bundles, the order, the `After:` lines to add and the one command to run.
+`f10 start <parent | id>... --propose` prints a proposal of how to start the tasks: the bundles, the order and the one command to run.
+The command spells the order in the start's own notation, such as `A,B`, `C@A` or `C@A@B`.
+So running the command is the whole of accepting the proposal, and nothing is written to the tracker.
 It starts nothing.
+`/f10:start <ids | description> --propose` gets a proposal with the facts sheet filled, in the current session.
+It reads each task against the code, writes the sheet, runs this command and stops.
 `--hint` alone asks for the proposal's one line, so it needs no `--propose` beside it.
 `--facts` or `--json` without `--propose` is refused, because they only shape a proposal.
 A proposal takes ids or a parent, and the flags that shape the proposed command: `--flow`, `--local`, `--pace`, `--agent`, `--model` and `--parallel`.
@@ -1187,32 +1191,43 @@ The rules, in order, each leaving a one-line reason on every task and bundle:
    A task over `bundle_max_lines` stays alone, and so does a task the user kept alone.
 2. **Bundle**: tasks of the same flow, the same agent profile and the same kind class share a bundle when they share a file or an area.
    The kind classes are bugs, and features with refactors, so a regression fix keeps its own PR.
-   A bundle carries at most one `After:` outside itself, so a task joins only a bundle with its base, or with its base inside.
+   A bundle carries one set of bases outside itself, so a task joins only a bundle with the same outside bases, or one holding every base it has.
 3. **Cap**: a bundle stops at `bundle_max_lines` changed lines, in the parent's order, and the task left out says `split: N lines with <id>'s group, over the cap of M`.
-4. **Order**: a task the sheet says builds on another, with no `After:` saying so, gets a proposed `After:` edit.
-   So do two entries that share a file but cannot bundle, such as a bug and a feature.
-   The later goes after the earlier, since side by side they would conflict.
-5. **Levels** are each entry's depth in the `After:` graph, the way a batch releases them: every base of an entry sits in an earlier level.
+4. **Order**: an entry may take several bases.
+   They come from its `After:` line and from the tasks the sheet says it builds on.
+   They also come from earlier entries it shares a file with but cannot bundle with, such as a bug and a feature, because side by side they would conflict.
+   The shared files are walked nearest entry first, and an entry already reached through another base adds nothing.
+   So three tasks on one file make a chain, not a join.
+   The user's `after` in the sheet replaces all of them.
+   Several bases make a join, which waits for every base to merge and needs a flow that finishes.
+   Two bases in one bundle are one base, the bundle's lead.
+   When the run's flow does not finish, an entry keeps its first base, and the others print as dropped with the reason.
+   The start refuses a join on an unfinished base outside the list, because nothing in the batch would merge it.
+   So that base is kept alone, and the others print as dropped.
+5. **Levels** are each entry's depth in the base graph, the way a batch releases them: every base of an entry sits in an earlier level.
    `--parallel` is the widest level, capped by the `--parallel` given, else by a start's default.
 
 It prints the levels, one row per entry, the first row of each labelled `level 1`, `level 2` and so on.
-Under them it prints the `f10 start` command that runs the proposal, with the start flags given carried onto it.
+Under them an `order` block gives one row per base with its reason, such as `FT-47 after FT-44   builds on FT-44's code`.
+Then it prints the `f10 start` command that runs the proposal, with the start flags given carried onto it.
+An entry whose one base ends a chain joins it with `,` (`FT-44,FT-47`), and every other base is `@` and the lead of the base's entry (`FT-50@FT-41`).
+Every base is spelled, an entry's own `After:` line included, because a typed base makes the start stop reading that entry's body.
 It prints `saves about N CI waits and M finishes against starting them one by one`.
-It prints the `After:` edits waiting on a yes, and `f10 task update <id> --after <base>` applies one.
 When anything is bundled, it prints once that a bundle is one PR, one revert and one review over a mixed diff.
 It adds that a later bug is traced to its lead with the riders named.
-`--json` prints the same for a skill under the keys `command`, `proposal`, `tasks` (the gathered facts), `notes` and `saving`, and the proposal holds its rows under `levels`.
+`--json` prints the same for a skill under the keys `command`, `proposal`, `tasks` (the gathered facts), `notes` and `saving`.
+The proposal holds its rows under `levels`, and each entry holds its bases under `bases`.
 `--hint` prints one line when the rules alone save at least one CI wait, and nothing otherwise.
 A bundle the user typed or named with `with` is not counted.
 The line names the start command that saves the waits, and `/f10:start` prints it under the tree.
 
-**The facts sheet** is a JSON object keyed by task id, written by a skill from a short read of each task against the code.
+**The facts sheet** is a JSON object keyed by task id, written by the propose step from a short read of each task against the code.
 An unknown field is refused, so a misspelt one never reads as not sized:
 
 ```json
 {
   "FT-41": {"areas": ["cli ui"], "files": ["cli/internal/ui/table.go"], "lines": 20},
-  "FT-47": {"areas": ["status"], "lines": 40, "buildsOn": "FT-44"},
+  "FT-47": {"areas": ["status"], "lines": 40, "buildsOn": ["FT-44"]},
   "FT-50": {"lines": 50, "risky": "migration"},
   "FT-45": {"alone": true},
   "FT-46": {"with": "FT-45"},
@@ -1224,7 +1239,10 @@ An unknown field is refused, so a misspelt one never reads as not sized:
 `lines` is marked estimated in the reasons.
 `alone`, `with` and `after` are the user's edits to the proposal.
 `with` bundles with that task, whatever the rules say.
-`after` is an id, or `none` to drop the line.
+`buildsOn` and `after` are lists of ids, and a single id reads as a list of one.
+`after` replaces every base the rules would give, and `none` drops them all.
+The start reads the body's `After:` line of an entry with no typed base.
+So a dropped order that the body still states prints a line under the order block, naming `f10 task update <id> --after none`, which drops it from the task.
 
 ## Daemon
 
@@ -2111,7 +2129,6 @@ Both exit **3** on a tracker that is not the host's when no driver takes the ver
 A failed comment is never retried, and its error says it may have posted.
 On the host's issues, unless `tracker.title` is `none`, an update also puts the prefix back on a title renamed by hand.
 `--after <id>` writes the body's `After:` line, replacing the first one or adding one at the end, and `--after none` drops it.
-`f10 start <ids> --propose` proposes these edits.
 It goes to the driver as an update of its own (`update <n> --after <m>`, an empty number to drop it).
 Else the host's issues rewrite the body, and a tracker that edits no body exits **3**.
 `--parent <id>` links the task under that parent, moving it from a parent it already has, and `--parent ""` takes it out from under its parent.

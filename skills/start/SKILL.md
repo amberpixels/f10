@@ -1,8 +1,8 @@
 ---
 name: start
-description: "f10 start skill - start tasks without leaving this session, each in its own worktree, Herdr workspace and agent, run through the project's flow by the f10 daemon: plan, ship, then finish when the flow ends in it; a list, a range or a parent runs every task, ordered by the body's After: lines or typed on the line (A,B stacks B on A, C@A@B waits for A and B to merge), a dependent once its base has a commit (under --plan, once its base's plan is saved), pausing once an agent asks and nothing else can move; --discuss or a PR link opens one agent that summarises and waits. Use when the user says \"/f10:start <task-id | ids | id -- id | parent | PR url | #n> [--plan | --discuss | --local | --flow <name>] [--pace <name>] [--after <task-id> | --base <branch>] [--task <id>] [--agent <profile> | --model <model>] [--parallel N]\", asks to start, run or ship one or several tasks in new worktrees, to run a parent's subtasks, to discuss a task before planning, to pick up someone else's PR, or asks what to bundle, run in parallel or order before starting a set of tasks, which --discuss answers: its agent reads the tasks and proposes it."
+description: "f10 start skill - start tasks without leaving this session, each in its own worktree, Herdr workspace and agent, run through the project's flow by the f10 daemon: plan, ship, then finish when the flow ends in it; a list, a range or a parent runs every task, ordered by the body's After: lines or typed on the line (A,B stacks B on A, C@A@B waits for A and B to merge), a dependent once its base has a commit (under --plan, once its base's plan is saved), pausing once an agent asks and nothing else can move; --discuss or a PR link opens one agent that summarises and waits; --propose reads the tasks (or the tasks a description finds) in this session and prints the one start command that bundles and orders them, starting nothing. Use when the user says \"/f10:start <task-id | ids | id -- id | parent | PR url | #n> [--plan | --discuss | --local | --flow <name>] [--pace <name>] [--after <task-id> | --base <branch>] [--task <id>] [--agent <profile> | --model <model>] [--parallel N] [--propose]\", asks to start, run or ship one or several tasks in new worktrees, to run a parent's subtasks, to discuss a task before planning, to pick up someone else's PR, or asks what to bundle, run in parallel or order before starting a set of tasks, which --propose answers in this session and --discuss in an agent of its own."
 allowed-tools: Bash, AskUserQuestion, Read, Grep
-argument-hint: "<id>[@<base>...][:profile]... | <id>,<id>... | <id> -- <id> | <PR url> [--plan | --discuss] [--pace <name>]"
+argument-hint: "<id>[@<base>...][:profile]... | <id>,<id>... | <id> -- <id> | <PR url> [--plan | --discuss | --propose] [--pace <name>]"
 ---
 
 # f10 · start
@@ -23,7 +23,7 @@ A dependent opens once its base branch has a commit, and its finish waits for th
 Under `--plan` a dependent opens once its base's plan is saved, because it designs against that plan.
 Two starts open one agent, prompt it once and leave it to you: `--discuss` and a PR pickup, because their agent waits for a person.
 This skill expands parents, runs the command (`${CLAUDE_PLUGIN_ROOT}/modes/binary.md`), relays its questions and prints its report.
-It runs no step.
+It runs no step, except **propose** under `--propose`.
 
 **Arguments**
 - `--help`: follow `${CLAUDE_PLUGIN_ROOT}/modes/help.md` and stop; nothing below applies.
@@ -60,9 +60,25 @@ It runs no step.
   The default is half the CPU cores, from 2 to 8.
   Tasks past the cap queue in the start's order and show as `queued`.
   A task frees its slot once it asks, waits for its base's first commit, or waits at finish for its base.
+- `--propose`: print how to start the tasks, and start nothing (**Propose** below).
+  It runs in this session, with no worktree and no agent.
 - Everything else (`--task`) goes to `f10 start` verbatim.
 - A request to resume or go on with a stopped batch is `f10 resume <task-id>`, with any task of the batch, or bare when the user names none.
   It takes `--answer`, `--every` and `--parallel`, and it runs and exits as **Every other start** below says.
+
+**Propose** (`--propose`) answers "what should I start, and in what order", and ends at a command to run.
+**Parents** and **Run** below do not apply.
+
+1. **Settle the tasks.**
+   Ids and parents go on as typed.
+   A description, such as "today we need the export fix and the two status tasks", goes to `f10 task search <query>`.
+   Run one search for each thing it names, all in one Bash call.
+   When the open hits are one clear set, take them and name them in one line.
+   Otherwise ask once, in one `AskUserQuestion`, with a multi-select question for each thing named.
+   Its options are the open hits as `<id> <title>`, cut to fit, four at most per question.
+   No open hit for a thing is one line saying so, and the rest go on.
+2. **Run the propose step**: `f10-load-project.sh propose`, then follow it with the tasks and the start flags given.
+3. **Stop** at the proposal, with one line offering to run its command.
 
 **Parents**: a task id whose task has subtasks is never started itself.
 Its unfinished subtasks run instead.

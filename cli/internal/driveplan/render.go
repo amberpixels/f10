@@ -37,8 +37,8 @@ func count(n int, what string) string {
 	return fmt.Sprintf("%d %ss", n, what)
 }
 
-// Write prints the proposal: the levels, the command, the saving, the
-// After: edits waiting on a yes, and the trade-off once.
+// Write prints the proposal: the levels, the order with its reasons, the
+// command, the saving, and the trade-off once.
 func (p Plan) Write(w io.Writer, notes []string, extra ...string) error {
 	var b strings.Builder
 
@@ -64,18 +64,16 @@ func (p Plan) Write(w io.Writer, notes []string, extra ...string) error {
 		fmt.Fprintf(&b, "%-9s %s\n", "", note)
 	}
 
+	p.writeOrder(&b)
+
+	for _, line := range p.Unordered {
+		fmt.Fprintf(&b, "%-9s %s\n", "", line)
+	}
+
 	fmt.Fprintf(&b, "\n%s\n", p.Command(extra...))
 
 	if s := p.Saving(); s != "" {
 		b.WriteString(s + "\n")
-	}
-
-	if len(p.Edits) > 0 {
-		b.WriteString("\nAfter: lines to add to the tasks, with your yes:\n")
-
-		for _, e := range p.Edits {
-			fmt.Fprintf(&b, "  %s  After: %s  %s\n", e.Task, e.After, e.Reason)
-		}
 	}
 
 	if p.Bundles > 0 {
@@ -88,6 +86,47 @@ func (p Plan) Write(w io.Writer, notes []string, extra ...string) error {
 	}
 
 	return nil
+}
+
+// writeOrder prints a row per base, so the reader sees why each @ and , in
+// the command is there. A dropped base says why the join was cut.
+func (p Plan) writeOrder(b *strings.Builder) {
+	type row struct{ pair, reason string }
+
+	var rows []row
+
+	for _, st := range p.Levels {
+		for _, e := range st.Entries {
+			for _, base := range e.Bases {
+				pair := strings.Join(e.IDs, "+") + " after " + base.ID
+				if base.Dropped {
+					pair = strings.Join(e.IDs, "+") + " not after " + base.ID
+				}
+
+				rows = append(rows, row{pair, base.Reason})
+			}
+		}
+	}
+
+	if len(rows) == 0 {
+		return
+	}
+
+	width := 0
+	for _, r := range rows {
+		width = max(width, len(r.pair))
+	}
+
+	b.WriteString("\n")
+
+	for n, r := range rows {
+		label := ""
+		if n == 0 {
+			label = "order"
+		}
+
+		fmt.Fprintf(b, "%-9s %-*s  %s\n", label, width, r.pair, r.reason)
+	}
 }
 
 // Hint is the one line a plain start prints when the rules alone would save

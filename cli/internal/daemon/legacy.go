@@ -102,6 +102,14 @@ func newSniffListener(ln net.Listener, legacy func(net.Conn, *bufio.Reader)) *sn
 }
 
 func (l *sniffListener) Accept() (net.Conn, error) {
+	// a failed listener wins over a sorted connection: select picks at random
+	// between two ready cases, and the sort closes the one it still holds
+	select {
+	case <-l.done:
+		return nil, l.err
+	default:
+	}
+
 	select {
 	case c := <-l.conns:
 		return c, nil
