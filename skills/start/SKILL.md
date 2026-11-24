@@ -125,10 +125,10 @@ Rerunning the same arguments follows the drive already running; from another ses
 1. Run it with the arguments from **Parents**.
    Its first line is `drive <n>`, the record it keeps; rerunning the same arguments picks that record up.
    When it exits, read its output and act on the exit code.
+   A finished task's `<id> handoff:` lines are markdown: on every exit, relay them verbatim beneath the report block, outside the fence.
+   A drive that waited on an ask prints a report each time it stops, and a task that finished before the ask has its handoff only in that earlier report, so take the handoff lines from the whole output.
 2. **Exit 0**: every task went through its flow.
    Print the report block (one row per task) in a fenced `yaml` block and any line beneath it, and stop.
-   A finished task's `<id> handoff:` lines are markdown: relay them verbatim beneath the block, outside the fence.
-   A drive that waited on an ask prints a report each time it stops, and a task that finished before the ask has its handoff only in that earlier report, so relay the handoff lines from the whole output.
 3. **The command waits through asks.**
    When an agent asks and nothing else can move, the command prints the drive's report and keeps following: an answer resumes the drive, and the command follows it on.
    The question waits in the asking agent's pane, on the status line and in the inbox, so print nothing about it and open no questionnaire.
@@ -136,6 +136,7 @@ Rerunning the same arguments follows the drive already running; from another ses
    **Exit 4** comes only when the drive was stopped (`f10 stop`) while it waited on its asks.
    Print the report block and the line beneath it that says so, and stop.
 4. **Exit 5**: a task halted; the lines beneath the report say which and why.
+   A halt wins over an ask, so another task's question may still wait in its pane.
    Print the report block and those lines verbatim, and stop.
    A row `owned by drive <n> (pid …)` is a task another drive holds: name that drive; `f10 status --drives` shows it and `f10 stop <n>` stops it.
    The user settles a halt in that workspace, then reruns the same command, which resumes where each task stands.

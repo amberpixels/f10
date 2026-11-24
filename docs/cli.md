@@ -1037,11 +1037,11 @@ A cancelled record is never picked up again: the same command line starts a new 
 7. **The report.**
    Progress lines as it goes, an end included: a halt or an ask is printed the moment the driver sees it, not only beneath the report.
    Then one row per task in graph order: `already finished`, `finished`, `done: <skills>`, `waiting on <id>` (parked for its base's code, or for its branch on origin), `waiting for <id>` (its finish waits on its base), `asked at <skill>`, `halted at <skill>`, `halted: base <id> halted`, `owned by drive <n> (pid …)`, `cancelled`, `not reached`.
-   Exit 0 when every task went through its skills, 4 when any task asks, else 5 when any halted.
+   Exit 0 when every task went through its skills, 5 when any halted, else 4 when any task asks.
    Exit 6 is a drive stopped for a daemon upgrade, and exit 8 a drive asking its daemon to start it again.
    Only the daemon and the command following it see them.
    The command following a drive does not end on a 4: it prints that the drive waits on its asks and follows the run an answer resumes, found through the daemon's log index, because a rerun would only stop on the same asks again.
-   It ends with 4 only when the drive was stopped while it waited.
+   It ends with 4 when the drive was stopped while it waited, or when the daemon never learned the drive's number, so no resumed run can be found.
 
 Rerunning the same command, or `f10 start --resume <n>`, is the resume: the record is picked up, and each task's position is read from its own branch and run state.
 With `--answer "1. … 2. …"`, the first task stopped on a question gets the text as its agent's next prompt, plain, the way `f10 forward` sends an answer, and the driver polls that turn as it would any other.

@@ -26,7 +26,7 @@
 #   f10-state.sh pipeline <step>...     declare the ship pipeline's steps, the last one final
 #   f10-state.sh show                   the current run, human-readable (`f10 status` says more)
 #   f10-state.sh clear | prune          drop this session's state | drop long-dead sessions
-#   f10-state.sh render [<session id>]  the status-line segment, open asks counted; status-line JSON on stdin
+#   f10-state.sh render [<session id>]  the status-line segment, open asks shown; status-line JSON on stdin
 #   f10-state.sh doctor                 is any of this actually wired up?
 #
 # A fixed path, not ${CLAUDE_PLUGIN_DATA}: the renderer runs from the user's `statusLine` command,
@@ -143,7 +143,7 @@ color_for() {
 
 # This project's open asks as ` f10 · 󰚇 2 asks`, or nothing. It globs and never parses, because
 # it runs on every refresh. An ask's file name starts with its project's hash, which the
-# SessionStart hook writes to `<session>.project`. With no such file, every project's asks count.
+# SessionStart hook writes to `<session>.project`. With no such file, every project's asks show.
 # Shown with or without a run. The icon is md-inbox (U+F0687, Nerd Fonts).
 asks_segment() {
   _asks=""
@@ -202,7 +202,7 @@ render() {
     fi
   fi
 
-  # the session first: it names the project whose asks count
+  # the session first: it names the project whose asks show
   find_sid "$want" || {
     asks_segment
     printf '%s' "$_asks"
@@ -353,7 +353,7 @@ f10-state.sh - where an f10 run is right now, for the status line to render.
   pipeline <step>...       declare the ship pipeline's steps, the last one final
   show                     the current run, human-readable
   clear | prune            drop this session's state | drop long-dead sessions
-  render [<session id>]    the status-line segment, open asks counted; status-line JSON on stdin
+  render [<session id>]    the status-line segment, open asks shown; status-line JSON on stdin
   doctor                   is any of this actually wired up?
 USAGE
     exit 2
