@@ -324,11 +324,12 @@ func runScenario(ctx context.Context, root string, s Scenario, o options, p agen
 
 	if jerr := json.Unmarshal(out, &res); jerr == nil {
 		rep.CostUSD, rep.DurationMS = res.CostUSD, res.DurationMS
+		// an errored run's result is claude's error, not a reply worth grading
 		if res.IsError {
 			rep.Error = lastLine(res.Result)
+		} else {
+			s.reply = res.Result
 		}
-
-		s.reply = res.Result
 	}
 
 	if err != nil && rep.Error == "" {
