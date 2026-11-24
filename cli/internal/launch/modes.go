@@ -4,6 +4,6 @@ const ModePlan = "plan"
 
 const ModeDiscuss = "discuss"
 
-// DrivenEnv marks the environment of an agent a drive runs: the inbox hook
-// tells it no other agent's asks, which it could only print into its pane.
+// DrivenEnv marks the environment of an agent a drive runs, so a hook can
+// tell a drive's agent from one the user works in.
 const DrivenEnv = "F10_DRIVEN"

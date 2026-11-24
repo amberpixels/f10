@@ -364,3 +364,22 @@ func TestReportNamesASkippedReproduction(t *testing.T) {
 		t.Errorf("got\n%s\nwant\n%s", got, want)
 	}
 }
+
+// A halt beside an ask exits as the halt, since the follower waits through
+// an ask and would otherwise hide the halt until the ask is answered.
+func TestReportHaltWinsOverAnAsk(t *testing.T) {
+	in := &DriveInput{Out: io.Discard}
+	in.Runs = capRuns(2)
+	in.Runs[0].End = &driveResult{Row: "asked at plan", Code: ui.ExitAsk}
+	in.Runs[1].End = &driveResult{Row: "halted at plan", Code: ui.ExitHalted}
+
+	if err := in.Report(in.Runs, nil); testkit.ExitCode(err) != ui.ExitHalted {
+		t.Errorf("err = %v, want exit %d", err, ui.ExitHalted)
+	}
+
+	in.Runs[1].End = nil
+
+	if err := in.Report(in.Runs, nil); testkit.ExitCode(err) != ui.ExitAsk {
+		t.Errorf("an ask alone: err = %v, want exit %d", err, ui.ExitAsk)
+	}
+}

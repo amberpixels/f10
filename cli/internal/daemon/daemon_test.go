@@ -170,6 +170,32 @@ func TestServeAttachesToAResumeBeforeItsNumber(t *testing.T) {
 	waitExit(t, resume.Log)
 }
 
+// A resume is indexed under its number at start, so a run that ends before
+// it reports its number is still found by FindLog.
+func TestServeIndexesAResumeAtStart(t *testing.T) {
+	t.Parallel()
+
+	s := &Server{Dir: runDir(t), Version: "v1", Child: shell}
+	serve(t, s)
+
+	resume, err := call(t.Context(), s.Dir, request{
+		Op:     opRun,
+		Argv:   []string{"exit 4"},
+		Dir:    "/",
+		Root:   "/r",
+		Resume: 7,
+	}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	waitExit(t, resume.Log)
+
+	if got := FindLog(s.Dir, "/r", 7); got != resume.Log {
+		t.Errorf("FindLog = %q, want %q", got, resume.Log)
+	}
+}
+
 // The other order: a resume sent while a drive started by its command line
 // has not reported its number attaches to it too.
 func TestServeAttachesAResumeToAnUnnumberedDrive(t *testing.T) {

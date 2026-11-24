@@ -26,7 +26,7 @@
 #   f10-state.sh pipeline <step>...     declare the ship pipeline's steps, the last one final
 #   f10-state.sh show                   the current run, human-readable (`f10 status` says more)
 #   f10-state.sh clear | prune          drop this session's state | drop long-dead sessions
-#   f10-state.sh render [<session id>]  the status-line segment, open asks counted; status-line JSON on stdin
+#   f10-state.sh render [<session id>]  the status-line segment with the open asks, from the status-line JSON on stdin
 #   f10-state.sh doctor                 is any of this actually wired up?
 #
 # A fixed path, not ${CLAUDE_PLUGIN_DATA}: the renderer runs from the user's `statusLine` command,
@@ -143,26 +143,41 @@ color_for() {
 
 # This project's open asks as ` f10 · 󰚇 2 asks`, or nothing. It globs and never parses, because
 # it runs on every refresh. An ask's file name starts with its project's hash, which the
-# SessionStart hook writes to `<session>.project`. With no such file, every project's asks count.
+# SessionStart hook writes to `<session>.project`. With no such file, every project's asks show.
 # Shown with or without a run. The icon is md-inbox (U+F0687, Nerd Fonts).
 asks_segment() {
   _asks=""
-  local n=0 f hash="" glob="*"
+  local n=0 f first="" hash="" glob="*"
   if [ -n "$sid" ] && [ -f "$state_dir/$sid.project" ]; then
     read -r hash <"$state_dir/$sid.project"
     case "$hash" in '' | *[!0-9a-f]*) hash="" ;; esac # a hand-edited file must not widen the glob
     [ -n "$hash" ] && glob="$hash-*"
   fi
+  # the first in name order: finding the oldest would stat every file on each refresh
   for f in "$inbox_dir"/$glob.yaml; do
-    [ -e "$f" ] && n=$((n + 1))
+    [ -e "$f" ] || continue
+    n=$((n + 1))
+    [ -n "$first" ] || first="$f"
   done
   [ "$n" -gt 0 ] || return 0
 
-  local noun="asks"
-  [ "$n" = 1 ] && noun="ask"
-  _asks=" f10 · 󰚇 $n $noun"
+  # <project-hash>-<TASK>.yaml: the hash is hex, so its first dash ends it
+  local id="${first##*/}"
+  id="${id%.yaml}"
+  id="${id#*-}"
+  local more=""
+  [ "$n" -gt 1 ] && more="+$((n - 1))"
+
+  # OSC 8 links: Ctrl+click opens the ask's file, and +N the inbox directory
+  if [ "${F10_STATE_LINK:-1}" != "0" ]; then
+    id=$'\033]8;;file://'"$first"$'\033\\'"$id"$'\033]8;;\033\\'
+    [ -n "$more" ] && more=$'\033]8;;file://'"$inbox_dir/"$'\033\\'"$more"$'\033]8;;\033\\'
+  fi
+
+  local text="f10 · 󰚇 $id${more:+ $more}"
+  _asks=" $text"
   if [ -z "${NO_COLOR:-}" ] && [ "${F10_STATE_COLOR:-1}" != "0" ]; then
-    _asks=" "$'\033[1;33m'"f10 · 󰚇 $n $noun"$'\033[0m'
+    _asks=" "$'\033[1;33m'"$text"$'\033[0m'
   fi
 }
 
@@ -187,7 +202,7 @@ render() {
     fi
   fi
 
-  # the session first: it names the project whose asks count
+  # the session first: it names the project whose asks show
   find_sid "$want" || {
     asks_segment
     printf '%s' "$_asks"
@@ -338,7 +353,7 @@ f10-state.sh - where an f10 run is right now, for the status line to render.
   pipeline <step>...       declare the ship pipeline's steps, the last one final
   show                     the current run, human-readable
   clear | prune            drop this session's state | drop long-dead sessions
-  render [<session id>]    the status-line segment, open asks counted; status-line JSON on stdin
+  render [<session id>]    the status-line segment, open asks shown; status-line JSON on stdin
   doctor                   is any of this actually wired up?
 USAGE
     exit 2

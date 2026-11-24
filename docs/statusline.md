@@ -37,11 +37,15 @@ f10-state.sh doctor   # where state lives, whether the symlink is in place, what
 | <img src="glyphs/blocked.svg" width="14" alt="blocked"> | blocked: a judge verdict ended the run, so nothing broke and the user decided |
 
 A stopped run adds the step it stopped on, so `◉ ●` <img src="glyphs/blocked.svg" width="14" alt="blocked"> `judge` reads "blocked at judge".
-Open asks of this session's project add a count, ` f10 · 󰚇 2 asks`, shown with or without a run.
-The count means a driven agent is waiting on you (`f10 inbox`, `/f10:inbox`).
+Open asks of this session's project add the first asking task's id, in file name order, and a count of the rest.
+It reads ` f10 · 󰚇 FT-12` for one ask and ` f10 · 󰚇 FT-12 +2` for three, with or without a run.
+The id links to its ask's file, and `+2` links to the inbox directory.
+In a terminal that supports OSC 8 links, Ctrl+click opens the question, or a picker over the open asks.
+Any other terminal shows plain text.
+The segment means a driven agent is waiting on you: answer in its pane, with `f10 inbox` or `/f10:inbox`.
 Its icon is md-inbox (U+F0687).
 The session start hook writes the project to `<session>.project` beside the run state, as the hash every ask's file name starts with.
-A session with no such record, such as one outside git, counts every project's asks.
+A session with no such record, such as one outside git, shows every project's asks.
 The rest, the task, the reason, what unblocks it, and the question a driven agent is waiting on (`ask`), is `f10 status`; `f10 status <task-id>` reads the same for a task running in its own worktree, from the task's own run only; when the agent there has moved on to another task, it names that task and falls back to the task's plan file and PR.
 For a finished task, its worktree gone, it prints the same block from what `f10 finish` archived.
 Bare `f10 status` in a checkout whose branch names no task prints a `launched here` tree, a row per live task this session started or drove.
@@ -76,7 +80,7 @@ To copy the real characters, take them from the `F10_STATE_GLYPHS` default below
 |---|---|
 | `NO_COLOR` or `F10_STATE_COLOR=0` | drop the color, keep the badge |
 | `F10_STATE_GLYPHS` | replace the glyph set: all eight positions, in the order upcoming, running, done, skipped, failed, prior, partial, blocked; default `○ ◎ ● ◌ ✗ ◉ 󰅚 󰜺`, whose last two are the real U+F015A and U+F073A characters |
-| `F10_STATE_LINK` | `0` drops the hyperlink on the task id |
+| `F10_STATE_LINK` | `0` drops the hyperlinks on the asks' task id and count |
 | `F10_STATUS_GLYPHS` | replace the four icons in `f10 status` trees: open PR, merged PR, review and judge ([cli](cli.md#status)) |
 | `F10_STATE_DIR` | where state files live, default `~/.claude/f10/state` |
 | `F10_STATE_TTL` | seconds before a badge reads as stale, default one day |

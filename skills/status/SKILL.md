@@ -1,7 +1,7 @@
 ---
 name: status
-description: "f10 status skill - where an f10 run is (this session's, a task's in its own worktree, each child's of a parent, or everything this session started or drove), why it stopped, and the question a driven agent is waiting on, relayed and answered. Use when the user says \"/f10:status\" or \"/f10:status <task-id>\", asks where a run is, why it stopped, how a parent's subtasks are going, what the status-line badge means, or what an agent in another workspace is asking."
-allowed-tools: Bash, AskUserQuestion
+description: "f10 status skill - where an f10 run is (this session's, a task's in its own worktree, each child's of a parent, or everything this session started or drove), why it stopped, and the question a driven agent is waiting on, shown and answered when the user replies. Use when the user says \"/f10:status\" or \"/f10:status <task-id>\", asks where a run is, why it stopped, how a parent's subtasks are going, what the status-line badge means, or what an agent in another workspace is asking."
+allowed-tools: Bash
 argument-hint: "[task-id]"
 ---
 
@@ -38,8 +38,13 @@ Never reorder it, summarise it, or turn it into a table, because the binary alre
    A tree goes in a plain fence, because its titles break the highlighting.
    A failure is printed as is and ends the turn.
 2. **When the output carries an `ask` row**, the agent is driven (`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`) and stopped on that question.
-   Put it to the user in **one `AskUserQuestion`**: one question per numbered item, the bracketed options as the choices, the first as recommended.
-   Then write the answers through the inbox, numbered as the ask was, each answer the option's text, quoted:
+   The block already shows the question.
+   Add one line under it saying the user can answer by replying here, or in the agent's own pane.
+   Never open an `AskUserQuestion` for it, because the user asked where the run is rather than to answer it now.
+   It is also not asked here because the question may already be answered in the pane.
+   Then stop.
+   When the user's next message answers it, write the answers through the inbox.
+   Number them as the ask was, and quote each answer as the option's text:
 
    ```
    f10 inbox answer <task-id> --by skill 1=<answer> 2=<answer>
@@ -51,7 +56,9 @@ Never reorder it, summarise it, or turn it into a table, because the binary alre
 3. **A parent, or the session's launches, prints a tree** instead of a block, with a row per child.
    Each row carries its task url and PR url on `url` and `pr` lines.
    A child's files are one call away: `f10 status <child-id>` prints its block.
-   An `asking` child carries its question, whole, on an `ask` line under its row: put every one to the user in **one `AskUserQuestion`**, the questions grouped by child id, and answer each child's ask with its own answers (`f10 inbox answer <child-id> --by skill 1=<answer>`), one command per child in one Bash call.
+   An `asking` child carries its question, whole, on an `ask` line under its row.
+   Add the same one line as point 2 and stop, with no `AskUserQuestion`.
+   When the user's reply answers them, answer each child's ask with its own answers (`f10 inbox answer <child-id> --by skill 1=<answer>`), one command per child in one Bash call.
    No `asking` child: the tree is the whole answer.
    Stop.
 4. No `ask` row: the status is the whole answer.

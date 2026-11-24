@@ -718,9 +718,10 @@ func TestSeedChainsADigitPrefix(t *testing.T) {
 	}
 }
 
-// The open asks count on the status line, with a run and without one: a
-// session that recorded its project counts that project's alone.
-func TestRenderCountsAsks(t *testing.T) {
+// The status line shows the first asking task's id and a count of the rest,
+// with a run and without one. A session that recorded its project shows
+// that project's asks alone.
+func TestRenderShowsAsks(t *testing.T) {
 	t.Parallel()
 
 	if runtime.GOOS == "windows" {
@@ -749,12 +750,12 @@ func TestRenderCountsAsks(t *testing.T) {
 	}
 
 	for session, want := range map[string]string{
-		"asks":   " 󱊴 ○○○ f10 · 󰚇 3 asks",
-		"scoped": " 󱊴 ○○○ f10 · 󰚇 1 ask",
-		"none":   " f10 · 󰚇 3 asks",
+		"asks":   " 󱊴 ○○○ f10 · 󰚇 FT-1 +2",
+		"scoped": " 󱊴 ○○○ f10 · 󰚇 FT-1",
+		"none":   " f10 · 󰚇 FT-1 +2",
 	} {
 		cmd := exec.Command(script, "render", session)
-		cmd.Env = append(os.Environ(), dirEnv+"="+dir, "NO_COLOR=1", "F10_INBOX_DIR="+asks)
+		cmd.Env = append(os.Environ(), dirEnv+"="+dir, "NO_COLOR=1", "F10_STATE_LINK=0", "F10_INBOX_DIR="+asks)
 
 		out, err := cmd.Output()
 		if err != nil {
@@ -764,6 +765,23 @@ func TestRenderCountsAsks(t *testing.T) {
 		if string(out) != want {
 			t.Errorf("render %s = %q, want %q", session, out, want)
 		}
+	}
+
+	// the id links to its ask's file, and +N to the inbox directory
+	cmd := exec.Command(script, "render", "none")
+	cmd.Env = append(os.Environ(), dirEnv+"="+dir, "NO_COLOR=1", "F10_INBOX_DIR="+asks)
+
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+
+	link := func(url, text string) string { return "\x1b]8;;" + url + "\x1b\\" + text + "\x1b]8;;\x1b\\" }
+	want := " f10 · 󰚇 " + link("file://"+filepath.Join(asks, "0a0a0a0a-FT-1.yaml"), "FT-1") + " " +
+		link("file://"+asks+"/", "+2")
+
+	if string(out) != want {
+		t.Errorf("render with links = %q, want %q", out, want)
 	}
 }
 

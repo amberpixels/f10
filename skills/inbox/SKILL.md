@@ -1,6 +1,6 @@
 ---
 name: inbox
-description: "f10 inbox skill - the questions driven agents are waiting on in this project (every project with --all), put to the user in one questionnaire and answered: a drive's task resumes its drive, any other agent gets the answer as its next prompt. Use when the user says \"/f10:inbox\" (formerly /f10:asks), asks what agents are waiting on or asking, or wants to answer the open asks the status line counts."
+description: "f10 inbox skill - the questions driven agents are waiting on in this project (every project with --all), put to the user in one questionnaire and answered: a drive's task resumes its drive, any other agent gets the answer as its next prompt. Use when the user says \"/f10:inbox\" (formerly /f10:asks), asks what agents are waiting on or asking, or wants to answer the open asks the status line shows."
 allowed-tools: Bash, AskUserQuestion
 argument-hint: "[task-id] [--all]"
 ---

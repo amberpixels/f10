@@ -13,8 +13,8 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
-// Report exits with an ask over a halt, since answering the ask is what
-// resumes the drive.
+// Report exits with a halt over an ask: a follower waits through an ask
+// for the drive to resume, so only a halt tells it that someone must act.
 func (in *DriveInput) Report(runs []*DriveRun, notes []string) error {
 	var (
 		rows   []render.Fact
@@ -63,7 +63,10 @@ func (in *DriveInput) Report(runs []*DriveRun, notes []string) error {
 	}
 
 	if len(asking) > 0 {
-		code = ui.ExitAsk
+		if code != ui.ExitHalted {
+			code = ui.ExitAsk
+		}
+
 		lines = append(lines, "answer with: "+in.resumeLine()+answerFlags(asking))
 	}
 

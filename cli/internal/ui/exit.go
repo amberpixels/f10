@@ -19,7 +19,7 @@ const (
 	// no write, forward with the task in this checkout, finish of someone
 	// else's PR, start with no task named, and review round with no next round.
 	ExitDeclined = 3
-	// ExitAsk is a drive stopped on an ask the skill relays.
+	// ExitAsk is a drive stopped on an ask, which an answer resumes.
 	ExitAsk = 4
 	// ExitHalted is a drive stopped by any other halt.
 	ExitHalted = 5

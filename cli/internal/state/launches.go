@@ -12,11 +12,12 @@ import (
 
 const (
 	launchesExt = ".launches"
-	inboxExt    = ".inbox"
 	projectExt  = ".project"
-	// legacyAsksExt is the marks' name before the inbox rename, still pruned so
-	// old files go. Drop it in v0.68.
-	legacyAsksExt = ".asks"
+	// legacyAsksExt and legacyInboxExt name the marks of the asks a session
+	// was told. No session is told any more, but old files are still pruned.
+	// Drop them in v0.72.
+	legacyAsksExt  = ".asks"
+	legacyInboxExt = ".inbox"
 )
 
 // Launch kinds: a task `f10 start` opened, or a drive by its number.
@@ -29,11 +30,6 @@ const (
 type Launch struct {
 	Kind  string
 	Value string // the task as typed for start, the drive's number for drive
-}
-
-// InboxPath marks the asks a session was told, so each is told once.
-func InboxPath(dir, session string) string {
-	return filepath.Join(dir, unsafe.ReplaceAllString(session, "_")+inboxExt)
 }
 
 // ProjectPath holds the hash of the session's project, written at session
