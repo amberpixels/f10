@@ -10,15 +10,6 @@
             "async": true
           }
         ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/f10 inbox hook",
-            "timeout": 5
-          }
-        ]
       }
     ],
     "UserPromptExpansion": [

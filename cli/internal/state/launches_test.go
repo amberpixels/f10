@@ -100,37 +100,30 @@ func TestPruneReclaimsInboxMarks(t *testing.T) {
 	now := time.Now()
 	old := now.Add(-pruneAge - time.Hour)
 
-	for _, session := range []string{"old", "new"} {
-		if err := os.WriteFile(InboxPath(dir, session), []byte("x\n"), 0o600); err != nil {
+	mark := func(name string) string { return filepath.Join(dir, name) }
+
+	// the marks of told asks, under both of their old names
+	for _, name := range []string{"old.inbox", "new.inbox", "older.asks"} {
+		if err := os.WriteFile(mark(name), []byte("x\n"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	if err := os.Chtimes(InboxPath(dir, "old"), old, old); err != nil {
-		t.Fatal(err)
-	}
-
-	// a mark named before the inbox rename still goes
-	legacy := filepath.Join(dir, "older.asks")
-	if err := os.WriteFile(legacy, []byte("x\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := os.Chtimes(legacy, old, old); err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"old.inbox", "older.asks"} {
+		if err := os.Chtimes(mark(name), old, old); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	Prune(dir, now)
 
-	if _, err := os.Stat(InboxPath(dir, "old")); !os.IsNotExist(err) {
-		t.Fatalf("old asks mark kept: %v", err)
+	for _, name := range []string{"old.inbox", "older.asks"} {
+		if _, err := os.Stat(mark(name)); !os.IsNotExist(err) {
+			t.Fatalf("old mark %s kept: %v", name, err)
+		}
 	}
 
-	if _, err := os.Stat(legacy); !os.IsNotExist(err) {
-		t.Fatalf("old .asks mark kept: %v", err)
-	}
-
-	if _, err := os.Stat(InboxPath(dir, "new")); err != nil {
-		t.Fatalf("new asks mark pruned: %v", err)
+	if _, err := os.Stat(mark("new.inbox")); err != nil {
+		t.Fatalf("new mark pruned: %v", err)
 	}
 }

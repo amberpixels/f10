@@ -364,50 +364,6 @@ func TestListAsksJSON(t *testing.T) {
 	}
 }
 
-// A session is told each open ask once, never the one its own agent asks.
-func TestInboxContextOncePerSession(t *testing.T) {
-	dir, stateDir := t.TempDir(), t.TempDir()
-	testkit.Raised(t, dir, asks.Ask{Task: "FT-1", Root: "/r", Worktree: "/w1", Skill: "review"})
-	testkit.Raised(t, dir, asks.Ask{Task: "FT-2", Root: "/r", Worktree: "/w2"})
-
-	out := string(inboxcmd.InboxContext(dir, stateDir, "s1", "UserPromptSubmit", "/w2", "/r"))
-	if !strings.Contains(out, "FT-1 · asked at review") || strings.Contains(out, "FT-2") ||
-		!strings.Contains(out, `"hookEventName":"UserPromptSubmit"`) {
-		t.Errorf("first prompt:\n%s", out)
-	}
-
-	if out := inboxcmd.InboxContext(dir, stateDir, "s1", "UserPromptSubmit", "/w2", "/r"); out != nil {
-		t.Errorf("told twice:\n%s", out)
-	}
-
-	if out := string(
-		inboxcmd.InboxContext(dir, stateDir, "s2", "SessionStart", "", ""),
-	); !strings.Contains(
-		out,
-		"FT-2",
-	) {
-		t.Errorf("another session was not told:\n%s", out)
-	}
-}
-
-// A session in one project is never told another project's asks. One
-// outside any project is told every project's, each named.
-func TestInboxContextKeepsToTheProject(t *testing.T) {
-	dir := t.TempDir()
-	testkit.Raised(t, dir, asks.Ask{Task: "FT-1", Root: "/a", Project: "a", Worktree: "/a1"})
-	testkit.Raised(t, dir, asks.Ask{Task: "FT-2", Root: "/b", Project: "b", Worktree: "/b1"})
-
-	out := string(inboxcmd.InboxContext(dir, t.TempDir(), "s1", "UserPromptSubmit", "/a0", "/a"))
-	if !strings.Contains(out, "FT-1") || strings.Contains(out, "FT-2") {
-		t.Errorf("in project a:\n%s", out)
-	}
-
-	out = string(inboxcmd.InboxContext(dir, t.TempDir(), "s1", "UserPromptSubmit", "", ""))
-	if !strings.Contains(out, asks.AskIcon+" a:FT-1") || !strings.Contains(out, asks.AskIcon+" b:FT-2") {
-		t.Errorf("outside any project:\n%s", out)
-	}
-}
-
 // SessionStart records the session's project for the status line, and
 // drops the record outside any project.
 func TestWriteProject(t *testing.T) {
@@ -427,9 +383,10 @@ func TestWriteProject(t *testing.T) {
 	}
 }
 
-// A driven agent's hook tells it nothing on any event, including the
-// prompt that carries its own answer. The same hook undriven tells the ask.
-func TestInboxHookSkipsADrivenAgent(t *testing.T) {
+// No session is told the open asks, driven or not, on any event: they
+// wait in the asking pane and on the status line. Session start still
+// records the project the status line counts asks by.
+func TestInboxHookTellsNoSession(t *testing.T) {
 	dir, stateDir := t.TempDir(), t.TempDir()
 	t.Setenv("F10_INBOX_DIR", dir)
 	t.Setenv("F10_STATE_DIR", stateDir)
@@ -450,25 +407,28 @@ func TestInboxHookSkipsADrivenAgent(t *testing.T) {
 		return out.String()
 	}
 
-	t.Setenv(launch.DrivenEnv, "1")
-
 	repo := testkit.ScopeRepo(t, t.TempDir(), "app")
 
-	for _, event := range []string{"SessionStart", "UserPromptSubmit"} {
-		if out := hook(event, repo); out != "" {
-			t.Errorf("%s told a driven agent:\n%s", event, out)
+	for _, driven := range []string{"1", ""} {
+		t.Setenv(launch.DrivenEnv, driven)
+
+		for _, cwd := range []string{repo, "/"} {
+			for _, event := range []string{"SessionStart", "UserPromptSubmit"} {
+				if out := hook(event, cwd); out != "" {
+					t.Errorf("%s in %s (driven %q) told the session:\n%s", event, cwd, driven, out)
+				}
+			}
 		}
 	}
 
-	// its status line still counts its own project's asks alone
+	_ = hook("SessionStart", repo)
+
 	if _, err := os.Stat(state.ProjectPath(stateDir, "s1")); err != nil {
-		t.Errorf("a driven session start wrote no project record: %v", err)
+		t.Errorf("session start wrote no project record: %v", err)
 	}
 
-	t.Setenv(launch.DrivenEnv, "")
-
-	if out := hook("UserPromptSubmit", "/"); !strings.Contains(out, "FT-1") {
-		t.Errorf("an undriven session was not told:\n%s", out)
+	if _, isOpen, err := asks.Get(dir, asks.Key("/r", "FT-1")); err != nil || !isOpen {
+		t.Errorf("the open ask did not survive: open %v, %v", isOpen, err)
 	}
 }
 

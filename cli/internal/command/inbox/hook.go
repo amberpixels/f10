@@ -6,9 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/urfave/cli/v3"
@@ -97,9 +95,9 @@ func resumeAskDrive(ctx context.Context, w io.Writer, a asks.Ask) error {
 	return nil
 }
 
-// runInboxHook prints, as context, the open asks of the session's project
-// it has not been told, leaving out the asking agent's own checkout and
-// every agent a drive runs.
+// runInboxHook keeps the inbox's per-session bookkeeping at session start:
+// it prunes old asks and records the session's project, which the status
+// line counts asks by. It adds nothing to any agent's context.
 func runInboxHook(ctx context.Context, cmd *cli.Command) error {
 	// a hook never fails the prompt it runs for
 	defer func() { _ = recover() }()
@@ -120,41 +118,19 @@ func runInboxHook(ctx context.Context, cmd *cli.Command) error {
 		Cwd     string `json:"cwd"`
 	}
 
-	if json.Unmarshal(raw, &p) != nil || p.Session == "" {
+	// an older plugin cache may still run it on every prompt
+	if json.Unmarshal(raw, &p) != nil || p.Session == "" || p.Event != "SessionStart" {
 		return nil
 	}
 
-	lay := &layout.Layout{}
-	located := false
+	asks.Prune(asks.Dir(), time.Now())
 
-	// at most once, and only where needed: it runs git
-	locate := func() *layout.Layout {
-		if !located && p.Cwd != "" {
-			lay, located = layout.Locate(ctx, p.Cwd), true
-		}
-
-		return lay
+	root := ""
+	if p.Cwd != "" {
+		root = ProjectOf(layout.Locate(ctx, p.Cwd))
 	}
 
-	// before the driven and empty-inbox returns: every session's status line,
-	// a drive's included, counts by it
-	if p.Event == "SessionStart" {
-		asks.Prune(asks.Dir(), time.Now())
-		WriteProject(state.Dir(), p.Session, ProjectOf(locate()))
-	}
-
-	// a driven agent's prompt runs no git
-	if os.Getenv(launch.DrivenEnv) == "1" {
-		return nil
-	}
-
-	// every prompt in every session runs this: an empty inbox costs no git
-	if open, _ := asks.Open(asks.Dir()); len(open) == 0 {
-		return nil
-	}
-
-	l := locate()
-	_, _ = cmd.Writer.Write(InboxContext(asks.Dir(), state.Dir(), p.Session, p.Event, l.CheckoutRoot, ProjectOf(l)))
+	WriteProject(state.Dir(), p.Session, root)
 
 	return nil
 }
@@ -181,62 +157,4 @@ func WriteProject(stateDir, session, root string) {
 
 	_ = os.MkdirAll(stateDir, 0o750)
 	_ = os.WriteFile(path, []byte(asks.ProjectHash(root)+"\n"), 0o600)
-}
-
-// InboxContext is the hook's additional context: the open asks of the
-// project at project that this session was not told, leaving out its own
-// checkout's. An empty project takes every project's. None gives nothing.
-func InboxContext(dir, stateDir, session, event, checkout, project string) []byte {
-	open, err := asks.OpenIn(dir, project)
-	if err != nil || len(open) == 0 {
-		return nil
-	}
-
-	markPath := state.InboxPath(stateDir, session)
-	raw, _ := os.ReadFile(markPath)
-	told := strings.Fields(string(raw))
-
-	var banners, marks []string
-
-	for _, a := range open {
-		mark := a.Key() + "@" + strconv.FormatInt(a.AskedAt.Unix(), 10)
-		if a.Worktree == checkout && checkout != "" {
-			continue
-		}
-
-		marks = append(marks, mark)
-		if slices.Contains(told, mark) {
-			continue
-		}
-
-		name := ""
-		if project == "" && a.Project != "" {
-			name = a.Project + ":" + a.Task
-		}
-
-		banners = append(banners, "```\n"+asks.Banner(a, name)+"```")
-	}
-
-	if len(banners) == 0 {
-		return nil
-	}
-
-	_ = os.MkdirAll(stateDir, 0o750)
-	_ = os.WriteFile(markPath, []byte(strings.Join(marks, "\n")+"\n"), 0o600)
-
-	text := "f10: driven agents are waiting on these questions. Tell the user about them once, printing each " +
-		"banner below verbatim inside a code fence; /f10:inbox answers them here, or " +
-		"`f10 inbox answer <task> N=VALUE` in a terminal.\n\n" + strings.Join(banners, "\n\n")
-
-	out, err := json.Marshal(map[string]any{
-		"hookSpecificOutput": map[string]any{
-			"hookEventName":     event,
-			"additionalContext": text,
-		},
-	})
-	if err != nil {
-		return nil
-	}
-
-	return append(out, '\n')
 }
