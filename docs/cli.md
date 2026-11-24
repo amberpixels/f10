@@ -1196,7 +1196,9 @@ The rules, in order, each leaving a one-line reason on every task and bundle:
    The shared files are walked nearest entry first, and an entry already reached through another base adds nothing, so three tasks on one file make a chain, not a join.
    The user's `after` in the sheet replaces all of them.
    Several bases make a join, which waits for every base to merge and needs a flow that finishes.
+   Two bases in one bundle are one base, the bundle's lead.
    When the run's flow does not finish, an entry keeps its first base, and the others print as dropped with the reason.
+   A join on a base outside the list that is not finished is refused by the start, because nothing in the batch would merge it, so that base is kept alone and the others print as dropped.
 5. **Levels** are each entry's depth in the base graph, the way a batch releases them: every base of an entry sits in an earlier level.
    `--parallel` is the widest level, capped by the `--parallel` given, else by a start's default.
 
@@ -1233,6 +1235,7 @@ An unknown field is refused, so a misspelt one never reads as not sized:
 `with` bundles with that task, whatever the rules say.
 `buildsOn` and `after` are lists of ids, and a single id reads as a list of one.
 `after` replaces every base the rules would give, and `none` drops them all.
+The start reads the body's `After:` line of an entry with no typed base, so a dropped order the body still states prints a line under the order block naming `f10 task update <id> --after none`, which drops it from the task.
 
 ## Daemon
 

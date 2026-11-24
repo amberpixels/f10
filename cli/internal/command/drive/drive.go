@@ -320,6 +320,7 @@ func runPropose(ctx context.Context, cmd *cli.Command, a drivectl.DriveArgs) err
 		MaxLines:        t.Effective.BundleMaxLines,
 		DefaultParallel: drive.DefaultParallel(),
 		Joins:           fl.Finishes && !fl.Mixed,
+		Main:            cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot),
 	}, a)
 	if err != nil {
 		return err

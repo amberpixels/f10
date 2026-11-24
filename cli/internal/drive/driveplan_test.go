@@ -214,12 +214,24 @@ func TestPlanCommandParsesBackToItsOrder(t *testing.T) {
 		bases[id] = got.Bases[i]
 	}
 
-	// GH-30's body names GH-14, outside the list; GH-15 is reached through GH-16
-	want := map[string][]string{"GH-15": nil, "GH-16": {"GH-15"}, "GH-30": {"GH-14", "GH-16"}}
+	// GH-30's body names GH-14, open outside the list, so the start would
+	// refuse a join on it: GH-14 is kept and GH-16 named as dropped.
+	// GH-15 is reached through GH-16, so the shared file adds nothing.
+	want := map[string][]string{"GH-15": nil, "GH-16": {"GH-15"}, "GH-30": {"GH-14"}}
 	for id, w := range want {
 		if !slices.Equal(bases[id], w) {
 			t.Errorf("%s: bases %v, want %v (args %v)", id, bases[id], w, res.Plan.Args)
 		}
+	}
+
+	var out strings.Builder
+	if err := res.Plan.Write(&out, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(out.String(), "GH-30 not after GH-16") ||
+		!strings.Contains(out.String(), "GH-14 is open outside the list") {
+		t.Errorf("output:\n%s", out.String())
 	}
 }
 

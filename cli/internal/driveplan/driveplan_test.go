@@ -347,6 +347,79 @@ func TestCommandSpelling(t *testing.T) {
 	}
 }
 
+// a join on an open task outside the list is refused by the start, so the
+// open base is kept alone; a finished one is no wait and the join stays
+func TestJoinOnAnOutsideBase(t *testing.T) {
+	t.Parallel()
+
+	c := alone("FT-3")
+	c.Base, c.BuildsOn = "FT-90", []string{"FT-1"}
+
+	p := proposeJoins(t, alone("FT-1"), c)
+	if !slices.Equal(order(p), []string{"FT-1", "FT-3@FT-90"}) {
+		t.Errorf("open outside base: %v", order(p))
+	}
+
+	if b := entries(p)["FT-3"].Bases; len(b) != 2 || b[0].Dropped || !b[1].Dropped ||
+		!strings.Contains(b[1].Reason, "FT-90 is open outside the list") {
+		t.Errorf("bases %+v", b)
+	}
+
+	finished, err := driveplan.Propose(driveplan.Input{
+		Tasks: []driveplan.Task{alone("FT-1"), c}, MaxLines: 300, Joins: true, Finished: []string{"ft-90"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !slices.Equal(finished.Args, []string{"FT-1", "FT-3@FT-90@FT-1"}) {
+		t.Errorf("finished outside base: %v", finished.Args)
+	}
+}
+
+// two bases in one bundle are one base, spelled once
+func TestBasesInOneBundleCollapse(t *testing.T) {
+	t.Parallel()
+
+	d := alone("FT-6")
+	d.BuildsOn = []string{"FT-4", "FT-5"}
+
+	p := propose(t, small("FT-4", "ui", 20), small("FT-5", "ui", 20), d)
+	if !slices.Equal(order(p), []string{"FT-4+FT-5,FT-6"}) {
+		t.Errorf("args %v", order(p))
+	}
+
+	if b := entries(p)["FT-6"].Bases; len(b) != 1 || b[0].Dropped {
+		t.Errorf("bases %+v, want the bundle once, kept even with no join allowed", b)
+	}
+}
+
+// a dropped order the body still states is named, since the start reads it
+func TestDroppedOrderTheBodyStillStates(t *testing.T) {
+	t.Parallel()
+
+	a := alone("FT-3")
+	a.Base, a.After = "FT-9", []string{driveplan.NoOrder}
+
+	p := propose(t, a)
+
+	var out bytes.Buffer
+	if err := p.Write(&out, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(out.String(), "`f10 task update FT-3 --after none`") {
+		t.Errorf("output:\n%s", out.String())
+	}
+
+	b := alone("FT-4")
+	b.After = []string{driveplan.NoOrder}
+
+	if q := propose(t, b); len(q.Unordered) != 0 {
+		t.Errorf("no body base, yet %v", q.Unordered)
+	}
+}
+
 func TestBundleSplitsOnDifferentBases(t *testing.T) {
 	t.Parallel()
 

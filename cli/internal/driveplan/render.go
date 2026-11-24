@@ -66,6 +66,10 @@ func (p Plan) Write(w io.Writer, notes []string, extra ...string) error {
 
 	p.writeOrder(&b)
 
+	for _, line := range p.Unordered {
+		fmt.Fprintf(&b, "%-9s %s\n", "", line)
+	}
+
 	fmt.Fprintf(&b, "\n%s\n", p.Command(extra...))
 
 	if s := p.Saving(); s != "" {
@@ -94,13 +98,12 @@ func (p Plan) writeOrder(b *strings.Builder) {
 	for _, st := range p.Levels {
 		for _, e := range st.Entries {
 			for _, base := range e.Bases {
-				pair, reason := strings.Join(e.IDs, "+")+" after "+base.ID, base.Reason
+				pair := strings.Join(e.IDs, "+") + " after " + base.ID
 				if base.Dropped {
 					pair = strings.Join(e.IDs, "+") + " not after " + base.ID
-					reason += "; dropped, since a join needs a flow that finishes"
 				}
 
-				rows = append(rows, row{pair, reason})
+				rows = append(rows, row{pair, base.Reason})
 			}
 		}
 	}

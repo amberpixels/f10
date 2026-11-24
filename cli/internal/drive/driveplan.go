@@ -28,7 +28,8 @@ type PlanInput struct {
 	FlowByArea      map[string]string
 	MaxLines        int
 	DefaultParallel int
-	Joins           bool // the run's flow finishes, so an entry may wait on several bases
+	Joins           bool   // the run's flow finishes, so an entry may wait on several bases
+	Main            string // the main checkout, where a task's branch is looked up
 }
 
 // PlanResult is a proposal.
@@ -115,12 +116,63 @@ func Plan(ctx context.Context, in PlanInput, a drivectl.DriveArgs) (PlanResult, 
 		MaxLines: in.MaxLines,
 		Parallel: cmp.Or(a.Parallel, in.DefaultParallel),
 		Joins:    in.Joins,
+		Finished: in.finishedOutside(ctx, tasks),
 	})
 	if err != nil {
 		return PlanResult{}, err
 	}
 
 	return PlanResult{Plan: p, Tasks: tasks, Notes: notes, Extra: pa.Pass}, nil
+}
+
+// finishedOutside is the bases outside the list that are finished, read as
+// the start reads a join's outside base. One that cannot be read counts as
+// open, so the proposal never offers a join the start would refuse.
+func (in PlanInput) finishedOutside(ctx context.Context, tasks []driveplan.Task) []string {
+	listed := map[string]bool{}
+	for _, t := range tasks {
+		listed[strings.ToUpper(t.ID)] = true
+	}
+
+	var out []string
+
+	seen := map[string]bool{}
+
+	for _, t := range tasks {
+		for _, id := range append(append([]string{t.Base}, t.BuildsOn...), t.After...) {
+			key := strings.ToUpper(id)
+			if id == "" || strings.EqualFold(key, driveplan.NoOrder) || listed[key] || seen[key] {
+				continue
+			}
+
+			seen[key] = true
+
+			if in.finished(ctx, id) {
+				out = append(out, id)
+			}
+		}
+	}
+
+	return out
+}
+
+func (in PlanInput) finished(ctx context.Context, id string) bool {
+	r, err := in.Tracker.Resolve(ctx, id)
+	if err != nil || in.Main == "" {
+		return false
+	}
+
+	branched, err := stack.HasTaskBranch(ctx, in.Main, r.ID)
+	if err != nil {
+		return false
+	}
+
+	info, err := in.Tracker.Info(ctx, r)
+	if err != nil {
+		return false
+	}
+
+	return stack.FinishedTask(info, in.Storage, r.ID, branched)
 }
 
 // readSheet reads the facts sheet, keyed by upper-cased task id; an unknown

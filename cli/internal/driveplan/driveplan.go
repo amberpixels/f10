@@ -51,6 +51,9 @@ type Input struct {
 	// Joins says the run's flow finishes, so an entry may wait on several
 	// bases; f10 start refuses a join otherwise, so only the first is kept
 	Joins bool
+	// Finished is the bases outside the list that are finished, the only
+	// outside bases f10 start lets a join wait on
+	Finished []string
 }
 
 // An Entry is one item of the start command: a task or a bundle.
@@ -109,13 +112,16 @@ type Formed struct {
 
 // A Plan is the proposal.
 type Plan struct {
-	Levels   []Level  `json:"levels"`
-	Args     []string `json:"args"` // the start command's arguments, the order spelled with , and @
-	Parallel int      `json:"parallel"`
-	Waits    int      `json:"ciWaitsSaved"`
-	Finishes int      `json:"finishesSaved"`
-	Bundles  int      `json:"bundles"`
-	Bundled  int      `json:"bundled"` // tasks inside a bundle
+	Levels []Level  `json:"levels"`
+	Args   []string `json:"args"` // the start command's arguments, the order spelled with , and @
+	// Unordered is a line per task whose order the user dropped while its
+	// body still names a base, which the start would read back
+	Unordered []string `json:"unordered,omitempty"`
+	Parallel  int      `json:"parallel"`
+	Waits     int      `json:"ciWaitsSaved"`
+	Finishes  int      `json:"finishesSaved"`
+	Bundles   int      `json:"bundles"`
+	Bundled   int      `json:"bundled"` // tasks inside a bundle
 	// Formed counts the bundles the rules formed, the user's own left out, so
 	// a hint never offers what the user already bundled
 	Formed Formed `json:"formed"`
@@ -172,10 +178,9 @@ func Propose(in Input) (Plan, error) {
 
 	conflictOrders(tasks, entries, byID)
 
-	if !in.Joins {
-		for k := range entries {
-			cutJoin(&entries[k])
-		}
+	for k := range entries {
+		collapse(entries, k)
+		cutJoin(&entries[k], in, byID)
 	}
 
 	levels, err := levelsOf(entries)
@@ -183,7 +188,7 @@ func Propose(in Input) (Plan, error) {
 		return Plan{}, err
 	}
 
-	p := Plan{Levels: levels, Args: commandArgs(levels)}
+	p := Plan{Levels: levels, Args: commandArgs(levels), Unordered: unordered(tasks, levels, byID)}
 
 	for _, st := range levels {
 		p.Parallel = max(p.Parallel, len(st.Entries))
@@ -653,12 +658,85 @@ func conflictOrders(tasks []Task, entries []Entry, byID map[string]int) {
 	}
 }
 
-// cutJoin keeps an entry's first base when the flow does not finish, since
-// f10 start refuses a join that nothing would merge; the rest stay named.
-func cutJoin(e *Entry) {
-	for k := 1; k < len(e.Bases); k++ {
-		e.Bases[k].Dropped = true
+// collapse names each base by the lead of the entry that holds it, once, so
+// two members of one bundle are one base and never an @ twice.
+func collapse(entries []Entry, k int) {
+	of := entryIndex(entries)
+
+	var out []Base
+
+	for _, b := range entries[k].Bases {
+		if j, ok := of[strings.ToUpper(b.ID)]; ok {
+			if j == k {
+				continue
+			}
+
+			b.ID = entries[j].IDs[0]
+		}
+
+		out = addBase(out, b)
 	}
+
+	entries[k].Bases = out
+}
+
+// cutJoin keeps one base of an entry f10 start would refuse as a join: the
+// flow does not finish, or a base outside the list is still open, which
+// nothing in the batch would merge. The open base is the one kept, since
+// the entry needs its code; the rest stay named as dropped.
+func cutJoin(e *Entry, in Input, byID map[string]int) {
+	if len(e.Bases) < 2 {
+		return
+	}
+
+	keep, why := 0, "dropped, since a join needs a flow that finishes"
+
+	if in.Joins {
+		keep = slices.IndexFunc(e.Bases, func(b Base) bool {
+			_, listed := byID[strings.ToUpper(b.ID)]
+
+			done := slices.ContainsFunc(in.Finished, func(f string) bool { return strings.EqualFold(f, b.ID) })
+
+			return !listed && !done
+		})
+		if keep < 0 {
+			return
+		}
+
+		why = "dropped, since " + e.Bases[keep].ID + " is open outside the list and a join waits for every base to merge"
+	}
+
+	for k := range e.Bases {
+		if k != keep {
+			e.Bases[k].Dropped = true
+			e.Bases[k].Reason += "; " + why
+		}
+	}
+}
+
+// unordered names each task whose order the user dropped but whose body
+// still says After:, when its entry spells no base: the start reads the
+// body of an entry with no typed base, so only the tracker can drop it.
+func unordered(tasks []Task, levels []Level, byID map[string]int) []string {
+	var out []string
+
+	for _, st := range levels {
+		for _, e := range st.Entries {
+			if len(e.waits()) > 0 {
+				continue
+			}
+
+			for _, id := range e.IDs {
+				t := tasks[byID[strings.ToUpper(id)]]
+				if dropsOrder(t) && t.Base != "" {
+					out = append(out, fmt.Sprintf("%s: f10 start still reads its After: %s line; "+
+						"`f10 task update %s --after none` drops it", t.ID, t.Base, t.ID))
+				}
+			}
+		}
+	}
+
+	return out
 }
 
 func sharedFile(tasks []Task, a, b Entry, byID map[string]int) string {
