@@ -204,6 +204,7 @@ func TestSniffListenerClosesWithAConnectionBeingSorted(t *testing.T) {
 	time.Sleep(50 * time.Millisecond) // the sort peeks and waits to hand the connection over
 
 	_ = ln.Close()
+	<-sl.done // the accept loop has seen the close; before that, Accept may still hand a connection over
 
 	if _, err := sl.Accept(); err == nil {
 		t.Fatal("Accept after the listener closed returned a connection")
