@@ -121,7 +121,8 @@ func main() {
 	flag.StringVar(&o.only, "scenario", "", "run only this scenario")
 	flag.StringVar(&o.permission, "permission-mode", "acceptEdits",
 		"claude's --permission-mode for the run; a driven ship runs commands, which acceptEdits may refuse")
-	flag.StringVar(&o.budget, "max-budget-usd", "5", "claude's --max-budget-usd per scenario")
+	flag.StringVar(&o.budget, "max-budget-usd", "5",
+		"claude's --max-budget-usd per turn; a scenario with several prompts may spend it on each")
 	flag.StringVar(&o.agent, "agent", "",
 		"run every scenario on this agent `profile` (kind:model:effort, or a part), not the ones it lists")
 	flag.BoolVar(&o.keep, "keep", false, "keep each scenario's temp dir and print its path")
@@ -369,6 +370,14 @@ func runScenario(ctx context.Context, root string, s Scenario, o options, p agen
 		}
 
 		s.reply = res.Result
+
+		// a later turn without a session would start a new conversation
+		// and fail as a later stage's check, not as the runner's error
+		if session == "" && i < len(turns)-1 {
+			rep.Error = fmt.Sprintf("turn %d: claude printed no session id to resume", i+1)
+
+			break
+		}
 	}
 
 	s.grade = gradeWithClaude

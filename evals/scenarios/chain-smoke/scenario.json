@@ -15,7 +15,7 @@
   "captured": {"tasks": 1, "parents": 0, "subtasks": 0, "after": 0},
   "accept": [
     {
-      "run": "d=$(mktemp -d) && printf x > \"$d/a.txt\" && printf y > \"$d/b.txt\" && go build -o \"$d/notes\" . && { \"$d/notes\" -addr 127.0.0.1:18765 -dir \"$d\" & p=$!; sleep 1; curl -s 127.0.0.1:18765/notes/count; kill $p; }",
+      "run": "d=$(mktemp -d) && printf x > \"$d/a.txt\" && printf y > \"$d/b.txt\" && go build -o \"$d/notes\" . && { \"$d/notes\" -addr 127.0.0.1:18765 -dir \"$d\" & p=$!; sleep 1; curl -s --max-time 5 127.0.0.1:18765/notes/count; kill $p; }",
       "want": "2"
     }
   ]

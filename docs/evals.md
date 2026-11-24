@@ -63,7 +63,7 @@ A fixture may also hold a saved plan under `f10/plans/<task>.md`, which lands in
 
 A multi-turn scenario runs one conversation, the way a person would answer between skills:
 
-- `prompts`: the turns, in place of `prompt`. The first runs as `prompt` does, and each later one runs `claude -p --resume <session>` on the session the turn before printed. The report sums the turns' cost and duration, the reply a rubric grades is the last turn's, and a turn that fails ends the run, its index in the error.
+- `prompts`: the turns, in place of `prompt`. The first runs as `prompt` does, and each later one runs `claude -p --resume <session>` on the session the turn before printed. The report sums the turns' cost and duration, the reply a rubric grades is the last turn's, and a turn that fails ends the run, its index in the error. `-max-budget-usd` caps each turn, so a scenario of five turns may spend five times it.
 - `branch`: a branch checked out after the initial commit, so the commits the run makes have `main` to be reviewed against. A scenario with a `change` has its own branch, so it never names one.
 
 A capture scenario runs on a fixture tracker that creates tasks: the `capture-simple` fixture's driver writes `tasks/EV-<n>.md`, numbered past the highest one there, with a `Parent: EV-<m>` line under the status line for a subtask.
