@@ -34,6 +34,8 @@ type ChildRow struct {
 	OnChecks bool `json:"-"`
 	// Waits are a join's bases not yet merged, by its drive's record
 	Waits []string `json:"-"`
+	// WaitsPlan: its batch runs --plan, so Waits owe saved plans, not merges
+	WaitsPlan bool `json:"-"`
 	// Stated: State comes from the tracker, so an open one outranks a
 	// ledger finish
 	Stated bool `json:"-"`

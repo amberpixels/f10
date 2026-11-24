@@ -81,6 +81,13 @@ func TestStageOf(t *testing.T) {
 			"for FT-1 and FT-2 to merge",
 		},
 		{
+			"a plan-only join waiting on its bases' plans",
+			facts{JoinWaits: []string{"FT-2"}, JoinPlan: true, Driven: true},
+			false,
+			stageWaiting,
+			"for FT-2 to save a plan",
+		},
+		{
 			"parked by its drive",
 			facts{Run: run("skipped", "done", "upcoming", ""), Base: "FT-1", DrivePhase: drivestore.PhaseParked},
 			false, stageWaiting, "on FT-1",

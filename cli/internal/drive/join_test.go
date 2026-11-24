@@ -338,12 +338,12 @@ func TestJoinStanding(t *testing.T) {
 		{ID: "GH-3", Join: []string{"GH-1", "GH-2"}, Phase: drivestore.PhasePending},
 	}
 
-	if got := taskStanding(tasks[2], true, tasks); got != "waiting for GH-2 to merge" {
+	if got := taskStanding(tasks[2], true, tasks, nil); got != "waiting for GH-2 to merge" {
 		t.Errorf("standing = %q", got)
 	}
 
 	tasks[1].Outcome = &drivestore.Outcome{Row: drivectl.RowFinished}
-	if got := taskStanding(tasks[2], true, tasks); got != "not reached" {
+	if got := taskStanding(tasks[2], true, tasks, nil); got != "not reached" {
 		t.Errorf("standing once both merged = %q", got)
 	}
 }
@@ -440,5 +440,48 @@ func TestDriveRecordKeepsTheOrder(t *testing.T) {
 	again, err := drivectl.ParseDriveArgs(rec.Args)
 	if err != nil || fmt.Sprint(again.Bases) != fmt.Sprint(fx.in.Args.Bases) {
 		t.Errorf("resumed bases = %v, %v; want %v", again.Bases, err, fx.in.Args.Bases)
+	}
+}
+
+// A base on an ask keeps its join waiting: the batch resumes onto both once
+// it is answered, as it does for a stack.
+func TestJoinWaitsOnABasesAsk(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1")
+	a, _, j := joinRuns()
+	a.End = &driveResult{Row: "asked at plan", Code: ui.ExitAsk}
+
+	if res := fx.in.joinWait(j); res != nil || j.joinWaits != "GH-1 and GH-2" {
+		t.Errorf("res = %+v, waits %q; want both still waited for", res, j.joinWaits)
+	}
+}
+
+// A join started under --plan has a branch while its bases are unmerged, so
+// starting it alone later still refuses an unlisted base that has not merged.
+func TestDriveRefusesAStartedJoinWhoseBasesHaveNotMerged(t *testing.T) {
+	fx := newDriveFixture(t, "GH-3")
+	fx.in.Flow.Finishes = true
+
+	fx.task("GH-3", tasksource.TaskInfo{Body: "x"}, testkit.Heads("GH-3"))
+	fx.f.Meta.Seed("GH-3", branchmeta.Join, "GH-1 GH-2")
+	fx.task("GH-1", tasksource.TaskInfo{Body: "x"}, testkit.Heads("GH-1"))
+	fx.task("GH-2", tasksource.TaskInfo{Body: "x"}, testkit.Heads("GH-2"))
+
+	err := fx.drive(t)
+	if err == nil || !strings.Contains(err.Error(), "GH-3 waits for GH-1 to merge, which is not in the list") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+// Under --plan a join's row names the bases whose plan is not saved.
+func TestJoinStandingUnderPlan(t *testing.T) {
+	tasks := []drivestore.Task{
+		{ID: "GH-1", Phase: drivestore.PhaseRunning, Skill: "plan"},
+		{ID: "GH-2", Phase: drivestore.PhaseRunning, Skill: "plan"},
+		{ID: "GH-3", Join: []string{"GH-1", "GH-2"}, Phase: drivestore.PhasePending},
+	}
+	planned := func(id string) bool { return id == "GH-1" }
+
+	if got := taskStanding(tasks[2], true, tasks, planned); got != "waiting for GH-2 to save a plan" {
+		t.Errorf("standing = %q", got)
 	}
 }

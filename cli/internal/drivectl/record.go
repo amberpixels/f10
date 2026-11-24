@@ -7,6 +7,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/drivestore"
 	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
 // The rows a finished task ends on: finished by the drive or outside it, or
@@ -22,8 +23,9 @@ func RowDone(t drivestore.Task) bool {
 
 // JoinWaits is a join's bases its batch's record has not seen finish, nil
 // for a task that is no join. A base outside the record was finished when
-// the batch started, since a join refuses any other.
-func JoinWaits(t drivestore.Task, tasks []drivestore.Task) []string {
+// the batch started, since a join refuses any other. planned is non-nil for
+// a --plan batch, whose join waits for saved plans, not merges.
+func JoinWaits(t drivestore.Task, tasks []drivestore.Task, planned func(string) bool) []string {
 	var out []string
 
 	for _, id := range t.Join {
@@ -33,12 +35,34 @@ func JoinWaits(t drivestore.Task, tasks []drivestore.Task) []string {
 
 			return strings.EqualFold(lead, id)
 		})
-		if i >= 0 && !RowDone(tasks[i]) {
+		if i >= 0 && !RowDone(tasks[i]) && (planned == nil || !planned(id)) {
 			out = append(out, id)
 		}
 	}
 
 	return out
+}
+
+// PlanOnly reports a batch started with --plan, from its command line.
+func PlanOnly(args []string) bool { return slices.Contains(args, "--plan") }
+
+// JoinPlanned is what JoinWaits takes for a batch: under --plan, whether a
+// base's plan is saved under root; else nil, since the join waits for merges.
+func JoinPlanned(args []string, root string) func(string) bool {
+	if !PlanOnly(args) {
+		return nil
+	}
+
+	return storage.Root(root).PlanLive
+}
+
+// JoinWhat is what a join's bases still owe it: a merge, or a plan.
+func JoinWhat(planOnly bool) string {
+	if planOnly {
+		return "save a plan"
+	}
+
+	return "merge"
 }
 
 func SetFinished(t *drivestore.Task) {

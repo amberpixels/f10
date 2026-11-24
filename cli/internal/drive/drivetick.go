@@ -359,6 +359,7 @@ func (in *DriveInput) released(ctx context.Context, b *DriveRun) bool {
 // merged, or under --plan once each has a saved plan. It sets joinWaits to
 // the bases still out, printing them when they change, and ends the join
 // when a base ended without what it waits for, since nothing would follow.
+// A base on an ask is still out: the batch resumes onto it once answered.
 // planReleased decides both the release and the halt, as it does for a
 // stack, so a base that halted after saving its plan still releases.
 func (in *DriveInput) joinWait(r *DriveRun) *driveResult {
@@ -367,7 +368,7 @@ func (in *DriveInput) joinWait(r *DriveRun) *driveResult {
 	for _, b := range r.Join {
 		switch id := b.Task.Ref.ID; {
 		case merged(b), in.Args.PlanOnly && in.planReleased(b):
-		case b.End != nil:
+		case b.End != nil && b.End.Code != ui.ExitAsk:
 			return joinHalted(r, b, in.Args.PlanOnly)
 		default:
 			out = append(out, in.id(id))
@@ -376,12 +377,8 @@ func (in *DriveInput) joinWait(r *DriveRun) *driveResult {
 
 	waits := textx.JoinAnd(out)
 	if waits != "" && waits != r.joinWaits {
-		what := "merge"
-		if in.Args.PlanOnly {
-			what = "save a plan"
-		}
-
-		fmt.Fprintf(in.Out, "%s: waiting for %s to %s\n", in.id(r.Task.Ref.ID), waits, what)
+		fmt.Fprintf(in.Out, "%s: waiting for %s to %s\n",
+			in.id(r.Task.Ref.ID), waits, drivectl.JoinWhat(in.Args.PlanOnly))
 	}
 
 	r.joinWaits = waits

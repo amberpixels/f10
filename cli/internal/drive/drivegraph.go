@@ -184,7 +184,9 @@ func (t DriveTask) bases() []string {
 // the same way: an outside base needs a saved plan, or to be finished.
 func (in *DriveInput) refuseJoins(ctx context.Context, tasks []DriveTask, index map[string]int) error {
 	for _, t := range tasks {
-		if t.finished || len(t.Join) == 0 || t.Branch != "" {
+		// a started join is checked too: under --plan it branched before its
+		// bases merged, so a later run must still find them merged or listed
+		if t.finished || len(t.Join) == 0 {
 			continue
 		}
 

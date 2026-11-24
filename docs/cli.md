@@ -328,7 +328,8 @@ A join waits until every base has merged, then branches from the default branch 
 Under `--plan` it opens once every base's plan is saved, and its plan prompt names each base with its plan's path.
 A flow that does not end in finish refuses a join before anything is created, because nothing would merge its bases.
 So does a base outside the list that is not finished, under `--plan` one with no saved plan.
-A base that halts, or ends at its PR without merging, halts the join before it opens.
+A base that halts, or ends at its PR without merging, halts the join before it opens, while a base on an ask keeps it waiting.
+A join started under `--plan` keeps those rules on a later run, because its branch exists before its bases merge.
 
 A typed base wins over the body's `After:` line, as `--after` does, and is never written to the tracker.
 The order is kept in the batch's record until an entry starts, and on its branch after, so `f10 resume` brings a stopped batch back in the same order.
@@ -688,7 +689,7 @@ It applies only to the tree; a run's block prints as without it.
 | `reviewing`, `resolving` | ship running review, resolve | orange |
 | `judging`, `planning` | ship running judge; capture or plan under way | blue |
 | `planned` | the plan is saved, ship not begun | faint blue |
-| `waiting` | a join its batch has not opened, its step naming the bases not merged yet (`for <id> and <id> to merge`); or no run yet, its `After:` base is not done, and a running batch lists it (a bundle's riders included), so the batch holds it for that base; or the record of a running batch this session launched says it parked the task for its base's code or its push (step `on <id>`) or holds its finish until the base is through (step `to finish after <id>`) | faint |
+| `waiting` | a join its batch has not opened, its step naming the bases not merged yet (`for <id> and <id> to merge`), or under `--plan` the bases whose plan is not saved (`to save a plan`); or no run yet, its `After:` base is not done, and a running batch lists it (a bundle's riders included), so the batch holds it for that base; or the record of a running batch this session launched says it parked the task for its base's code or its push (step `on <id>`) or holds its finish until the base is through (step `to finish after <id>`) | faint |
 | `not started` | nothing recorded; a task no batch lists keeps `after <id>` as its step while its base is not done | faint |
 
 Color is off when stdout is not a terminal or `NO_COLOR` is set.

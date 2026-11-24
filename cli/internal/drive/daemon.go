@@ -59,8 +59,8 @@ func WriteDaemonStatus(ctx context.Context, w io.Writer, links *render.TaskLinks
 			links.Load(ctx, project, ids...)
 
 			for _, t := range rec.Tasks {
-				fmt.Fprintf(w, "  %s %s\n",
-					render.PadRight(links.ID(project, t.ID), 6), taskStanding(t, true, rec.Tasks))
+				standing := taskStanding(t, true, rec.Tasks, drivectl.JoinPlanned(rec.Args, r.Root))
+				fmt.Fprintf(w, "  %s %s\n", render.PadRight(links.ID(project, t.ID), 6), standing)
 			}
 		}
 	}

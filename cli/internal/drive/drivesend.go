@@ -185,8 +185,6 @@ func (in *DriveInput) retryEnter(ctx context.Context, r *DriveRun) {
 	}
 }
 
-// steered puts steering after the skill's subject, before any chained
-// clause and the driven marker, so the skill reads it as its own.
 // withJoin adds a join's bases and their plans to a plan-only join's plan
 // prompt. Without --plan its bases merged before it branched, so their
 // code is in the default branch and the prompt needs nothing more.
@@ -208,6 +206,8 @@ func (in *DriveInput) withJoin(r *DriveRun, skill, prompt string) string {
 	return prompt + " && " + clause
 }
 
+// steered puts steering after the skill's subject, before any chained
+// clause and the driven marker, so the skill reads it as its own.
 func steered(prompt, steering string) string {
 	if steering == "" {
 		return prompt

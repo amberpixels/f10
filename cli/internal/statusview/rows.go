@@ -176,7 +176,7 @@ func stageOf(f lookaround.TaskFacts, baseDone bool) (string, string) {
 	case f.DrivePhase == drivestore.PhaseWaiting:
 		return stageWaiting, "to finish after " + cmp.Or(f.Base, "its base")
 	case r == nil && len(f.JoinWaits) > 0:
-		return stageWaiting, "for " + textx.JoinAnd(f.JoinWaits) + " to merge"
+		return stageWaiting, "for " + textx.JoinAnd(f.JoinWaits) + " to " + drivectl.JoinWhat(f.JoinPlan)
 	case r == nil && f.Queued:
 		return stageQueued, ""
 	case r == nil && f.Base != "" && !baseDone && f.Driven:
@@ -291,6 +291,7 @@ func (src rowSource) Gather(ctx context.Context, k stack.ChildRow) (TaskRow, loo
 		DrivePhase:  k.Phase,
 		DriveChecks: k.OnChecks,
 		JoinWaits:   k.Waits,
+		JoinPlan:    k.WaitsPlan,
 		Driven:      src.Driven[strings.ToUpper(k.ID)],
 	}
 

@@ -410,7 +410,7 @@ func DriveList(
 			id := links.ID(project, t.ID) + ":"
 			nodes[j] = tasktree.Node{Cells: []tasktree.Cell{
 				{Text: t.ID + ":", Render: func(string) string { return id }},
-				{Text: taskStanding(t, running, rec.Tasks)},
+				{Text: taskStanding(t, running, rec.Tasks, drivectl.JoinPlanned(rec.Args, root))},
 			}}
 		}
 
@@ -476,12 +476,13 @@ func finishedLazily(root storage.Root, id string, branched func() (bool, error),
 	return stack.FinishedTask(ti, root, id, false)
 }
 
-func taskStanding(t drivestore.Task, running bool, tasks []drivestore.Task) string {
-	switch waits := drivectl.JoinWaits(t, tasks); {
+// taskStanding is a task's row in a batch listing; planned is JoinPlanned's.
+func taskStanding(t drivestore.Task, running bool, tasks []drivestore.Task, planned func(string) bool) string {
+	switch waits := drivectl.JoinWaits(t, tasks, planned); {
 	case t.Outcome != nil:
 		return t.Outcome.Row
 	case len(waits) > 0 && t.Skill == "" && (t.Phase == "" || t.Phase == drivestore.PhasePending):
-		return "waiting for " + textx.JoinAnd(waits) + " to merge"
+		return "waiting for " + textx.JoinAnd(waits) + " to " + drivectl.JoinWhat(planned != nil)
 	case running && t.Queued:
 		return "queued"
 	case running && t.Phase == drivestore.PhaseParked:

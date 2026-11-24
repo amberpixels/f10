@@ -36,6 +36,7 @@ type TaskFacts struct {
 	DriveChecks  bool   // a waiting DrivePhase holds finish on running checks
 	// JoinWaits are a join's bases its drive has yet to see merged
 	JoinWaits []string
+	JoinPlan  bool // the join's batch runs --plan: its bases owe plans
 	Findings  *Findings
 	Verdict   string
 }
