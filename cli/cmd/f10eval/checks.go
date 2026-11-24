@@ -284,8 +284,8 @@ func verdictNumber(path string) int {
 	return n
 }
 
-// Captured is the shape a capture run's tasks must have: how many it made,
-// how many of them are parents and subtasks, and how many carry After:.
+// Captured is the shape a capture run's tasks must have. It counts the
+// tasks made, the parents and subtasks among them, and those with After:.
 type Captured struct {
 	Tasks    int `json:"tasks"`
 	Parents  int `json:"parents"`

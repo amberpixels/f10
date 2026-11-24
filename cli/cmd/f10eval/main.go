@@ -49,7 +49,7 @@ type Scenario struct {
 	HistoryCites []string        `json:"history_cites"`
 	Rubric       *Rubric         `json:"rubric"`       // what the rubric check grades, and against which lines
 	Captured     *Captured       `json:"captured"`     // the shape of the tasks a capture run creates
-	WantVerdict  string          `json:"want_verdict"` // the verdict a judge run must reach; none checks only that it reached one
+	WantVerdict  string          `json:"want_verdict"` // the verdict a judge run must reach, else any of the four
 
 	env   []string // the run's environment, so a check that runs f10 reads the run's state
 	f10   string   // this checkout's bin/f10, the binary the run itself used
@@ -242,7 +242,6 @@ func (s Scenario) checkFields() error {
 	return nil
 }
 
-// turns is the prompts the run sends, in order.
 func (s Scenario) turns() []string {
 	if len(s.Prompts) > 0 {
 		return s.Prompts

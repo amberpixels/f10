@@ -63,19 +63,21 @@ A fixture may also hold a saved plan under `f10/plans/<task>.md`, which lands in
 
 A multi-turn scenario runs one conversation, the way a person would answer between skills:
 
-- `prompts`: the turns, in place of `prompt`. The first runs as `prompt` does, and each later one runs `claude -p --resume <session>` on the session the turn before printed. The report sums the turns' cost and duration, the reply a rubric grades is the last turn's, and a turn that fails ends the run, its index in the error. `-max-budget-usd` caps each turn, so a scenario of five turns may spend five times it.
+- `prompts`: the turns, in place of `prompt`. The first runs as `prompt` does. Each later one runs `claude -p --resume <session>` on the session the turn before printed. The report sums the turns' cost and duration. A rubric grades the last turn's reply. A turn that fails ends the run, and the error names its index. `-max-budget-usd` caps each turn, so a scenario of five turns may spend five times it.
 - `branch`: a branch checked out after the initial commit, so the commits the run makes have `main` to be reviewed against. A scenario with a `change` has its own branch, so it never names one.
 
-A capture scenario runs on a fixture tracker that creates tasks: the `capture-simple` fixture's driver writes `tasks/EV-<n>.md`, numbered past the highest one there, with a `Parent: EV-<m>` line under the status line for a subtask.
+A capture scenario runs on a fixture tracker that creates tasks.
+The `capture-simple` fixture's driver writes `tasks/EV-<n>.md`, numbered past the highest one there.
+A subtask's file has a `Parent: EV-<m>` line under the status line.
 It also serves `children` and `update --parent` / `--after`, the verbs a split needs.
 
-- `captured`: the shape the run's tasks must have, `{tasks, parents, subtasks, after}`. It counts every task file the fixture's initial commit did not hold, so a task a later turn committed still counts. Each `After:` must name a sibling under the same parent that waits on nothing, which is what a split three levels deep looks like.
+- `captured`: the shape the run's tasks must have, `{tasks, parents, subtasks, after}`. It counts every task file the fixture's initial commit did not hold, so a task a later turn committed still counts. Each `After:` must name a sibling under the same parent. That sibling must wait on nothing, which is the shape of a split three levels deep.
 - The check and the field come together, or the scenario fails to load.
 
 A judge scenario names the verdict its subject deserves:
 
 - `want_verdict`: one of the four verdicts. The `verdict` check then also fails unless the newest verdict file, by its number, carries it.
-- The subject is a task, so the verdict file is keyed by the task id the check reads, where an idea's file is keyed by a slug no scenario can predict.
+- The subject is a task, so the verdict file is keyed by the task id the check reads, because an idea's file is keyed by a slug no scenario can predict.
 
 Brainstorm and capture run under `claude -p`, which answers no question.
 So each prompt gives the step everything it needs, and a run that asks anyway fails its check, which is the signal wanted.
@@ -130,15 +132,24 @@ Read the findings file before blaming the reviewer.
 
 Each skill has scenarios of its own on fixed inputs, so a failing report names the stage that broke:
 
-- **brainstorm**: `brainstorm-three` puts three ideas for the notes server in one prompt and grades the first reply with `rubric`: graceful shutdown is built as asked, search comes back as two or more shapes with their trade-offs, and a health endpoint gets "don't build", because the server already has `GET /health`.
-- **capture**: on the empty `capture-simple` tracker, `capture-simple` must make one task, `capture-moderate` one task whose body `rubric` grades (problem, scope, _Areas_), and `capture-split` a parent with four subtasks, two of them `After:` the other two. The parent is created first, so `rubric` grades `tasks/EV-1.md` as the parent.
-- **implement**: `implement-ruby` and `implement-js` ship a saved plan for a search method on an `implement commit` flow, graded by hidden `accept` commands. `feature-small` is the Go one.
-- **review**: `review-planted-ruby` and `review-planted-js` plant the same four kinds of defect as `review-planted`, each in its own language, in the implement fixtures' repos.
-- **judge**: `judge-proceed`, `judge-changes`, `judge-rethink` and `judge-stop` each judge one task in a copy of the notes server, written so its right verdict is not close to the next one: a correct startup check, a delete that joins the name unchecked where `save` validates it, a lower size limit for memory spikes whose cause is reading the whole body first, and a health endpoint that already exists.
+- **brainstorm**: `brainstorm-three` puts three ideas for the notes server in one prompt. `rubric` grades the first reply on three points:
+  - Graceful shutdown is built as asked.
+  - Search comes back as two or more shapes with their trade-offs.
+  - A health endpoint gets "don't build", because the server already has `GET /health`.
+- **capture**: these run on the `capture-simple` tracker, which starts empty. `capture-simple` must make one task. `capture-moderate` must make one task, and `rubric` grades its body for the problem, the scope and an _Areas_ note. `capture-split` must make a parent with four subtasks, two of them `After:` the other two. The parent is created first, so `rubric` grades `tasks/EV-1.md` as the parent.
+- **implement**: `implement-ruby` and `implement-js` ship a saved plan for a search method on an `implement commit` flow. Hidden `accept` commands grade them. `feature-small` is the Go one.
+- **review**: `review-planted-ruby` and `review-planted-js` plant the same four kinds of defect as `review-planted`, each in its own language. They run in the implement fixtures' repos.
+- **judge**: `judge-proceed`, `judge-changes`, `judge-rethink` and `judge-stop` each judge one task in a copy of the notes server. Each task is written so its right verdict is not close to the next one:
+  - proceed: a correct startup check.
+  - proceed with changes: a delete that joins the name unchecked, where `save` validates it.
+  - rethink: a lower size limit for memory spikes, whose cause is reading the whole body first.
+  - stop: a health endpoint that already exists.
 
-`chain-smoke` is a release smoke test of the hand-offs, not of their quality: brainstorm, an agreed shape, capture, plan and ship, then review, as five turns of one conversation on a branch.
+`chain-smoke` is a release smoke test of the hand-offs, not of their quality.
+It runs five turns of one conversation on a branch: brainstorm, an agreed shape, capture, plan and ship, then review.
 The tracker starts empty, so the captured task is `EV-1`, and the later turns name it.
-A good run's outputs (the settled statement, the task file, the plan) can be frozen as the fixed inputs of the per-stage scenarios, as the implement scenarios' plans are.
+A good run's settled statement, task file and plan can be frozen as the fixed inputs of the per-stage scenarios.
+The implement scenarios already take a saved plan as their input in the same way.
 
 A bug scenario (a failing test to fix) and a spike scenario are the next ones to add. The runner needs no change for them.
 `go test ./cmd/f10eval` covers the checks against a canned result, and the rubric check against a canned grader, with no model call.
