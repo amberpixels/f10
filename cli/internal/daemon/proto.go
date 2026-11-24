@@ -177,14 +177,39 @@ type Watch struct {
 // to watch: the daemon stops watching it.
 const ExitNothingWatched = 7
 
-// NumberFileEnv names the file a drive the daemon runs writes its record
+// NumberFileEnv names the file a batch the daemon runs writes its record
 // number to, once the record is open.
-const NumberFileEnv = "F10_DRIVE_FILE"
+const NumberFileEnv = "F10_BATCH_FILE"
 
-// ResumeEnv is set on every drive a daemon runs that starts an ExitResume
-// again. A drive under an older daemon, which lacks it, names the --resume
+// ResumeEnv is set on every batch a daemon runs that starts an ExitResume
+// again. A batch under an older daemon, which lacks it, names the resume
 // command instead of exiting for a restart that never comes.
-const ResumeEnv = "F10_DRIVE_RESUMES"
+const ResumeEnv = "F10_BATCH_RESUMES"
+
+// OldNumberFileEnv and OldResumeEnv are the two names above as the last
+// release spelt them. A daemon sets both spellings and its child reads
+// either, because across an upgrade the two can be one release apart.
+const (
+	OldNumberFileEnv = "F10_DRIVE_FILE"
+	OldResumeEnv     = "F10_DRIVE_RESUMES"
+)
+
+// EnvOf reads one of the two variables above under its new name, else its
+// old one.
+func EnvOf(name string) string {
+	if v := os.Getenv(name); v != "" {
+		return v
+	}
+
+	switch name {
+	case NumberFileEnv:
+		return os.Getenv(OldNumberFileEnv)
+	case ResumeEnv:
+		return os.Getenv(OldResumeEnv)
+	}
+
+	return ""
+}
 
 // A DriveSpec is one drive to run: its arguments, where it was typed, its
 // project's storage root, its environment, and the record a resume names.

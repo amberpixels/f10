@@ -12,7 +12,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file f10/v1/daemon.proto.
  */
 export const file_f10_v1_daemon: GenFile = /*@__PURE__*/
-  fileDesc("ChNmMTAvdjEvZGFlbW9uLnByb3RvEgZmMTAudjEiNAoMSGVsbG9SZXF1ZXN0Eg8KB3ZlcnNpb24YASABKAkSEwoLYXBpX3ZlcnNpb24YAiABKAUipAEKDUhlbGxvUmVzcG9uc2USDwoHdmVyc2lvbhgBIAEoCRITCgthcGlfdmVyc2lvbhgCIAEoBRILCgNwaWQYAyABKAUSLgoKc3RhcnRlZF9hdBgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEAoIc3RvcHBpbmcYBSABKAgSHgoGY2FsbGVyGAYgASgLMg4uZjEwLnYxLkNhbGxlciJKCgZDYWxsZXISDQoFbG9jYWwYASABKAgSDQoFdG9rZW4YAiABKAkSDgoGc2NvcGVzGAMgAygJEhIKCnByb2NlZHVyZXMYBCADKAkigAEKD1N1cGVydmlzZWREcml2ZRIMCgRyb290GAEgASgJEgsKA2RpchgCIAEoCRINCgVkcml2ZRgDIAEoBRILCgNwaWQYBCABKAUSKQoFc2luY2UYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEgsKA2xvZxgGIAEoCSJ4Cg5XYXRjaGVkUHJvamVjdBIMCgRyb290GAEgASgJEgsKA2RpchgCIAEoCRIwCgxsYXN0X3Bhc3NfYXQYAyABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEgwKBGV4aXQYBCABKAUSCwoDbG9nGAUgASgJIhgKFkdldERhZW1vblN0YXR1c1JlcXVlc3QicQoOUmVtb3RlTGlzdGVuZXISDwoHZW5hYmxlZBgBIAEoCBIMCgRhZGRyGAIgASgJEg4KBnJlYXNvbhgDIAEoCRILCgN1cmwYBCABKAkSDQoFaHR0cHMYBSABKAgSFAoMaHR0cHNfcmVhc29uGAYgASgJIpMBChdHZXREYWVtb25TdGF0dXNSZXNwb25zZRInCgZkcml2ZXMYASADKAsyFy5mMTAudjEuU3VwZXJ2aXNlZERyaXZlEicKB3dhdGNoZXMYAiADKAsyFi5mMTAudjEuV2F0Y2hlZFByb2plY3QSJgoGcmVtb3RlGAMgASgLMhYuZjEwLnYxLlJlbW90ZUxpc3RlbmVyIjMKEVN0b3BEYWVtb25SZXF1ZXN0Eg0KBWRyYWluGAEgASgIEg8KB3VwZ3JhZGUYAiABKAgiFAoSU3RvcERhZW1vblJlc3BvbnNlIj0KE1dhdGNoUHJvamVjdFJlcXVlc3QSDAoEcm9vdBgBIAEoCRILCgNkaXIYAiABKAkSCwoDZW52GAMgAygJIiMKFFdhdGNoUHJvamVjdFJlc3BvbnNlEgsKA2xvZxgBIAEoCTKpAgoNRGFlbW9uU2VydmljZRI0CgVIZWxsbxIULmYxMC52MS5IZWxsb1JlcXVlc3QaFS5mMTAudjEuSGVsbG9SZXNwb25zZRJSCg9HZXREYWVtb25TdGF0dXMSHi5mMTAudjEuR2V0RGFlbW9uU3RhdHVzUmVxdWVzdBofLmYxMC52MS5HZXREYWVtb25TdGF0dXNSZXNwb25zZRJDCgpTdG9wRGFlbW9uEhkuZjEwLnYxLlN0b3BEYWVtb25SZXF1ZXN0GhouZjEwLnYxLlN0b3BEYWVtb25SZXNwb25zZRJJCgxXYXRjaFByb2plY3QSGy5mMTAudjEuV2F0Y2hQcm9qZWN0UmVxdWVzdBocLmYxMC52MS5XYXRjaFByb2plY3RSZXNwb25zZUKDAQoKY29tLmYxMC52MUILRGFlbW9uUHJvdG9QAVovZ2l0aHViLmNvbS9hbWJlcnBpeGVscy9mMTAvY2xpL2dlbi9mMTAvdjE7ZjEwdjGiAgNGWFiqAgZGMTAuVjHKAgZGMTBcVjHiAhJGMTBcVjFcR1BCTWV0YWRhdGHqAgdGMTA6OlYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
+  fileDesc("ChNmMTAvdjEvZGFlbW9uLnByb3RvEgZmMTAudjEiNAoMSGVsbG9SZXF1ZXN0Eg8KB3ZlcnNpb24YASABKAkSEwoLYXBpX3ZlcnNpb24YAiABKAUipAEKDUhlbGxvUmVzcG9uc2USDwoHdmVyc2lvbhgBIAEoCRITCgthcGlfdmVyc2lvbhgCIAEoBRILCgNwaWQYAyABKAUSLgoKc3RhcnRlZF9hdBgEIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASEAoIc3RvcHBpbmcYBSABKAgSHgoGY2FsbGVyGAYgASgLMg4uZjEwLnYxLkNhbGxlciJKCgZDYWxsZXISDQoFbG9jYWwYASABKAgSDQoFdG9rZW4YAiABKAkSDgoGc2NvcGVzGAMgAygJEhIKCnByb2NlZHVyZXMYBCADKAkigAEKD1N1cGVydmlzZWREcml2ZRIMCgRyb290GAEgASgJEgsKA2RpchgCIAEoCRINCgVkcml2ZRgDIAEoBRILCgNwaWQYBCABKAUSKQoFc2luY2UYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEgsKA2xvZxgGIAEoCSKAAQoPU3VwZXJ2aXNlZEJhdGNoEgwKBHJvb3QYASABKAkSCwoDZGlyGAIgASgJEg0KBWJhdGNoGAMgASgFEgsKA3BpZBgEIAEoBRIpCgVzaW5jZRgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASCwoDbG9nGAYgASgJIngKDldhdGNoZWRQcm9qZWN0EgwKBHJvb3QYASABKAkSCwoDZGlyGAIgASgJEjAKDGxhc3RfcGFzc19hdBgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDAoEZXhpdBgEIAEoBRILCgNsb2cYBSABKAkiGAoWR2V0RGFlbW9uU3RhdHVzUmVxdWVzdCJxCg5SZW1vdGVMaXN0ZW5lchIPCgdlbmFibGVkGAEgASgIEgwKBGFkZHIYAiABKAkSDgoGcmVhc29uGAMgASgJEgsKA3VybBgEIAEoCRINCgVodHRwcxgFIAEoCBIUCgxodHRwc19yZWFzb24YBiABKAkiwQEKF0dldERhZW1vblN0YXR1c1Jlc3BvbnNlEisKBmRyaXZlcxgBIAMoCzIXLmYxMC52MS5TdXBlcnZpc2VkRHJpdmVCAhgBEicKB3dhdGNoZXMYAiADKAsyFi5mMTAudjEuV2F0Y2hlZFByb2plY3QSJgoGcmVtb3RlGAMgASgLMhYuZjEwLnYxLlJlbW90ZUxpc3RlbmVyEigKB2JhdGNoZXMYBCADKAsyFy5mMTAudjEuU3VwZXJ2aXNlZEJhdGNoIjMKEVN0b3BEYWVtb25SZXF1ZXN0Eg0KBWRyYWluGAEgASgIEg8KB3VwZ3JhZGUYAiABKAgiFAoSU3RvcERhZW1vblJlc3BvbnNlIj0KE1dhdGNoUHJvamVjdFJlcXVlc3QSDAoEcm9vdBgBIAEoCRILCgNkaXIYAiABKAkSCwoDZW52GAMgAygJIiMKFFdhdGNoUHJvamVjdFJlc3BvbnNlEgsKA2xvZxgBIAEoCTKpAgoNRGFlbW9uU2VydmljZRI0CgVIZWxsbxIULmYxMC52MS5IZWxsb1JlcXVlc3QaFS5mMTAudjEuSGVsbG9SZXNwb25zZRJSCg9HZXREYWVtb25TdGF0dXMSHi5mMTAudjEuR2V0RGFlbW9uU3RhdHVzUmVxdWVzdBofLmYxMC52MS5HZXREYWVtb25TdGF0dXNSZXNwb25zZRJDCgpTdG9wRGFlbW9uEhkuZjEwLnYxLlN0b3BEYWVtb25SZXF1ZXN0GhouZjEwLnYxLlN0b3BEYWVtb25SZXNwb25zZRJJCgxXYXRjaFByb2plY3QSGy5mMTAudjEuV2F0Y2hQcm9qZWN0UmVxdWVzdBocLmYxMC52MS5XYXRjaFByb2plY3RSZXNwb25zZUKDAQoKY29tLmYxMC52MUILRGFlbW9uUHJvdG9QAVovZ2l0aHViLmNvbS9hbWJlcnBpeGVscy9mMTAvY2xpL2dlbi9mMTAvdjE7ZjEwdjGiAgNGWFiqAgZGMTAuVjHKAgZGMTBcVjHiAhJGMTBcVjFcR1BCTWV0YWRhdGHqAgdGMTA6OlYxYgZwcm90bzM", [file_google_protobuf_timestamp]);
 
 /**
  * @generated from message f10.v1.HelloRequest
@@ -129,7 +129,7 @@ export const CallerSchema: GenMessage<Caller> = /*@__PURE__*/
   messageDesc(file_f10_v1_daemon, 2);
 
 /**
- * A SupervisedDrive is one drive process the daemon runs.
+ * A SupervisedDrive is the old form of SupervisedBatch.
  *
  * @generated from message f10.v1.SupervisedDrive
  */
@@ -142,14 +142,14 @@ export type SupervisedDrive = Message<"f10.v1.SupervisedDrive"> & {
   root: string;
 
   /**
-   * dir is where the drive was typed.
+   * dir is where the start was typed.
    *
    * @generated from field: string dir = 2;
    */
   dir: string;
 
   /**
-   * drive is the drive's number, 0 until the drive reported it.
+   * drive is the batch's number, 0 until its process reported it.
    *
    * @generated from field: int32 drive = 3;
    */
@@ -166,7 +166,7 @@ export type SupervisedDrive = Message<"f10.v1.SupervisedDrive"> & {
   since?: Timestamp | undefined;
 
   /**
-   * log is the drive's log file.
+   * log is the batch's log file.
    *
    * @generated from field: string log = 6;
    */
@@ -179,6 +179,58 @@ export type SupervisedDrive = Message<"f10.v1.SupervisedDrive"> & {
  */
 export const SupervisedDriveSchema: GenMessage<SupervisedDrive> = /*@__PURE__*/
   messageDesc(file_f10_v1_daemon, 3);
+
+/**
+ * A SupervisedBatch is one batch's process the daemon runs.
+ *
+ * @generated from message f10.v1.SupervisedBatch
+ */
+export type SupervisedBatch = Message<"f10.v1.SupervisedBatch"> & {
+  /**
+   * root is the project's storage root, which tells projects apart.
+   *
+   * @generated from field: string root = 1;
+   */
+  root: string;
+
+  /**
+   * dir is where the start was typed.
+   *
+   * @generated from field: string dir = 2;
+   */
+  dir: string;
+
+  /**
+   * batch is the batch's number, 0 until its process reported it.
+   *
+   * @generated from field: int32 batch = 3;
+   */
+  batch: number;
+
+  /**
+   * @generated from field: int32 pid = 4;
+   */
+  pid: number;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp since = 5;
+   */
+  since?: Timestamp | undefined;
+
+  /**
+   * log is the batch's log file.
+   *
+   * @generated from field: string log = 6;
+   */
+  log: string;
+};
+
+/**
+ * Describes the message f10.v1.SupervisedBatch.
+ * Use `create(SupervisedBatchSchema)` to create a new message.
+ */
+export const SupervisedBatchSchema: GenMessage<SupervisedBatch> = /*@__PURE__*/
+  messageDesc(file_f10_v1_daemon, 4);
 
 /**
  * A WatchedProject is one project the daemon runs watch passes for.
@@ -223,7 +275,7 @@ export type WatchedProject = Message<"f10.v1.WatchedProject"> & {
  * Use `create(WatchedProjectSchema)` to create a new message.
  */
 export const WatchedProjectSchema: GenMessage<WatchedProject> = /*@__PURE__*/
-  messageDesc(file_f10_v1_daemon, 4);
+  messageDesc(file_f10_v1_daemon, 5);
 
 /**
  * @generated from message f10.v1.GetDaemonStatusRequest
@@ -236,7 +288,7 @@ export type GetDaemonStatusRequest = Message<"f10.v1.GetDaemonStatusRequest"> & 
  * Use `create(GetDaemonStatusRequestSchema)` to create a new message.
  */
 export const GetDaemonStatusRequestSchema: GenMessage<GetDaemonStatusRequest> = /*@__PURE__*/
-  messageDesc(file_f10_v1_daemon, 5);
+  messageDesc(file_f10_v1_daemon, 6);
 
 /**
  * A RemoteListener is the daemon's listener on the tailnet.
@@ -291,14 +343,18 @@ export type RemoteListener = Message<"f10.v1.RemoteListener"> & {
  * Use `create(RemoteListenerSchema)` to create a new message.
  */
 export const RemoteListenerSchema: GenMessage<RemoteListener> = /*@__PURE__*/
-  messageDesc(file_f10_v1_daemon, 6);
+  messageDesc(file_f10_v1_daemon, 7);
 
 /**
  * @generated from message f10.v1.GetDaemonStatusResponse
  */
 export type GetDaemonStatusResponse = Message<"f10.v1.GetDaemonStatusResponse"> & {
   /**
-   * @generated from field: repeated f10.v1.SupervisedDrive drives = 1;
+   * drives is the old name of batches, still filled for clients built
+   * against it.
+   *
+   * @generated from field: repeated f10.v1.SupervisedDrive drives = 1 [deprecated = true];
+   * @deprecated
    */
   drives: SupervisedDrive[];
 
@@ -311,6 +367,11 @@ export type GetDaemonStatusResponse = Message<"f10.v1.GetDaemonStatusResponse"> 
    * @generated from field: f10.v1.RemoteListener remote = 3;
    */
   remote?: RemoteListener | undefined;
+
+  /**
+   * @generated from field: repeated f10.v1.SupervisedBatch batches = 4;
+   */
+  batches: SupervisedBatch[];
 };
 
 /**
@@ -318,21 +379,21 @@ export type GetDaemonStatusResponse = Message<"f10.v1.GetDaemonStatusResponse"> 
  * Use `create(GetDaemonStatusResponseSchema)` to create a new message.
  */
 export const GetDaemonStatusResponseSchema: GenMessage<GetDaemonStatusResponse> = /*@__PURE__*/
-  messageDesc(file_f10_v1_daemon, 7);
+  messageDesc(file_f10_v1_daemon, 8);
 
 /**
  * @generated from message f10.v1.StopDaemonRequest
  */
 export type StopDaemonRequest = Message<"f10.v1.StopDaemonRequest"> & {
   /**
-   * drain lets each drive reach its next tick before it stops.
+   * drain lets each batch reach its next tick before it stops.
    *
    * @generated from field: bool drain = 1;
    */
   drain: boolean;
 
   /**
-   * upgrade says a newer daemon follows and resumes the drained drives.
+   * upgrade says a newer daemon follows and resumes the drained batches.
    *
    * @generated from field: bool upgrade = 2;
    */
@@ -344,7 +405,7 @@ export type StopDaemonRequest = Message<"f10.v1.StopDaemonRequest"> & {
  * Use `create(StopDaemonRequestSchema)` to create a new message.
  */
 export const StopDaemonRequestSchema: GenMessage<StopDaemonRequest> = /*@__PURE__*/
-  messageDesc(file_f10_v1_daemon, 8);
+  messageDesc(file_f10_v1_daemon, 9);
 
 /**
  * @generated from message f10.v1.StopDaemonResponse
@@ -357,7 +418,7 @@ export type StopDaemonResponse = Message<"f10.v1.StopDaemonResponse"> & {
  * Use `create(StopDaemonResponseSchema)` to create a new message.
  */
 export const StopDaemonResponseSchema: GenMessage<StopDaemonResponse> = /*@__PURE__*/
-  messageDesc(file_f10_v1_daemon, 9);
+  messageDesc(file_f10_v1_daemon, 10);
 
 /**
  * @generated from message f10.v1.WatchProjectRequest
@@ -389,7 +450,7 @@ export type WatchProjectRequest = Message<"f10.v1.WatchProjectRequest"> & {
  * Use `create(WatchProjectRequestSchema)` to create a new message.
  */
 export const WatchProjectRequestSchema: GenMessage<WatchProjectRequest> = /*@__PURE__*/
-  messageDesc(file_f10_v1_daemon, 10);
+  messageDesc(file_f10_v1_daemon, 11);
 
 /**
  * @generated from message f10.v1.WatchProjectResponse
@@ -408,7 +469,7 @@ export type WatchProjectResponse = Message<"f10.v1.WatchProjectResponse"> & {
  * Use `create(WatchProjectResponseSchema)` to create a new message.
  */
 export const WatchProjectResponseSchema: GenMessage<WatchProjectResponse> = /*@__PURE__*/
-  messageDesc(file_f10_v1_daemon, 11);
+  messageDesc(file_f10_v1_daemon, 12);
 
 /**
  * DaemonService is the per-user daemon's own lifecycle: the version
@@ -429,7 +490,7 @@ export const DaemonService: GenService<{
     output: typeof HelloResponseSchema;
   },
   /**
-   * GetDaemonStatus is who the daemon is, the drives it runs, the
+   * GetDaemonStatus is who the daemon is, the batches it runs, the
    * projects it watches and its tailnet listener.
    *
    * @generated from rpc f10.v1.DaemonService.GetDaemonStatus

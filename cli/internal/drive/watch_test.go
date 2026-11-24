@@ -40,7 +40,7 @@ func TestDecideWatch(t *testing.T) {
 		kind string // "" for no report
 		act  bool
 	}{
-		{name: "owned by a drive", task: WatchedTask{Owner: "drive 3", Pr: mergedPR()}, mode: "finish"},
+		{name: "owned by a drive", task: WatchedTask{Owner: "batch 3", Pr: mergedPR()}, mode: "finish"},
 		{name: "handed back", task: WatchedTask{Off: true, Pr: mergedPR()}, mode: "finish"},
 		{
 			name: "merged, report mode",
@@ -304,8 +304,8 @@ func TestCollectWatched(t *testing.T) {
 		t.Fatalf("tasks = %+v, want GH-1, GH-2 and GH-3, the worktrees", tasks)
 	}
 
-	if !strings.HasPrefix(tasks[2].Owner, "drive 2") || fx.F.Called(testkit.GhHeadOf("GH-3/z")) {
-		t.Errorf("GH-3, owned by drive 2: %+v", tasks[2])
+	if !strings.HasPrefix(tasks[2].Owner, "batch 2") || fx.F.Called(testkit.GhHeadOf("GH-3/z")) {
+		t.Errorf("GH-3, owned by batch 2: %+v", tasks[2])
 	}
 
 	if tasks[0].Pr == nil || tasks[0].Pr.HeadSHA != "a1" || tasks[0].Off {

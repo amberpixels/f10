@@ -2,7 +2,7 @@
 // @generated from file f10/v1/events.proto (package f10.v1, syntax proto3)
 /* eslint-disable */
 
-// f10.v1 is the task flow: tasks, runs, drives, the board and the event log.
+// f10.v1 is the task flow: tasks, runs, batches, the board and the event log.
 // It reaches agents only through agents.v1.
 
 import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
@@ -497,7 +497,7 @@ export const StepEnteredSchema: GenMessage<StepEntered> = /*@__PURE__*/
 
 /**
  * TaskFinished is ledger kind task_finished: a finish call's arguments, and
- * who ran it when it ran in-process (drive, watch).
+ * who ran it when it ran in-process (`drive` for a batch, or `watch`).
  *
  * @generated from message f10.v1.TaskFinished
  */
@@ -1006,7 +1006,7 @@ export const JudgeVerdictSchema: GenMessage<JudgeVerdict> = /*@__PURE__*/
   messageDesc(file_f10_v1_events, 22);
 
 /**
- * TaskHalted is ledger kind task_halted: a task a drive stopped, with the
+ * TaskHalted is ledger kind task_halted: a task its batch stopped, with the
  * attempts it counted.
  *
  * @generated from message f10.v1.TaskHalted

@@ -21,7 +21,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// A KnownProject is a project the daemon watches or runs a drive in.
+// A KnownProject is a project the daemon watches or runs a batch in.
 type KnownProject struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// id is the project id, such as github.com/acme/widgets; every request's

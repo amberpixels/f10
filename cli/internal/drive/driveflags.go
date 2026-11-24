@@ -54,5 +54,5 @@ func DriveUsage() string {
 	return flagUsage(run)
 }
 
-// ResumeUsage is the flags --resume N takes.
+// ResumeUsage is the flags a resume takes.
 func ResumeUsage() string { return flagUsage(drivectl.ResumeTunes()) }

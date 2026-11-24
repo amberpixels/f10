@@ -6,6 +6,7 @@ import (
 	"unicode"
 
 	"google.golang.org/protobuf/compiler/protogen"
+	"google.golang.org/protobuf/types/descriptorpb"
 )
 
 // A tool is one unary method on its way to the generated file.
@@ -19,7 +20,22 @@ type tool struct {
 	file        *protogen.File
 }
 
-// collect is every unary method of the files to generate. A method with no
+// deprecated reports a method or a field its proto marks deprecated. Such a
+// name is kept for clients built against it and is no tool or argument,
+// because a model picks from what it is shown.
+func deprecated(opts any) bool {
+	switch o := opts.(type) {
+	case *descriptorpb.MethodOptions:
+		return o.GetDeprecated()
+	case *descriptorpb.FieldOptions:
+		return o.GetDeprecated()
+	}
+
+	return false
+}
+
+// collect is every unary method of the files to generate that is not
+// deprecated. A method with no
 // comment, or two methods with one tool name, fail the run: the comment is
 // all a model reads to pick the tool.
 func collect(files []*protogen.File) ([]tool, error) {
@@ -34,7 +50,7 @@ func collect(files []*protogen.File) ([]tool, error) {
 
 		for _, svc := range f.Services {
 			for _, m := range svc.Methods {
-				if m.Desc.IsStreamingClient() || m.Desc.IsStreamingServer() {
+				if m.Desc.IsStreamingClient() || m.Desc.IsStreamingServer() || deprecated(m.Desc.Options()) {
 					continue
 				}
 

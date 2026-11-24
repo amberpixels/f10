@@ -119,7 +119,7 @@ func TestWatchSendsARedHeadUnderWatchCI(t *testing.T) {
 
 	for name, task := range map[string]func(*WatchedTask){
 		"handed back": func(w *WatchedTask) { w.Off = true },
-		"driven":      func(w *WatchedTask) { w.Owner = "drive 3" },
+		"driven":      func(w *WatchedTask) { w.Owner = "batch 3" },
 		"working":     func(w *WatchedTask) { w.Agent = agentctl.StatusWorking },
 	} {
 		in, _, sent, _ := ciWatch(t, true)

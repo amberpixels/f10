@@ -78,11 +78,11 @@ describe("taskList", () => {
 });
 
 describe("startReply", () => {
-  it("tells a joined drive from a started one and a discussion", () => {
-    const r = { drive: 4, attached: true, task: "", branch: "" };
-    expect(startReply(r, "FT-1")).toBe("Joined drive 4");
-    expect(startReply({ ...r, attached: false }, "FT-1 FT-2")).toBe("Drive 4 runs FT-1 FT-2");
-    expect(startReply({ drive: 0, attached: false, task: "FT-1", branch: "FT-1/x" }, "FT-1")).toBe(
+  it("tells a joined batch from a started one and a discussion", () => {
+    const r = { batch: 4, attached: true, task: "", branch: "" };
+    expect(startReply(r, "FT-1")).toBe("Joined batch 4");
+    expect(startReply({ ...r, attached: false }, "FT-1 FT-2")).toBe("Batch 4 runs FT-1 FT-2");
+    expect(startReply({ batch: 0, attached: false, task: "FT-1", branch: "FT-1/x" }, "FT-1")).toBe(
       "Started FT-1 on FT-1/x",
     );
   });

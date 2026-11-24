@@ -13,7 +13,7 @@ export const file_f10_v1_projects: GenFile = /*@__PURE__*/
   fileDesc("ChVmMTAvdjEvcHJvamVjdHMucHJvdG8SBmYxMC52MSI5CgxLbm93blByb2plY3QSCgoCaWQYASABKAkSDAoEbmFtZRgCIAEoCRIPCgd3YXRjaGVkGAMgASgIIhUKE0xpc3RQcm9qZWN0c1JlcXVlc3QiPgoUTGlzdFByb2plY3RzUmVzcG9uc2USJgoIcHJvamVjdHMYASADKAsyFC5mMTAudjEuS25vd25Qcm9qZWN0MlsKDlByb2plY3RTZXJ2aWNlEkkKDExpc3RQcm9qZWN0cxIbLmYxMC52MS5MaXN0UHJvamVjdHNSZXF1ZXN0GhwuZjEwLnYxLkxpc3RQcm9qZWN0c1Jlc3BvbnNlQoUBCgpjb20uZjEwLnYxQg1Qcm9qZWN0c1Byb3RvUAFaL2dpdGh1Yi5jb20vYW1iZXJwaXhlbHMvZjEwL2NsaS9nZW4vZjEwL3YxO2YxMHYxogIDRlhYqgIGRjEwLlYxygIGRjEwXFYx4gISRjEwXFYxXEdQQk1ldGFkYXRh6gIHRjEwOjpWMWIGcHJvdG8z");
 
 /**
- * A KnownProject is a project the daemon watches or runs a drive in.
+ * A KnownProject is a project the daemon watches or runs a batch in.
  *
  * @generated from message f10.v1.KnownProject
  */
@@ -84,7 +84,7 @@ export const ListProjectsResponseSchema: GenMessage<ListProjectsResponse> = /*@_
  */
 export const ProjectService: GenService<{
   /**
-   * ListProjects lists the projects the daemon watches or runs a drive in,
+   * ListProjects lists the projects the daemon watches or runs a batch in,
    * with the id every other request's project field takes.
    *
    * @generated from rpc f10.v1.ProjectService.ListProjects

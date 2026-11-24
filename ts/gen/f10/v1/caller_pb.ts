@@ -52,7 +52,7 @@ export type CallerContext = Message<"f10.v1.CallerContext"> & {
 
   /**
    * env is the command's environment. The daemon keeps the allowlisted
-   * part a drive passes on, and runs the call's Herdr commands in its
+   * part a batch passes on, and runs the call's Herdr commands in its
    * session.
    *
    * @generated from field: repeated string env = 5;

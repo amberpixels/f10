@@ -256,3 +256,32 @@ func TestInputSchemaMapsEveryShape(t *testing.T) {
 		t.Errorf("a recursive message must refer to its own $defs entry: %s", node)
 	}
 }
+
+// A deprecated method is an old name kept for older clients: it is no tool,
+// and a deprecated field is no argument of one.
+func TestCollectLeavesOutDeprecatedNames(t *testing.T) {
+	old := &descriptorpb.MethodDescriptorProto{
+		Name:       new("OldGet"),
+		InputType:  new(".t.v1.Req"),
+		OutputType: new(".t.v1.Node"),
+		Options:    &descriptorpb.MethodOptions{Deprecated: new(true)},
+	}
+	f := testFile("GetPRNode reads a node.", old)
+
+	gone := field("old_name", 99, tString, "")
+	gone.Options = &descriptorpb.FieldOptions{Deprecated: new(true)}
+	f.MessageType[0].Field = append(f.MessageType[0].Field, gone)
+
+	tools, err := collect(plugin(t, f).Files)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(tools) != 1 || tools[0].name != "get_pr_node" {
+		t.Fatalf("tools = %+v, want only the method still current", tools)
+	}
+
+	if strings.Contains(tools[0].schema, "old_name") {
+		t.Errorf("the schema keeps a deprecated field: %s", tools[0].schema)
+	}
+}

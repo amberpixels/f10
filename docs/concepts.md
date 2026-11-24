@@ -147,6 +147,32 @@ A mode is a way of running a skill that changes how it executes, kept in `modes/
 - `forward.md`: a task id that another worktree holds
 - `binary.md`: a skill that only runs the f10 binary and relays its output (board, finish, inbox, read, start and status)
 
+## Start vocabulary
+
+`f10 start` runs tasks, and these words name what it runs.
+Each word has one meaning, in the commands, the messages and the docs.
+
+- **entry**: a task or a bundle, which is one branch, one agent and one PR.
+  A unit of a flow is always written "flow entry", so "entry" alone never means that.
+- **bundle**: several tasks in one entry, typed `A+B`.
+  The first task is the lead, and the others are its riders.
+- **base**: what an entry comes after, which is another entry or a branch.
+- **stack**: an entry on one base.
+  It is opened at the base's first commit, and its finish waits for the base's.
+- **chain**: a line of stacks, each one's base the entry before it.
+- **join**: an entry with several bases.
+  It waits until every base has merged, then branches from the default branch.
+- **proposal**: what `f10 start <ids> --propose` prints, which is the bundles, the order and the one command to run.
+  It starts nothing.
+- **level**: one row group of a proposal, holding the entries whose bases all sit in earlier levels.
+  It is not a stage, which is a unit of a task's plan.
+- **batch**: the tasks one `f10 start` started, kept as a record so that it can be stopped and resumed.
+  Any task id of a batch names it to `f10 stop`, `f10 resume` and `f10 daemon logs`.
+- **driven**: the mode of an agent working through its flow without the user, prompted by the daemon skill by skill (`modes/driven.md`).
+
+The daemon is the per-user process that prompts a batch's agents.
+With `--foreground`, `f10 start` does that itself.
+
 ## Artifacts
 
 ### Task

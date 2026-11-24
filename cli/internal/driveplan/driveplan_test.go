@@ -46,7 +46,7 @@ func propose(t *testing.T, tasks ...driveplan.Task) driveplan.Plan {
 func entries(p driveplan.Plan) map[string]driveplan.Entry {
 	out := map[string]driveplan.Entry{}
 
-	for _, st := range p.Stages {
+	for _, st := range p.Levels {
 		for _, e := range st.Entries {
 			out[e.Token()] = e
 		}
@@ -56,7 +56,7 @@ func entries(p driveplan.Plan) map[string]driveplan.Entry {
 }
 
 func stageOf(p driveplan.Plan, token string) int {
-	for n, st := range p.Stages {
+	for n, st := range p.Levels {
 		if slices.ContainsFunc(st.Entries, func(e driveplan.Entry) bool { return e.Token() == token }) {
 			return n + 1
 		}
@@ -76,7 +76,7 @@ func TestFixtureParent(t *testing.T) {
 		"FT-47+FT-48": 2, "FT-49": 1, "FT-50": 1,
 	} {
 		if stageOf(p, token) != stage {
-			t.Errorf("%s: stage %d, want %d (stages %+v)", token, stageOf(p, token), stage, p.Stages)
+			t.Errorf("%s: stage %d, want %d (stages %+v)", token, stageOf(p, token), stage, p.Levels)
 		}
 	}
 
@@ -101,7 +101,7 @@ func TestFixtureParent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, want := range []string{"stage 1", "stage 2", "f10 start FT-41+FT-42+FT-43", "saves about 3 CI waits and 3 finishes", driveplan.Tradeoff} {
+	for _, want := range []string{"level 1", "level 2", "f10 start FT-41+FT-42+FT-43", "saves about 3 CI waits and 3 finishes", driveplan.Tradeoff} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("output lacks %q:\n%s", want, out.String())
 		}
@@ -196,7 +196,7 @@ func TestProposedOrders(t *testing.T) {
 	}
 
 	if stageOf(p, "FT-2") != 2 || stageOf(p, "FT-4") != 2 {
-		t.Errorf("stages %+v", p.Stages)
+		t.Errorf("stages %+v", p.Levels)
 	}
 
 	// an order the user declined is not proposed again

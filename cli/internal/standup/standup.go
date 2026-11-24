@@ -16,7 +16,7 @@ import (
 )
 
 // Schema is the version of the report's JSON shape.
-const Schema = 2
+const Schema = 3
 
 // Where a PR or a task ended the period, least advanced first; Closed never
 // decides a task's state while anything else does.

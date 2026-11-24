@@ -40,9 +40,9 @@ func (r *row) next() {
 
 	// drive merges and removes it in its own process: nothing is owed
 	if r.driveFinishes() {
-		r.Next = text("drive finishes it")
+		r.Next = text("its batch finishes it")
 		if a := r.Branch.Finish.Action; a != "" {
-			r.Next = text("drive: " + a)
+			r.Next = text("batch: " + a)
 		}
 
 		return

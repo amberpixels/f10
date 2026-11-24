@@ -22,7 +22,7 @@ func finishRecords(w io.Writer, in FinishInput, branch string) {
 
 	recs, err := drivestore.List(in.Root)
 	if err != nil {
-		fmt.Fprintf(w, "  marking drive records: %v\n", err)
+		fmt.Fprintf(w, "  marking batch records: %v\n", err)
 
 		return
 	}
@@ -34,7 +34,7 @@ func finishRecords(w io.Writer, in FinishInput, branch string) {
 		}
 
 		if err := drivectl.MarkFinished(in.Root, rec.Number, match); err != nil {
-			fmt.Fprintf(w, "  marking drive %d: %v\n", rec.Number, err)
+			fmt.Fprintf(w, "  marking batch %d: %v\n", rec.Number, err)
 		}
 	}
 }

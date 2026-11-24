@@ -135,9 +135,9 @@ func GetStatus(ctx context.Context, dir, version string) (Status, error) {
 
 	st := Status{Info: info}
 
-	for _, d := range res.Msg.GetDrives() {
+	for _, d := range res.Msg.GetBatches() {
 		st.Runs = append(st.Runs, Run{
-			Root: d.GetRoot(), Dir: d.GetDir(), Drive: int(d.GetDrive()), PID: int(d.GetPid()),
+			Root: d.GetRoot(), Dir: d.GetDir(), Drive: int(d.GetBatch()), PID: int(d.GetPid()),
 			Since: d.GetSince().AsTime(), Log: d.GetLog(),
 		})
 	}
@@ -225,19 +225,19 @@ func RunDrive(ctx context.Context, dir string, c DriveCall) (Started, error) {
 	ctx, cancel := context.WithTimeout(ctx, callTimeout)
 	defer cancel()
 
-	req := &f10v1.DriveRequest{
+	req := &f10v1.StartBatchRequest{
 		Args:   c.Args,
 		Dir:    c.Dir,
 		Env:    c.Env,
-		Resume: int32(c.Resume), //nolint:gosec // a drive number
+		Resume: int32(c.Resume), //nolint:gosec // a batch number
 	}
 
-	res, err := Dial(dir).Runs.Drive(ctx, connect.NewRequest(req))
+	res, err := Dial(dir).Runs.StartBatch(ctx, connect.NewRequest(req))
 	if err != nil {
 		return Started{}, plainError(err)
 	}
 
-	return Started{Log: res.Msg.GetLog(), Attach: res.Msg.GetAttached(), Drive: int(res.Msg.GetDrive())}, nil
+	return Started{Log: res.Msg.GetLog(), Attach: res.Msg.GetAttached(), Drive: int(res.Msg.GetBatch())}, nil
 }
 
 // ResumeCall is the call that picks drive n up again.

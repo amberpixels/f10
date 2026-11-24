@@ -611,7 +611,7 @@ const (
 )
 
 // catchupNext is the next line the catchup guard leaves on a driven ship.
-const catchupNext = "run /f10:catchup --driven in the worktree, then rerun the drive"
+const catchupNext = "run /f10:catchup --driven in the worktree, then run f10 resume"
 
 // adoptsGH1 scripts the rerun's open of GH-1's worktree, its agent found.
 func (fx *driveFixture) adoptsGH1() {
@@ -709,7 +709,7 @@ func TestDriveHaltsAShipStopNoCatchupSettled(t *testing.T) {
 			"",
 		},
 		"dirty tree": {"partial", "pr", catchupNext, [2]string{"git status --porcelain", " M a.go"}, ""},
-		"red verify": {"failed", "implement", "fix the failing test, then rerun the drive", [2]string{}, ""},
+		"red verify": {"failed", "implement", "fix the failing test, then run f10 resume", [2]string{}, ""},
 		"catchup failed, merge left": {
 			"failed",
 			"catchup",
@@ -721,7 +721,7 @@ func TestDriveHaltsAShipStopNoCatchupSettled(t *testing.T) {
 		"judge stop, marked": {
 			"blocked",
 			"judge",
-			"answer the judge, then rerun the drive",
+			"answer the judge, then run f10 resume",
 			[2]string{},
 			"main",
 		},
@@ -856,7 +856,7 @@ func TestDriveSettlesAShipGuardConflict(t *testing.T) {
 			code:  ui.ExitHalted,
 			want: []string{
 				"GH-1 halted at ship: GH-1 still conflicts with main after a catchup: a.go",
-				"next: settle it with /f10:catchup in /code/repo.GH-1, then rerun the drive",
+				"next: settle it with /f10:catchup in /code/repo.GH-1, then run f10 resume GH-1",
 			},
 			catchups: 1,
 		},
@@ -872,7 +872,7 @@ func TestDriveSettlesAShipGuardConflict(t *testing.T) {
 			want: []string{
 				"catchup failed 3 times in a row with nothing changed",
 				"attempt 3 at",
-				"next: settle it with /f10:catchup in /code/repo.GH-1, then rerun the drive",
+				"next: settle it with /f10:catchup in /code/repo.GH-1, then run f10 resume GH-1",
 			},
 			catchups: 3,
 		},
@@ -2484,7 +2484,7 @@ func TestDriveCatchesUpAPushedBranchWhenItsTargetMoves(t *testing.T) {
 		mark     string // the mark the boundary sets
 		fetches  int    // git fetch origin calls: the tick's one before ship (the boundary and the catchup's send), after it, the push, finish
 		halt     string
-		next     string // the halt's next line, "next: rerun the drive" when ""
+		next     string // the halt's next line, "next: run f10 resume GH-1" when ""
 	}{
 		"origin/main moved":      {pushed: "p1", mark: landed, fetches: 4},
 		"never pushed":           {fetches: 1},
@@ -2616,7 +2616,7 @@ func TestDriveCatchesUpAPushedBranchWhenItsTargetMoves(t *testing.T) {
 			}
 
 			if tc.halt != "" {
-				next := cmp.Or(tc.next, "next: rerun the drive")
+				next := cmp.Or(tc.next, "next: run f10 resume GH-1")
 				if testkit.ExitCode(err) != ui.ExitHalted || !strings.Contains(out, tc.halt) ||
 					!strings.Contains(out, next) || fx.f.Called("finish GH-1") ||
 					(tc.moved && fx.f.Called("git push")) {
@@ -3960,7 +3960,7 @@ func TestDriveHaltsAnOriginWaitThatStopsAgain(t *testing.T) {
 		},
 		"base done, unpushed": {
 			waitHead: "through", through: true,
-			reason: "GH-1 ended in this drive, yet its pr step still found GH-1 not on origin",
+			reason: "GH-1 ended in this batch, yet its pr step still found GH-1 not on origin",
 		},
 	}
 
@@ -4128,7 +4128,7 @@ func TestPushCatchupOnlyOverWhatTheCatchupSaw(t *testing.T) {
 		},
 		"origin moved": {
 			held: true, pushed: "p2",
-			next: "next: bring origin/GH-1 into /code/repo.GH-1, then /f10:catchup there, then rerun the drive",
+			next: "next: bring origin/GH-1 into /code/repo.GH-1, then /f10:catchup there, then run f10 resume GH-1",
 		},
 		"no record, rebased": {
 			pushed: "p2",

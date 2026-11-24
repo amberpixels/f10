@@ -53,9 +53,9 @@ func noun(name string) *cli.Command {
 	return &cli.Command{
 		Name:  name,
 		Usage: "the questions driven agents wait on in this project: list, answer, or walk them in a terminal",
-		Description: "A driven agent's ask, or a drive's finish question, waits here until the first answer from " +
-			"any way in: its own pane, f10 inbox, /f10:inbox or f10 start --answer. An answer to a drive's task " +
-			"resumes the drive; one to an agent no drive watches is sent to it. Bare f10 inbox walks the open asks " +
+		Description: "A driven agent's ask, or a batch's finish question, waits here until the first answer from " +
+			"any way in: its own pane, f10 inbox, /f10:inbox or f10 resume --answer. An answer to a batch's task " +
+			"resumes the batch; one to an agent no batch holds is sent to it. Bare f10 inbox walks the open asks " +
 			"in a terminal and lists them otherwise. Both show this project's asks, and --all every project's. " +
 			"~/.f10/inbox.md sets notify, the command run for each new ask.",
 		Flags:  []cli.Flag{allFlag()},
@@ -80,7 +80,7 @@ func noun(name string) *cli.Command {
 			},
 			{
 				Name:      "resume",
-				Usage:     "resume the drive an answered ask belongs to",
+				Usage:     "resume the batch an answered ask belongs to",
 				ArgsUsage: "<key>",
 				Hidden:    true,
 				Action:    runInboxResume,
@@ -133,7 +133,7 @@ type askView struct {
 	Project    string          `json:"project,omitempty"`
 	URL        string          `json:"url,omitempty"`
 	Skill      string          `json:"skill,omitempty"`
-	Drive      int             `json:"drive,omitempty"`
+	Drive      int             `json:"batch,omitempty"`
 	Text       string          `json:"text"`
 	Context    string          `json:"context,omitempty"`
 	Questions  []asks.Question `json:"questions"`

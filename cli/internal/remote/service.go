@@ -259,7 +259,7 @@ var plistTmpl = template.Must(template.New("plist").Funcs(template.FuncMap{"x": 
 
 var unitTmpl = template.Must(template.New("unit").Funcs(template.FuncMap{"q": systemdQuote}).Parse(
 	`[Unit]
-Description=f10 daemon: drives, watches and the control-plane API
+Description=f10 daemon: batches, watches and the control-plane API
 
 [Service]
 ExecStart="{{q .Program}}" daemon --service

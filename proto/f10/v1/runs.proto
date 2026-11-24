@@ -6,27 +6,45 @@ import "f10/v1/caller.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 
-// RunService starts, drives and finishes tasks, and reports where each run is.
+// RunService starts, resumes and finishes tasks, and reports where each run is.
 service RunService {
   // GetRunStatus is where f10 runs stand: one task's, a project's, or every
   // live run on the machine, with the question a stopped run waits on.
   rpc GetRunStatus(GetRunStatusRequest) returns (GetRunStatusResponse);
-  // Start runs a task through its flow in a drive, as f10 start does. A
+  // Start runs a task through its flow in a batch, as f10 start does. A
   // discussion or a picked-up PR opens the worktree, workspace and agent,
   // prompted once, since nothing steers an agent that waits for a person.
   rpc Start(StartRequest) returns (StartResponse);
-  // Drive runs a list of tasks through a flow, each once its base has a
-  // commit, as f10 start does with several tasks.
-  rpc Drive(DriveRequest) returns (DriveResponse);
+  // Drive is the old name of StartBatch, kept for clients built against it.
+  rpc Drive(DriveRequest) returns (DriveResponse) {
+    option deprecated = true;
+  }
+  // StartBatch runs a list of tasks through a flow as one batch, each once
+  // its base has a commit, as f10 start does with a typed command line.
+  rpc StartBatch(StartBatchRequest) returns (StartBatchResponse);
+  // Resume goes on with a stopped batch wherever each task stopped, the
+  // finish included, as f10 resume does. Any task of the batch names it.
+  rpc Resume(ResumeRequest) returns (ResumeResponse);
   // Finish merges a task's PR and removes its worktree, branch and workspace.
   rpc Finish(FinishRequest) returns (FinishResponse);
   // Forward hands text to the agent working on a task, as f10 forward does.
   rpc Forward(ForwardRequest) returns (ForwardResponse);
-  // ListDrives lists a project's drive records, as f10 status --drives does.
-  rpc ListDrives(ListDrivesRequest) returns (ListDrivesResponse);
-  // CancelDrive stops a drive from prompting further and closes its asks,
-  // as f10 stop does.
-  rpc CancelDrive(CancelDriveRequest) returns (CancelDriveResponse);
+  // ListDrives is the old name of ListBatches, kept for clients built
+  // against it.
+  rpc ListDrives(ListDrivesRequest) returns (ListDrivesResponse) {
+    option deprecated = true;
+  }
+  // CancelDrive is the old name of StopBatch, kept for clients built
+  // against it.
+  rpc CancelDrive(CancelDriveRequest) returns (CancelDriveResponse) {
+    option deprecated = true;
+  }
+  // ListBatches lists a project's batches, each the tasks one f10 start
+  // started, as f10 status --batches does.
+  rpc ListBatches(ListBatchesRequest) returns (ListBatchesResponse);
+  // StopBatch stops a batch from prompting further and closes its asks, as
+  // f10 stop does. Any task of the batch names it.
+  rpc StopBatch(StopBatchRequest) returns (StopBatchResponse);
 }
 
 // PhaseStatus is where one phase of a run stands.
@@ -228,7 +246,7 @@ message StartRequest {
   // names the task a picked-up PR belongs to.
   string token = 13;
   // tasks are the other ids, after token. A discussion opens token's
-  // worktree and reads them all, and a flow start runs them in one drive.
+  // worktree and reads them all, and a flow start runs them in one batch.
   repeated string tasks = 14;
   // chain makes a flow start a range: token, then the one id in tasks, and
   // every id between, as `f10 start A -- B` runs them.
@@ -240,7 +258,7 @@ message StartRequest {
 
 message StartResponse {
   // task, branch, worktree, workspace_id and agent are a discussion's or a
-  // pickup's; a drive opens its task after the call returns.
+  // pickup's; a batch opens its task after the call returns.
   string task = 1;
   string branch = 2;
   string worktree = 3;
@@ -248,25 +266,30 @@ message StartResponse {
   string agent = 5;
   // printed is the report f10 start prints, and the waits it reported.
   Printed printed = 6;
-  // drive is the drive a flow start runs in, 0 for a discussion or a pickup.
-  int32 drive = 7;
-  // log is that drive's log file, which grows until the drive exits.
+  // drive is the old name of batch, still filled for clients built
+  // against it.
+  int32 drive = 7 [deprecated = true];
+  // log is the batch's log file, which grows until the batch exits.
   string log = 8;
-  // attached is true when the daemon already ran that drive and the call
+  // attached is true when the daemon already ran that batch and the call
   // followed it instead of starting another.
   bool attached = 9;
+  // batch is the number of the batch a flow start runs in, 0 for a
+  // discussion or a pickup.
+  int32 batch = 10;
 }
 
-// A DriveTask is one task of a drive, with its own agent profile.
+// A DriveTask is one task of DriveRequest's field form, with its own agent
+// profile.
 message DriveTask {
   string id = 1;
   string agent = 2;
 }
 
-// DriveRequest starts or resumes a drive. f10 start sends args. The field
-// form (args unset) is kept for older clients only: a new client calls
-// Start, which runs the same flow start with its closed-task check and
-// plan-only mode. The field form refuses a start of closed tasks.
+// DriveRequest is the old form of StartBatchRequest. Its field form (args
+// unset) is kept for older clients only: a new client calls Start, which
+// runs the same flow start with its closed-task check and plan-only mode.
+// The field form refuses a start of closed tasks.
 message DriveRequest {
   string project = 1;
   repeated DriveTask tasks = 2;
@@ -280,33 +303,88 @@ message DriveRequest {
   // plan_first is refused: a plan-only start is StartRequest with mode
   // START_MODE_PLAN.
   bool plan_first = 9 [deprecated = true];
-  // args are the drive's arguments as `f10 start` takes them. When set they
-  // win over the fields above, so a rerun of a typed command line keys to
-  // the record it opened.
+  // args are the arguments as `f10 start` takes them. When set they win
+  // over the fields above, so a rerun of a typed command line keys to the
+  // record it opened.
   repeated string args = 10;
-  // dir is the checkout the drive runs from.
+  // dir is the checkout the batch runs from.
   string dir = 11;
-  // env is the allowlisted environment the drive runs with. Honored only on
+  // env is the allowlisted environment the batch runs with. Honored only on
   // the unix socket, because a remote client has no local session to pass.
   repeated string env = 12;
-  // resume picks up the drive record with this number.
+  // resume picks up the record with this number.
   int32 resume = 13;
-  // answers are the answers to the drive's open asks, `ID=text` for one
+  // answers are the answers to the batch's open asks, `ID=text` for one
   // task or bare text.
   repeated string answers = 14;
-  // every is how often the drive polls its tasks; unset keeps the default.
+  // every is how often the tasks are polled; unset keeps the default.
   google.protobuf.Duration every = 15;
 }
 
+// DriveResponse is the old form of StartBatchResponse.
 message DriveResponse {
-  // drive is the drive's number in the project, 0 until the drive opened
-  // its record.
+  // drive is the batch's number in the project, 0 until its record opened.
   int32 drive = 1;
-  // log is the drive's log file, which grows until the drive exits.
+  // log is the batch's log file, which grows until the batch exits.
   string log = 2;
-  // attached is true when the daemon already ran this drive and the call
+  // attached is true when the daemon already ran this batch and the call
   // joined it instead of starting another.
   bool attached = 3;
+}
+
+// StartBatchRequest starts a batch from a command line, or picks up the
+// batch that command line already started.
+message StartBatchRequest {
+  string project = 1;
+  // args are the arguments as `f10 start` takes them, so a rerun of a typed
+  // command line keys to the record it opened.
+  repeated string args = 2;
+  // dir is the checkout the batch runs from; empty takes the project's.
+  string dir = 3;
+  // env is the allowlisted environment the batch runs with. Honored only on
+  // the unix socket, because a remote client has no local session to pass.
+  repeated string env = 4;
+  // resume picks up the batch record with this number, for a client that
+  // already resolved it; Resume takes a task id instead.
+  int32 resume = 5;
+}
+
+message StartBatchResponse {
+  // batch is the batch's number in the project, 0 until its record opened.
+  int32 batch = 1;
+  // log is the batch's log file, which grows until the batch exits.
+  string log = 2;
+  // attached is true when the daemon already ran this batch and the call
+  // joined it instead of starting another.
+  bool attached = 3;
+}
+
+// ResumeRequest names a stopped batch by one of its tasks. With no task, the
+// project's one stopped batch resumes, and several are refused by name.
+message ResumeRequest {
+  string project = 1;
+  // task is any task id of the batch, a bundle's rider included.
+  string task = 2;
+  // answers are the answers to the batch's open asks, `ID=text` for one
+  // task or bare text.
+  repeated string answers = 3;
+  // every is how often the tasks are polled; unset keeps the record's.
+  google.protobuf.Duration every = 4;
+  // parallel caps the tasks running a skill at once; 0 keeps the record's.
+  int32 parallel = 5;
+  CallerContext caller = 6;
+}
+
+message ResumeResponse {
+  // batch is the number of the batch resumed.
+  int32 batch = 1;
+  // log is the batch's log file, which grows until the batch exits.
+  string log = 2;
+  // attached is true when the batch was still running and the call joined
+  // it.
+  bool attached = 3;
+  // printed is what f10 resume prints for the call.
+  Printed printed = 4;
 }
 
 // MergeMode is how Finish lands a task.
@@ -377,39 +455,82 @@ message ForwardResponse {
   Printed printed = 4;
 }
 
+// ListDrivesRequest is the old form of ListBatchesRequest.
 message ListDrivesRequest {
   string project = 1;
-  // all lists finished and cancelled drives too.
+  // all lists every record, not only the newest.
   bool all = 2;
   CallerContext caller = 3;
 }
 
-// A DriveRecord is one drive a project ran, by its number.
+// A DriveRecord is the old form of Batch.
 message DriveRecord {
   int32 number = 1;
-  // args are the drive's arguments as f10 start took them.
+  // args are the arguments as f10 start took them.
   repeated string args = 2;
   // state is running, stopped, done or cancelled.
   string state = 3;
   google.protobuf.Timestamp started = 4;
 }
 
+// ListDrivesResponse is the old form of ListBatchesResponse.
 message ListDrivesResponse {
   repeated DriveRecord drives = 1;
-  // printed is the table f10 status --drives prints.
+  // printed is the table f10 status --batches prints.
   Printed printed = 2;
 }
 
+// CancelDriveRequest is the old form of StopBatchRequest.
 message CancelDriveRequest {
   string project = 1;
-  // drive is the drive's number; task, when set instead, is a task id whose
-  // drive is stopped.
+  // drive is the batch's number; task, when set instead, is a task id whose
+  // batch is stopped.
   int32 drive = 2;
   CallerContext caller = 3;
   string task = 4;
 }
 
+// CancelDriveResponse is the old form of StopBatchResponse.
 message CancelDriveResponse {
+  // printed is what f10 stop prints.
+  Printed printed = 1;
+}
+
+message ListBatchesRequest {
+  string project = 1;
+  // all lists every batch, not only the newest 20.
+  bool all = 2;
+  CallerContext caller = 3;
+}
+
+// A Batch is the tasks one f10 start started, kept as a record so it can be
+// stopped and resumed.
+message Batch {
+  int32 number = 1;
+  // args are the arguments as f10 start took them.
+  repeated string args = 2;
+  // state is running, stopped, done or cancelled.
+  string state = 3;
+  google.protobuf.Timestamp started = 4;
+  // tasks are the batch's tasks as typed, a bundle joined by +. Any of
+  // them names the batch to Resume and StopBatch.
+  repeated string tasks = 5;
+}
+
+message ListBatchesResponse {
+  repeated Batch batches = 1;
+  // printed is the table f10 status --batches prints.
+  Printed printed = 2;
+}
+
+message StopBatchRequest {
+  string project = 1;
+  // task is any task id of the batch to stop, a bundle's rider included.
+  string task = 2;
+  CallerContext caller = 3;
+}
+
+message StopBatchResponse {
   // printed is what f10 stop prints.
   Printed printed = 1;
 }

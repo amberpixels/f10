@@ -108,7 +108,8 @@ func Labels(a Ask) map[string]string {
 	}
 
 	if a.Drive > 0 {
-		out["drive"] = strconv.Itoa(a.Drive)
+		out["batch"] = strconv.Itoa(a.Drive)
+		out["drive"] = out["batch"] // the old label, for clients built against it
 	}
 
 	return out

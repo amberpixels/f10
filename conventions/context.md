@@ -15,7 +15,7 @@ f10 is generic, and everything project-specific lives under `.f10/instructions/`
   **Roles** below or the overlay can replace it.
   Under a replaced role, an instruction phrased for code applies by analogy or not at all, as the overlay says.
 - **stage** - one ordered unit inside a plan, never a step or a skill.
-- **drive** - the daemon loop that prompts started tasks skill by skill.
+- **batch** - the tasks one `f10 start` started, which the daemon prompts skill by skill.
   A discussion or a PR pickup has none.
 - **task id** - the tracker's id, which names the plan, the branch and the report's rows.
   A planless run from free text has none, and no step invents one.

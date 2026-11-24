@@ -67,7 +67,7 @@ var riskyLabels = []string{"migration", "risky"}
 func Plan(ctx context.Context, in PlanInput, a drivectl.DriveArgs) (PlanResult, error) {
 	pa := a.Plan
 	if pa == nil {
-		return PlanResult{}, errors.New("drive plan: no plan arguments")
+		return PlanResult{}, errors.New("start --propose: no proposal arguments")
 	}
 
 	sheet, err := readSheet(pa.Facts)
@@ -199,7 +199,7 @@ func (in PlanInput) candidates(ctx context.Context, a drivectl.DriveArgs) ([]dri
 		}
 
 		if open == 0 {
-			notes = append(notes, "left out: "+r.ID+" has no open subtask to drive")
+			notes = append(notes, "left out: "+r.ID+" has no open subtask to start")
 		}
 	}
 

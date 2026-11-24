@@ -77,7 +77,7 @@
       "finish"
     ]
   },
-  "driveEnv": [
+  "batchEnv": [
     "FOO_TOKEN"
   ],
   "watch": "report",
@@ -222,7 +222,7 @@
       "origin": "default"
     },
     {
-      "key": "drive_env",
+      "key": "batch_env",
       "value": "FOO_TOKEN",
       "origin": "declared (main, frontmatter)"
     },

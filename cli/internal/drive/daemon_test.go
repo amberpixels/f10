@@ -85,7 +85,7 @@ func TestDriveDrainsAtATick(t *testing.T) {
 		t.Fatalf("err = %v, want exit %d\n%s", err, daemon.ExitDrained, fx.out.String())
 	}
 
-	if !strings.Contains(fx.out.String(), "drive 1 drained for an upgrade") {
+	if !strings.Contains(fx.out.String(), "batch 1 drained for an upgrade") {
 		t.Errorf("output = %s", fx.out.String())
 	}
 
@@ -159,7 +159,7 @@ func TestRecordArgsDropsForeground(t *testing.T) {
 // once the exit file appears; the log's drive line names the drive.
 func TestTailLog(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "d.log")
-	if err := os.WriteFile(path, []byte("drive 7\nGH-1 judge: sent\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("batch 7\nGH-1 judge: sent\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -180,7 +180,7 @@ func TestTailLog(t *testing.T) {
 		t.Fatalf("tail = %+v, %v", exit, err)
 	}
 
-	if out.String() != "drive 7\nGH-1 judge: sent\nGH-1 judge: done\n" {
+	if out.String() != "batch 7\nGH-1 judge: sent\nGH-1 judge: done\n" {
 		t.Errorf("tail copied %q", out.String())
 	}
 
@@ -198,8 +198,8 @@ func TestTailLog(t *testing.T) {
 
 func TestDriveTitle(t *testing.T) {
 	for root, want := range map[string]string{
-		"/code/repo/.f10":     "repo: drive 3",
-		"/home/u/.f10/widget": "widget: drive 3",
+		"/code/repo/.f10":     "repo: batch 3",
+		"/home/u/.f10/widget": "widget: batch 3",
 	} {
 		if got := driveTitle(daemon.Run{Root: root, Drive: 3}); got != want {
 			t.Errorf("driveTitle(%s) = %q, want %q", root, got, want)

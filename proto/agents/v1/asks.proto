@@ -24,9 +24,9 @@ enum AnswerSource {
   ANSWER_SOURCE_ASKS = 2;
   // the inbox skill in an agent session
   ANSWER_SOURCE_SKILL = 3;
-  // a drive's own answer flag
+  // f10 start --answer or f10 resume --answer
   ANSWER_SOURCE_DRIVE = 4;
-  // the asking drive was cancelled
+  // the asking batch was cancelled
   ANSWER_SOURCE_CANCELLED = 5;
   // a client of this API
   ANSWER_SOURCE_API = 6;
@@ -55,7 +55,7 @@ message Ask {
   google.protobuf.Timestamp answered_at = 9;
   // delivered_at is when the answer reached the agent.
   google.protobuf.Timestamp delivered_at = 10;
-  // labels is the owner's own context, such as the task, project and drive
+  // labels is the owner's own context, such as the task, project and batch
   // f10 records, so this package never grows owner-specific fields.
   map<string, string> labels = 11;
 }

@@ -15,7 +15,7 @@ If a skill chains into another (`/f10:plan ... && /f10:ship ...`), it passes `--
 
 These skills take the token: catchup, ci, cleanup, debug, judge, plan, resolve, review, ship and standup.
 Brainstorm, capture, demo and explain never see it, because nothing prompts them from another session.
-A skill that only runs the binary (`modes/binary.md`) has no run to drive, so the token does not apply to it.
+A skill that only runs the binary (`modes/binary.md`) has no run for another session to prompt, so the token does not apply to it.
 
 Some steps have a **Driven** paragraph of their own (judge, catchup).
 That paragraph adds to this file for that step, so follow both.
@@ -48,19 +48,19 @@ Examples are a judge's rethink, a resolve `ask` and a deploy confirmation.
    Never type the banner by hand, because a hand-typed one drifts from the text the answers are read against.
    The banner ends with what to type and where, so add nothing after it.
    Never add a command meant for another session, such as `f10 forward`, `f10 status` or `f10 start --answer`.
-   The driving session reads the ask through `f10 status <task-id>` and already knows its own way back.
+   The session that started the task reads the ask through `f10 status <task-id>` and already knows its own way back.
 
 `f10-state.sh ask` also puts the ask in the user's inbox (`f10 inbox`), and inside Herdr it shows this pane as blocked until the ask is answered.
 The status line of this project's sessions shows the asking task's id, and the inbox notifies the user.
 No other session is told the ask in its conversation, because the user answers it in this pane, or asks for it with `/f10:inbox`.
-A drive's agents are never told another agent's ask, because they could only print it into their pane.
+A batch's agents are never told another agent's ask, because they could only print it into their pane.
 
 Six kinds of open question never become an ask:
 
 - **A gap.** A driven run takes every gap on its default and lists the open ones in its report (`conventions/gaps.md`).
 - **A conflict.** A driven catchup settles every conflict by the task's intent and writes each choice down (the **catchup** step's Driven paragraph).
 - **A base with no code, or not on origin before `pr`.** Ship stops with `f10-state.sh wait <base-id>` and asks nothing.
-  The drive sends ship again once the base commits.
+  The daemon sends ship again once the base commits.
   For a stop at `pr`, it sends ship again once the base's branch is on origin or the base has finished (`skills/ship/SKILL.md` → the catchup guard, `steps/pr.md` point 4).
 - **A stale task's verdict** (`steps/stale.md`).
   The run ends blocked and names the verdict file.
@@ -69,35 +69,35 @@ Six kinds of open question never become an ask:
   It is trusted when the cited code still reads as the task says, and verified otherwise.
 - **A bug that is costly to reproduce, under `debug_costly: skip` or `reproduce`** (`steps/debug.md`).
   The frontmatter's value decides, as the debug step says.
-  The drive's report names every task planned without a reproduction, so a skipped one is seen.
+  The daemon's report names every task planned without a reproduction, so a skipped one is seen.
 
 Three bug questions do become one ask each.
 A report with more than three problems asks which to chase.
 Under `debug_costly: ask`, a costly bug asks its three options.
-A bug whose cause is not confirmed asks for the missing evidence, and then its plan is written marked `Reproduction: unconfirmed`, so the drive goes on.
+A bug whose cause is not confirmed asks for the missing evidence, and then its plan is written marked `Reproduction: unconfirmed`, so the daemon goes on.
 
 ## A turn ends at its report, never before
 
-The drive and the watcher read an idle agent as a turn that has ended.
+The daemon and the watcher read an idle agent as a turn that has ended.
 So a turn that ends before its report looks like one that stopped without reporting.
-After a minute's grace the drive reads where the task stands from git, the PR and the task's files, and a report that lands later is not read.
-If the branch shows the step done, the drive moves on.
+After a minute's grace the daemon reads where the task stands from git, the PR and the task's files, and a report that lands later is not read.
+If the branch shows the step done, the daemon moves on.
 Otherwise the task halts, because an idle agent on a running run may be waiting on a permission dialog that a new prompt could answer.
 
 - Run verify, and every other long command, in the foreground.
   Raise the `timeout` where the default is too short.
 - If a command must run in the background, wait for it in the same turn with a Monitor until-loop on its exit.
   Never end the turn expecting to be woken when it reports.
-  If a turn ended on a background Bash command, a Monitor or a subagent, the drive reads the agent as working for up to 30 minutes.
+  If a turn ended on a background Bash command, a Monitor or a subagent, the daemon reads the agent as working for up to 30 minutes.
   So a turn that breaks this rule is not halted at once.
-  The rule still holds, because a turn that waits reports sooner than one the drive waits out.
-  A background job that never notifies leaves the drive waiting the full 30 minutes before it treats the agent as stalled.
+  The rule still holds, because a turn that waits reports sooner than one the daemon waits out.
+  A background job that never notifies leaves the daemon waiting the full 30 minutes before it treats the agent as stalled.
 - A driven turn ends in only three ways: the step's report, an ask or a failure.
 
-## When a drive halts
+## When a task halts
 
-The drive reads how far a turn got from the branch, the PR and the task's files, whoever prompted the turn.
-A turn that stopped `failed` or `partial` is a failed attempt, and the drive sends the step again.
+The daemon reads how far a turn got from the branch, the PR and the task's files, whoever prompted the turn.
+A turn that stopped `failed` or `partial` is a failed attempt, and the daemon sends the step again.
 The task halts only in these cases:
 
 - **An ask.** The task waits for the answer (**The answer**, below).
@@ -112,13 +112,13 @@ The task halts only in these cases:
   A head whose checks are still running holds the task as `waiting on checks`, and finish runs again each poll.
   It halts once the same head has been pending for 20 minutes.
   A push starts the wait over, because the new head has checks of its own.
-- **The drive's own environment fails**, because sending the step again cannot fix it.
-  It covers a git read that fails, a workspace that is gone, a base task that halted, or a task another drive holds.
+- **The daemon's own environment fails**, because sending the step again cannot fix it.
+  It covers a git read that fails, a workspace that is gone, a base task that halted, or a task another batch holds.
 
 ## The answer
 
 An answer arrives as your **next prompt**, in plain text, numbered the way the ask was.
-It may be typed in this pane, sent by the drive, or sent from anywhere by `f10 inbox answer` or `/f10:inbox`.
+It may be typed in this pane, sent by the daemon, or sent from anywhere by `f10 inbox answer` or `/f10:inbox`.
 A reply typed in this pane may pick options by letter, number or text, such as `b`, `1. a 2. b` or `1. b 2. 8080` for a free-text second question.
 f10 then adds a context line on that prompt naming the options it chose (`f10: this reply answers your ask: 1. merge now`), and that line is the answer.
 A reply with no such line is the user's own words.
@@ -135,17 +135,17 @@ A prompt that arrives while no ask is recorded is not an answer.
 Treat it as steering.
 
 A **Claude Code permission dialog** cannot travel through run state.
-The driving session sees only an idle agent.
+The session that started the task sees only an idle agent.
 So stay inside the session's existing permissions.
 A dialog you cannot avoid is answered in this pane.
 
-## When drive finishes the task
+## When f10 finishes the task
 
-Sometimes the ship prompt says that drive finishes the task after ship.
-The drive does that when the run's flow ends in a `finish` entry that the pace does not turn off, read under the project's ceiling.
+Sometimes the ship prompt says that f10 finishes the task after ship.
+The daemon does that when the run's flow ends in a `finish` entry that the pace does not turn off, read under the project's ceiling.
 In that case, end the report with one line that says so.
-Name the PR by number where there is one, and say that nothing is owed in this pane: `Next: the drive merges #204 and removes this worktree; nothing to do here.`
-For a spike the line is `Next: the drive closes the spike and removes this worktree; nothing to do here.`
+Name the PR by number where there is one, and say that nothing is owed in this pane: `Next: the daemon merges #204 and removes this worktree; nothing to do here.`
+For a spike the line is `Next: the daemon closes the spike and removes this worktree; nothing to do here.`
 
 A driven run whose prompt does not say this adds no such line.
 

@@ -25,7 +25,7 @@ lore: committed
 lore_gate: block
 stale_after: 14d
 driver_timeout: 2m
-drive_env: [FOO_TOKEN]
+batch_env: [FOO_TOKEN]
 watch: report
 watch_catchup: on
 watch_ci: on

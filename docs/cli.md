@@ -2,11 +2,12 @@
 
 A lookaround, and the commands that start, reach and finish tasks.
 The lookaround verbs explain the loaded configuration and read the things it points at, changing nothing.
-Six verbs act.
+Seven verbs act.
 `init` registers a checkout and never overwrites.
 `start` takes one task or a list, creates the branch and worktree each task is worked on in, opens them in Herdr and runs the task through its flow.
 `forward` hands a command to the agent a task already has.
-`stop` stops a drive.
+`resume` goes on with a stopped batch, which is the tasks one `start` started.
+`stop` stops a batch.
 `finish` merges the task's PR (or a branch never pushed, locally) and removes what start created.
 
 The plugin requires the binary and ships it as `bin/f10`, a shim that runs the build matching `plugin.json`'s version.
@@ -82,7 +83,7 @@ f10 review settle [n] --id <id> --revision <rev>      # leave the declared settl
 f10 review round [task-id] [--json]                   # the findings directory, its latest round and the next, or the decline (exit 3)
 f10 trace trailers --step <step> [--task <id>] [--round n --fixed n --skipped n]   # the Task:, Step: and Review: lines a step's commit ends in; nothing with traces off
 f10 trace state --step <step> [--round n] [--open n] [--asks n] [--task <id>] [--body-file <file>]   # rewrite the hidden state block in the branch's open PR body, or put it into a drafted body; nothing with traces off
-f10 status [id] [--all] [--json | --plain] | --drives [--all]   # --drives: the newest 20 drive records, each running, stopped, done or cancelled (--all: every one); else where the run is: a task's in its worktree (bare: the session's task, else the branch's, with that output's --json shape; in the main checkout, a `launched here` tree of what the session started or drove that is still live, nested by `After:` as a parent's children are, task rows under --json), else this session's, every live one, or a row per child of a parent
+f10 status [id] [--all] [--json | --plain] | --batches [--all] [--json]   # --batches: the newest 20 batches, each running, stopped, done or cancelled (--all: every one); else where the run is: a task's in its worktree (bare: the session's task, else the branch's, with that output's --json shape; in the main checkout, a `launched here` tree of what the session started that is still live, nested by `After:` as a parent's children are, task rows under --json), else this session's, every live one, or a row per child of a parent
 f10 standup [--since <time> | --week] [-C <checkout>]... [--group <name>]... [--all] [--json]   # your commits and PRs since your last standup, grouped by project and task
 f10 standup mark --since <time> [--at <time>]      # record a standup as reported: the next one starts where it ended
 f10 board [<window> | --since <window>] [--state] [--remote] [-C <checkout>]... [--group <name>]... [--all] [--detail] [--by person] [--json | --html] [--out <path>]   # what changed today (else the last working day); --state: where every task stands; one project or several
@@ -93,13 +94,13 @@ f10 audit map <range | all> [--json]                    # churn, tasks and pain 
 f10 ledger dump [--json] [--project p] [--task id] [--session s]   # the recorded events, oldest first
 f10 ledger schema        # the JSON Schema of each event kind's payload, by version (docs/ledger.schema.json)
 
-f10 start <id | id+id>[-suffix][:profile]... | <id> -- <id> [--plan] [--flow <name> | --local] [--pace <name>] [--after <id> | --base <branch>] [--agent <profile> | --model <model>] [--parallel <n>] [--answer [<id>=]<text>] [--every 30s] [--foreground]   # each task in a worktree, a Herdr workspace and an agent, run through the flow by a drive in the daemon
+f10 start <id | id+id>[-suffix][:profile]... | <id> -- <id> [--plan] [--flow <name> | --local] [--pace <name>] [--after <id> | --base <branch>] [--agent <profile> | --model <model>] [--parallel <n>] [--answer [<id>=]<text>] [--every 30s] [--foreground]   # each task in a worktree, a Herdr workspace and an agent, run through the flow as one batch, which the daemon prompts
 f10 start <id | parent> [<id>...] --discuss [note...] | <PR url | #n> [--plan] [--task <id>] [note...]   # one agent in one worktree, prompted once, that reads the tasks and waits
-f10 start --resume <n> [--answer [<id>=]<text>] [--every 30s] [--parallel <n>]   # pick drive n up again
-f10 stop <id | n>   # stop the drive holding the task, or drive n; nothing more is prompted
+f10 start <parent | id | id+id>[:profile]... --propose [--flow | --local | --pace | --agent | --parallel] [--facts F] [--json | --hint]   # print a proposal of what to bundle, run in parallel and order; starts nothing
+f10 resume [<id>] [--answer [<id>=]<text>] [--every 30s] [--parallel <n>] [--foreground]   # go on with the stopped batch holding the task, or the one stopped batch in the project
+f10 stop <id>   # stop the batch holding the task, running or stopped; nothing more is prompted
 f10 forward <id>[-suffix] <text...>   # hand a command or a steering note to the agent working on the task
-f10 drive plan <parent | id | id+id>[:profile]... [--flow | --local | --pace | --agent | --parallel] [--facts F] [--json | --hint]   # plumbing: propose what to bundle, run in parallel and order; changes nothing
-f10 daemon status | stop [--now] | logs [<drive>] [-f]   # the per-user process drives run in
+f10 daemon status | stop [--now] | logs [<id>] [-f]   # the per-user process batches run in; logs <id>: the log of the batch holding the task
 f10 remote on [--port N] [--mcp] | off | token add <name> --scope <scopes> | token list | token revoke <name> | install | uninstall   # serve the daemon's API to your other devices on the tailnet
 f10 mcp [--scope <scopes> | --token <name>]   # the daemon's API as MCP tools over stdio, for Claude Desktop and other MCP clients
 f10 inbox [list [--json] [--all] | answer <task> [N=VALUE ...]] [--all]  # the questions driven agents wait on in this project; bare walks them in a terminal
@@ -183,13 +184,13 @@ It moves the daemon's run dir too, unless `F10_RUN_DIR` or `XDG_RUNTIME_DIR` nam
 
 ## Start
 
-`f10 start 42` is the three hand-offs of starting a task as one command, and the drive that runs it through its flow after.
+`f10 start 42` is the three hand-offs of starting a task as one command, and the [batch](#batches) that runs it through its flow after.
 It derives the branch name (the driver's `branch` verb, else `<ID>/<slug>` with the slug cut from the task's title, else the bare id with a note when the host returns no title), creates the worktree beside the main checkout - through `wt switch` when [worktrunk](https://github.com/max-sixty/worktrunk) is on `PATH`, so the project's hooks keep firing, else with `git worktree add` at the same sibling path - opens it as a Herdr workspace and starts a claude agent in its root pane.
-Then the [drive](#drives) prompts that agent one skill at a time.
+Then the daemon prompts that agent one skill at a time.
 It sends `/f10:plan <id>` when the flow leads with `plan` and no plan is saved, then `/f10:ship <id>`, then finish when the flow ends in it.
 Several ids, a bundle, a range or a parent start the same way, each task once its base has code, or under `--plan` once its base's plan is saved.
-The command follows the drive until it ends, an agent asks, or a task halts.
-Ctrl+C stops only the following, and the drive goes on in the daemon.
+The command follows the batch until it ends, an agent asks, or a task halts.
+Ctrl+C stops only the following, and the batch goes on in the daemon.
 
 What the start does, case by case:
 
@@ -202,34 +203,34 @@ What the start does, case by case:
   A flow with no leading `plan` sends ship alone, and so does a pace that skips `plan`.
   `--pace <name>` is recorded on the branch, where ship's `f10 flow` reads it, so the prompt does not carry it.
   `--plan` with `--flow` or `--local` is refused, since `--plan` stops before ship, which runs the flow
-- `--discuss` opens one worktree and one agent, prompted once with no drive.
+- `--discuss` opens one worktree and one agent, prompted once, and starts no batch.
   The agent waits for you in its own pane, so the prompt is plain text with no `--driven` marker.
   - One task: the agent summarises it and waits.
-  - A parent: the worktree is the parent's. The agent prints the subtask tree, each row marking what it waits on, a draft and a finished subtask, then the `f10 drive plan` proposal, and waits.
-  - Several ids (`f10 start A B C --discuss`): the worktree is the first id's. The agent reads every task, shows how they depend on each other and the `f10 drive plan` proposal, and waits. A listed id with subtasks also gets its tree.
+  - A parent: the worktree is the parent's. The agent prints the subtask tree, each row marking what it waits on, a draft and a finished subtask, then the [proposal](#proposal) `f10 start <ids> --propose` prints, and waits.
+  - Several ids (`f10 start A B C --discuss`): the worktree is the first id's. The agent reads every task, shows how they depend on each other, shows the same proposal, and waits. A listed id with subtasks also gets its tree.
 
   The leading words shaped as task ids are the tasks, and the note starts at the first word that is not one.
   A note is what the agent acts on after its summary and before it waits (`f10 start 42 --discuss "/f10:judge it first"`), so quote a note that starts with an id.
   A note goes only with `--discuss` or a PR pickup, because a driven run takes its instructions from the task.
-  `--discuss` is exclusive with `--plan`, `--flow` and `--local`, and takes none of the drive's flags; with several ids, `--after`, `--base` and a range are refused too, because one base cannot belong to several tasks.
+  `--discuss` is exclusive with `--plan`, `--flow` and `--local`, and takes none of a flow start's flags; with several ids, `--after`, `--base` and a range are refused too, because one base cannot belong to several tasks.
   The command returns once the prompt is submitted, and the [watcher](#watch) looks after the task.
 
   The discussion's branch records `branch.<name>.f10-discuss`.
   A flow start run inside that worktree (`/f10:start A+B C`, typed in the agent's pane) continues the conversation there:
-  - its first group takes the worktree and the agent. When the group's lead is not the task the worktree opened for, the branch is renamed to the lead's (`git branch -m`, its recorded facts moving with it), and the agent and the workspace are renamed to the lead's. Another lead starts without the discussed task's recorded base, flow, pace and agent profile. A lead that already has a branch, or one with subtasks, is refused before anything changes, and so is another lead when the discussion's branch was built on a base task's branch. A drive the daemon refuses puts the whole discussion back. The worktree's directory keeps its name, because every lookup goes by branch.
+  - its first group takes the worktree and the agent. When the group's lead is not the task the worktree opened for, the branch is renamed to the lead's (`git branch -m`, its recorded facts moving with it), and the agent and the workspace are renamed to the lead's. Another lead starts without the discussed task's recorded base, flow, pace and agent profile. A lead that already has a branch, or one with subtasks, is refused before anything changes, and so is another lead when the discussion's branch was built on a base task's branch. A batch the daemon refuses puts the whole discussion back. The worktree's directory keeps its name, because every lookup goes by branch.
   - the other groups get worktrees of their own.
-  - the command returns once the daemon has the drive, instead of following it, because the drive prompts that same agent. The drive holds the first skill until the agent's turn ends, then clears the mark. `--foreground` is refused there.
-- a start whose every task is closed, none with a branch, opens a discussion instead of a drive, because a drive would run nothing.
+  - the command returns once the daemon has the batch, instead of following it, because the daemon prompts that same agent. The daemon holds the first skill until the agent's turn ends, then clears the mark. `--foreground` is refused there.
+- a start whose every task is closed, none with a branch, opens a discussion instead of a batch, because a batch would run nothing.
   A note says so first, and names the flags the discussion drops: `--plan`, `--flow` and `--pace`.
   It also names any other task's `:profile` as dropped, because one agent opens.
   The first task's `:profile` is the discussion's agent unless `--agent` or `--model` names one.
   The agent's report names the commits that shipped each task and the release that holds them.
   It also names any open task whose id is one digit off, in case the id was mistyped.
-  A resume, a range or `--answer` goes on with a drive already agreed, so it is never switched.
+  A resume, a range or `--answer` goes on with a batch already agreed, so it is never switched.
 - the flow is recorded on the branch as `branch.<name>.f10-flow` in local git config, for `f10 status` and a rerun of `f10 start`.
   With `flow_by_area` declared and no flow named, nothing is recorded and the prompt is `/f10:ship <id>` alone, because ship picks the flow from the task's area
 - a plan the main checkout saved for the task (`.f10/plans/<id>.md`, written by `/f10:plan` after a discussion there) stays in place: every worktree's storage root is main's `.f10/` (or the out-of-tree root), so the worktree's agent reads it there.
-  The agent ships it, because the drive's first prompt is `/f10:ship <id>` (`/f10:ship <name>: <id>` with `--flow` or `--local`).
+  The agent ships it, because the first prompt is `/f10:ship <id>` (`/f10:ship <name>: <id>` with `--flow` or `--local`).
   `--plan` ends at once, saying the plan exists and that `/f10:plan <id>` in the task's pane plans it again.
   `--discuss` names the plan's path.
 - the agent is started with an `--add-dir` for each dir of the storage root an agent writes to: the task-file dirs and `audits`, created if missing.
@@ -270,7 +271,7 @@ What the start does, case by case:
   The id stays in front, so the branch is still searched by its task.
   A project with its own shape encodes it in the driver's `branch` verb; no title, or a title with no ASCII letters in it, leaves the bare id and says so beneath the report
 - a new branch never takes a name a merged or closed PR used as its head.
-  Finish, the watcher and the drive look PRs up by head branch, so each would read that PR as the new branch's and finish the task at once.
+  Finish, the watcher and a running batch look PRs up by head branch, so each would read that PR as the new branch's and finish the task at once.
   The task's next PR gets `<name>-2`, `-3` and so on, and a note beneath the report says so.
   A local branch at a merged PR's head with nothing past it is refused, naming the PR and `f10 finish <id>`, which archives that PR's plan with the branch.
   A branch whose only commits past the head are main merged in, or one recreated at main's tip, has nothing past it.
@@ -298,7 +299,7 @@ What the start does, case by case:
   `--plan` is refused: going on from a landed PR is a task of its own, started by its id.
   `/f10:finish --local` removes the worktree.
   A landed commit origin does not hold after the fetch (its base branch deleted since) fails the start, naming the sha
-- every lookup of a task's branch (start, forward, status, finish, drive, `--after`) reads the `f10-task` link and the `f10-tasks` riders first and falls back to the name patterns (`<id>`, `<id>/...`, `<id>-...`, `<id>+...`), then, for local branches only, to the id past a prefix (`feat/<id>-...`), as `f10 task read` reads a branch; a task read with no id in a picked-up worktree finds its task through the same link.
+- every lookup of a task's branch (start, resume, forward, status, finish, `--after`) reads the `f10-task` link and the `f10-tasks` riders first and falls back to the name patterns (`<id>`, `<id>/...`, `<id>-...`, `<id>+...`), then, for local branches only, to the id past a prefix (`feat/<id>-...`), as `f10 task read` reads a branch; a task read with no id in a picked-up worktree finds its task through the same link.
   With no local branch, start also finds the one task branch on origin (`refs/remotes/origin/`) and creates the local branch tracking it rather than a second branch from main.
   It reads what the last fetch saw; for a branch pushed since, run `git fetch` or pass the PR link
 - a task that already has a branch gets its worktree reused, or created when the branch has none, and `--base` is noted as ignored since the branch keeps its base - `--after` likewise for the base, while its dependency is recorded all the same; a workspace Herdr already shows is adopted rather than opened again, keeps its agent, and nothing is prompted twice.
@@ -315,11 +316,11 @@ Every other command takes any member's id and acts on the bundle: `f10 finish AB
 A bundle branch fetched from origin has no local record; start reads its riders from the branch name and records them.
 Before anything is created, start refuses a parent among the members, a rider already on another branch (naming it), a branch that exists with other riders (riders are fixed at start) and a suffix.
 The bundle's base is the one `After:` its members name outside it; a line naming another member is dropped, and two different bases are refused.
-A drive takes a bundle as one entry; a task `After:` a rider waits for the whole bundle.
+A batch takes a bundle as one entry; a task `After:` a rider waits for the whole bundle.
 A bundle's PR title names the riders after the lead id, up to two and then a count (`ABC-1 (+ABC-2, ABC-3, 2 more): <lead title>`), because GitHub cuts long commit subjects from the end.
 `f10 pr create` and `f10 pr edit` add that tag to the drafted title, and replace one already there.
 The board shows such a PR under its lead with the lead's title.
-Drive's finish and the watcher ask no riders question, since a resume carries only the latest answer.
+A batch's finish and the watcher ask no riders question, since a resume carries only the latest answer.
 They follow the PR body instead.
 A rider under `Closes #n` closes.
 A rider under `Part of #n`, or not named at all, stays open.
@@ -339,6 +340,28 @@ Outside one it stops before touching anything and points at https://herdr.dev.
 
 After its report, start runs the [janitor](#janitor) when its last run is 6 hours old or more; its lines follow on stderr, prefixed `janitor:`, and a janitor failure is one warning line that never fails the start.
 
+## Resume
+
+`f10 resume [<task-id>] [--answer [<id>=]<text>]... [--every 30s] [--parallel <n>] [--foreground]` goes on with a stopped [batch](#batches).
+A batch is the tasks one `f10 start` started, kept as a record.
+
+- **Any task id of the batch names it**, a bundle's rider included, and a task typed with a suffix by its plain id too.
+  The newest record holding the task that is neither cancelled nor done is the one resumed.
+- **With no task id**, the one stopped batch in the project resumes.
+  When several are stopped, it resumes none: it prints one line per batch, `f10 resume <lead>   batch <n>: <its tasks>`, and exits **1**.
+  When none is stopped, it says so and exits non-zero.
+- **It resumes wherever each task stopped**, the finish included.
+  Each task's position is read from its own branch and run state, so a batch whose tasks all shipped has only its finishes left to run.
+  That is why resume is a command of its own and no flag of `start`, which opens tasks.
+- **A batch still running is followed**, as rerunning its `f10 start` line follows it.
+- **The flags** are the ones that change how a batch runs, never what it runs.
+  `--answer` answers the batch's open asks, `--every` sets how often the tasks are polled, `--parallel` rewrites the cap, and `--foreground` runs the batch in this process.
+  Any other flag, or a second task id, is refused, because a resume runs the batch's own tasks, flow and agent profiles.
+- **A batch stopped for good** with `f10 stop` is never resumed: its `f10 start` line starts a new one.
+
+The exit codes are a start's (**Batches**, point 7).
+The daemon's API has the same call as `Resume`, and MCP as `resume`, so a client resumes by task id too.
+
 ## Finish
 
 `f10 finish 42` is the inverse of start, in the order that keeps the local side honest.
@@ -354,10 +377,10 @@ Past that, it refuses, saying the checks were still running.
 A host that cannot answer the read refuses too.
 `--ignore-checks` merges anyway.
 `--yes` does not imply it, because automated finishes pass `--yes`.
-A drive's finish does not wait itself.
-Instead the drive holds the task as `waiting on checks` and tries again each poll, for up to 20 minutes per head.
+A batch's finish does not wait itself.
+Instead the batch holds the task as `waiting on checks` and tries again each poll, for up to 20 minutes per head.
 On red it sends `/f10:ci` to the task's agent and shows the task as `triaging checks` (**Checks triage** below).
-A drive that runs no `finish` holds a shipped PR the same way before it ends the task, so a head that turns red is triaged first.
+A batch that runs no `finish` holds a shipped PR the same way before it ends the task, so a head that turns red is triaged first.
 The watcher finishes only merged PRs, so its finish never waits on checks.
 Its own read of an open PR's checks is under **Watch** (**red**).
 
@@ -373,7 +396,7 @@ The limits live on the branch as `branch.<branch>.f10-ci`, local and never pushe
 A fix round counts for the branch, because it pushes a new head, and a rerun counts for its head.
 Any read that finds the head green clears the record.
 `--record fix` and `--rerun` refuse an action already spent, so a second red ends in a question.
-A drive sends the step to the agent when finish meets red, and halts when a triage leaves the same red head with nothing new recorded.
+A batch sends the step to the agent when finish meets red, and halts the task when a triage leaves the same red head with nothing new recorded.
 
 For a bundle, finish needs `--close`: the riders the PR delivers, comma-separated, `all` or `none`.
 Without it, finish exits **7** before changing anything, naming the riders the PR body closes as the default, and the finish skill asks.
@@ -391,14 +414,14 @@ Once every one is closed with no branch left, here or on origin, it closes the p
 It names the subtasks in the report.
 On any other tracker it only checks them, and the note says to close the parent there.
 A subtask still open or still holding a branch is named in the refusal, and the parent stays open.
-Once a finish succeeds, it marks the task finished in every stopped drive record that lists it, so `f10 status --drives` needs no rerun of the drive.
-It takes each drive's own lease without waiting, so a running drive's record is left to that drive.
+Once a finish succeeds, it marks the task finished in the record of every stopped batch that lists it, so `f10 status --batches` is right without resuming the batch.
+It takes each batch's own lease without waiting, so a running batch's record is left to that batch.
 Only the attempt finish acted on is marked: the suffix typed, else the one its branch ends in, so finishing `<id>-b` leaves an `<id>` row as it was.
 There finish merges as usual, brings the default branch up to the merge, switches main to it, deletes the local branch, and leaves main's workspace open; the report says the checkout was main's and was switched, not removed.
 
 1. **Refusals, before anything changes.**
-   A task a drive holds (its lease, **Drives** below): `GH-12 is owned by drive 3 (pid 4242)`, with `f10 stop 3` named.
-   Finish takes the same lease for its own run, so two finishes of one task never run at once; drive's own finish runs under the lease drive already holds.
+   A task a batch holds (its lease, **Batches** below): `GH-12 is owned by batch 3 (pid 4242)`, with `f10 stop GH-12` named.
+   Finish takes the same lease for its own run, so two finishes of one task never run at once; a batch's own finish runs under the lease the batch already holds.
    A dirty worktree, named file by file, with no `--force`: commit or discard first.
    A cwd inside the worktree being removed, or a `HERDR_WORKSPACE_ID` naming its workspace, unless `--yes` was passed: the message says the command would close its own workspace.
    With the branch checked out in main, nothing closes, so this refusal does not apply.
@@ -447,7 +470,7 @@ There finish merges as usual, brings the default branch up to the merge, switche
 3. **The merge method** comes from `project.md → Hosting & PR` when it carries `merge method: squash` (or `merge`, `rebase`, in any case).
    Absent, the repo's settings decide: on GitHub the one method allowed, else squash with a note beneath the report saying the default was taken and how to declare one; on GitLab the project's squash option, since GitLab fixes the strategy per project.
 4. **The remote branch is deleted** when origin still has it, through the host's API (glab's `--remove-source-branch` usually did it already).
-   Its local copy, `refs/remotes/origin/<branch>`, goes too: left behind, it reads as a branch, and drive or start would reopen the finished task.
+   Its local copy, `refs/remotes/origin/<branch>`, goes too: left behind, it reads as a branch, and a start or a resume would reopen the finished task.
    Before the delete, every open PR or MR based on the branch is retargeted to the merged one's base (`gh pr edit <n> --base` / `glab mr update <iid> --target-branch`), a note each: a branch deleted through the API closes the PRs still based on it.
    A failed retarget stops finish with the branch left on origin, so the stacked PR stays open; a rerun finds the request merged and retries.
    A branch the merge already removed (glab's `--remove-source-branch`, GitHub's automatic delete) leaves nothing to retarget: the host did it.
@@ -465,7 +488,7 @@ There finish merges as usual, brings the default branch up to the merge, switche
    Finish never rebases or resets the default branch.
    The deferred pull is recorded in `<storage root>/pending-pull`.
    A later finish retries it until the merge commit is in the default branch.
-   So does each tick of a drive that ran a finish, and each pass of the watcher under `watch: finish`.
+   So does each tick of a batch that ran a finish, and each pass of the watcher under `watch: finish`.
    A pending pull keeps the project watched until it lands.
 6. **Dependents are released.**
    A branch another task started with `--after` on this one has `branch.<name>.f10-after` and `.f10-after-branch` in local config.
@@ -481,7 +504,7 @@ There finish merges as usual, brings the default branch up to the merge, switche
    On a terminal, the `plan`, `handoff` and `spike` rows link their path to its `file://` url (OSC 8).
    `f10 start`'s `plan` row and the `wrote` row of `f10 init` link the same way.
    So do the `plan`, `handoff`, `judge` and `review` rows of `f10 status <id>`.
-   A drive's copy of the report links when the drive writes to a terminal.
+   A batch's copy of the report links when the batch writes to a terminal.
 8. **The report**, then the worktree and its local branch are removed - through `wt remove` when worktrunk is on `PATH`, else `git worktree remove` and `git branch -D` - then the Herdr workspace closes (the agent goes with it).
    With `--yes` from inside the worktree, main's workspace is focused before the close so the user lands at home; the close ends the process, which is why it comes last.
    With the branch checked out in main, main is switched to the default branch (`git switch`) and only the local branch is deleted (`git branch -D`, worktrunk or not), and no workspace closes.
@@ -495,7 +518,7 @@ There finish merges as usual, brings the default branch up to the merge, switche
 Once the merge has landed, a failing step does not stop the ones after it.
 Releasing dependents and archiving the plan, the reviews and the handoff each run, and finish then exits non-zero naming every step that failed.
 A rerun finds the task by its branch.
-So a failure in any of these steps keeps the worktree and branch, leaves the workspace open and leaves stopped drive records unmarked.
+So a failure in any of these steps keeps the worktree and branch, leaves the workspace open and leaves the records of stopped batches unmarked.
 The error ends in `rerun f10 finish <id>`.
 Each step finds its own work done on that rerun, so it completes the rest.
 Archiving the plan and copying a spike report out matter twice over, because the worktree may hold the only copy.
@@ -515,7 +538,7 @@ Its worktree may hold the experiment uncommitted, so the dirty refusal of step 1
 Nothing is merged, pulled or measured; dependents are released as in step 6; the plan is archived as in step 7 and the report beside it, as `plans/archive/<ID>.spike.md` (`<ID>.spike.<N>.md` when taken), which counts a spike planned with no plan file as finished too.
 The report moves once the worktree is gone (a legacy worktree's own, before), so a rerun after a failed removal still closes the spike.
 After the report the experiment is discarded (`git reset --hard`, `git clean -fd`, ignored files left), its paths listed in the notes, with a branch commit's recovery command when the branch had commits of its own; then the worktree, branch and workspace go as in step 8.
-`--keep` keeps the experiment instead: in a linked worktree it is committed onto the branch (`--no-verify`) and the worktree is removed; on the main checkout, which is refused dirty, only the branch's own commits are kept. Either way the branch moves to `kept/<name>`, its name with the task ids taken out (in any case, dash or not), so no task lookup, the janitor or drive finds it and the task reads as finished.
+`--keep` keeps the experiment instead: in a linked worktree it is committed onto the branch (`--no-verify`) and the worktree is removed; on the main checkout, which is refused dirty, only the branch's own commits are kept. Either way the branch moves to `kept/<name>`, its name with the task ids taken out (in any case, dash or not), so no task lookup, the janitor or a batch finds it and the task reads as finished.
 `--keep` on a task with no spike report, or with a PR, is a refusal.
 A spike branch with a PR finishes the normal way, clean tree required, and its report is archived with the plan.
 Nothing closes the task on the tracker: the notes say so.
@@ -555,7 +578,7 @@ The output is one line per removal and per branch kept for a reason worth knowin
 The last run is the mtime of `janitor.stamp` in the shared storage root (main's `.f10/`, or the out-of-tree root).
 The stamp moves before the run, so starts in quick succession run it once; `--dry-run` leaves it alone.
 Finish runs it before any workspace closes, since closing its own workspace ends the process; its lines go to stderr, as start's do.
-A drive opens and finishes its tasks without the start and finish commands, so it never runs the janitor.
+A batch opens and finishes its tasks without the start and finish commands, so it never runs the janitor.
 
 ## Forward
 
@@ -629,13 +652,13 @@ It applies only to the tree; a run's block prints as without it.
 | `done` | finished (the issue closed; for a tracker that reports no state, finish ran or the plan archived) or the PR merged | green |
 | `shipped` | the ship pipeline ended, the PR not merged yet | faint green |
 | `asking` | a driven run stopped on a question; the `ask:` line under it holds the question | red |
-| `halted` | a phase failed, partial or blocked, or drive halted the task itself (an idle agent, a refused finish) after its run's last word; `halt:` and `next:` lines under it | red |
+| `halted` | a phase failed, partial or blocked, or its batch halted the task itself (an idle agent, a refused finish) after its run's last word; `halt:` and `next:` lines under it | red |
 | `implementing` | ship running any step but the three below | yellow |
 | `reviewing`, `resolving` | ship running review, resolve | orange |
 | `judging`, `planning` | ship running judge; capture or plan under way | blue |
 | `planned` | the plan is saved, ship not begun | faint blue |
-| `waiting` | no run yet, its `After:` base is not done, and a running drive lists it (a bundle's riders included), so the drive holds it for that base; or the record of a running drive this session launched says it parked the task for its base's code or its push (step `on <id>`) or holds its finish until the base is through (step `to finish after <id>`) | faint |
-| `not started` | nothing recorded; a task no drive lists keeps `after <id>` as its step while its base is not done | faint |
+| `waiting` | no run yet, its `After:` base is not done, and a running batch lists it (a bundle's riders included), so the batch holds it for that base; or the record of a running batch this session launched says it parked the task for its base's code or its push (step `on <id>`) or holds its finish until the base is through (step `to finish after <id>`) | faint |
+| `not started` | nothing recorded; a task no batch lists keeps `after <id>` as its step while its base is not done | faint |
 
 Color is off when stdout is not a terminal or `NO_COLOR` is set.
 
@@ -707,11 +730,11 @@ ship:           running: review:local
 
 - **The flow** is ship's entries as `f10 state pipeline` recorded them.
   Without those, it is the entries after `plan` of the flow the branch records (`branch.<name>.f10-flow`).
-  Without that, it is the flow of the newest drive record holding the task that is neither cancelled nor done.
-  A stopped drive's record counts only while the task has no branch.
+  Without that, it is the flow of the newest batch holding the task that is neither cancelled nor done.
+  A stopped batch's record counts only while the task has no branch.
   Else the flow is `default`.
-  It is followed by `finish` when the branch carries the finish record a drive writes (`branch.<name>.f10-finish`, below).
-  The flow is read at the pace the branch records (`branch.<name>.f10-pace`), else the pace of the drive record holding the task, else the default.
+  It is followed by `finish` when the branch carries the finish record a batch writes (`branch.<name>.f10-finish`, below).
+  The flow is read at the pace the branch records (`branch.<name>.f10-pace`), else the pace of the batch holding the task, else the default.
   An entry that pace skips is no row.
   A `judge` before `implement` is the **plan** judge, any later one the **change** judge, and `plan` and `resolve` are no rows of their own.
 - **A plain step** is `done` before the step ship is on.
@@ -735,16 +758,16 @@ ship:           running: review:local
   A `ci?` entry names it only where it would run.
   Its host is asked under a 5 second timeout.
   Past that it reads `unknown (timed out)` and the rest still prints.
-- **Finish**, on a branch a drive finishes, reads `upcoming` until ship is done, then `queued (drive)`.
-  It reads `running (drive): <action>` while the driver's finish works, such as `merging #204`, `pulling main` or `removing worktree`, and then `done`.
-  A finish held for its base reads `queued (drive): waiting for <id>`.
-  A finish whose pull was deferred is `done` and the task `finished`, with the note under it in the drive's report.
-  A drive that ran a finish retries the pull each tick and prints a cause once.
-  The driver records this on the branch as `branch.<name>.f10-finish`: `queued` or `running: <action>`.
-  The record's presence is what puts the finish row there, so a drive that stops short of finish sets it back to `queued` rather than removing it.
-  Whether the driver still runs is read from the task's lease (**Drives**, below), never from the record.
-  Without the lease only the record's presence counts, so a halted or killed driver leaves the row `upcoming`.
-  A parent's row puts the same text in its step column while the task is `shipped`, and `f10 board --state`, once the task's ship run is done, names it as the next move (`drive: merging #204`, `drive finishes it`) in place of `f10 finish`.
+- **Finish**, on a branch a batch finishes, reads `upcoming` until ship is done, then `queued (batch)`.
+  It reads `running (batch): <action>` while the batch's finish works, such as `merging #204`, `pulling main` or `removing worktree`, and then `done`.
+  A finish held for its base reads `queued (batch): waiting for <id>`.
+  A finish whose pull was deferred is `done` and the task `finished`, with the note under it in the batch's report.
+  A batch that ran a finish retries the pull each tick and prints a cause once.
+  The batch records this on the branch as `branch.<name>.f10-finish`: `queued` or `running: <action>`.
+  The record's presence is what puts the finish row there, so a batch that stops short of finish sets it back to `queued` rather than removing it.
+  Whether the batch still runs is read from the task's lease (**Batches**, below), never from the record.
+  Without the lease only the record's presence counts, so a halted or killed batch leaves the row `upcoming`.
+  A parent's row puts the same text in its step column while the task is `shipped`, and `f10 board --state`, once the task's ship run is done, names it as the next move (`batch: merging #204`, `its batch finishes it`) in place of `f10 finish`.
 - **Judge** reads `upcoming`, `running`, or its outcome and reason.
   After the outcome, in parentheses, comes what the ship run did with it, read from the verdict file's `decision:` line.
   Examples are `proceed with changes (2 built) - <reason>`, `(folded into plan)`, `(refactor built)`, `(blocked)` and `(waiting on an answer)`.
@@ -789,52 +812,61 @@ Then `--json` prints a one-row array.
 Otherwise it fails as before, with `no run to read`.
 A task whose checkout has its branch is read from there first, so only a task with no run to read asks the host for children.
 
-## Drives
+## Batches
 
-Every `f10 start` that runs the flow is a drive: `f10 start 42 43` runs both tasks from the main session.
-Each task waits for its one base to have code, every task released that way runs at once, and the driver exits when every task is through, one needs a human, or nothing else can move.
-The driver is this binary rather than a Claude session: ordering, prompting and polling are deterministic, and a session polling an agent pays a round trip and a slice of context per check.
-The driver runs in the per-user [daemon](#daemon), not in the process that typed the command: that process prints the drive's log as it grows and exits with the drive's exit code, so closing or clearing the session that ran `/f10:start` leaves the drive running.
-Ctrl+C stops only the printing, naming `f10 daemon logs <n> -f` to follow it again; rerunning the same command follows the drive already running instead of starting a second one.
-`--foreground` runs the driver in this process, as the daemon itself runs each drive; it is for tests and debugging, and on a platform without unix sockets it is how every drive runs.
+A batch is the tasks one `f10 start` started, kept as a record so it can be stopped and resumed.
+Every `f10 start` that runs the flow starts one: `f10 start 42 43` runs both tasks from the main session.
+Each task waits for its one base to have code, and every task released that way runs at once.
+The batch's process exits when every task is through, one needs a human, or nothing else can move.
+That process is this binary rather than a Claude session: ordering, prompting and polling are deterministic, and a session polling an agent pays a round trip and a slice of context per check.
+It runs in the per-user [daemon](#daemon), not in the process that typed the command.
+The typed command prints the batch's log as it grows and exits with the batch's exit code, so closing or clearing the session that ran `/f10:start` leaves the batch running.
+Ctrl+C stops only the printing, naming `f10 daemon logs <task-id> -f` to follow it again.
+Rerunning the same command follows the batch already running instead of starting a second one.
+`--foreground` runs the batch in this process, as the daemon itself runs each batch; it is for tests and debugging, and on a platform without unix sockets it is how every batch runs.
+
+A user never needs a batch's number, because any of its task ids names it, a bundle's rider included: `f10 stop <task-id>`, `f10 resume <task-id>` and `f10 daemon logs <task-id>`.
+The words around a batch (entry, bundle, base, stack, chain, level, proposal) are defined in [concepts](concepts.md#start-vocabulary).
 
 **The record.**
-Every drive writes `<storage root>/drives/<n>.yaml` and prints `drive <n>` first.
+Every batch writes its record under the storage root and prints `batch <n>` first.
+The record's path is `<storage root>/drives/<n>.yaml`: the directory keeps the name it had before a batch was called one.
 The record holds the command line without `--answer`, `--every`, `--parallel`, `--resume` and `--foreground`.
 It holds the tasks with their `:profile`, the flow, the run-wide profile and the cap (`parallel`).
 It holds the answers given and not yet taken, and each answer taken with its task, skill, text and time.
 Per task, it holds the skill in flight and its outcome: its report row and exit code.
-Rerunning the same command line picks up the newest record started with it that is neither cancelled nor done (every task through with code 0); `f10 start --resume <n>` picks up record `n` by number and takes only `--answer`, `--every` and `--parallel` beside it.
-A rerun and a `--resume` keep the record's cap, unless they pass `--parallel`, which rewrites it.
-A driver still running reads the new cap at its next poll.
-An answer kept in the record, because the drive stopped before an agent took it, is given again on the resume, unless the resume gives that task another.
-The branch's `f10-drive` and `f10-flow` keys stay what position and flow are read from.
+Rerunning the same command line picks up the newest record started with it that is neither cancelled nor done (every task through with code 0).
+[`f10 resume <task-id>`](#resume) picks up the newest such record holding that task, and takes only `--answer`, `--every`, `--parallel` and `--foreground`.
+A rerun and a resume keep the record's cap, unless they pass `--parallel`, which rewrites it.
+A batch still running reads the new cap at its next poll.
+An answer kept in the record, because the batch stopped before an agent took it, is given again on the resume, unless the resume gives that task another.
+The branch's `f10-drive` and `f10-flow` keys stay what position and flow are read from (`f10-drive` is a stored name, so it keeps its spelling).
 The record keeps what a branch cannot.
 
 **The lease.**
-Before anything opens, the driver takes an exclusive, non-blocking `flock` on `<storage root>/drives/locks/<id>.lock` for every task not already finished, its pid and drive number written into it, and one for itself (`drive-<n>.lock`).
+Before anything opens, the batch takes an exclusive, non-blocking `flock` on `<storage root>/drives/locks/<id>.lock` for every task not already finished, its pid and batch number written into it, and one for itself (`drive-<n>.lock`, another stored name).
 The key is the task's lead id, so two attempts at one task share it.
-A task whose lease another process holds ends at once with the row `owned by drive 3 (pid 4242)` (or `owned by f10 finish (pid …)`, `owned by the f10 watcher (pid …)`), and its dependents halt with it.
-A task's lease is released when the task ends, so a halted task can be finished by hand while the drive runs on; the kernel releases every lease when the driver's process ends, however it ends.
-A second drive on a record whose driver still runs is refused.
-Readers (`f10 status`, `f10 board`) probe the lease with a shared lock for an instant; the driver retries a held lease for about 200ms to absorb that.
+A task whose lease another process holds ends at once with the row `owned by batch 3 (pid 4242)` (or `owned by f10 finish (pid …)`, `owned by the f10 watcher (pid …)`), and its dependents halt with it.
+A task's lease is released when the task ends, so a halted task can be finished by hand while the batch runs on; the kernel releases every lease when the batch's process ends, however it ends.
+A second process on a record whose batch still runs is refused, naming `f10 stop <task-id>`.
+Readers (`f10 status`, `f10 board`) probe the lease with a shared lock for an instant; the batch retries a held lease for about 200ms to absorb that.
 On a platform without `flock` nothing is exclusive.
 Lock files are never deleted.
 
 **List and stop.**
-`f10 status --drives` prints the newest 20 drives (`--all` for every one), each with its time, `running (pid …)`, `stopped`, `done` or `cancelled`, its command line, and a row per task: its outcome, else `queued` or `running <skill>` while its driver runs, else `stopped at <skill>` or `not reached`.
-A drive that is not running, a cancelled one included, has each row not yet finished checked against its task.
-The check is the rule drive and status use.
+`f10 status --batches` prints the newest 20 batches (`--all` for every one, `--json` for the records), each with its number, its time, `running (pid …)`, `stopped`, `done` or `cancelled`, its command line, and a row per task: its outcome, else `queued` or `running <skill>` while its batch runs, else `stopped at <skill>` or `not reached`.
+A batch that is not running, a cancelled one included, has each row not yet finished checked against its task.
+The check is the rule a running batch and `f10 status` use.
 A task with no branch here or on origin and no live plan reads `finished` when its issue is closed.
 An archived plan counts only for a tracker that reports no state, because an open issue may ship another PR.
 A finish the ledger recorded counts the same way, so `f10 status` never calls a task done while `f10 start` would open its next PR.
 The tracker is asked only when no branch or live plan decides.
 Finish's own `already finished` is narrower, because it asks whether finish got as far as archiving the plan.
-The corrected row is saved when the drive's lease is free, and only shown when another process holds it.
-A row only ever moves to finished, because only a rerun knows a drive's next step for a halt settled halfway.
-`f10 stop <n>` marks the record cancelled.
-`f10 stop <id>` does the same to the running drive holding that task, and names every task it stops.
-A running driver stops at its next poll, after any finish it is in the middle of.
+The corrected row is saved when the batch's lease is free, and only shown when another process holds it.
+A row only ever moves to finished, because only a resume knows a batch's next step for a halt settled halfway.
+`f10 stop <task-id>` stops the batch holding that task: the running one that holds its lease, else the newest stopped one whose record lists it.
+It marks the record cancelled and names every task it stops.
+A running batch stops at its next poll, after any finish it is in the middle of.
 It ends every task still going with the row `cancelled` and exits **5**.
 Nothing more is prompted, and worktrees, branches and agents stay as they are.
 A cancelled record is never picked up again: the same command line starts a new one.
@@ -842,12 +874,12 @@ A cancelled record is never picked up again: the same command line starts a new 
 1. **The arguments.**
    Task ids first, or a range `42 -- 47` (every id between, inclusive, at most 50).
    The flow is `default`, or the one `--flow <name>` or `--local` names; an undeclared name fails with the `f10 flow` list.
-   It gives the skills the driver prompts, which are never typed and never stored.
+   It gives the skills the batch prompts, which are never typed and never stored.
    They are `plan` when the flow leads with it, then `ship`, which runs every other entry.
    Then comes `finish`, when the flow ends in a `finish` entry that neither the run's pace nor the project's ceiling turns off.
    A task whose ship ended as a spike (its spike report written) is closed right after ship, whatever the flow says, since the close merges nothing.
    Its branch gains the finish record, and a dependent then starts on the default branch.
-   `--flow`, `--local`, `--agent`, `--model`, `--parallel`, `--answer`, `--every`, `--resume` and `--foreground` go anywhere.
+   `--flow`, `--local`, `--agent`, `--model`, `--parallel`, `--answer`, `--every` and `--foreground` go anywhere.
    The command parses its own arguments, so the range's `--` survives.
    `--agent` starts every agent on that profile, read as start reads it, and `--model` is its model-only form; `<id>:<profile>` starts one task's agent on its own, which wins (`42:sonnet:low 43 --agent opus`).
    The profile starts at the first colon with no slash after it, so a url keeps its own and `42:claude:opus:high` reads whole.
@@ -875,8 +907,8 @@ A cancelled record is never picked up again: the same command line starts a new 
    A task starts once its base releases it.
    That happens when the base's branch has a commit of its own, or when the base is through: finished, or every one of its skills run.
    Its own commits are what its branch has beyond the default branch, `origin/<default>`, its own base's branch, and the commit it was created at (its oldest reflog entry), merges left out, so a lagging local default branch, a squash-merged grandparent or a catchup merge never releases it early.
-   `f10 pr catchup` prints the same answer as its `code:` line, so ship's guard and the driver agree.
-   Implement never commits, so a first commit means a commit or pr step ran with verify green; the driver reads it from local refs on each poll, so a branch never pushed counts.
+   `f10 pr catchup` prints the same answer as its `code:` line, so ship's guard and the batch agree.
+   Implement never commits, so a first commit means a commit or pr step ran with verify green; the batch reads it from local refs on each poll, so a branch never pushed counts.
    A `--plan` run never commits, so there an opened base releases its dependents once its plan is saved, even if it halted after saving it.
    A dependent's own `finish` still waits until its base is through, so a dependent never merges before its base; while it waits its row reads `waiting for <id>`.
    Every task that is ready starts in the same pass, up to the cap.
@@ -884,61 +916,61 @@ A cancelled record is never picked up again: the same command line starts a new 
    A task keeps its slot from one of its skills to the next.
    It frees the slot once it asks, waits for its base's first commit, or waits at finish for its base.
    Open agents are capped too, at twice the cap, because an idle session still holds its memory.
-   The agent limit counts the tasks under way and the tasks asking, including agents an earlier run of the drive left open.
-   A done or halted task's agent does not count, because the drive is finished with it.
-   Counting it would also stall a drive that runs no `finish`, whose done tasks keep their agents open, so no task past the limit would ever start.
-   A task past either limit shows as `queued` in the report, `f10 status --drives` and `f10 status`, and starts in the drive's order as slots free.
+   The agent limit counts the tasks under way and the tasks asking, including agents an earlier run of the batch left open.
+   A done or halted task's agent does not count, because the batch is finished with it.
+   Counting it would also stall a batch that runs no `finish`, whose done tasks keep their agents open, so no task past the limit would ever start.
+   A task past either limit shows as `queued` in the report, `f10 status --batches` and `f10 status`, and starts in the batch's order as slots free.
    A task whose agent an earlier run left open goes first, because it adds no session.
-   A turn already running when the driver reaches the task is tracked and counted even past the cap, because the driver cannot stop it.
+   A turn already running when the batch reaches the task is tracked and counted even past the cap, because the batch cannot stop it.
    The worktree, workspace and agent are opened as `f10 start` opens them, with the body's `After:` as the base: a base still on its branch stacks the new one on it, and a finished base leaves it on the default branch.
    A plan the main checkout saved for the task is read in place under start's rules.
    A checkout Herdr already shows, as an earlier `f10 start` leaves it, is adopted: its workspace, its agent, or a new agent in its idle shell.
-   Run state recorded before the driver started that new agent was written by one that is gone, and halts nothing.
+   Run state recorded before the batch started that new agent was written by one that is gone, and halts nothing.
    From then on the task's workspace is the one opened, by id, whatever else shows the same checkout.
    Nothing is prompted at open.
    The skills run from the task's position.
-   The position is the last skill the driver saw finish, recorded on the branch as `branch.<name>.f10-drive` in local git config.
+   The position is the last skill the batch saw finish, recorded on the branch as `branch.<name>.f10-drive` in local git config.
    Else it is what the task's run state proves, such as plan done or ship done.
    Ship counts as done only when a ship turn wrote the run (its `skill` is `ship`) and the branch carries what the flow delivers.
    That is commits of the branch's own past its base, not counting merges and `Step: catchup` commits, and an open PR when the flow has `pr`.
    A spike's report counts in place of both.
    Anything less sends ship.
-   A plan the worktree reads when the driver starts its agent counts as plan done, so the task goes straight to ship rather than planning again.
+   A plan the worktree reads when the batch starts its agent counts as plan done, so the task goes straight to ship rather than planning again.
    A task whose branch already records a flow (`branch.<name>.f10-flow`) keeps it, with a note when the run named another; a recorded flow `project.md` no longer declares gives way to the run's.
-   `finish` runs in the driver, exactly as `f10 finish` would from the main checkout.
+   `finish` runs in the batch, exactly as `f10 finish` would from the main checkout.
    It records what it is doing on the branch as `branch.<name>.f10-finish` for `f10 status` (above).
-   On any other end, an interrupt included, the driver sets it back to `queued`.
-   A PR someone else opened is the driver's own ask at finish, `[local | merge]`, answered with `--answer` like any other.
+   On any other end, an interrupt included, the batch sets it back to `queued`.
+   A PR someone else opened is the batch's own ask at finish, `[local | merge]`, answered with `--answer` like any other.
    Finish takes a keyed answer only for that question.
    An answer to the agent's own question goes to the agent as its `ci` turn, and finish runs again once the triage reports.
    The agent's own question is one its run carries as an ask, as a ci triage's does.
-   Each finished task's handoff, the body finish printed under its report, repeats beneath the drive's report as `<id> handoff:` with the body indented.
-   So the driving session relays every merged task's list at once.
+   Each finished task's handoff, the body finish printed under its report, repeats beneath the batch's report as `<id> handoff:` with the body indented.
+   So the session that started the batch relays every merged task's list at once.
    Every other skill is prompted to the agent, marked `--driven`, which takes every gap on its default and reuses a saved plan.
    A dependent task's plan and ship name the base task and its plan.
    Ship names its flow unless it is `default`.
-   With `finish` among the skills, ship's prompt says the driver finishes the task after it and removes the worktree.
+   With `finish` among the skills, ship's prompt ends with `f10 finishes it after ship and removes this worktree`.
    So the agent's report ends with that next step.
 5. **Catchup when the base or the target moves, after finish, and before it.**
    On each poll, a running dependent whose branch lacks its base branch's head, read while the base agent is not working, is marked `branch.<name>.f10-base-moved` with that head; a dependent mid-catchup is not marked.
-   Before a task's next skill, when its branch is on origin, the driver fetches once and marks the branch if its pull request's target moved past it, so an open PR never sits behind.
-   The mark is `f10-landed` with the default branch's name when the PR targets it, `f10-base-moved` with the base's head for a base branch no task in the drive owns.
+   Before a task's next skill, when its branch is on origin, the batch fetches once and marks the branch if its pull request's target moved past it, so an open PR never sits behind.
+   The mark is `f10-landed` with the default branch's name when the PR targets it, `f10-base-moved` with the base's head for a base branch no task in the batch owns.
    A branch already marked, one its target is already in, or one never pushed is left alone, and a fetch that fails skips the poll.
    The catchup follows `catchup:`, or `catchup_stacked:` for a base branch.
-   Once it ends clean the driver pushes a branch origin has, plain after a merge and `--force-with-lease` against origin's tip when it sent the catchup after a rebase or an `onto`, so the PR carries the integration before the next skill runs; a rejected push halts the task with the branch caught up locally.
+   Once it ends clean the batch pushes a branch origin has, plain after a merge and `--force-with-lease` against origin's tip when it sent the catchup after a rebase or an `onto`, so the PR carries the integration before the next skill runs; a rejected push halts the task with the branch caught up locally.
    A branch origin moved on while the catchup ran is not pushed: the task halts, saying to bring `origin/<branch>` in and run `/f10:catchup` there, since the rebased branch lacks what was pushed meanwhile.
-   The drive saves what it read when the catchup went out in its drive record, so a resumed drive leases the push the same way.
+   The batch saves what it read when the catchup went out in its record, so a resumed batch leases the push the same way.
    With nothing saved, a rewritten branch is never force-pushed, and the task halts instead.
    A catchup that brought in commits origin does not hold yet, a base merged from its local branch, is not pushed: the next `pr` entry or finish pushes it, so another task's unpushed work never rides into this PR.
    `finish` marks each branch that depended on the finished task `f10-landed`.
-   Before a marked task's next skill, the driver catches the branch up itself, never interrupting a turn.
+   Before a marked task's next skill, the batch catches the branch up itself, never interrupting a turn.
    It fetches, merges or rebases by the method `f10 pr catchup` prints.
    Then it runs verify, clears the marks and pushes as above, with no agent turn.
    It runs verify when the frontmatter declares a `verify` list, when verify is detected, or when the Verify heading is backticked commands joined by ` / `, as `f10 init` writes it.
-   With a heading in any other prose, the driver still integrates, and verify becomes the agent's turn.
-   The driver prompts `/f10:catchup --driven` and says the base came in cleanly.
+   With a heading in any other prose, the batch still integrates, and verify becomes the agent's turn.
+   The batch prompts `/f10:catchup --driven` and says the base came in cleanly.
    It asks the agent to run verify, fix a red by the branch's intent, and clear the marks once verify is green.
-   The drive says once why the agent verifies.
+   The batch says once why the agent verifies.
    It reads the cleared marks as verify green.
    A PR whose base on the host is not the base the task was started on (retargeted by hand) is never caught up.
    The task halts naming the PR and its base.
@@ -947,22 +979,22 @@ A cancelled record is never picked up again: the same command line starts a new 
    A red verify after a clean integration prompts it naming the failing command and a log of its output.
    After that turn git decides whether the catchup settled.
    It settled when no merge or rebase is in progress and no conflict marker is in a path the branch changes.
-   The branch must also hold its base, and verify must be green when the driver runs it again.
+   The branch must also hold its base, and verify must be green when the batch runs it again.
    Anything left is a failed attempt, so the next prompt names what is left, such as a rebase still at commit 2 of 3.
-   Before a task's own `finish`, the driver fetches and tries origin's copy of the branch against `origin/<default>` in memory (`git merge-tree`), as the host will; a branch origin does not have is tried against the local default branch, where finish merges it.
+   Before a task's own `finish`, the batch fetches and tries origin's copy of the branch against `origin/<default>` in memory (`git merge-tree`), as the host will; a branch origin does not have is tried against the local default branch, where finish merges it.
    A conflict, as a sibling that merged first leaves one, marks the branch `f10-landed` with the default branch's name and sends the same catchup.
    Once it ends clean, the push above reaches origin and then finish merges.
    A catchup attempt's fingerprint is the target sha plus the conflicting paths with each side's blobs.
    It leaves out the head, because a merge moves the head without making progress.
    A branch that conflicts again after a catchup is a failed attempt naming the files.
-   If the target moved or other files conflict, the fingerprint differs, so the count starts over and the drive catches up again.
+   If the target moved or other files conflict, the fingerprint differs, so the count starts over and the batch catches up again.
    The third catchup in a row with the same fingerprint halts the task.
    After a catchup the caught-up local branch is what is tried, since origin's copy is the tree before it.
    A ship stopped by its catchup guard gets the same catchup.
    The guard marks the branch and records the stop as the guard's (`f10-state.sh stop guard`).
    Then ship is prompted again at the entry it stopped on (`resume at <entry>`).
    Its dependents wait, and a second guard conflict counts by the same fingerprint.
-   The driver keeps its own copy of that stop's entry and place on the task's record (`guard:`) until ship is prompted again.
+   The batch keeps its own copy of that stop's entry and place on the task's record (`guard:`) until ship is prompted again.
    So it resumes there even when the run file no longer carries the guard's kind.
    The copy counts only while the run is still stopped at that entry and place, so a later stop elsewhere is not read as the guard's.
    A ship that failed for another reason under a mark is not the guard's stop, and halts.
@@ -974,8 +1006,8 @@ A cancelled record is never picked up again: the same command line starts a new 
    An idle agent without it is a stall after the same grace a ship or plan turn gets, and is never read as done.
    A catchup git shows settled goes on to verify.
    Any other catchup halts, as a stalled ship or plan turn does.
-   The drive's own catchup resumes the task once git shows it settled and the driver's verify is green.
-   The driver clears the marks then.
+   The batch's own catchup resumes the task once git shows it settled and the batch's verify is green.
+   The batch clears the marks then.
    A red verify the agent's turns do not fix counts as a failed attempt, so the same command red against the same target three times halts.
    When the agent verifies (a prose Verify heading), the task resumes only on a clean end.
    A clean end has the signal there and the mark cleared, which catchup does once verify is green.
@@ -991,25 +1023,25 @@ A cancelled record is never picked up again: the same command line starts a new 
    No sign within two minutes halts the task, because a prompt never taken may sit under a startup dialog that typing it again could answer.
    A workspace that still shows no agent status by then halts it too.
    Once the agent is idle again, the run says how the turn ended:
-   - **blocked with an ask** - the question is printed with its options and kept in the inbox (**Inbox** below), naming this drive.
-     The driver keeps driving every other task: a guard stop still gets its catchup, a base still releases its dependents.
+   - **blocked with an ask** - the question is printed with its options and kept in the inbox (**Inbox** below), naming this batch.
+     The batch keeps prompting every other task: a guard stop still gets its catchup, a base still releases its dependents.
      Once nothing else can move (every other task ended, asking, or held on its base), it prints every task's ask and the command that answers them all, and exits **4**;
    - **blocked waiting on its base** - the task parks, with no ask and no halt, and its row reads `waiting on <id>`.
      This is `f10 state wait`: a driven ship that found its base without code before `implement`, or not on origin before `pr`.
      A wait for code ends once the base is released and its branch head has moved past the one the ship found.
      Then ship is sent again with `resume at implement`, and the same head never sends it twice.
      A wait at `pr` ends once the base's branch is on origin or the base has finished, and ship is sent again with `resume at pr`.
-     A wait on a base this drive does not run, or one already through, halts the task with the run's note;
+     A wait on a base this batch does not run, or one already through, halts the task with the run's note;
    - **blocked without one** - a decision, not breakage, such as a judge stop or a stale task's verdict.
      The task halts with the run's note and next, since sending the skill again would only roll the decision again;
-   - **failed** or **partial** - the driver reads the branch, since the turn may not be the one it sent (a ship typed by hand while it followed plan).
+   - **failed** or **partial** - the batch reads the branch, since the turn may not be the one it sent (a ship typed by hand while it followed plan).
      Each skill the branch shows done is recorded and passed, so a ship stopped by its guard gets its catchup.
      A stop the branch does not get past is a failed attempt of the skill in flight;
    - **still running** under plan or ship, or a catchup with no `done catchup` signal since its prompt, a minute after the agent went idle - the agent stopped without reporting.
      An agent whose session launched background work its hooks still count as pending is not idle.
      Such work is a background command, a Monitor or a subagent.
      The agent reads as working for up to 30 minutes from that launch, so a long verify or a wait on a subagent is no stall.
-     Past that, or with no background work, the driver reads the branch the same way.
+     Past that, or with no background work, the batch reads the branch the same way.
      A branch with its plan, commits of its own, a settled tree and an open PR carrying them counts as shipped.
      Anything less halts the task naming the workspace, because the agent is usually waiting on a permission dialog in its pane, and typing the skill again could answer it.
      Found at prompt time, a run still running halts the same way and says how to leave a cancelled run.
@@ -1028,34 +1060,34 @@ A cancelled record is never picked up again: the same command line starts a new 
    So a red verify and an unsettled turn that take turns do not start each other's count over.
    A halted task halts every task that waits on it.
    One not started yet never starts, and one already running halts before its next skill, its work left on its branch.
-   Every other task runs on, and the driver exits **5** once nothing can move.
-   The count lives in the running drive only, so a rerun or a resumed drive starts it over.
+   Every other task runs on, and the batch exits **5** once nothing can move.
+   The count lives in the running batch only, so a rerun or a resumed batch starts it over.
 
    **Every prompt checks first.**
    An agent working is attached to, not prompted.
-   A `plan` or `ship` its run already shows `done` (or `prior`) is counted done and recorded with no prompt, as when a driver stopped mid-ship and the agent finished the step before the rerun saw it.
+   A `plan` or `ship` its run already shows `done` (or `prior`) is counted done and recorded with no prompt, as when a batch stopped mid-ship and the agent finished the step before the rerun saw it.
 7. **The report.**
-   Progress lines as it goes, an end included: a halt or an ask is printed the moment the driver sees it, not only beneath the report.
-   Then one row per task in graph order: `already finished`, `finished`, `done: <skills>`, `waiting on <id>` (parked for its base's code, or for its branch on origin), `waiting for <id>` (its finish waits on its base), `asked at <skill>`, `halted at <skill>`, `halted: base <id> halted`, `owned by drive <n> (pid …)`, `cancelled`, `not reached`.
+   Progress lines as it goes, an end included: a halt or an ask is printed the moment the batch sees it, not only beneath the report.
+   Then one row per task in graph order: `already finished`, `finished`, `done: <skills>`, `waiting on <id>` (parked for its base's code, or for its branch on origin), `waiting for <id>` (its finish waits on its base), `asked at <skill>`, `halted at <skill>`, `halted: base <id> halted`, `owned by batch <n> (pid …)`, `cancelled`, `not reached`.
    Exit 0 when every task went through its skills, 5 when any halted, else 4 when any task asks.
-   Exit 6 is a drive stopped for a daemon upgrade, and exit 8 a drive asking its daemon to start it again.
+   Exit 6 is a batch stopped for a daemon upgrade, and exit 8 a batch asking its daemon to start it again.
    Only the daemon and the command following it see them.
-   The command following a drive does not end on a 4, because a rerun would only stop on the same asks again.
-   It prints that the drive waits on its asks.
+   The command following a batch does not end on a 4, because a rerun would only stop on the same asks again.
+   It prints that the batch waits on its asks.
    It then follows the run an answer resumes, which it finds through the daemon's log index.
-   It ends with 4 when the drive was stopped while it waited.
-   It also ends with 4 when the daemon never learned the drive's number, because no resumed run can be found then.
+   It ends with 4 when the batch was stopped while it waited.
+   It also ends with 4 when the daemon never learned the batch's number, because no resumed run can be found then.
 
-Rerunning the same command, or `f10 start --resume <n>`, is the resume: the record is picked up, and each task's position is read from its own branch and run state.
-With `--answer "1. … 2. …"`, the first task stopped on a question gets the text as its agent's next prompt, plain, the way `f10 forward` sends an answer, and the driver polls that turn as it would any other.
+Rerunning the same command, or [`f10 resume <task-id>`](#resume), is the resume: the record is picked up, and each task's position is read from its own branch and run state.
+With `--answer "1. … 2. …"`, the first task stopped on a question gets the text as its agent's next prompt, plain, the way `f10 forward` sends an answer, and the batch polls that turn as it would any other.
 Several asking tasks take one answer each, keyed by id: `--answer "42=1. proceed" --answer "45=1. no"`, each sent to its own task's agent.
 An answer sent closes the task's ask in the inbox. An answer the inbox already holds for a task goes first: one typed in the agent's pane is followed as the turn it started, with nothing sent; any other is sent as an `--answer` would be, and an `--answer` for the same task goes unused with a note.
-A drive whose task was answered after it last looked, while it still held its lease, runs again once it has stopped.
-In the daemon it exits 8, and the daemon runs `--resume <n>` in its place.
-Outside the daemon, or under a daemon too old to restart it, it prints `f10 start --resume <n>` for the answer.
-`f10 stop <n>` closes the drive's open asks.
+A batch whose task was answered after it last looked, while it still held its lease, runs again once it has stopped.
+In the daemon it exits 8, and the daemon resumes it in its place.
+Outside the daemon, or under a daemon too old to restart it, it prints `f10 resume <task-id> takes the answer`.
+`f10 stop <task-id>` closes the batch's open asks.
 An agent found mid-turn is attached to rather than prompted again.
-The turn is read by what it reports: one that turns out to be a catchup is followed like a catchup the drive sent, so a clean one resumes ship at the entry its stop names.
+The turn is read by what it reports: one that turns out to be a catchup is followed like a catchup the batch sent, so a clean one resumes ship at the entry its stop names.
 Two kinds of task are prompted again on a rerun once a catchup settled the branch.
 One is a ship the catchup guard stopped before `implement`, `pr` or a `judge`.
 That stop is told by the `stop guard` kind its run records, never by the wording of its next.
@@ -1069,9 +1101,19 @@ A task halted for another reason stays halted until its run changes: settle it i
 
 Out of scope: more than one base per task, and ordering tasks by anything but their recorded dependencies.
 
-### Plan
+**Old spellings.**
+Each of these still works for one release and prints one line on stderr naming its replacement: `f10 start --resume <n>` (now `f10 resume <task-id>`), `f10 drive plan <ids>` (now `f10 start <ids> --propose`), `f10 status --drives` (now `f10 status --batches`), the frontmatter key `drive_env` (now `batch_env`), and a batch number given to `f10 stop`, `f10 resume` or `f10 daemon logs` (now any task id of the batch).
+Until then a bare positive number given to those three commands is read as a batch number, never as a task id.
+`drive_env` beside `batch_env` in one frontmatter is an error.
 
-`f10 drive plan <parent | id>...` is plumbing: it proposes how to start the tasks and prints it.
+### Proposal
+
+`f10 start <parent | id>... --propose` prints a proposal of how to start the tasks: the bundles, the order, the `After:` lines to add and the one command to run.
+It starts nothing.
+`--hint` alone asks for the proposal's one line, so it needs no `--propose` beside it.
+`--facts` or `--json` without `--propose` is refused, because they only shape a proposal.
+A proposal takes ids or a parent, and the flags that shape the proposed command: `--flow`, `--local`, `--pace`, `--agent`, `--model` and `--parallel`.
+It refuses a range and every other start flag.
 It opens nothing, writes no record, takes no lease, starts no daemon and changes no task.
 So the daemon, a hook or a status line may call it.
 A parent expands into its open subtasks in `f10 task children` order, a `draft` child left out with a line naming it.
@@ -1101,15 +1143,16 @@ The rules, in order, each leaving a one-line reason on every task and bundle:
 4. **Order**: a task the sheet says builds on another, with no `After:` saying so, gets a proposed `After:` edit.
    So do two entries that share a file but cannot bundle, such as a bug and a feature.
    The later goes after the earlier, since side by side they would conflict.
-5. **Stages** are each entry's depth in the `After:` graph, the way drive releases them.
-   `--parallel` is the widest stage, capped by the `--parallel` given, else by drive's default.
+5. **Levels** are each entry's depth in the `After:` graph, the way a batch releases them: every base of an entry sits in an earlier level.
+   `--parallel` is the widest level, capped by the `--parallel` given, else by a start's default.
 
-It prints the stages, and the drive command with the drive flags given carried onto it.
+It prints the levels, one row per entry, the first row of each labelled `level 1`, `level 2` and so on.
+Under them it prints the `f10 start` command that runs the proposal, with the start flags given carried onto it.
 It prints `saves about N CI waits and M finishes against starting them one by one`.
 It prints the `After:` edits waiting on a yes, and `f10 task update <id> --after <base>` applies one.
 When anything is bundled, it prints once that a bundle is one PR, one revert and one review over a mixed diff.
 It adds that a later bug is traced to its lead with the riders named.
-`--json` prints the same for a skill, the tasks' gathered facts included.
+`--json` prints the same for a skill under the keys `command`, `proposal`, `tasks` (the gathered facts), `notes` and `saving`, and the proposal holds its rows under `levels`.
 `--hint` prints one line when the rules alone save at least one CI wait, and nothing otherwise.
 A bundle the user typed or named with `with` is not counted.
 The line names the start command that saves the waits, and `/f10:start` prints it under the tree.
@@ -1136,37 +1179,37 @@ An unknown field is refused, so a misspelt one never reads as not sized:
 
 ## Daemon
 
-`f10 daemon` is one process per user that runs drives, so a drive outlives the session that typed it, and watches the projects tasks were started in (**Watch** below).
+`f10 daemon` is one process per user that runs batches, so a batch outlives the session that typed it, and watches the projects tasks were started in (**Watch** below).
 Nothing registers it as a service.
 Every control-plane command below starts it when none listens.
-It exits after ten minutes with no drive running, no project watched and no call.
+It exits after ten minutes with no batch running, no project watched and no call.
 Its socket serves the control-plane API over Connect ([proto/README.md](../proto/README.md)).
 `f10.v1.DaemonService` serves its own lifecycle.
 The rest of `f10.v1` and `agents.v1` serve tasks, runs, the board, events and agents.
 `WatchEvents` opened with `tail` and no cursor starts at the ledger's newest row, and its first response carries only the cursor to resume from.
 
-- **Where.** The run dir is `F10_RUN_DIR`, else `$XDG_RUNTIME_DIR/f10`, else `run` in the user's f10 dir. The user's f10 dir is `~/.f10`, or `F10_USER_DIR`. The run dir is kept `0700` and refused when another user owns it. It holds the socket `daemon.sock` and the daemon's own `daemon.log`. It holds a log per drive run under `logs/`, with its `.exit` file and an `index`, and finished ones are pruned after seven days. It holds the locks under `drives/locks/`, and `drained.json` between an upgrade's two daemons. It holds `watch.json` (`0600`) for as long as each project is watched: the watched projects with the environment their passes run with, tokens such as `GH_TOKEN` included. Each watched project gets a `logs/watch-<hash>.log`.
+- **Where.** The run dir is `F10_RUN_DIR`, else `$XDG_RUNTIME_DIR/f10`, else `run` in the user's f10 dir. The user's f10 dir is `~/.f10`, or `F10_USER_DIR`. The run dir is kept `0700` and refused when another user owns it. It holds the socket `daemon.sock` and the daemon's own `daemon.log`. It holds a log per batch run under `logs/`, with its `.exit` file and an `index`, and finished ones are pruned after seven days. It holds the locks under `drives/locks/` (a stored name), and `drained.json` between an upgrade's two daemons. It holds `watch.json` (`0600`) for as long as each project is watched: the watched projects with the environment their passes run with, tokens such as `GH_TOKEN` included. Each watched project gets a `logs/watch-<hash>.log`.
 - **Starting one.** A client dials the socket; with nothing listening it takes the `start` lock, dials again (another client may have started one), else starts `f10 daemon` detached in its own session and waits up to 5s for it to listen. The daemon holds its own `daemon` lock for life and exits at once if another holds it, so two clients at once get one daemon.
-- **A drive.** The client sends the command line, its directory and an allowlisted copy of its environment. The copy holds `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TMPDIR`, `LANG`, `LC_*`, `TERM`, `SSH_AUTH_SOCK`, `XDG_*`, `GH_*`, `GITHUB_TOKEN`, `GLAB_*`, `GITLAB_TOKEN`, `HERDR_*`, `F10_*`, `CLAUDE_*`, and the keys the frontmatter's `drive_env` lists. The daemon reads the storage root from that directory. It runs `f10 start --foreground <command line>` in it with exactly that environment, its output going to the drive's log. `F10_DRIVE_FILE` names a file the drive writes its record number to once the record is open. When the drive ends, the daemon writes `<log>.exit` with the exit code and the drive's number. For exit 6 or 8 it also writes the reason. The reason `upgrade` means the next daemon resumes it. `stopped` means it waits for `--resume`. `resumed` goes with exit 8 and means this daemon runs it again. A request for a drive already running in the same storage root (the same command line, or `--resume` of its number) with no `--answer` follows that drive's log instead.
-- **Upgrades.** A client says hello first and reads the daemon's version and API version from the reply. A daemon kept by the rule below whose API version differs from the client's is an error naming both versions, never a decode error. Only a client of a strictly newer release (`0.46.0` over `0.45.2`) replaces the daemon. An older client, or a development build, uses the daemon running and says which version it runs. `f10 daemon stop` is how to replace one by hand. A client following a drive never starts a daemon while another drains. The replacing client starts the next one. A follower starts one only when none has listened for 5s after the old one is gone. A replacing client asks the old daemon to drain. Each drive stops at its next tick, after any finish it is in the middle of, ends no task, releases its leases and exits 6. The old daemon writes those drives to `drained.json` (`0600`) and exits. Each entry holds the drive's storage root, directory, number and environment. The client then starts its own binary's daemon, which runs each drained drive again as `--resume <n>`. Every client that was following one follows it into the new daemon, whatever its version. A drive that has not stopped after ten minutes is stopped outright and not resumed. Rerunning its command resumes it.
-- **Releases before the Connect API** spoke JSON on the same socket. A new client that finds such a daemon drains and replaces it through that protocol, and the new daemon resumes its drives from `drained.json` as above. A new daemon answers an old client's hello, so the older client keeps it by the rule above, and answers its `run`, `status` and `watch` with "update f10".
-- **The CLI as a client.** `start`, `forward`, `status`, `inbox` (its list, `answer` and the terminal walk), `stop`, `status --drives`, `finish`, `board`, `task create` and `task read` parse their flags, call the API and print the reply. So a remote client gets what the terminal gets, from one implementation. `f10 start` runs its drives in the daemon, and a discussion or a pickup through the same API.
+- **A batch.** The client sends the command line, its directory and an allowlisted copy of its environment. The copy holds `PATH`, `HOME`, `USER`, `LOGNAME`, `SHELL`, `TMPDIR`, `LANG`, `LC_*`, `TERM`, `SSH_AUTH_SOCK`, `XDG_*`, `GH_*`, `GITHUB_TOKEN`, `GLAB_*`, `GITLAB_TOKEN`, `HERDR_*`, `F10_*`, `CLAUDE_*`, and the keys the frontmatter's `batch_env` lists. The daemon reads the storage root from that directory. It runs `f10 start --foreground <command line>` in it with exactly that environment, its output going to the batch's log. `F10_BATCH_FILE` names a file the batch writes its record number to once the record is open, and `F10_BATCH_RESUMES` tells the batch its daemon can start it again. For one release the daemon also sets both under their old names, `F10_DRIVE_FILE` and `F10_DRIVE_RESUMES`, and a batch reads either, because across an upgrade a daemon and the batch it runs can be one release apart. When the batch ends, the daemon writes `<log>.exit` with the exit code and the batch's number. For exit 6 or 8 it also writes the reason. The reason `upgrade` means the next daemon resumes it. `stopped` means it waits for `f10 resume`. `resumed` goes with exit 8 and means this daemon runs it again. A request for a batch already running in the same storage root (the same command line, or a resume of it) with no `--answer` follows that batch's log instead.
+- **Upgrades.** A client says hello first and reads the daemon's version and API version from the reply. A daemon kept by the rule below whose API version differs from the client's is an error naming both versions, never a decode error. Only a client of a strictly newer release (`0.46.0` over `0.45.2`) replaces the daemon. An older client, or a development build, uses the daemon running and says which version it runs. `f10 daemon stop` is how to replace one by hand. A client following a batch never starts a daemon while another drains. The replacing client starts the next one. A follower starts one only when none has listened for 5s after the old one is gone. A replacing client asks the old daemon to drain. Each batch stops at its next tick, after any finish it is in the middle of, ends no task, releases its leases and exits 6. The old daemon writes those batches to `drained.json` (`0600`) and exits. Each entry holds the batch's storage root, directory, number and environment. The client then starts its own binary's daemon, which resumes each drained batch. Every client that was following one follows it into the new daemon, whatever its version. A batch that has not stopped after ten minutes is stopped outright and not resumed. Rerunning its command resumes it.
+- **Releases before the Connect API** spoke JSON on the same socket. A new client that finds such a daemon drains and replaces it through that protocol, and the new daemon resumes its batches from `drained.json` as above. A new daemon answers an old client's hello, so the older client keeps it by the rule above, and answers its `run`, `status` and `watch` with "update f10".
+- **The CLI as a client.** `start`, `forward`, `status`, `inbox` (its list, `answer` and the terminal walk), `stop`, `status --batches`, `finish`, `board`, `task create` and `task read` parse their flags, call the API and print the reply. So a remote client gets what the terminal gets, from one implementation. `f10 start` runs its batches in the daemon, and a discussion or a pickup through the same API.
   Their output, `--json` shapes and exit codes are what they were in process, with one difference in timing. A write prints what the daemon wrote for it: its stdout, then its stderr. So the lines a command reports while it works, such as `f10 finish` waiting on checks, print once the call returns, not as they happen. A read renders the model the daemon read, with the command's own renderer. A refusal carries its exit code and what the command printed before it failed.
   Each call passes where it runs: its directory and `-C` checkout, its Claude session and its Herdr workspace. It also passes its environment, and whether its output is a terminal, for links. The daemon honors that only on the socket.
   When the daemon cannot start, the command fails with the daemon's error. Off unix, where no daemon runs, the commands serve the same API in their own process.
   `f10 finish` run from the task's own workspace closes that workspace itself, after it printed the report, because a close inside the daemon would end the command before it printed anything.
 - **Left in process.** The step plumbing that runs inside an agent's worktree stays local, because routing it through the daemon adds a failure point to every step. That plumbing is `trace`, `lore`, `pr create`, `pr edit`, `review round`, `task ref` and the like.
   `f10 inbox hook` and the status the Stop hook prints stay local, because a daemon start would break their time budget.
-  `f10 start --foreground` is the drive the daemon runs, so it cannot call the daemon. `f10 drive plan` and `f10 janitor` stay local too.
-- **Herdr from the daemon.** A call from a local command runs its `herdr` commands in that command's own session, so two sessions calling at once never cross, and keeps that session as the newest. The other handlers that reach agents run `herdr` with the environment of the newest local call, drive or watch registration made inside Herdr. That environment is kept in `session.json` (`0600`) across restarts. With none kept, they answer that no Herdr session has registered.
-- **A crash or a reboot** leaves running drives stopped, their records intact: rerunning the drive's command resumes it.
+  `f10 start --foreground` is the batch the daemon runs, so it cannot call the daemon. `f10 resume` resolves its task id in the caller and then takes the same road as a start. `f10 start --propose` and `f10 janitor` stay local too.
+- **Herdr from the daemon.** A call from a local command runs its `herdr` commands in that command's own session, so two sessions calling at once never cross, and keeps that session as the newest. The other handlers that reach agents run `herdr` with the environment of the newest local call, batch or watch registration made inside Herdr. That environment is kept in `session.json` (`0600`) across restarts. With none kept, they answer that no Herdr session has registered.
+- **A crash or a reboot** leaves running batches stopped, their records intact: `f10 resume <task-id>`, or rerunning the batch's command, resumes one.
 
 `f10 daemon status` prints the pid, version and start time.
 When **Remote** below turned the tailnet listener on, it prints the listener's address, or why it is not listening.
-Then it prints each drive with its project, number, pid and log, and each task's standing from its record.
+Then it prints each batch with its project, number, pid and log, and each task's standing from its record.
 Then it prints each watched project: its last pass, that pass's exit, and its log.
-`f10 daemon stop` drains the daemon the same way but keeps no drained list: each drive stops at its next tick, a client following one ends with `f10 start --resume <n> goes on`, and nothing resumes until someone runs that. `--now` stops each drive at once, and cuts a drain in progress short: the daemon keeps answering `status` and `stop` until its drives are gone.
-`f10 daemon logs` prints the daemon's log, `f10 daemon logs <n>` drive `n`'s newest log in this project, `-f` following it until the drive exits.
+`f10 daemon stop` drains the daemon the same way but keeps no drained list: each batch stops at its next tick, a client following one ends with `batch <n> stopped with the f10 daemon: f10 resume <task-id> goes on`, and nothing resumes until someone runs that. `--now` stops each batch at once, and cuts a drain in progress short: the daemon keeps answering `status` and `stop` until its batches are gone.
+`f10 daemon logs` prints the daemon's log. `f10 daemon logs <task-id>` prints the newest log of the batch holding that task in this project, a finished batch's included. `-f` follows it until the batch exits.
 
 ### Remote
 
@@ -1180,13 +1223,14 @@ Then it prints each watched project: its last pass, that pass's exit, and its lo
   | scope | methods |
   |---|---|
   | any token | `Hello` |
-  | `read` | `GetDaemonStatus`, `GetTask`, `GetRunStatus`, `GetBoard`, `WatchEvents`, `ListAsks`, `ListWorkspaces`, `ListAgents`, `GetAgentStatus`, `ListArtifacts`, `GetArtifact`, `ListProjects`, `ListDrives` |
+  | `read` | `GetDaemonStatus`, `GetTask`, `GetRunStatus`, `GetBoard`, `WatchEvents`, `ListAsks`, `ListWorkspaces`, `ListAgents`, `GetAgentStatus`, `ListArtifacts`, `GetArtifact`, `ListProjects`, `ListBatches` |
   | `answer` | `AnswerAsk` |
   | `steer` | `SendText`, `Forward` |
-  | `start` | `Start`, `Drive`, `CancelDrive`, `CreateTask` |
+  | `start` | `Start`, `StartBatch`, `Resume`, `StopBatch`, `CreateTask` |
   | `finish` | `Finish`, `CloseWorkspace` |
   | socket only | `StopDaemon`, `WatchProject` |
 
+  `Drive`, `ListDrives` and `CancelDrive` are the old names of `StartBatch`, `ListBatches` and `StopBatch`. They stay served under the same scopes for clients built against them, marked deprecated, and so do the `drive` fields beside `StartResponse.batch` and the daemon status's `batches`.
   A remote call's environment fields are ignored, because a remote client has no local session to pass.
   `Hello` returns the caller: its token's name, scopes and the procedures they allow, so a client hides what it cannot call.
 - **The web client.** The listener also serves a web app at its address, `https://<machine>.<tailnet>.ts.net:7410/`, which `f10 remote on` and `f10 daemon status` print.
@@ -1205,9 +1249,9 @@ Then it prints each watched project: its last pass, that pass's exit, and its lo
   Over HTTPS, add the page to the home screen to install it.
   The app's source is `ts/web`. `just web::build` rebuilds `cli/internal/webui/dist`, which the binary embeds.
 - **MCP.** `f10 remote on --mcp` also serves the API as MCP tools at `/mcp` on the listener's address, beside the web client (**MCP** below). A bare `f10 remote on` turns that off again. Each request carries a device token as above. The tools it lists are the ones that token's scopes reach, read again on every request. So a revoke or a narrower token applies at once. With the setting off, `/mcp` is not served.
-- **Always on.** With the listener on, the daemon does not exit when idle. `f10 remote install` writes and loads a launchd agent (`~/Library/LaunchAgents/io.github.amberpixels.f10.daemon.plist`) on macOS, or a systemd user unit (`~/.config/systemd/user/f10-daemon.service`) on Linux. That service runs `f10 daemon --service` at login and restarts it whenever it exits, `f10 daemon stop` included. So with the service installed, a stopped daemon comes back within seconds. `f10 remote uninstall` stops the service and removes it. Like `f10 daemon stop`, each drive stops at its next tick, and `f10 start --resume <n>` goes on with one. The service manager waits up to 11 minutes for that before killing what is left.
-  The service runs the `f10` the installing shell's PATH finds, which is the plugin's shim in a session, else the running binary. It carries that shell's `PATH`, `HOME`, `F10_RUN_DIR`, `XDG_RUNTIME_DIR` and `F10_USER_DIR`. So it uses the same run dir and finds the same tools. A shim under a versioned plugin directory stays on that release after an upgrade, and `f10 doctor` flags it as older than the binary running doctor. Run `install` again after an upgrade like that, or after any of the others moves. Installing drains the running daemon as an upgrade does before the service restarts, so the restarted daemon resumes its drives.
-  A `--service` daemon never idles out, and while another daemon holds the lease it waits and takes over when that one exits. A client that replaces an older daemon writes its version to `newest` in the run dir first, and again once the old daemon has drained. For two minutes after that, a service older than it keeps waiting. So the service manager restarting an old binary cannot take the drained drives from the daemon that client starts. Past those two minutes an old service serves again, and the next newer client replaces it as usual.
+- **Always on.** With the listener on, the daemon does not exit when idle. `f10 remote install` writes and loads a launchd agent (`~/Library/LaunchAgents/io.github.amberpixels.f10.daemon.plist`) on macOS, or a systemd user unit (`~/.config/systemd/user/f10-daemon.service`) on Linux. That service runs `f10 daemon --service` at login and restarts it whenever it exits, `f10 daemon stop` included. So with the service installed, a stopped daemon comes back within seconds. `f10 remote uninstall` stops the service and removes it. Like `f10 daemon stop`, each batch stops at its next tick, and `f10 resume <task-id>` goes on with one. The service manager waits up to 11 minutes for that before killing what is left.
+  The service runs the `f10` the installing shell's PATH finds, which is the plugin's shim in a session, else the running binary. It carries that shell's `PATH`, `HOME`, `F10_RUN_DIR`, `XDG_RUNTIME_DIR` and `F10_USER_DIR`. So it uses the same run dir and finds the same tools. A shim under a versioned plugin directory stays on that release after an upgrade, and `f10 doctor` flags it as older than the binary running doctor. Run `install` again after an upgrade like that, or after any of the others moves. Installing drains the running daemon as an upgrade does before the service restarts, so the restarted daemon resumes its batches.
+  A `--service` daemon never idles out, and while another daemon holds the lease it waits and takes over when that one exits. A client that replaces an older daemon writes its version to `newest` in the run dir first, and again once the old daemon has drained. For two minutes after that, a service older than it keeps waiting. So the service manager restarting an old binary cannot take the drained batches from the daemon that client starts. Past those two minutes an old service serves again, and the next newer client replaces it as usual.
 
 ### MCP
 
@@ -1217,45 +1261,45 @@ Then it prints each watched project: its last pass, that pass's exit, and its lo
 { "mcpServers": { "f10": { "command": "/Users/you/.local/bin/f10", "args": ["mcp", "--scope", "read,answer"] } } }
 ```
 
-- **One tool per method.** Every unary method of `f10.v1` and `agents.v1` is a tool named after the method in snake case (`list_asks`, `answer_ask`, `get_run_status`). Its description is the rpc's comment and its input schema the request message, in proto field names. Both are generated from the proto schema by `protoc-gen-f10-mcp` into `cli/gen/mcptools`. So `just proto::gen` after a new method is all it takes to add its tool. The plugin refuses an rpc with no comment.
+- **One tool per method.** Every unary method of `f10.v1` and `agents.v1` is a tool named after the method in snake case (`list_asks`, `answer_ask`, `get_run_status`). Its description is the rpc's comment and its input schema the request message, in proto field names. Both are generated from the proto schema by `protoc-gen-f10-mcp` into `cli/gen/mcptools`. So `just proto::gen` after a new method is all it takes to add its tool. The plugin refuses an rpc with no comment. A deprecated method is no tool and a deprecated field is no argument, so a batch's tools are `start_batch`, `resume`, `list_batches` and `stop_batch`.
 - **Scopes.** The tools offered are the methods the **Remote** scope table places under the scopes given. `--scope` names the scopes. `--token <name>` takes the scopes of the device token with that name, and is refused once that token is revoked. The socket checks no token, so its secret is never needed here. With neither flag, the scopes are `read` and `answer`. `Hello`, `StopDaemon` and `WatchProject` are never tools. Neither is `WatchEvents`, because it streams and a tool call returns once, so poll `get_run_status` instead.
 - **Calls.** Each call starts the daemon when none listens, so a client that stays connected past the daemon's idle exit keeps working. A result is the response as JSON. A refused call, such as an ask already answered or a misspelled field, is a tool error naming why.
 
 ## Inbox
 
-A driven agent's ask (`f10-state.sh ask`, `modes/driven.md`), and a drive's own finish question, wait in one per-user inbox until the first answer from any way in.
+A driven agent's ask (`f10-state.sh ask`, `modes/driven.md`), and a batch's own finish question, wait in one per-user inbox until the first answer from any way in.
 `f10 asks` and `/f10:asks` were its names until v0.67; `f10 asks` still runs, hidden, for one release.
 
-- **Where.** `~/.claude/f10/inbox/` (`F10_INBOX_DIR` overrides), beside the run state and outside every project: one YAML file per open ask, `<root hash>-<TASK>.yaml`, naming its task, url, storage root, main checkout, worktree, herdr pane, drive (none for an agent no drive watches), skill, the ask's text, its context and its parsed questions. The context is the background given as `f10-state.sh ask`'s second argument, plus any prose before question 1. A project is its storage root, shared by every worktree of a repo, and the root hash at the front of the file name names it. The first answer moves it to `answered/` with the answer, the way in (`pane`, `asks`, `skill`, `drive`, `cancelled`) and the time, through a rename only one caller wins; a later one is told who answered and when. At each session start, answered asks older than a week are pruned, and so is an open ask whose worktree is gone.
-- **Raised.** `f10-state.sh ask` writes the ask as the agent stops; the drive that sees it adds its number. The same text is one ask, so the user is told once.
+- **Where.** `~/.claude/f10/inbox/` (`F10_INBOX_DIR` overrides), beside the run state and outside every project: one YAML file per open ask, `<root hash>-<TASK>.yaml`, naming its task, url, storage root, main checkout, worktree, herdr pane, batch number (none for an agent no batch holds), skill, the ask's text, its context and its parsed questions. The context is the background given as `f10-state.sh ask`'s second argument, plus any prose before question 1. A project is its storage root, shared by every worktree of a repo, and the root hash at the front of the file name names it. The first answer moves it to `answered/` with the answer, the way in (`pane`, `asks`, `skill`, `drive` for `--answer` on a start or a resume, `cancelled`) and the time, through a rename only one caller wins; a later one is told who answered and when. At each session start, answered asks older than a week are pruned, and so is an open ask whose worktree is gone.
+- **Raised.** `f10-state.sh ask` writes the ask as the agent stops; the batch that sees it adds its number. The same text is one ask, so the user is told once.
 - **Shown.** `f10-state.sh ask` prints the ask as a banner, and the asking agent prints it verbatim as its last message (`modes/driven.md`). It warns on stderr when a question lists its choices in its text, as "Options: 1) ... 2) ...", instead of in brackets. It still raises the ask. `f10 inbox list` draws the same banner. The banner is plain text wrapped at 76 columns, so a code fence shows it as drawn. It draws an ask the way the inbox walk does. A header names the task, the step and the time asked. The context follows, one sentence per line. Each question comes next, with its options lettered and the default marked. A footer says what to type in the asking agent's pane. A reply typed there that picks options is stored as the options it names. The agent is then told those options as context on that prompt. A lone question takes a letter, a number or an option's text (`b`, `2`, `merge now`). Several questions take a numbered reply (`1. a 2. b`). In it, a free-text question takes its words, and a question with options that the reply leaves out takes its default. One letter per question (`b a`) works too, but only when every question has options. Any other reply is stored as typed. Inside Herdr, raising the ask reports the agent's pane blocked (`herdr pane report-agent --source f10:inbox`). The first answer from any way in releases the pane (`herdr pane release-agent`), which hands it back to Herdr's own detection.
 - **Told.** The status line shows the task id of the session project's first open ask and a count of the rest: ` f10 · 󰚇 FT-12 +2` (`docs/statusline.md`). The first ask is in file name order, and the segment shows with or without a run. The id links to its ask's file, and `+N` links to the inbox directory. So Ctrl+click opens the question without entering any conversation. Outside git it shows every project's. No session is told an ask in its conversation. The `SessionStart` hook (`f10 inbox hook`) only prunes the inbox and records the session's project for the status line. The desktop notification stays global, because it never enters an agent's context. And `notify` runs per new ask: `~/.f10/inbox.md` frontmatter, `notify: ntfy publish f10 "{task} asks: {question}" {url}`, run through `sh -c` for up to 10s, with `{task}`, `{question}` (the first question) and `{url}` standing for the shell variables `${F10_ASK_TASK}`, `${F10_ASK_QUESTION}` and `${F10_ASK_URL}`, so an agent's text is never run as shell; quote them as any variable; `notify: off` runs nothing, and absent it is a desktop notification (`osascript` on macOS, `notify-send` on Linux when installed).
-- **Answered.** Typed in the agent's own pane, the prompt is the answer: the agent goes on, and its drive, if stopped, is resumed to follow the turn. `f10 inbox answer <task> 1=b 2=8080` answers questions by option letter, number or text; free text only for a question with no options, and every question not named takes its default (one with no default must be named). `<project>:<task>` picks between two projects' asks. `answer` finds an ask in any project. Bare `f10 inbox` in a terminal walks this project's open asks (`--all` every project's). Each ask shows a header with its task, step and age. Its context follows, dimmed and wrapped, with urls linked and shas shortened. Each question is bold, with its options lettered and the default marked. A letter, a number or the option's text answers a question. Enter takes the default, and `s` skips the ask. Under `NO_COLOR`, the same layout prints unstyled. Outside a terminal, bare `f10 inbox` is `f10 inbox list`. `/f10:inbox` asks them in one questionnaire and runs `f10 inbox answer --by skill`.
-- **Delivered.** An answer to a drive's task goes to its drive: a stopped drive is resumed through the daemon (`--resume <n>` from its main checkout, with the answering process's allowlisted environment), and a drive still running takes it as it stops. An answer to an agent no drive watches is sent to the agent, as `f10 forward` would; one that cannot be sent is printed to type in its pane.
+- **Answered.** Typed in the agent's own pane, the prompt is the answer: the agent goes on, and its batch, if stopped, is resumed to follow the turn. `f10 inbox answer <task> 1=b 2=8080` answers questions by option letter, number or text; free text only for a question with no options, and every question not named takes its default (one with no default must be named). `<project>:<task>` picks between two projects' asks. `answer` finds an ask in any project. Bare `f10 inbox` in a terminal walks this project's open asks (`--all` every project's). Each ask shows a header with its task, step and age. Its context follows, dimmed and wrapped, with urls linked and shas shortened. Each question is bold, with its options lettered and the default marked. A letter, a number or the option's text answers a question. Enter takes the default, and `s` skips the ask. Under `NO_COLOR`, the same layout prints unstyled. Outside a terminal, bare `f10 inbox` is `f10 inbox list`. `/f10:inbox` asks them in one questionnaire and runs `f10 inbox answer --by skill`.
+- **Delivered.** An answer to a batch's task goes to its batch: a stopped batch is resumed through the daemon (from its main checkout, with the answering process's allowlisted environment), and a batch still running takes it as it stops. An answer to an agent no batch holds is sent to the agent, as `f10 forward` would; one that cannot be sent is printed to type in its pane.
 
 `f10 inbox list` prints this project's open asks, oldest first, each as its banner, then those answered in the last day.
 `--all` lists every project's asks, each banner naming its project, and so does a list outside git.
-`--json` prints `{open: [...], answered: [...]}`.
+`--json` prints `{open: [...], answered: [...]}`, and an ask of a batch's task carries the batch's number under `batch`.
 The API's `ListAsks` takes the storage root as `project`, and MCP's `list_asks` passes it on.
 An empty `project`, which the web client sends, lists every project.
 
 ## Watch
 
-The daemon watches every project `f10 start` ran in, for the tasks no drive owns: a task started by hand whose PR merged on the host, an agent left idle, a run that stopped with nobody looking.
+The daemon watches every project `f10 start` ran in, for the tasks no batch owns: a task started by hand whose PR merged on the host, an agent left idle, a run that stopped with nobody looking.
 `watch: finish` is the default, and under it a pass also finishes a task whose PR merged.
 `watch: report` only reports, and `watch: off` watches nothing.
 `watch_catchup: on` lets a pass also catch an open PR up with its target when it needs it (**catchup**, **left** and **behind** below).
 `watch_ci: on` lets it send a red PR to its agent (**red** below).
-Owning is the task's lease (**Drives**): a task a drive or a finish holds is never looked at, and the watcher's own finish takes the lease first, so a drive started later is refused with `owned by the f10 watcher`.
+Owning is the task's lease (**Batches**): a task a batch or a finish holds is never looked at, and the watcher's own finish takes the lease first, so a batch started later is refused with `owned by the f10 watcher`.
 
-- **Registering.** After its report, a discussion or a pickup hands the daemon the project's storage root, its main checkout and the same allowlisted environment a drive gets. A flow start does the same before it follows its drive. It never replaces or waits on a running daemon: a daemon of another version is used as it is, and one that is stopping is skipped with one line, so the next `f10 start` hands the project over. A failure is one `watch: warning:` line, never a failed command. The project stays watched across daemon restarts and upgrades (`watch.json` in the run dir, which keeps the newest registration's environment, tokens included), and leaves the list once a pass finds no task worktree left (under `watch: finish`, no local task branch either, since its janitor still has work), once its main checkout is gone, or after ten passes in a row fail. A registration that arrives while a pass runs gets one more pass after it, so a task started meanwhile is seen. `watch: off` in the frontmatter registers nothing.
+- **Registering.** After its report, a discussion or a pickup hands the daemon the project's storage root, its main checkout and the same allowlisted environment a batch gets. A flow start does the same before it follows its batch. It never replaces or waits on a running daemon: a daemon of another version is used as it is, and one that is stopping is skipped with one line, so the next `f10 start` hands the project over. A failure is one `watch: warning:` line, never a failed command. The project stays watched across daemon restarts and upgrades (`watch.json` in the run dir, which keeps the newest registration's environment, tokens included), and leaves the list once a pass finds no task worktree left (under `watch: finish`, no local task branch either, since its janitor still has work), once its main checkout is gone, or after ten passes in a row fail. A registration that arrives while a pass runs gets one more pass after it, so a task started meanwhile is seen. `watch: off` in the frontmatter registers nothing.
 - **A pass.** Every 3 minutes, and at once on registering, the daemon runs `f10 watch --pass` in the main checkout with that environment, its output appended to the project's watch log. For each task worktree whose lease nobody holds and that `f10 watch off` did not hand back, it reads the PR (`gh pr list --head`, one call per branch), the newest run reported from the worktree and the agent's status, and says at most one thing, in this order:
   - **merged**: the PR merged on the host. Under `watch: finish` it is finished when the branch's tip equals the PR's head and the agent is not working. The pass takes the task's lease, then reads the agent's status and the branch's tip again. It finishes the task as `f10 finish` would: the worktree removed, the workspace closed, the plan archived and main pulled. Its finish refuses anything but a merged PR, so the watcher never merges. A refusal, such as a dirty worktree or someone else's PR, is reported with `f10 finish <id>` to run by hand. A bundle's riders are closed as the PR body says (**Bundles**). A branch with commits the PR lacks is only reported.
   - **closed**: the PR closed without a merge; reported, never cleaned up.
-  - **stalled**: the agent idle while its run says plan or ship is running and the run has not changed for 10 minutes: the test a drive halts on, with a longer grace, measured from the run's last write since a pass keeps no memory between runs.
+  - **stalled**: the agent idle while its run says plan or ship is running and the run has not changed for 10 minutes: the test a batch halts on, with a longer grace, measured from the run's last write since a pass keeps no memory between runs.
   - **stopped**: the run ended `blocked` (with its question), `failed`, `partial`, or ship `done`.
-  - **red**: the open PR's head checks failed, told once per head with the first failed job that was not cancelled. A head that read green is not read again until it moves, so a quiet PR costs no call. Under `watch_ci: on`, an idle agent with a clean tree and no background work gets `/f10:ci --driven` once per head, under the task's lease. A task handed back with `f10 watch off`, or one a drive holds, is never sent one. Off by default, because an unattended agent would commit and push a fix.
-  - **catchup**, **left** and **behind**, under `watch_catchup: on` only. When any undriven task has an open PR and an idle agent, or a catchup in flight, the pass fetches origin once. It reads what each such branch targets as the catchup step does: the branch it was started after, else the default branch. It cross-checks that against the PR's base. A target that moved past a branch whose tip is origin's is caught up only when the move matters to the branch, because a catchup's push restarts the PR's CI. It matters in three cases. The branch conflicts with the target, checked by an in-memory `git merge-tree`, which touches neither the worktree nor the index. A catchup is already owed: an `f10-landed` or `f10-base-moved` mark is on the branch, or a failed catchup is on record. The host will not merge the PR while it is behind: GitHub's `mergeStateStatus: BEHIND` under a require-up-to-date branch protection, or GitLab's `need_rebase` under a fast-forward merge method. **left** is any other behind PR. It merges into its target clean, so it is left alone and told once per pushed head. Another clean move of the target is silent, and a leave after a catchup is told again. A branch that needs a catchup, with an idle agent and a clean tree, is marked with the drive's marks, `f10-landed` or `f10-base-moved`. A mark already there, left by a finish, a ship guard or a failed catchup, is set again. The branch is then integrated by the same engine the drive uses, under the task's lease. The agent is then prompted with a driven catchup for what is left: the conflicts git stopped on, then verify. The watcher always leaves verify to the agent, so a pass stays short. A prompt that cannot go out puts the branch back where it was. A later pass reads the end from git. The end is clean when the mark is gone, no merge or rebase is open and the target is held. There must also be no conflict marker and a clean tree. The pass then pushes the branch under the lease, plain after a merge and `--force-with-lease` after a rebase. The push is against the origin tip the catchup started from. So a commit pushed to the PR meanwhile is never overwritten, and such a catchup is told once as not pushed. One that did not end clean is told with `/f10:catchup` to run in the worktree, and the branch is left as it is. It is sent again only once its fingerprint moves: the target, or what the branch conflicts on. **behind** is a PR the watcher will not catch up. It has no agent in its workspace, was retargeted to a branch the task was not started on, or has a tip that is not origin's. A working agent or a dirty tree waits for a later pass. So does an idle agent whose last turn launched background work, for up to 30 minutes from the launch. No catchup is sent to it then. During that wait, a catchup in flight that did not end clean is not failed, while one git shows clean is still pushed. A task a drive holds, or one handed back, is never touched.
+  - **red**: the open PR's head checks failed, told once per head with the first failed job that was not cancelled. A head that read green is not read again until it moves, so a quiet PR costs no call. Under `watch_ci: on`, an idle agent with a clean tree and no background work gets `/f10:ci --driven` once per head, under the task's lease. A task handed back with `f10 watch off`, or one a batch holds, is never sent one. Off by default, because an unattended agent would commit and push a fix.
+  - **catchup**, **left** and **behind**, under `watch_catchup: on` only. When any undriven task has an open PR and an idle agent, or a catchup in flight, the pass fetches origin once. It reads what each such branch targets as the catchup step does: the branch it was started after, else the default branch. It cross-checks that against the PR's base. A target that moved past a branch whose tip is origin's is caught up only when the move matters to the branch, because a catchup's push restarts the PR's CI. It matters in three cases. The branch conflicts with the target, checked by an in-memory `git merge-tree`, which touches neither the worktree nor the index. A catchup is already owed: an `f10-landed` or `f10-base-moved` mark is on the branch, or a failed catchup is on record. The host will not merge the PR while it is behind: GitHub's `mergeStateStatus: BEHIND` under a require-up-to-date branch protection, or GitLab's `need_rebase` under a fast-forward merge method. **left** is any other behind PR. It merges into its target clean, so it is left alone and told once per pushed head. Another clean move of the target is silent, and a leave after a catchup is told again. A branch that needs a catchup, with an idle agent and a clean tree, is marked with the batch's marks, `f10-landed` or `f10-base-moved`. A mark already there, left by a finish, a ship guard or a failed catchup, is set again. The branch is then integrated by the same engine the batch uses, under the task's lease. The agent is then prompted with a driven catchup for what is left: the conflicts git stopped on, then verify. The watcher always leaves verify to the agent, so a pass stays short. A prompt that cannot go out puts the branch back where it was. A later pass reads the end from git. The end is clean when the mark is gone, no merge or rebase is open and the target is held. There must also be no conflict marker and a clean tree. The pass then pushes the branch under the lease, plain after a merge and `--force-with-lease` after a rebase. The push is against the origin tip the catchup started from. So a commit pushed to the PR meanwhile is never overwritten, and such a catchup is told once as not pushed. One that did not end clean is told with `/f10:catchup` to run in the worktree, and the branch is left as it is. It is sent again only once its fingerprint moves: the target, or what the branch conflicts on. **behind** is a PR the watcher will not catch up. It has no agent in its workspace, was retargeted to a branch the task was not started on, or has a tip that is not origin's. A working agent or a dirty tree waits for a later pass. So does an idle agent whose last turn launched background work, for up to 30 minutes from the launch. No catchup is sent to it then. During that wait, a catchup in flight that did not end clean is not failed, while one git shows clean is still pushed. A task a batch holds, or one handed back, is never touched.
 
   A pass lists only this checkout's branches, so it asks the network nothing before the host, except the one fetch `watch_catchup: on` needs. An agent whose status cannot be read (no listing from Herdr) is never finished. A host that does not answer for a task's PR leaves the task out of the pass, and the pass says so in one line naming the error and the tasks left out, every pass until the host answers; `f10 watch` shows it under `host`.
   Each fact is told once: `watch.yaml` in the storage root keeps the last report per task and every fact told for it (the PR's state, the run's update time), so a fact is never repeated, even after another, and a newer one is told. Under `watch: finish` the janitor then runs if it is due; under `report` it never runs from a pass, since it deletes branches.
@@ -1288,12 +1332,12 @@ With neither it fails.
 It refuses a key that is not `f10-landed` or `f10-base-moved`, and an `f10-base-moved` value that names no commit.
 A guard that stops on a conflict marks the branch this way, never with `git config` by hand.
 Under a stopped rebase, `git config` writes the key under an empty branch name that git then refuses to read.
-`f10-base-moved` overrides the local-first order of an `f10-after-branch` base because the drive's and the watcher's push gates check that sha against origin, so a newer local tip would carry commits neither checked; a marked sha the base branch no longer holds fails, naming the key to unset.
+`f10-base-moved` overrides the local-first order of an `f10-after-branch` base because the batch's and the watcher's push gates check that sha against origin, so a newer local tip would carry commits neither checked; a marked sha the base branch no longer holds fails, naming the key to unset.
 A base is rewritten when the branch holds the recorded `f10-base-tip` and the base does not, as after a squash merge or a rebase of the base.
 `onto` then replays only the branch's own commits, whatever `catchup:` or `catchup_stacked:` says; the guard still merges a branch on origin.
 `f10 start --after` records the tip, `f10 finish` records it again for each dependent before deleting the base branch (a spike closed without merging clears it instead), and the catchup step refreshes it once green.
 `f10 pr base` prints the same `found: f10-after-branch gone` line for a finished stacked base.
-No `origin/HEAD` fails with its remedy, as `pr base` and the drive do.
+No `origin/HEAD` fails with its remedy, as `pr base` and the batch do.
 
 ## Review
 
@@ -1482,19 +1526,19 @@ It is read once per repository: the project's sessions active in the period, by 
 - **Whose work**: a row counts when it was recorded in one of the repository's checkouts (the main checkout or a worktree of it).
   It also counts when it was recorded in the worktree `f10 start` makes for the row's branch, still matched after `f10 finish` removed it.
   A row no checkout recorded counts when its task is one your commits or PRs already name.
-  A drive counts, because its agents run in your worktrees.
+  A batch counts, because its agents run in your worktrees.
   A teammate's clone elsewhere on the machine does not.
 - **Period**: a row counts by its time, in the same period as commits, so `--since`, `--week` and the stored standup apply unchanged.
   A task with ledger rows in the period but no commit or PR is reported too, its state `started`.
 - **Per machine**: the ledger is local, while git and the host are not, so on a second machine the ledger half is partial and `ledger.scope` says so.
 
-**JSON**, schema 2.
+**JSON**, schema 3.
 The same history gives the same bytes in the same zone: no run timestamp, every time in UTC (`days` are local dates), every list in a fixed order.
 A breaking change bumps `schema`.
 
 ```json
 {
-  "schema": 2,
+  "schema": 3,
   "since": "2026-10-14T00:00:00Z",
   "period": "last_standup",
   "days": ["2026-10-14", "2026-10-15"],
@@ -1538,7 +1582,7 @@ A breaking change bumps `schema`.
      "actions": [{"kind": "reviewed", "at": "..."}, {"kind": "merged", "at": "..."}],
      "days": ["2026-10-15"]}
   ],
-  "drives": [{"repo": "svc-a", "number": 12, "tasks": 5, "shipped": 4, "needs_you": 1}]
+  "batches": [{"repo": "svc-a", "number": 12, "tasks": 5, "shipped": 4, "needs_you": 1}]
   }
   ],
   "ledger": {"scope": "this machine only", "contributed": true},
@@ -1575,13 +1619,13 @@ A breaking change bumps `schema`.
 | `upkeep` | on an upkeep commit or force-push: `base-merge`, `rebase`, `files` or `ci-fix`; absent on work |
 | `prs[].force_pushes` | your force-pushes to it in the period, by time, then after-sha |
 | `reviewed[].actions` | by time, then kind |
-| `tasks[].blocked` | what the task waits on when the period ends, and `since` when: `ask` (an ask with no answer yet, the question in one line), `halt` (a drive halted it after its run's last word, with the skill and reason) or `failed` (its run stopped `failed` or `partial`, with the step and the note, such as a red verify or CI); absent when nothing |
+| `tasks[].blocked` | what the task waits on when the period ends, and `since` when: `ask` (an ask with no answer yet, the question in one line), `halt` (its batch halted it after its run's last word, with the skill and reason) or `failed` (its run stopped `failed` or `partial`, with the step and the note, such as a red verify or CI); absent when nothing |
 | `tasks[].activity` | the steps run in the period, by time, each once a day: `plan` (saved or superseded), `debug` (cause found, cause unconfirmed, or run), `spike` (report saved), `review` (`round 2: 3 fixed, 1 skipped`, or `round 2 opened`) and `judge` (the verdict and its subject) |
 | `tasks[].stage` | where the run left the task, in words: `planned, not started`, `planning`, `review round 2`, `waiting on CI`, `waiting on <base>`, `shipping: <step>`; absent when the run has nothing `state` lacks, as after a finished ship. `state` keeps its values, because the carry-over and the classes read them |
-| `tasks[].driven` | the newest drive that lists the task and ran in the period; absent when none |
+| `tasks[].driven` | the number of the newest batch that lists the task and ran in the period; absent when none |
 | `tasks[].active_minutes` | the task's active minutes in the period, counted as `f10 stats` counts them, waits on you left out; always present. The `/f10:standup` skill renders it only when your `standup.md` asks for it |
 | `tasks[].blocked.later_commit` | on an `ask`: the sha of the task's first commit authored after it, which may have settled it while the ledger still holds the ask open; absent when none |
-| `drives` | each drive that ran in the period (created in it, or with a task your ledger rows show active in it), with its task count, the tasks shipped and the tasks that ended needing you; a task the report shows `shipped` counts as shipped whatever its drive outcome, because a drive that stops before finish ends non-zero on a PR merged later |
+| `batches` | each batch that ran in the period (created in it, or with a task your ledger rows show active in it), with its number, its task count, the tasks shipped and the tasks that ended needing you; a task the report shows `shipped` counts as shipped whatever its outcome in the batch, because a batch that stops before finish ends non-zero on a PR merged later. Schema 2 named this key `drives` |
 | `warnings` | one line per PR whose commits or force-pushes the host did not return after a retry, such as `svc-a#40: commits not read: gh: HTTP 504`; the report printed without them. Always present |
 | `ledger` | present when a ledger exists: `scope` is always `this machine only`, and `contributed` says whether the ledger added anything to the report |
 
@@ -1925,7 +1969,7 @@ A subtask that is itself a parent is listed, not expanded.
 | `title`, `url`, `state` | as the tracker holds them |
 | `labels` | label names; `[]` for none |
 | `after` | the id its body's `After:` line names, absent when none |
-| `finished` | no branch, no live plan, and closed (its plan archived, for a tracker with no state), as drive decides it |
+| `finished` | no branch, no live plan, and closed (its plan archived, for a tracker with no state), by the rule a start uses to skip a finished task |
 | `depth` | 0 directly under the parent, one more per `After:` step |
 
 A task with no subtasks prints `[]`.
@@ -2018,7 +2062,7 @@ Both exit **3** on a tracker that is not the host's when no driver takes the ver
 A failed comment is never retried, and its error says it may have posted.
 On the host's issues, unless `tracker.title` is `none`, an update also puts the prefix back on a title renamed by hand.
 `--after <id>` writes the body's `After:` line, replacing the first one or adding one at the end, and `--after none` drops it.
-`f10 drive plan` proposes these edits.
+`f10 start <ids> --propose` proposes these edits.
 It goes to the driver as an update of its own (`update <n> --after <m>`, an empty number to drop it).
 Else the host's issues rewrite the body, and a tracker that edits no body exits **3**.
 `--parent <id>` links the task under that parent, moving it from a parent it already has, and `--parent ""` takes it out from under its parent.

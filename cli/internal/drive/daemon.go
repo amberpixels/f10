@@ -25,7 +25,7 @@ import (
 
 // WriteDaemonStatus prints what the daemon runs and watches.
 func WriteDaemonStatus(ctx context.Context, w io.Writer, links *render.TaskLinks, rep daemon.Status) {
-	fmt.Fprintf(w, "pid      %d\nversion  %s\nsince    %s\ndrives   %d\nwatching %d\n", rep.PID, rep.Version,
+	fmt.Fprintf(w, "pid      %d\nversion  %s\nsince    %s\nbatches  %d\nwatching %d\n", rep.PID, rep.Version,
 		rep.Started.Format(time.DateTime), len(rep.Runs), len(rep.Watches))
 
 	switch r := rep.Remote; {
@@ -80,10 +80,10 @@ func WriteDaemonStatus(ctx context.Context, w io.Writer, links *render.TaskLinks
 func driveTitle(r daemon.Run) string {
 	project := projectName(r.Root)
 	if r.Drive == 0 {
-		return project + ": drive starting"
+		return project + ": batch starting"
 	}
 
-	return fmt.Sprintf("%s: drive %d", project, r.Drive)
+	return fmt.Sprintf("%s: batch %d", project, r.Drive)
 }
 
 func projectName(root string) string {
@@ -124,7 +124,7 @@ func ThroughDaemon(
 	req := daemon.DriveCall{
 		Args: argv,
 		Dir:  cwd,
-		Env:  daemon.DriveEnv(os.Environ(), t.Effective.DriveEnv),
+		Env:  daemon.DriveEnv(os.Environ(), t.Effective.BatchEnv),
 	}
 
 	if !follow {
@@ -145,8 +145,8 @@ func ThroughDaemon(
 			n = runningDrive(dir, rep.Log)
 		}
 
-		fmt.Fprintf(w, "drive %d runs in the f10 daemon; this agent gets its first prompt once this turn ends: "+
-			"f10 daemon logs %d -f follows it\n", n, n)
+		fmt.Fprintf(w, "batch %d runs in the f10 daemon; this agent gets its first prompt once this turn ends: "+
+			"%s follows it\n", n, startedLogsHint(t.Layout.StorageRoot.Path(), n, a))
 
 		return nil
 	}
@@ -195,7 +195,7 @@ func setDriveParallel(w io.Writer, root string, argv []string, a drivectl.DriveA
 		rec.Number,
 		func(r *drivestore.Record) { r.Parallel = a.Parallel },
 	); err != nil {
-		fmt.Fprintf(w, "  recording drive %d's --parallel: %v\n", rec.Number, err)
+		fmt.Fprintf(w, "  recording batch %d's --parallel: %v\n", rec.Number, err)
 	}
 }
 
@@ -219,7 +219,7 @@ func followDrive(
 			Follow:  follow,
 			Spawn:   spawn,
 			Draining: func(old string) {
-				fmt.Fprintf(w, "replacing f10 daemon %s with %s: its drives stop at their next tick\n", old, ver)
+				fmt.Fprintf(w, "replacing f10 daemon %s with %s: its batches stop at their next tick\n", old, ver)
 			},
 			Kept: func(running string) {
 				fmt.Fprintf(w, "the f10 daemon runs %s, not this %s: f10 daemon stop replaces it\n", running, ver)
@@ -236,7 +236,7 @@ func followDrive(
 		}
 
 		if rep.Attach {
-			fmt.Fprintln(w, "following the drive the daemon already runs")
+			fmt.Fprintln(w, "following the batch the daemon already runs")
 		}
 
 		exit, err := followAsks(ctx, w, dir, root, rep.Log)
@@ -256,12 +256,8 @@ func followDrive(
 		case exit.Code != daemon.ExitDrained && exit.Code != daemon.ExitResume:
 			return cli.Exit("", exit.Code)
 		case !resumed || exit.Drive == 0:
-			fmt.Fprintf(
-				w,
-				"drive %d stopped with the f10 daemon: f10 start --resume %d goes on\n",
-				exit.Drive,
-				exit.Drive,
-			)
+			fmt.Fprintf(w, "batch %d stopped with the f10 daemon: %s goes on\n",
+				exit.Drive, resumeHint(root, exit.Drive))
 
 			return cli.Exit("", exit.Code)
 		}
@@ -292,19 +288,19 @@ func followAsks(ctx context.Context, w io.Writer, dir, root, log string) (daemon
 	for {
 		exit, err := TailLog(ctx, w, log)
 		if errors.Is(err, context.Canceled) {
-			keepsRunning(w, dir, log)
+			keepsRunning(w, dir, root, log)
 		}
 
 		if err != nil || exit.Code != ui.ExitAsk || exit.Drive == 0 {
 			return exit, err
 		}
 
-		fmt.Fprintf(w, "\ndrive %d waits on its asks: answer them in the asking agent's pane, "+
-			"with f10 inbox or /f10:inbox; this follows the drive once it resumes\n", exit.Drive)
+		fmt.Fprintf(w, "\nbatch %d waits on its asks: answer them in the asking agent's pane, "+
+			"with f10 inbox or /f10:inbox; this follows the batch once it resumes\n", exit.Drive)
 
 		next, err := awaitResume(ctx, dir, root, exit.Drive, log)
 		if errors.Is(err, context.Canceled) {
-			fmt.Fprintf(w, "\ndrive %d still waits on its asks: f10 status --drives shows it\n", exit.Drive)
+			fmt.Fprintf(w, "\nbatch %d still waits on its asks: f10 status --batches shows it\n", exit.Drive)
 		}
 
 		if err != nil {
@@ -312,7 +308,7 @@ func followAsks(ctx context.Context, w io.Writer, dir, root, log string) (daemon
 		}
 
 		if next == "" {
-			fmt.Fprintf(w, "drive %d was stopped while it waited on its asks\n", exit.Drive)
+			fmt.Fprintf(w, "batch %d was stopped while it waited on its asks\n", exit.Drive)
 
 			return exit, nil
 		}
@@ -341,11 +337,11 @@ func awaitResume(ctx context.Context, dir, root string, n int, last string) (str
 	}
 }
 
-func keepsRunning(w io.Writer, dir, log string) {
+func keepsRunning(w io.Writer, dir, root, log string) {
 	if n := runningDrive(dir, log); n > 0 {
-		fmt.Fprintf(w, "\ndrive %d keeps running in the f10 daemon: f10 daemon logs %d -f\n", n, n)
+		fmt.Fprintf(w, "\nbatch %d keeps running in the f10 daemon: %s\n", n, logsHint(root, n))
 	} else {
-		fmt.Fprintln(w, "\nthe drive keeps running in the f10 daemon: f10 daemon status")
+		fmt.Fprintln(w, "\nthe batch keeps running in the f10 daemon: f10 daemon status")
 	}
 }
 

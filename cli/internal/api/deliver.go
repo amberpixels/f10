@@ -35,9 +35,9 @@ func deliverer(sup Supervisor) agents.Deliverer {
 			if !daemon.Supported {
 				fmt.Fprintf(
 					w,
-					"drive %d is stopped: f10 start --resume %d in %s takes the answer\n",
+					"batch %d is stopped: f10 resume %s in %s takes the answer\n",
 					a.Drive,
-					a.Drive,
+					a.Task,
 					a.Main,
 				)
 
@@ -46,14 +46,14 @@ func deliverer(sup Supervisor) agents.Deliverer {
 
 			t, err := target.At(ctx, a.Main, false, "inbox")
 			if err != nil {
-				return fmt.Errorf("resuming drive %d: %w", a.Drive, err)
+				return fmt.Errorf("resuming batch %d: %w", a.Drive, err)
 			}
 
 			if _, err := sup.ResumeDrive(a.Root, a.Main, driveEnvFor(sup, t), a.Drive); err != nil {
-				return fmt.Errorf("resuming drive %d: %w", a.Drive, err)
+				return fmt.Errorf("resuming batch %d: %w", a.Drive, err)
 			}
 
-			fmt.Fprintf(w, "drive %d resumed: f10 daemon logs %d -f follows it\n", a.Drive, a.Drive)
+			fmt.Fprintf(w, "batch %d resumed: f10 daemon logs %s -f follows it\n", a.Drive, a.Task)
 
 			return nil
 		},

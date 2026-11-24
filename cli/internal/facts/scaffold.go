@@ -180,7 +180,7 @@ func isEmpty(d Declared) bool {
 		}
 	}
 
-	return d.Tracker.empty() && d.Flows == nil && d.FlowByArea == nil && d.DriveEnv == nil &&
+	return d.Tracker.empty() && d.Flows == nil && d.FlowByArea == nil && d.BatchEnv == nil && d.OldBatchEnv == nil &&
 		d.Review == (ReviewDecl{}) && d.Standup.Upkeep == nil && d.Verify == nil &&
 		d.Agents == nil && d.Paces == nil && d.Ceiling == nil
 }

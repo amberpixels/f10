@@ -1475,8 +1475,8 @@ func TestFinishLeaseRefusesADrivenTask(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Lease(root, "GH-1"); err == nil || !strings.Contains(err.Error(), "owned by drive 3") ||
-		!strings.Contains(err.Error(), "f10 stop 3") {
+	if _, err := Lease(root, "GH-1"); err == nil || !strings.Contains(err.Error(), "owned by batch 3") ||
+		!strings.Contains(err.Error(), "f10 stop GH-1") {
 		t.Errorf("err = %v", err)
 	}
 

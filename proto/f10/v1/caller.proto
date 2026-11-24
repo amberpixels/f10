@@ -17,7 +17,7 @@ message CallerContext {
   // workspace_id is the Herdr workspace the command runs in.
   string workspace_id = 4;
   // env is the command's environment. The daemon keeps the allowlisted
-  // part a drive passes on, and runs the call's Herdr commands in its
+  // part a batch passes on, and runs the call's Herdr commands in its
   // session.
   repeated string env = 5;
   // terminal is true when the command's output is a terminal, so the

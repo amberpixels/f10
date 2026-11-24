@@ -753,11 +753,11 @@ func TestGatesDriveFinish(t *testing.T) {
 	}{
 		{"no record", shipped, "", branchmeta.DriveFinish{}, gateUpcoming},
 		{"ship not done", working, "", queued(""), gateUpcoming},
-		{"queued", shipped, "", queued(""), "queued (drive)"},
-		{"queued once drive recorded ship", nil, "ship", queued(""), "queued (drive)"},
-		{"waiting for a base", shipped, "", queued("waiting for FT-0"), "queued (drive): waiting for FT-0"},
-		{"catching up", shipped, "", queued("catching up with main"), "queued (drive): catching up with main"},
-		{"merging", shipped, "", running("merging #204"), "running (drive): merging #204"},
+		{"queued", shipped, "", queued(""), "queued (batch)"},
+		{"queued once drive recorded ship", nil, "ship", queued(""), "queued (batch)"},
+		{"waiting for a base", shipped, "", queued("waiting for FT-0"), "queued (batch): waiting for FT-0"},
+		{"catching up", shipped, "", queued("catching up with main"), "queued (batch): catching up with main"},
+		{"merging", shipped, "", running("merging #204"), "running (batch): merging #204"},
 		{"finished", shipped, "finish", running("removing worktree"), gateDone},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

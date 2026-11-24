@@ -66,18 +66,18 @@ GitHub issues need no adapter: f10 reads and creates them.
 | `layering` | `extends` or `replaces`, in a linked worktree only | `extends` |
 | `tracker` | `kind` (`github`, `gitlab`, `notion`, `jira`), `id`, the task id format, an optional `priority` map from the four levels to the host labels that carry them, and an optional `status` map from `started` and `shipped` to the tracker's own words ([Reporting back](#reporting-back)) | host issues via `gh` or `glab`; ids prefixed from the project's name; no priority; no status moved |
 | `merge_method` | `squash`, `merge` or `rebase`, for `f10 finish` | the merge method the repo allows, else squash |
-| `catchup` | `rebase`, `merge` or `off`: how a branch is brought up to date with its base; `off` stops ship integrating before implement, `pr` and a change judge (it still asks about a base with no code), and leaves `/f10:catchup` and the drive running | `rebase` |
+| `catchup` | `rebase`, `merge` or `off`: how a branch is brought up to date with its base; `off` stops ship integrating before implement, `pr` and a change judge (it still asks about a base with no code), and leaves `/f10:catchup` and the daemon running | `rebase` |
 | `catchup_stacked` | `merge` or `rebase`: how a branch is brought up to date with a base that is another task's branch, the stacked PR's target. `rebase` replays that base's old commits into the branch if the base later rebases or squash-merges; `merge` never does. Once the base is rewritten, a branch holding its recorded tip catches up by `onto` instead, whichever is declared | `merge` |
 | `traces` | `on` or `off`: what f10 leaves on the host. `Task:`, `Step:` and `Review:` trailers on every commit a step makes, `Task:` on the squash commit `f10 finish` lands, a hidden state block in the PR body rewritten by each step after the PR, and a local review's or a judge's commit status and PR comment after the PR; off, nothing | `off` |
 | `stale_after` | a number of days or weeks (`10d`, `3w`): the stale step judges a task created longer ago than this before it is planned, from the created date the tracker shows; anything but proceed stops the run blocked | off |
-| `bundle_max_lines` | a positive number of changed lines: the most a bundle `f10 drive plan` proposes may hold, because review quality falls as a diff grows and a bad rider holds the whole PR ([docs/cli.md](cli.md#plan)) | `300` |
+| `bundle_max_lines` | a positive number of changed lines: the most a bundle `f10 start --propose` proposes may hold, because review quality falls as a diff grows and a bad rider holds the whole PR ([docs/cli.md](cli.md#proposal)) | `300` |
 | `driver_timeout` | a positive Go duration (`45s`, `2m`): how long f10 waits on one verb of the project's [driver](driver-contract.md) before it kills the driver and fails the command with `no answer within <limit>` | `30s` |
 | `lore` | `local` or `committed`: where `f10 lore` keeps its entries, `lore/` under the main checkout's storage root on this machine, shared by its worktrees, or `.lore/` at the checkout root, committed with the code ([docs/lore.md](lore.md)) | `local` |
 | `lore_gate` | `warn` or `block`: what `f10 finish` does when `f10 lore check` fails for the task right before its merge. `warn` prints the reasons under the report and merges; `block` refuses with nothing changed. A passing check needs the intent, a judge verdict of proceed and no open blocker or major finding, so a flow with no `judge` entry stays on `warn`. Nothing about to merge is checked: a request already merged, `--local`, a spike's close ([docs/lore.md](lore.md)) | `warn` |
 | `flows` | name to every entry a task runs through, as a list or one string split on spaces or arrows ([Flows](#flows)) | `default: plan implement pr finish` |
 | `flow_by_area` | an area, in the plain words Roles uses, to the flow its tasks ship through when the user names none | `default` for every task |
-| `drive_env` | a list of environment variable names a drive passes to its commands, beyond the built-in allowlist (`PATH`, `HOME`, `SSH_AUTH_SOCK`, `GH_*`, `GLAB_*`, `HERDR_*`, `F10_*`, `CLAUDE_*` and the like): the drive runs in the per-user daemon, which sees only these ([docs/cli.md](cli.md#daemon)) | none |
-| `watch` | `report`, `finish` or `off`: what the per-user daemon does for this project's tasks no drive owns. `report` tells when a PR merged or closed, an agent sits idle under a running phase, or a run stops; `finish` also finishes a task whose PR merged, with a clean worktree and an idle agent, and runs the janitor from each pass; `off` watches nothing. A project whose merges are a human's opts down to `report` or `off`; `finish` acts only on a PR already merged whose tip is the branch's, with an idle agent, so nothing unmerged is lost ([docs/cli.md](cli.md#watch)) | `finish` |
+| `batch_env` | a list of environment variable names a batch passes to its commands, beyond the built-in allowlist (`PATH`, `HOME`, `SSH_AUTH_SOCK`, `GH_*`, `GLAB_*`, `HERDR_*`, `F10_*`, `CLAUDE_*` and the like): a batch runs in the per-user daemon, which sees only these ([docs/cli.md](cli.md#daemon)). The old key `drive_env` is read for one more release, with a warning | none |
+| `watch` | `report`, `finish` or `off`: what the per-user daemon does for this project's tasks no batch owns. `report` tells when a PR merged or closed, an agent sits idle under a running phase, or a run stops; `finish` also finishes a task whose PR merged, with a clean worktree and an idle agent, and runs the janitor from each pass; `off` watches nothing. A project whose merges are a human's opts down to `report` or `off`; `finish` acts only on a PR already merged whose tip is the branch's, with an idle agent, so nothing unmerged is lost ([docs/cli.md](cli.md#watch)) | `finish` |
 | `watch_ci` | `on` or `off`: with `on`, a watch pass sends an undriven task whose open PR reads red to its agent as `/f10:ci --driven`, once per head, with an idle agent and a clean tree; a task handed back with `f10 watch off` is never touched. With `off` the red PR is only reported, once per head. Off by default, because an unattended agent would commit and push a fix ([docs/cli.md](cli.md#watch)) | `off` |
 | `watch_catchup` | `on` or `off`: with `on`, a pass under `watch: report` or `finish` also catches an undriven task's open PR up with its target when it needs it: the branch conflicts with the target, a catchup is already owed (a landed stacked base), or the host will not merge it while behind. Any other PR behind its target is left alone and told once per pushed head, so its CI is not restarted. A PR that needs a catchup is integrated by the watcher with an idle agent and a clean tree, the task's own agent settling any conflict and running verify as a driven catchup, and pushed a pass later once it ended clean, with a lease after a rebase; a task handed back with `f10 watch off` is never touched. A catchup that does not end clean leaves the branch as it was and is told once. Off by default: an unattended agent settling conflicts and force-pushing them is the riskiest thing the watcher does ([docs/cli.md](cli.md#watch)) | `off` |
 | `report_back` | `on` or `off`: a ship run posts its shipment on the task and moves it to its `shipped` status | `on` |
@@ -319,7 +319,7 @@ Inside a `{ }` map YAML refuses a bare `?`, so quote it there: `{ review: "local
 A judge before `implement` needs a leading `plan`, since a planless flow has no plan file to judge.
 A `pr` entry opens the PR, or refreshes its title and description when one is open, so `judged` ends with a PR describing the reviewed code.
 An entry may end in a label in brackets, a display name for an entry the flow repeats: `judged: plan implement pr review:local judge pr[pr-polish]`.
-`f10 status`, the parent tree, `f10 flow`, the drive's `resume at` line and `f10 stats <id>` show `pr-polish` where they would show `pr`.
+`f10 status`, the parent tree, `f10 flow`, the daemon's `resume at` line and `f10 stats <id>` show `pr-polish` where they would show `pr`.
 `--json` keeps `step` as the bare step beside a `label`.
 The label changes nothing that runs: the entry is still `pr`, and every claim and match uses the bare entry.
 A label is lower kebab-case and unique within its flow.
@@ -338,12 +338,12 @@ Then it runs `/f10:ship`, then `finish` when the flow ends in a `finish` entry t
 The pace is read under the project's ceiling.
 `finish` comes last in a flow, after a `pr` entry, because it merges that PR.
 It takes no argument.
-Drive runs it itself, and ship never does: with `finish` in the flow, ship's report names `/f10:finish` as the next step.
+The daemon runs it itself, and ship never does: with `finish` in the flow, ship's report names `/f10:finish` as the next step.
 A spike is closed after ship either way: `f10 finish` merges nothing for it, and a spike left open would hold its dependents on an empty base.
 A rerun keeps the flow a task's branch recorded when it started.
 A project whose only merges are a human's leaves `finish` out of its flows.
 It can also declare `ceiling: { finish: off }`, so no pace finishes there, whatever a flow says.
-With `flow_by_area` and no flow named, drive cannot know which flow ship picks.
+With `flow_by_area` and no flow named, the daemon cannot know which flow ship picks.
 So it finishes only when every flow the map can pick, `default` included, runs `finish` under the pace, and it prints a note when only some do.
 
 `flow_by_area` routes a task to a flow by its area, in the plain words Roles uses:
@@ -382,7 +382,7 @@ The dials are:
   A judge running inline stays on the task agent's profile.
 - `pr: { marker }`, a word the project's `pr` overlay gives a meaning, such as a title tag that makes CI run a short pipeline.
 - `<step>: off` skips that entry, `handoff: off` among them.
-  `finish: off` skips the flow's `finish` entry, so drive stops at ship.
+  `finish: off` skips the flow's `finish` entry, so the batch stops at ship.
   `finish: on` is refused, because finishing is the flow's choice: add `finish` to the flow instead.
   `handoff: off` also reaches every `pr` entry as a dial, so the PR carries no `## Handoff` section.
 
@@ -492,7 +492,7 @@ A misspelt step is refused, as is a profile the kind refuses.
 
 What reaches where is explicit, and `f10 agents` prints it per step:
 
-- the task's agent (`f10 start`) starts on `default`, its model and effort as flags on the command line; the profile is recorded on the branch, so a rerun keeps it unless a flag names another, and `f10 start`'s report, the drive's open line and `f10 status` name it when it is not the kind's default;
+- the task's agent (`f10 start`) starts on `default`, its model and effort as flags on the command line; the profile is recorded on the branch, so a rerun keeps it unless a flag names another, and `f10 start`'s report, the daemon's open line and `f10 status` name it when it is not the kind's default;
 - a step that spawns a subagent passes its own key's profile to the Agent tool.
   Those subagents are the **review** step's blind reviewer, `judge --blind`'s judge, **cleanup**'s rules check and the **audit** step's reviewers.
   The project load (`f10-load-project.sh <step>`) prints each requested step's line, with the model family and effort word in the form the Agent tool takes;

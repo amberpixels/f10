@@ -10,7 +10,7 @@ import (
 const Tradeoff = "a bundle is one PR: one revert, one review over a mixed diff, " +
 	"and a later bug is traced to its lead with the riders named"
 
-// Command is the drive command line the plan runs, extra flags appended.
+// Command is the start command line the proposal runs, extra flags appended.
 func (p Plan) Command(extra ...string) string {
 	return "f10 start " + strings.Join(append(append([]string{}, p.Args...), extra...), " ")
 }
@@ -37,23 +37,23 @@ func count(n int, what string) string {
 	return fmt.Sprintf("%d %ss", n, what)
 }
 
-// Write prints the proposal: the stages, the command, the saving, the
+// Write prints the proposal: the levels, the command, the saving, the
 // After: edits waiting on a yes, and the trade-off once.
 func (p Plan) Write(w io.Writer, notes []string, extra ...string) error {
 	var b strings.Builder
 
 	width := 0
-	for _, st := range p.Stages {
+	for _, st := range p.Levels {
 		for _, e := range st.Entries {
 			width = max(width, len(e.Token()))
 		}
 	}
 
-	for n, st := range p.Stages {
+	for n, st := range p.Levels {
 		for k, e := range st.Entries {
 			label := ""
 			if k == 0 {
-				label = fmt.Sprintf("stage %d", n+1)
+				label = fmt.Sprintf("level %d", n+1)
 			}
 
 			fmt.Fprintf(&b, "%-9s %-*s  %s\n", label, width, e.Token(), e.Reason)

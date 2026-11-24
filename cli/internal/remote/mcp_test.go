@@ -25,13 +25,13 @@ type envRuns struct {
 	seen bool
 }
 
-func (r *envRuns) Drive(
+func (r *envRuns) StartBatch(
 	_ context.Context,
-	req *connect.Request[f10v1.DriveRequest],
-) (*connect.Response[f10v1.DriveResponse], error) {
+	req *connect.Request[f10v1.StartBatchRequest],
+) (*connect.Response[f10v1.StartBatchResponse], error) {
 	r.env, r.seen = daemon.LocalEnv(req, req.Msg.GetEnv()), true
 
-	return connect.NewResponse(&f10v1.DriveResponse{}), nil
+	return connect.NewResponse(&f10v1.StartBatchResponse{}), nil
 }
 
 func mcpSession(t *testing.T, url, token string) (*sdk.ClientSession, error) {
@@ -100,7 +100,7 @@ func TestListenerServesMCPByTokenScope(t *testing.T) {
 
 	want := []string{
 		"get_agent_status", "get_artifact", "get_board", "get_daemon_status", "get_run_status",
-		"get_task", "list_agents", "list_artifacts", "list_asks", "list_drives", "list_projects", "list_workspaces",
+		"get_task", "list_agents", "list_artifacts", "list_asks", "list_batches", "list_projects", "list_workspaces",
 	}
 	if !slices.Equal(names, want) {
 		t.Errorf("a read token's tools = %v, want %v", names, want)
@@ -119,15 +119,15 @@ func TestListenerServesMCPByTokenScope(t *testing.T) {
 	}
 
 	res, err := cs.CallTool(t.Context(), &sdk.CallToolParams{
-		Name:      "drive",
+		Name:      "start_batch",
 		Arguments: map[string]any{"project": "p", "env": []string{"HERDR_SOCKET=/tmp/x"}},
 	})
 	if err != nil || res.IsError {
-		t.Fatalf("drive = %v %v", res, err)
+		t.Fatalf("start_batch = %v %v", res, err)
 	}
 
 	if !runs.seen || runs.env != nil {
-		t.Errorf("a drive through MCP ran with env %v, want none: a tailnet caller has no local session", runs.env)
+		t.Errorf("a batch through MCP ran with env %v, want none: a tailnet caller has no local session", runs.env)
 	}
 }
 

@@ -256,4 +256,4 @@ func (InProcess) SessionEnv() []string { return nil }
 
 func (InProcess) Remember([]string) {}
 
-var errNoDaemon = errors.New("no f10 daemon runs drives in this process: f10 start runs them")
+var errNoDaemon = errors.New("no f10 daemon runs batches in this process: f10 start runs them")

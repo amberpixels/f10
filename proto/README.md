@@ -10,7 +10,7 @@ The daemon serves it on its unix socket (`docs/cli.md`, **Daemon**).
   It knows nothing about tasks, so it can become a project of its own.
   An owner's context, such as the task f10 maps to an agent, goes in `Ask.labels`, never in a new field.
 - **`f10.v1`** is the task flow.
-  It covers tasks and runs, start, drive and finish, the board and the event stream.
+  It covers tasks and runs, start, resume and finish, the board and the event stream.
   It also carries `DaemonService`, the daemon's own hello, status, stop and project watch.
   It imports `agents.v1`, and `agents.v1` never imports it.
 

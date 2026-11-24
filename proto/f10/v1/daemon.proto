@@ -10,7 +10,7 @@ service DaemonService {
   // Hello is the first call a client makes, to learn which daemon answers
   // and whether this client may keep it or must replace it.
   rpc Hello(HelloRequest) returns (HelloResponse);
-  // GetDaemonStatus is who the daemon is, the drives it runs, the
+  // GetDaemonStatus is who the daemon is, the batches it runs, the
   // projects it watches and its tailnet listener.
   rpc GetDaemonStatus(GetDaemonStatusRequest) returns (GetDaemonStatusResponse);
   // StopDaemon stops the daemon; a second call without drain cuts a drain
@@ -52,17 +52,31 @@ message Caller {
   repeated string procedures = 4;
 }
 
-// A SupervisedDrive is one drive process the daemon runs.
+// A SupervisedDrive is the old form of SupervisedBatch.
 message SupervisedDrive {
   // root is the project's storage root, which tells projects apart.
   string root = 1;
-  // dir is where the drive was typed.
+  // dir is where the start was typed.
   string dir = 2;
-  // drive is the drive's number, 0 until the drive reported it.
+  // drive is the batch's number, 0 until its process reported it.
   int32 drive = 3;
   int32 pid = 4;
   google.protobuf.Timestamp since = 5;
-  // log is the drive's log file.
+  // log is the batch's log file.
+  string log = 6;
+}
+
+// A SupervisedBatch is one batch's process the daemon runs.
+message SupervisedBatch {
+  // root is the project's storage root, which tells projects apart.
+  string root = 1;
+  // dir is where the start was typed.
+  string dir = 2;
+  // batch is the batch's number, 0 until its process reported it.
+  int32 batch = 3;
+  int32 pid = 4;
+  google.protobuf.Timestamp since = 5;
+  // log is the batch's log file.
   string log = 6;
 }
 
@@ -97,15 +111,18 @@ message RemoteListener {
 }
 
 message GetDaemonStatusResponse {
-  repeated SupervisedDrive drives = 1;
+  // drives is the old name of batches, still filled for clients built
+  // against it.
+  repeated SupervisedDrive drives = 1 [deprecated = true];
   repeated WatchedProject watches = 2;
   RemoteListener remote = 3;
+  repeated SupervisedBatch batches = 4;
 }
 
 message StopDaemonRequest {
-  // drain lets each drive reach its next tick before it stops.
+  // drain lets each batch reach its next tick before it stops.
   bool drain = 1;
-  // upgrade says a newer daemon follows and resumes the drained drives.
+  // upgrade says a newer daemon follows and resumes the drained batches.
   bool upgrade = 2;
 }
 

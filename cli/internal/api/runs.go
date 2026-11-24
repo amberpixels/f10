@@ -191,9 +191,9 @@ func flowStart(
 	once := func() error {
 		switch {
 		case m.GetChain():
-			return errors.New("a range runs as a drive: --discuss and a PR pickup take the ids one by one")
+			return errors.New("a range runs as a batch: --discuss and a PR pickup take the ids one by one")
 		case m.GetParallel() > 0:
-			return errors.New("parallel caps a drive: --discuss and a PR pickup open one agent")
+			return errors.New("parallel caps a batch: --discuss and a PR pickup open one agent")
 		}
 
 		return nil
@@ -267,7 +267,7 @@ func startToken(m *f10v1.StartRequest) (string, string) {
 // own, allowlisted, else what a drive started without one runs with.
 func callerEnv(sup Supervisor, c *f10v1.CallerContext, t *target.Target) []string {
 	if len(c.GetEnv()) > 0 {
-		return daemon.DriveEnv(c.GetEnv(), t.Effective.DriveEnv)
+		return daemon.DriveEnv(c.GetEnv(), t.Effective.BatchEnv)
 	}
 
 	return driveEnvFor(sup, t)
@@ -311,21 +311,13 @@ func startMode(m f10v1.StartMode) (string, error) {
 	return "", invalid("unknown start mode " + m.String())
 }
 
+// Drive is the old name of StartBatch, and adds the field form older
+// clients send.
 func (s *runService) Drive(
 	ctx context.Context,
 	req *connect.Request[f10v1.DriveRequest],
 ) (*connect.Response[f10v1.DriveResponse], error) {
 	m := req.Msg
-
-	dir := m.GetDir()
-	if dir == "" {
-		d, err := projectDir(ctx, s.sup, m.GetProject())
-		if err != nil {
-			return nil, err
-		}
-
-		dir = d
-	}
 
 	argv, fields := m.GetArgs(), len(m.GetArgs()) == 0
 	if fields {
@@ -335,56 +327,212 @@ func (s *runService) Drive(
 		}
 	}
 
-	parsed, err := drivectl.ParseDriveArgs(argv)
-	if err != nil {
-		return nil, invalid(err.Error())
-	}
-
-	// a drive given answers starts its own process, so the answers reach it
-	// instead of a running drive that would never read them
-	resume := int(m.GetResume())
-	if len(parsed.Answers) > 0 {
-		resume = 0
-	}
-
-	t, terr := target.At(ctx, dir, false, "start")
-	if terr != nil {
-		return nil, invalid(terr.Error())
-	}
-
-	// the field form comes from a client that never ran start's closed check,
-	// and a drive cannot answer with the discussion Start would open
-	if fields {
-		if sw := start.ClosedSwitch(ctx, t, parsed); sw != nil {
-			return nil, connect.NewError(connect.CodeFailedPrecondition,
-				fmt.Errorf("%s: Start opens that discussion, since a drive would run nothing", sw.Note))
-		}
-	}
-
-	env := daemon.LocalEnv(req, m.GetEnv())
-	if len(env) == 0 {
-		env = sessionless(driveEnvFor(s.sup, t))
-	}
-
-	started, err := s.sup.RunDrive(daemon.DriveSpec{
-		Argv:   argv,
-		Dir:    dir,
-		Root:   t.Layout.StorageRoot.Path(),
-		Env:    env,
-		Resume: resume,
+	started, err := runBatch(ctx, s.sup, req, batchCall{
+		Project: m.GetProject(), Dir: m.GetDir(), Argv: argv, Env: m.GetEnv(), Resume: int(m.GetResume()),
+		Fields: fields,
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	return connect.NewResponse(&f10v1.DriveResponse{
-		Drive:    int32(started.Drive), //nolint:gosec // a drive number
+		Drive:    int32(started.Drive), //nolint:gosec // a batch number
 		Log:      started.Log,
 		Attached: started.Attach,
 	}), nil
 }
 
-// driveArgv is the command line f10 start takes for a drive given as fields:
+func (s *runService) StartBatch(
+	ctx context.Context,
+	req *connect.Request[f10v1.StartBatchRequest],
+) (*connect.Response[f10v1.StartBatchResponse], error) {
+	m := req.Msg
+
+	if len(m.GetArgs()) == 0 {
+		return nil, invalid("a batch needs its command line: the tasks, as f10 start takes them")
+	}
+
+	started, err := runBatch(ctx, s.sup, req, batchCall{
+		Project: m.GetProject(), Dir: m.GetDir(), Argv: m.GetArgs(), Env: m.GetEnv(), Resume: int(m.GetResume()),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return connect.NewResponse(&f10v1.StartBatchResponse{
+		Batch:    int32(started.Drive), //nolint:gosec // a batch number
+		Log:      started.Log,
+		Attached: started.Attach,
+	}), nil
+}
+
+// A batchCall is one batch to run, as StartBatch and its old name take it.
+type batchCall struct {
+	Project, Dir string
+	Argv, Env    []string
+	Resume       int
+	// Fields is set when the command line was built from the old field form
+	Fields bool
+}
+
+// runBatch hands a command line to the supervisor, which runs it as a
+// batch or attaches to the one already running it.
+func runBatch(
+	ctx context.Context, sup Supervisor, req connect.AnyRequest, c batchCall,
+) (daemon.Started, error) {
+	dir := c.Dir
+	if dir == "" {
+		d, err := projectDir(ctx, sup, c.Project)
+		if err != nil {
+			return daemon.Started{}, err
+		}
+
+		dir = d
+	}
+
+	parsed, err := drivectl.ParseDriveArgs(c.Argv)
+	if err != nil {
+		return daemon.Started{}, invalid(err.Error())
+	}
+
+	// a batch given answers starts its own process, so the answers reach it
+	// instead of a running one that would never read them
+	resume := c.Resume
+	if len(parsed.Answers) > 0 {
+		resume = 0
+	}
+
+	t, terr := target.At(ctx, dir, false, "start")
+	if terr != nil {
+		return daemon.Started{}, invalid(terr.Error())
+	}
+
+	// the field form comes from a client that never ran start's closed check,
+	// and a batch cannot answer with the discussion Start would open
+	if c.Fields {
+		if sw := start.ClosedSwitch(ctx, t, parsed); sw != nil {
+			return daemon.Started{}, connect.NewError(connect.CodeFailedPrecondition,
+				fmt.Errorf("%s: Start opens that discussion, since a batch would run nothing", sw.Note))
+		}
+	}
+
+	env := daemon.LocalEnv(req, c.Env)
+	if len(env) == 0 {
+		env = sessionless(driveEnvFor(sup, t))
+	}
+
+	return sup.RunDrive(daemon.DriveSpec{
+		Argv:   c.Argv,
+		Dir:    dir,
+		Root:   t.Layout.StorageRoot.Path(),
+		Env:    env,
+		Resume: resume,
+	})
+}
+
+func (s *runService) Resume(
+	ctx context.Context,
+	req *connect.Request[f10v1.ResumeRequest],
+) (*connect.Response[f10v1.ResumeResponse], error) {
+	m := req.Msg
+	ctx, c := withCaller(ctx, req, m.GetCaller())
+
+	t, err := callerTarget(ctx, s.sup, m.GetProject(), c, "resume")
+	if err != nil {
+		return nil, err
+	}
+
+	rec, err := resumable(ctx, t, m.GetTask())
+	if err != nil {
+		return nil, err
+	}
+
+	flags := make([]drivectl.FlagValue, 0, len(m.GetAnswers())+2)
+	for _, a := range m.GetAnswers() {
+		flags = append(flags, drivectl.FlagValue{Name: "--answer", Value: a})
+	}
+
+	if m.GetEvery() != nil {
+		flags = append(flags, drivectl.FlagValue{Name: "--every", Value: m.GetEvery().AsDuration().String()})
+	}
+
+	if m.GetParallel() > 0 {
+		flags = append(flags, drivectl.FlagValue{Name: "--parallel", Value: strconv.Itoa(int(m.GetParallel()))})
+	}
+
+	argv, err := drivectl.AppendFlags([]string{"--resume", strconv.Itoa(rec.Number)}, flags...)
+	if err != nil {
+		return nil, invalid(err.Error())
+	}
+
+	// answers start a process of their own, as runBatch says
+	resume := rec.Number
+	if len(m.GetAnswers()) > 0 {
+		resume = 0
+	}
+
+	started, err := s.sup.RunDrive(daemon.DriveSpec{
+		Argv:   argv,
+		Dir:    cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot),
+		Root:   t.Layout.StorageRoot.Path(),
+		Env:    driveCallerEnv(s.sup, c, t),
+		Resume: resume,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	how := "resumed"
+	if started.Attach {
+		how = "is still running, followed"
+	}
+
+	o := output(c)
+	fmt.Fprintf(&o.Stdout, "batch %d %s: f10 daemon logs %s -f follows it\n", rec.Number, how, rec.Lead())
+
+	return connect.NewResponse(&f10v1.ResumeResponse{
+		Batch:    int32(rec.Number), //nolint:gosec // a batch number
+		Log:      started.Log,
+		Attached: started.Attach,
+		Printed:  printedOf(o),
+	}), nil
+}
+
+// resumable is the batch a resume names: the one holding the task, or with
+// no task the project's one stopped batch.
+func resumable(ctx context.Context, t *target.Target, task string) (*drivestore.Record, error) {
+	root := t.Layout.StorageRoot.Path()
+
+	if task = strings.TrimSpace(task); task != "" {
+		l, ok := drive.BatchOf(ctx, t, task)
+		if !ok {
+			return nil, connect.NewError(connect.CodeNotFound,
+				fmt.Errorf("no batch to resume holds %s: f10 status --batches lists every batch", task))
+		}
+
+		return l.Record, nil
+	}
+
+	stopped := drivestore.Stopped(root)
+
+	switch len(stopped) {
+	case 0:
+		return nil, connect.NewError(connect.CodeNotFound,
+			errors.New("no stopped batch in this project: f10 status --batches lists every batch"))
+	case 1:
+		return stopped[0].Record, nil
+	}
+
+	leads := make([]string, 0, len(stopped))
+	for _, l := range stopped {
+		leads = append(leads, l.Lead())
+	}
+
+	return nil, connect.NewError(connect.CodeFailedPrecondition,
+		fmt.Errorf("%d batches are stopped: name one by a task id (%s)", len(stopped), strings.Join(leads, ", ")))
+}
+
+// driveArgv is the command line f10 start takes for a batch given as fields:
 // the deprecated form, still served for clients built against it.
 func driveArgv(m *f10v1.DriveRequest) ([]string, error) {
 	if m.GetPlanFirst() { //nolint:staticcheck // refused by name, for clients built against it
@@ -441,7 +589,7 @@ func driveArgv(m *f10v1.DriveRequest) ([]string, error) {
 	}
 
 	if len(argv) == 0 {
-		return nil, invalid("a drive needs its tasks, or the record to resume")
+		return nil, invalid("a batch needs its tasks, or the record to resume")
 	}
 
 	return argv, nil
@@ -472,7 +620,7 @@ func driveEnvFor(sup Supervisor, t *target.Target) []string {
 		return env
 	}
 
-	return daemon.DriveEnv(os.Environ(), t.Effective.DriveEnv)
+	return daemon.DriveEnv(os.Environ(), t.Effective.BatchEnv)
 }
 
 func (s *runService) Finish(
@@ -613,14 +761,48 @@ func (s *runService) Forward(
 	}), nil
 }
 
+// ListDrives is the old name of ListBatches.
 func (s *runService) ListDrives(
 	ctx context.Context,
 	req *connect.Request[f10v1.ListDrivesRequest],
 ) (*connect.Response[f10v1.ListDrivesResponse], error) {
 	m := req.Msg
-	ctx, c := withCaller(ctx, req, m.GetCaller())
 
-	t, err := callerTarget(ctx, s.sup, m.GetProject(), c, "status")
+	res, err := listBatches(ctx, s.sup, req, m.GetProject(), m.GetAll(), m.GetCaller())
+	if err != nil {
+		return nil, err
+	}
+
+	out := &f10v1.ListDrivesResponse{Printed: res.GetPrinted()}
+	for _, b := range res.GetBatches() {
+		out.Drives = append(out.Drives, &f10v1.DriveRecord{
+			Number: b.GetNumber(), Args: b.GetArgs(), State: b.GetState(), Started: b.GetStarted(),
+		})
+	}
+
+	return connect.NewResponse(out), nil
+}
+
+func (s *runService) ListBatches(
+	ctx context.Context,
+	req *connect.Request[f10v1.ListBatchesRequest],
+) (*connect.Response[f10v1.ListBatchesResponse], error) {
+	m := req.Msg
+
+	res, err := listBatches(ctx, s.sup, req, m.GetProject(), m.GetAll(), m.GetCaller())
+	if err != nil {
+		return nil, err
+	}
+
+	return connect.NewResponse(res), nil
+}
+
+func listBatches(
+	ctx context.Context, sup Supervisor, req connect.AnyRequest, project string, all bool, caller *f10v1.CallerContext,
+) (*f10v1.ListBatchesResponse, error) {
+	ctx, c := withCaller(ctx, req, caller)
+
+	t, err := callerTarget(ctx, sup, project, c, "status")
 	if err != nil {
 		return nil, err
 	}
@@ -639,29 +821,28 @@ func (s *runService) ListDrives(
 		render.LinksFor(&o.Stdout, false),
 		t.RefProject(ctx),
 		root,
-		m.GetAll(),
+		all,
 		drive.RowFinishedFor(ctx, t),
 	); err != nil {
 		return nil, o.Wrap(err)
 	}
 
 	// the same records the table shows
-	if !m.GetAll() && len(recs) > drive.DrivesShown {
+	if !all && len(recs) > drive.DrivesShown {
 		recs = recs[:drive.DrivesShown]
 	}
 
-	out := &f10v1.ListDrivesResponse{Printed: printedOf(o)}
+	out := &f10v1.ListBatchesResponse{Printed: printedOf(o)}
 	for _, rec := range recs {
-		out.Drives = append(out.Drives, driveRecordOf(root, rec))
+		out.Batches = append(out.Batches, batchOf(root, rec))
 	}
 
-	return connect.NewResponse(out), nil
+	return out, nil
 }
 
-// driveRecordOf is a drive record as the API lists it.
-//
-//nolint:lostfield // a summary: the tasks and answers stay in the record
-func driveRecordOf(root string, rec *drivestore.Record) *f10v1.DriveRecord {
+// batchOf is a batch record as the API lists it: a summary, so the answers
+// and each task's standing stay in the record.
+func batchOf(root string, rec *drivestore.Record) *f10v1.Batch {
 	_, running := drivestore.Probe(root, drivestore.DriveKey(rec.Number))
 
 	st := "stopped"
@@ -675,34 +856,68 @@ func driveRecordOf(root string, rec *drivestore.Record) *f10v1.DriveRecord {
 		st = "done"
 	}
 
-	return &f10v1.DriveRecord{
-		Number:  int32(rec.Number), //nolint:gosec // a drive number
+	tasks := make([]string, 0, len(rec.Tasks))
+	for _, task := range rec.Tasks {
+		tasks = append(tasks, task.ID)
+	}
+
+	return &f10v1.Batch{
+		Number:  int32(rec.Number), //nolint:gosec // a batch number
 		Args:    rec.Args,
 		State:   st,
 		Started: timestamppb.New(rec.Created),
+		Tasks:   tasks,
 	}
 }
 
+// CancelDrive is the old name of StopBatch, and still takes a batch number.
 func (s *runService) CancelDrive(
 	ctx context.Context,
 	req *connect.Request[f10v1.CancelDriveRequest],
 ) (*connect.Response[f10v1.CancelDriveResponse], error) {
 	m := req.Msg
-	ctx, c := withCaller(ctx, req, m.GetCaller())
 
-	if m.GetDrive() <= 0 && strings.TrimSpace(m.GetTask()) == "" {
-		return nil, invalid("stop needs a drive number or a task id")
-	}
-
-	t, err := callerTarget(ctx, s.sup, m.GetProject(), c, "stop")
+	printed, err := stopBatch(ctx, s.sup, req, m.GetProject(), int(m.GetDrive()), m.GetTask(), m.GetCaller())
 	if err != nil {
 		return nil, err
 	}
 
-	root, n, now := t.Layout.StorageRoot.Path(), int(m.GetDrive()), time.Now()
+	return connect.NewResponse(&f10v1.CancelDriveResponse{Printed: printed}), nil
+}
+
+func (s *runService) StopBatch(
+	ctx context.Context,
+	req *connect.Request[f10v1.StopBatchRequest],
+) (*connect.Response[f10v1.StopBatchResponse], error) {
+	m := req.Msg
+
+	printed, err := stopBatch(ctx, s.sup, req, m.GetProject(), 0, m.GetTask(), m.GetCaller())
+	if err != nil {
+		return nil, err
+	}
+
+	return connect.NewResponse(&f10v1.StopBatchResponse{Printed: printed}), nil
+}
+
+func stopBatch(
+	ctx context.Context, sup Supervisor, req connect.AnyRequest, project string, n int, task string,
+	caller *f10v1.CallerContext,
+) (*f10v1.Printed, error) {
+	ctx, c := withCaller(ctx, req, caller)
+
+	if n <= 0 && strings.TrimSpace(task) == "" {
+		return nil, invalid("stop needs a task id of the batch")
+	}
+
+	t, err := callerTarget(ctx, sup, project, c, "stop")
+	if err != nil {
+		return nil, err
+	}
+
+	root, now := t.Layout.StorageRoot.Path(), time.Now()
 
 	if n <= 0 {
-		if n, err = taskDrive(ctx, t, root, m.GetTask()); err != nil {
+		if n, err = taskDrive(ctx, t, root, task); err != nil {
 			return nil, err
 		}
 	}
@@ -714,10 +929,10 @@ func (s *runService) CancelDrive(
 
 	drive.CloseDriveAsks(ctx, &o.Stdout, asks.Dir(), root, n, now)
 
-	return connect.NewResponse(&f10v1.CancelDriveResponse{Printed: printedOf(o)}), nil
+	return printedOf(o), nil
 }
 
-// startDrive runs a flow start as the drive it is, as Drive does.
+// startDrive runs a flow start as the batch it is, as StartBatch does.
 func (s *runService) startDrive(
 	t *target.Target, c *f10v1.CallerContext, argv []string,
 ) (*connect.Response[f10v1.StartResponse], error) {
@@ -737,34 +952,35 @@ func (s *runService) startDrive(
 	}
 
 	o := output(c)
-	fmt.Fprintf(&o.Stdout, "drive %d %s: f10 start %s\nlog: %s\n",
+	fmt.Fprintf(&o.Stdout, "batch %d %s: f10 start %s\nlog: %s\n",
 		started.Drive, how, strings.Join(argv, " "), started.Log)
 
 	return connect.NewResponse(&f10v1.StartResponse{
-		Drive:    int32(started.Drive), //nolint:gosec // a drive number
+		Drive:    int32(started.Drive), //nolint:gosec,staticcheck // the old name, for clients built against it
+		Batch:    int32(started.Drive), //nolint:gosec // a batch number
 		Log:      started.Log,
 		Attached: started.Attach,
 		Printed:  printedOf(o),
 	}), nil
 }
 
-// taskDrive is the number of the drive holding the task's lease: a running
-// drive, since a stopped one prompts nothing.
+// taskDrive is the number of the batch a task names: the running one
+// holding its lease, else the newest stopped one whose record holds it.
 func taskDrive(ctx context.Context, t *target.Target, root, task string) (int, error) {
-	r, err := t.Reference(ctx, strings.TrimSpace(task))
-	if err != nil {
-		return 0, invalid(err.Error())
+	task = strings.TrimSpace(task)
+
+	if r, err := t.Reference(ctx, task); err == nil {
+		if holder, held := drivestore.Probe(root, r.Head().ID); held && holder.Drive > 0 {
+			return holder.Drive, nil
+		}
 	}
 
-	id := r.Head().ID
-
-	holder, held := drivestore.Probe(root, id)
-	if !held || holder.Drive <= 0 {
-		return 0, connect.NewError(connect.CodeNotFound,
-			fmt.Errorf("no running drive holds %s: f10 status --drives lists them", id))
+	if l, ok := drive.BatchOf(ctx, t, task); ok {
+		return l.Number, nil
 	}
 
-	return holder.Drive, nil
+	return 0, connect.NewError(connect.CodeNotFound,
+		fmt.Errorf("no batch holds %s: f10 status --batches lists them", task))
 }
 
 // statusReport reads what f10 status shows: every live run with all, the

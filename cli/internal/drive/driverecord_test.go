@@ -46,7 +46,7 @@ func TestDriveSkipsATaskAnotherDriveOwns(t *testing.T) {
 		t.Fatalf("err = %v, want exit %d\n%s", err, ui.ExitHalted, fx.out.String())
 	}
 
-	want := "GH-1:    owned by drive 7 (pid " + strconv.Itoa(os.Getpid()) + ")"
+	want := "GH-1:    owned by batch 7 (pid " + strconv.Itoa(os.Getpid()) + ")"
 	if !strings.Contains(fx.out.String(), want) {
 		t.Errorf("output lacks %q:\n%s", want, fx.out.String())
 	}
@@ -78,7 +78,7 @@ func TestDriveRecordIsPickedUpByTheSameCommand(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 
-	if want := `answer with: f10 start --resume 1 --answer "1. … 2. …"`; !strings.Contains(fx.out.String(), want) {
+	if want := `answer with: f10 resume GH-1 --answer "1. … 2. …"`; !strings.Contains(fx.out.String(), want) {
 		t.Errorf("output lacks %q:\n%s", want, fx.out.String())
 	}
 
@@ -119,8 +119,8 @@ func TestDriveRecordIsPickedUpByTheSameCommand(t *testing.T) {
 		t.Fatalf("%v\n%s", err, fx.out.String())
 	}
 
-	if !strings.HasPrefix(fx.out.String(), "drive 1\n") {
-		t.Errorf("the rerun did not pick up drive 1:\n%s", fx.out.String())
+	if !strings.HasPrefix(fx.out.String(), "batch 1\n") {
+		t.Errorf("the rerun did not pick up batch 1:\n%s", fx.out.String())
 	}
 
 	rec, err = drivestore.Read(root, 1)
@@ -206,7 +206,7 @@ func TestOpenRecordKeepsAnswersNotTaken(t *testing.T) {
 		Argv: []string{"GH-1", "GH-2"},
 		Now:  time.Now,
 	}
-	if err := second.openRecord(nil); err == nil || !strings.Contains(err.Error(), "drive 1 is running") {
+	if err := second.openRecord(nil); err == nil || !strings.Contains(err.Error(), "batch 1 is running") {
 		t.Errorf("second openRecord = %v", err)
 	}
 }
@@ -340,7 +340,7 @@ func TestDriveStopsWhenCancelled(t *testing.T) {
 			t.Error(err)
 		}
 
-		if !strings.Contains(out.String(), "drive 1 stopped (GH-1): pid") {
+		if !strings.Contains(out.String(), "batch 1 stopped (GH-1): pid") {
 			t.Errorf("cancel said %q", out.String())
 		}
 	}
@@ -362,7 +362,7 @@ func TestDriveStopsWhenCancelled(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, want := range []string{"drive 1 ", "  cancelled\n", "f10 start GH-1 judge ship", "└─ GH-1:  cancelled"} {
+	for _, want := range []string{"batch 1 ", "  cancelled\n", "f10 start GH-1 judge ship", "└─ GH-1:  cancelled"} {
 		if !strings.Contains(list.String(), want) {
 			t.Errorf("list lacks %q:\n%s", want, list.String())
 		}

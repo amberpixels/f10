@@ -59,7 +59,7 @@ func inSession(ctx context.Context, sup Supervisor, c *f10v1.CallerContext, t *t
 
 	var extra []string
 	if t != nil {
-		extra = t.Effective.DriveEnv
+		extra = t.Effective.BatchEnv
 	}
 
 	env := daemon.DriveEnv(c.GetEnv(), extra)

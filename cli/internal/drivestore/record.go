@@ -130,7 +130,7 @@ func recordPath(root string, n int) string {
 func Create(root string, rec *Record) error {
 	dir := filepath.Join(root, Dir)
 	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return fmt.Errorf("drive record: %w", err)
+		return fmt.Errorf("batch record: %w", err)
 	}
 
 	for range 100 {
@@ -146,7 +146,7 @@ func Create(root string, rec *Record) error {
 
 		b, err := yaml.Marshal(rec)
 		if err != nil {
-			return fmt.Errorf("drive record: %w", err)
+			return fmt.Errorf("batch record: %w", err)
 		}
 
 		f, err := os.OpenFile(recordPath(root, rec.Number), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
@@ -155,7 +155,7 @@ func Create(root string, rec *Record) error {
 		}
 
 		if err != nil {
-			return fmt.Errorf("drive record: %w", err)
+			return fmt.Errorf("batch record: %w", err)
 		}
 
 		_, err = f.Write(b)
@@ -164,29 +164,29 @@ func Create(root string, rec *Record) error {
 		}
 
 		if err != nil {
-			return fmt.Errorf("drive record %d: %w", rec.Number, err)
+			return fmt.Errorf("batch record %d: %w", rec.Number, err)
 		}
 
 		return nil
 	}
 
-	return errors.New("drive record: no free number after 100 tries")
+	return errors.New("batch record: no free number after 100 tries")
 }
 
 // Read reads record n.
 func Read(root string, n int) (*Record, error) {
 	b, err := os.ReadFile(recordPath(root, n))
 	if errors.Is(err, fs.ErrNotExist) {
-		return nil, fmt.Errorf("no drive %d: f10 status --drives shows them", n)
+		return nil, fmt.Errorf("no batch %d: f10 status --batches shows them", n)
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("drive %d: %w", n, err)
+		return nil, fmt.Errorf("batch %d: %w", n, err)
 	}
 
 	var rec Record
 	if err := yaml.Unmarshal(b, &rec); err != nil {
-		return nil, fmt.Errorf("drive %d: %w", n, err)
+		return nil, fmt.Errorf("batch %d: %w", n, err)
 	}
 
 	rec.Number = n
@@ -213,11 +213,11 @@ func Update(root string, n int, change func(*Record)) (*Record, error) {
 
 	b, err := yaml.Marshal(rec)
 	if err != nil {
-		return nil, fmt.Errorf("drive %d: %w", n, err)
+		return nil, fmt.Errorf("batch %d: %w", n, err)
 	}
 
 	if err := fsx.WriteFile(recordPath(root, n), b, 0o600); err != nil {
-		return nil, fmt.Errorf("drive %d: %w", n, err)
+		return nil, fmt.Errorf("batch %d: %w", n, err)
 	}
 
 	return rec, nil
@@ -230,11 +230,11 @@ const recordLockWait = 2 * time.Second
 func lockRecord(root string, n int) (func(), error) {
 	release, err := flock.Wait(lockPath(root, "record-"+strconv.Itoa(n)), recordLockWait)
 	if errors.Is(err, flock.ErrHeld) {
-		return nil, fmt.Errorf("drive %d: its record stayed locked", n)
+		return nil, fmt.Errorf("batch %d: its record stayed locked", n)
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("drive %d: %w", n, err)
+		return nil, fmt.Errorf("batch %d: %w", n, err)
 	}
 
 	return release, nil
@@ -285,7 +285,7 @@ func numbers(root string) ([]int, error) {
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("drive records: %w", err)
+		return nil, fmt.Errorf("batch records: %w", err)
 	}
 
 	var ns []int

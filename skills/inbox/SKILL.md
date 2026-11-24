@@ -1,6 +1,6 @@
 ---
 name: inbox
-description: "f10 inbox skill - the questions driven agents are waiting on in this project (every project with --all), put to the user in one questionnaire and answered: a drive's task resumes its drive, any other agent gets the answer as its next prompt. Use when the user says \"/f10:inbox\" (formerly /f10:asks), asks what agents are waiting on or asking, or wants to answer the open asks the status line shows."
+description: "f10 inbox skill - the questions driven agents are waiting on in this project (every project with --all), put to the user in one questionnaire and answered: a batch's task resumes its batch, any other agent gets the answer as its next prompt. Use when the user says \"/f10:inbox\" (formerly /f10:asks), asks what agents are waiting on or asking, or wants to answer the open asks the status line shows."
 allowed-tools: Bash, AskUserQuestion
 argument-hint: "[task-id] [--all]"
 ---
@@ -34,4 +34,4 @@ This skill reads the inbox, asks the user, and writes the answers (`${CLAUDE_PLU
    Pass each answer as the option's text, quoted; free text the user typed goes in as typed.
    An answer refused because another way in answered first (`already answered ...`) is a normal end for that ask: name who answered.
 4. **Report** per `${CLAUDE_PLUGIN_ROOT}/conventions/report.md`: one row per task answered, the id as the label and what was sent as the value, plain-fenced if a value would break the highlighting.
-   Under it, one line per task saying where the answer went, as the command printed it (sent to the agent, drive `<n>` resumed, or left to a drive still running).
+   Under it, one line per task saying where the answer went, as the command printed it (sent to the agent, batch `<n>` resumed, or left to a batch still running).

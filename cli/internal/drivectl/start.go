@@ -23,6 +23,8 @@ const (
 	// MaybePickup is a bare #n, a PR or a task: the host decides, and a
 	// task runs as FlowStart.
 	MaybePickup
+	// ProposeStart prints a proposal for the tasks and starts nothing.
+	ProposeStart
 )
 
 // OnceArgs is a discussion's or a pickup's command line.
@@ -57,6 +59,15 @@ func (s StartArgs) Flow() (DriveArgs, error) { return ParseDriveArgs(s.argv) }
 // naming a PR make a one-shot start. Anything else is a flow start, which
 // takes ids, a range and the drive's flags.
 func ParseStart(argv []string) (StartArgs, error) {
+	switch proposes, err := Proposes(argv); {
+	case err != nil:
+		return StartArgs{}, err
+	case proposes:
+		a, err := ParsePropose(argv)
+
+		return StartArgs{Kind: ProposeStart, Drive: a, argv: argv}, err
+	}
+
 	named := false
 
 	for _, tok := range argv {

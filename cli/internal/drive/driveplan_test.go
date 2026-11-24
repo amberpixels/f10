@@ -92,7 +92,7 @@ func writeSheet(t *testing.T, body string) string {
 func planArgs(t *testing.T, args ...string) drivectl.DriveArgs {
 	t.Helper()
 
-	a, err := drivectl.ParseDrivePlan(args)
+	a, err := drivectl.ParsePropose(args)
 	if err != nil {
 		t.Fatal(err)
 	}

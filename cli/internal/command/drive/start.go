@@ -20,7 +20,7 @@ import (
 )
 
 // StartCommand is the start verb. A task, a list, a range or a parent runs
-// through its flow in a drive the daemon steers. A discussion or a
+// through its flow in a batch the daemon steers. A discussion or a
 // picked-up PR opens one agent prompted once, because it waits for a person.
 // Flags are parsed by hand, because a range is `GH-12 -- GH-15`.
 func StartCommand() *cli.Command {
@@ -28,7 +28,8 @@ func StartCommand() *cli.Command {
 		Name:  "start",
 		Usage: "start tasks: each in a worktree, a Herdr workspace and an agent, run through the flow",
 		ArgsUsage: "<id>[-suffix][:profile]... | <id>+<id>... | <id> -- <id> | <PR url | #n> [note...]  " +
-			drive.DriveUsage() + " [--discuss] [--task TASK-ID]\n   f10 start --resume N " + drive.ResumeUsage(),
+			drive.DriveUsage() + " [--discuss] [--task TASK-ID]\n" +
+			"   f10 start <id>... | <parent> --propose [--facts FILE] [--json] [--hint]",
 		Description: "Each task runs the default flow, or the one --flow or --local names (f10 flow lists them): " +
 			"plan when the flow has a plan entry and the task no plan file, then ship, " +
 			"then finish when the flow ends in it and the pace does not turn it off. A rerun keeps the flow a task's branch records.\n" +
@@ -41,17 +42,23 @@ func StartCommand() *cli.Command {
 			"and a halt stops only its dependents.\n" +
 			"--parallel N caps the tasks running a skill at once (default: half the CPU cores, 2 to 8), " +
 			"and the agents open to twice N; the rest queue in the start's order. A task on an ask, its base or " +
-			"its finish frees its slot. A rerun or --resume keeps the cap unless it passes a new one.\n" +
+			"its finish frees its slot. A rerun or f10 resume keeps the cap unless it passes a new one.\n" +
 			"--agent starts every agent on PROFILE (kind:model:effort, or a part), laid over the agents map's default; " +
 			"--model is the model-only form; <id>:<profile> starts one task's agent on its own, which wins.\n" +
-			"Each start keeps a drive record under the storage root, picked up by the same command or --resume N, " +
-			"and holds a lease on each task: a task another drive holds is skipped, and f10 finish refuses it. " +
-			"f10 status --drives lists the drives; f10 stop stops one.\n" +
-			"The drive runs in the per-user f10 daemon, started when none runs: this command prints its progress, " +
-			"Ctrl+C stops only that, and rerunning it follows the drive again. --foreground runs it in this process.\n" +
+			"The tasks one start runs are a batch, kept as a record under the storage root. The same command picks it up, " +
+			"and so does f10 resume <any of its tasks>. The batch holds a lease on each task: a task another batch " +
+			"holds is skipped, and f10 finish refuses it. " +
+			"f10 status --batches lists the batches; f10 stop <task> stops one.\n" +
+			"The batch runs in the per-user f10 daemon, started when none runs: this command prints its progress, " +
+			"Ctrl+C stops only that, and rerunning it follows the batch again. --foreground runs it in this process.\n" +
+			"--propose starts nothing: it prints a proposal for the tasks, which is the bundles, the order, " +
+			"the After: lines to add and the one command to run. Small tasks of one kind sharing files or an area " +
+			"are bundled under bundle_max_lines, and the rest stay alone with the reason. --facts FILE lays the " +
+			"start skill's estimates on top, --json prints the proposal for the skill, and --hint prints one line " +
+			"when a bundle saves a CI wait, else nothing.\n" +
 			"--discuss opens one agent in one worktree, which reads the tasks and waits: a parent's, showing its subtask tree, " +
 			"or the first id's, reading every id listed. A start run in that worktree continues there as its first group, " +
-			"the branch and agent renamed to the group's lead, and returns once the daemon has the drive. " +
+			"the branch and agent renamed to the group's lead, and returns once the daemon has the batch. " +
 			"A PR url or #n picks that PR up, and --task names its task when the PR names none. " +
 			"Words after the ids are a note for that agent.\n" +
 			"A start whose every task is closed, none with a branch, opens a discussion instead: " +
@@ -77,7 +84,14 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	switch sa.Kind {
+	case drivectl.ProposeStart:
+		return runPropose(ctx, cmd, sa.Drive)
 	case drivectl.FlowStart:
+		// the daemon's own child passes --resume with --foreground
+		if sa.Drive.Resume > 0 && !sa.Drive.Fore {
+			fmt.Fprintln(cmd.ErrWriter, drivectl.Renamed("f10 start --resume", "f10 resume <task-id>"))
+		}
+
 		return flowStart(ctx, cmd, argv, sa.Drive)
 	case drivectl.MaybePickup:
 		t, err := target.For(ctx, cmd)
@@ -105,7 +119,7 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 	return startOnce(ctx, cmd, onceRequest(sa.Once))
 }
 
-// flowStart runs a as a drive, or as a discussion when every task is closed.
+// flowStart runs a as a batch, or as a discussion when every task is closed.
 func flowStart(ctx context.Context, cmd *cli.Command, argv []string, a drivectl.DriveArgs) error {
 	if req := closedDiscussion(ctx, cmd, a); req != nil {
 		return startOnce(ctx, cmd, req)

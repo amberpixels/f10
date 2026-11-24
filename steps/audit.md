@@ -14,8 +14,8 @@ It reads plans and lore, because recorded intent is what tells a deliberate diff
 It reads the ledger's record of past runs too, through `f10 audit map`, because where changing code was costly is where to look first.
 
 **Process metrics say where to look, and are never findings.**
-"Review rounds are high in `drive/`" is not a finding.
-"The base-resolution logic exists in three copies, which is why every drive change draws catchup findings" is one, because it has a `file:line`, a design and a fix.
+"Review rounds are high in `cli/internal/stack/`" is not a finding.
+"The base-resolution logic exists in three copies, which is why every change there draws catchup findings" is one, because it has a `file:line`, a design and a fix.
 Judging the process itself is not the audit's job.
 
 1. **The window.**

@@ -13,6 +13,7 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
+	"google.golang.org/protobuf/types/descriptorpb"
 
 	agentsv1 "github.com/amberpixels/f10/cli/gen/agents/v1"
 	"github.com/amberpixels/f10/cli/gen/agents/v1/agentsv1connect"
@@ -43,9 +44,20 @@ func TestEveryUnaryMethodIsATool(t *testing.T) {
 						continue
 					}
 
+					proc := "/" + string(svc.FullName()) + "/" + string(m.Name())
+
+					// a deprecated method is an old name kept for older clients, and no tool
+					if opts, ok := m.Options().(*descriptorpb.MethodOptions); ok && opts.GetDeprecated() {
+						if have[proc] {
+							t.Errorf("%s is deprecated and still an MCP tool: run just proto::gen", proc)
+						}
+
+						continue
+					}
+
 					methods++
 
-					if proc := "/" + string(svc.FullName()) + "/" + string(m.Name()); !have[proc] {
+					if !have[proc] {
 						t.Errorf("%s has no MCP tool: run just proto::gen", proc)
 					}
 				}

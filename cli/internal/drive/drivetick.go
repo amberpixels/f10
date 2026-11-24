@@ -50,7 +50,7 @@ func Drive(ctx context.Context, w io.Writer, in *DriveInput) (err error) {
 	}
 
 	if err := in.recordLaunch(); err != nil {
-		notes = append(notes, "the drive was not recorded as this session's launch: "+err.Error())
+		notes = append(notes, "the batch was not recorded as this session's launch: "+err.Error())
 	}
 
 	// runs after releaseAll: an answer claimed while this drive still held
@@ -76,14 +76,13 @@ func Drive(ctx context.Context, w io.Writer, in *DriveInput) (err error) {
 	in.takeInbox(tasks)
 
 	if in.Rec != nil {
-		fmt.Fprintf(w, "drive %d\n", in.Rec.Number)
+		fmt.Fprintf(w, "batch %d\n", in.Rec.Number)
 		in.savePending(nil)
 
 		// the daemon running this drive learns its number here
-		if path := os.Getenv(daemon.NumberFileEnv); path != "" {
-			//nolint:gosec // the daemon names the path, as this same user
+		if path := daemon.EnvOf(daemon.NumberFileEnv); path != "" {
 			if err := os.WriteFile(path, []byte(strconv.Itoa(in.Rec.Number)+"\n"), 0o600); err != nil {
-				fmt.Fprintf(w, "  telling the daemon the drive's number: %v\n", err)
+				fmt.Fprintf(w, "  telling the daemon the batch's number: %v\n", err)
 			}
 		}
 	}
@@ -140,7 +139,7 @@ func Drive(ctx context.Context, w io.Writer, in *DriveInput) (err error) {
 		}
 
 		if in.Draining.Load() {
-			fmt.Fprintf(w, "drive %d drained for an upgrade; the new daemon resumes it\n", in.number())
+			fmt.Fprintf(w, "batch %d drained for an upgrade; the new daemon resumes it\n", in.number())
 
 			return cli.Exit("", daemon.ExitDrained)
 		}

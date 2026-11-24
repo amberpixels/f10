@@ -221,7 +221,7 @@ const (
 	viaShip   = "in ship"
 	viaDriven = "driven"
 	viaManual = "manual"
-	viaDrive  = "drive" // finish, which drive runs in its own process
+	viaDrive  = "batch" // finish, which the batch runs in its own process
 	viaHost   = "on host"
 )
 

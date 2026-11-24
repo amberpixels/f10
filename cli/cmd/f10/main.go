@@ -94,6 +94,7 @@ func newApp() *cli.Command {
 			boardcmd.Command(),
 			atlascmd.Command(),
 			drivecmd.StartCommand(),
+			drivecmd.ResumeCommand(),
 			startcmd.StopCommand(),
 			startcmd.ForwardCommand(),
 			drivecmd.Command(),
