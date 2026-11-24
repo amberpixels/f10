@@ -718,9 +718,9 @@ func TestSeedChainsADigitPrefix(t *testing.T) {
 	}
 }
 
-// The open asks show on the status line as the first asking task's id plus
-// a count of the rest, with a run and without one: a session that recorded
-// its project shows that project's alone.
+// The status line shows the first asking task's id and a count of the rest,
+// with a run and without one. A session that recorded its project shows
+// that project's asks alone.
 func TestRenderShowsAsks(t *testing.T) {
 	t.Parallel()
 

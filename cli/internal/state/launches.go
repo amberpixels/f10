@@ -14,8 +14,8 @@ const (
 	launchesExt = ".launches"
 	projectExt  = ".project"
 	// legacyAsksExt and legacyInboxExt name the marks of the asks a session
-	// was told, which no session is told any more; still pruned so old files
-	// go. Drop them in v0.72.
+	// was told. No session is told any more, but old files are still pruned.
+	// Drop them in v0.72.
 	legacyAsksExt  = ".asks"
 	legacyInboxExt = ".inbox"
 )

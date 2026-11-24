@@ -126,7 +126,8 @@ Rerunning the same arguments follows the drive already running; from another ses
    Its first line is `drive <n>`, the record it keeps; rerunning the same arguments picks that record up.
    When it exits, read its output and act on the exit code.
    A finished task's `<id> handoff:` lines are markdown: on every exit, relay them verbatim beneath the report block, outside the fence.
-   A drive that waited on an ask prints a report each time it stops, and a task that finished before the ask has its handoff only in that earlier report, so take the handoff lines from the whole output.
+   A drive that waited on an ask prints a report each time it stops.
+   A task that finished before the ask has its handoff only in that earlier report, so take the handoff lines from the whole output.
 2. **Exit 0**: every task went through its flow.
    Print the report block (one row per task) in a fenced `yaml` block and any line beneath it, and stop.
 3. **The command waits through asks.**

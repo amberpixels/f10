@@ -95,7 +95,7 @@ type child struct {
 	env     []string
 	cmd     *exec.Cmd
 	done    chan struct{}
-	indexed bool // its log is in the logs index; guarded by mu
+	indexed bool // its log is in the logs index, guarded by mu
 }
 
 // drained is a drive a drain stopped, for the next daemon to resume.
@@ -505,7 +505,7 @@ func (s *Server) numbered(c *child, n int) {
 	s.index(c)
 }
 
-// index appends c's log to the logs index once; the caller holds mu.
+// index appends c's log to the logs index once. The caller holds mu.
 func (s *Server) index(c *child) {
 	if c.indexed {
 		return

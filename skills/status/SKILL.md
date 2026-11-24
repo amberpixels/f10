@@ -38,10 +38,13 @@ Never reorder it, summarise it, or turn it into a table, because the binary alre
    A tree goes in a plain fence, because its titles break the highlighting.
    A failure is printed as is and ends the turn.
 2. **When the output carries an `ask` row**, the agent is driven (`${CLAUDE_PLUGIN_ROOT}/modes/driven.md`) and stopped on that question.
-   The block already shows the question, so add one line under it: the user can answer by replying here, or in the agent's own pane.
-   Never open an `AskUserQuestion` for it, because the user asked where the run is, not to answer it now, and the question may already be answered in the pane.
+   The block already shows the question.
+   Add one line under it saying the user can answer by replying here, or in the agent's own pane.
+   Never open an `AskUserQuestion` for it, because the user asked where the run is rather than to answer it now.
+   It is also not asked here because the question may already be answered in the pane.
    Then stop.
-   When the user's next message answers it, write the answers through the inbox, numbered as the ask was, each answer the option's text, quoted:
+   When the user's next message answers it, write the answers through the inbox.
+   Number them as the ask was, and quote each answer as the option's text:
 
    ```
    f10 inbox answer <task-id> --by skill 1=<answer> 2=<answer>

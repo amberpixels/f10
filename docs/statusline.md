@@ -37,8 +37,11 @@ f10-state.sh doctor   # where state lives, whether the symlink is in place, what
 | <img src="glyphs/blocked.svg" width="14" alt="blocked"> | blocked: a judge verdict ended the run, so nothing broke and the user decided |
 
 A stopped run adds the step it stopped on, so `◉ ●` <img src="glyphs/blocked.svg" width="14" alt="blocked"> `judge` reads "blocked at judge".
-Open asks of this session's project add the first asking task's id, in file name order, and a count of the rest: ` f10 · 󰚇 FT-12` for one, ` f10 · 󰚇 FT-12 +2` for three, shown with or without a run.
-The id is a link to its ask's file and `+2` a link to the inbox directory, so Ctrl+click opens the question, or a picker over the open asks, in a terminal that supports OSC 8 links; any other shows plain text.
+Open asks of this session's project add the first asking task's id, in file name order, and a count of the rest.
+It reads ` f10 · 󰚇 FT-12` for one ask and ` f10 · 󰚇 FT-12 +2` for three, with or without a run.
+The id links to its ask's file, and `+2` links to the inbox directory.
+In a terminal that supports OSC 8 links, Ctrl+click opens the question, or a picker over the open asks.
+Any other terminal shows plain text.
 The segment means a driven agent is waiting on you: answer in its pane, with `f10 inbox` or `/f10:inbox`.
 Its icon is md-inbox (U+F0687).
 The session start hook writes the project to `<session>.project` beside the run state, as the hash every ask's file name starts with.

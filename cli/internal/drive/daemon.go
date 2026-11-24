@@ -202,7 +202,7 @@ func setDriveParallel(w io.Writer, root string, argv []string, a drivectl.DriveA
 // followDrive follows the drive until it exits, into the next daemon when
 // an upgrade drained it, and through its asks into the run an answer
 // resumes. root is the storage root the daemon keys the drive's logs by.
-// spawn starts a daemon; nil is this binary's.
+// spawn starts a daemon, and nil is this binary's.
 func followDrive(
 	ctx context.Context,
 	w io.Writer,
@@ -274,7 +274,7 @@ func followDrive(
 }
 
 // askPoll is how often a drive stopped on its asks is checked for the run
-// an answer resumes; tests shorten it.
+// an answer resumes. Tests shorten it.
 var askPoll = 2 * time.Second
 
 // driveGone reports a drive no answer can resume: f10 stop cancelled its
@@ -285,9 +285,9 @@ var driveGone = func(root string, n int) bool {
 	return err != nil || rec.Cancelled != nil
 }
 
-// followAsks tails log, and when the drive stops on its asks, waits for
-// the run an answer resumes and tails that one too, since a rerun would
-// only stop on the same asks again. It returns the last run's exit.
+// followAsks tails log. When the drive stops on its asks, it also tails the
+// run an answer resumes, because a rerun would stop on the same asks again.
+// It returns the last run's exit.
 func followAsks(ctx context.Context, w io.Writer, dir, root, log string) (daemon.Exit, error) {
 	for {
 		exit, err := TailLog(ctx, w, log)
@@ -322,7 +322,7 @@ func followAsks(ctx context.Context, w io.Writer, dir, root, log string) (daemon
 }
 
 // awaitResume waits for drive n to run again after last, and returns the
-// new run's log; "" once the drive is gone. It reads the daemon's log index,
+// new run's log, or "" once the drive is gone. It reads the daemon's log index,
 // not its live runs, so a resumed run that ends between two looks is
 // followed all the same.
 func awaitResume(ctx context.Context, dir, root string, n int, last string) (string, error) {

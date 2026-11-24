@@ -26,7 +26,7 @@
 #   f10-state.sh pipeline <step>...     declare the ship pipeline's steps, the last one final
 #   f10-state.sh show                   the current run, human-readable (`f10 status` says more)
 #   f10-state.sh clear | prune          drop this session's state | drop long-dead sessions
-#   f10-state.sh render [<session id>]  the status-line segment, open asks shown; status-line JSON on stdin
+#   f10-state.sh render [<session id>]  the status-line segment with the open asks, from the status-line JSON on stdin
 #   f10-state.sh doctor                 is any of this actually wired up?
 #
 # A fixed path, not ${CLAUDE_PLUGIN_DATA}: the renderer runs from the user's `statusLine` command,
