@@ -348,7 +348,7 @@ func TestCommandSpelling(t *testing.T) {
 }
 
 // a join on an open task outside the list is refused by the start, so the
-// open base is kept alone; a finished one is no wait and the join stays
+// open base is kept alone. A finished one is no wait, and the join stays.
 func TestJoinOnAnOutsideBase(t *testing.T) {
 	t.Parallel()
 

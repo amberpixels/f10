@@ -71,9 +71,11 @@ It runs no step, except **propose** under `--propose`.
 
 1. **Settle the tasks.**
    Ids and parents go on as typed.
-   A description, such as "today we need the export fix and the two status tasks", goes to `f10 task search <query>`, one search for each thing it names, all in one Bash call.
+   A description, such as "today we need the export fix and the two status tasks", goes to `f10 task search <query>`.
+   Run one search for each thing it names, all in one Bash call.
    When the open hits are one clear set, take them and name them in one line.
-   Otherwise ask once, in one `AskUserQuestion`: a multi-select question for each thing named, its open hits as options (`<id> <title>`, cut to fit), four at most per question.
+   Otherwise ask once, in one `AskUserQuestion`, with a multi-select question for each thing named.
+   Its options are the open hits as `<id> <title>`, cut to fit, four at most per question.
    No open hit for a thing is one line saying so, and the rest go on.
 2. **Run the propose step**: `f10-load-project.sh propose`, then follow it with the tasks and the start flags given.
 3. **Stop** at the proposal, with one line offering to run its command.

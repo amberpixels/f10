@@ -40,9 +40,9 @@ type PlanResult struct {
 	Extra []string // the drive flags carried onto the command
 }
 
-// A SheetTask is one task's row in the facts sheet the propose step writes:
-// what only a read of the task against the code can tell, and the user's
-// edits to the proposal.
+// A SheetTask is one task's row in the facts sheet the propose step writes.
+// It holds what only a read of the task against the code can tell, and the
+// user's edits to the proposal.
 type SheetTask struct {
 	Kind     string   `json:"kind,omitempty"`
 	Areas    []string `json:"areas,omitempty"`

@@ -1,7 +1,7 @@
-// Package driveplan proposes how to start a set of tasks: which to bundle on
-// one branch, which to leave alone, and which entry waits for which, spelled
-// in the start command. It reads nothing itself, so every rule is a table
-// test; gathering lives in drive.
+// Package driveplan proposes how to start a set of tasks. It says which to
+// bundle on one branch and which to leave alone, and spells which entry
+// waits for which in the start command. It reads nothing itself, so every
+// rule is a table test. Gathering lives in drive.
 package driveplan
 
 import (
@@ -49,7 +49,7 @@ type Input struct {
 	MaxLines int // bundle_max_lines
 	Parallel int // the ceiling on --parallel, 0 for none
 	// Joins says the run's flow finishes, so an entry may wait on several
-	// bases; f10 start refuses a join otherwise, so only the first is kept
+	// bases. f10 start refuses a join otherwise, so only the first is kept.
 	Joins bool
 	// Finished is the bases outside the list that are finished, the only
 	// outside bases f10 start lets a join wait on
@@ -74,7 +74,7 @@ type Base struct {
 	Dropped bool   `json:"dropped,omitempty"` // the flow does not finish, so the join was cut to one base
 }
 
-// Token is how the proposal's rows name the entry; the command adds its bases.
+// Token is how the proposal's rows name the entry. The command adds its bases.
 func (e Entry) Token() string {
 	tok := strings.Join(e.IDs, "+")
 	if e.Profile != "" {
@@ -114,8 +114,8 @@ type Formed struct {
 type Plan struct {
 	Levels []Level  `json:"levels"`
 	Args   []string `json:"args"` // the start command's arguments, the order spelled with , and @
-	// Unordered is a line per task whose order the user dropped while its
-	// body still names a base, which the start would read back
+	// Unordered is a line per task whose order the user dropped. Its body
+	// still names a base, which the start would read back.
 	Unordered []string `json:"unordered,omitempty"`
 	Parallel  int      `json:"parallel"`
 	Waits     int      `json:"ciWaitsSaved"`
@@ -127,8 +127,8 @@ type Plan struct {
 	Formed Formed `json:"formed"`
 }
 
-// Propose applies the rules: alone first, then bundles within a class by
-// shared files or areas, split at the cap, then the bases and levels.
+// Propose applies the rules in order. Alone comes first, then bundles within
+// a class by shared files or areas, split at the cap, then bases and levels.
 func Propose(in Input) (Plan, error) {
 	if in.MaxLines <= 0 {
 		return Plan{}, errors.New("the bundle cap must be a positive number of lines")
@@ -430,10 +430,9 @@ func bundle(tasks []Task, base [][]Base, alone []string, byID map[string]int, ma
 	return groups
 }
 
-// split cuts one joined set: a member joins the first bundle whose outside
-// bases are its own outside bases, or that holds every base it has, and
-// fits under the cap. Only a pair the user named passes the cap; a task the
-// rules joined never does.
+// split cuts one joined set. A member joins the first bundle that fits it
+// under the cap and has the same outside bases, or holds every base it has.
+// Only a pair the user named passes the cap. A task the rules joined never does.
 func split(tasks []Task, base [][]Base, members []int, byID map[string]int, maxLines int) [][]int {
 	if len(members) == 1 {
 		return [][]int{members}
@@ -680,10 +679,10 @@ func collapse(entries []Entry, k int) {
 	entries[k].Bases = out
 }
 
-// cutJoin keeps one base of an entry f10 start would refuse as a join: the
-// flow does not finish, or a base outside the list is still open, which
-// nothing in the batch would merge. The open base is the one kept, since
-// the entry needs its code; the rest stay named as dropped.
+// cutJoin keeps one base of an entry that f10 start would refuse as a join.
+// It refuses one when the flow does not finish, or when a base outside the
+// list is open, since nothing in the batch would merge it. The open base is
+// kept, because the entry needs its code. The rest stay named as dropped.
 func cutJoin(e *Entry, in Input, byID map[string]int) {
 	if len(e.Bases) < 2 {
 		return
@@ -715,7 +714,7 @@ func cutJoin(e *Entry, in Input, byID map[string]int) {
 }
 
 // unordered names each task whose order the user dropped but whose body
-// still says After:, when its entry spells no base: the start reads the
+// still says After:, when its entry spells no base. The start reads the
 // body of an entry with no typed base, so only the tracker can drop it.
 func unordered(tasks []Task, levels []Level, byID map[string]int) []string {
 	var out []string
@@ -793,7 +792,7 @@ func entryIndex(entries []Entry) map[string]int {
 	return of
 }
 
-// levelsOf puts each entry one level below its deepest base; a base outside
+// levelsOf puts each entry one level below its deepest base. A base outside
 // the list counts as done. Inside a level, entries keep the parent's order.
 func levelsOf(entries []Entry) ([]Level, error) {
 	of := entryIndex(entries)
@@ -853,8 +852,8 @@ func levelsOf(entries []Entry) ([]Level, error) {
 }
 
 // commandArgs spells the levels as f10 start's arguments. An entry whose one
-// base ends a chain not yet extended joins it with a comma (A,B); any other
-// base is @ and the lead of the base's entry (C@A), a profile last.
+// base ends a chain not yet extended joins it with a comma (A,B). Any other
+// base is @ and the lead of the base's entry (C@A), and a profile comes last.
 func commandArgs(levels []Level) []string {
 	var all []Entry
 	for _, st := range levels {

@@ -89,7 +89,7 @@ func (p Plan) Write(w io.Writer, notes []string, extra ...string) error {
 }
 
 // writeOrder prints a row per base, so the reader sees why each @ and , in
-// the command is there; a dropped base says the flow kept it from a join.
+// the command is there. A dropped base says why the join was cut.
 func (p Plan) writeOrder(b *strings.Builder) {
 	type row struct{ pair, reason string }
 

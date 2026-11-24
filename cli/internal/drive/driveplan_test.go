@@ -179,7 +179,7 @@ func TestPlanWithoutASheet(t *testing.T) {
 }
 
 // the printed command is read back by the start's own parser, so the order
-// the proposal sets is the order a start runs; buildsOn reads one id or a list
+// the proposal sets is the order a start runs. buildsOn reads one id or a list.
 func TestPlanCommandParsesBackToItsOrder(t *testing.T) {
 	t.Parallel()
 
