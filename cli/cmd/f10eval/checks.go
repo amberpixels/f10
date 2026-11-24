@@ -16,12 +16,13 @@ import (
 	"github.com/amberpixels/f10/cli/internal/storage"
 )
 
-// A Check is one assertion on what a scenario's run left in its repo:
-// artifacts, never wording.
+// A Check is one assertion on what a scenario's run left in its repo. All
+// but rubric check artifacts by rule; rubric has a model grade wording.
 type Check struct {
-	Name   string `json:"name"`
-	Pass   bool   `json:"pass"`
-	Detail string `json:"detail,omitempty"`
+	Name   string        `json:"name"`
+	Pass   bool          `json:"pass"`
+	Detail string        `json:"detail,omitempty"`
+	Rubric *RubricResult `json:"rubric,omitempty"`
 }
 
 var checks = map[string]func(ctx context.Context, dir string, s Scenario) Check{
@@ -35,6 +36,7 @@ var checks = map[string]func(ctx context.Context, dir string, s Scenario) Check{
 	"verdict":  checkVerdict,
 	"lore":     checkLore,
 	"history":  checkHistory,
+	"rubric":   checkRubric,
 }
 
 func result(name string, problems []string) Check {

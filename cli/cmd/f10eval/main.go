@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -44,9 +45,12 @@ type Scenario struct {
 	History      []HistoryCommit `json:"history"`
 	Reviews      []SeedReview    `json:"reviews"`
 	HistoryCites []string        `json:"history_cites"`
+	Rubric       *Rubric         `json:"rubric"` // what the rubric check grades, and against which lines
 
-	env []string // the run's environment, so a check that runs f10 reads the run's state
-	f10 string   // this checkout's bin/f10, the binary the run itself used
+	env   []string // the run's environment, so a check that runs f10 reads the run's state
+	f10   string   // this checkout's bin/f10, the binary the run itself used
+	reply string   // the run's final reply, for the rubric check
+	grade grader   // per scenario, not global, so parallel tests each grade with their own
 }
 
 // An Accept lives in scenario.json, outside the fixture, so the run never
@@ -82,16 +86,19 @@ type SeedReview struct {
 
 // A Report is one scenario's run, as written under evals/reports.
 type Report struct {
-	Scenario   string    `json:"scenario"`
-	Agent      string    `json:"agent,omitempty"` // the profile the run started on, resolved; "" for the kind's default
-	Version    string    `json:"version"`
-	Commit     string    `json:"commit"`
-	At         time.Time `json:"at"`
-	Pass       bool      `json:"pass"`
-	Checks     []Check   `json:"checks"`
-	CostUSD    float64   `json:"cost_usd"`
-	DurationMS int64     `json:"duration_ms"`
-	Error      string    `json:"error,omitempty"`
+	Scenario string    `json:"scenario"`
+	Agent    string    `json:"agent,omitempty"` // the profile the run started on, resolved; "" for the kind's default
+	Version  string    `json:"version"`
+	Commit   string    `json:"commit"`
+	At       time.Time `json:"at"`
+	Pass     bool      `json:"pass"`
+	Checks   []Check   `json:"checks"`
+	CostUSD  float64   `json:"cost_usd"`
+	// GraderCostUSD is the rubric check's spend, apart from the run's, so
+	// cost_usd compares across releases with and without a rubric.
+	GraderCostUSD float64 `json:"grader_cost_usd,omitempty"`
+	DurationMS    int64   `json:"duration_ms"`
+	Error         string  `json:"error,omitempty"`
 }
 
 type options struct {
@@ -173,13 +180,37 @@ func run(ctx context.Context, o options) error {
 				status, failed = "FAIL", failed+1
 			}
 
-			fmt.Printf("%-24s %-16s %s  $%.2f  %s  %s\n", s.Name, p.Short(), status, rep.CostUSD,
+			cost := fmt.Sprintf("$%.2f", rep.CostUSD)
+			if rep.GraderCostUSD > 0 {
+				cost += fmt.Sprintf(" + $%.2f grader", rep.GraderCostUSD)
+			}
+
+			fmt.Printf("%-24s %-16s %s  %s  %s  %s\n", s.Name, p.Short(), status, cost,
 				time.Duration(rep.DurationMS)*time.Millisecond, path)
 		}
 	}
 
 	if failed > 0 {
 		return fmt.Errorf("%d of %d runs failed", failed, runs)
+	}
+
+	return nil
+}
+
+// checkRubricField refuses a rubric that cannot grade before any spend, and
+// one the checks never run, which its author would not otherwise notice.
+func (s Scenario) checkRubricField() error {
+	listed := slices.Contains(s.Checks, "rubric")
+
+	switch {
+	case !listed && s.Rubric != nil:
+		return errors.New("a rubric, but no rubric check")
+	case !listed:
+		return nil
+	case s.Rubric == nil || len(s.Rubric.Lines) == 0:
+		return errors.New("a rubric check, but no rubric lines")
+	case !s.Rubric.Reply && len(s.Rubric.Files) == 0:
+		return errors.New("a rubric grading neither the reply nor any file")
 	}
 
 	return nil
@@ -212,6 +243,10 @@ func loadScenarios(dir, only string) ([]Scenario, error) {
 			if checks[c] == nil {
 				return nil, fmt.Errorf("%s: unknown check %q", e.Name(), c)
 			}
+		}
+
+		if err := s.checkRubricField(); err != nil {
+			return nil, fmt.Errorf("%s: %w", e.Name(), err)
 		}
 
 		list = append(list, s)
@@ -292,6 +327,8 @@ func runScenario(ctx context.Context, root string, s Scenario, o options, p agen
 		if res.IsError {
 			rep.Error = lastLine(res.Result)
 		}
+
+		s.reply = res.Result
 	}
 
 	if err != nil && rep.Error == "" {
@@ -301,10 +338,25 @@ func runScenario(ctx context.Context, root string, s Scenario, o options, p agen
 		}
 	}
 
+	s.grade = gradeWithClaude
+
 	rep.Checks, rep.Pass = runChecks(ctx, dir, s)
 	rep.Pass = rep.Pass && rep.Error == ""
+	rep.GraderCostUSD = graderCost(rep.Checks)
 
 	return rep
+}
+
+func graderCost(list []Check) float64 {
+	total := 0.0
+
+	for _, c := range list {
+		if c.Rubric != nil {
+			total += c.Rubric.CostUSD
+		}
+	}
+
+	return total
 }
 
 func runChecks(ctx context.Context, dir string, s Scenario) ([]Check, bool) {
@@ -536,18 +588,28 @@ func claudeArgs(root string, o options, prompt string, p agentctl.Profile) []str
 	return append(args, prompt)
 }
 
-// runEnv is the run's environment: f10's ledger, run state, asks, daemon
-// and user dirs all inside tmp, so the nested run never reaches the user's
-// own, its agents map included; and no CLAUDECODE marker, so a run started
-// from inside a session is not refused as nested.
-func runEnv(environ []string, tmp string) []string {
-	env := make([]string, 0, len(environ)+5)
+// droppedEnv is unset for every claude call the runner makes: CLAUDECODE so
+// a run started inside a session is not refused as nested, and
+// ANTHROPIC_API_KEY so claude uses the logged-in subscription, never the API.
+var droppedEnv = []string{"CLAUDECODE=", "ANTHROPIC_API_KEY="}
+
+func claudeEnv(environ []string) []string {
+	env := make([]string, 0, len(environ))
 
 	for _, kv := range environ {
-		if !strings.HasPrefix(kv, "CLAUDECODE=") {
+		if !slices.ContainsFunc(droppedEnv, func(p string) bool { return strings.HasPrefix(kv, p) }) {
 			env = append(env, kv)
 		}
 	}
+
+	return env
+}
+
+// runEnv is the run's environment: f10's ledger, run state, asks, daemon
+// and user dirs all inside tmp, so the nested run never reaches the user's
+// own, its agents map included.
+func runEnv(environ []string, tmp string) []string {
+	env := claudeEnv(environ)
 
 	return append(env,
 		"F10_LEDGER="+filepath.Join(tmp, "f10.db"),

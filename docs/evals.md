@@ -3,6 +3,7 @@
 Skills, steps, modes and conventions make up half of what f10 does, and `just test` checks none of it.
 A model update or a prose edit can change what `plan`, `ship`, `review` or `judge` produce, and no test fails.
 `just eval` runs real sessions against small fixture repos and checks the artifacts they leave behind, not their wording.
+The exception is the `rubric` check: a pinned model grades the wording against lines the scenario states, for output that is prose, such as a brainstorm reply or a plan's quality.
 
 It costs model spend and several minutes per scenario. Run it on demand and before a release, never in CI.
 
@@ -18,7 +19,7 @@ just eval -scenario feature-small -agent opus:medium   # one profile, instead of
 Each scenario runs `claude -p --plugin-dir <this checkout>` in a temporary copy of its fixture:
 
 - **This checkout's plugin and binary run.** The runner first builds this checkout into the cache slot `bin/f10` uses (`bin/f10 --shim-rebuild`, as `just install` does), so the hooks, the skills and the lore check run the code the report's commit names, not the release. If the installed f10 plugin is also enabled, both plugins load: disable the installed one for the run, so its skills do not answer instead.
-- **The run cannot reach your own state.** `F10_LEDGER`, `F10_STATE_DIR`, `F10_INBOX_DIR`, `F10_RUN_DIR` and `F10_USER_DIR` point inside the temp dir, so its hooks, badges and asks never reach your ledger, status line or inbox, and its subagents resolve their profiles against the fixture's `agents:` map alone, never your `~/.f10/agents.md`. `CLAUDECODE` is dropped from the environment, so a run started from inside a session is not refused as nested.
+- **The run cannot reach your own state.** `F10_LEDGER`, `F10_STATE_DIR`, `F10_INBOX_DIR`, `F10_RUN_DIR` and `F10_USER_DIR` point inside the temp dir, so its hooks, badges and asks never reach your ledger, status line or inbox, and its subagents resolve their profiles against the fixture's `agents:` map alone, never your `~/.f10/agents.md`. Two variables are dropped from the environment of every `claude` call the runner makes, the grader's included. `CLAUDECODE` is dropped so a run started from inside a session is not refused as nested. `ANTHROPIC_API_KEY` is dropped so every run uses the logged-in subscription and never bills the API, which means evals need a logged-in `claude`.
 - **Nothing is pushed.** The fixture repo has no `origin`, and its tracker is a local driver that reads `tasks/`.
 - **Permissions.** A driven ship runs verify and commits. Under the default `-permission-mode acceptEdits` those commands may be refused. Choose the mode yourself: the run is a throwaway directory, but the flag is yours to pass.
 - **The agent profile.** Each run starts `claude -p` on one profile (`docs/project-setup.md` → Agents): the ones the scenario's `agents` list names, one run each, else one run on the kind's default; `-agent <profile>` runs every scenario on that one profile instead. The profile's model and effort go on the command line (`--model`, `--effort`), and a profile the kind refuses fails before any spend.
@@ -32,6 +33,8 @@ Each report holds:
 
 - pass/fail for each check;
 - `cost_usd` and `duration_ms`, from claude's JSON output;
+- `grader_cost_usd`, the rubric check's spend, kept apart from `cost_usd` so the run's cost compares across releases with and without a rubric;
+- for a `rubric` check, the grader's model and a pass or fail with a one-line reason for each rubric line;
 - the profile the run started on, as `agent`;
 - the plugin version and the commit, `-dirty` appended when the tree had uncommitted changes, so the commit never names code that did not run.
 
@@ -60,6 +63,22 @@ A history scenario gives the run a past to plan against:
 - `reviews`: review rounds seeded into the run's ledger, under the project the run records itself as. Each entry is `{task, rounds, categories}`. Each round is round `1`, then `2`, at a reviewed sha of its own.
 - `history_cites`: the ids the plan's `## History` section must name.
 
+A rubric scenario lists `rubric` in its `checks` and grades prose against lines it states:
+
+- `rubric`: `{lines, reply, files}`. `lines` are the statements the output must meet, each graded on its own. `reply: true` grades the run's final reply, and `files` grades files by their path in the fixture repo (`.f10/plans/EV-1.md`). A scenario needs at least one of the two.
+- The runner loads a scenario only when the check and the `rubric` field come together, so a rubric that would never run, or a check with nothing to grade, fails before any spend.
+- The grader is one `claude -p` call on a pinned model (`graderModel` in `cli/cmd/f10eval/rubric.go`), a full id rather than an alias, so a model release never changes a grade without a diff. It runs in an empty directory with no tools, settings, MCP servers or skills, and its own system prompt. Its prompt holds only the rubric lines and the graded output, so a change in the grader's context never reads as a change in the skill. `--bare` would isolate it further, but it signs in only with an API key.
+- A missing reply or file fails the check by name, without a grader call.
+- Unlike every other check, a rubric can pass one run and fail the next on the same output. Read the reasons in the report before calling a flipped line a regression.
+
+```json
+"checks": ["plan", "rubric"],
+"rubric": {
+  "files": [".f10/plans/EV-1.md"],
+  "lines": ["Each stage names the files it changes", "The plan says why the flag defaults to off"]
+}
+```
+
 The checks (`cli/cmd/f10eval/checks.go`):
 
 | check | passes when |
@@ -73,6 +92,7 @@ The checks (`cli/cmd/f10eval/checks.go`):
 | `verdict` | each `.f10/verdicts/<task>/*.md` carries one of the four verdicts |
 | `lore` | `f10 lore validate <task>` passes |
 | `history` | the plan has a `## History` section naming every id in `history_cites` |
+| `rubric` | the grader passes every rubric line on the reply and files the `rubric` field names |
 | `planted` | every planted defect has a finding whose `where:` falls in its lines, and at most `max_extra` findings fall outside them; the detail gives both counts on a pass too |
 
 `feature-small` is the first scenario: it adds a flag to a one-file CLI through `/f10:plan EV-1 && /f10:ship EV-1 --driven` on a `plan implement commit` flow.
@@ -84,4 +104,4 @@ Read the findings file before blaming the reviewer.
 `review-planted-host` runs the same fixture and change through `/f10:review EV-2 host --driven`, the host engine, so the two reports compare the reviewers finding for finding on the `planted` check.
 `plan-history` plans `feature-small`'s task after three earlier tasks touched `main.go`, each with two review rounds raising a tests-and-docs finding, through `/f10:plan EV-1 --driven`. Its `history` check passes when the plan's `## History` names all three, which `f10 history` printed as a recurring finding and a median of 2 rounds.
 A bug scenario (a failing test to fix) and a spike scenario are the next ones to add. The runner needs no change for them.
-`go test ./cmd/f10eval` covers the checks against a canned result, with no model call.
+`go test ./cmd/f10eval` covers the checks against a canned result, and the rubric check against a canned grader, with no model call.
