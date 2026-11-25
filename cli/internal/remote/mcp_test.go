@@ -17,7 +17,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/daemon"
 )
 
-// envRuns records the environment a Drive call would run under.
+// envRuns records the environment a Start call would run under.
 type envRuns struct {
 	f10v1connect.UnimplementedRunServiceHandler
 
@@ -25,13 +25,13 @@ type envRuns struct {
 	seen bool
 }
 
-func (r *envRuns) StartBatch(
+func (r *envRuns) Start(
 	_ context.Context,
-	req *connect.Request[f10v1.StartBatchRequest],
-) (*connect.Response[f10v1.StartBatchResponse], error) {
-	r.env, r.seen = daemon.LocalEnv(req, req.Msg.GetEnv()), true
+	req *connect.Request[f10v1.StartRequest],
+) (*connect.Response[f10v1.StartResponse], error) {
+	r.env, r.seen = daemon.LocalEnv(req, req.Msg.GetCaller().GetEnv()), true
 
-	return connect.NewResponse(&f10v1.StartBatchResponse{}), nil
+	return connect.NewResponse(&f10v1.StartResponse{}), nil
 }
 
 func mcpSession(t *testing.T, url, token string) (*sdk.ClientSession, error) {
@@ -118,12 +118,21 @@ func TestListenerServesMCPByTokenScope(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// StartBatch stays an rpc for a local client and is no tool
+	if _, err := cs.CallTool(t.Context(), &sdk.CallToolParams{
+		Name: "start_batch", Arguments: map[string]any{"project": "p"},
+	}); err == nil {
+		t.Error("start_batch is still a tool")
+	}
+
 	res, err := cs.CallTool(t.Context(), &sdk.CallToolParams{
-		Name:      "start_batch",
-		Arguments: map[string]any{"project": "p", "env": []string{"HERDR_SOCKET=/tmp/x"}},
+		Name: "start",
+		Arguments: map[string]any{
+			"project": "p", "token": "FT-1", "caller": map[string]any{"env": []string{"HERDR_SOCKET=/tmp/x"}},
+		},
 	})
 	if err != nil || res.IsError {
-		t.Fatalf("start_batch = %v %v", res, err)
+		t.Fatalf("start = %v %v", res, err)
 	}
 
 	if !runs.seen || runs.env != nil {

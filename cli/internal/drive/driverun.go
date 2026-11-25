@@ -52,6 +52,7 @@ func (in *DriveInput) enter(r *DriveRun, p runPhase) {
 	r.Phase = p
 	in.saveTask(r, func(t *drivestore.Task) {
 		t.Phase, t.Queued = p.recorded(), r.queued()
+		t.Opened = t.Opened || r.opened()
 		if p != atWaiting {
 			t.Checks = ""
 		}
@@ -164,11 +165,15 @@ type DriveTask struct {
 	profile agentctl.Profile // what the agent starts on, resolved
 	flagged bool             // the command line chose it, over the branch's record
 	Branch  string           // the task's local branch, or "" before it started
-	after   string           // the base the body's After: line names, as an id
-	Base    string           // the base the drive waits for: the branch's record, else after
-	// typed is set when the command line ordered the task with , or @.
-	// It wins over its body's After: line, as --after does.
-	typed bool
+	// typedProfile is the task's :profile as typed, "" for none, which the record keeps
+	typedProfile string
+	// want is the bases the task asks for before its branch is read, as lead
+	// ids, and source says who asked. graph settles them against the branch's
+	// record into Base or Join, and nothing else sets those two.
+	want   []string
+	source baseSource
+	// Base is the one base the drive waits for, "" for none or for a join.
+	Base string
 	// Join is a join's bases as ids, two or more. Each must merge before
 	// the join branches from the default branch, and Base is then empty.
 	Join     []string

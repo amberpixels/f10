@@ -123,12 +123,12 @@ func TestPlanFromAParent(t *testing.T) {
 		t.Errorf("args %v, want %v", res.Plan.Args, want)
 	}
 
-	if cmd := res.Plan.Command(res.Extra...); !strings.HasSuffix(cmd, "--parallel 4 --pace fast") {
+	if cmd := res.Plan.Command(); !strings.HasSuffix(cmd, "--parallel 4 --pace fast") {
 		t.Errorf("command %q carries no --pace", cmd)
 	}
 
 	// the command is one drive takes as it is
-	a, err := drivectl.ParseDriveArgs(append(slices.Clone(res.Plan.Args), res.Extra...))
+	a, err := drivectl.ParseDriveArgs(append(slices.Clone(res.Plan.Args), res.Plan.Carry...))
 	if err != nil || len(a.Tasks) != 7 || a.Parallel != 4 || a.Pace != "fast" {
 		t.Errorf("drive reads %+v, %v", a, err)
 	}
@@ -275,5 +275,73 @@ func TestPlanHintWithoutASheet(t *testing.T) {
 
 	if hint := typed.Plan.Hint(); hint != "" {
 		t.Errorf("a typed bundle hinted %q", hint)
+	}
+}
+
+// A -suffix is one attempt of a task: the proposal keeps it alone and prints
+// it, where it used to refuse the token a start accepts.
+func TestPlanCarriesASuffix(t *testing.T) {
+	t.Parallel()
+
+	in := planFixture(t)
+
+	res, err := Plan(context.Background(), in, planArgs(t, "GH-14-x", "GH-30", "--facts",
+		writeSheet(t, `{"GH-14": {"lines": 10, "areas": ["x"]}, "GH-30": {"lines": 10, "areas": ["x"]}}`)))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want := []string{"GH-14-x,GH-30"}; !slices.Equal(res.Plan.Args, want) {
+		t.Errorf("args %v, want %v", res.Plan.Args, want)
+	}
+
+	if e := res.Plan.Levels[0].Entries[0]; e.Reason != "alone: its own attempt, -x" {
+		t.Errorf("reason %q", e.Reason)
+	}
+
+	a, err := drivectl.ParseDriveArgs(res.Plan.Args)
+	if err != nil || !slices.Equal(a.Tasks, []string{"GH-14-x", "GH-30"}) ||
+		!slices.Equal(a.Bases[1], []string{"GH-14"}) {
+		t.Errorf("start reads %+v, %v", a, err)
+	}
+}
+
+// A closed task is left out wherever it is typed: alone, as a rider, or as
+// the lead of a bundle, whose first open member then leads.
+func TestPlanLeavesAClosedTaskOutOfABundle(t *testing.T) {
+	t.Parallel()
+
+	in := planFixture(t)
+	info := in.Tracker.Info
+	in.Tracker.Info = func(ctx context.Context, r ref.Ref) (tasksource.TaskInfo, error) {
+		switch r.ID {
+		case "GH-40":
+			return tasksource.TaskInfo{Closed: true}, nil
+		case "GH-41", "GH-42":
+			return tasksource.TaskInfo{Body: "open"}, nil
+		}
+
+		return info(ctx, r)
+	}
+
+	sheet := writeSheet(t, `{"GH-41": {"lines": 10}, "GH-42": {"lines": 10}}`)
+
+	for typed, want := range map[string]string{
+		"GH-41+GH-40+GH-42": "GH-41+GH-42", // a closed rider
+		"GH-40+GH-41+GH-42": "GH-41+GH-42", // a closed lead: the first open member leads
+		"GH-40+GH-41":       "GH-41",       // one open member left is a task alone
+	} {
+		res, err := Plan(context.Background(), in, planArgs(t, typed, "--facts", sheet))
+		if err != nil {
+			t.Fatalf("%s: %v", typed, err)
+		}
+
+		if len(res.Plan.Args) != 1 || res.Plan.Args[0] != want {
+			t.Errorf("%s: args %v, want [%s]", typed, res.Plan.Args, want)
+		}
+
+		if !slices.Contains(res.Notes, "left out: GH-40 is closed") {
+			t.Errorf("%s: notes %q name no closed task", typed, res.Notes)
+		}
 	}
 }

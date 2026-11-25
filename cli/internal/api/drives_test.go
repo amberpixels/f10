@@ -259,6 +259,17 @@ func TestResumeByTask(t *testing.T) {
 		t.Errorf("a resume with answers ran %+v, want its own process and the flags on the line", got)
 	}
 
+	// a batch still running is attached to, which discards the line: the cap
+	// reaches it through its record, read each tick
+	_, err = c.Resume(t.Context(), connect.NewRequest(&f10v1.ResumeRequest{Project: dir, Task: "GH-1", Parallel: 3}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if rec, err := drivestore.Read(root, 1); err != nil || rec.Parallel != 3 {
+		t.Errorf("batch 1's recorded cap = %+v, %v; want 3", rec, err)
+	}
+
 	_, err = c.Resume(t.Context(), connect.NewRequest(&f10v1.ResumeRequest{Project: dir, Task: "GH-9"}))
 	if connect.CodeOf(err) != connect.CodeNotFound || !strings.Contains(err.Error(), "GH-9") {
 		t.Errorf("resume GH-9 = %v, want NotFound naming it", err)

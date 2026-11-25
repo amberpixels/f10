@@ -458,11 +458,11 @@ func TestFlowStartArgv(t *testing.T) {
 	}
 }
 
-// A Start with chain runs a range, and with parallel caps the drive, in the
+// A Start with range runs a range, and with parallel caps the drive, in the
 // argv the CLI would type for the same start.
-func TestFlowStartChainAndParallel(t *testing.T) {
+func TestFlowStartRangeAndParallel(t *testing.T) {
 	argv, flow, err := flowStart(t.Context(), nil,
-		&f10v1.StartRequest{Tasks: []string{"GH-4"}, Chain: true, Parallel: 3, Pace: "fast"}, "GH-1", "", "")
+		&f10v1.StartRequest{Tasks: []string{"GH-4"}, Range: true, Parallel: 3, Pace: "fast"}, "GH-1", "", "")
 	if err != nil || !flow {
 		t.Fatalf("flow = %v, %v", flow, err)
 	}
@@ -471,14 +471,28 @@ func TestFlowStartChainAndParallel(t *testing.T) {
 		t.Errorf("argv = %q", got)
 	}
 
+	// the field's old name is read the same way, for clients built against it
+	old, _, err := flowStart(t.Context(), nil,
+		&f10v1.StartRequest{Tasks: []string{"GH-4"}, Chain: true}, "GH-1", "", "") //nolint:staticcheck // the old name
+	if err != nil || strings.Join(old, " ") != "GH-1 -- GH-4" {
+		t.Errorf("chain argv = %q, %v", old, err)
+	}
+
 	if _, _, err := flowStart(t.Context(), nil,
-		&f10v1.StartRequest{Tasks: []string{"GH-2", "GH-3"}, Chain: true}, "GH-1", "", ""); err == nil {
-		t.Error("a chain of three ids was taken")
+		&f10v1.StartRequest{Tasks: []string{"GH-2", "GH-3"}, Range: true}, "GH-1", "", ""); err == nil {
+		t.Error("a range of three ids was taken")
+	}
+
+	// an order typed in the token and the tasks reaches the flow start whole
+	ordered, flow, err := flowStart(t.Context(), nil,
+		&f10v1.StartRequest{Tasks: []string{"GH-3@GH-1"}}, "GH-1,GH-2", "", "")
+	if err != nil || !flow || strings.Join(ordered, " ") != "GH-1,GH-2 GH-3@GH-1" {
+		t.Errorf("an order: argv = %q, flow = %v, %v", ordered, flow, err)
 	}
 
 	// a discussion takes neither, as f10 start --discuss refuses them
 	for _, m := range []*f10v1.StartRequest{
-		{Tasks: []string{"GH-4"}, Chain: true},
+		{Tasks: []string{"GH-4"}, Range: true},
 		{Parallel: 2},
 	} {
 		if _, flow, err := flowStart(t.Context(), nil, m, "GH-1", "", launch.ModeDiscuss); flow || err == nil {

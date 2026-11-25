@@ -143,7 +143,7 @@ func TestStartProposesByFlag(t *testing.T) {
 		"FT-1 --facts f.json":            "add --propose",
 		"FT-1 -- FT-4 --propose":         "not a range",
 		"FT-1 --propose --answer yes":    "start --propose takes",
-		"FT-1 --propose --resume 2":      "a resume runs",
+		"FT-1 --propose --resume 2":      "start --propose takes",
 		"--propose":                      "needs the tasks",
 		"FT-1 --propose --facts":         "needs the facts sheet",
 		"FT-1 --propose --discuss":       "unknown flag",

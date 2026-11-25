@@ -14,9 +14,9 @@ The tasks one `f10 start` started are a **batch**, and any of its task ids names
 An **entry** is a task or a bundle, which is one branch, one agent and one PR.
 `docs/concepts.md` → Start vocabulary defines the other words: base, stack, chain and proposal.
 The first skill is `/f10:plan` when the flow leads with a `plan` the pace keeps and the task has no plan file.
-Then comes `/f10:ship`, which runs every other entry.
-Then comes finish, when the flow ends in a `finish` entry.
-The pace can skip that entry as it skips any step, and the project's `ceiling: { finish: off }` skips it under every pace.
+Then comes `/f10:ship`, which runs every other flow entry.
+Then comes finish, when the flow ends in a `finish` flow entry.
+The pace can skip that flow entry as it skips any step, and the project's `ceiling: { finish: off }` skips it under every pace.
 A spike is closed after ship either way, because `f10 finish` closes it without a merge.
 A plan the main checkout saved for a task stays where it is, in the storage root every worktree shares, and the agent ships it instead of planning again.
 A dependent opens once its base branch has a commit, and its finish waits for the base's.
@@ -33,7 +33,8 @@ It runs no step, except **propose** under `--propose`.
   It is keyed on the lead, and any member's id reopens it.
   Its finish leaves every rider open, and the report names them.
   `<id> -- <id>` is a range.
-  It ships the members in one PR under the lead's branch, and nothing orders the work inside it.
+  It runs every id from the first to the last as a task of its own, each with its own branch and PR, ordered by their `After:` lines.
+  A range takes no typed order and no profile on its ends.
 - **An order** on the line, which wins over the tasks' `After:` lines and is never written to the tracker:
   - `A,B` stacks B on A, and `A,B,C` is a chain, the same as `A B@A C@B`.
   - `C@A` names A as C's base, so `A,B C@A` puts two entries on one base.
@@ -77,7 +78,10 @@ It runs no step, except **propose** under `--propose`.
    Otherwise ask once, in one `AskUserQuestion`, with a multi-select question for each thing named.
    Its options are the open hits as `<id> <title>`, cut to fit, four at most per question.
    No open hit for a thing is one line saying so, and the rest go on.
-2. **Run the propose step**: `f10-load-project.sh propose`, then follow it with the tasks and the start flags given.
+2. **Run the propose step.**
+   It is the one step this skill runs, so load what a step reads first, when this context does not hold it yet: `f10-load-conventions.sh`, then `f10 help --agent` in a call of its own.
+   A plain start never loads them, because it runs no step.
+   Then run `f10-load-project.sh propose`, and follow it with the tasks and the start flags given.
 3. **Stop** at the proposal, with one line offering to run its command.
 
 **Parents**: a task id whose task has subtasks is never started itself.

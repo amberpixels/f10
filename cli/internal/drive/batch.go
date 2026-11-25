@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/drivectl"
 	"github.com/amberpixels/f10/cli/internal/drivestore"
@@ -46,12 +47,14 @@ func BatchOf(ctx context.Context, t *target.Target, token string) (drivestore.Li
 // RecordOf is the newest record holding the task a token names, whatever
 // its standing: a finished batch still has a log, and a stopped one a reason.
 func RecordOf(ctx context.Context, t *target.Target, token string) (*drivestore.Record, bool) {
-	recs, err := drivestore.List(t.Layout.StorageRoot.Path())
+	return recordHolding(t.Layout.StorageRoot.Path(), namesOf(ctx, t, token))
+}
+
+func recordHolding(root string, names []string) (*drivestore.Record, bool) {
+	recs, err := drivestore.List(root)
 	if err != nil {
 		return nil, false
 	}
-
-	names := namesOf(ctx, t, token)
 
 	for _, rec := range recs {
 		if slices.ContainsFunc(names, rec.Holds) {
@@ -60,6 +63,49 @@ func RecordOf(ctx context.Context, t *target.Target, token string) (*drivestore.
 	}
 
 	return nil, false
+}
+
+// A NoBatchError is a task id no batch answers to, for the command asking.
+type NoBatchError struct{ Token string }
+
+func (e NoBatchError) Error() string {
+	return fmt.Sprintf("no batch holds %s: f10 status --batches lists every batch", e.Token)
+}
+
+// LogBatch is the number of the batch whose log a task names: the newest
+// record holding it, live or not, because a finished batch still has a log
+// and an older live batch is not the one the task last ran in.
+func LogBatch(ctx context.Context, t *target.Target, token string) (int, error) {
+	return logBatch(t.Layout.StorageRoot.Path(), token, namesOf(ctx, t, token))
+}
+
+func logBatch(root, token string, names []string) (int, error) {
+	if rec, ok := recordHolding(root, names); ok {
+		return rec.Number, nil
+	}
+
+	return 0, NoBatchError{Token: token}
+}
+
+// StopBatch is the number of the batch f10 stop ends for a task: the
+// running one holding its lease, else the newest live one whose record
+// holds it. The lease is asked first, because a batch the daemon has just
+// taken runs before its record is readable.
+func StopBatch(ctx context.Context, t *target.Target, token string) (int, error) {
+	token = strings.TrimSpace(token)
+	root := t.Layout.StorageRoot.Path()
+
+	if r, err := t.Reference(ctx, token); err == nil {
+		if holder, held := drivestore.Probe(root, r.Head().ID); held && holder.Drive > 0 {
+			return holder.Drive, nil
+		}
+	}
+
+	if l, ok := BatchOf(ctx, t, token); ok {
+		return l.Number, nil
+	}
+
+	return 0, NoBatchError{Token: token}
 }
 
 // ErrNoneStopped is a bare resume in a project with no stopped batch.
@@ -116,15 +162,23 @@ func Resumable(ctx context.Context, t *target.Target, token string) (*drivestore
 	return nil, NotResumableError{Token: token}
 }
 
-// leadOf is batch n's first task, the id its commands take, "" when the
-// record is not open or not readable.
+// CommandID is the task id that names rec to stop, resume and daemon logs:
+// its first task that resolves back to it, else its lead. Every hint prints
+// it, so a hint never names a task a newer batch has taken. It reads every
+// record, so it is called where a line is printed, never in the poll loop.
+func CommandID(root string, rec *drivestore.Record) string {
+	return cmp.Or(rec.Name(root), rec.Lead())
+}
+
+// leadOf is CommandID for batch n, "" when the record is not open or not
+// readable.
 func leadOf(root string, n int) string {
 	rec, err := drivestore.Read(root, n)
 	if err != nil {
 		return ""
 	}
 
-	return cmp.Or(rec.Name(root), rec.Lead())
+	return CommandID(root, rec)
 }
 
 // resumeHint is the command that goes on with batch n.

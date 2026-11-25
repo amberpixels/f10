@@ -22,7 +22,6 @@ import (
 	"github.com/amberpixels/f10/cli/internal/target"
 	"github.com/amberpixels/f10/cli/internal/tasksource"
 	"github.com/amberpixels/f10/cli/internal/tasktree"
-	"github.com/amberpixels/f10/cli/internal/textx"
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
 
@@ -115,16 +114,13 @@ func (in *DriveInput) openRecord(tasks []DriveTask) error {
 			Agent:    in.Args.Agent,
 			Session:  in.Session,
 			Parallel: in.Parallel,
+			PlanOnly: in.Args.PlanOnly,
 		}
 
-		for i, t := range tasks {
-			profile := ""
-			if i < len(in.Args.Profiles) {
-				profile = in.Args.Profiles[i]
-			}
-
+		// the profile is the task's own as typed, and the bases are the settled ones
+		for _, t := range tasks {
 			in.Rec.Tasks = append(in.Rec.Tasks, drivestore.Task{
-				ID: t.Ref.Label() + worktree.SuffixOf(t.Suffix), Agent: profile, After: t.after, Join: t.Join,
+				ID: t.Ref.Label() + worktree.SuffixOf(t.Suffix), Agent: t.typedProfile, After: t.Base, Join: t.Join,
 			})
 		}
 
@@ -136,7 +132,7 @@ func (in *DriveInput) openRecord(tasks []DriveTask) error {
 	own, err := drivestore.Acquire(in.Root, drivestore.DriveKey(in.Rec.Number), in.Rec.Number)
 	if held := (drivestore.HeldError{}); errors.As(err, &held) {
 		return fmt.Errorf("batch %d is running (pid %d): f10 stop %s stops it", in.Rec.Number,
-			held.Holder.PID, in.Rec.Lead())
+			held.Holder.PID, CommandID(in.Root, in.Rec))
 	}
 
 	if err != nil {
@@ -334,7 +330,7 @@ func (in *DriveInput) number() int {
 
 func (in *DriveInput) resumeLine() string {
 	if in.Rec != nil {
-		return "f10 resume " + in.Rec.Lead()
+		return "f10 resume " + CommandID(in.Root, in.Rec)
 	}
 
 	return resumeCommand(in.Argv)
@@ -410,7 +406,7 @@ func DriveList(
 			id := links.ID(project, t.ID) + ":"
 			nodes[j] = tasktree.Node{Cells: []tasktree.Cell{
 				{Text: t.ID + ":", Render: func(string) string { return id }},
-				{Text: taskStanding(t, running, rec.Tasks, drivectl.JoinPlanned(rec.Args, root))},
+				{Text: taskStanding(t, running, rec.Tasks, drivectl.JoinPlanned(drivectl.PlanOnly(rec), root))},
 			}}
 		}
 
@@ -482,7 +478,7 @@ func taskStanding(t drivestore.Task, running bool, tasks []drivestore.Task, plan
 	case t.Outcome != nil:
 		return t.Outcome.Row
 	case len(waits) > 0 && t.Skill == "" && (t.Phase == "" || t.Phase == drivestore.PhasePending):
-		return "waiting for " + textx.JoinAnd(waits) + " to " + drivectl.JoinWhat(planned != nil)
+		return "waiting " + drivectl.JoinWaitPhrase(waits, planned != nil)
 	case running && t.Queued:
 		return "queued"
 	case running && t.Phase == drivestore.PhaseParked:

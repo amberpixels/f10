@@ -10,6 +10,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/amberpixels/f10/cli/internal/agents"
 	"github.com/amberpixels/f10/cli/internal/asks"
 	"github.com/amberpixels/f10/cli/internal/buildinfo"
 	"github.com/amberpixels/f10/cli/internal/daemon"
@@ -34,7 +35,7 @@ func liveDeliver() Deliverer {
 
 			return err
 		},
-		Resume: resumeAskDrive,
+		Resume: agents.BatchResume(daemon.Supported, resumeAskBatch),
 		Live: func(a asks.Ask) bool {
 			_, held := drivestore.Probe(a.Root, drivestore.DriveKey(a.Drive))
 
@@ -61,13 +62,8 @@ func runInboxResume(ctx context.Context, cmd *cli.Command) error {
 	return err
 }
 
-func resumeAskDrive(ctx context.Context, w io.Writer, a asks.Ask) error {
-	if !daemon.Supported {
-		fmt.Fprintf(w, "batch %d is stopped: f10 resume %s in %s takes the answer\n", a.Drive, a.Task, a.Main)
-
-		return nil
-	}
-
+// resumeAskBatch hands a stopped batch to the daemon, started when none runs.
+func resumeAskBatch(ctx context.Context, a asks.Ask) error {
 	var extra []string
 	if t, err := target.At(ctx, a.Main, false, "inbox"); err == nil {
 		extra = t.Effective.BatchEnv
@@ -77,19 +73,12 @@ func resumeAskDrive(ctx context.Context, w io.Writer, a asks.Ask) error {
 
 	e := &daemon.Ensurer{Dir: dir, Version: buildinfo.Version()}
 	if _, err := e.Ensure(ctx); err != nil {
-		return fmt.Errorf("resuming batch %d: %w", a.Drive, err)
+		return err
 	}
 
-	call := daemon.ResumeCall(a.Main, daemon.DriveEnv(os.Environ(), extra), a.Drive)
+	_, err := daemon.RunDrive(ctx, dir, daemon.ResumeCall(a.Main, daemon.DriveEnv(os.Environ(), extra), a.Drive))
 
-	_, err := daemon.RunDrive(ctx, dir, call)
-	if err != nil {
-		return fmt.Errorf("resuming batch %d: %w", a.Drive, err)
-	}
-
-	fmt.Fprintf(w, "batch %d resumed: f10 daemon logs %s -f follows it\n", a.Drive, a.Task)
-
-	return nil
+	return err
 }
 
 // runInboxHook keeps the inbox's per-session bookkeeping at session start:

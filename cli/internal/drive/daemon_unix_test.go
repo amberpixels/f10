@@ -23,8 +23,8 @@ import (
 // The drives these tests run: a script typed as the argv's first word, and
 // a resume that names itself and ends.
 const (
-	waitsForDrain = `trap 'exit 6' USR1; echo 5 > "$F10_DRIVE_FILE"; echo batch 5; while :; do sleep 0.05; done`
-	resumed       = `echo 5 > "$F10_DRIVE_FILE"; echo resumed; exit 0`
+	waitsForDrain = `trap 'exit 6' USR1; echo 5 > "$F10_BATCH_FILE"; echo batch 5; while :; do sleep 0.05; done`
+	resumed       = `echo 5 > "$F10_BATCH_FILE"; echo resumed; exit 0`
 )
 
 func scriptChild(argv []string) (string, []string) {
@@ -257,7 +257,7 @@ func TestFollowDriveFollowsAResume(t *testing.T) {
 		dir,
 		"0.1.0",
 		"/r",
-		runReq(`echo 5 > "$F10_DRIVE_FILE"; echo batch 5; sleep 0.3; exit 8`),
+		runReq(`echo 5 > "$F10_BATCH_FILE"; echo batch 5; sleep 0.3; exit 8`),
 		serving(t.Context(), dir, "0.1.0"),
 	)
 	if err != nil {
@@ -270,7 +270,7 @@ func TestFollowDriveFollowsAResume(t *testing.T) {
 }
 
 // asking is a drive that stops on its asks once the daemon read its number.
-const asking = `echo 5 > "$F10_DRIVE_FILE"; echo batch 5 asks; sleep 0.3; exit 4`
+const asking = `echo 5 > "$F10_BATCH_FILE"; echo batch 5 asks; sleep 0.3; exit 4`
 
 // waitAsks shortens the wait for a resumed run and fixes whether the
 // drive's record is gone.

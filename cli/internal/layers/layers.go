@@ -31,7 +31,8 @@ var Table = []Rule{
 	// project state, so nothing of the domain may reach into them
 	{Prefix: "internal/textx", Rank: -2},
 	{Prefix: "internal/fsx", Rank: -2},
-	{Prefix: "internal/taskid", Rank: -2},
+	{Prefix: "internal/taskid", Rank: -3},   // the id's grammar, which the notation builds its patterns from
+	{Prefix: "internal/notation", Rank: -2}, // how start's command line spells an entry, no I/O
 	{Prefix: "internal/shell", Rank: -2},
 	{Prefix: "internal/gitx", Rank: -2},
 	{Prefix: "internal/flock", Rank: -2},
@@ -48,7 +49,7 @@ var Table = []Rule{
 	{Prefix: "internal/agentctl", Rank: -2},
 	{Prefix: "internal/images", Rank: -2},
 	{Prefix: "internal/projects", Rank: -2},
-	{Prefix: "internal/driveplan", Rank: -2}, // the drive proposal's rules, no I/O
+	{Prefix: "internal/driveplan", Rank: -1}, // the drive proposal's rules, no I/O; spells its command through notation
 	{Prefix: "internal/ui", Rank: -1},
 	{Prefix: "internal/tasktree", Rank: -1},
 	{Prefix: "internal/trackerdriver", Rank: -1}, // imports shell

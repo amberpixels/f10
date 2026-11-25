@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -162,6 +163,7 @@ var proseOldWords = map[string]string{
 	"steps/demo.md: **What drives the app**":                    "the verb, about an app under demo",
 	"docs/project-setup.md: The old key `drive_env`":            "an old spelling, named beside its replacement",
 	"docs/cli.md: under their old names, `F10_DRIVE_FILE`":      "the two variables a daemon still sets for an older child",
+	"ts/web/src/views/Inbox.tsx: carries it as drive":           "a stored label's name",
 	"proto/f10/v1/events.proto: (`drive` for a batch":           "a stored value",
 	"proto/f10/v1/runs.proto: // drive is the batch's number":   "a deprecated message's field",
 	"proto/f10/v1/daemon.proto: // drive is the batch's number": "a deprecated message's field",
@@ -175,6 +177,13 @@ const oldSpellingsParagraph = "**Old spellings.**"
 // alone is allowed because a stored name may hold it.
 var oldSpellingRe = regexp.MustCompile(`f10 drive\b|--drives\b|start --resume|drive_env|F10_DRIVE_`)
 
+// tsWordsRe is what a person reads in a line of the web client: a comment, a
+// string, or the text between two JSX tags. An identifier is none of them,
+// so a property named by a stored label is not read as prose.
+var tsWordsRe = regexp.MustCompile("//.*$|^\\s*/?\\*.*$|\"[^\"]*\"|'[^']*'|`[^`]*`|>[^<>{}]+<")
+
+func tsProse(line string) string { return strings.Join(tsWordsRe.FindAllString(line, -1), " ") }
+
 // TestProseKeepsTheStartVocabulary reads prose and code apart. Prose never
 // says the old word. Code, in a span or a fence, may hold a stored name such
 // as `drives/`, and never an old spelling outside its one paragraph.
@@ -184,10 +193,14 @@ func TestProseKeepsTheStartVocabulary(t *testing.T) {
 
 	check := func(rel string, n int, line string, code bool) {
 		prose := line
-		if code {
+
+		switch ext := filepath.Ext(rel); {
+		case code:
 			prose = ""
-		} else if filepath.Ext(rel) == ".md" {
+		case ext == ".md":
 			prose = codeSpanRe.ReplaceAllString(line, "")
+		case ext == ".ts" || ext == ".tsx":
+			prose = tsProse(line)
 		}
 
 		// a proto field or method named with the old word is a wire name, and
@@ -214,15 +227,23 @@ func TestProseKeepsTheStartVocabulary(t *testing.T) {
 			rel, n, strings.TrimSpace(line))
 	}
 
-	files := []string{"README.md", filepath.Join("proto", "README.md"), filepath.Join("bin", "f10-state.sh")}
+	files := []string{"README.md", filepath.Join("proto", "README.md")}
 
-	for _, dir := range []string{"steps", "skills", "conventions", "modes", "docs", "proto"} {
+	// the plugin's prose, then what else a user or a model reads: the hook
+	// scripts, the plugin manifest and the web client's words
+	read := map[string][]string{
+		"steps": {".md"}, "skills": {".md"}, "conventions": {".md"}, "modes": {".md"}, "docs": {".md"},
+		"proto": {".md", ".proto"}, "bin": {".sh", ""}, ".claude-plugin": {".json"},
+		filepath.Join("ts", "web", "src"): {".ts", ".tsx"},
+	}
+
+	for dir, exts := range read {
 		err := filepath.WalkDir(filepath.Join(root, dir), func(path string, d fs.DirEntry, err error) error {
 			if err != nil || d.IsDir() {
 				return err
 			}
 
-			if ext := filepath.Ext(path); ext == ".md" || ext == ".proto" {
+			if slices.Contains(exts, filepath.Ext(path)) {
 				rel, _ := filepath.Rel(root, path)
 				files = append(files, rel)
 			}

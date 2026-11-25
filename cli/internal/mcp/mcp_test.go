@@ -24,6 +24,13 @@ import (
 
 func TestMain(m *testing.M) { testenv.Main(m) }
 
+// notTools are the methods whose proto comment says "Not a tool:", with why.
+// The comment is not in the descriptor, so the list is kept here beside the
+// test that counts the tools.
+var notTools = map[string]string{
+	"/f10.v1.RunService/StartBatch": "a local client's: it takes a batch number, an environment and a directory",
+}
+
 // TestEveryUnaryMethodIsATool fails when a method reaches the API without
 // its generated tool: the generated file is stale, or the plugin skipped it.
 func TestEveryUnaryMethodIsATool(t *testing.T) {
@@ -50,6 +57,14 @@ func TestEveryUnaryMethodIsATool(t *testing.T) {
 					if opts, ok := m.Options().(*descriptorpb.MethodOptions); ok && opts.GetDeprecated() {
 						if have[proc] {
 							t.Errorf("%s is deprecated and still an MCP tool: run just proto::gen", proc)
+						}
+
+						continue
+					}
+
+					if _, local := notTools[proc]; local {
+						if have[proc] {
+							t.Errorf("%s is marked not a tool and still one: run just proto::gen", proc)
 						}
 
 						continue

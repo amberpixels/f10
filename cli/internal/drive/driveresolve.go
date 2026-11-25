@@ -54,6 +54,7 @@ func (in *DriveInput) resolveTasks(ctx context.Context) ([]DriveTask, []string, 
 		task := DriveTask{
 			Ref: r, Suffix: suffix, info: info,
 			profile: in.profileFor(listed), flagged: in.profileFlagged(listed),
+			typedProfile: in.typedProfile(listed),
 		}
 
 		line, err := stack.BundleAfter(ctx, in.Tracker, r, info.Body)
@@ -67,7 +68,7 @@ func (in *DriveInput) resolveTasks(ctx context.Context) ([]DriveTask, []string, 
 				return fmt.Errorf("%s's body says After: %s: %w", r.ID, line, err)
 			}
 
-			task.after = base.Head().ID
+			task.want, task.source = []string{base.Head().ID}, baseBody
 		}
 
 		x, err := stack.LoadBranchIndex(ctx, in.Main)
@@ -181,8 +182,8 @@ func (in *DriveInput) resolveTasks(ctx context.Context) ([]DriveTask, []string, 
 	}
 
 	for _, t := range tasks {
-		for _, b := range append([]string{t.after}, t.Join...) {
-			if t.typed && parents[b] {
+		for _, b := range t.want {
+			if t.source == baseLine && parents[b] {
 				return nil, nil, fmt.Errorf("%s: base %s is a parent, whose subtasks keep their After: order: "+
 					"name the subtask it builds on", t.Ref.ID, b)
 			}
@@ -202,7 +203,7 @@ func (in *DriveInput) typedBases(i int) []string {
 }
 
 // typedOrder lays a token's typed bases over its body's After: line. One
-// base stacks the task as --after does, and several make it a join.
+// base stacks the task, and several make it a join.
 func (in *DriveInput) typedOrder(ctx context.Context, t *DriveTask, typed []string, parents map[string]bool) error {
 	if len(typed) == 0 {
 		return nil
@@ -229,13 +230,7 @@ func (in *DriveInput) typedOrder(ctx context.Context, t *DriveTask, typed []stri
 		ids = append(ids, id)
 	}
 
-	t.typed = true
-
-	if len(ids) == 1 {
-		t.after, t.Join = ids[0], nil
-	} else {
-		t.after, t.Join = "", ids
-	}
+	t.want, t.source = ids, baseLine
 
 	return nil
 }
@@ -249,14 +244,14 @@ func (in *DriveInput) typedBase(ctx context.Context, tasks []DriveTask) error {
 	case len(tasks) != 1:
 		return fmt.Errorf("--after and --base set one task's base, and %s runs %d tasks", in.Args.Tasks[0], len(tasks))
 	case in.Args.Base != "":
-		tasks[0].after = ""
+		tasks[0].want, tasks[0].source = nil, baseFlag
 	case in.Args.After != "":
 		base, err := in.Tracker.Resolve(ctx, in.Args.After)
 		if err != nil {
 			return fmt.Errorf("--after: %w", err)
 		}
 
-		tasks[0].after = base.Head().ID
+		tasks[0].want, tasks[0].source = []string{base.Head().ID}, baseFlag
 	}
 
 	return nil

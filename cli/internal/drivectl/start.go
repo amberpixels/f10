@@ -3,9 +3,11 @@ package drivectl
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/launch"
+	"github.com/amberpixels/f10/cli/internal/notation"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/worktree"
 )
@@ -158,15 +160,16 @@ func listed(words []string) int {
 	return len(words)
 }
 
-// ordered reports a word that is ids joined by , or @, an order a flow
-// start reads.
+// ordered reports a word that types an order between task ids, which a
+// flow start reads. A profile on an entry does not hide it.
 func ordered(w string) bool {
-	if !strings.ContainsAny(w, ",@") {
+	entries, err := notation.Parse(w)
+	if err != nil || !notation.Ordered(entries) {
 		return false
 	}
 
-	for part := range strings.FieldsFuncSeq(w, func(r rune) bool { return r == ',' || r == '@' }) {
-		if !ref.IsID(part) {
+	for _, e := range entries {
+		if !ref.IsID(e.Task) || slices.ContainsFunc(e.Bases, func(b string) bool { return !ref.IsID(b) }) {
 			return false
 		}
 	}

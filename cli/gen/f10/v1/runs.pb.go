@@ -1333,13 +1333,20 @@ type StartRequest struct {
 	Token string `protobuf:"bytes,13,opt,name=token,proto3" json:"token,omitempty"`
 	// tasks are the other ids, after token. A discussion opens token's
 	// worktree and reads them all, and a flow start runs them in one batch.
+	// Token and each of tasks are entries as f10 start takes them, so a flow
+	// start reads an order typed in them: A,B stacks B on A, and C@A names a base.
 	Tasks []string `protobuf:"bytes,14,rep,name=tasks,proto3" json:"tasks,omitempty"`
-	// chain makes a flow start a range: token, then the one id in tasks, and
-	// every id between, as `f10 start A -- B` runs them.
+	// chain is the old name of range, read the same way for clients built
+	// against it. A chain is now A,B,C, which token and tasks spell.
+	//
+	// Deprecated: Marked as deprecated in f10/v1/runs.proto.
 	Chain bool `protobuf:"varint,15,opt,name=chain,proto3" json:"chain,omitempty"`
 	// parallel caps a flow start's tasks running a skill at once; 0 keeps the
 	// record's or the default.
-	Parallel      int32 `protobuf:"varint,16,opt,name=parallel,proto3" json:"parallel,omitempty"`
+	Parallel int32 `protobuf:"varint,16,opt,name=parallel,proto3" json:"parallel,omitempty"`
+	// range makes a flow start a range: token, then the one id in tasks, and
+	// every id between, as `f10 start A -- B` runs them.
+	Range         bool `protobuf:"varint,17,opt,name=range,proto3" json:"range,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1472,6 +1479,7 @@ func (x *StartRequest) GetTasks() []string {
 	return nil
 }
 
+// Deprecated: Marked as deprecated in f10/v1/runs.proto.
 func (x *StartRequest) GetChain() bool {
 	if x != nil {
 		return x.Chain
@@ -1484,6 +1492,13 @@ func (x *StartRequest) GetParallel() int32 {
 		return x.Parallel
 	}
 	return 0
+}
+
+func (x *StartRequest) GetRange() bool {
+	if x != nil {
+		return x.Range
+	}
+	return false
 }
 
 type StartResponse struct {
@@ -3297,7 +3312,7 @@ const file_f10_v1_runs_proto_rawDesc = "" +
 	"\x14GetRunStatusResponse\x12%\n" +
 	"\x04runs\x18\x01 \x03(\v2\x11.f10.v1.RunStatusR\x04runs\x12\x12\n" +
 	"\x04view\x18\x02 \x01(\fR\x04view\x12)\n" +
-	"\aprinted\x18\x03 \x01(\v2\x0f.f10.v1.PrintedR\aprinted\"\x92\x03\n" +
+	"\aprinted\x18\x03 \x01(\v2\x0f.f10.v1.PrintedR\aprinted\"\xac\x03\n" +
 	"\fStartRequest\x12\x18\n" +
 	"\aproject\x18\x01 \x01(\tR\aproject\x12\x12\n" +
 	"\x04task\x18\x02 \x01(\tR\x04task\x12\x0e\n" +
@@ -3313,9 +3328,10 @@ const file_f10_v1_runs_proto_rawDesc = "" +
 	"\x04note\x18\v \x01(\tR\x04note\x12-\n" +
 	"\x06caller\x18\f \x01(\v2\x15.f10.v1.CallerContextR\x06caller\x12\x14\n" +
 	"\x05token\x18\r \x01(\tR\x05token\x12\x14\n" +
-	"\x05tasks\x18\x0e \x03(\tR\x05tasks\x12\x14\n" +
-	"\x05chain\x18\x0f \x01(\bR\x05chain\x12\x1a\n" +
-	"\bparallel\x18\x10 \x01(\x05R\bparallel\"\x99\x02\n" +
+	"\x05tasks\x18\x0e \x03(\tR\x05tasks\x12\x18\n" +
+	"\x05chain\x18\x0f \x01(\bB\x02\x18\x01R\x05chain\x12\x1a\n" +
+	"\bparallel\x18\x10 \x01(\x05R\bparallel\x12\x14\n" +
+	"\x05range\x18\x11 \x01(\bR\x05range\"\x99\x02\n" +
 	"\rStartResponse\x12\x12\n" +
 	"\x04task\x18\x01 \x01(\tR\x04task\x12\x16\n" +
 	"\x06branch\x18\x02 \x01(\tR\x06branch\x12\x1a\n" +

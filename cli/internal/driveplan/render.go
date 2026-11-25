@@ -3,6 +3,7 @@ package driveplan
 import (
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 )
 
@@ -10,9 +11,10 @@ import (
 const Tradeoff = "a bundle is one PR: one revert, one review over a mixed diff, " +
 	"and a later bug is traced to its lead with the riders named"
 
-// Command is the start command line the proposal runs, extra flags appended.
-func (p Plan) Command(extra ...string) string {
-	return "f10 start " + strings.Join(append(append([]string{}, p.Args...), extra...), " ")
+// Command is the start command line the proposal runs: its arguments, then
+// the start flags the user typed.
+func (p Plan) Command() string {
+	return "f10 start " + strings.Join(append(slices.Clone(p.Args), p.Carry...), " ")
 }
 
 // Saving is the line naming what bundling saves, "" when it saves nothing.
@@ -39,7 +41,7 @@ func count(n int, what string) string {
 
 // Write prints the proposal: the levels, the order with its reasons, the
 // command, the saving, and the trade-off once.
-func (p Plan) Write(w io.Writer, notes []string, extra ...string) error {
+func (p Plan) Write(w io.Writer, notes []string) error {
 	var b strings.Builder
 
 	width := 0
@@ -70,7 +72,7 @@ func (p Plan) Write(w io.Writer, notes []string, extra ...string) error {
 		fmt.Fprintf(&b, "%-9s %s\n", "", line)
 	}
 
-	fmt.Fprintf(&b, "\n%s\n", p.Command(extra...))
+	fmt.Fprintf(&b, "\n%s\n", p.Command())
 
 	if s := p.Saving(); s != "" {
 		b.WriteString(s + "\n")

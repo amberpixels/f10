@@ -17,6 +17,7 @@ import (
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
 	"github.com/amberpixels/f10/cli/internal/gitx"
+	"github.com/amberpixels/f10/cli/internal/notation"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/taskid"
 )
@@ -29,7 +30,7 @@ const (
 )
 
 // Separator joins a bundle's ids, `ABC-1+ABC-2`, lead first.
-const Separator = "+"
+const Separator = notation.Bundle
 
 // TypedMembers is each task a typed id names (`ft-1_v2+FT-2`), upper-cased
 // with its suffix dropped, lead first: the key drives and leases use.
@@ -232,39 +233,15 @@ func (r Lookup) exhausted(ctx context.Context) error {
 	return fmt.Errorf("%w (%s)", ErrNoReference, strings.Join(why, "; "))
 }
 
-// suffixRE is a reference salted with a word (`1454-attempt2`, `GH-1_v2`):
-// `f10 start` salts the branch so a second worktree for one task can live
-// beside the first.
-var suffixRE = regexp.MustCompile(`^(` + taskid.Reference + `)[-_]([A-Za-z0-9][A-Za-z0-9_-]*)$`)
-
 // JoinSuffix is SplitSuffix's inverse: id salted with suffix, as a command
 // names one attempt of a task, or id alone with none.
-func JoinSuffix(id, suffix string) string {
-	if suffix == "" {
-		return id
-	}
-
-	return id + "-" + suffix
-}
+func JoinSuffix(id, suffix string) string { return notation.JoinSuffix(id, suffix) }
 
 // SplitSuffix separates a salted reference into the reference and its
 // suffix. A token without one, or a url, comes back whole with "".
-func SplitSuffix(token string) (string, string) {
-	token = strings.TrimSpace(token)
-	if isURL(token) {
-		return token, ""
-	}
+func SplitSuffix(token string) (string, string) { return notation.SplitSuffix(token) }
 
-	if m := suffixRE.FindStringSubmatch(token); m != nil {
-		return m[1], m[4]
-	}
-
-	return token, ""
-}
-
-func isURL(token string) bool {
-	return strings.Contains(token, "://")
-}
+func isURL(token string) bool { return notation.IsURL(token) }
 
 func lastSegment(raw string) string {
 	u, err := url.Parse(raw)
@@ -386,27 +363,11 @@ func Members(prefix, branch string) []string {
 	return members
 }
 
-// idShape is any `ABC-12` or a bare number.
-var idShape = regexp.MustCompile(`^(?:[A-Za-z][A-Za-z0-9]*-)?\d+$`)
-
 // IsID says whether word is shaped as a task id f10 start takes. That is
 // `ABC-12` or a bare number with an optional -suffix, or a bundle of them
 // joined by Separator. The shape is enough, because the API resolves
 // each id against the project.
-func IsID(word string) bool {
-	if word == "" || strings.HasPrefix(word, "-") {
-		return false
-	}
-
-	for m := range strings.SplitSeq(word, Separator) {
-		id, _ := SplitSuffix(m)
-		if !idShape.MatchString(id) {
-			return false
-		}
-	}
-
-	return true
-}
+func IsID(word string) bool { return notation.IsID(word) }
 
 // Match is the task id in text (a branch name, a PR title, a commit subject),
 // anchored on a non-word boundary rather than the start since the id sits in

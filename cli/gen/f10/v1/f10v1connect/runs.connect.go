@@ -72,6 +72,9 @@ type RunServiceClient interface {
 	Drive(context.Context, *connect.Request[v1.DriveRequest]) (*connect.Response[v1.DriveResponse], error)
 	// StartBatch runs a list of tasks through a flow as one batch, each once
 	// its base has a commit, as f10 start does with a typed command line.
+	// Not a tool: Start runs the same batch with its closed-task check, and
+	// this method takes a batch number, an environment and a directory that
+	// only a local client has.
 	StartBatch(context.Context, *connect.Request[v1.StartBatchRequest]) (*connect.Response[v1.StartBatchResponse], error)
 	// Resume goes on with a stopped batch wherever each task stopped, the
 	// finish included, as f10 resume does. Any task of the batch names it.
@@ -269,6 +272,9 @@ type RunServiceHandler interface {
 	Drive(context.Context, *connect.Request[v1.DriveRequest]) (*connect.Response[v1.DriveResponse], error)
 	// StartBatch runs a list of tasks through a flow as one batch, each once
 	// its base has a commit, as f10 start does with a typed command line.
+	// Not a tool: Start runs the same batch with its closed-task check, and
+	// this method takes a batch number, an environment and a directory that
+	// only a local client has.
 	StartBatch(context.Context, *connect.Request[v1.StartBatchRequest]) (*connect.Response[v1.StartBatchResponse], error)
 	// Resume goes on with a stopped batch wherever each task stopped, the
 	// finish included, as f10 resume does. Any task of the batch names it.

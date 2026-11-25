@@ -84,7 +84,7 @@ func TestServeRunsAndAttaches(t *testing.T) {
 
 	req := request{
 		Op:   opRun,
-		Argv: []string{`echo 3 > "$F10_DRIVE_FILE"; echo batch 3; sleep 0.3; echo done; exit 4`},
+		Argv: []string{`echo 3 > "$F10_BATCH_FILE"; echo batch 3; sleep 0.3; echo done; exit 4`},
 		Dir:  "/",
 		Root: "/r",
 		Key:  "GH-1",
@@ -142,7 +142,7 @@ func TestServeAttachesToAResumeBeforeItsNumber(t *testing.T) {
 
 	resume, err := call(t.Context(), s.Dir, request{
 		Op:     opRun,
-		Argv:   []string{`sleep 0.5; echo 1 > "$F10_DRIVE_FILE"; sleep 0.3`},
+		Argv:   []string{`sleep 0.5; echo 1 > "$F10_BATCH_FILE"; sleep 0.3`},
 		Dir:    "/",
 		Root:   root,
 		Resume: rec.Number,
@@ -213,7 +213,7 @@ func TestServeAttachesAResumeToAnUnnumberedDrive(t *testing.T) {
 
 	first, err := call(t.Context(), s.Dir, request{
 		Op:   opRun,
-		Argv: []string{`sleep 0.5; echo 1 > "$F10_DRIVE_FILE"; sleep 0.3`},
+		Argv: []string{`sleep 0.5; echo 1 > "$F10_BATCH_FILE"; sleep 0.3`},
 		Dir:  "/",
 		Root: root,
 		Key:  "FT-1 FT-2",
@@ -293,7 +293,7 @@ func TestDrainResumesInTheNextDaemon(t *testing.T) {
 	s := &Server{Dir: dir, Version: "v1", Child: shell}
 	done := serve(t, s)
 
-	script := `trap 'exit 6' USR1; echo 5 > "$F10_DRIVE_FILE"; while :; do sleep 0.05; done`
+	script := `trap 'exit 6' USR1; echo 5 > "$F10_BATCH_FILE"; while :; do sleep 0.05; done`
 
 	rep, err := call(
 		t.Context(),
@@ -340,7 +340,7 @@ func TestDrainResumesInTheNextDaemon(t *testing.T) {
 		got = append(got, argv)
 		mu.Unlock()
 
-		return "/bin/sh", []string{"-c", `echo 5 > "$F10_DRIVE_FILE"; echo "$A"`}
+		return "/bin/sh", []string{"-c", `echo 5 > "$F10_BATCH_FILE"; echo "$A"`}
 	}}
 	serve(t, next)
 
@@ -426,7 +426,7 @@ func TestStopKeepsNoDrainedList(t *testing.T) {
 	s := &Server{Dir: dir, Version: "v1", Child: shell}
 	done := serve(t, s)
 
-	script := `trap 'exit 6' USR1; echo 5 > "$F10_DRIVE_FILE"; while :; do sleep 0.05; done`
+	script := `trap 'exit 6' USR1; echo 5 > "$F10_BATCH_FILE"; while :; do sleep 0.05; done`
 
 	rep, err := call(t.Context(), dir, request{Op: opRun, Argv: []string{script}, Dir: "/", Root: "/r"}, 0)
 	if err != nil {
@@ -465,7 +465,7 @@ func TestStopNowCutsADrainShort(t *testing.T) {
 		dir,
 		request{
 			Op:   opRun,
-			Argv: []string{`trap '' USR1; echo 2 > "$F10_DRIVE_FILE"; while :; do sleep 0.05; done`},
+			Argv: []string{`trap '' USR1; echo 2 > "$F10_BATCH_FILE"; while :; do sleep 0.05; done`},
 			Dir:  "/",
 			Root: "/r",
 		},
@@ -708,7 +708,7 @@ func TestServeResumesADriveThatAsksIt(t *testing.T) {
 
 	first, err := call(t.Context(), dir, request{
 		Op:   opRun,
-		Argv: []string{`echo 5 > "$F10_DRIVE_FILE"; sleep 0.4; exit 8`},
+		Argv: []string{`echo 5 > "$F10_BATCH_FILE"; sleep 0.4; exit 8`},
 		Dir:  "/",
 		Root: "/r",
 		Env:  []string{"A=1"},
@@ -751,7 +751,7 @@ func TestDrainKeepsADriveThatAsksToResume(t *testing.T) {
 
 	rep, err := call(t.Context(), dir, request{
 		Op:   opRun,
-		Argv: []string{`trap 'exit 8' USR1; echo 5 > "$F10_DRIVE_FILE"; while :; do sleep 0.05; done`},
+		Argv: []string{`trap 'exit 8' USR1; echo 5 > "$F10_BATCH_FILE"; while :; do sleep 0.05; done`},
 		Dir:  "/",
 		Root: "/r",
 	}, 0)
@@ -786,5 +786,49 @@ func TestDrainKeepsADriveThatAsksToResume(t *testing.T) {
 
 	if raw, err := os.ReadFile(drainedPath(dir)); err != nil || !strings.Contains(string(raw), `"drive":5`) {
 		t.Errorf("drained list = %s, %v", raw, err)
+	}
+}
+
+// A child one release older reads the two variables under their old names,
+// so the daemon sets both spellings, each to the same value.
+func TestServeSetsTheOldVariableNamesToo(t *testing.T) {
+	t.Parallel()
+
+	s := &Server{Dir: runDir(t), Version: "v1", Child: shell}
+	serve(t, s)
+
+	script := `[ "$F10_DRIVE_FILE" = "$F10_BATCH_FILE" ] && [ -n "$F10_DRIVE_RESUMES" ] && [ -n "$F10_BATCH_RESUMES" ] ` +
+		`&& echo 7 > "$F10_DRIVE_FILE"; sleep 0.3; exit 4`
+
+	rep, err := call(
+		t.Context(),
+		s.Dir,
+		request{Op: opRun, Argv: []string{script}, Dir: "/", Root: "/r", Key: "GH-1"},
+		0,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if exit := waitExit(t, rep.Log); exit != (Exit{Code: 4, Drive: 7}) {
+		t.Errorf("exit = %+v, want batch 7 written through the old name", exit)
+	}
+}
+
+// A child under a daemon one release older finds only the old names.
+func TestEnvOfReadsTheOldNameWhenTheNewIsUnset(t *testing.T) {
+	t.Setenv(NumberFileEnv, "")
+	t.Setenv(OldNumberFileEnv, "/tmp/old")
+	t.Setenv(ResumeEnv, "")
+	t.Setenv(OldResumeEnv, "1")
+
+	if EnvOf(NumberFileEnv) != "/tmp/old" || EnvOf(ResumeEnv) != "1" {
+		t.Errorf("old names read as %q and %q", EnvOf(NumberFileEnv), EnvOf(ResumeEnv))
+	}
+
+	t.Setenv(NumberFileEnv, "/tmp/new")
+
+	if EnvOf(NumberFileEnv) != "/tmp/new" {
+		t.Errorf("the new name does not win: %q", EnvOf(NumberFileEnv))
 	}
 }
