@@ -45,12 +45,27 @@ func TestReportNameAndArgs(t *testing.T) {
 	def, _, _ := agentctl.Profile{}.Resolve()
 	high, _, _ := agentctl.Profile{Model: "opus", Effort: "high"}.Resolve()
 
-	if n := reportName("feature-small", def); n != "feature-small.json" {
-		t.Errorf("default report %q", n)
+	for _, c := range []struct {
+		p      agentctl.Profile
+		repeat int
+		want   string
+	}{
+		{def, 0, "feature-small.json"},
+		{high, 0, "feature-small.opus-high.json"},
+		{def, 3, "feature-small.3.json"},
+		{high, 2, "feature-small.opus-high.2.json"},
+	} {
+		if n := reportName("feature-small", c.p, c.repeat); n != c.want {
+			t.Errorf("report %q, want %q", n, c.want)
+		}
 	}
 
-	if n := reportName("feature-small", high); n != "feature-small.opus-high.json" {
-		t.Errorf("profile report %q", n)
+	if d := resolveDir("/root", "evals/reports/base"); d != "/root/evals/reports/base" {
+		t.Errorf("relative out %q", d)
+	}
+
+	if d := resolveDir("/root", "/tmp/base"); d != "/tmp/base" {
+		t.Errorf("absolute out %q", d)
 	}
 
 	o := options{permission: "acceptEdits", budget: "5"}

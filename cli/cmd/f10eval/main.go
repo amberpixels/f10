@@ -1,7 +1,8 @@
 // Command f10eval runs f10's prompt scenarios against the real model and
 // checks what each run leaves behind. It costs model spend, so it runs on
 // demand and before a release (`just eval`), never in CI; its reports under
-// evals/reports/<version>/ are kept in git so releases compare by diff.
+// evals/reports/<version>/ are kept in git, and `f10eval compare` reads two
+// report sets side by side.
 package main
 
 import (
@@ -94,6 +95,7 @@ type Report struct {
 	Agent    string    `json:"agent,omitempty"` // the profile the run started on, resolved; "" for the kind's default
 	Version  string    `json:"version"`
 	Commit   string    `json:"commit"`
+	Repeat   int       `json:"repeat,omitempty"` // 1-based under -repeat above 1; 0 for a single run
 	At       time.Time `json:"at"`
 	Pass     bool      `json:"pass"`
 	Checks   []Check   `json:"checks"`
@@ -111,6 +113,8 @@ type options struct {
 	permission string
 	budget     string
 	agent      string
+	out        string
+	repeat     int
 	keep       bool
 }
 
@@ -125,8 +129,32 @@ func main() {
 		"claude's --max-budget-usd per turn; a scenario with several prompts may spend it on each")
 	flag.StringVar(&o.agent, "agent", "",
 		"run every scenario on this agent `profile` (kind:model:effort, or a part), not the ones it lists")
+	flag.StringVar(&o.out, "out", "",
+		"write reports to this `dir`, relative to -root (default evals/reports/<version>)")
+	flag.IntVar(&o.repeat, "repeat", 1, "run every scenario `N` times on each of its profiles")
 	flag.BoolVar(&o.keep, "keep", false, "keep each scenario's temp dir and print its path")
 	flag.Parse()
+
+	// `just eval compare <a> <b>` arrives as `-root .. compare <a> <b>`, so
+	// the subcommand follows the flags and shares -root
+	if flag.Arg(0) == "compare" {
+		if err := compareMain(os.Stdout, o.root, flag.Args()[1:]); err != nil {
+			fmt.Fprintln(os.Stderr, "f10eval compare:", err)
+			os.Exit(1)
+		}
+
+		return
+	}
+
+	if flag.NArg() > 0 {
+		fmt.Fprintf(os.Stderr, "f10eval: unexpected argument %q\n", flag.Arg(0))
+		os.Exit(2)
+	}
+
+	if o.repeat < 1 {
+		fmt.Fprintln(os.Stderr, "f10eval: -repeat must be 1 or more")
+		os.Exit(2)
+	}
 
 	if err := run(context.Background(), o); err != nil {
 		fmt.Fprintln(os.Stderr, "f10eval:", err)
@@ -160,6 +188,7 @@ func run(ctx context.Context, o options) error {
 		commit += "-dirty"
 	}
 
+	out := resolveDir(root, cmp.Or(o.out, filepath.Join("evals", "reports", version)))
 	failed, runs := 0, 0
 
 	for _, s := range scenarios {
@@ -171,27 +200,39 @@ func run(ctx context.Context, o options) error {
 		}
 
 		for _, p := range profiles {
-			runs++
-			rep := runScenario(ctx, root, s, o, p)
-			rep.Version, rep.Commit = version, commit
+			for n := range o.repeat {
+				repeat := 0
+				if o.repeat > 1 {
+					repeat = n + 1
+				}
 
-			path := filepath.Join(root, "evals", "reports", version, reportName(s.Name, p))
-			if err := writeReport(path, rep); err != nil {
-				return err
+				runs++
+				rep := runScenario(ctx, root, s, o, p)
+				rep.Version, rep.Commit, rep.Repeat = version, commit, repeat
+
+				path := filepath.Join(out, reportName(s.Name, p, repeat))
+				if err := writeReport(path, rep); err != nil {
+					return err
+				}
+
+				status := "pass"
+				if !rep.Pass {
+					status, failed = "FAIL", failed+1
+				}
+
+				cost := fmt.Sprintf("$%.2f", rep.CostUSD)
+				if rep.GraderCostUSD > 0 {
+					cost += fmt.Sprintf(" + $%.2f grader", rep.GraderCostUSD)
+				}
+
+				name := s.Name
+				if repeat > 0 {
+					name += fmt.Sprintf(" #%d", repeat)
+				}
+
+				fmt.Printf("%-28s %-16s %s  %s  %s  %s\n", name, p.Short(), status, cost,
+					time.Duration(rep.DurationMS)*time.Millisecond, path)
 			}
-
-			status := "pass"
-			if !rep.Pass {
-				status, failed = "FAIL", failed+1
-			}
-
-			cost := fmt.Sprintf("$%.2f", rep.CostUSD)
-			if rep.GraderCostUSD > 0 {
-				cost += fmt.Sprintf(" + $%.2f grader", rep.GraderCostUSD)
-			}
-
-			fmt.Printf("%-24s %-16s %s  %s  %s  %s\n", s.Name, p.Short(), status, cost,
-				time.Duration(rep.DurationMS)*time.Millisecond, path)
 		}
 	}
 
@@ -640,15 +681,30 @@ func profilesFor(s Scenario, only string) ([]agentctl.Profile, error) {
 	return out, nil
 }
 
-// reportName is the report file for one run: the scenario's name, and the
-// profile with its colons as hyphens when it is not the kind's default, so
-// two profiles of one scenario sit side by side under one version.
-func reportName(scenario string, p agentctl.Profile) string {
-	if p.IsDefault() {
-		return scenario + ".json"
+// reportName is the report file for one run: the scenario's name, the
+// profile with its colons as hyphens when it is not the kind's default, and
+// the repeat index when there is one, so every run of a set gets its own file.
+func reportName(scenario string, p agentctl.Profile, repeat int) string {
+	name := scenario
+	if !p.IsDefault() {
+		name += "." + strings.ReplaceAll(p.Short(), ":", "-")
 	}
 
-	return scenario + "." + strings.ReplaceAll(p.Short(), ":", "-") + ".json"
+	if repeat > 0 {
+		name += "." + strconv.Itoa(repeat)
+	}
+
+	return name + ".json"
+}
+
+// resolveDir joins a relative dir to the checkout root, because `just eval`
+// runs from cli/ and a path typed at the repo root means the repo root.
+func resolveDir(root, dir string) string {
+	if filepath.IsAbs(dir) {
+		return dir
+	}
+
+	return filepath.Join(root, dir)
 }
 
 // claudeArgs is the command line for one turn: the profile's flags through
