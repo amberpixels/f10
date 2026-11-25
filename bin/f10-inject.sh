@@ -23,7 +23,8 @@ set -uo pipefail
 state_dir="${F10_STATE_DIR:-$HOME/.claude/f10/state}"
 
 # The skills that run a step and so read the conventions. board, finish, inbox, read, start and status run the binary
-# alone. --help loads nothing (modes/help.md).
+# alone; start --propose runs one step, and the start skill loads the conventions for it itself, so a plain start
+# never pays for them. --help loads nothing (modes/help.md).
 skills="audit brainstorm capture catchup ci cleanup debug demo explain handoff judge plan resolve review ship standup"
 
 # shellcheck disable=SC2016 # the backticks are markdown for the model, not a command

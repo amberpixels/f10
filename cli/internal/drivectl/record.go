@@ -73,11 +73,15 @@ func JoinWaits(t drivestore.Task, tasks []drivestore.Task, planned func(string) 
 
 // opened reads a record's task as opened: its mark, or for a record written
 // before the mark, a skill in flight or a phase only an opened task reaches.
+// An ended task counts, because a base that ended before it opened ends its
+// join too, and the join's own outcome is then its row.
 func opened(t drivestore.Task) bool {
 	switch t.Phase {
 	case drivestore.PhaseRunning, drivestore.PhaseVerifying, drivestore.PhaseRetrying,
 		drivestore.PhaseParked, drivestore.PhaseWaiting:
 		return true
+	case drivestore.PhaseEnded:
+		return t.Outcome != nil
 	}
 
 	return t.Opened || t.Skill != ""

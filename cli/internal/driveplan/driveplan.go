@@ -149,14 +149,22 @@ func Propose(in Input) (Plan, error) {
 
 	tasks := slices.Clone(in.Tasks)
 	byID := map[string]int{}
+	typed := map[string]bool{}
 
+	// two attempts of one task are two entries, as a start opens them; a base
+	// names the task, so byID keeps its first attempt
 	for i := range tasks {
-		key := strings.ToUpper(tasks[i].ID)
-		if _, dup := byID[key]; dup {
-			return Plan{}, fmt.Errorf("%s is listed twice", tasks[i].ID)
+		attempt := strings.ToUpper(notation.JoinSuffix(tasks[i].ID, tasks[i].Suffix))
+		if typed[attempt] {
+			return Plan{}, fmt.Errorf("%s is listed twice", notation.JoinSuffix(tasks[i].ID, tasks[i].Suffix))
 		}
 
-		byID[key] = i
+		typed[attempt] = true
+
+		key := strings.ToUpper(tasks[i].ID)
+		if _, taken := byID[key]; !taken {
+			byID[key] = i
+		}
 	}
 
 	base := make([][]Base, len(tasks))

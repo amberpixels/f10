@@ -602,3 +602,20 @@ func TestCommandCarriesWhatWasTyped(t *testing.T) {
 		t.Errorf("command %q", p.Command())
 	}
 }
+
+// Two attempts of one task are two entries, as a start opens them: each
+// stays alone and keeps its suffix in the command.
+func TestTwoAttemptsOfOneTask(t *testing.T) {
+	a, b := small("FT-1", "ui", 20), small("FT-1", "ui", 20)
+	a.Suffix, b.Suffix = "a", "b"
+
+	p := propose(t, a, b)
+	if got := p.Command(); got != "f10 start FT-1-a FT-1-b --parallel 2" {
+		t.Errorf("command %q", got)
+	}
+
+	if _, err := driveplan.Propose(driveplan.Input{Tasks: []driveplan.Task{a, a}, MaxLines: 300}); err == nil ||
+		!strings.Contains(err.Error(), "FT-1-a is listed twice") {
+		t.Errorf("one attempt typed twice: err = %v", err)
+	}
+}
