@@ -321,6 +321,8 @@ The command line can order its entries itself, with three marks read left to rig
 An entry reads `<id>[-suffix][@<base>...][:profile]`.
 The profile comes last because it is the entry's, never a base's, and `C:opus@A` is refused with the right spelling.
 A base is a task id or a bundle, with no suffix and no profile.
+A bundle's rider named as a base is waited for as the bundle, by its lead.
+A url takes no order, so a `,` or an `@` and a task id typed around one is refused, and the refusal says to use the task's id.
 No part of the notation needs quoting in bash or zsh, extendedglob included.
 
 One base is a stack, the same as `--after` or a body's `After:` line.
@@ -334,7 +336,12 @@ So does a base outside the list that is not finished, under `--plan` one with no
 A base that halts, or ends at its PR without merging, halts the join before it opens, while a base on an ask keeps it waiting.
 A join started under `--plan` keeps those rules on a later run, because its branch exists before its bases merge.
 
-A typed base wins over the body's `After:` line, as `--after` does, and is never written to the tracker.
+A typed base wins over the body's `After:` line, and is never written to the tracker.
+A task's bases are settled once, before anything is created, and the same answer decides what the batch waits for and what the branch records.
+Once a task has started, its branch's record wins over a typed order and over the body, for a stack and a join alike.
+A note names what it overruled.
+So a branch never records both a stack and a join.
+`--after` and `--base` are the exception: they restack the one task they name, so they win over its branch's record.
 The order is kept in the batch's record until an entry starts, and on its branch after, so `f10 resume` brings a stopped batch back in the same order.
 A parent cannot be ordered or named as a base, because its subtasks keep their own `After:` order: name the subtasks.
 `--after` or `--base` beside an `@` on the same entry is refused, and so is an order on a range.
@@ -852,7 +859,8 @@ A task whose checkout has its branch is read from there first, so only a task wi
 
 A batch is the tasks one `f10 start` started, kept as a record so it can be stopped and resumed.
 Every `f10 start` that runs the flow starts one: `f10 start 42 43` runs both tasks from the main session.
-Each task waits for its one base to have code, and every task released that way runs at once.
+A task with one base waits for that base to have code, and a join, a task with several bases, waits for every one of them to merge.
+Every task released that way runs at once.
 The batch's process exits when every task is through, one needs a human, or nothing else can move.
 That process is this binary rather than a Claude session: ordering, prompting and polling are deterministic, and a session polling an agent pays a round trip and a slice of context per check.
 It runs in the per-user [daemon](#daemon), not in the process that typed the command.
@@ -891,6 +899,9 @@ Lock files are never deleted.
 
 **List and stop.**
 `f10 status --batches` prints the newest 20 batches (`--all` for every one, `--json` for the records), each with its number, its time, `running (pid …)`, `stopped`, `done` or `cancelled`, its command line, and a row per task: its outcome, else `queued` or `running <skill>` while its batch runs, else `stopped at <skill>` or `not reached`.
+A join not opened yet reads `waiting for A and B to merge`, or under `--plan`, `waiting for A to save a plan`.
+`--json` prints a row per batch with its `number`, `args`, `state`, `started` and `tasks`.
+`tasks` holds the batch's tasks as typed, and any of them names the batch to `f10 stop`, `f10 resume` and `f10 daemon logs`, so a reader needs no number.
 A batch that is not running, a cancelled one included, has each row not yet finished checked against its task.
 The check is the rule a running batch and `f10 status` use.
 A task with no branch here or on origin and no live plan reads `finished` when its issue is closed.
@@ -1137,8 +1148,6 @@ A task halted for another reason stays halted until its run changes: settle it i
 
 `/f10:start` runs the command in the background and prints the final report. It never relays an ask: the question waits in the asking agent's pane, on the status line and in the inbox, and `/f10:inbox` answers it on request.
 
-Out of scope: more than one base per task, and ordering tasks by anything but their recorded dependencies.
-
 **Old spellings.**
 Each of these still works for one release and prints one line on stderr naming its replacement:
 - `f10 start --resume <n>` is now `f10 resume <task-id>`.
@@ -1147,13 +1156,27 @@ Each of these still works for one release and prints one line on stderr naming i
 - The frontmatter key `drive_env` is now `batch_env`, and both in one frontmatter are an error.
 - A batch number given to `f10 stop`, `f10 resume` or `f10 daemon logs` is now any task id of the batch.
   Until the number goes, a bare positive number given to those three commands is read as a batch number, never as a task id.
+  `f10 stop <n>` goes through the API's old stop-by-number method, which is kept for that release too.
+
+Two more old names are still served for one release and print nothing, because no person types them:
+- A daemon sets the two variables it hands a batch under their old names, `F10_DRIVE_FILE` and `F10_DRIVE_RESUMES`, beside `F10_BATCH_FILE` and `F10_BATCH_RESUMES`, and a batch reads either.
+- `f10 daemon status` reads the old list of batches from a daemon one release older.
+
+In the code, each of these sites carries the comment `one-release alias:`, so one search finds what to remove.
 
 What a program reads is renamed with no alias, because the plugin's skills are its readers and ship with the binary:
 - the proposal's `--json` keys `proposal` and `levels`
 - the `batch` key of `f10 inbox list --json`
 - `batchEnv` in `f10 config --json`
 - the `batches` key of `f10 standup --json`, which is schema 3
-- the MCP tools `start_batch`, `list_batches` and `stop_batch`
+- the MCP tools `list_batches` and `stop_batch`.
+  The old `drive` tool has no successor of its own: `start` starts a batch, and `StartBatch` stays an API method for a local client and is no tool.
+
+More changes a project or a program meets after the upgrade:
+- A flow label `propose`, as in `pr[propose]`, is now refused, because `propose` became a step's name and a label may not be one.
+- A project's `.f10/instructions/propose.md` now loads as the propose step's overlay.
+- In the proposal's `--json`, `tasks[].buildsOn` and `tasks[].afterEdit` are lists, where each was one id.
+- An MCP tool's result no longer carries a deprecated field, so `start` answers `batch` and no `drive` beside it.
 
 ### Proposal
 
@@ -1215,7 +1238,9 @@ Every base is spelled, an entry's own `After:` line included, because a typed ba
 It prints `saves about N CI waits and M finishes against starting them one by one`.
 When anything is bundled, it prints once that a bundle is one PR, one revert and one review over a mixed diff.
 It adds that a later bug is traced to its lead with the riders named.
-`--json` prints the same for a skill under the keys `command`, `proposal`, `tasks` (the gathered facts), `notes` and `saving`.
+`--json` prints the same for a program, under the keys `schema`, `command`, `proposal`, `tasks` (the gathered facts), `notes` and `saving`.
+No skill reads it: the propose step prints the text.
+`schema` is 1, and it goes up with every change that would break a reader of the old keys.
 The proposal holds its rows under `levels`, and each entry holds its bases under `bases`.
 `--hint` prints one line when the rules alone save at least one CI wait, and nothing otherwise.
 A bundle the user typed or named with `with` is not counted.
@@ -1240,6 +1265,10 @@ An unknown field is refused, so a misspelt one never reads as not sized:
 `alone`, `with` and `after` are the user's edits to the proposal.
 `with` bundles with that task, whatever the rules say.
 `buildsOn` and `after` are lists of ids, and a single id reads as a list of one.
+An id typed with a `-suffix` is one attempt of its task: it stays alone, and the command prints the suffix.
+A closed task is left out with a note, typed alone or inside a bundle, and when it led the bundle the first open member leads.
+A bundle the user typed stays whole whichever member is typed first.
+A typed `--parallel` is printed on the command, a cap of 1 included, and `--hint` carries the typed start flags as the text and `--json` do.
 `after` replaces every base the rules would give, and `none` drops them all.
 The start reads the body's `After:` line of an entry with no typed base.
 So a dropped order that the body still states prints a line under the order block, naming `f10 task update <id> --after none`, which drops it from the task.
@@ -1328,7 +1357,9 @@ Then it prints each watched project: its last pass, that pass's exit, and its lo
 { "mcpServers": { "f10": { "command": "/Users/you/.local/bin/f10", "args": ["mcp", "--scope", "read,answer"] } } }
 ```
 
-- **One tool per method.** Every unary method of `f10.v1` and `agents.v1` is a tool named after the method in snake case (`list_asks`, `answer_ask`, `get_run_status`). Its description is the rpc's comment and its input schema the request message, in proto field names. Both are generated from the proto schema by `protoc-gen-f10-mcp` into `cli/gen/mcptools`. So `just proto::gen` after a new method is all it takes to add its tool. The plugin refuses an rpc with no comment. A deprecated method is no tool and a deprecated field is no argument, so a batch's tools are `start_batch`, `resume`, `list_batches` and `stop_batch`.
+- **One tool per method.** Every unary method of `f10.v1` and `agents.v1` is a tool named after the method in snake case (`list_asks`, `answer_ask`, `get_run_status`). Its description is the rpc's comment and its input schema the request message, in proto field names. Both are generated from the proto schema by `protoc-gen-f10-mcp` into `cli/gen/mcptools`. So `just proto::gen` after a new method is all it takes to add its tool. The plugin refuses an rpc with no comment. A deprecated method is no tool and a deprecated field is no argument, and a tool's result leaves the deprecated fields out as well.
+An rpc whose comment holds a sentence opening `Not a tool:` stays an API method and is no tool, which keeps `StartBatch` for a local client.
+So a batch's tools are `start`, `resume`, `list_batches` and `stop_batch`.
 - **Scopes.** The tools offered are the methods the **Remote** scope table places under the scopes given. `--scope` names the scopes. `--token <name>` takes the scopes of the device token with that name, and is refused once that token is revoked. The socket checks no token, so its secret is never needed here. With neither flag, the scopes are `read` and `answer`. `Hello`, `StopDaemon` and `WatchProject` are never tools. Neither is `WatchEvents`, because it streams and a tool call returns once, so poll `get_run_status` instead.
 - **Calls.** Each call starts the daemon when none listens, so a client that stays connected past the daemon's idle exit keeps working. A result is the response as JSON. A refused call, such as an ask already answered or a misspelled field, is a tool error naming why.
 

@@ -15,6 +15,7 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/types/descriptorpb"
 
 	"github.com/amberpixels/f10/cli/gen/mcptools"
 )
@@ -83,6 +84,8 @@ func (o Options) handler(t mcptools.Tool) sdk.ToolHandler {
 			return failed(err), nil
 		}
 
+		dropDeprecated(out.ProtoReflect())
+
 		raw, err := marshal.Marshal(out)
 		if err != nil {
 			return nil, err
@@ -105,6 +108,41 @@ func dropCaller(m protoreflect.Message) {
 			m.Clear(f)
 		}
 	}
+}
+
+// dropDeprecated clears every field a reply's proto marks deprecated, in the
+// messages it holds too. The API still fills an old name for clients built
+// against it, and a tool's result would otherwise say it beside the new one.
+// A map entry keyed by an old word is data and stays.
+func dropDeprecated(m protoreflect.Message) {
+	m.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
+		if opts, ok := fd.Options().(*descriptorpb.FieldOptions); ok && opts.GetDeprecated() {
+			m.Clear(fd)
+
+			return true
+		}
+
+		switch {
+		case fd.IsMap():
+			if fd.MapValue().Message() != nil {
+				v.Map().Range(func(_ protoreflect.MapKey, e protoreflect.Value) bool {
+					dropDeprecated(e.Message())
+
+					return true
+				})
+			}
+		case fd.IsList():
+			if fd.Message() != nil {
+				for i := range v.List().Len() {
+					dropDeprecated(v.List().Get(i).Message())
+				}
+			}
+		case fd.Message() != nil:
+			dropDeprecated(v.Message())
+		}
+
+		return true
+	})
 }
 
 func failed(err error) *sdk.CallToolResult {

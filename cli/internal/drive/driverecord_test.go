@@ -18,6 +18,7 @@ import (
 	"github.com/amberpixels/f10/cli/internal/ledger"
 	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/runplan"
+	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/state"
 	"github.com/amberpixels/f10/cli/internal/storage"
 	"github.com/amberpixels/f10/cli/internal/tasksource"
@@ -682,4 +683,47 @@ func TestRecordFollowsThePhase(t *testing.T) {
 
 	in.end(t.Context(), r, driveResult{Row: "done: ship"})
 	want(drivestore.PhaseEnded, false)
+}
+
+// A parent expands into several tasks, so a later token's :profile must land
+// on its own task's row, not on the row at the token's index.
+func TestRecordKeepsEachTasksOwnProfile(t *testing.T) {
+	fx := newDriveFixture(t, "GH-1", "GH-9:opus")
+	fx.in.Root = t.TempDir()
+
+	for _, id := range []string{"GH-1", "GH-2", "GH-3", "GH-9"} {
+		fx.task(id, tasksource.TaskInfo{Body: "x"}, "")
+	}
+
+	fx.in.Tracker.Children = func(_ context.Context, r ref.Ref) ([]stack.ChildRow, error) {
+		if r.ID == "GH-1" {
+			return []stack.ChildRow{{ID: "GH-2"}, {ID: "GH-3"}}, nil
+		}
+
+		return nil, tasksource.ErrNoParentLink
+	}
+
+	tasks, _, err := fx.in.resolveTasks(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, _, err := fx.in.graph(t.Context(), tasks); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := fx.in.openRecord(tasks); err != nil {
+		t.Fatal(err)
+	}
+
+	defer fx.in.releaseAll()
+
+	got := make([]string, 0, len(fx.in.Rec.Tasks))
+	for _, row := range fx.in.Rec.Tasks {
+		got = append(got, row.ID+"="+row.Agent)
+	}
+
+	if want := "GH-2= GH-3= GH-9=opus"; strings.Join(got, " ") != want {
+		t.Errorf("rows = %q, want %q", strings.Join(got, " "), want)
+	}
 }

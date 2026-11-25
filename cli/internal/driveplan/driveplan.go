@@ -10,6 +10,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/amberpixels/f10/cli/internal/notation"
 )
 
 // The kinds a task may carry, as fetch settles them.
@@ -38,6 +40,8 @@ type Task struct {
 	Alone     bool     `json:"alone,omitempty"`     // the user kept it alone
 	With      string   `json:"with,omitempty"`      // the user bundled it with this task
 	After     []string `json:"afterEdit,omitempty"` // the user's bases for it, ["none"] to drop every base
+	// Suffix is its -suffix as typed, one attempt of the task, which never bundles
+	Suffix string `json:"suffix,omitempty"`
 }
 
 // NoOrder is the user's After: that drops every base of a task.
@@ -48,6 +52,11 @@ type Input struct {
 	Tasks    []Task
 	MaxLines int // bundle_max_lines
 	Parallel int // the ceiling on --parallel, 0 for none
+	// TypedParallel says the user typed that ceiling, so the command prints
+	// it even at 1, where a default ceiling of 1 prints nothing
+	TypedParallel bool
+	// Carry is the start flags the user typed, put on the command as typed
+	Carry []string
 	// Joins says the run's flow finishes, so an entry may wait on several
 	// bases. f10 start refuses a join otherwise, so only the first is kept.
 	Joins bool
@@ -63,6 +72,7 @@ type Entry struct {
 	Bases   []Base   `json:"bases,omitempty"` // the tasks outside the entry it waits for
 	Lines   int      `json:"lines,omitempty"`
 	Profile string   `json:"profile,omitempty"`
+	Suffix  string   `json:"suffix,omitempty"` // a lone task's -suffix as typed
 	spike   bool
 	named   bool // holds a pair the user bundled, so the rules did not form it
 }
@@ -76,12 +86,12 @@ type Base struct {
 
 // Token is how the proposal's rows name the entry. The command adds its bases.
 func (e Entry) Token() string {
-	tok := strings.Join(e.IDs, "+")
-	if e.Profile != "" {
-		tok += ":" + e.Profile
-	}
+	return notation.Format(notation.Entry{Task: e.task(), Profile: e.Profile})
+}
 
-	return tok
+// task is the entry's tasks as the command line spells them.
+func (e Entry) task() string {
+	return notation.JoinSuffix(strings.Join(e.IDs, notation.Bundle), e.Suffix)
 }
 
 // waits is the ids of the bases the entry keeps.
@@ -114,6 +124,9 @@ type Formed struct {
 type Plan struct {
 	Levels []Level  `json:"levels"`
 	Args   []string `json:"args"` // the start command's arguments, the order spelled with , and @
+	// Carry is the typed start flags the command ends in. Command is the one
+	// place the line is built, for the text, the JSON and the hint.
+	Carry []string `json:"carried,omitempty"`
 	// Unordered is a line per task whose order the user dropped. Its body
 	// still names a base, which the start would read back.
 	Unordered []string `json:"unordered,omitempty"`
@@ -136,14 +149,22 @@ func Propose(in Input) (Plan, error) {
 
 	tasks := slices.Clone(in.Tasks)
 	byID := map[string]int{}
+	typed := map[string]bool{}
 
+	// two attempts of one task are two entries, as a start opens them. A base
+	// names the task, so byID keeps its first attempt.
 	for i := range tasks {
-		key := strings.ToUpper(tasks[i].ID)
-		if _, dup := byID[key]; dup {
-			return Plan{}, fmt.Errorf("%s is listed twice", tasks[i].ID)
+		attempt := strings.ToUpper(notation.JoinSuffix(tasks[i].ID, tasks[i].Suffix))
+		if typed[attempt] {
+			return Plan{}, fmt.Errorf("%s is listed twice", notation.JoinSuffix(tasks[i].ID, tasks[i].Suffix))
 		}
 
-		byID[key] = i
+		typed[attempt] = true
+
+		key := strings.ToUpper(tasks[i].ID)
+		if _, taken := byID[key]; !taken {
+			byID[key] = i
+		}
 	}
 
 	base := make([][]Base, len(tasks))
@@ -188,7 +209,7 @@ func Propose(in Input) (Plan, error) {
 		return Plan{}, err
 	}
 
-	p := Plan{Levels: levels, Args: commandArgs(levels), Unordered: unordered(tasks, levels, byID)}
+	p := Plan{Levels: levels, Args: commandArgs(levels), Carry: in.Carry, Unordered: unordered(tasks, levels, byID)}
 
 	for _, st := range levels {
 		p.Parallel = max(p.Parallel, len(st.Entries))
@@ -221,7 +242,8 @@ func Propose(in Input) (Plan, error) {
 		p.Parallel = min(p.Parallel, in.Parallel)
 	}
 
-	if p.Parallel > 1 {
+	// a cap of 1 is the start's own default only when nobody typed it
+	if p.Parallel > 1 || in.TypedParallel && in.Parallel > 0 {
 		p.Args = append(p.Args, "--parallel", strconv.Itoa(p.Parallel))
 	}
 
@@ -295,6 +317,8 @@ func sameSet(a, b []string) bool {
 // aloneReason is why a task never bundles, "" when it may.
 func aloneReason(t Task, maxLines int) string {
 	switch {
+	case t.Suffix != "":
+		return "alone: its own attempt, -" + t.Suffix
 	case t.Alone:
 		return "alone: you kept it alone"
 	case t.With != "":
@@ -432,7 +456,9 @@ func bundle(tasks []Task, base [][]Base, alone []string, byID map[string]int, ma
 
 // split cuts one joined set. A member joins the first bundle that fits it
 // under the cap and has the same outside bases, or holds every base it has.
-// Only a pair the user named passes the cap. A task the rules joined never does.
+// A member's outside bases are read against the whole set, through the
+// members it builds on. So the cut does not depend on the listing order. A pair the user named always joins, and only such a pair
+// passes the cap. A task the rules joined never does.
 func split(tasks []Task, base [][]Base, members []int, byID map[string]int, maxLines int) [][]int {
 	if len(members) == 1 {
 		return [][]int{members}
@@ -457,27 +483,54 @@ func split(tasks []Task, base [][]Base, members []int, byID map[string]int, maxL
 			slices.ContainsFunc(p.ids, func(j int) bool { return strings.EqualFold(tasks[j].With, tasks[i].ID) })
 	}
 
+	// outside is the bases of i outside the set, its own and those of the
+	// members it builds on. seen stops a circle, which levelsOf reports.
+	var outside func(i int, seen map[int]bool) []string
+
+	outside = func(i int, seen map[int]bool) []string {
+		if seen[i] {
+			return nil
+		}
+
+		seen[i] = true
+
+		var out []string
+
+		for _, b := range base[i] {
+			j, ok := byID[strings.ToUpper(b.ID)]
+			if !ok || !slices.Contains(members, j) {
+				if !slices.ContainsFunc(out, func(x string) bool { return strings.EqualFold(x, b.ID) }) {
+					out = append(out, b.ID)
+				}
+
+				continue
+			}
+
+			for _, id := range outside(j, seen) {
+				if !slices.ContainsFunc(out, func(x string) bool { return strings.EqualFold(x, id) }) {
+					out = append(out, id)
+				}
+			}
+		}
+
+		return out
+	}
+
 	for _, i := range members {
 		placed := false
+		ext := outside(i, map[int]bool{})
 
 		for k := range parts {
 			p := &parts[k]
 
-			var outside []string
-
-			for _, b := range base[i] {
-				if !inPart(*p, b.ID) {
-					outside = append(outside, b.ID)
-				}
-			}
-
-			fits := named(*p, i) || p.lines+tasks[i].Lines <= maxLines
+			holdsAll := len(base[i]) > 0 &&
+				!slices.ContainsFunc(base[i], func(b Base) bool { return !inPart(*p, b.ID) })
 
 			switch {
-			case !fits:
+			case named(*p, i):
+			case p.lines+tasks[i].Lines > maxLines:
 				continue
-			case len(base[i]) > 0 && len(outside) == 0:
-			case sameSet(p.ext, outside):
+			case holdsAll, sameSet(p.ext, ext):
 			default:
 				continue
 			}
@@ -490,7 +543,7 @@ func split(tasks []Task, base [][]Base, members []int, byID map[string]int, maxL
 		}
 
 		if !placed {
-			parts = append(parts, part{ids: []int{i}, ext: baseIDs(base[i]), lines: tasks[i].Lines})
+			parts = append(parts, part{ids: []int{i}, ext: ext, lines: tasks[i].Lines})
 		}
 	}
 
@@ -505,6 +558,10 @@ func split(tasks []Task, base [][]Base, members []int, byID map[string]int, maxL
 // entryOf names a group's reason: why it is bundled, or why it stands alone.
 func entryOf(tasks []Task, base [][]Base, alone []string, groupLines, g []int, maxLines int) Entry {
 	e := Entry{Profile: tasks[g[0]].Profile}
+	if len(g) == 1 {
+		e.Suffix = tasks[g[0]].Suffix
+	}
+
 	estimated := false
 
 	for _, i := range g {
@@ -862,17 +919,20 @@ func commandArgs(levels []Level) []string {
 
 	of := entryIndex(all)
 
-	var chains [][]string
+	var chains [][]notation.Entry
 
 	tail := map[int]int{} // an entry ending a chain -> that chain
 
 	for k, e := range all {
 		waits := e.waits()
+		link := notation.Entry{Task: e.task(), Profile: e.Profile}
 
 		if len(waits) == 1 {
 			if b, ok := of[strings.ToUpper(waits[0])]; ok {
 				if c, open := tail[b]; open {
-					chains[c] = append(chains[c], e.Token())
+					// the comma says this base, as the parser reads it back
+					link.Bases = []string{chains[c][len(chains[c])-1].ID()}
+					chains[c] = append(chains[c], link)
 					delete(tail, b)
 					tail[k] = c
 
@@ -881,29 +941,21 @@ func commandArgs(levels []Level) []string {
 			}
 		}
 
-		var link strings.Builder
-
-		link.WriteString(strings.Join(e.IDs, "+"))
-
 		for _, id := range waits {
 			if b, ok := of[strings.ToUpper(id)]; ok {
 				id = all[b].IDs[0]
 			}
 
-			link.WriteString("@" + id)
+			link.Bases = append(link.Bases, id)
 		}
 
-		if e.Profile != "" {
-			link.WriteString(":" + e.Profile)
-		}
-
-		chains = append(chains, []string{link.String()})
+		chains = append(chains, []notation.Entry{link})
 		tail[k] = len(chains) - 1
 	}
 
 	args := make([]string, 0, len(chains))
 	for _, c := range chains {
-		args = append(args, strings.Join(c, ","))
+		args = append(args, notation.FormatChain(c))
 	}
 
 	return args

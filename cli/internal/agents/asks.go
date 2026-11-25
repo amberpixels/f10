@@ -139,6 +139,29 @@ type Deliverer struct {
 	Live   func(a asks.Ask) bool
 }
 
+// BatchResume is a Deliverer's Resume for the stopped batch an answered ask
+// belongs to. hand is the caller's, because the daemon resumes in process and
+// a command dials the daemon. Unsupported, it tells the user to resume by hand.
+func BatchResume(
+	supported bool, hand func(context.Context, asks.Ask) error,
+) func(context.Context, io.Writer, asks.Ask) error {
+	return func(ctx context.Context, w io.Writer, a asks.Ask) error {
+		if !supported {
+			fmt.Fprintf(w, "batch %d is stopped: f10 resume %s in %s takes the answer\n", a.Drive, a.Task, a.Main)
+
+			return nil
+		}
+
+		if err := hand(ctx, a); err != nil {
+			return fmt.Errorf("resuming batch %d: %w", a.Drive, err)
+		}
+
+		fmt.Fprintf(w, "batch %d resumed: f10 daemon logs %s -f follows it\n", a.Drive, a.Task)
+
+		return nil
+	}
+}
+
 // Deliver moves a claimed answer to where it acts. A drive's ask goes to its
 // drive, a running one taking it as it exits so nothing runs twice; any
 // other is sent to its agent, unless typed in the pane already. sent is true

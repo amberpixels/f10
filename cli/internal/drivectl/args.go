@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
-	"github.com/amberpixels/f10/cli/internal/ref"
+	"github.com/amberpixels/f10/cli/internal/notation"
 	"github.com/amberpixels/f10/cli/internal/runplan"
 	"github.com/amberpixels/f10/cli/internal/textx"
 )
@@ -33,22 +33,28 @@ type DriveFlag struct {
 	Once bool
 	// OnceOnly is set for a flag only a discussion or a pickup takes
 	OnceOnly bool
+	// Internal is set for a flag no user types: f10 resume, the API and the
+	// daemon's child pass it. No usage, help or refusal lists it.
+	Internal bool
+	// Proposal is set for a flag that shapes a start, which start --propose
+	// takes and carries onto the command it prints
+	Proposal bool
 }
 
 // StartFlags is every flag f10 start takes.
 var StartFlags = []DriveFlag{
-	{Name: "--flow", Value: "NAME", Once: true},
-	{Name: "--local", Alt: "--flow", Once: true},
-	{Name: "--pace", Value: "NAME", Resume: true, Once: true},
-	{Name: "--agent", Value: "PROFILE", Once: true},
-	{Name: "--model", Value: "MODEL", Alt: "--agent", Once: true},
+	{Name: "--flow", Value: "NAME", Once: true, Proposal: true},
+	{Name: "--local", Alt: "--flow", Once: true, Proposal: true},
+	{Name: "--pace", Value: "NAME", Resume: true, Once: true, Proposal: true},
+	{Name: "--agent", Value: "PROFILE", Once: true, Proposal: true},
+	{Name: "--model", Value: "MODEL", Alt: "--agent", Once: true, Proposal: true},
 	{Name: "--plan", Once: true},
 	{Name: "--after", Value: "TASK-ID", Once: true},
 	{Name: "--base", Value: "BRANCH", Alt: "--after", Once: true},
 	{Name: "--answer", Value: "[ID=]TEXT", Resume: true, Tunes: true, Many: true},
 	{Name: "--every", Value: "DURATION", Resume: true, Tunes: true},
-	{Name: "--parallel", Value: "N", Resume: true, Tunes: true},
-	{Name: "--resume", Value: "N", Resume: true, Tunes: true},
+	{Name: "--parallel", Value: "N", Resume: true, Tunes: true, Proposal: true},
+	{Name: "--resume", Value: "N", Resume: true, Tunes: true, Internal: true},
 	{Name: "--foreground", Resume: true, Tunes: true},
 	{Name: "--discuss", Once: true, OnceOnly: true},
 	{Name: "--task", Value: "TASK-ID", Once: true, OnceOnly: true},
@@ -135,7 +141,7 @@ func ResumeTunes() []DriveFlag {
 	var out []DriveFlag
 
 	for _, f := range DriveFlags {
-		if f.Resume && f.Tunes && f.Value != "" && f.Name != "--resume" {
+		if f.Resume && f.Tunes && f.Value != "" && !f.Internal {
 			out = append(out, f)
 		}
 	}
@@ -143,14 +149,23 @@ func ResumeTunes() []DriveFlag {
 	return out
 }
 
-// flagList names flags as a sentence: --a, --b and --c.
+// flagList names flags as a sentence: --a, --b and --c. An internal flag is
+// left out, because the sentence is for a person.
 func flagList(flags []DriveFlag) string {
 	names := make([]string, 0, len(flags))
+
 	for _, f := range flags {
-		names = append(names, f.Name)
+		if !f.Internal {
+			names = append(names, f.Name)
+		}
 	}
 
 	return textx.JoinAnd(names)
+}
+
+// proposalFlags are the start flags a proposal takes and carries.
+func proposalFlags() []DriveFlag {
+	return slices.DeleteFunc(slices.Clone(DriveFlags), func(f DriveFlag) bool { return !f.Proposal })
 }
 
 // DriveArgs is the command line, parsed by hand so `--` survives.
@@ -290,16 +305,20 @@ func (a *DriveArgs) set(name, value string) error {
 		a.Flow = value
 
 		return nil
+	case "--every":
+		d, err := time.ParseDuration(value)
+		if err != nil || d <= 0 {
+			return fmt.Errorf("--every %s: a positive duration, like 15s", value)
+		}
+
+		a.Every = d
+
+		return nil
 	}
 
-	d, err := time.ParseDuration(value)
-	if err != nil || d <= 0 {
-		return fmt.Errorf("--every %s: a positive duration, like 15s", value)
-	}
-
-	a.Every = d
-
-	return nil
+	// a row added to StartFlags with no case here would otherwise be taken
+	// and dropped
+	return fmt.Errorf("%s is a start flag nothing reads yet", name)
 }
 
 func ParseDriveArgs(args []string) (DriveArgs, error) {
@@ -346,16 +365,17 @@ func ParseDriveArgs(args []string) (DriveArgs, error) {
 
 			a.Span = true
 		case strings.HasPrefix(tok, "-"):
-			return DriveArgs{}, fmt.Errorf("unknown flag %s: start takes %s", tok, flagList(DriveFlags))
+			return DriveArgs{}, fmt.Errorf("unknown flag %s: start takes %s, and --propose for a proposal",
+				tok, flagList(DriveFlags))
 		default:
-			entries, err := parseEntries(tok)
+			entries, err := notation.Parse(tok)
 			if err != nil {
 				return DriveArgs{}, err
 			}
 
 			for _, e := range entries {
-				a.Tasks, a.Profiles = append(a.Tasks, e.task), append(a.Profiles, e.profile)
-				a.Bases = append(a.Bases, e.bases)
+				a.Tasks, a.Profiles = append(a.Tasks, e.Task), append(a.Profiles, e.Profile)
+				a.Bases = append(a.Bases, e.Bases)
 			}
 		}
 	}
@@ -460,6 +480,36 @@ func ParsePropose(args []string) (DriveArgs, error) {
 		}
 	}
 
+	// the carried flags are read off the table, before the line is parsed as
+	// a start's, so a flag a proposal does not take is refused by one list
+	for i := 0; i < len(rest); i++ {
+		name, _, inline := strings.Cut(rest[i], "=")
+
+		f, ok := DriveFlagNamed(name)
+
+		switch {
+		case !ok:
+			continue
+		case !f.Proposal:
+			return DriveArgs{}, fmt.Errorf("start --propose takes ids or a parent, --facts, --json, --hint "+
+				"and the flags that shape a start: %s", flagList(proposalFlags()))
+		}
+
+		// the cap is the proposer's to print, cut to the widest level
+		carried := name != "--parallel"
+		if carried {
+			pa.Pass = append(pa.Pass, rest[i])
+		}
+
+		if f.Value != "" && !inline && i+1 < len(rest) {
+			i++
+
+			if carried {
+				pa.Pass = append(pa.Pass, rest[i])
+			}
+		}
+	}
+
 	a, err := ParseDriveArgs(rest)
 	if err != nil {
 		return DriveArgs{}, fmt.Errorf("start --propose: %w", err)
@@ -470,30 +520,6 @@ func ParsePropose(args []string) (DriveArgs, error) {
 		return DriveArgs{}, errors.New("start --propose takes ids or a parent, not a range")
 	case a.Ordered():
 		return DriveArgs{}, errors.New("start --propose sets the order itself: list the ids with spaces, no , or @")
-	case a.Resume > 0, len(a.Answers) > 0, a.Fore, a.Every != DefaultEvery,
-		a.PlanOnly, a.After != "", a.Base != "":
-		return DriveArgs{}, errors.New("start --propose takes ids or a parent, --facts, --json, --hint " +
-			"and the flags that shape a start: --flow, --local, --pace, --agent, --model and --parallel")
-	}
-
-	for i := 0; i < len(rest); i++ {
-		name, _, inline := strings.Cut(rest[i], "=")
-
-		f, ok := DriveFlagNamed(name)
-		if !ok || name == "--parallel" {
-			if ok && !inline {
-				i++
-			}
-
-			continue
-		}
-
-		pa.Pass = append(pa.Pass, rest[i])
-
-		if f.Value != "" && !inline {
-			i++
-			pa.Pass = append(pa.Pass, rest[i])
-		}
 	}
 
 	a.Plan = pa
@@ -522,7 +548,7 @@ func ParseResume(args []string) (ResumeArgs, error) {
 
 		switch {
 		case tok == "":
-		case ok && f.Resume && f.Tunes && name != "--resume":
+		case ok && f.Resume && f.Tunes && !f.Internal:
 			r.Flags = append(r.Flags, tok)
 			r.Fore = r.Fore || name == "--foreground"
 
@@ -556,93 +582,9 @@ func DriveNumber(s string) (int, error) {
 	return n, nil
 }
 
-// An entry is one task of a token, with its profile and its typed bases.
-type entry struct {
-	task, profile string
-	bases         []string
-}
-
-// parseEntries reads a token as a chain of entries, each one shaped
-// <task>[-suffix][@<base>...][:profile]. A comma stacks an entry on the one
-// before it, and each @ names one more base. A url is taken whole, because
-// it may hold either mark.
-func parseEntries(tok string) ([]entry, error) {
-	if strings.Contains(tok, "://") {
-		task, p, err := splitProfile(tok)
-
-		return []entry{{task: task, profile: p}}, err
-	}
-
-	var (
-		out  []entry
-		prev string
-	)
-
-	for link := range strings.SplitSeq(tok, ",") {
-		if link == "" {
-			return nil, fmt.Errorf("%s: an empty entry beside a comma: A,B stacks B on A", tok)
-		}
-
-		head, p, err := splitProfile(link)
-		if err != nil {
-			return nil, err
-		}
-
-		if prof, bases, ok := strings.Cut(p, "@"); ok {
-			return nil, fmt.Errorf("%s: the profile comes last: %s@%s:%s", link, head, bases, prof)
-		}
-
-		parts := strings.Split(head, "@")
-		if parts[0] == "" {
-			return nil, fmt.Errorf("%s names no task before @: C@A", link)
-		}
-
-		var bases []string
-		if prev != "" {
-			bases = append(bases, prev)
-		}
-
-		for _, b := range parts[1:] {
-			switch _, suffix := ref.SplitSuffix(b); {
-			case b == "":
-				return nil, fmt.Errorf("%s: an @ names no base: C@A", link)
-			case suffix != "":
-				return nil, fmt.Errorf("%s: a base is a task id, with no -%s", link, suffix)
-			case slices.ContainsFunc(bases, func(x string) bool { return strings.EqualFold(x, b) }):
-				return nil, fmt.Errorf("%s names %s as a base twice", link, b)
-			}
-
-			bases = append(bases, b)
-		}
-
-		prev, _ = ref.SplitSuffix(parts[0])
-		out = append(out, entry{task: parts[0], profile: p, bases: bases})
-	}
-
-	return out, nil
-}
-
-// splitProfile cuts a task token's :profile off: the first colon whose
-// remainder holds no slash, so `FT-1:claude:opus:high` splits after the
-// id, and a url's scheme and port stay part of the task.
-func splitProfile(tok string) (string, string, error) {
-	for i := range len(tok) {
-		if tok[i] != ':' || strings.Contains(tok[i+1:], "/") {
-			continue
-		}
-
-		if tok[i+1:] == "" {
-			return "", "", fmt.Errorf("%s names no profile after the colon: GH-12:opus", tok)
-		}
-
-		return tok[:i], tok[i+1:], nil
-	}
-
-	return tok, "", nil
-}
-
 // Renamed is the one line an old spelling prints on stderr, for the one
-// release it still works.
+// release it still works. Every site that serves an old spelling carries
+// the comment "one-release alias:", so one search finds what to remove.
 func Renamed(old, now string) string {
 	return fmt.Sprintf("%s still works for one release: use %s", old, now)
 }
@@ -650,6 +592,8 @@ func Renamed(old, now string) string {
 // OldNumber reads a token as a batch number, the old way to name a batch.
 // A task id names it now, so a positive integer is read this way for one
 // more release only.
+//
+// one-release alias: a batch named by its number
 func OldNumber(token string) (int, bool) {
 	n, err := strconv.Atoi(strings.TrimSpace(token))
 

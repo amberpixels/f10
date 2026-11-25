@@ -141,6 +141,11 @@ func (r *Record) Lead() string {
 
 // Holds reports the record holding task id: as a task, as any member of a
 // bundle, or with a -suffix.
-func (r *Record) Holds(id string) bool {
-	return slices.ContainsFunc(r.Tasks, func(t Task) bool { return holds(t.ID, id) })
+func (r *Record) Holds(id string) bool { return HolderOf(r.Tasks, id) >= 0 }
+
+// HolderOf is the index of the task in tasks that holds id, -1 for none.
+// It is the one answer to which of a record's tasks an id means: the task
+// itself, a bundle it rides in, or one of its -suffix attempts.
+func HolderOf(tasks []Task, id string) int {
+	return slices.IndexFunc(tasks, func(t Task) bool { return holds(t.ID, id) })
 }

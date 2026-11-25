@@ -56,15 +56,14 @@ func TestDriveFlagTable(t *testing.T) {
 		t.Fatal("--force parsed")
 	}
 
+	// an internal flag is no user's to type, so neither names it
 	for _, f := range drivectl.DriveFlags {
-		if !strings.Contains(err.Error(), f.Name) {
-			t.Errorf("the unknown-flag message does not name %s: %v", f.Name, err)
+		if strings.Contains(err.Error(), f.Name) == f.Internal {
+			t.Errorf("the unknown-flag message names %s wrongly (internal: %v): %v", f.Name, f.Internal, err)
 		}
-	}
 
-	for _, f := range drivectl.DriveFlags {
-		if f.Name != "--resume" && !strings.Contains(DriveUsage(), f.Name) {
-			t.Errorf("the usage does not name %s", f.Name)
+		if strings.Contains(DriveUsage(), f.Name) == f.Internal {
+			t.Errorf("the usage names %s wrongly (internal: %v)", f.Name, f.Internal)
 		}
 	}
 

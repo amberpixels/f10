@@ -27,7 +27,7 @@ Never end a turn on a question in chat.
 Instead, every question the steps call for goes through run state.
 Examples are a judge's rethink, a resolve `ask` and a deploy confirmation.
 
-1. **Ask the whole batch as one ask.**
+1. **Ask every question as one ask.**
    Run `f10-state.sh ask "<questions>" ["<context>"]`, each argument on one line.
    Number the questions, put each one's options in brackets, and list the default or recommended answer first: `1. Reuse the saved plan? [reuse | re-plan] 2. Deploy to staging? [yes | no]`.
    Choices go in the brackets, never as "Options: 1) ..." in the question, because the inbox offers only bracketed options as choices.

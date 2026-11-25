@@ -37,7 +37,6 @@ type PlanResult struct {
 	Plan  driveplan.Plan
 	Tasks []driveplan.Task
 	Notes []string // tasks left out, and why
-	Extra []string // the drive flags carried onto the command
 }
 
 // A SheetTask is one task's row in the facts sheet the propose step writes.
@@ -114,7 +113,8 @@ func Plan(ctx context.Context, in PlanInput, a drivectl.DriveArgs) (PlanResult, 
 	p, err := driveplan.Propose(driveplan.Input{
 		Tasks:    tasks,
 		MaxLines: in.MaxLines,
-		Parallel: cmp.Or(a.Parallel, in.DefaultParallel),
+		Parallel: cmp.Or(a.Parallel, in.DefaultParallel), TypedParallel: a.Parallel > 0,
+		Carry:    pa.Pass,
 		Joins:    in.Joins,
 		Finished: in.finishedOutside(ctx, tasks),
 	})
@@ -122,7 +122,7 @@ func Plan(ctx context.Context, in PlanInput, a drivectl.DriveArgs) (PlanResult, 
 		return PlanResult{}, err
 	}
 
-	return PlanResult{Plan: p, Tasks: tasks, Notes: notes, Extra: pa.Pass}, nil
+	return PlanResult{Plan: p, Tasks: tasks, Notes: notes}, nil
 }
 
 // finishedOutside is the bases outside the list that are finished, read as
@@ -172,7 +172,9 @@ func (in PlanInput) finished(ctx context.Context, id string) bool {
 		return false
 	}
 
-	return stack.FinishedTask(info, in.Storage, r.ID, branched)
+	// a proposal is never plan-only, so a base outside the list is through
+	// only once merged, by the rule the start's join reads
+	return drivectl.BaseStanding{Finished: stack.FinishedTask(info, in.Storage, r.ID, branched)}.Through(false)
 }
 
 // readSheet reads the facts sheet, keyed by upper-cased task id; an unknown
@@ -218,18 +220,43 @@ func (in PlanInput) candidates(ctx context.Context, a drivectl.DriveArgs) ([]dri
 			profile = a.Profiles[i]
 		}
 
-		r, err := in.Tracker.Resolve(ctx, token)
+		id, suffix := ref.SplitSuffix(token)
+
+		r, err := in.Tracker.Resolve(ctx, id)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		if len(r.Riders()) > 0 {
-			members, err := in.members(ctx, r, profile)
+		// a suffix names one attempt of one task, as a start reads it
+		if suffix != "" {
+			if len(r.Riders()) > 0 {
+				return nil, nil, fmt.Errorf("%s ships in bundle %s, which takes no suffix", r.ID, r.Label())
+			}
+
+			t, closed, err := in.single(ctx, r, profile)
 			if err != nil {
 				return nil, nil, err
 			}
 
-			out = append(out, members...)
+			if closed {
+				notes = append(notes, closedNote(r.ID))
+
+				continue
+			}
+
+			t.Suffix = suffix
+			out = append(out, t)
+
+			continue
+		}
+
+		if len(r.Riders()) > 0 {
+			members, left, err := in.members(ctx, r, profile)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			out, notes = append(out, members...), append(notes, left...)
 
 			continue
 		}
@@ -246,7 +273,7 @@ func (in PlanInput) candidates(ctx context.Context, a drivectl.DriveArgs) ([]dri
 			}
 
 			if closed {
-				notes = append(notes, "left out: "+r.ID+" is closed")
+				notes = append(notes, closedNote(r.ID))
 
 				continue
 			}
@@ -317,27 +344,38 @@ func (in PlanInput) single(ctx context.Context, r ref.Ref, profile string) (driv
 }
 
 // members is a typed bundle: the user already chose to bundle it, so each
-// rider is bundled with the lead.
-func (in PlanInput) members(ctx context.Context, r ref.Ref, profile string) ([]driveplan.Task, error) {
-	var out []driveplan.Task
+// rider is bundled with the lead. A closed member is left out with a note,
+// as a closed task typed alone is, and the first open member then leads.
+func (in PlanInput) members(ctx context.Context, r ref.Ref, profile string) ([]driveplan.Task, []string, error) {
+	var (
+		out   []driveplan.Task
+		notes []string
+	)
 
-	refs := r.MemberRefs()
-
-	for _, m := range refs {
-		t, _, err := in.single(ctx, m, profile)
+	for _, m := range r.MemberRefs() {
+		t, closed, err := in.single(ctx, m, profile)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
-		if m.ID != refs[0].ID {
-			t.With = refs[0].ID
+		if closed {
+			notes = append(notes, closedNote(m.ID))
+
+			continue
+		}
+
+		if len(out) > 0 {
+			t.With = out[0].ID
 		}
 
 		out = append(out, t)
 	}
 
-	return out, nil
+	return out, notes, nil
 }
+
+// closedNote is the one line for a closed task the proposal leaves out.
+func closedNote(id string) string { return "left out: " + id + " is closed" }
 
 // lay fills what the tracker did not say: a saved plan's Kind and Areas
 // lines, then the facts sheet. A label's kind wins over the plan's, and the

@@ -30,33 +30,16 @@ func deliverer(sup Supervisor) agents.Deliverer {
 
 			return err
 		},
-		Resume: func(ctx context.Context, w io.Writer, a asks.Ask) error {
-			// no daemon runs drives here: the user resumes it in the foreground
-			if !daemon.Supported {
-				fmt.Fprintf(
-					w,
-					"batch %d is stopped: f10 resume %s in %s takes the answer\n",
-					a.Drive,
-					a.Task,
-					a.Main,
-				)
-
-				return nil
-			}
-
+		Resume: agents.BatchResume(daemon.Supported, func(ctx context.Context, a asks.Ask) error {
 			t, err := target.At(ctx, a.Main, false, "inbox")
 			if err != nil {
-				return fmt.Errorf("resuming batch %d: %w", a.Drive, err)
+				return err
 			}
 
-			if _, err := sup.ResumeDrive(a.Root, a.Main, driveEnvFor(sup, t), a.Drive); err != nil {
-				return fmt.Errorf("resuming batch %d: %w", a.Drive, err)
-			}
+			_, err = sup.ResumeDrive(a.Root, a.Main, driveEnvFor(sup, t), a.Drive)
 
-			fmt.Fprintf(w, "batch %d resumed: f10 daemon logs %s -f follows it\n", a.Drive, a.Task)
-
-			return nil
-		},
+			return err
+		}),
 		Live: func(a asks.Ask) bool {
 			_, held := drivestore.Probe(a.Root, drivestore.DriveKey(a.Drive))
 

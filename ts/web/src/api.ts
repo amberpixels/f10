@@ -30,7 +30,6 @@ export const P = {
   status: proc(RunService, "getRunStatus"),
   forward: proc(RunService, "forward"),
   start: proc(RunService, "start"),
-  startBatch: proc(RunService, "startBatch"),
   createTask: proc(TaskService, "createTask"),
   listAsks: proc(InboxService, "listAsks"),
   answerAsk: proc(InboxService, "answerAsk"),

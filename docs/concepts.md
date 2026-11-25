@@ -145,15 +145,17 @@ A mode is a way of running a skill that changes how it executes, kept in `modes/
 - `dry-run.md`: `--dry-run`
 - `driven.md`: `--driven`, a run prompted from another session
 - `forward.md`: a task id that another worktree holds
-- `binary.md`: a skill that only runs the f10 binary and relays its output (board, finish, inbox, read, start and status)
+- `binary.md`: a skill that only runs the f10 binary and relays its output (board, finish, inbox, read, start and status).
+  `/f10:start --propose` is the exception, because it runs the propose step and so loads the conventions.
 
 ## Start vocabulary
 
 `f10 start` runs tasks, and these words name what it runs.
-Each word has one meaning, in the commands, the messages and the docs.
+Each word has one meaning in start's commands, its messages and its docs.
 
 - **entry**: a task or a bundle, which is one branch, one agent and one PR.
-  A unit of a flow is always written "flow entry", so "entry" alone never means that.
+  Where start is the subject, a unit of a flow is written "flow entry", so "entry" alone never means that there.
+  The pages about flows and about ship say "entry" for a flow's unit, because no task entry is in sight there.
 - **bundle**: several tasks in one entry, typed `A+B`.
   The first task is the lead, and the others are its riders.
   The members ship in one PR, and nothing orders the work inside it.

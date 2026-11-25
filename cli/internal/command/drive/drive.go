@@ -59,6 +59,7 @@ func Command() *cli.Command {
 					"f10 status --batches lists batches, f10 stop stops one, f10 resume goes on with one")
 			}
 
+			// one-release alias: f10 drive plan
 			fmt.Fprintln(cmd.ErrWriter, drivectl.Renamed("f10 drive plan", "f10 start <ids> --propose"))
 
 			a, err := drivectl.ParsePropose(argv[1:])
@@ -117,10 +118,12 @@ func runResume(ctx context.Context, cmd *cli.Command) error {
 // resumeNumber is the record a resume names: by a task id, by the one
 // stopped batch, or by its number for one more release.
 func resumeNumber(ctx context.Context, cmd *cli.Command, t *target.Target, token string) (int, error) {
+	// one-release alias: f10 resume <n>, a batch by its number
 	if n, ok := drivectl.OldNumber(token); ok {
 		lead := "<task-id>"
-		if rec, err := drivestore.Read(t.Layout.StorageRoot.Path(), n); err == nil && rec.Lead() != "" {
-			lead = rec.Lead()
+		root := t.Layout.StorageRoot.Path()
+		if rec, err := drivestore.Read(root, n); err == nil && drive.CommandID(root, rec) != "" {
+			lead = drive.CommandID(root, rec)
 		}
 
 		fmt.Fprintln(cmd.ErrWriter, drivectl.Renamed("a batch number", "f10 resume "+lead))
@@ -341,17 +344,27 @@ func runPropose(ctx context.Context, cmd *cli.Command, a drivectl.DriveArgs) err
 		return nil
 	}
 
-	return res.Plan.Write(w, res.Notes, res.Extra...)
+	return res.Plan.Write(w, res.Notes)
 }
+
+// proposalSchema is the version of the keys --propose --json prints. It
+// goes up with every change a reader of the old keys would break on.
+const proposalSchema = 1
 
 func writePlanJSON(w io.Writer, res drive.PlanResult) error {
 	out := struct {
+		// Schema counts the incompatible changes to these keys, for a program
+		// that reads them
+		Schema  int              `json:"schema"`
 		Command string           `json:"command"`
 		Plan    *driveplan.Plan  `json:"proposal,omitempty"`
 		Tasks   []driveplan.Task `json:"tasks,omitempty"`
 		Notes   []string         `json:"notes,omitempty"`
 		Saving  string           `json:"saving,omitempty"`
-	}{Notes: res.Notes, Tasks: res.Tasks, Plan: &res.Plan, Command: res.Plan.Command(res.Extra...), Saving: res.Plan.Saving()}
+	}{
+		Schema: proposalSchema, Notes: res.Notes, Tasks: res.Tasks, Plan: &res.Plan,
+		Command: res.Plan.Command(), Saving: res.Plan.Saving(),
+	}
 
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")

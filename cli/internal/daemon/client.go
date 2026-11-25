@@ -142,6 +142,7 @@ func GetStatus(ctx context.Context, dir, version string) (Status, error) {
 		})
 	}
 
+	// one-release alias: the drives field of a daemon one release older
 	// status asks whatever daemon runs, and one a release older fills only
 	// the old field
 	if len(st.Runs) == 0 {

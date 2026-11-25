@@ -84,8 +84,8 @@ func launchKids(ctx context.Context, warn io.Writer, t *target.Target, sid strin
 			tokens = append(tokens, token{text: l.Value, started: true})
 		case state.LaunchDrive:
 			root := t.Layout.StorageRoot.Path()
-			tasks, unopened, args := driveTasks(root, l.Value)
-			planned := drivectl.JoinPlanned(args, root)
+			tasks, unopened, planOnly := driveTasks(root, l.Value)
+			planned := drivectl.JoinPlanned(planOnly, root)
 
 			for i, task := range tasks {
 				waits := drivectl.JoinWaits(task, tasks, planned)
@@ -224,15 +224,15 @@ func launchBase(
 // cancelled, or its record is gone. Queued, parked and waiting hold only
 // while the driver runs: a stopped drive holds no task back. unopened says,
 // per task, that the drive never opened it, read before that reset.
-func driveTasks(root, n string) ([]drivestore.Task, []bool, []string) {
+func driveTasks(root, n string) ([]drivestore.Task, []bool, bool) {
 	num, err := strconv.Atoi(n)
 	if err != nil {
-		return nil, nil, nil
+		return nil, nil, false
 	}
 
 	d, ok := drivestore.ActiveOne(root, num)
 	if !ok {
-		return nil, nil, nil
+		return nil, nil, false
 	}
 
 	unopened := make([]bool, len(d.Tasks))
@@ -246,5 +246,5 @@ func driveTasks(root, n string) ([]drivestore.Task, []bool, []string) {
 		}
 	}
 
-	return d.Tasks, unopened, d.Args
+	return d.Tasks, unopened, drivectl.PlanOnly(d.Record)
 }

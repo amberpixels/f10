@@ -45,6 +45,7 @@ func runStop(ctx context.Context, cmd *cli.Command) error {
 
 	var printed *f10v1.Printed
 
+	// one-release alias: f10 stop <n>, a batch by its number
 	if n, ok := drivectl.OldNumber(token); ok {
 		fmt.Fprintln(cmd.ErrWriter, drivectl.Renamed("a batch number", "f10 stop <task-id>"))
 

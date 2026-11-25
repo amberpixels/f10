@@ -3,6 +3,7 @@
 Some skills do all their work through one `f10` command: board, finish, inbox, read, start and status.
 The procedure of each is to run that command and relay its output.
 Such a skill runs no step and loads no conventions.
+The one exception is `/f10:start --propose`, which runs the **propose** step, so the start skill loads the conventions for that path alone.
 Its `--help` runs the command's own help (`modes/help.md`).
 
 ## Relaying the output

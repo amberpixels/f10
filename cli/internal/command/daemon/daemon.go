@@ -159,10 +159,11 @@ func runDaemonLogs(ctx context.Context, cmd *cli.Command) error {
 			return err
 		}
 
+		// one-release alias: f10 daemon logs <n>, a batch by its number
 		n, old := drivectl.OldNumber(arg)
 		if old {
 			fmt.Fprintln(cmd.ErrWriter, drivectl.Renamed("a batch number", "f10 daemon logs <task-id>"))
-		} else if n, err = logBatch(ctx, t, arg); err != nil {
+		} else if n, err = drive.LogBatch(ctx, t, arg); err != nil {
 			return err
 		}
 
@@ -192,18 +193,4 @@ func runDaemonLogs(ctx context.Context, cmd *cli.Command) error {
 	}
 
 	return err
-}
-
-// logBatch is the number of the batch a task names. A finished batch still
-// has a log, so any record holding the task counts, the newest first.
-func logBatch(ctx context.Context, t *target.Target, token string) (int, error) {
-	if l, ok := drive.BatchOf(ctx, t, token); ok {
-		return l.Number, nil
-	}
-
-	if rec, ok := drive.RecordOf(ctx, t, token); ok {
-		return rec.Number, nil
-	}
-
-	return 0, fmt.Errorf("no batch holds %s: f10 status --batches lists every batch", token)
 }

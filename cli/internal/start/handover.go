@@ -96,7 +96,7 @@ func PrepareHandOver(ctx context.Context, t *target.Target, branch, first string
 
 	if existing.Name != "" && existing.Name != branch {
 		return HandOver{}, fmt.Errorf("%s already has branch %s: start it from the main checkout, "+
-			"or put another group first", r.ID, existing.Name)
+			"or put another entry first", r.ID, existing.Name)
 	}
 
 	// the branch was made from the discussed task's base, which another
@@ -108,7 +108,7 @@ func PrepareHandOver(ctx context.Context, t *target.Target, branch, first string
 
 	if rec.AfterBranch != "" {
 		return HandOver{}, fmt.Errorf("%s is built on %s, the base of the task it was opened for: "+
-			"start %s from the main checkout, or put that task's group first", branch, rec.AfterBranch, r.ID)
+			"start %s from the main checkout, or put that task's entry first", branch, rec.AfterBranch, r.ID)
 	}
 
 	return h, nil

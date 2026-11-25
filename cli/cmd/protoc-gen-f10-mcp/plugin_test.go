@@ -285,3 +285,13 @@ func TestCollectLeavesOutDeprecatedNames(t *testing.T) {
 		t.Errorf("the schema keeps a deprecated field: %s", tools[0].schema)
 	}
 }
+
+// A method whose comment says it is not a tool stays an rpc and is no tool.
+func TestCollectLeavesOutAMethodMarkedNotATool(t *testing.T) {
+	f := testFile("GetPRNode reads a node. Not a tool: only a local client has what it takes.")
+
+	tools, err := collect(plugin(t, f).Files)
+	if err != nil || len(tools) != 0 {
+		t.Errorf("tools = %+v, %v; want none", tools, err)
+	}
+}

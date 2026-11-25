@@ -71,9 +71,13 @@ describe("groups", () => {
 });
 
 describe("taskList", () => {
-  it("reads ids and a chain", () => {
-    expect(taskList("FT-1, FT-2")).toEqual({ ids: ["FT-1", "FT-2"], chain: false });
-    expect(taskList("FT-1 -- FT-2")).toEqual({ ids: ["FT-1", "FT-2"], chain: true });
+  it("reads entries and a range", () => {
+    expect(taskList("FT-1  FT-2")).toEqual({ ids: ["FT-1", "FT-2"], range: false });
+    expect(taskList("FT-1 -- FT-2")).toEqual({ ids: ["FT-1", "FT-2"], range: true });
+  });
+  it("passes an order through whole, for the daemon to parse", () => {
+    expect(taskList("FT-1,FT-2 FT-3@FT-1")).toEqual({ ids: ["FT-1,FT-2", "FT-3@FT-1"], range: false });
+    expect(taskList("FT-1+FT-2:opus FT-4@FT-1@FT-3")).toEqual({ ids: ["FT-1+FT-2:opus", "FT-4@FT-1@FT-3"], range: false });
   });
 });
 

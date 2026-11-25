@@ -67,15 +67,20 @@ func (in *DriveInput) KeepFlow(ctx context.Context, branch string) (runplan.Ship
 func (in *DriveInput) open(ctx context.Context, r *DriveRun) error {
 	task := r.Task
 
-	// a typed --after, --base or order wins over the body, which is then not
-	// read, because its base may be a task not started. A join opens with no
-	// base task, so it branches from the default branch.
-	after, note := task.after, ""
-	if in.Args.After == "" && in.Args.Base == "" && !task.typed {
+	// a base the branch records is not passed again, because a second record
+	// would move its tip. A body's base is read again for its notes, and a
+	// finished one leaves none. A join branches from the default branch.
+	after, note := task.Base, ""
+
+	switch task.source {
+	case baseBranch:
+		after = ""
+	case baseBody:
 		var err error
 		if after, note, err = stack.BodyAfter(ctx, in.Tracker, in.Main, task.Ref, task.info.Body); err != nil {
 			return err
 		}
+	case baseNone, baseLine, baseFlag:
 	}
 
 	var title func(context.Context) (string, error)
@@ -117,9 +122,16 @@ func (in *DriveInput) open(ctx context.Context, r *DriveRun) error {
 		o.Notes = append(o.Notes, start.MarkStarted(ctx, in.Started, o.Task)...)
 	}
 
-	if len(task.Join) > 0 {
+	// a branch records one shape: a join's bases, or the base it is stacked on
+	switch {
+	case len(task.Join) > 0 && task.source != baseBranch:
 		if err := branchmeta.Set(ctx, in.Main, o.Branch, branchmeta.Join, strings.Join(task.Join, " ")); err != nil {
 			return fmt.Errorf("recording the bases: %w", err)
+		}
+	case task.source == baseFlag:
+		// --after or --base restacked it, which ends a join it recorded
+		if err := branchmeta.UnsetIfSet(ctx, in.Main, o.Branch, branchmeta.Join); err != nil {
+			return fmt.Errorf("clearing the recorded bases: %w", err)
 		}
 	}
 

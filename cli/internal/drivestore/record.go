@@ -32,6 +32,9 @@ type Record struct {
 	// Parallel is the cap on tasks running a skill at once, as the drive
 	// took it; a rerun or a resume keeps it unless it passes --parallel
 	Parallel int `yaml:"parallel,omitempty"`
+	// PlanOnly is set for a batch started with --plan, whose dependents open
+	// on saved plans. A record written before the field has it in Args only.
+	PlanOnly bool `yaml:"plan_only,omitempty"`
 	// Answers are given and not yet taken, by task id, "" for the bare one
 	Answers  map[string]string `yaml:"answers,omitempty"`
 	Answered []Answer          `yaml:"answered,omitempty"`
@@ -48,7 +51,10 @@ type Task struct {
 	Queued bool     `yaml:"queued,omitempty"` // held back by the drive's cap; Phase says it too, for older readers
 	// Phase is where the task stands: one of the Phase names, "" in a record
 	// written before it was kept
-	Phase   string   `yaml:"phase,omitempty"`
+	Phase string `yaml:"phase,omitempty"`
+	// Opened is set once the task has a worktree and an agent. Phase cannot
+	// say it, because queued covers a task the cap holds before it opens.
+	Opened  bool     `yaml:"opened,omitempty"`
 	Outcome *Outcome `yaml:"outcome,omitempty"`
 	// Catchup is the catchup the drive last sent for the task, so a resumed
 	// drive still leases its push; the repeat count stays in the drive's memory

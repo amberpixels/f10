@@ -52,6 +52,7 @@ func runStatus(ctx context.Context, cmd *cli.Command) error {
 	all := cmd.Bool("all")
 	token := strings.TrimSpace(cmd.Args().First())
 
+	// one-release alias: f10 status --drives
 	if cmd.Bool("drives") {
 		fmt.Fprintln(cmd.ErrWriter, drivectl.Renamed("f10 status --drives", "f10 status --batches"))
 	}
@@ -124,7 +125,7 @@ func listBatches(ctx context.Context, cmd *cli.Command, all bool) error {
 
 	out := make([]batchJSON, 0, len(res.Msg.GetBatches()))
 	for _, d := range res.Msg.GetBatches() {
-		row := batchJSON{Number: int(d.GetNumber()), Args: d.GetArgs(), State: d.GetState()}
+		row := batchJSON{Number: int(d.GetNumber()), Args: d.GetArgs(), State: d.GetState(), Tasks: d.GetTasks()}
 		if d.GetStarted() != nil {
 			row.Started = d.GetStarted().AsTime().Format(time.RFC3339)
 		}
@@ -141,4 +142,7 @@ type batchJSON struct {
 	Args    []string `json:"args"`
 	State   string   `json:"state"`
 	Started string   `json:"started,omitempty"`
+	// Tasks are the batch's tasks as typed. Any of them names the batch to
+	// stop, resume and daemon logs, which take no number.
+	Tasks []string `json:"tasks"`
 }

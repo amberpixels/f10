@@ -29,8 +29,7 @@ var machineRead = map[string]string{
 	"internal/command/pr/pr.go":              `"task: %s\n"`,                  // pr view, parsed
 	"internal/command/audit/audit.go":        `"  %s  %s  %s\n"`,              // audit map's task rows, read by the audit step
 	"internal/statusview/refs.go":            `"%s: %v"`,                      // a warning on stderr
-	"internal/api/deliver.go":                `"batch %d `,                    // the id is part of a command to paste
-	"internal/command/inbox/hook.go":         `"batch %d `,                    // the id is part of a command to paste
+	"internal/agents/asks.go":                `"batch %d `,                    // the id is part of a command to paste
 	"internal/command/task/taskreport.go":    `"%s: %v: no subtasks to list"`, // a warning on stderr
 	"internal/launch/closed.go":              `" %s is closed."`,              // a discussion prompt, read by the agent
 	"internal/command/refs/refs.go":          `"%s:%d: %s is not linked\n"`,   // refs check, a linter's line

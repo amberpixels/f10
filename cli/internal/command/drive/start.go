@@ -58,7 +58,7 @@ func StartCommand() *cli.Command {
 			"--propose starts nothing: it prints a proposal for the tasks, which is the bundles, the order, " +
 			"and the one command to run, the order spelled in it with , and @; it takes no typed order. Small tasks of one kind sharing files or an area " +
 			"are bundled under bundle_max_lines, and the rest stay alone with the reason. --facts FILE lays the " +
-			"start skill's estimates on top, --json prints the proposal for the skill, and --hint prints one line " +
+			"start skill's estimates on top, --json prints the proposal for a program, with a schema number, and --hint prints one line " +
 			"when a bundle saves a CI wait, else nothing.\n" +
 			"--discuss opens one agent in one worktree, which reads the tasks and waits: a parent's, showing its subtask tree, " +
 			"or the first id's, reading every id listed. A start run in that worktree continues there as its first group, " +
@@ -93,6 +93,7 @@ func runStart(ctx context.Context, cmd *cli.Command) error {
 	case drivectl.FlowStart:
 		// the daemon's own child passes --resume with --foreground
 		if sa.Drive.Resume > 0 && !sa.Drive.Fore {
+			// one-release alias: f10 start --resume <n>, typed by a person
 			fmt.Fprintln(cmd.ErrWriter, drivectl.Renamed("f10 start --resume", "f10 resume <task-id>"))
 		}
 

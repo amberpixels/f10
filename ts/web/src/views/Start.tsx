@@ -28,14 +28,15 @@ function useForm() {
 
 const field = (set: (v: string) => void) => (e: Event) => set((e.target as HTMLInputElement).value);
 
-/** taskList reads ids separated by spaces or commas; `--` chains them. */
-export function taskList(raw: string): { ids: string[]; chain: boolean } {
-  const chain = /(^|\s)--(\s|$)/.test(raw);
-  const ids = raw
-    .split(/[\s,]+/)
-    .map((s) => s.trim())
-    .filter((s) => s && s !== "--");
-  return { ids, chain };
+/**
+ * taskList reads the entries as f10 start takes them, separated by spaces.
+ * A comma or an @ inside one is its order, which the daemon parses, so each
+ * word goes through whole. `--` between two ids makes a range.
+ */
+export function taskList(raw: string): { ids: string[]; range: boolean } {
+  const range = /(^|\s)--(\s|$)/.test(raw);
+  const ids = raw.split(/\s+/).filter((s) => s && s !== "--");
+  return { ids, range };
 }
 
 /** startReply is what a start says it did. */
@@ -44,7 +45,7 @@ export function startReply(r: { batch: number; attached: boolean; task: string; 
   return r.batch ? `Batch ${r.batch} runs ${typed}` : `Started ${r.task} on ${r.branch}`;
 }
 
-// StartForm is f10 start's: one id or several, a range with --, and how far
+// StartForm is f10 start's: one id or several, an order with , and @, a range with --, and how far
 // the agents run. A flow start runs as a batch, which opens its tasks after
 // the call. A discussion opens one agent.
 function StartForm() {
@@ -62,18 +63,18 @@ function StartForm() {
       onSubmit={(e) => {
         e.preventDefault();
         void f.run(async () => {
-          const { ids, chain } = taskList(tasks);
+          const { ids, range } = taskList(tasks);
           const r = await api.runs.start({
             project,
             token: ids[0] ?? "",
             tasks: ids.slice(1),
-            chain,
+            range,
             mode,
             flow,
             pace,
             parallel: Number(parallel) || 0,
           });
-          return startReply(r, ids.join(chain ? " -- " : " "));
+          return startReply(r, ids.join(range ? " -- " : " "));
         });
       }}
     >
@@ -81,7 +82,7 @@ function StartForm() {
       <ProjectPicker projects={projects.value} value={project} onChange={setProject} />
       <label>
         Task ids
-        <input value={tasks} onInput={field(setTasks)} placeholder="FT-1 FT-2, or FT-1 -- FT-2 for a range" required />
+        <input value={tasks} onInput={field(setTasks)} placeholder="FT-1 FT-2, FT-1,FT-2 to stack, or FT-1 -- FT-2 for a range" required />
       </label>
       <label>
         Mode

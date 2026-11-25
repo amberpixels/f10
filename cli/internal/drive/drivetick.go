@@ -255,6 +255,16 @@ func (in *DriveInput) profileFor(i int) agentctl.Profile {
 	return in.profiles[""]
 }
 
+// typedProfile is the :profile typed on the token listed at i, "" for none
+// and for a range's tasks.
+func (in *DriveInput) typedProfile(i int) string {
+	if i >= 0 && i < len(in.Args.Profiles) {
+		return in.Args.Profiles[i]
+	}
+
+	return ""
+}
+
 // profileFlagged says the command line chose the task's profile, so a
 // rerun does not keep the one its branch recorded.
 func (in *DriveInput) profileFlagged(i int) bool {
@@ -367,7 +377,7 @@ func (in *DriveInput) joinWait(r *DriveRun) *driveResult {
 
 	for _, b := range r.Join {
 		switch id := b.Task.Ref.ID; {
-		case merged(b), in.Args.PlanOnly && in.planReleased(b):
+		case in.standing(b).Through(in.Args.PlanOnly):
 		case b.End != nil && b.End.Code != ui.ExitAsk:
 			return joinHalted(r, b, in.Args.PlanOnly)
 		default:
@@ -377,8 +387,7 @@ func (in *DriveInput) joinWait(r *DriveRun) *driveResult {
 
 	waits := textx.JoinAnd(out)
 	if waits != "" && waits != r.joinWaits {
-		fmt.Fprintf(in.Out, "%s: waiting for %s to %s\n",
-			in.id(r.Task.Ref.ID), waits, drivectl.JoinWhat(in.Args.PlanOnly))
+		fmt.Fprintf(in.Out, "%s: waiting %s\n", in.id(r.Task.Ref.ID), drivectl.JoinWaitPhrase(out, in.Args.PlanOnly))
 	}
 
 	r.joinWaits = waits
@@ -415,11 +424,23 @@ func joinHalted(r, b *DriveRun, planOnly bool) *driveResult {
 	}
 }
 
+// standing is a listed base as the one rule over a join's bases reads it.
+func (in *DriveInput) standing(b *DriveRun) drivectl.BaseStanding {
+	return drivectl.BaseStanding{
+		Finished: merged(b), Listed: true, Opened: b.opened(),
+		Planned: in.Storage.PlanLive(b.Task.Ref.Head().ID),
+	}
+}
+
 // planReleased: under --plan, an opened base with a saved plan, ended or
 // not. It must be opened, since the cap's order can reach a dependent before
 // its base, and a dependent opened first finds no base branch to stack on.
+// Finished is left out, because a stack is released on a merge elsewhere.
 func (in *DriveInput) planReleased(b *DriveRun) bool {
-	return in.Args.PlanOnly && b.opened() && in.Storage.PlanLive(b.Task.Ref.Head().ID)
+	s := in.standing(b)
+	s.Finished = false
+
+	return in.Args.PlanOnly && s.Through(true)
 }
 
 // markMoved marks a running dependent whose base branch moved past it, read

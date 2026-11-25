@@ -189,6 +189,8 @@ const ResumeEnv = "F10_BATCH_RESUMES"
 // OldNumberFileEnv and OldResumeEnv are the two names above as the last
 // release spelt them. A daemon sets both spellings and its child reads
 // either, because across an upgrade the two can be one release apart.
+//
+// one-release alias: the F10_DRIVE_FILE and F10_DRIVE_RESUMES variables
 const (
 	OldNumberFileEnv = "F10_DRIVE_FILE"
 	OldResumeEnv     = "F10_DRIVE_RESUMES"

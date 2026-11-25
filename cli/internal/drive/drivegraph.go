@@ -3,70 +3,68 @@ package drive
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/amberpixels/f10/cli/internal/branchmeta"
+	"github.com/amberpixels/f10/cli/internal/drivectl"
+	"github.com/amberpixels/f10/cli/internal/ref"
 	"github.com/amberpixels/f10/cli/internal/stack"
 	"github.com/amberpixels/f10/cli/internal/textx"
 )
 
-// A task's base is the f10-after its branch records once started, else the
-// command line's typed base, else its body's After: line. A join has several
-// bases (f10-join, else the typed ones) and no single base. The graph is
-// rebuilt every run from those, so a resume reads the same answer.
+// A task's bases are settled once, in settleBases. A started task takes its
+// branch's record, and any other what the command line or the body asks.
+// One base is a stack (Base) and several a join (Join), never both.
+// The graph is rebuilt every run from those, so a resume reads the same answer.
+
+// A baseSource is who named a task's bases.
+type baseSource int
+
+const (
+	baseNone   baseSource = iota
+	baseBody              // the body's After: line
+	baseLine              // a typed order: A,B or C@A
+	baseFlag              // --after or --base, which restacks the one task
+	baseBranch            // the branch's own record
+)
+
+// names is how a message says the source asked for bases.
+func (s baseSource) names(bases []string) string {
+	list := textx.JoinAnd(bases)
+
+	switch s {
+	case baseBody:
+		return "its body says After: " + list
+	case baseLine:
+		return "the command line names " + list
+	case baseFlag:
+		return "--after names " + list
+	case baseBranch:
+		return "its branch records after " + list
+	case baseNone:
+	}
+
+	return list
+}
 
 // graph refuses a base outside the list that is neither started nor
 // finished, and a cycle, before anything is created.
 func (in *DriveInput) graph(ctx context.Context, tasks []DriveTask) ([]int, []string, error) {
 	var notes []string
 
-	for i := range tasks {
-		t := &tasks[i]
-		if t.finished {
-			continue
-		}
-
-		t.Base = t.after
-
-		if t.Branch == "" {
-			continue
-		}
-
-		join, err := branchmeta.Get(ctx, in.Main, t.Branch, branchmeta.Join)
-		if err != nil {
-			return nil, nil, fmt.Errorf("%s: reading its recorded bases: %w", t.Ref.ID, err)
-		}
-
-		if join != "" {
-			t.Base, t.Join = "", strings.Fields(join)
-
-			continue
-		}
-
-		// the branch's copy wins: it is what start recorded, and what ship
-		// and pr act on; finish clears it, and the body then names a base
-		// that is finished, which is the same answer
-		recorded, err := branchmeta.Get(ctx, in.Main, t.Branch, branchmeta.After)
-		if err != nil {
-			return nil, nil, fmt.Errorf("%s: reading its recorded base: %w", t.Ref.ID, err)
-		}
-
-		if recorded == "" {
-			continue
-		}
-
-		if t.after != "" && !strings.EqualFold(recorded, t.after) {
-			notes = append(
-				notes,
-				fmt.Sprintf("%s: its branch records after %s and its body says After: %s; the branch wins",
-					t.Ref.ID, recorded, t.after),
-			)
-		}
-
-		t.Base = recorded
-	}
-
 	index := listIndex(tasks)
+
+	for i := range tasks {
+		note, err := in.settleBases(ctx, &tasks[i], tasks, index)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if note != "" {
+			notes = append(notes, note)
+		}
+	}
 
 	if err := in.refuseJoins(ctx, tasks, index); err != nil {
 		return nil, nil, err
@@ -89,8 +87,8 @@ func (in *DriveInput) graph(ctx context.Context, tasks []DriveTask) ([]int, []st
 		}
 
 		if !ok {
-			return nil, nil, fmt.Errorf("%s is After: %s, which is not in the list, not started and not finished: "+
-				"add %s to the list, or start it first", t.Ref.ID, t.Base, t.Base)
+			return nil, nil, fmt.Errorf("%s: %s, which is not in the list, not started and not finished: "+
+				"add %s to the list, or start it first", t.Ref.ID, t.source.names([]string{t.Base}), t.Base)
 		}
 	}
 
@@ -100,6 +98,95 @@ func (in *DriveInput) graph(ctx context.Context, tasks []DriveTask) ([]int, []st
 	}
 
 	return order, notes, nil
+}
+
+// settleBases sets a task's Base or Join, the one place either is set. The
+// branch's record wins over a typed order and the body, because it is what
+// ship, pr and finish act on. Only --after and --base win over it, because
+// they restack the one task they name. The note says what was overruled.
+func (in *DriveInput) settleBases(
+	ctx context.Context,
+	t *DriveTask,
+	tasks []DriveTask,
+	index map[string]int,
+) (string, error) {
+	t.Base, t.Join = "", nil
+
+	if t.finished {
+		return "", nil
+	}
+
+	bases, source, note := leads(t.want, tasks, index, t.Ref), t.source, ""
+
+	if t.Branch != "" && source != baseFlag {
+		rec, err := branchmeta.Load(ctx, in.Main, t.Branch)
+		if err != nil {
+			return "", fmt.Errorf("%s: reading its recorded bases: %w", t.Ref.ID, err)
+		}
+
+		// finish clears the record, and the body then names a base that is
+		// finished, which is the same answer
+		recorded := rec.Join
+		if rec.After != "" {
+			recorded = []string{rec.After}
+		}
+
+		if recorded = leads(recorded, tasks, index, t.Ref); len(recorded) > 0 {
+			if len(bases) > 0 && !sameIDs(recorded, bases) {
+				note = fmt.Sprintf("%s: %s and %s; the branch wins",
+					t.Ref.ID, baseBranch.names(recorded), source.names(bases))
+			}
+
+			bases, source = recorded, baseBranch
+		}
+	}
+
+	t.source = source
+
+	if len(bases) == 1 {
+		t.Base = bases[0]
+	} else {
+		t.Join = bases
+	}
+
+	return note, nil
+}
+
+// leads names each base by the lead of the listed entry that holds it, once,
+// so a bundle's rider named as a base is waited for as the bundle. A base in
+// the task's own entry orders work inside its branch and is no base.
+func leads(bases []string, tasks []DriveTask, index map[string]int, own ref.Ref) []string {
+	var out []string
+
+	for _, id := range bases {
+		if i, listed := index[id]; listed {
+			id = tasks[i].Ref.ID
+		}
+
+		if id == "" || slices.Contains(own.Members(), id) ||
+			slices.ContainsFunc(out, func(x string) bool { return strings.EqualFold(x, id) }) {
+			continue
+		}
+
+		out = append(out, id)
+	}
+
+	return out
+}
+
+// sameIDs compares two id lists, ignoring order and case.
+func sameIDs(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	for _, x := range a {
+		if !slices.ContainsFunc(b, func(y string) bool { return strings.EqualFold(x, y) }) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // listIndex maps each listed id to its first position; every member of a
@@ -224,7 +311,8 @@ func (in *DriveInput) joinOutside(ctx context.Context, id string) (bool, error) 
 		return false, err
 	}
 
-	if in.Args.PlanOnly && in.Storage.PlanLive(base.ID) {
+	b := drivectl.BaseStanding{Planned: in.Storage.PlanLive(base.ID)}
+	if b.Through(in.Args.PlanOnly) {
 		return true, nil
 	}
 
@@ -238,5 +326,7 @@ func (in *DriveInput) joinOutside(ctx context.Context, id string) (bool, error) 
 		return false, fmt.Errorf("%s: %w", base.ID, err)
 	}
 
-	return stack.FinishedTask(info, in.Tracker.Storage, base.ID, branched), nil
+	b.Finished = stack.FinishedTask(info, in.Tracker.Storage, base.ID, branched)
+
+	return b.Through(in.Args.PlanOnly), nil
 }

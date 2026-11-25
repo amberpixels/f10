@@ -535,3 +535,87 @@ func TestNamedPairKeepsTheCapForOthers(t *testing.T) {
 		t.Errorf("formed %+v, hint %q", p.Formed, p.Hint())
 	}
 }
+
+// A bundle the user named stays whole whichever member is typed first, and a
+// rule-formed chain inside one area bundles in either order too.
+func TestBundleDoesNotDependOnMemberOrder(t *testing.T) {
+	named := func(lead, rider string) driveplan.Plan {
+		t623, t624 := small("FT-623", "drive", 40), small("FT-624", "plan", 40)
+		t623.Base, t624.Base = "FT-622", "FT-623"
+
+		byID := map[string]*driveplan.Task{"FT-623": &t623, "FT-624": &t624}
+		byID[rider].With = lead
+
+		return propose(t, *byID[lead], *byID[rider])
+	}
+
+	for _, pair := range [][2]string{{"FT-623", "FT-624"}, {"FT-624", "FT-623"}} {
+		p := named(pair[0], pair[1])
+
+		want := pair[0] + "+" + pair[1] + "@FT-622"
+		if len(p.Args) != 1 || p.Args[0] != want {
+			t.Errorf("%s+%s: args %v, want [%s]", pair[0], pair[1], p.Args, want)
+		}
+	}
+
+	// the rules alone: FT-2 builds on FT-1, both after FT-9 outside the list
+	t1, t2 := small("FT-1", "ui", 20), small("FT-2", "ui", 20)
+	t1.Base, t2.Base = "FT-9", "FT-1"
+
+	for _, tasks := range [][]driveplan.Task{{t1, t2}, {t2, t1}} {
+		if p := propose(t, tasks...); p.Bundles != 1 {
+			t.Errorf("%s first: %d bundles, args %v; want one", tasks[0].ID, p.Bundles, p.Args)
+		}
+	}
+}
+
+// A cap the user typed is printed, a cap of 1 included, and the carried
+// flags reach the command however the proposal is printed.
+func TestCommandCarriesWhatWasTyped(t *testing.T) {
+	in := driveplan.Input{
+		Tasks:    []driveplan.Task{small("FT-41", "ui", 20), small("FT-42", "ui", 20), small("FT-45", "forge", 80)},
+		MaxLines: 300, Parallel: 1, TypedParallel: true, Carry: []string{"--pace", "fast"},
+	}
+
+	p, err := driveplan.Propose(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := "f10 start FT-41+FT-42 FT-45 --parallel 1 --pace fast"
+	if got := p.Command(); got != want {
+		t.Errorf("command %q, want %q", got, want)
+	}
+
+	if hint := p.Hint(); !strings.HasSuffix(hint, want) {
+		t.Errorf("hint %q does not end in the command", hint)
+	}
+
+	var b bytes.Buffer
+	if err := p.Write(&b, nil); err != nil || !strings.Contains(b.String(), "\n"+want+"\n") {
+		t.Errorf("text %q, %v", b.String(), err)
+	}
+
+	// the default ceiling is no typed cap: a cap of 1 from it prints nothing
+	in.TypedParallel, in.Carry = false, nil
+	if p, _ := driveplan.Propose(in); p.Command() != "f10 start FT-41+FT-42 FT-45" {
+		t.Errorf("command %q", p.Command())
+	}
+}
+
+// Two attempts of one task are two entries, as a start opens them: each
+// stays alone and keeps its suffix in the command.
+func TestTwoAttemptsOfOneTask(t *testing.T) {
+	a, b := small("FT-1", "ui", 20), small("FT-1", "ui", 20)
+	a.Suffix, b.Suffix = "a", "b"
+
+	p := propose(t, a, b)
+	if got := p.Command(); got != "f10 start FT-1-a FT-1-b --parallel 2" {
+		t.Errorf("command %q", got)
+	}
+
+	if _, err := driveplan.Propose(driveplan.Input{Tasks: []driveplan.Task{a, a}, MaxLines: 300}); err == nil ||
+		!strings.Contains(err.Error(), "FT-1-a is listed twice") {
+		t.Errorf("one attempt typed twice: err = %v", err)
+	}
+}

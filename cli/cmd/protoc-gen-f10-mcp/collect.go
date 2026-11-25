@@ -34,8 +34,13 @@ func deprecated(opts any) bool {
 	return false
 }
 
+// notATool opens the sentence of an rpc's comment that keeps it off the tool
+// list. Such a method is for a local client, and a model would only mistake
+// it for the tool beside it.
+const notATool = "Not a tool:"
+
 // collect is every unary method of the files to generate that is not
-// deprecated. A method with no
+// deprecated and whose comment does not say notATool. A method with no
 // comment, or two methods with one tool name, fail the run: the comment is
 // all a model reads to pick the tool.
 func collect(files []*protogen.File) ([]tool, error) {
@@ -59,6 +64,10 @@ func collect(files []*protogen.File) ([]tool, error) {
 				desc := commentText(m.Comments.Leading)
 				if desc == "" {
 					return nil, fmt.Errorf("%s has no comment: an MCP tool's description is its rpc's comment", full)
+				}
+
+				if strings.Contains(desc, notATool) {
+					continue
 				}
 
 				name := snake(m.GoName)

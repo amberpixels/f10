@@ -124,7 +124,7 @@ func (s *runService) Start(
 		}
 
 		if sw = start.ClosedSwitch(ctx, t, a); sw == nil {
-			return s.startDrive(t, c, argv)
+			return s.startDrive(t, c, argv, a)
 		}
 	}
 
@@ -190,7 +190,7 @@ func flowStart(
 	// a range and a cap are a drive's, refused as f10 start refuses them
 	once := func() error {
 		switch {
-		case m.GetChain():
+		case startRange(m):
 			return errors.New("a range runs as a batch: --discuss and a PR pickup take the ids one by one")
 		case m.GetParallel() > 0:
 			return errors.New("parallel caps a batch: --discuss and a PR pickup open one agent")
@@ -217,11 +217,11 @@ func flowStart(
 	}
 
 	// the other tasks run in the same drive, as f10 start A B runs them, or
-	// as its range with chain
+	// as its range
 	argv := append([]string{token}, m.GetTasks()...)
-	if m.GetChain() {
+	if startRange(m) {
 		if len(m.GetTasks()) != 1 {
-			return nil, false, errors.New("chain takes the two ends of a range: the token and one id")
+			return nil, false, errors.New("a range takes its two ends: the token and one id")
 		}
 
 		argv = []string{token, "--", m.GetTasks()[0]}
@@ -251,6 +251,12 @@ func flowStart(
 	}
 
 	return argv, true, nil
+}
+
+// startRange reports a start asked for as a range, under the field's old
+// name too.
+func startRange(m *f10v1.StartRequest) bool {
+	return m.GetRange() || m.GetChain() //nolint:staticcheck // the old name, for clients built against it
 }
 
 // startToken is the start's argument and the task a picked-up PR is for:
@@ -465,18 +471,20 @@ func (s *runService) Resume(
 		return nil, invalid(err.Error())
 	}
 
-	// answers start a process of their own, as runBatch says
-	resume := rec.Number
-	if len(m.GetAnswers()) > 0 {
-		resume = 0
+	a, err := drivectl.ParseDriveArgs(argv)
+	if err != nil {
+		return nil, invalid(err.Error())
 	}
+
+	o := output(c)
+	root := t.Layout.StorageRoot.Path()
 
 	started, err := s.sup.RunDrive(daemon.DriveSpec{
 		Argv:   argv,
 		Dir:    cmp.Or(t.Layout.MainRoot, t.Layout.CheckoutRoot),
-		Root:   t.Layout.StorageRoot.Path(),
+		Root:   root,
 		Env:    driveCallerEnv(s.sup, c, t),
-		Resume: resume,
+		Resume: drive.TuneAttach(&o.Stderr, root, argv, a),
 	})
 	if err != nil {
 		return nil, err
@@ -487,8 +495,8 @@ func (s *runService) Resume(
 		how = "is still running, followed"
 	}
 
-	o := output(c)
-	fmt.Fprintf(&o.Stdout, "batch %d %s: f10 daemon logs %s -f follows it\n", rec.Number, how, rec.Lead())
+	fmt.Fprintf(&o.Stdout, "batch %d %s: f10 daemon logs %s -f follows it\n",
+		rec.Number, how, drive.CommandID(root, rec))
 
 	return connect.NewResponse(&f10v1.ResumeResponse{
 		Batch:    int32(rec.Number), //nolint:gosec // a batch number
@@ -543,7 +551,7 @@ func driveArgv(m *f10v1.DriveRequest) ([]string, error) {
 
 	switch {
 	case m.GetChain() && len(tasks) != 2:
-		return nil, invalid("chain takes the two ends of a range")
+		return nil, invalid("a range takes its two ends")
 	case m.GetChain():
 		argv = append(argv, tasks[0].GetId(), "--", tasks[1].GetId())
 	default:
@@ -910,7 +918,7 @@ func stopBatch(
 	root, now := t.Layout.StorageRoot.Path(), time.Now()
 
 	if n <= 0 {
-		if n, err = taskDrive(ctx, t, root, task); err != nil {
+		if n, err = batchToStop(ctx, t, task); err != nil {
 			return nil, err
 		}
 	}
@@ -927,13 +935,17 @@ func stopBatch(
 
 // startDrive runs a flow start as the batch it is, as StartBatch does.
 func (s *runService) startDrive(
-	t *target.Target, c *f10v1.CallerContext, argv []string,
+	t *target.Target, c *f10v1.CallerContext, argv []string, a drivectl.DriveArgs,
 ) (*connect.Response[f10v1.StartResponse], error) {
+	o := output(c)
+	root := t.Layout.StorageRoot.Path()
+
 	started, err := s.sup.RunDrive(daemon.DriveSpec{
-		Argv: argv,
-		Dir:  cmp.Or(c.GetCheckout(), c.GetCwd(), t.Dir),
-		Root: t.Layout.StorageRoot.Path(),
-		Env:  driveCallerEnv(s.sup, c, t),
+		Argv:   argv,
+		Dir:    cmp.Or(c.GetCheckout(), c.GetCwd(), t.Dir),
+		Root:   root,
+		Env:    driveCallerEnv(s.sup, c, t),
+		Resume: drive.TuneAttach(&o.Stderr, root, argv, a),
 	})
 	if err != nil {
 		return nil, err
@@ -944,7 +956,6 @@ func (s *runService) startDrive(
 		how = "already running, followed"
 	}
 
-	o := output(c)
 	fmt.Fprintf(&o.Stdout, "batch %d %s: f10 start %s\nlog: %s\n",
 		started.Drive, how, strings.Join(argv, " "), started.Log)
 
@@ -957,23 +968,14 @@ func (s *runService) startDrive(
 	}), nil
 }
 
-// taskDrive is the number of the batch a task names: the running one
-// holding its lease, else the newest stopped one whose record holds it.
-func taskDrive(ctx context.Context, t *target.Target, root, task string) (int, error) {
-	task = strings.TrimSpace(task)
-
-	if r, err := t.Reference(ctx, task); err == nil {
-		if holder, held := drivestore.Probe(root, r.Head().ID); held && holder.Drive > 0 {
-			return holder.Drive, nil
-		}
+// batchToStop is drive.StopBatch with its refusal as the API's code.
+func batchToStop(ctx context.Context, t *target.Target, task string) (int, error) {
+	n, err := drive.StopBatch(ctx, t, task)
+	if none, ok := errors.AsType[drive.NoBatchError](err); ok {
+		return 0, connect.NewError(connect.CodeNotFound, none)
 	}
 
-	if l, ok := drive.BatchOf(ctx, t, task); ok {
-		return l.Number, nil
-	}
-
-	return 0, connect.NewError(connect.CodeNotFound,
-		fmt.Errorf("no batch holds %s: f10 status --batches lists them", task))
+	return n, err
 }
 
 // statusReport reads what f10 status shows: every live run with all, the

@@ -82,10 +82,23 @@ func TestParseOrderRefusals(t *testing.T) {
 		"A-1 C-1@A-1 --hint":    "sets the order itself",
 		"A-1,A-2 --discuss":     "proposes the order itself",
 		"B-1 C-1@B-1 --discuss": "proposes the order itself",
+		// a profile on an entry does not hide the order
+		"A-1,A-2:opus --discuss":     "proposes the order itself",
+		"A-1 C-1@A-1:opus --discuss": "proposes the order itself",
 	} {
 		_, err := drivectl.ParseStart(strings.Fields(line))
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%q: err = %v, want %q", line, err, want)
+		}
+	}
+
+	// an order typed around a url names the fix, not "not a task reference"
+	for _, tok := range []string{"https://github.com/o/r/issues/2,FT-623", "FT-1@https://github.com/o/r/issues/2"} {
+		if _, err := drivectl.ParseDriveArgs(
+			[]string{tok},
+		); err == nil ||
+			!strings.Contains(err.Error(), "use the task's id") {
+			t.Errorf("%q: err = %v, want the refusal naming the id", tok, err)
 		}
 	}
 
@@ -119,6 +132,43 @@ func TestOrderNeedsNoQuoting(t *testing.T) {
 		out, err := exec.Command(argv[0], argv[1:]...).CombinedOutput()
 		if err != nil || string(out) != want {
 			t.Errorf("%s: %q, %v; want every word as typed", name, out, err)
+		}
+	}
+}
+
+// The unknown-flag refusal lists the flags a user types: --propose among
+// them, and never --resume, which only f10 resume and the daemon pass.
+func TestUnknownFlagListsWhatAUserTypes(t *testing.T) {
+	_, err := drivectl.ParseDriveArgs([]string{"A-1", "--bogus"})
+	if err == nil {
+		t.Fatal("--bogus was taken")
+	}
+
+	if msg := err.Error(); strings.Contains(msg, "--resume") || !strings.Contains(msg, "--propose") ||
+		!strings.Contains(msg, "--parallel") {
+		t.Errorf("refusal = %q", msg)
+	}
+}
+
+// A proposal carries the flags that shape a start, a typed cap among them
+// as the proposer's to print, and refuses every other flag by one list.
+func TestProposeCarriesTheShapingFlags(t *testing.T) {
+	a, err := drivectl.ParsePropose(strings.Fields("A-1 A-2 --propose --pace fast --model=opus --parallel 1 --local"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := strings.Join(a.Plan.Pass, " "); got != "--pace fast --model=opus --local" || a.Parallel != 1 {
+		t.Errorf("carried %q, cap %d", got, a.Parallel)
+	}
+
+	for _, line := range []string{
+		"A-1 --propose --plan", "A-1 --propose --after B-1", "A-1 --propose --foreground",
+		"A-1 --propose --every 5s", "A-1 --propose --answer yes", "A-1 --propose --resume 2",
+	} {
+		_, err := drivectl.ParsePropose(strings.Fields(line))
+		if err == nil || !strings.Contains(err.Error(), "--flow, --local, --pace, --agent, --model and --parallel") {
+			t.Errorf("%q: err = %v, want the list of flags a proposal carries", line, err)
 		}
 	}
 }

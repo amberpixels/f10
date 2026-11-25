@@ -313,6 +313,7 @@ func (e *Effective) resolveHosting(fm *layered) {
 		})
 	}
 
+	// one-release alias: the frontmatter key drive_env
 	if fm.OldBatchEnv != nil {
 		e.problem(false, "drive_env is now batch_env: rename the key; the old one is read for one more release")
 	}

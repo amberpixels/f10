@@ -48,7 +48,7 @@ func flagUsage(flags []drivectl.DriveFlag) string {
 func DriveUsage() string {
 	run := slices.DeleteFunc(
 		slices.Clone(drivectl.DriveFlags),
-		func(f drivectl.DriveFlag) bool { return f.Name == "--resume" },
+		func(f drivectl.DriveFlag) bool { return f.Internal },
 	)
 
 	return flagUsage(run)

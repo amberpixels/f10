@@ -59,7 +59,7 @@ func WriteDaemonStatus(ctx context.Context, w io.Writer, links *render.TaskLinks
 			links.Load(ctx, project, ids...)
 
 			for _, t := range rec.Tasks {
-				standing := taskStanding(t, true, rec.Tasks, drivectl.JoinPlanned(rec.Args, r.Root))
+				standing := taskStanding(t, true, rec.Tasks, drivectl.JoinPlanned(drivectl.PlanOnly(rec), r.Root))
 				fmt.Fprintf(w, "  %s %s\n", render.PadRight(links.ID(project, t.ID), 6), standing)
 			}
 		}
@@ -152,17 +152,7 @@ func ThroughDaemon(
 		return nil
 	}
 
-	// a rerun may attach to the drive still running, which reads its cap
-	// from the record each tick
-	if a.Parallel > 0 {
-		setDriveParallel(w, t.Layout.StorageRoot.Path(), argv, a)
-	}
-
-	// a drive given answers starts its own process, so the answers reach it;
-	// the daemon keys the rest by RecordKey
-	if len(a.Answers) == 0 {
-		req.Resume = a.Resume
-	}
+	req.Resume = TuneAttach(w, t.Layout.StorageRoot.Path(), argv, a)
 
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt)
 	defer stop()
@@ -171,6 +161,21 @@ func ThroughDaemon(
 	drivectl.WatchProject(ctx, w, t)
 
 	return followDrive(ctx, w, dir, ver, t.Layout.StorageRoot.Path(), req, nil)
+}
+
+// TuneAttach writes a given --parallel into the record, because a running
+// batch the daemon attaches to never reads the line, only its record. It
+// returns the record to attach by, none when answers need a process of their own.
+func TuneAttach(w io.Writer, root string, argv []string, a drivectl.DriveArgs) int {
+	if a.Parallel > 0 {
+		setDriveParallel(w, root, argv, a)
+	}
+
+	if len(a.Answers) > 0 {
+		return 0
+	}
+
+	return a.Resume
 }
 
 // setDriveParallel writes a given --parallel into the record --resume names
