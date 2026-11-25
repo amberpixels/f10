@@ -153,15 +153,18 @@ func TestPlantedCheck(t *testing.T) {
 		s      Scenario
 		pass   bool
 		detail string
+		count  *PlantedCount
 	}{
 		"found": {
 			s:      Scenario{Task: "T-1", Planted: []Planted{{File: "main.go", From: 1, To: 5}}},
 			pass:   true,
 			detail: "1 of 1 planted found, 1 outside",
+			count:  &PlantedCount{Found: 1, Total: 1, Outside: 1},
 		},
 		"missed": {
 			s:      Scenario{Task: "T-1", Planted: []Planted{{File: "main.go", From: 1, To: 5}, {File: "main.go", From: 10, To: 12, What: "leak"}}},
 			detail: "missed main.go:10-12 (leak)",
+			count:  &PlantedCount{Found: 1, Total: 2, Outside: 1},
 		},
 		"too many outside": {
 			s:      Scenario{Task: "T-1", Planted: []Planted{{File: "main.go", From: 1, To: 5}}, MaxExtra: &zero},
@@ -175,6 +178,10 @@ func TestPlantedCheck(t *testing.T) {
 		got := checkPlanted(t.Context(), dir, c.s)
 		if got.Pass != c.pass || !strings.Contains(got.Detail, c.detail) {
 			t.Errorf("%s = %+v, want pass %v with %q", name, got, c.pass, c.detail)
+		}
+
+		if c.count != nil && (got.Planted == nil || *got.Planted != *c.count) {
+			t.Errorf("%s counts %+v, want %+v", name, got.Planted, c.count)
 		}
 	}
 }

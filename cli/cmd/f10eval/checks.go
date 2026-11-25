@@ -19,10 +19,19 @@ import (
 // A Check is one assertion on what a scenario's run left in its repo. Every
 // check reads artifacts by rule, except rubric, where a model grades wording.
 type Check struct {
-	Name   string        `json:"name"`
-	Pass   bool          `json:"pass"`
-	Detail string        `json:"detail,omitempty"`
-	Rubric *RubricResult `json:"rubric,omitempty"`
+	Name    string        `json:"name"`
+	Pass    bool          `json:"pass"`
+	Detail  string        `json:"detail,omitempty"`
+	Rubric  *RubricResult `json:"rubric,omitempty"`
+	Planted *PlantedCount `json:"planted,omitempty"`
+}
+
+// A PlantedCount is the planted check's tally as numbers, so a comparison of
+// report sets reads it without parsing the detail.
+type PlantedCount struct {
+	Found   int `json:"found"`
+	Total   int `json:"total"`
+	Outside int `json:"outside"`
 }
 
 var checks = map[string]func(ctx context.Context, dir string, s Scenario) Check{
@@ -209,6 +218,7 @@ func checkPlanted(_ context.Context, dir string, s Scenario) Check {
 		fmt.Sprintf("%d of %d planted found, %d outside", len(s.Planted)-missed, len(s.Planted), extra))
 	c := result("planted", problems)
 	c.Pass = len(problems) == 1
+	c.Planted = &PlantedCount{Found: len(s.Planted) - missed, Total: len(s.Planted), Outside: extra}
 
 	return c
 }
