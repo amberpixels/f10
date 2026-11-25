@@ -15,6 +15,8 @@ just eval                                  # every scenario
 just eval -scenario feature-small          # one
 just eval -permission-mode bypassPermissions -max-budget-usd 3 -keep
 just eval -scenario feature-small -agent opus:medium   # one profile, instead of the ones the scenario lists
+just eval -scenario review-planted -repeat 5 -out evals/reports/base   # five runs, into a set of their own
+just eval compare evals/reports/base evals/reports/cut                 # two sets side by side
 ```
 
 Each scenario runs `claude -p --plugin-dir <this checkout>` in a temporary copy of its fixture:
@@ -24,7 +26,7 @@ Each scenario runs `claude -p --plugin-dir <this checkout>` in a temporary copy 
 - **Nothing is pushed.** The fixture repo has no `origin`, and its tracker is a local driver that reads `tasks/`.
 - **Permissions.** A driven ship runs verify and commits. Under the default `-permission-mode acceptEdits` those commands may be refused. Choose the mode yourself: the run is a throwaway directory, but the flag is yours to pass.
 - **The agent profile.** Each run starts `claude -p` on one profile (`docs/project-setup.md` → Agents): the ones the scenario's `agents` list names, one run each, else one run on the kind's default; `-agent <profile>` runs every scenario on that one profile instead. The profile's model and effort go on the command line (`--model`, `--effort`), and a profile the kind refuses fails before any spend.
-- **Flags.** `-keep` keeps the temp dir and prints its path, so you can read what the run left.
+- **Flags.** `-keep` keeps the temp dir and prints its path, so you can read what the run left. `-repeat N` runs every selected scenario N times on each of its profiles, one run after another, because parallel sessions share the subscription's rate limits and would skew `duration_ms`. `-out <dir>` writes the reports there instead of `evals/reports/<version>/`. A relative path resolves against the repo root. A run refuses an `-out` that already holds reports of a scenario it would run, because a compare reads every report in the directory. `-repeat` above 1 needs `-out`, so its set never lands beside a committed release report.
 
 ## Reports
 
@@ -41,7 +43,40 @@ Each report holds:
 
 Two profiles of one scenario sit side by side under one version, so a cheaper profile is justified by diffing its report against the dearer one on the same checks.
 
-Commit the reports with a release. Two releases then compare by diffing their files.
+With `-repeat N` above 1, each run's file name carries its index before `.json`, as in `review-planted.3.json` or `feature-small.opus-medium.2.json`.
+The report carries it too, as a `repeat` field.
+A `planted` check also writes its counts as numbers, `planted: {found, total, outside}`, beside the detail sentence.
+
+Commit the reports with a release. Sets made to compare a change stay uncommitted.
+
+## Comparing
+
+One run is not a measurement, because a rerun of the same prompt can find a different number of planted defects.
+So a prompt change is judged on several runs of each side:
+
+1. On `main`: `just eval -scenario <name> -repeat 5 -out evals/reports/base`.
+2. On the branch with the change: the same command with `-out evals/reports/<name>`.
+   Each side runs in its own checkout, because a run loads the plugin of the checkout it runs from.
+   The branch does not bump the version, so without `-out` the second set would overwrite the first.
+3. `just eval compare <baseline-dir> <variant-dir>`. Give the baseline's path as an absolute path when it lives in the other checkout.
+
+The command groups each set's reports by scenario and profile, read from the reports themselves, not their file names.
+For each group it prints a row per metric, with the baseline and the variant side by side:
+
+- `errors`: the runs that stopped with an error, as `k/N`. A run that errored in setup returned before its checks ran, so it counts in this row and in no other. A turn error, such as a spent budget, still ran the checks and spent money, so that run counts in every row.
+- `pass` and each `check <name>`: passes as `k/N`.
+- `planted found`, `planted outside`, `rubric lines passed`, `cost` and `duration`: the mean, then the min-max range and the sample count (`3.4 [3-4] n=5`).
+
+A row is marked `better` or `worse` only when the difference exceeds the spread across runs:
+
+- A numeric row is marked when the two ranges do not overlap, and each side has at least 2 samples. With 3 to 5 runs, ranges that do not overlap are a claim a reader can check by eye.
+- A `k/N` row is marked when the rates differ by at least two runs of the smaller side, and each side has at least 3 samples. A range cannot mark it, because one pass and one fail already span the whole range. So 5/5 against 2/5 is marked, and 5/5 against 4/5 is not.
+
+Higher is better for passes, planted found and rubric lines. Lower is better for errors, planted outside, cost and duration.
+`cost` is the run's own spend, without the grader's.
+A group in only one set is listed as not compared.
+The header warns when a group has one run, and when a set holds reports from more than one commit, which usually means two sets were mixed in one directory.
+The command exits 0 whatever it finds, because the comparison informs a decision and gates nothing.
 
 ## Scenarios
 

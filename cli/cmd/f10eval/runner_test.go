@@ -45,12 +45,27 @@ func TestReportNameAndArgs(t *testing.T) {
 	def, _, _ := agentctl.Profile{}.Resolve()
 	high, _, _ := agentctl.Profile{Model: "opus", Effort: "high"}.Resolve()
 
-	if n := reportName("feature-small", def); n != "feature-small.json" {
-		t.Errorf("default report %q", n)
+	for _, c := range []struct {
+		p      agentctl.Profile
+		repeat int
+		want   string
+	}{
+		{def, 0, "feature-small.json"},
+		{high, 0, "feature-small.opus-high.json"},
+		{def, 3, "feature-small.3.json"},
+		{high, 2, "feature-small.opus-high.2.json"},
+	} {
+		if n := reportName("feature-small", c.p, c.repeat); n != c.want {
+			t.Errorf("report %q, want %q", n, c.want)
+		}
 	}
 
-	if n := reportName("feature-small", high); n != "feature-small.opus-high.json" {
-		t.Errorf("profile report %q", n)
+	if d := resolveDir("/root", "evals/reports/base"); d != "/root/evals/reports/base" {
+		t.Errorf("relative out %q", d)
+	}
+
+	if d := resolveDir("/root", "/tmp/base"); d != "/tmp/base" {
+		t.Errorf("absolute out %q", d)
 	}
 
 	o := options{permission: "acceptEdits", budget: "5"}
@@ -127,5 +142,42 @@ func TestHistoryAndReviewsSeedTheRun(t *testing.T) {
 	events, err := ledger.ReadEvents(ctx, path, ledger.Filter{Task: "EV-11", Kind: ledger.ReviewRoundOpened})
 	if err != nil || len(events) != 2 || events[0].Project != ledger.Where(ctx, dir).Project {
 		t.Fatalf("seeded %d rows (%v), want two under the run's project", len(events), err)
+	}
+}
+
+// A set that mixes with reports already in its dir would count stale runs,
+// so a run refuses it before any spend.
+func TestCheckOutRefusesAMixedSet(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	s := []Scenario{{Name: "review"}}
+
+	if err := checkOut(filepath.Join(dir, "x"), options{repeat: 3}, s); err == nil {
+		t.Error("-repeat 3 without -out accepted")
+	}
+
+	if err := checkOut(dir, options{out: dir, repeat: 3}, s); err != nil {
+		t.Errorf("an empty -out refused: %v", err)
+	}
+
+	if err := writeReport(filepath.Join(dir, "review.2.json"), Report{Scenario: "review"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := writeReport(filepath.Join(dir, "review-host.json"), Report{Scenario: "review-host"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := checkOut(dir, options{out: dir, repeat: 3}, s); err == nil {
+		t.Error("an -out holding reports of the scenario accepted")
+	}
+
+	if err := checkOut(dir, options{out: dir}, []Scenario{{Name: "feature"}}); err != nil {
+		t.Errorf("another scenario's reports refused: %v", err)
+	}
+
+	if err := checkOut(dir, options{repeat: 1}, s); err != nil {
+		t.Errorf("the release dir refused: %v", err)
 	}
 }
