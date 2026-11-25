@@ -30,9 +30,9 @@ type BaseStanding struct {
 }
 
 // Through reports a base its join no longer waits for. A join waits for
-// merges. Under --plan it waits for saved plans instead: a listed base must
-// also have opened, because a dependent opened first finds no base branch,
-// and a base outside the batch has nothing here to open it.
+// merges, and under --plan for saved plans instead. There a listed base must
+// also have opened, because a dependent opened first finds no base branch.
+// A base outside the batch needs only its plan, because nothing here opens it.
 func (b BaseStanding) Through(planOnly bool) bool {
 	switch {
 	case b.Finished:

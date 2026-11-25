@@ -13,9 +13,9 @@ import (
 	"github.com/amberpixels/f10/cli/internal/textx"
 )
 
-// A task's bases are settled once, in settleBases: the branch's record once the
-// task started, else what the command line or the body asks. One base is a
-// stack (Base), several are a join (Join), and the two are never both set.
+// A task's bases are settled once, in settleBases. A started task takes its
+// branch's record, and any other what the command line or the body asks.
+// One base is a stack (Base) and several a join (Join), never both.
 // The graph is rebuilt every run from those, so a resume reads the same answer.
 
 // A baseSource is who named a task's bases.

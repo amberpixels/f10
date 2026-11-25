@@ -139,11 +139,9 @@ type Deliverer struct {
 	Live   func(a asks.Ask) bool
 }
 
-// BatchResume is a Deliverer's Resume: it goes on with the stopped batch an
-// answered ask belongs to, and says so. hand passes the batch to a
-// supervisor. It is the caller's, because the daemon resumes in process and
-// a command dials the daemon. With supported false no daemon runs batches
-// here, so the line tells the user to resume it in the foreground.
+// BatchResume is a Deliverer's Resume for the stopped batch an answered ask
+// belongs to. hand is the caller's, because the daemon resumes in process and
+// a command dials the daemon. Unsupported, it tells the user to resume by hand.
 func BatchResume(
 	supported bool, hand func(context.Context, asks.Ask) error,
 ) func(context.Context, io.Writer, asks.Ask) error {

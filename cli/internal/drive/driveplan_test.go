@@ -278,8 +278,8 @@ func TestPlanHintWithoutASheet(t *testing.T) {
 	}
 }
 
-// A -suffix is one attempt of a task: the proposal keeps it alone and prints
-// it, where it used to refuse the token a start accepts.
+// A -suffix is one attempt of a task, as a start reads it: the proposal keeps
+// it alone and prints it.
 func TestPlanCarriesASuffix(t *testing.T) {
 	t.Parallel()
 

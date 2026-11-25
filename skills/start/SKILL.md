@@ -79,7 +79,8 @@ It runs no step, except **propose** under `--propose`.
    Its options are the open hits as `<id> <title>`, cut to fit, four at most per question.
    No open hit for a thing is one line saying so, and the rest go on.
 2. **Run the propose step.**
-   It is the one step this skill runs, so load what a step reads first, when this context does not hold it yet: `f10-load-conventions.sh`, then `f10 help --agent` in a call of its own.
+   It is the one step this skill runs, so it first needs what every step reads.
+   When this context does not hold it yet, run `f10-load-conventions.sh`, then `f10 help --agent` in a call of its own.
    A plain start never loads them, because it runs no step.
    Then run `f10-load-project.sh propose`, and follow it with the tasks and the start flags given.
 3. **Stop** at the proposal, with one line offering to run its command.

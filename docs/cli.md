@@ -338,7 +338,8 @@ A join started under `--plan` keeps those rules on a later run, because its bran
 
 A typed base wins over the body's `After:` line, and is never written to the tracker.
 A task's bases are settled once, before anything is created, and the same answer decides what the batch waits for and what the branch records.
-Once a task has started, its branch's record wins over a typed order and over the body, for a stack and a join alike, and a note names what it overruled.
+Once a task has started, its branch's record wins over a typed order and over the body, for a stack and a join alike.
+A note names what it overruled.
 So a branch never records both a stack and a join.
 `--after` and `--base` are the exception: they restack the one task they name, so they win over its branch's record.
 The order is kept in the batch's record until an entry starts, and on its branch after, so `f10 resume` brings a stopped batch back in the same order.

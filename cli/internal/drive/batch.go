@@ -72,9 +72,9 @@ func (e NoBatchError) Error() string {
 	return fmt.Sprintf("no batch holds %s: f10 status --batches lists every batch", e.Token)
 }
 
-// LogBatch is the number of the batch whose log a task names: the newest
-// record holding it, live or not, because a finished batch still has a log
-// and an older live batch is not the one the task last ran in.
+// LogBatch is the number of the newest batch whose record holds the task,
+// live or not. A finished batch still has a log, and an older live batch is
+// not the one the task last ran in.
 func LogBatch(ctx context.Context, t *target.Target, token string) (int, error) {
 	return logBatch(t.Layout.StorageRoot.Path(), token, namesOf(ctx, t, token))
 }

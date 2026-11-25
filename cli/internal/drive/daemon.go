@@ -163,12 +163,9 @@ func ThroughDaemon(
 	return followDrive(ctx, w, dir, ver, t.Layout.StorageRoot.Path(), req, nil)
 }
 
-// TuneAttach prepares a command line the daemon may attach to a batch still
-// running, which then never reads the line. A given --parallel is written
-// into the record, which a running batch reads each tick. It returns the
-// record to attach by: none for a batch given answers, which starts a
-// process of its own so the answers reach it, and the daemon keys the rest
-// by RecordKey. The CLI and the API both hand a batch over through it.
+// TuneAttach writes a given --parallel into the record, because a running
+// batch the daemon attaches to never reads the line, only its record. It
+// returns the record to attach by, none when answers need a process of their own.
 func TuneAttach(w io.Writer, root string, argv []string, a drivectl.DriveArgs) int {
 	if a.Parallel > 0 {
 		setDriveParallel(w, root, argv, a)

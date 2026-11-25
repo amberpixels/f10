@@ -151,8 +151,8 @@ func Propose(in Input) (Plan, error) {
 	byID := map[string]int{}
 	typed := map[string]bool{}
 
-	// two attempts of one task are two entries, as a start opens them; a base
-	// names the task, so byID keeps its first attempt
+	// two attempts of one task are two entries, as a start opens them. A base
+	// names the task, so byID keeps its first attempt.
 	for i := range tasks {
 		attempt := strings.ToUpper(notation.JoinSuffix(tasks[i].ID, tasks[i].Suffix))
 		if typed[attempt] {
@@ -456,9 +456,8 @@ func bundle(tasks []Task, base [][]Base, alone []string, byID map[string]int, ma
 
 // split cuts one joined set. A member joins the first bundle that fits it
 // under the cap and has the same outside bases, or holds every base it has.
-// A member's outside bases are read against the whole set and through the
-// members it builds on, so the cut does not depend on the order the members
-// were listed in. A pair the user named always joins, and only such a pair
+// A member's outside bases are read against the whole set, through the
+// members it builds on. So the cut does not depend on the listing order. A pair the user named always joins, and only such a pair
 // passes the cap. A task the rules joined never does.
 func split(tasks []Task, base [][]Base, members []int, byID map[string]int, maxLines int) [][]int {
 	if len(members) == 1 {
@@ -485,7 +484,7 @@ func split(tasks []Task, base [][]Base, members []int, byID map[string]int, maxL
 	}
 
 	// outside is the bases of i outside the set, its own and those of the
-	// members it builds on; seen stops a circle, which levelsOf reports
+	// members it builds on. seen stops a circle, which levelsOf reports.
 	var outside func(i int, seen map[int]bool) []string
 
 	outside = func(i int, seen map[int]bool) []string {

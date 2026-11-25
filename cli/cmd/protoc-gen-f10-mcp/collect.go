@@ -35,8 +35,8 @@ func deprecated(opts any) bool {
 }
 
 // notATool opens the sentence of an rpc's comment that keeps it off the tool
-// list, with its reason: a method for a local client, which a model would
-// only mistake for the tool beside it.
+// list. Such a method is for a local client, and a model would only mistake
+// it for the tool beside it.
 const notATool = "Not a tool:"
 
 // collect is every unary method of the files to generate that is not

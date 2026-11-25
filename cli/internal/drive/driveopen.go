@@ -67,11 +67,9 @@ func (in *DriveInput) KeepFlow(ctx context.Context, branch string) (runplan.Ship
 func (in *DriveInput) open(ctx context.Context, r *DriveRun) error {
 	task := r.Task
 
-	// the base is the settled one. A base the branch already records is not
-	// passed again, because the branch carries it and a second record would
-	// move its tip. A base the body alone named is read again, for its notes
-	// and for a finished base, which leaves none. A join opens with no base
-	// task, so it branches from the default branch.
+	// a base the branch records is not passed again, because a second record
+	// would move its tip. A body's base is read again for its notes, and a
+	// finished one leaves none. A join branches from the default branch.
 	after, note := task.Base, ""
 
 	switch task.source {
