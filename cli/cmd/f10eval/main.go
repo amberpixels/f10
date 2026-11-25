@@ -1,8 +1,8 @@
 // Command f10eval runs f10's prompt scenarios against the real model and
 // checks what each run leaves behind. It costs model spend, so it runs on
-// demand and before a release (`just eval`), never in CI; its reports under
-// evals/reports/<version>/ are kept in git, and `f10eval compare` reads two
-// report sets side by side.
+// demand and before a release (`just eval`), never in CI. Its release reports
+// under evals/reports/<version>/ are kept in git, and `f10eval compare` reads
+// two report sets side by side.
 package main
 
 import (
@@ -95,7 +95,7 @@ type Report struct {
 	Agent    string    `json:"agent,omitempty"` // the profile the run started on, resolved; "" for the kind's default
 	Version  string    `json:"version"`
 	Commit   string    `json:"commit"`
-	Repeat   int       `json:"repeat,omitempty"` // 1-based under -repeat above 1; 0 for a single run
+	Repeat   int       `json:"repeat,omitempty"` // 1-based under -repeat above 1, else 0
 	At       time.Time `json:"at"`
 	Pass     bool      `json:"pass"`
 	Checks   []Check   `json:"checks"`
@@ -685,9 +685,9 @@ func profilesFor(s Scenario, only string) ([]agentctl.Profile, error) {
 	return out, nil
 }
 
-// reportName is the report file for one run: the scenario's name, the
-// profile with its colons as hyphens when it is not the kind's default, and
-// the repeat index when there is one, so every run of a set gets its own file.
+// reportName is the report file for one run. A profile other than the kind's
+// default adds its name with colons as hyphens. A repeat index adds itself, so
+// every run of a set gets its own file.
 func reportName(scenario string, p agentctl.Profile, repeat int) string {
 	name := scenario
 	if !p.IsDefault() {
@@ -701,10 +701,10 @@ func reportName(scenario string, p agentctl.Profile, repeat int) string {
 	return name + ".json"
 }
 
-// checkOut refuses a run whose set would mix with reports already there: a
-// compare reads every file in the dir, so a stale repeat counts as a run.
-// Repeats need -out, so they never land beside a committed release report;
-// the release dir alone is overwritten in place, as before.
+// checkOut refuses a run whose set would mix with reports already in -out,
+// because a compare reads every file there and a stale repeat counts as a run.
+// Repeats need -out, so they never land beside a committed release report.
+// Without -out, the release dir is overwritten in place.
 func checkOut(out string, o options, scenarios []Scenario) error {
 	if o.repeat > 1 && o.out == "" {
 		return errors.New("-repeat above 1 needs -out, so its set stays apart from the release reports")

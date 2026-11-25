@@ -26,7 +26,7 @@ Each scenario runs `claude -p --plugin-dir <this checkout>` in a temporary copy 
 - **Nothing is pushed.** The fixture repo has no `origin`, and its tracker is a local driver that reads `tasks/`.
 - **Permissions.** A driven ship runs verify and commits. Under the default `-permission-mode acceptEdits` those commands may be refused. Choose the mode yourself: the run is a throwaway directory, but the flag is yours to pass.
 - **The agent profile.** Each run starts `claude -p` on one profile (`docs/project-setup.md` → Agents): the ones the scenario's `agents` list names, one run each, else one run on the kind's default; `-agent <profile>` runs every scenario on that one profile instead. The profile's model and effort go on the command line (`--model`, `--effort`), and a profile the kind refuses fails before any spend.
-- **Flags.** `-keep` keeps the temp dir and prints its path, so you can read what the run left. `-repeat N` runs every selected scenario N times on each of its profiles, one run after another, because parallel sessions share the subscription's rate limits and would skew `duration_ms`. `-out <dir>` writes the reports there instead of `evals/reports/<version>/`; a relative path resolves against the repo root. A run refuses an `-out` that already holds reports of a scenario it would run, because a compare reads every report in the directory. `-repeat` above 1 needs `-out`, so its set never lands beside a committed release report.
+- **Flags.** `-keep` keeps the temp dir and prints its path, so you can read what the run left. `-repeat N` runs every selected scenario N times on each of its profiles, one run after another, because parallel sessions share the subscription's rate limits and would skew `duration_ms`. `-out <dir>` writes the reports there instead of `evals/reports/<version>/`. A relative path resolves against the repo root. A run refuses an `-out` that already holds reports of a scenario it would run, because a compare reads every report in the directory. `-repeat` above 1 needs `-out`, so its set never lands beside a committed release report.
 
 ## Reports
 
@@ -43,7 +43,8 @@ Each report holds:
 
 Two profiles of one scenario sit side by side under one version, so a cheaper profile is justified by diffing its report against the dearer one on the same checks.
 
-Under `-repeat N` with N above 1, each run's file also carries its index before `.json` (`review-planted.3.json`, `feature-small.opus-medium.2.json`), and the report a `repeat` field.
+With `-repeat N` above 1, each run's file name carries its index before `.json`, as in `review-planted.3.json` or `feature-small.opus-medium.2.json`.
+The report carries it too, as a `repeat` field.
 A `planted` check also writes its counts as numbers, `planted: {found, total, outside}`, beside the detail sentence.
 
 Commit the reports with a release. Sets made to compare a change stay uncommitted.

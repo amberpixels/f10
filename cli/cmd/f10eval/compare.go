@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
@@ -52,7 +53,7 @@ func (k groupKey) String() string {
 	return k.scenario + " (" + k.agent + ")"
 }
 
-// loadSet reads dir; name is the path as typed, for the output.
+// loadSet reads dir. The output shows name, the path as typed.
 func loadSet(name, dir string) (reportSet, error) {
 	files, err := filepath.Glob(filepath.Join(dir, "*.json"))
 	if err != nil {
@@ -88,7 +89,7 @@ func loadSet(name, dir string) (reportSet, error) {
 }
 
 // A metric is one row of a group: its samples on one side. A binary metric
-// holds 1 or 0 per sample and prints as k/N; any other prints its mean and
+// holds 1 or 0 per sample and prints as k/N. Any other prints its mean and
 // min-max range.
 type metric struct {
 	name   string
@@ -213,11 +214,10 @@ const (
 	minBinarySamples = 3
 )
 
-// mark compares one metric across the sides, and returns "better", "worse"
-// or "". A pass rate is marked when the rates differ by at least two runs of
-// the smaller side, because min-max cannot mark it: one pass and one fail
-// already span [0-1]. Any other metric is marked when its ranges do not
-// overlap.
+// mark returns "better", "worse" or "" for one metric across the sides. A
+// pass rate is marked when it differs by two runs of the smaller side,
+// because one pass and one fail already span the whole min-max range. Any
+// other metric is marked when its ranges do not overlap.
 func mark(base, variant metric) string {
 	nb, nv := len(base.values), len(variant.values)
 	if nb == 0 || nv == 0 {
@@ -230,7 +230,7 @@ func mark(base, variant metric) string {
 	var up bool
 
 	if base.binary {
-		if min(nb, nv) < minBinarySamples || abs(mv-mb) < 2/float64(min(nb, nv))-1e-9 {
+		if min(nb, nv) < minBinarySamples || math.Abs(mv-mb) < 2/float64(min(nb, nv))-1e-9 {
 			return ""
 		}
 
@@ -253,14 +253,6 @@ func mark(base, variant metric) string {
 	}
 
 	return "worse"
-}
-
-func abs(v float64) float64 {
-	if v < 0 {
-		return -v
-	}
-
-	return v
 }
 
 func writeComparison(w io.Writer, base, variant reportSet) {
@@ -324,9 +316,9 @@ func writeComparison(w io.Writer, base, variant reportSet) {
 	}
 }
 
-// warnings names what makes a comparison weaker than it looks: a group with
-// one run has no spread, and a set holding several commits usually mixes two
-// runs in one directory.
+// warnings names what makes a comparison weaker than it looks. A group with
+// one run has no spread. A set holding several commits usually mixes two runs
+// in one directory.
 func warnings(sets ...reportSet) []string {
 	var out []string
 
