@@ -26,7 +26,7 @@ Each scenario runs `claude -p --plugin-dir <this checkout>` in a temporary copy 
 - **Nothing is pushed.** The fixture repo has no `origin`, and its tracker is a local driver that reads `tasks/`.
 - **Permissions.** A driven ship runs verify and commits. Under the default `-permission-mode acceptEdits` those commands may be refused. Choose the mode yourself: the run is a throwaway directory, but the flag is yours to pass.
 - **The agent profile.** Each run starts `claude -p` on one profile (`docs/project-setup.md` → Agents): the ones the scenario's `agents` list names, one run each, else one run on the kind's default; `-agent <profile>` runs every scenario on that one profile instead. The profile's model and effort go on the command line (`--model`, `--effort`), and a profile the kind refuses fails before any spend.
-- **Flags.** `-keep` keeps the temp dir and prints its path, so you can read what the run left. `-repeat N` runs every selected scenario N times on each of its profiles, one run after another, because parallel sessions share the subscription's rate limits and would skew `duration_ms`. `-out <dir>` writes the reports there instead of `evals/reports/<version>/`; a relative path resolves against the repo root.
+- **Flags.** `-keep` keeps the temp dir and prints its path, so you can read what the run left. `-repeat N` runs every selected scenario N times on each of its profiles, one run after another, because parallel sessions share the subscription's rate limits and would skew `duration_ms`. `-out <dir>` writes the reports there instead of `evals/reports/<version>/`; a relative path resolves against the repo root. A run refuses an `-out` that already holds reports of a scenario it would run, because a compare reads every report in the directory. `-repeat` above 1 needs `-out`, so its set never lands beside a committed release report.
 
 ## Reports
 
@@ -62,7 +62,7 @@ So a prompt change is judged on several runs of each side:
 The command groups each set's reports by scenario and profile, read from the reports themselves, not their file names.
 For each group it prints a row per metric, with the baseline and the variant side by side:
 
-- `errors`: the runs that stopped with an error, as `k/N`. An errored run returned before its checks ran, so it counts in this row and in no other.
+- `errors`: the runs that stopped with an error, as `k/N`. A run that errored in setup returned before its checks ran, so it counts in this row and in no other. A turn error, such as a spent budget, still ran the checks and spent money, so that run counts in every row.
 - `pass` and each `check <name>`: passes as `k/N`.
 - `planted found`, `planted outside`, `rubric lines passed`, `cost` and `duration`: the mean, then the min-max range and the sample count (`3.4 [3-4] n=5`).
 

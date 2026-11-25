@@ -129,9 +129,9 @@ func TestCompareErroredRunsSampleNothingElse(t *testing.T) {
 	t.Parallel()
 
 	p := planted(4, 0, 1)
-	errored := Report{Scenario: "review", Commit: "abc", Error: "turn 1: budget", CostUSD: 5}
+	setup := Report{Scenario: "review", Commit: "abc", Error: "git checkout: exit 1"}
 	base := writeSet(t, p, p, p)
-	variant := writeSet(t, p, p, errored)
+	variant := writeSet(t, p, p, setup)
 
 	out := compareOut(t, base, variant)
 
@@ -145,6 +145,22 @@ func TestCompareErroredRunsSampleNothingElse(t *testing.T) {
 
 	if r := row(out, "pass"); !strings.Contains(r, "2/2") {
 		t.Errorf("pass row counts the errored run: %q", r)
+	}
+}
+
+func TestCompareCountsATurnErrorEverywhere(t *testing.T) {
+	t.Parallel()
+
+	p := planted(4, 0, 1)
+	spent := failed(planted(2, 0, 5))
+	spent.Error = "turn 1: budget"
+
+	out := compareOut(t, writeSet(t, p, p, p), writeSet(t, p, p, spent))
+
+	for name, want := range map[string]string{"errors": "1/3", "pass": "2/3", "cost": "n=3", "planted found": "n=3"} {
+		if r := row(out, name); !strings.Contains(r, want) {
+			t.Errorf("%s row %q lacks %q", name, r, want)
+		}
 	}
 }
 

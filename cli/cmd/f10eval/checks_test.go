@@ -173,6 +173,7 @@ func TestPlantedCheck(t *testing.T) {
 		"no findings": {
 			s:      Scenario{Task: "T-2", Planted: []Planted{{File: "main.go", From: 1, To: 5}}},
 			detail: "no findings file",
+			count:  &PlantedCount{Total: 1},
 		},
 	} {
 		got := checkPlanted(t.Context(), dir, c.s)

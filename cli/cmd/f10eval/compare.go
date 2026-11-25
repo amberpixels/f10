@@ -98,8 +98,9 @@ type metric struct {
 	values []float64
 }
 
-// metrics is a group's rows on one side. An errored run returned before its
-// checks ran, so it counts only in the errors row and in no other sample.
+// metrics is a group's rows on one side. A run that errored in setup returned
+// before its checks ran, so it counts only in the errors row. A turn error
+// (budget, timeout) still ran the checks and spent, so it counts everywhere.
 func metrics(runs []Report, checkNames []string) []metric {
 	errs := metric{name: "errors", binary: true}
 	pass := metric{name: "pass", binary: true, higher: true}
@@ -116,7 +117,7 @@ func metrics(runs []Report, checkNames []string) []metric {
 
 	for _, r := range runs {
 		errs.values = append(errs.values, b2f(r.Error != ""))
-		if r.Error != "" {
+		if r.Error != "" && len(r.Checks) == 0 {
 			continue
 		}
 

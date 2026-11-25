@@ -189,6 +189,10 @@ func run(ctx context.Context, o options) error {
 	}
 
 	out := resolveDir(root, cmp.Or(o.out, filepath.Join("evals", "reports", version)))
+	if err := checkOut(out, o, scenarios); err != nil {
+		return err
+	}
+
 	failed, runs := 0, 0
 
 	for _, s := range scenarios {
@@ -695,6 +699,44 @@ func reportName(scenario string, p agentctl.Profile, repeat int) string {
 	}
 
 	return name + ".json"
+}
+
+// checkOut refuses a run whose set would mix with reports already there: a
+// compare reads every file in the dir, so a stale repeat counts as a run.
+// Repeats need -out, so they never land beside a committed release report;
+// the release dir alone is overwritten in place, as before.
+func checkOut(out string, o options, scenarios []Scenario) error {
+	if o.repeat > 1 && o.out == "" {
+		return errors.New("-repeat above 1 needs -out, so its set stays apart from the release reports")
+	}
+
+	if o.out == "" {
+		return nil
+	}
+
+	for _, s := range scenarios {
+		old, _ := filepath.Glob(filepath.Join(out, s.Name+".*json"))
+		for _, f := range old {
+			if r, err := readReport(f); err == nil && r.Scenario == s.Name {
+				return fmt.Errorf("%s already holds reports of %s: pick a fresh -out or clear it", out, s.Name)
+			}
+		}
+	}
+
+	return nil
+}
+
+func readReport(path string) (Report, error) {
+	var r Report
+
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return r, err
+	}
+
+	err = json.Unmarshal(body, &r)
+
+	return r, err
 }
 
 // resolveDir joins a relative dir to the checkout root, because `just eval`

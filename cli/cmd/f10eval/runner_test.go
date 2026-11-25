@@ -144,3 +144,40 @@ func TestHistoryAndReviewsSeedTheRun(t *testing.T) {
 		t.Fatalf("seeded %d rows (%v), want two under the run's project", len(events), err)
 	}
 }
+
+// A set that mixes with reports already in its dir would count stale runs,
+// so a run refuses it before any spend.
+func TestCheckOutRefusesAMixedSet(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	s := []Scenario{{Name: "review"}}
+
+	if err := checkOut(filepath.Join(dir, "x"), options{repeat: 3}, s); err == nil {
+		t.Error("-repeat 3 without -out accepted")
+	}
+
+	if err := checkOut(dir, options{out: dir, repeat: 3}, s); err != nil {
+		t.Errorf("an empty -out refused: %v", err)
+	}
+
+	if err := writeReport(filepath.Join(dir, "review.2.json"), Report{Scenario: "review"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := writeReport(filepath.Join(dir, "review-host.json"), Report{Scenario: "review-host"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := checkOut(dir, options{out: dir, repeat: 3}, s); err == nil {
+		t.Error("an -out holding reports of the scenario accepted")
+	}
+
+	if err := checkOut(dir, options{out: dir}, []Scenario{{Name: "feature"}}); err != nil {
+		t.Errorf("another scenario's reports refused: %v", err)
+	}
+
+	if err := checkOut(dir, options{repeat: 1}, s); err != nil {
+		t.Errorf("the release dir refused: %v", err)
+	}
+}

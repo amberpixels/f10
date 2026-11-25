@@ -182,7 +182,10 @@ const defaultMaxExtra = 2
 func checkPlanted(_ context.Context, dir string, s Scenario) Check {
 	found, files := findingWheres(dir, s.Task)
 	if len(files) == 0 {
-		return result("planted", []string{"no findings file"})
+		c := result("planted", []string{"no findings file"})
+		c.Planted = &PlantedCount{Total: len(s.Planted)}
+
+		return c
 	}
 
 	var problems []string
