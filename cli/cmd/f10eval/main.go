@@ -433,8 +433,8 @@ func runScenario(ctx context.Context, root string, s Scenario, o options, p agen
 }
 
 // runIn points f10's ledger, run state, asks and daemon dirs inside the temp
-// dir, so the nested run never reaches the user's own; the repo has no
-// origin, so nothing can be pushed. A non-nil folder keeps what it saw and left.
+// dir, so the nested run never reaches the user's own. The repo has no origin,
+// so nothing can be pushed. A non-nil folder keeps what the run saw and left.
 func runIn(
 	ctx context.Context,
 	root string,

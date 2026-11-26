@@ -27,8 +27,8 @@ const (
 	inputsDir      = "inputs"
 )
 
-// A transcript is the stream as claude printed it, every turn of a run, and
-// beside it each line's arrival in milliseconds since the run's first turn,
+// A transcript is the stream as claude printed it, every turn of a run.
+// Beside it goes each line's arrival in milliseconds since the first turn,
 // because stream-json lines carry no time.
 type transcript struct {
 	mu    sync.Mutex

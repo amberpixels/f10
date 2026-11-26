@@ -14,8 +14,8 @@ func testReport() Report {
 	}
 }
 
-// Off a terminal the view prints plain lines: a started line, the result
-// with its checks, report and steps lines, and the footer.
+// Off a terminal the view prints plain lines. They are a started line, the
+// result with its checks, the report and steps lines, and the footer.
 func TestViewPlain(t *testing.T) {
 	t.Parallel()
 

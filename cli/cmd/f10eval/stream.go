@@ -39,8 +39,8 @@ type eventMessage struct {
 	Usage   *eventUsage  `json:"usage"`
 }
 
-// An eventBlock is a tool_use in an assistant message, or a tool_result in
-// a user one; other blocks are read and ignored.
+// An eventBlock is a tool_use in an assistant message or a tool_result in a
+// user one. Other blocks are read and ignored.
 type eventBlock struct {
 	Type      string          `json:"type"`
 	ID        string          `json:"id"`
@@ -183,8 +183,8 @@ type progress struct {
 	seen    map[string]bool
 }
 
-// CostUSD is the exact cost of the ended turns plus the running one's
-// estimate; Estimated says whether the estimate is in it.
+// CostUSD is the exact cost of the ended turns plus the running turn's
+// estimate. The bool says whether an estimate is in it.
 func (p *progress) CostUSD() (float64, bool) { return p.doneUSD + p.estUSD, p.estUSD > 0 }
 
 // beginTurn takes the skill from the turn's prompt, because a slash command
@@ -245,8 +245,8 @@ var (
 	loadStep = regexp.MustCompile(`f10-load-project\.sh ((?:[a-z-]+ ?)+)`)
 )
 
-// stepOf is the step a Bash command names: the leaf, else the phase, of a
-// badge call, else the steps a project load named.
+// stepOf is the step a Bash command names. That is a badge call's leaf, else
+// its phase, else the steps a project load named.
 func stepOf(cmd string) string {
 	if m := stateSet.FindAllStringSubmatch(cmd, -1); len(m) > 0 {
 		last := m[len(m)-1]

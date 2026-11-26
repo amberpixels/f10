@@ -16,18 +16,16 @@ import (
 	"github.com/amberpixels/f10/cli/internal/render"
 )
 
-// A job is one run of the selection: a scenario on one profile, with its
-// repeat index (0 when it does not repeat).
+// A job is one run of the selection, named as the view prints it.
 type job struct {
-	name    string // with its repeat, as the lines show it
+	name    string // the scenario, with #n under -repeat
 	profile string
 }
 
-// A view owns stdout for a whole eval: finished runs print their result
-// lines, and on a terminal a block under them is repainted in place with the
-// running run and the queued ones. Off a terminal or under NO_COLOR it prints
-// plain lines only. The stream's goroutine and the ticker both reach it, so
-// every method locks.
+// A view owns stdout for a whole eval. Finished runs print their result lines.
+// On a terminal, a block under them is repainted in place with the running
+// and the queued runs, and elsewhere only plain lines print. The stream's
+// goroutine and the ticker both reach it, so every method locks.
 type view struct {
 	mu   sync.Mutex
 	w    io.Writer
