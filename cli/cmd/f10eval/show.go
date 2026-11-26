@@ -37,7 +37,7 @@ func showMain(w io.Writer, root string, args []string) error {
 		return err
 	}
 
-	// the prompts name the skill a turn starts with; without them the
+	// the prompts name the skill each turn starts with. Without them the
 	// timeline still prints, from the Skill calls alone
 	var s Scenario
 
