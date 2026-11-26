@@ -174,6 +174,7 @@ func main() {
 // and `just eval show <report>` arrive as `-root .. <word> <args>`.
 var subcommands = map[string]func(io.Writer, string, []string) error{
 	"compare": compareMain,
+	"html":    htmlMain,
 	"show":    showMain,
 }
 
@@ -269,6 +270,14 @@ func run(ctx context.Context, o options) error {
 			return err
 		}
 
+		// the report and the folder are the record, so a page that fails to
+		// write leaves the run standing, and `just eval html` rebuilds it
+		if rep.RunDir != "" {
+			if err := writeRunPage(r.path); err != nil {
+				v.say("page: " + err.Error())
+			}
+		}
+
 		if !rep.Pass {
 			failed++
 		}
@@ -279,6 +288,10 @@ func run(ctx context.Context, o options) error {
 		}
 
 		v.finish(i, rep, r.path, kept)
+	}
+
+	if err := writeSetIndex(out); err != nil {
+		v.say("index page: " + err.Error())
 	}
 
 	v.close(out)

@@ -1,0 +1,31 @@
+{
+  "description": "a small feature: a flag on a tiny CLI, planned and shipped on a local flow",
+  "task": "EV-1",
+  "prompt": "/f10:plan EV-1 && /f10:ship EV-1 --driven",
+  "verify": [
+    "just lint",
+    "just test"
+  ],
+  "agents": [
+    "opus:high",
+    "opus:medium"
+  ],
+  "checks": [
+    "plan",
+    "intent",
+    "verify",
+    "accept",
+    "commit",
+    "lore"
+  ],
+  "accept": [
+    {
+      "run": "go run . --name Ada --shout",
+      "want": "HELLO, ADA!"
+    },
+    {
+      "run": "go run . --name Ada",
+      "want": "Hello, Ada!"
+    }
+  ]
+}

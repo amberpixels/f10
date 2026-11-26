@@ -155,7 +155,7 @@ func (v *view) close(out string) {
 
 	mark := v.st.mark(v.passed == len(v.jobs))
 	fmt.Fprintf(v.w, "\n%s %d/%d passed  %s  %s  %s\n", mark, v.passed, len(v.jobs), cost,
-		v.st.timer.Render(v.duration.Round(time.Second).String()), v.link(fileURL(out)))
+		v.st.timer.Render(v.duration.Round(time.Second).String()), v.link(fileURL(filepath.Join(out, pageFile))))
 }
 
 func (v *view) resultLines(j job, rep Report, path, folder string) []string {
@@ -187,7 +187,7 @@ func (v *view) resultLines(j job, rep Report, path, folder string) []string {
 	}
 
 	if folder != "" {
-		lines = append(lines, "    "+v.st.dim.Render("report")+"  "+v.link(fileURL(folder)))
+		lines = append(lines, "    "+v.st.dim.Render("report")+"  "+v.link(fileURL(filepath.Join(folder, pageFile))))
 	}
 
 	if rep.RunDirError != "" {
@@ -337,10 +337,10 @@ func termSize(w io.Writer) (int, int) {
 	return width, height
 }
 
-// fileURL is a directory's file:// url, its path percent-encoded so a space
+// fileURL is a path's file:// url, its path percent-encoded so a space
 // or a # in the checkout's path still opens.
 func fileURL(path string) string {
-	return (&url.URL{Scheme: "file", Path: filepath.ToSlash(path) + "/"}).String()
+	return (&url.URL{Scheme: "file", Path: filepath.ToSlash(path)}).String()
 }
 
 // relToRoot is path as typed at the repo root, where `just eval` runs from,

@@ -1,9 +1,11 @@
 # The TypeScript half of f10: the web client in web/, built on the code
-# `just proto::gen` writes to gen/. The root justfile loads this as the `web`
-# module. The build lands in cli/internal/webui/dist, checked in, so a Go
+# `just proto::gen` writes to gen/, and the eval report page. The root
+# justfile loads this as the `web` module. The builds land in
+# cli/internal/webui/dist and cli/cmd/f10eval/page, checked in, so a Go
 # build needs no Node.
 
 dist := "../cli/internal/webui/dist"
+page := "../cli/cmd/f10eval/page"
 
 default: build
 
@@ -15,9 +17,10 @@ tools:
       npm ci --no-audit --no-fund --silent
     fi
 
-# build the web client into the Go tree
+# build the web client and the eval report page into the Go tree
 build: tools
     npx vite build --config web/vite.config.ts --logLevel warn
+    npx vite build --config web/report.vite.config.ts --logLevel warn
 
 # typecheck, and fail when the checked-in build is stale
 lint: tools
@@ -27,10 +30,14 @@ lint: tools
     tmp="$(mktemp -d)"
     trap 'rm -rf "$tmp"' EXIT
     npx vite build --config web/vite.config.ts --logLevel warn --outDir "$tmp/dist" --emptyOutDir
-    if ! diff -r {{dist}} "$tmp/dist" >/dev/null; then
-      echo "web: {{dist}} is stale; run \`just web::build\` and commit the result" >&2
-      exit 1
-    fi
+    npx vite build --config web/report.vite.config.ts --logLevel warn --outDir "$tmp/page" --emptyOutDir
+    for pair in "{{dist}} $tmp/dist" "{{page}} $tmp/page"; do
+      set -- $pair
+      if ! diff -r "$1" "$2" >/dev/null; then
+        echo "web: $1 is stale; run \`just web::build\` and commit the result" >&2
+        exit 1
+      fi
+    done
 
 # run the web client's tests
 test: tools

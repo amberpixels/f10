@@ -34,9 +34,9 @@ func TestViewPlain(t *testing.T) {
 		"✗ feature-small  opus:high  FAIL  $1.50 + $0.10 grader  1m30s",
 		"    ✓ plan\n",
 		`    ✗ accept  go run . -n: want "3"`,
-		"    report  file:///repo/evals/reports/x/feature-small/",
+		"    report  file:///repo/evals/reports/x/feature-small/index.html",
 		"    steps   just eval show evals/reports/x/feature-small.json",
-		"✗ 0/1 passed  $1.50 + $0.10 grader  1m30s  file:///repo/evals/reports/x/",
+		"✗ 0/1 passed  $1.50 + $0.10 grader  1m30s  file:///repo/evals/reports/x/index.html",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output misses %q:\n%s", want, out)
@@ -122,7 +122,7 @@ func TestViewFrameCapsQueued(t *testing.T) {
 func TestFileURLEncodes(t *testing.T) {
 	t.Parallel()
 
-	if got := fileURL("/Users/x/My Evals/#1"); got != "file:///Users/x/My%20Evals/%231/" {
+	if got := fileURL("/Users/x/My Evals/#1"); got != "file:///Users/x/My%20Evals/%231" {
 		t.Errorf("fileURL %q", got)
 	}
 }
