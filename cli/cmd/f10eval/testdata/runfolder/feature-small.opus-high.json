@@ -1,0 +1,38 @@
+{
+  "scenario": "feature-small",
+  "agent": "opus:high",
+  "version": "0.71.0",
+  "commit": "92db388",
+  "at": "2026-11-26T10:00:00Z",
+  "pass": false,
+  "checks": [
+    {
+      "name": "plan",
+      "pass": true
+    },
+    {
+      "name": "accept",
+      "pass": false,
+      "detail": "go run . --name Ada --shout: want \"HELLO, ADA!\""
+    },
+    {
+      "name": "rubric",
+      "pass": true,
+      "rubric": {
+        "model": "claude-haiku-5-5",
+        "cost_usd": 0.02,
+        "lines": [
+          {
+            "line": "names the flag",
+            "pass": true,
+            "reason": "the reply names --shout"
+          }
+        ]
+      }
+    }
+  ],
+  "cost_usd": 1.25,
+  "grader_cost_usd": 0.02,
+  "duration_ms": 150000,
+  "run_dir": "feature-small.opus-high"
+}

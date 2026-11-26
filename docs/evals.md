@@ -28,7 +28,7 @@ Each scenario runs `claude -p --plugin-dir <this checkout>` in a temporary copy 
 - **Permissions.** A driven ship runs verify and commits. Under the default `-permission-mode acceptEdits` those commands may be refused. Choose the mode yourself: the run is a throwaway directory, but the flag is yours to pass.
 - **The agent profile.** Each run starts `claude -p` on one profile (`docs/project-setup.md` → Agents): the ones the scenario's `agents` list names, one run each, else one run on the kind's default; `-agent <profile>` runs every scenario on that one profile instead. The profile's model and effort go on the command line (`--model`, `--effort`), and a profile the kind refuses fails before any spend.
 - **Flags.** `-keep` keeps the temp dir and prints its path, so you can read what the run left. `-repeat N` runs every selected scenario N times on each of its profiles, one run after another, because parallel sessions share the subscription's rate limits and would skew `duration_ms`. `-out <dir>` writes the reports there instead of `evals/reports/<version>/`. A relative path resolves against the repo root. A run refuses an `-out` that already holds reports of a scenario it would run, because a compare reads every report in the directory. `-repeat` above 1 needs `-out`, so its set never lands beside a committed release report.
-- **Output.** Each turn runs with `--output-format stream-json --verbose`, so the runner reads the session as it happens. On a terminal, a block under the finished runs is redrawn every 100ms: the running run with a spinner, its elapsed time, its cost so far, and the skill, step and tool it is on, then every later run as `queued`. The cost so far is an estimate from each message's token usage and a small price table in `cli/cmd/f10eval/stream.go`, shown as `~$0.42`, until the turn's result gives claude's own figure; the report only ever holds claude's figure. A finished run prints its result line, a line per check with a failed check's detail, a `report` line with the `file://` url of its run folder, and a `steps` line holding the `just eval show` command for its report, the path relative to the repo root so it pastes as is. A footer gives the runs passed, the total cost and time, and the url of the report set. When stdout is not a terminal, or `NO_COLOR` is set, the output is plain lines with no escape codes: a `started` line per run, then its result lines.
+- **Output.** Each turn runs with `--output-format stream-json --verbose`, so the runner reads the session as it happens. On a terminal, a block under the finished runs is redrawn every 100ms: the running run with a spinner, its elapsed time, its cost so far, and the skill, step and tool it is on, then every later run as `queued`. The cost so far is an estimate from each message's token usage and a small price table in `cli/cmd/f10eval/stream.go`, shown as `~$0.42`, until the turn's result gives claude's own figure; the report only ever holds claude's figure. A finished run prints its result line, a line per check with a failed check's detail, a `report` line with the `file://` url of its page (**Report page**, below), and a `steps` line holding the `just eval show` command for its report, the path relative to the repo root so it pastes as is. A footer gives the runs passed, the total cost and time, and the url of the report set's index page. When stdout is not a terminal, or `NO_COLOR` is set, the output is plain lines with no escape codes: a `started` line per run, then its result lines.
 
 ## Reports
 
@@ -64,11 +64,28 @@ Beside each `<report>.json` the runner writes `<report>/`, named like the report
 - `before/`: the repo as the run was handed it, after the fixture, the history, the branch and the change, without `.git`.
 - `after/`: the repo as the run left it, `.f10/` included, without `.git`.
 - `inputs/scenario.json`: the scenario file as written, with the prompts, the verify and the hidden `accept` commands, the rubric lines and the planted defects. `inputs/task.md` and `inputs/project.md` are the fixture's `tasks/<task>.md` and `f10/instructions/project.md`, where it has them.
+- `index.html`: the report page, written from the rest of the folder and the report. It is the one file here that is rebuilt, never read.
 
 A run that errors in setup still writes the folder, with its inputs at least.
 A rerun into the same directory replaces the folder with its report.
 
 `just eval show <report.json>` prints the run's timeline from the folder: a heading per turn and per skill, then one line per tool call with its elapsed time, the cost so far, a `sub` mark on a subagent's call and a `✗` on a call whose result was an error, and each turn's exact cost, duration and first line of its reply. A report written before run folders existed has no `run_dir`, and `show` says so.
+
+### Report page
+
+Each run folder gets an `index.html` that opens from `file://` with no server and no network, in the system's light or dark theme. It is one file: the runner inlines the page's script and stylesheet, built from `ts/web/src/report` into `cli/cmd/f10eval/page/`, and the run's data as JSON. That data is the report and the folder nearly as written, and the page derives the rest, so a later page that shows a run can read the same folder.
+
+- A header with the scenario, profile, version, commit, pass or fail, cost and time, and the error of a run that errored.
+- The checks, with each detail, rubric reasons and planted counts.
+- The inputs: the prompts, the verify, the task and `project.md`, and the `accept` commands and planted defects marked as never shown to the agent.
+- Three linked panes. The timeline has a heading per turn and per skill and a row per tool call with its elapsed time and running cost; a row opens to the call's input and output. The file tree marks each file added (`A`), modified (`M`) or deleted (`D`), with a before and after toggle. The viewer shows the chosen file, or its diff against `before/`.
+- A click on a `Write` or `Edit` row shows that file as the step left it, rebuilt by replaying the transcript's `Write` bodies and `Edit` pairs over `before/`. A failed call changes nothing. Shell commands are not replayed, so the after tree always comes from `after/`, and a file a shell command changed carries a note saying so.
+- The final reply.
+
+A file that is not UTF-8 text, a symlink, or a file over 512KB is listed with its size and no text.
+The set's directory gets an `index.html` too, a row per report with its checks, cost and time, linked to its run's page when it has one.
+
+`just eval html <dir>` rebuilds every run page in a set from its folder, then the index, with no model call. Run it after a change to the page, or on a set from before pages existed.
 
 ## Comparing
 
@@ -209,4 +226,4 @@ A good run's settled statement, task file and plan can be frozen as the fixed in
 The implement scenarios already take a saved plan as their input in the same way.
 
 A bug scenario (a failing test to fix) and a spike scenario are the next ones to add. The runner needs no change for them.
-`go test ./cmd/f10eval` covers the checks against a canned result, the rubric check against a canned grader, and the stream reader, the run folder, the live view and `show` against a canned stream (`cli/cmd/f10eval/testdata/stream/`), with no model call.
+`go test ./cmd/f10eval` covers the checks against a canned result, the rubric check against a canned grader, and the stream reader, the run folder, the live view and `show` against a canned stream (`cli/cmd/f10eval/testdata/stream/`), and the report page and `html` against a canned run folder (`cli/cmd/f10eval/testdata/runfolder/`), with no model call. The page's data loading and step replay have their own tests in `ts/web/src/report`, run by `just web::test`, which read the same folder's `payload.json`; `go test ./cmd/f10eval -run Golden -update` rewrites it.

@@ -12,8 +12,9 @@
     "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true,
     "isolatedModules": true,
+    "resolveJsonModule": true,
     "verbatimModuleSyntax": false,
     "types": ["vite/client"]
   },
-  "include": ["web/src", "web/vite.config.ts", "gen"]
+  "include": ["web/src", "web/vite.config.ts", "web/report.vite.config.ts", "gen"]
 }

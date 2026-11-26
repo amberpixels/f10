@@ -155,7 +155,7 @@ func (v *view) close(out string) {
 
 	mark := v.st.mark(v.passed == len(v.jobs))
 	fmt.Fprintf(v.w, "\n%s %d/%d passed  %s  %s  %s\n", mark, v.passed, len(v.jobs), cost,
-		v.st.timer.Render(v.duration.Round(time.Second).String()), v.link(fileURL(out)))
+		v.st.timer.Render(v.duration.Round(time.Second).String()), v.link(fileURL(filepath.Join(out, pageFile))))
 }
 
 func (v *view) resultLines(j job, rep Report, path, folder string) []string {
@@ -187,7 +187,7 @@ func (v *view) resultLines(j job, rep Report, path, folder string) []string {
 	}
 
 	if folder != "" {
-		lines = append(lines, "    "+v.st.dim.Render("report")+"  "+v.link(fileURL(folder)))
+		lines = append(lines, "    "+v.st.dim.Render("report")+"  "+v.link(fileURL(filepath.Join(folder, pageFile))))
 	}
 
 	lines = append(lines, "    "+v.st.dim.Render("steps")+"   just eval show "+relToRoot(v.root, path))
@@ -299,7 +299,7 @@ func (v *view) frame() []string {
 }
 
 func fileURL(path string) string {
-	return "file://" + filepath.ToSlash(path) + "/"
+	return "file://" + filepath.ToSlash(path)
 }
 
 // relToRoot is path as typed at the repo root, where `just eval` runs from,

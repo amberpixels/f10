@@ -1,0 +1,15 @@
+{
+  "scenario": "plan-history",
+  "version": "0.63.0",
+  "commit": "abc1234",
+  "at": "2026-10-01T10:00:00Z",
+  "pass": true,
+  "checks": [
+    {
+      "name": "plan",
+      "pass": true
+    }
+  ],
+  "cost_usd": 0.4,
+  "duration_ms": 40000
+}
