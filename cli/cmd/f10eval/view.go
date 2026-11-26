@@ -3,15 +3,17 @@ package main
 import (
 	"fmt"
 	"io"
+	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/charmbracelet/x/ansi"
+	"golang.org/x/term"
 
 	"github.com/amberpixels/f10/cli/internal/render"
-	"github.com/amberpixels/f10/cli/internal/ui"
 )
 
 // A job is one run of the selection: a scenario on one profile, with its
@@ -27,12 +29,12 @@ type job struct {
 // plain lines only. The stream's goroutine and the ticker both reach it, so
 // every method locks.
 type view struct {
-	mu    sync.Mutex
-	w     io.Writer
-	st    *styles
-	root  string
-	width int
-	now   func() time.Time
+	mu   sync.Mutex
+	w    io.Writer
+	st   *styles
+	root string
+	now  func() time.Time
+	size func(io.Writer) (int, int) // read on every paint, so a resize is followed
 
 	jobs    []job
 	cur     int // the running job, -1 between runs
@@ -52,7 +54,7 @@ type view struct {
 const tick = 100 * time.Millisecond
 
 func newView(w io.Writer, st *styles, root string, jobs []job) *view {
-	v := &view{w: w, st: st, root: root, jobs: jobs, cur: -1, now: time.Now, width: ui.Width(w)}
+	v := &view{w: w, st: st, root: root, jobs: jobs, cur: -1, now: time.Now, size: termSize}
 
 	if st.rich {
 		v.stop, v.done = make(chan struct{}), make(chan struct{})
@@ -190,18 +192,22 @@ func (v *view) resultLines(j job, rep Report, path, folder string) []string {
 		lines = append(lines, "    "+v.st.dim.Render("report")+"  "+v.link(fileURL(filepath.Join(folder, pageFile))))
 	}
 
+	if rep.RunDirError != "" {
+		lines = append(lines, "    "+v.st.fail.Render("run folder")+"  "+rep.RunDirError)
+	}
+
 	lines = append(lines, "    "+v.st.dim.Render("steps")+"   just eval show "+relToRoot(v.root, path))
 
 	return lines
 }
 
 // link is url as an OSC 8 hyperlink on a terminal, else the url alone.
-func (v *view) link(url string) string {
+func (v *view) link(target string) string {
 	if !v.st.rich {
-		return url
+		return target
 	}
 
-	return render.Hyperlink(url, url)
+	return render.Hyperlink(target, target)
 }
 
 // above prints lines where the block was, then paints the block under them.
@@ -228,7 +234,12 @@ func (v *view) paint() {
 		return
 	}
 
-	frame := v.frame()
+	width, height := 0, 0
+	if v.size != nil {
+		width, height = v.size(v.w)
+	}
+
+	frame := v.frame(height)
 
 	var b strings.Builder
 
@@ -237,9 +248,9 @@ func (v *view) paint() {
 	}
 
 	for _, line := range frame {
-		if v.width > 0 {
+		if width > 0 {
 			// a wrapped line would break the cursor-up count
-			line = ansi.Truncate(line, v.width-1, "…")
+			line = ansi.Truncate(line, width-1, "…")
 		}
 
 		b.WriteString(line + "\n")
@@ -252,7 +263,10 @@ func (v *view) paint() {
 var spinner = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
 // frame is the block's lines: the running job, then every later one queued.
-func (v *view) frame() []string {
+//
+// A block taller than the screen cannot be moved back over, so with a known
+// height the queued lines stop short of it and end with a count.
+func (v *view) frame(height int) []string {
 	if v.cur < 0 {
 		return nil
 	}
@@ -290,16 +304,45 @@ func (v *view) frame() []string {
 
 	frame := []string{strings.Join(parts, "  ")}
 
-	for _, q := range v.jobs[v.cur+1:] {
+	queued := v.jobs[v.cur+1:]
+	more := 0
+
+	if room := height - 3; height > 0 && len(queued) > max(room, 0) {
+		keep := max(room-1, 0)
+		queued, more = queued[:keep], len(queued)-keep
+	}
+
+	for _, q := range queued {
 		frame = append(frame, fmt.Sprintf("%s %s  %s  %s", v.st.dim.Render("·"), q.name,
 			v.st.dim.Render(q.profile), v.st.dim.Render("queued")))
+	}
+
+	if more > 0 {
+		frame = append(frame, v.st.dim.Render(fmt.Sprintf("+%d queued", more)))
 	}
 
 	return frame
 }
 
+// termSize is w's terminal width and height, 0 for either when w is not one.
+func termSize(w io.Writer) (int, int) {
+	f, ok := w.(*os.File)
+	if !ok {
+		return 0, 0
+	}
+
+	width, height, err := term.GetSize(int(f.Fd()))
+	if err != nil {
+		return 0, 0
+	}
+
+	return width, height
+}
+
+// fileURL is a path's file:// url, its path percent-encoded so a space
+// or a # in the checkout's path still opens.
 func fileURL(path string) string {
-	return "file://" + filepath.ToSlash(path)
+	return (&url.URL{Scheme: "file", Path: filepath.ToSlash(path)}).String()
 }
 
 // relToRoot is path as typed at the repo root, where `just eval` runs from,

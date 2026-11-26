@@ -58,6 +58,19 @@ func openTranscript(dir string) (*transcript, error) {
 	return t, nil
 }
 
+// begin starts the clock, as the first turn starts, so setup time stays
+// out of every line's arrival.
+func (t *transcript) begin() {
+	if t == nil {
+		return
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	t.start = time.Now()
+}
+
 // write keeps one line. A nil transcript keeps nothing, for a run with no
 // folder. The first error sticks and close reports it.
 func (t *transcript) write(line []byte) {
@@ -162,21 +175,70 @@ func (f *runFolder) after(ctx context.Context, repo string) error {
 		return err
 	}
 
-	if out, err := git(ctx, repo, "add", "-A", "--intent-to-add").CombinedOutput(); err != nil {
-		return fmt.Errorf("git add: %w: %s", err, out)
-	}
-
-	root, _, _ := strings.Cut(gitOut(ctx, repo, "rev-list", "--max-parents=0", "HEAD"), "\n")
-	if root == "" {
-		return errors.New("the run's repo has no initial commit")
-	}
-
-	patch, err := git(ctx, repo, "diff", "--binary", root).Output()
+	patch, err := runPatch(ctx, repo)
 	if err != nil {
-		return fmt.Errorf("git diff: %w", err)
+		return err
 	}
 
 	return os.WriteFile(filepath.Join(f.dir, diffFile), patch, 0o600)
+}
+
+// runPatch diffs the repo from its initial commit, untracked files included.
+// Marking them takes an index, so a copy of it is used and a -keep repo is
+// left as the run left it. The user's global git config is ignored, so the
+// patch has one format whoever runs the eval.
+func runPatch(ctx context.Context, repo string) ([]byte, error) {
+	index, err := os.CreateTemp("", "f10eval-index-")
+	if err != nil {
+		return nil, err
+	}
+
+	_ = index.Close()
+	defer os.Remove(index.Name())
+
+	if err := copyFile(
+		filepath.Join(repo, ".git", "index"),
+		index.Name(),
+	); err != nil &&
+		!errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
+
+	env := append(
+		os.Environ(),
+		"GIT_INDEX_FILE="+index.Name(),
+		"GIT_CONFIG_GLOBAL="+os.DevNull,
+		"GIT_CONFIG_NOSYSTEM=1",
+	)
+
+	run := func(args ...string) ([]byte, error) {
+		cmd := git(ctx, repo, args...)
+		cmd.Env = env
+
+		out, err := cmd.Output()
+		if err != nil {
+			return nil, fmt.Errorf("git %s: %w", args[0], err)
+		}
+
+		return out, nil
+	}
+
+	if _, err := run("add", "-A", "--intent-to-add"); err != nil {
+		return nil, err
+	}
+
+	roots, err := run("rev-list", "--max-parents=0", "HEAD")
+	if err != nil {
+		return nil, err
+	}
+
+	root, _, _ := strings.Cut(strings.TrimSpace(string(roots)), "\n")
+	if root == "" {
+		return nil, errors.New("the run's repo has no initial commit")
+	}
+
+	return run("diff", "--binary", "--no-ext-diff", "--no-color", "--no-textconv", "--no-relative",
+		"--src-prefix=a/", "--dst-prefix=b/", root)
 }
 
 func (f *runFolder) close() error {

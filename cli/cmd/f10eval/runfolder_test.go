@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/amberpixels/f10/cli/internal/agentctl"
 )
@@ -91,6 +93,30 @@ func TestRunFolder(t *testing.T) {
 		t.Error("the diff holds .f10/, which after/ carries")
 	}
 
+	// runPatch marks untracked files in a copy of the index, so a repo kept
+	// with -keep still shows them untracked
+	repo := t.TempDir()
+	for _, args := range [][]string{{"init", "-q"}, {"commit", "-q", "--allow-empty", "-m", "i"}} {
+		if out, err := git(
+			t.Context(),
+			repo,
+			append([]string{"-c", "user.email=e@x", "-c", "user.name=e"}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %s: %v %s", args[0], err, out)
+		}
+	}
+
+	if err := os.WriteFile(filepath.Join(repo, "new.txt"), []byte("x\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if p, err := runPatch(t.Context(), repo); err != nil || !bytes.Contains(p, []byte("b/new.txt")) {
+		t.Errorf("runPatch: %v\n%s", err, p)
+	}
+
+	if st := gitOut(t.Context(), repo, "status", "--porcelain"); st != "?? new.txt" {
+		t.Errorf("status after runPatch %q, want the file still untracked", st)
+	}
+
 	lines, _ := os.ReadFile(filepath.Join(folder, transcriptFile))
 	times, _ := os.ReadFile(filepath.Join(folder, timesFile))
 
@@ -123,5 +149,31 @@ func TestRunFolderOnSetupError(t *testing.T) {
 
 	if _, err := os.Stat(filepath.Join(folder, inputsDir)); err != nil {
 		t.Errorf("inputs: %v", err)
+	}
+}
+
+// begin restarts the clock, so the time setup took before the first turn
+// is in no line's arrival.
+func TestTranscriptClockStartsAtBegin(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+
+	tr, err := openTranscript(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tr.start = tr.start.Add(-time.Hour) // as if setup had taken an hour
+	tr.begin()
+	tr.write([]byte(`{"type":"system"}`))
+
+	if err := tr.close(); err != nil {
+		t.Fatal(err)
+	}
+
+	body, _ := os.ReadFile(filepath.Join(dir, timesFile))
+	if ms, err := strconv.ParseInt(strings.TrimSpace(string(body)), 10, 64); err != nil || ms > 60_000 {
+		t.Errorf("first line at %q ms, want it counted from begin", body)
 	}
 }

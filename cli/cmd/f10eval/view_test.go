@@ -69,7 +69,7 @@ func TestViewFrame(t *testing.T) {
 		Content: []eventBlock{{Type: "tool_use", Name: "Skill", Input: []byte(`{"skill":"f10:ship"}`)}},
 	}})
 
-	frame := v.frame()
+	frame := v.frame(0)
 	if len(frame) != 2 || !strings.Contains(frame[0], "a  opus:high  1m5s  ~$4.00  /f10:ship  Skill  f10:ship") ||
 		!strings.Contains(frame[1], "b  opus:medium  queued") {
 		t.Errorf("frame %q", frame)
@@ -93,5 +93,63 @@ func TestRelToRoot(t *testing.T) {
 
 	if got := relToRoot("/repo", "/tmp/set/a.json"); got != "/tmp/set/a.json" {
 		t.Errorf("outside: %q", got)
+	}
+}
+
+// A block taller than the screen could not be moved back over, so the queued
+// lines stop short of the height and end with a count.
+func TestViewFrameCapsQueued(t *testing.T) {
+	t.Parallel()
+
+	jobs := make([]job, 50)
+	for i := range jobs {
+		jobs[i] = job{name: "s", profile: "p"}
+	}
+
+	v := &view{st: &styles{}, jobs: jobs, cur: 0, now: time.Now}
+
+	frame := v.frame(10)
+	// the running line, six queued and the count: 8 lines, under the 10 rows
+	if len(frame) != 8 || frame[len(frame)-1] != "+43 queued" {
+		t.Errorf("frame %d lines, last %q, want 8 ending in +43 queued", len(frame), frame[len(frame)-1])
+	}
+
+	if got := len(v.frame(0)); got != 50 {
+		t.Errorf("an unknown height caps nothing: %d lines", got)
+	}
+}
+
+func TestFileURLEncodes(t *testing.T) {
+	t.Parallel()
+
+	if got := fileURL("/Users/x/My Evals/#1"); got != "file:///Users/x/My%20Evals/%231" {
+		t.Errorf("fileURL %q", got)
+	}
+}
+
+type fakeTerminal struct{ bytes.Buffer }
+
+func (*fakeTerminal) Terminal() bool { return true }
+
+// newStyles is plain for a pipe and under NO_COLOR, and colored only on a
+// terminal without it.
+//
+//nolint:paralleltest // t.Setenv
+func TestNewStyles(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+
+	if newStyles(&bytes.Buffer{}).rich {
+		t.Error("a pipe got rich styles")
+	}
+
+	if !newStyles(&fakeTerminal{}).rich {
+		t.Error("a terminal without NO_COLOR got plain styles")
+	}
+
+	t.Setenv("NO_COLOR", "1")
+
+	st := newStyles(&fakeTerminal{})
+	if st.rich || strings.Contains(st.mark(false), "\x1b") {
+		t.Error("NO_COLOR on a terminal still colors")
 	}
 }

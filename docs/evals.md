@@ -41,15 +41,15 @@ Each report holds:
 - `grader_cost_usd`, the rubric check's spend, kept apart from `cost_usd` so the run's cost compares across releases with and without a rubric;
 - for a `rubric` check, the grader's model and a pass or fail with a one-line reason for each rubric line;
 - the profile the run started on, as `agent`;
-- the plugin version and the commit, `-dirty` appended when the tree had uncommitted changes, so the commit never names code that did not run.
+- the plugin version and the commit, `-dirty` appended when the tree had uncommitted changes, so the commit never names code that did not run;
+- `run_dir`, the run's folder, relative to the report's directory, so a committed report carries no local path;
+- `run_dir_error`, when writing the folder failed after the checks ran. It leaves `pass` and `error` as the run decided them, because a local copy failing says nothing about the agent.
 
 Two profiles of one scenario sit side by side under one version, so a cheaper profile is justified by diffing its report against the dearer one on the same checks.
 
 With `-repeat N` above 1, each run's file name carries its index before `.json`, as in `review-planted.3.json` or `feature-small.opus-medium.2.json`.
 The report carries it too, as a `repeat` field.
 A `planted` check also writes its counts as numbers, `planted: {found, total, outside}`, beside the detail sentence.
-
-- `run_dir`, the run's folder, relative to the report's directory, so a committed report carries no local path.
 
 Commit the reports with a release. Sets made to compare a change stay uncommitted.
 The run folders stay out of git (`.gitignore`), because a transcript runs to hundreds of KB and is full of absolute local paths.
