@@ -30,6 +30,7 @@ export interface Report {
   duration_ms: number;
   error?: string;
   run_dir?: string;
+  run_dir_error?: string;
 }
 
 /** A file of a tree. `skip` says why `text` is absent; neither is an empty file. */

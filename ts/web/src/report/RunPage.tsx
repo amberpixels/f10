@@ -81,6 +81,7 @@ function Header({ report }: { report: Report }) {
         <dd>{report.at}</dd>
       </dl>
       {report.error && <p class="error">error: {report.error}</p>}
+      {report.run_dir_error && <p class="note">run folder: {report.run_dir_error}. Parts of this page may be missing.</p>}
     </header>
   );
 }
