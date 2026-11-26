@@ -17,6 +17,7 @@ just eval -permission-mode bypassPermissions -max-budget-usd 3 -keep
 just eval -scenario feature-small -agent opus:medium   # one profile, instead of the ones the scenario lists
 just eval -scenario review-planted -repeat 5 -out evals/reports/base   # five runs, into a set of their own
 just eval compare evals/reports/base evals/reports/cut                 # two sets side by side
+just eval show evals/reports/0.71.0/feature-small.json                 # one run's timeline
 ```
 
 Each scenario runs `claude -p --plugin-dir <this checkout>` in a temporary copy of its fixture:
@@ -27,6 +28,7 @@ Each scenario runs `claude -p --plugin-dir <this checkout>` in a temporary copy 
 - **Permissions.** A driven ship runs verify and commits. Under the default `-permission-mode acceptEdits` those commands may be refused. Choose the mode yourself: the run is a throwaway directory, but the flag is yours to pass.
 - **The agent profile.** Each run starts `claude -p` on one profile (`docs/project-setup.md` → Agents): the ones the scenario's `agents` list names, one run each, else one run on the kind's default; `-agent <profile>` runs every scenario on that one profile instead. The profile's model and effort go on the command line (`--model`, `--effort`), and a profile the kind refuses fails before any spend.
 - **Flags.** `-keep` keeps the temp dir and prints its path, so you can read what the run left. `-repeat N` runs every selected scenario N times on each of its profiles, one run after another, because parallel sessions share the subscription's rate limits and would skew `duration_ms`. `-out <dir>` writes the reports there instead of `evals/reports/<version>/`. A relative path resolves against the repo root. A run refuses an `-out` that already holds reports of a scenario it would run, because a compare reads every report in the directory. `-repeat` above 1 needs `-out`, so its set never lands beside a committed release report.
+- **Output.** Each turn runs with `--output-format stream-json --verbose`, so the runner reads the session as it happens. On a terminal, a block under the finished runs is redrawn every 100ms. Its first line is the running run, with a spinner, its elapsed time, its cost so far, and the skill, step and tool it is on. Every later run follows as `queued`, cut short with a `+N queued` line when the block would not fit the screen. The cost so far is an estimate, shown as `~$0.42`. It comes from each message's token usage and a small price table in `cli/cmd/f10eval/stream.go`. The turn's result then replaces it with claude's own figure, and the report only ever holds that figure. A finished run prints its result line and a line per check, with a failed check's detail on its line. A `report` line follows with the `file://` url of the run folder. A `steps` line then holds the `just eval show` command, with the report's path relative to the repo root, so it pastes as is. A footer gives the runs passed, the total cost and time, and the url of the report set. When stdout is not a terminal, or `NO_COLOR` is set, the output is plain lines with no escape codes. Each run prints a `started` line, then its result lines.
 
 ## Reports
 
@@ -35,11 +37,13 @@ A run on a profile other than the kind's default writes `<scenario>.<profile>.js
 Each report holds:
 
 - pass/fail for each check;
-- `cost_usd` and `duration_ms`, from claude's JSON output;
+- `cost_usd` and `duration_ms`, from the `result` event of each turn of claude's stream;
 - `grader_cost_usd`, the rubric check's spend, kept apart from `cost_usd` so the run's cost compares across releases with and without a rubric;
 - for a `rubric` check, the grader's model and a pass or fail with a one-line reason for each rubric line;
 - the profile the run started on, as `agent`;
-- the plugin version and the commit, `-dirty` appended when the tree had uncommitted changes, so the commit never names code that did not run.
+- the plugin version and the commit, `-dirty` appended when the tree had uncommitted changes, so the commit never names code that did not run;
+- `run_dir`, the run's folder, relative to the report's directory, so a committed report carries no local path;
+- `run_dir_error`, when writing the folder failed after the checks ran. It leaves `pass` and `error` as the run decided them, because a local copy failing says nothing about the agent.
 
 Two profiles of one scenario sit side by side under one version, so a cheaper profile is justified by diffing its report against the dearer one on the same checks.
 
@@ -48,6 +52,27 @@ The report carries it too, as a `repeat` field.
 A `planted` check also writes its counts as numbers, `planted: {found, total, outside}`, beside the detail sentence.
 
 Commit the reports with a release. Sets made to compare a change stay uncommitted.
+The run folders stay out of git (`.gitignore`), because a transcript runs to hundreds of KB and is full of absolute local paths.
+
+### Run folder
+
+Beside each `<report>.json` the runner writes `<report>/`, named like the report without `.json`. It is the input of the report page and of any later page that shows a run, so a change to this layout is a change to them:
+
+- `transcript.jsonl`: claude's stream-json output, line for line as printed, every turn of the run. Each turn ends with its `result` event.
+- `transcript.times`: one integer per transcript line, the milliseconds between the run's first turn starting and that line arriving. The stream's lines carry no time of their own.
+- `diff.patch`: `git diff --binary` from the repo's initial commit to the tree the run left, untracked files included. A review scenario's planted change is in it too. `.f10/` is not, because it is excluded from the repo. It is in `after/` instead. Git's global and system config are ignored, so the patch has one format on every machine.
+- `before/`: the repo as the run was handed it, without `.git`. The fixture, the history, the branch and the change are already in it.
+- `after/`: the repo as the run left it, `.f10/` included, without `.git`.
+- `inputs/scenario.json`: the scenario file as written, with the prompts, the verify and the hidden `accept` commands, the rubric lines and the planted defects. `inputs/task.md` and `inputs/project.md` are the fixture's `tasks/<task>.md` and `f10/instructions/project.md`, where it has them.
+
+A run that errors in setup still writes the folder, with its inputs at least.
+A rerun into the same directory replaces the folder with its report.
+
+`just eval show <report.json>` prints the run's timeline from the folder.
+It prints a heading per turn and per skill, then one line per tool call with its elapsed time and the cost so far.
+A subagent's call is marked `sub`, and a call whose result was an error is marked `✗`.
+Each turn ends with its exact cost, its duration and the first line of its reply.
+A report written before run folders existed has no `run_dir`, and `show` says so.
 
 ## Comparing
 
@@ -76,6 +101,7 @@ Higher is better for passes, planted found and rubric lines. Lower is better for
 `cost` is the run's own spend, without the grader's.
 A group in only one set is listed as not compared.
 The header warns when a group has one run, and when a set holds reports from more than one commit, which usually means two sets were mixed in one directory.
+On a terminal `better` prints green and `worse` red.
 The command exits 0 whatever it finds, because the comparison informs a decision and gates nothing.
 
 ## Scenarios
@@ -187,4 +213,6 @@ A good run's settled statement, task file and plan can be frozen as the fixed in
 The implement scenarios already take a saved plan as their input in the same way.
 
 A bug scenario (a failing test to fix) and a spike scenario are the next ones to add. The runner needs no change for them.
-`go test ./cmd/f10eval` covers the checks against a canned result, and the rubric check against a canned grader, with no model call.
+`go test ./cmd/f10eval` makes no model call.
+It covers the checks against a canned result and the rubric check against a canned grader.
+It covers the stream reader, the run folder, the live view and `show` against a canned stream in `cli/cmd/f10eval/testdata/stream/`.

@@ -71,8 +71,21 @@ func TestReportNameAndArgs(t *testing.T) {
 	o := options{permission: "acceptEdits", budget: "5"}
 	args := claudeArgs("/root", o, "/f10:plan T-1", high, "")
 	want := []string{
-		"-p", "--plugin-dir", "/root", "--output-format", "json", "--permission-mode", "acceptEdits",
-		"--max-budget-usd", "5", "--model", "opus", "--effort", "high", "/f10:plan T-1",
+		"-p",
+		"--plugin-dir",
+		"/root",
+		"--output-format",
+		"stream-json",
+		"--verbose",
+		"--permission-mode",
+		"acceptEdits",
+		"--max-budget-usd",
+		"5",
+		"--model",
+		"opus",
+		"--effort",
+		"high",
+		"/f10:plan T-1",
 	}
 
 	if !slices.Equal(args, want) {

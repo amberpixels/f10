@@ -20,11 +20,14 @@ func fakeClaude(t *testing.T, failAt string) string {
 	script := `#!/bin/sh
 n=$(( $(cat "` + log + `" 2>/dev/null | wc -l) + 1 ))
 echo "$*" >> "` + log + `"
+echo '{"type":"system","subtype":"init","session_id":"sess-'$n'"}'
+echo 'not json'
+echo '{"type":"assistant","message":{"id":"m'$n'","model":"claude-opus-5-5","content":[{"type":"tool_use","id":"t'$n'","name":"Skill","input":{"skill":"f10:plan"}}],"usage":{"input_tokens":10,"output_tokens":10}}}'
 if [ "$n" = "` + failAt + `" ]; then
-  echo '{"total_cost_usd":0.25,"duration_ms":5,"is_error":true,"result":"boom"}'
+  echo '{"type":"result","total_cost_usd":0.25,"duration_ms":5,"is_error":true,"result":"boom"}'
   exit 1
 fi
-echo "{\"total_cost_usd\":0.25,\"duration_ms\":5,\"result\":\"reply $n\",\"session_id\":\"sess-$n\"}"
+echo "{\"type\":\"result\",\"total_cost_usd\":0.25,\"duration_ms\":5,\"result\":\"reply $n\",\"session_id\":\"sess-$n\"}"
 `
 
 	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte(script), 0o700); err != nil {
@@ -76,7 +79,7 @@ func TestTurnsThreadTheSession(t *testing.T) {
 	t.Cleanup(func() { checks["rubric"] = checkRubric })
 
 	def, _, _ := agentctl.Profile{}.Resolve()
-	rep := runScenario(t.Context(), root, s, options{permission: "acceptEdits", budget: "1"}, def)
+	rep := runScenario(t.Context(), root, s, options{permission: "acceptEdits", budget: "1"}, def, runOut{})
 
 	if rep.Error != "" || rep.CostUSD != 0.75 || rep.DurationMS != 15 {
 		t.Errorf("report %+v, want three turns summed and no error", rep)
@@ -106,7 +109,7 @@ func TestATurnThatFailsEndsTheRun(t *testing.T) {
 	s := Scenario{Name: "s", Task: "EV-1", Prompts: []string{"one", "two", "three"}}
 
 	def, _, _ := agentctl.Profile{}.Resolve()
-	rep := runScenario(t.Context(), root, s, options{permission: "acceptEdits", budget: "1"}, def)
+	rep := runScenario(t.Context(), root, s, options{permission: "acceptEdits", budget: "1"}, def, runOut{})
 
 	if rep.Error != "turn 2: boom" || rep.CostUSD != 0.5 || rep.Pass {
 		t.Errorf("report %+v, want it stopped at turn 2 with two turns' cost", rep)

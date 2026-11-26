@@ -31,7 +31,7 @@ func compareMain(w io.Writer, root string, args []string) error {
 		return err
 	}
 
-	writeComparison(w, base, variant)
+	writeComparison(w, newStyles(w), base, variant)
 
 	return nil
 }
@@ -255,7 +255,7 @@ func mark(base, variant metric) string {
 	return "worse"
 }
 
-func writeComparison(w io.Writer, base, variant reportSet) {
+func writeComparison(w io.Writer, st *styles, base, variant reportSet) {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
 
 	side := func(label string, s reportSet) {
@@ -301,7 +301,8 @@ func writeComparison(w io.Writer, base, variant reportSet) {
 				continue
 			}
 
-			fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\n", bm[i].name, bm[i], vm[i], mark(bm[i], vm[i]))
+			// the mark is the last column, so its escape codes never shift the alignment
+			fmt.Fprintf(tw, "  %s\t%s\t%s\t%s\n", bm[i].name, bm[i], vm[i], st.verdict(mark(bm[i], vm[i])))
 		}
 
 		_ = tw.Flush()

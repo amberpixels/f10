@@ -12,6 +12,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -105,6 +106,13 @@ type Report struct {
 	GraderCostUSD float64 `json:"grader_cost_usd,omitempty"`
 	DurationMS    int64   `json:"duration_ms"`
 	Error         string  `json:"error,omitempty"`
+	// RunDir is the run's folder, relative to the report's directory, so a
+	// committed report carries no local path.
+	RunDir string `json:"run_dir,omitempty"`
+	// RunDirError is a failure to write the run folder after the checks ran.
+	// It stays apart from Error and Pass, because compare reads those as the
+	// run's outcome and a local copy failing says nothing about the agent.
+	RunDirError string `json:"run_dir_error,omitempty"`
 }
 
 type options struct {
@@ -137,9 +145,9 @@ func main() {
 
 	// `just eval compare <a> <b>` arrives as `-root .. compare <a> <b>`, so
 	// the subcommand follows the flags and shares -root
-	if flag.Arg(0) == "compare" {
-		if err := compareMain(os.Stdout, o.root, flag.Args()[1:]); err != nil {
-			fmt.Fprintln(os.Stderr, "f10eval compare:", err)
+	if sub, ok := subcommands[flag.Arg(0)]; ok {
+		if err := sub(os.Stdout, o.root, flag.Args()[1:]); err != nil {
+			fmt.Fprintf(os.Stderr, "f10eval %s: %v\n", flag.Arg(0), err)
 			os.Exit(1)
 		}
 
@@ -160,6 +168,13 @@ func main() {
 		fmt.Fprintln(os.Stderr, "f10eval:", err)
 		os.Exit(1)
 	}
+}
+
+// subcommands follow the flags and share -root, so `just eval compare <a> <b>`
+// and `just eval show <report>` arrive as `-root .. <word> <args>`.
+var subcommands = map[string]func(io.Writer, string, []string) error{
+	"compare": compareMain,
+	"show":    showMain,
 }
 
 func run(ctx context.Context, o options) error {
@@ -193,7 +208,17 @@ func run(ctx context.Context, o options) error {
 		return err
 	}
 
-	failed, runs := 0, 0
+	type planned struct {
+		s       Scenario
+		p       agentctl.Profile
+		repeat  int
+		path    string
+		display job
+	}
+
+	// every profile resolves before the first run, so a misspelt one fails
+	// before any spend
+	var plan []planned
 
 	for _, s := range scenarios {
 		s.f10 = f10
@@ -210,38 +235,56 @@ func run(ctx context.Context, o options) error {
 					repeat = n + 1
 				}
 
-				runs++
-				rep := runScenario(ctx, root, s, o, p)
-				rep.Version, rep.Commit, rep.Repeat = version, commit, repeat
-
-				path := filepath.Join(out, reportName(s.Name, p, repeat))
-				if err := writeReport(path, rep); err != nil {
-					return err
-				}
-
-				status := "pass"
-				if !rep.Pass {
-					status, failed = "FAIL", failed+1
-				}
-
-				cost := fmt.Sprintf("$%.2f", rep.CostUSD)
-				if rep.GraderCostUSD > 0 {
-					cost += fmt.Sprintf(" + $%.2f grader", rep.GraderCostUSD)
-				}
-
 				name := s.Name
 				if repeat > 0 {
 					name += fmt.Sprintf(" #%d", repeat)
 				}
 
-				fmt.Printf("%-28s %-16s %s  %s  %s  %s\n", name, p.Short(), status, cost,
-					time.Duration(rep.DurationMS)*time.Millisecond, path)
+				plan = append(plan, planned{
+					s: s, p: p, repeat: repeat, path: filepath.Join(out, reportName(s.Name, p, repeat)),
+					display: job{name: name, profile: cmp.Or(p.Short(), "default")},
+				})
 			}
 		}
 	}
 
+	jobs := make([]job, len(plan))
+	for i, r := range plan {
+		jobs[i] = r.display
+	}
+
+	v := newView(os.Stdout, newStyles(os.Stdout), root, jobs)
+	failed := 0
+
+	for i, r := range plan {
+		v.begin(i)
+
+		folder := strings.TrimSuffix(r.path, ".json")
+		rep := runScenario(ctx, root, r.s, o, r.p, runOut{folder: folder, onTurn: v.turn, onEvent: v.event, say: v.say})
+		rep.Version, rep.Commit, rep.Repeat = version, commit, r.repeat
+
+		if err := writeReport(r.path, rep); err != nil {
+			v.close(out)
+
+			return err
+		}
+
+		if !rep.Pass {
+			failed++
+		}
+
+		kept := folder
+		if rep.RunDir == "" {
+			kept = ""
+		}
+
+		v.finish(i, rep, r.path, kept)
+	}
+
+	v.close(out)
+
 	if failed > 0 {
-		return fmt.Errorf("%d of %d runs failed", failed, runs)
+		return fmt.Errorf("%d of %d runs failed", failed, len(plan))
 	}
 
 	return nil
@@ -338,11 +381,60 @@ func loadScenarios(dir, only string) ([]Scenario, error) {
 	return list, nil
 }
 
-// runScenario points f10's ledger, run state, asks and daemon dirs inside
-// the temp dir, so the nested run never reaches the user's own; the repo
-// has no origin, so nothing can be pushed.
-func runScenario(ctx context.Context, root string, s Scenario, o options, p agentctl.Profile) Report {
+// runScenario runs one scenario, and with out.folder keeps its run folder
+// beside the report.
+func runScenario(ctx context.Context, root string, s Scenario, o options, p agentctl.Profile, out runOut) Report {
+	if out.folder == "" {
+		return runIn(ctx, root, s, o, p, out, nil)
+	}
+
 	rep := Report{Scenario: s.Name, Agent: p.Short(), At: time.Now().UTC()}
+
+	// the folder opens before setup, so a run that errors in setup still
+	// keeps its inputs and the cause can be read there
+	folder, err := openRunFolder(out.folder)
+	if err != nil {
+		rep.Error = "run folder: " + err.Error()
+
+		return rep
+	}
+
+	scenarios := filepath.Join(root, "evals", "scenarios")
+	if err := folder.inputs(
+		filepath.Join(scenarios, s.Name),
+		filepath.Join(scenarios, cmp.Or(s.Fixture, s.Name), "repo"),
+		s.Task,
+	); err != nil {
+		rep.Error = "run folder: " + err.Error()
+	} else {
+		rep = runIn(ctx, root, s, o, p, out, folder)
+	}
+
+	rep.RunDir = filepath.Base(out.folder)
+
+	if err := folder.close(); err != nil && rep.RunDirError == "" {
+		rep.RunDirError = err.Error()
+	}
+
+	return rep
+}
+
+// runIn points f10's ledger, run state, asks and daemon dirs inside the temp
+// dir, so the nested run never reaches the user's own. The repo has no origin,
+// so nothing can be pushed. A non-nil folder keeps what the run saw and left.
+func runIn(
+	ctx context.Context,
+	root string,
+	s Scenario,
+	o options,
+	p agentctl.Profile,
+	out runOut,
+	folder *runFolder,
+) Report {
+	rep := Report{Scenario: s.Name, Agent: p.Short(), At: time.Now().UTC()}
+
+	scenarios := filepath.Join(root, "evals", "scenarios")
+	fixture := filepath.Join(scenarios, cmp.Or(s.Fixture, s.Name), "repo")
 
 	tmp, err := os.MkdirTemp("", "f10eval-"+s.Name+"-")
 	if err != nil {
@@ -352,15 +444,14 @@ func runScenario(ctx context.Context, root string, s Scenario, o options, p agen
 	}
 
 	if o.keep {
-		fmt.Println("kept:", tmp)
+		out.print("kept: " + tmp)
 	} else {
 		defer os.RemoveAll(tmp)
 	}
 
-	scenarios := filepath.Join(root, "evals", "scenarios")
 	dir := filepath.Join(tmp, "repo")
 
-	if err := prepare(ctx, filepath.Join(scenarios, cmp.Or(s.Fixture, s.Name), "repo"), dir); err != nil {
+	if err := prepare(ctx, fixture, dir); err != nil {
 		rep.Error = err.Error()
 
 		return rep
@@ -394,12 +485,29 @@ func runScenario(ctx context.Context, root string, s Scenario, o options, p agen
 		}
 	}
 
+	var tr *transcript
+
+	if folder != nil {
+		if err := folder.before(dir); err != nil {
+			rep.Error = "run folder: " + err.Error()
+
+			return rep
+		}
+
+		tr = folder.tr
+	}
+
 	s.env = runEnv(os.Environ(), tmp)
+	tr.begin()
 
 	turns, session := s.turns(), ""
 
 	for i, prompt := range turns {
-		res, err := runTurn(ctx, dir, s.env, claudeArgs(root, o, prompt, p, session))
+		if out.onTurn != nil {
+			out.onTurn(prompt)
+		}
+
+		res, err := runTurn(ctx, dir, s.env, claudeArgs(root, o, prompt, p, session), tr, out.onEvent)
 		rep.CostUSD += res.CostUSD
 		rep.DurationMS += res.DurationMS
 		session = res.SessionID
@@ -430,41 +538,33 @@ func runScenario(ctx context.Context, root string, s Scenario, o options, p agen
 	rep.Pass = rep.Pass && rep.Error == ""
 	rep.GraderCostUSD = graderCost(rep.Checks)
 
+	if folder != nil {
+		if err := folder.after(ctx, dir); err != nil {
+			rep.RunDirError = err.Error()
+		}
+	}
+
 	return rep
 }
 
-// A turnResult is the part of claude's JSON output the runner reads.
-type turnResult struct {
-	CostUSD    float64 `json:"total_cost_usd"`
-	DurationMS int64   `json:"duration_ms"`
-	IsError    bool    `json:"is_error"`
-	Result     string  `json:"result"`
-	SessionID  string  `json:"session_id"`
+// runOut is where a run reports besides its report: the folder it keeps,
+// the view its events feed and the lines it prints. The zero value keeps no
+// folder and prints to stdout.
+type runOut struct {
+	folder  string
+	onTurn  func(prompt string)
+	onEvent func(event)
+	say     func(string)
 }
 
-// runTurn runs one claude call. An errored turn's result is claude's error,
-// not a reply worth grading, so it comes back as the error.
-func runTurn(ctx context.Context, dir string, env, args []string) (turnResult, error) {
-	cmd := exec.CommandContext(ctx, "claude", args...)
-	cmd.Dir, cmd.Env = dir, env
+func (o runOut) print(line string) {
+	if o.say != nil {
+		o.say(line)
 
-	out, err := cmd.Output()
-
-	var res turnResult
-	if jerr := json.Unmarshal(out, &res); jerr == nil && res.IsError {
-		return res, errors.New(lastLine(res.Result))
+		return
 	}
 
-	if err != nil {
-		msg := fmt.Sprintf("claude: %v", err)
-		if exit, ok := errors.AsType[*exec.ExitError](err); ok {
-			msg += ": " + lastLine(string(exit.Stderr))
-		}
-
-		return res, errors.New(msg)
-	}
-
-	return res, nil
+	fmt.Println(line)
 }
 
 func graderCost(list []Check) float64 {
@@ -754,7 +854,7 @@ func resolveDir(root, dir string) string {
 // resumes that conversation, for a scenario's later turns.
 func claudeArgs(root string, o options, prompt string, p agentctl.Profile, session string) []string {
 	args := []string{
-		"-p", "--plugin-dir", root, "--output-format", "json",
+		"-p", "--plugin-dir", root, "--output-format", "stream-json", "--verbose",
 		"--permission-mode", o.permission, "--max-budget-usd", o.budget,
 	}
 	args = append(args, p.Args()...)
