@@ -28,9 +28,11 @@ var (
 
 const (
 	pageFile = "index.html"
-	// maxPageText keeps one large fixture file from pushing a page past
-	// what a browser opens comfortably; the file is listed without its text.
+	// maxPageText and maxTreeText keep one large file, or a tree of many,
+	// from pushing a page past what a browser opens comfortably; a file past
+	// either is listed without its text.
 	maxPageText = 512 << 10
+	maxTreeText = 8 << 20
 )
 
 // A pagePayload is what a page renders, injected as JSON. A run page's is
@@ -178,6 +180,8 @@ func readPageTree(root string) (map[string]pageText, error) {
 	}
 	defer r.Close()
 
+	var total int64
+
 	err = fs.WalkDir(r.FS(), ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
@@ -193,7 +197,7 @@ func readPageTree(root string) (map[string]pageText, error) {
 		switch {
 		case d.Type()&fs.ModeSymlink != 0:
 			f.Skip = "link"
-		case info.Size() > maxPageText:
+		case info.Size() > maxPageText || total+info.Size() > maxTreeText:
 			f.Skip = "large"
 		default:
 			body, err := r.ReadFile(path)
@@ -205,6 +209,7 @@ func readPageTree(root string) (map[string]pageText, error) {
 				f.Skip = "binary"
 			} else {
 				f.Text = string(body)
+				total += info.Size()
 			}
 		}
 

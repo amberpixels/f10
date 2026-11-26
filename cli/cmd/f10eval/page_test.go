@@ -89,6 +89,23 @@ func TestPageTreeSkipsLargeFiles(t *testing.T) {
 		t.Errorf("link = skip %q, want link", f.Skip)
 	}
 
+	// files under the per-file limit still stop at the tree's budget
+	many := t.TempDir()
+	for _, name := range []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q"} {
+		if err := os.WriteFile(filepath.Join(many, name), bytes.Repeat([]byte("a"), maxPageText), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	tree, err := readPageTree(many)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if tree["p"].Skip != "" || tree["q"].Skip != "large" {
+		t.Errorf("p skip %q, q skip %q; want p's text kept and q past the budget", tree["p"].Skip, tree["q"].Skip)
+	}
+
 	if got, err := readPageTree(filepath.Join(dir, "missing")); err != nil || len(got) != 0 {
 		t.Errorf("a missing tree = %v, %v; want empty", got, err)
 	}

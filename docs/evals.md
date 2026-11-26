@@ -82,7 +82,7 @@ Each run folder gets an `index.html` that opens from `file://` with no server an
 - A click on a `Write` or `Edit` row shows that file as the step left it, rebuilt by replaying the transcript's `Write` bodies and `Edit` pairs over `before/`. A failed call changes nothing. Shell commands are not replayed, so the after tree always comes from `after/`, and a file a shell command changed carries a note saying so.
 - The final reply.
 
-A file that is not UTF-8 text, a symlink, or a file over 512KB is listed with its size and no text.
+A file that is not UTF-8 text, a symlink, a file over 512KB, or a file past the first 8MB of a tree's text is listed with its size and no text.
 The set's directory gets an `index.html` too, a row per report with its checks, cost and time, linked to its run's page when it has one.
 
 `just eval html <dir>` rebuilds every run page in a set from its folder, then the index, with no model call. Run it after a change to the page, or on a set from before pages existed.
