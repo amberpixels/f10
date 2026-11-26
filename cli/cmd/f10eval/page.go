@@ -28,9 +28,9 @@ var (
 
 const (
 	pageFile = "index.html"
-	// maxPageText and maxTreeText keep one large file, or a tree of many,
-	// from pushing a page past what a browser opens comfortably; a file past
-	// either is listed without its text.
+	// maxPageText and maxTreeText keep a page small enough for a browser to
+	// open, whether from one large file or many small ones. A file past
+	// either limit is listed without its text.
 	maxPageText = 512 << 10
 	maxTreeText = 8 << 20
 )
@@ -49,7 +49,7 @@ type runPayload struct {
 	Scenario json.RawMessage `json:"scenario,omitempty"` // inputs/scenario.json as written
 	Task     string          `json:"task,omitempty"`
 	Project  string          `json:"project,omitempty"`
-	// Transcript is transcript.jsonl line for line; Times, CostUSD and
+	// Transcript is transcript.jsonl line for line. Times, CostUSD and
 	// Estimated align with it. The running cost is the live view's rule,
 	// computed here so its price table has one home.
 	Transcript []string            `json:"transcript"`
@@ -62,7 +62,7 @@ type runPayload struct {
 }
 
 // A pageText is one file of a tree. Skip says why Text is empty: "binary",
-// "large" or "link"; an empty Skip with empty Text is an empty file.
+// "large" or "link". An empty Skip with empty Text is an empty file.
 type pageText struct {
 	Text string `json:"text,omitempty"`
 	Size int64  `json:"size"`
@@ -74,7 +74,7 @@ type setPayload struct {
 	Runs []setRun `json:"runs"`
 }
 
-// A setRun is one report of the set; Page is its page relative to the
+// A setRun is one report of the set. Page is its page relative to the
 // set's directory, empty for a report with no run folder.
 type setRun struct {
 	File   string `json:"file"`
@@ -120,7 +120,7 @@ func runPayloadFor(path string) (*runPayload, string, error) {
 }
 
 // readTranscript keeps every line, a bad one included, so the times stay
-// aligned; a run that errored before its first turn has none.
+// aligned. A run that errored before its first turn has none.
 func (p *runPayload) readTranscript(dir string) error {
 	body, err := os.ReadFile(filepath.Join(dir, transcriptFile))
 	if errors.Is(err, fs.ErrNotExist) || len(body) == 0 {

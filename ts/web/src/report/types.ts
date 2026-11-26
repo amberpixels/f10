@@ -1,6 +1,6 @@
 // The payload the eval runner injects into a page (cli/cmd/f10eval/page.go).
-// A run's part is its report and run folder nearly as the folder holds them;
-// docs/evals.md owns that layout.
+// A run's part is its report and run folder, nearly as the folder holds
+// them. docs/evals.md owns that layout.
 
 export interface RubricLine {
   line: string;
@@ -33,7 +33,7 @@ export interface Report {
   run_dir_error?: string;
 }
 
-/** A file of a tree. `skip` says why `text` is absent; neither is an empty file. */
+/** A file of a tree. `skip` says why `text` is absent, and neither is an empty file. */
 export interface PageText {
   text?: string;
   size: number;
@@ -47,7 +47,7 @@ export interface RunPayload {
   scenario?: Scenario;
   task?: string;
   project?: string;
-  /** transcript.jsonl line for line; times, cost_usd and estimated align with it. */
+  /** transcript.jsonl line for line. times, cost_usd and estimated align with it. */
   transcript: string[];
   times: number[];
   cost_usd: number[];

@@ -270,8 +270,8 @@ func run(ctx context.Context, o options) error {
 			return err
 		}
 
-		// the report and the folder are the record; a page that fails to
-		// write is rebuilt by `just eval html`, so the run stands
+		// the report and the folder are the record, so a page that fails to
+		// write leaves the run standing, and `just eval html` rebuilds it
 		if rep.RunDir != "" {
 			if err := writeRunPage(r.path); err != nil {
 				v.say("page: " + err.Error())

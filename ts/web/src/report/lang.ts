@@ -7,7 +7,7 @@ import { StreamLanguage } from "@codemirror/language";
 import { shell } from "@codemirror/legacy-modes/mode/shell";
 import type { Extension } from "@codemirror/state";
 
-/** language is the highlighting for a path; an unknown kind of file is plain text. */
+/** language is the highlighting for a path. An unknown kind of file is plain text. */
 export function language(path: string): Extension[] {
   const name = path.split("/").pop()!.toLowerCase();
   const ext = name.includes(".") ? name.slice(name.lastIndexOf(".") + 1) : "";

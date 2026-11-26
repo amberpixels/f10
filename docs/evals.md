@@ -77,17 +77,29 @@ A report written before run folders existed has no `run_dir`, and `show` says so
 
 ### Report page
 
-Each run folder gets an `index.html` that opens from `file://` with no server and no network, in the system's light or dark theme. It is one file: the runner inlines the page's script and stylesheet, built from `ts/web/src/report` into `cli/cmd/f10eval/page/`, and the run's data as JSON. That data is the report and the folder nearly as written, and the page derives the rest, so a later page that shows a run can read the same folder.
+Each run folder gets an `index.html` that opens from `file://` with no server and no network.
+It follows the system's light or dark theme.
+The page is one file, because the runner inlines its script, its stylesheet and the run's data as JSON.
+The script and stylesheet are built from `ts/web/src/report` into `cli/cmd/f10eval/page/`.
+The data is the report and the folder nearly as written, and the page derives the rest.
+That way a later page that shows a run can read the same folder.
 
-- A header with the scenario, profile, version, commit, pass or fail, cost and time, and the error of a run that errored.
-- The checks, with each detail, rubric reasons and planted counts.
-- The inputs: the prompts, the verify, the task and `project.md`, and the `accept` commands and planted defects marked as never shown to the agent.
-- Three linked panes. The timeline has a heading per turn and per skill and a row per tool call with its elapsed time and running cost; a row opens to the call's input and output. The file tree marks each file added (`A`), modified (`M`) or deleted (`D`), with a before and after toggle. The viewer shows the chosen file, or its diff against `before/`.
-- A click on a `Write` or `Edit` row shows that file as the step left it, rebuilt by replaying the transcript's `Write` bodies and `Edit` pairs over `before/`. A failed call changes nothing. Shell commands are not replayed, so the after tree always comes from `after/`, and a file a shell command changed carries a note saying so.
+The page shows:
+
+- A header with the scenario, profile, version, commit, pass or fail, cost and time. A run that errored also shows its error.
+- The checks, with each check's detail, the rubric reasons and the planted counts.
+- The inputs: the prompts, the verify, the task and `project.md`. The `accept` commands and planted defects are marked as never shown to the agent.
+- Three linked panes:
+  - The timeline has a heading per turn and per skill, and a row per tool call with its elapsed time and running cost. A row opens to show the call's input and output.
+  - The file tree marks each file added (`A`), modified (`M`) or deleted (`D`), with a before and after toggle.
+  - The viewer shows the chosen file, or its diff against `before/`.
+- A click on a `Write` or `Edit` row shows that file as the step left it. The page rebuilds it by replaying the transcript's `Write` bodies and `Edit` pairs over `before/`. A failed call changes nothing. Shell commands are not replayed, so the after tree always comes from `after/`. A file that a shell command changed carries a note saying so.
 - The final reply.
 
-A file that is not UTF-8 text, a symlink, a file over 512KB, or a file past the first 8MB of a tree's text is listed with its size and no text.
-The set's directory gets an `index.html` too, a row per report with its checks, cost and time, linked to its run's page when it has one.
+A file that is not UTF-8 text, or a symlink, is listed with its size and no text.
+So is a file over 512KB, and any file past the first 8MB of a tree's text, which keeps the page small enough to open.
+The set's directory gets an `index.html` too, with a row per report showing its checks, cost and time.
+Each row links to its run's page when the run has one.
 
 `just eval html <dir>` rebuilds every run page in a set from its folder, then the index, with no model call. Run it after a change to the page, or on a set from before pages existed.
 
