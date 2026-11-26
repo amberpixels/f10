@@ -109,6 +109,10 @@ type Report struct {
 	// RunDir is the run's folder, relative to the report's directory, so a
 	// committed report carries no local path.
 	RunDir string `json:"run_dir,omitempty"`
+	// RunDirError is a failure to write the run folder after the checks ran.
+	// It stays apart from Error and Pass, because compare reads those as the
+	// run's outcome and a local copy failing says nothing about the agent.
+	RunDirError string `json:"run_dir_error,omitempty"`
 }
 
 type options struct {
@@ -408,8 +412,8 @@ func runScenario(ctx context.Context, root string, s Scenario, o options, p agen
 
 	rep.RunDir = filepath.Base(out.folder)
 
-	if err := folder.close(); err != nil && rep.Error == "" {
-		rep.Error, rep.Pass = "run folder: "+err.Error(), false
+	if err := folder.close(); err != nil && rep.RunDirError == "" {
+		rep.RunDirError = err.Error()
 	}
 
 	return rep
@@ -494,6 +498,7 @@ func runIn(
 	}
 
 	s.env = runEnv(os.Environ(), tmp)
+	tr.begin()
 
 	turns, session := s.turns(), ""
 
@@ -534,8 +539,8 @@ func runIn(
 	rep.GraderCostUSD = graderCost(rep.Checks)
 
 	if folder != nil {
-		if err := folder.after(ctx, dir); err != nil && rep.Error == "" {
-			rep.Error, rep.Pass = "run folder: "+err.Error(), false
+		if err := folder.after(ctx, dir); err != nil {
+			rep.RunDirError = err.Error()
 		}
 	}
 

@@ -58,6 +58,19 @@ func openTranscript(dir string) (*transcript, error) {
 	return t, nil
 }
 
+// begin starts the clock, as the first turn starts, so setup time stays
+// out of every line's arrival.
+func (t *transcript) begin() {
+	if t == nil {
+		return
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	t.start = time.Now()
+}
+
 // write keeps one line. A nil transcript keeps nothing, for a run with no
 // folder. The first error sticks and close reports it.
 func (t *transcript) write(line []byte) {
