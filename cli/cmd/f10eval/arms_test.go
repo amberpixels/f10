@@ -366,6 +366,27 @@ func TestArmsTable(t *testing.T) {
 	}
 }
 
+// An f10 run that fails only an f10-only check still passes on outcomes,
+// so the pass row compares like with like.
+func TestArmsTablePassCountsOutcomes(t *testing.T) {
+	t.Parallel()
+
+	var runs []Report
+
+	for range 3 {
+		f10 := armRun(armF10, false, 3, 30)
+		f10.Checks = []Check{{Name: "verify", Pass: true}, {Name: "lore", Pass: false}}
+		runs = append(runs, armRun(armRaw, true, 1, 10), f10)
+	}
+
+	var b bytes.Buffer
+	writeArmsTable(&b, &styles{}, runs)
+
+	if r := strings.Fields(row(b.String(), "pass")); !slices.Equal(r, []string{"pass", "3/3", "3/3"}) {
+		t.Errorf("pass row %q, want 3/3 on both arms and no mark", r)
+	}
+}
+
 func TestCompareRefusesAnArmsSet(t *testing.T) {
 	t.Parallel()
 

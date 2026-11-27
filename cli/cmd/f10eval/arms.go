@@ -313,6 +313,14 @@ func armMetrics(runs []Report, names []string) []metric {
 	all := metrics(runs, names)
 	out := slices.DeleteFunc(all, func(m metric) bool { return slices.Contains(armRows, m.name) })
 
+	// a report's own pass also needs the f10-only checks, which only the f10
+	// arm runs, so across arms pass counts the outcome checks alone
+	for i := range out {
+		if out[i].name == "pass" {
+			out[i] = outcomePass(runs)
+		}
+	}
+
 	share := metric{name: "plumbing share", unit: "%"}
 
 	for _, r := range runs {
@@ -325,6 +333,25 @@ func armMetrics(runs []Report, names []string) []metric {
 	}
 
 	return append(out, share)
+}
+
+func outcomePass(runs []Report) metric {
+	m := metric{name: "pass", binary: true, higher: true}
+
+	for _, r := range runs {
+		if r.Error != "" && len(r.Checks) == 0 {
+			continue
+		}
+
+		pass := r.Error == ""
+		for _, c := range r.Checks {
+			pass = pass && (c.Pass || !outcomeChecks[c.Name])
+		}
+
+		m.values = append(m.values, b2f(pass))
+	}
+
+	return m
 }
 
 // f10Only says a row means nothing for a plain arm.
@@ -370,6 +397,7 @@ func writeArmsTable(w io.Writer, st *styles, runs []Report) {
 
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "each plain arm against f10: better or worse means it beat or trailed f10 on that row")
+	fmt.Fprintln(w, "the pass row counts the outcome checks alone, on every arm")
 
 	var leaks []string
 
