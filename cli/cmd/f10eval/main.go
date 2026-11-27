@@ -16,6 +16,7 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -158,10 +159,12 @@ func main() {
 	bindRunFlags(flag.CommandLine, &o, 1, "evals/reports/<version>")
 	flag.Parse()
 
+	ctx := interruptible()
+
 	// arms parses its own flags after the word, because the run flags it
 	// takes would otherwise end at it
 	if flag.Arg(0) == "arms" {
-		if err := armsMain(context.Background(), os.Stdout, o.root, flag.Args()[1:]); err != nil {
+		if err := armsMain(ctx, os.Stdout, o.root, flag.Args()[1:]); err != nil {
 			fmt.Fprintln(os.Stderr, "f10eval arms:", err)
 			os.Exit(1)
 		}
@@ -190,10 +193,24 @@ func main() {
 		os.Exit(2)
 	}
 
-	if err := run(context.Background(), o); err != nil {
+	if err := run(ctx, o); err != nil {
 		fmt.Fprintln(os.Stderr, "f10eval:", err)
 		os.Exit(1)
 	}
+}
+
+// interruptible is cancelled by the first Ctrl+C, which stops the running
+// claude and the set but still prints the end block and its kept paths. A
+// second Ctrl+C kills the process as usual.
+func interruptible() context.Context {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+
+	go func() {
+		<-ctx.Done()
+		stop()
+	}()
+
+	return ctx
 }
 
 // subcommands follow the flags and share -root, so `just eval compare <a> <b>`
@@ -232,7 +249,7 @@ func run(ctx context.Context, o options) error {
 		return err
 	}
 
-	_, err = execute(ctx, root, o, out, b, plan)
+	err = execute(ctx, root, o, out, b, plan, nil)
 
 	return err
 }
@@ -303,17 +320,18 @@ func planRuns(
 					}
 
 					name := s.Name
-					if arm != "" {
-						name = arm + " · " + name
-					}
-
 					if repeat > 0 {
 						name += fmt.Sprintf(" #%d", repeat)
 					}
 
+					turns, _ := s.armTurns()
+
 					plan = append(plan, planned{
 						s: s, p: p, repeat: repeat, path: filepath.Join(out, reportName(s.Name, arm, p, repeat)),
-						display: job{name: name, profile: cmp.Or(p.Short(), "default")},
+						display: job{
+							arm: arm, scenario: name, profile: cmp.Or(p.Short(), "default"),
+							checks: len(s.runChecks()), turns: len(turns),
+						},
 					})
 				}
 			}
@@ -323,9 +341,12 @@ func planRuns(
 	return plan, nil
 }
 
-// execute runs a set's plan into out, with its view, run pages and index,
-// and returns the reports in plan order.
-func execute(ctx context.Context, root string, o options, out string, b build, plan []planned) ([]Report, error) {
+// execute runs a set's plan into out, with its view, run pages and index.
+// A non-nil tail gets the reports in plan order, and prints between the
+// view's end block and its footer.
+func execute(
+	ctx context.Context, root string, o options, out string, b build, plan []planned, tail func([]Report),
+) error {
 	jobs := make([]job, len(plan))
 	for i, r := range plan {
 		jobs[i] = r.display
@@ -336,6 +357,10 @@ func execute(ctx context.Context, root string, o options, out string, b build, p
 	reps := make([]Report, 0, len(plan))
 
 	for i, r := range plan {
+		if ctx.Err() != nil {
+			break
+		}
+
 		v.begin(i)
 
 		folder := strings.TrimSuffix(r.path, ".json")
@@ -343,9 +368,9 @@ func execute(ctx context.Context, root string, o options, out string, b build, p
 		rep.Version, rep.Commit, rep.Repeat = b.version, b.commit, r.repeat
 
 		if err := writeReport(r.path, rep); err != nil {
-			v.close(out)
+			v.end(out, tail, reps)
 
-			return reps, err
+			return err
 		}
 
 		reps = append(reps, rep)
@@ -374,13 +399,13 @@ func execute(ctx context.Context, root string, o options, out string, b build, p
 		v.say("index page: " + err.Error())
 	}
 
-	v.close(out)
+	v.end(out, tail, reps)
 
 	if failed > 0 {
-		return reps, fmt.Errorf("%d of %d runs failed", failed, len(plan))
+		return fmt.Errorf("%d of %d runs failed", failed, len(plan))
 	}
 
-	return reps, nil
+	return nil
 }
 
 // checkRubricField refuses a rubric that cannot grade before any spend, and
@@ -698,16 +723,21 @@ func graderCost(list []Check) float64 {
 	return total
 }
 
+// runChecks is the checks a run grades. A plain arm has none of f10's state,
+// so only its outcomes are checked.
+func (s Scenario) runChecks() []string {
+	if !plainArm(s.arm) {
+		return s.Checks
+	}
+
+	return slices.DeleteFunc(slices.Clone(s.Checks), func(name string) bool { return !outcomeChecks[name] })
+}
+
 func runChecks(ctx context.Context, dir string, s Scenario) ([]Check, bool) {
 	pass := true
 	list := make([]Check, 0, len(s.Checks))
 
-	for _, name := range s.Checks {
-		// a plain arm has none of f10's state, so only outcomes are checked
-		if plainArm(s.arm) && !outcomeChecks[name] {
-			continue
-		}
-
+	for _, name := range s.runChecks() {
 		c := checks[name](ctx, dir, s)
 		list = append(list, c)
 		pass = pass && c.Pass

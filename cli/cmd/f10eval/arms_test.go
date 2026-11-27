@@ -104,8 +104,8 @@ func TestPlanRunsOrdersArms(t *testing.T) {
 		t.Errorf("plan %q, want %q", got, want)
 	}
 
-	if plan[0].display.name != "raw · s #1" {
-		t.Errorf("display %q, want the arm before the scenario", plan[0].display.name)
+	if plan[0].display.name() != "raw · s #1" {
+		t.Errorf("display %q, want the arm before the scenario", plan[0].display.name())
 	}
 
 	plan, err = planRuns([]Scenario{rawOnly}, options{repeat: 1}, "/out", "f10", armOrder, armProfile)
