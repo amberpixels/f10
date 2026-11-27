@@ -40,6 +40,7 @@ describe("load", () => {
     // the first turn's exact cost replaces the estimate
     expect(call("Skill").cost).toBe(0.006);
     expect(model.turns[1]!.sections[0]!.calls[0]!.cost).toBe(0.506);
+    expect(model.calls.filter((c) => c.plumbing).map((c) => c.id)).toEqual(["t1", "t3"]);
   });
 });
 
@@ -88,6 +89,8 @@ describe("RunPage", () => {
     expect(root.querySelector(".inputs")?.textContent).toContain("never shown to the agent");
     expect(root.querySelectorAll(".panes .pane")).toHaveLength(3);
     expect(root.querySelector(".reply")?.textContent).toContain("prints the greeting in capitals");
+    expect(root.querySelector(".facts .plumbing")?.textContent).toBe("4% of time · 2/9 calls · $0.01");
+    expect([...root.querySelectorAll(".call.plumbing .name")].map((n) => n.textContent)).toEqual(["Skill", "Skill"]);
 
     const row = [...root.querySelectorAll<HTMLButtonElement>(".call .row")].find(
       (b) => b.textContent?.includes("Write") && b.textContent.includes("main.go"),

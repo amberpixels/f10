@@ -210,3 +210,36 @@ func TestCompareNeedsTwoDirs(t *testing.T) {
 		t.Error("an empty dir accepted")
 	}
 }
+
+func withPlumbing(r Report, calls int, seconds, cost float64) Report {
+	r.Plumbing = &Plumbing{Calls: calls, TotalCalls: 40, Seconds: seconds, CostUSD: cost}
+
+	return r
+}
+
+// Less plumbing is better, and a baseline from before the field prints "-"
+// with no mark.
+func TestComparePlumbingRows(t *testing.T) {
+	t.Parallel()
+
+	p := planted(4, 0, 1)
+	base := writeSet(t, withPlumbing(p, 12, 40, 0.4), withPlumbing(p, 14, 45, 0.5))
+	variant := writeSet(t, withPlumbing(p, 6, 20, 0.2), withPlumbing(p, 7, 22, 0.25))
+
+	out := compareOut(t, base, variant)
+
+	for name, want := range map[string]string{
+		"plumbing calls": "13 [12-14] n=2",
+		"plumbing time":  "42s [40s-45s] n=2",
+		"plumbing cost":  "$0.45 [$0.40-$0.50] n=2",
+	} {
+		if r := row(out, name); !strings.Contains(r, want) || !strings.HasSuffix(strings.TrimSpace(r), "better") {
+			t.Errorf("%s row %q, want %q marked better", name, r, want)
+		}
+	}
+
+	out = compareOut(t, writeSet(t, p, p), variant)
+	if r := row(out, "plumbing calls"); !strings.Contains(r, " - ") || strings.Contains(r, "better") {
+		t.Errorf("an old baseline's plumbing row %q, want - and no mark", r)
+	}
+}

@@ -275,6 +275,20 @@ button {
   color: var(--muted);
 }
 
+/* f10's own calls recede, so the eye lands on the work */
+.call.plumbing .row {
+  color: var(--muted);
+}
+
+.call.plumbing .name {
+  font-weight: normal;
+}
+
+.call.plumbing .row:hover,
+.call.plumbing.current .row {
+  color: var(--text);
+}
+
 .call .sub {
   color: var(--warn);
 }

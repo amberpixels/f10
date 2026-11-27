@@ -16,6 +16,14 @@ export interface Check {
   planted?: { found: number; total: number; outside: number };
 }
 
+/** The part of a run spent on f10's own machinery, as the runner measured it. */
+export interface Plumbing {
+  calls: number;
+  total_calls: number;
+  seconds: number;
+  cost_usd: number;
+}
+
 export interface Report {
   scenario: string;
   agent?: string;
@@ -28,6 +36,7 @@ export interface Report {
   cost_usd: number;
   grader_cost_usd?: number;
   duration_ms: number;
+  plumbing?: Plumbing;
   error?: string;
   run_dir?: string;
   run_dir_error?: string;
@@ -52,6 +61,8 @@ export interface RunPayload {
   times: number[];
   cost_usd: number[];
   estimated: boolean[];
+  /** The ids of the calls the runner counts as f10 plumbing. */
+  plumbing: string[];
   diff: string;
   before: Files;
   after: Files;
