@@ -17,7 +17,7 @@ func canned(t *testing.T) string {
 	t.Helper()
 
 	dir := t.TempDir()
-	if err := prepare(t.Context(), filepath.Join("testdata", "result"), dir); err != nil {
+	if err := prepare(t.Context(), filepath.Join("testdata", "result"), dir, false); err != nil {
 		t.Fatal(err)
 	}
 

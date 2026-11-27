@@ -77,6 +77,11 @@ func loadSet(name, dir string) (reportSet, error) {
 			return reportSet{}, fmt.Errorf("%s: %w", f, err)
 		}
 
+		// an arms set's groups are its arms, which compare would mix
+		if r.Arm != "" {
+			return reportSet{}, fmt.Errorf("%s holds arms reports, which `just eval arms` prints side by side", name)
+		}
+
 		k := groupKey{r.Scenario, r.Agent}
 		set.groups[k] = append(set.groups[k], r)
 
@@ -110,6 +115,8 @@ func metrics(runs []Report, checkNames []string) []metric {
 	rubric := metric{name: "rubric lines passed", higher: true}
 	cost := metric{name: "cost", unit: "$"}
 	dur := metric{name: "duration", unit: "s"}
+	turns := metric{name: "turns"}
+	calls := metric{name: "tool calls"}
 	plumbCalls := metric{name: "plumbing calls"}
 	plumbTime := metric{name: "plumbing time", unit: "s"}
 	plumbCost := metric{name: "plumbing cost", unit: "$"}
@@ -129,8 +136,13 @@ func metrics(runs []Report, checkNames []string) []metric {
 		cost.values = append(cost.values, r.CostUSD)
 		dur.values = append(dur.values, float64(r.DurationMS)/1000)
 
-		// a report from before the field adds no sample, so it prints "-"
+		// a report from before a field adds no sample, so it prints "-"
+		if r.Turns > 0 {
+			turns.values = append(turns.values, float64(r.Turns))
+		}
+
 		if p := r.Plumbing; p != nil {
+			calls.values = append(calls.values, float64(p.TotalCalls))
 			plumbCalls.values = append(plumbCalls.values, float64(p.Calls))
 			plumbTime.values = append(plumbTime.values, p.Seconds)
 			plumbCost.values = append(plumbCost.values, p.CostUSD)
@@ -164,7 +176,7 @@ func metrics(runs []Report, checkNames []string) []metric {
 		out = append(out, *byCheck[n])
 	}
 
-	return append(out, found, outside, rubric, cost, dur, plumbCalls, plumbTime, plumbCost)
+	return append(out, found, outside, rubric, cost, dur, turns, calls, plumbCalls, plumbTime, plumbCost)
 }
 
 func b2f(b bool) float64 {
@@ -192,6 +204,8 @@ func (m metric) String() string {
 			return fmt.Sprintf("$%.2f", v)
 		case "s":
 			return fmt.Sprintf("%.0fs", v)
+		case "%":
+			return fmt.Sprintf("%.0f%%", v)
 		}
 
 		return strings.TrimSuffix(strings.TrimSuffix(fmt.Sprintf("%.2f", v), "0"), ".0")

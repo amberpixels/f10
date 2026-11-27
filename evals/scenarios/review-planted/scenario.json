@@ -14,5 +14,16 @@
     {"file": "notes.go", "from": 58, "to": 61, "what": "read joins the name unchecked, so ../ escapes the notes directory"},
     {"file": "notes.go", "from": 80, "to": 91, "what": "save reads the whole body before the 1 MiB check, so a huge body is held in memory"}
   ],
-  "max_extra": 2
+  "max_extra": 2,
+  "arms": {
+    "raw": {
+      "prompt": "Review the commits on the checked-out branch against main for bugs. Write each finding to findings.md at the repo root as a block: a line `### <title>`, then a line `where: <file>:<line>` naming the line of the changed code the finding is about, then one or two lines on how it fails. Change no other file."
+    },
+    "native": {
+      "prompts": [
+        "/code-review EV-2/change",
+        "Write every finding you just reported to findings.md at the repo root, each as a block: a line `### <title>`, then a line `where: <file>:<line>` naming the line of the changed code the finding is about, then one or two lines on how it fails. Change no other file."
+      ]
+    }
+  }
 }

@@ -55,7 +55,7 @@ func TestReportNameAndArgs(t *testing.T) {
 		{def, 3, "feature-small.3.json"},
 		{high, 2, "feature-small.opus-high.2.json"},
 	} {
-		if n := reportName("feature-small", c.p, c.repeat); n != c.want {
+		if n := reportName("feature-small", "", c.p, c.repeat); n != c.want {
 			t.Errorf("report %q, want %q", n, c.want)
 		}
 	}
@@ -69,7 +69,7 @@ func TestReportNameAndArgs(t *testing.T) {
 	}
 
 	o := options{permission: "acceptEdits", budget: "5"}
-	args := claudeArgs("/root", o, "/f10:plan T-1", high, "")
+	args := claudeArgs("/root", o, high, turnCall{prompt: "/f10:plan T-1"})
 	want := []string{
 		"-p",
 		"--plugin-dir",
@@ -81,6 +81,9 @@ func TestReportNameAndArgs(t *testing.T) {
 		"acceptEdits",
 		"--max-budget-usd",
 		"5",
+		"--setting-sources",
+		"project,local",
+		"--strict-mcp-config",
 		"--model",
 		"opus",
 		"--effort",
@@ -92,7 +95,7 @@ func TestReportNameAndArgs(t *testing.T) {
 		t.Errorf("args %q, want %q", args, want)
 	}
 
-	args = claudeArgs("/root", o, "p", def, "")
+	args = claudeArgs("/root", o, def, turnCall{prompt: "p"})
 	if slices.Contains(args, "--model") || slices.Contains(args, "--effort") {
 		t.Errorf("the default passes no flag: %q", args)
 	}
@@ -125,6 +128,7 @@ func TestHistoryAndReviewsSeedTheRun(t *testing.T) {
 		ctx,
 		filepath.Join("..", "..", "..", "evals", "scenarios", "feature-small", "repo"),
 		dir,
+		false,
 	); err != nil {
 		t.Fatal(err)
 	}

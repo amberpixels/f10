@@ -398,6 +398,11 @@ button {
   font-weight: 600;
 }
 
+.set tr.arm th {
+  color: var(--text);
+  padding-top: 14px;
+}
+
 .marks span {
   margin-right: 10px;
   white-space: nowrap;
