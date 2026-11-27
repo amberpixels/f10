@@ -2248,7 +2248,8 @@ type FinishRequest struct {
 	Keep   bool           `protobuf:"varint,5,opt,name=keep,proto3" json:"keep,omitempty"`
 	Caller *CallerContext `protobuf:"bytes,6,opt,name=caller,proto3" json:"caller,omitempty"`
 	// yes closes the caller's own workspace after the report, when the
-	// caller runs inside the task's workspace, instead of refusing.
+	// caller runs inside the task's workspace, instead of refusing. A merged
+	// PR needs no yes: nothing is left to confirm.
 	Yes bool `protobuf:"varint,7,opt,name=yes,proto3" json:"yes,omitempty"`
 	// empty finishes a branch never pushed that adds nothing.
 	Empty bool `protobuf:"varint,8,opt,name=empty,proto3" json:"empty,omitempty"`

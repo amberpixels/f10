@@ -137,12 +137,6 @@ func decideFinish(ctx context.Context, in FinishInput) (finishDecision, error) {
 		d.self = gitx.Inside(in.Cwd, path) || (d.ws != nil && in.Workspace != "" && in.Workspace == d.ws.ID)
 	}
 
-	if d.self && !in.Flags.Yes {
-		return d, fmt.Errorf("f10 finish %s would close its own workspace (%s): "+
-			"run it from the main checkout, or pass --yes to close this workspace after the report",
-			in.Task.ID, cmp.Or(worktree.WorkspaceLabel(d.ws), name))
-	}
-
 	if d.def, err = stack.LocalDefault(ctx, in.Main); err != nil {
 		return d, err
 	}
@@ -156,6 +150,14 @@ func decideFinish(ctx context.Context, in FinishInput) (finishDecision, error) {
 
 	if in.Flags.MergedOnly && (unpushed || d.pull.Status != forge.Merged) {
 		return d, errNotMerged
+	}
+
+	// the question guards the merge; with the PR already merged, a finish
+	// typed in its own workspace has nothing left to confirm
+	if d.self && !in.Flags.Yes && (unpushed || d.pull.Status != forge.Merged) {
+		return d, fmt.Errorf("f10 finish %s would close its own workspace (%s): "+
+			"run it from the main checkout, or pass --yes to close this workspace after the report",
+			in.Task.ID, cmp.Or(worktree.WorkspaceLabel(d.ws), name))
 	}
 
 	// a spike with a PR finishes the normal way, and its tree must be clean

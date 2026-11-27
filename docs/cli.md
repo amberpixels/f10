@@ -467,6 +467,7 @@ There finish merges as usual, brings the default branch up to the merge, switche
    Finish takes the same lease for its own run, so two finishes of one task never run at once; a batch's own finish runs under the lease the batch already holds.
    A dirty worktree, named file by file, with no `--force`: commit or discard first.
    A cwd inside the worktree being removed, or a `HERDR_WORKSPACE_ID` naming its workspace, unless `--yes` was passed: the message says the command would close its own workspace.
+   It runs after the PR lookup and fires only when a merge would follow: with the PR already merged, typing finish is the confirmation, and the workspace closes after the report.
    With the branch checked out in main, nothing closes, so this refusal does not apply.
    Outside Herdr, as start does.
 2. **The merge.**
@@ -549,7 +550,7 @@ There finish merges as usual, brings the default branch up to the merge, switche
    So do the `plan`, `handoff`, `judge` and `review` rows of `f10 status <id>`.
    A batch's copy of the report links when the batch writes to a terminal.
 8. **The report**, then the worktree and its local branch are removed - through `wt remove` when worktrunk is on `PATH`, else `git worktree remove` and `git branch -D` - then the Herdr workspace closes (the agent goes with it).
-   With `--yes` from inside the worktree, main's workspace is focused before the close so the user lands at home; the close ends the process, which is why it comes last.
+   From inside the worktree (with `--yes`, or with the PR already merged), main's workspace is focused before the close so the user lands at home; the close ends the process, which is why it comes last.
    With the branch checked out in main, main is switched to the default branch (`git switch`) and only the local branch is deleted (`git branch -D`, worktrunk or not), and no workspace closes.
    A merge prints the handoff's body under the report.
    Finish reads the file before the merge, while the branch's tip still exists to compare its `head` with.
@@ -568,7 +569,7 @@ Archiving the plan and copying a spike report out matter twice over, because the
 Once the worktree and branch are removed, a rerun reads the task as finished.
 So a failure after that ends in "settle what failed by hand" instead.
 Such a failure is archiving a spike report kept outside the worktree, or focusing or closing a workspace.
-A finish closing its own workspace (`--yes` from inside it) leaves it open when a step failed, so the error stays on screen.
+A finish closing its own workspace (from inside it, with `--yes` or a merged PR) leaves it open when a step failed, so the error stays on screen.
 
 Before the merge lands, finish also measures the branch for `f10 stats`: lines added plus deleted against the base it forked from (its `--after` base branch, else `origin/<default>`, else the local default branch for a branch never pushed), lockfiles, generated code and snapshots left out, with the markdown share.
 Measured after landing, a local merge would read zero.

@@ -930,19 +930,20 @@ func TestFinishRefusesDirtyWorktree(t *testing.T) {
 	}
 }
 
-// From inside the worktree the command refuses without --yes; with it, the
+// From inside the worktree an open PR refuses without --yes; with it, the
 // report precedes the focus on main's workspace and the close.
 func TestFinishSelfClose(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.in.Cwd = filepath.Join(fx.wt, "cli")
+	fx.openPR()
 
 	_, err := fx.run(t)
 	if err == nil || !strings.Contains(err.Error(), "would close its own workspace (GH-1)") {
 		t.Fatalf("err = %v, want the self-close refusal", err)
 	}
 
-	if fx.f.Called("gh ") {
-		t.Error("the host was reached before the self-close refusal")
+	if fx.f.Called("gh pr merge") || fx.f.Called("herdr workspace close") {
+		t.Errorf("something changed before the self-close refusal: %v", fx.f.Calls)
 	}
 
 	fx = newFinishFixture(t)
@@ -1023,11 +1024,35 @@ func (r *recorder) Write(p []byte) (int, error) {
 	return r.buf.Write(p)
 }
 
+// With the PR already merged there is nothing left to confirm: a finish
+// from inside the worktree runs without --yes and closes it after the report.
+func TestFinishSelfCloseAfterMergeNeedsNoYes(t *testing.T) {
+	fx := newFinishFixture(t)
+	fx.in.Cwd = filepath.Join(fx.wt, "cli")
+	fx.f.Script(testkit.GhView, testkit.PrMerged)
+	fx.f.Script(testkit.LsRem, "")
+	fx.f.Script("herdr workspace focus ws:1", "{}")
+
+	out, err := fx.run(t)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !fx.f.Called("herdr workspace close ws:9") {
+		t.Errorf("the workspace was not closed: %v", fx.f.Calls)
+	}
+
+	if !strings.Contains(out, "this workspace closes after this report") {
+		t.Errorf("the self-close note is missing:\n%s", out)
+	}
+}
+
 // HERDR_WORKSPACE_ID naming the task's workspace is the self-close case
 // too, wherever the shell has cd'd to.
 func TestFinishSelfCloseByWorkspaceID(t *testing.T) {
 	fx := newFinishFixture(t)
 	fx.in.Workspace = "ws:9"
+	fx.openPR()
 
 	_, err := fx.run(t)
 	if err == nil || !strings.Contains(err.Error(), "would close its own workspace") {
