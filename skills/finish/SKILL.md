@@ -31,7 +31,7 @@ A finish on a PR whose checks are still running waits up to 20 minutes, which is
 
 1. Once it exits, print the command's report block in a fenced `yaml` block (`conventions/report.md`) and any line beneath it, and stop.
    After a merge the lines end in the change's handoff, which is markdown: relay it verbatim beneath the block, outside the fence.
-2. **The own-workspace refusal is a question** (the message names the workspace; a bare call inside the task's workspace hits it too): ask the user once with `AskUserQuestion`, close this workspace and finish, or stop.
+2. **The own-workspace refusal is a question** (the message names the workspace; a bare call inside the task's workspace hits it too; an already merged PR never hits it, since the command then closes the workspace without asking): ask the user once with `AskUserQuestion`, close this workspace and finish, or stop.
    On yes, rerun the same command with `--yes` appended and relay its report; the workspace then closes, ending this session.
    On no, stop.
 3. **Exit 3 is a question**: someone else opened the PR (the message names the author, `--merge` and `--local`).

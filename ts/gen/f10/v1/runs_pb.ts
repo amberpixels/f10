@@ -1213,7 +1213,8 @@ export type FinishRequest = Message<"f10.v1.FinishRequest"> & {
 
   /**
    * yes closes the caller's own workspace after the report, when the
-   * caller runs inside the task's workspace, instead of refusing.
+   * caller runs inside the task's workspace, instead of refusing. A merged
+   * PR needs no yes: nothing is left to confirm.
    *
    * @generated from field: bool yes = 7;
    */
