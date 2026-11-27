@@ -79,6 +79,10 @@ func TestPlumbingOfCannedRun(t *testing.T) {
 		t.Errorf("plumbing = %+v, want 2 of 9 calls, 6s, $%v", p, 2*one)
 	}
 
+	if p.RunSeconds != 31.5 || p.Share() != 6/31.5*100 {
+		t.Errorf("run seconds %v, share %v, want the last event's 31.5s", p.RunSeconds, p.Share())
+	}
+
 	if !ids["t1"] || !ids["t3"] || len(ids) != 2 {
 		t.Errorf("ids = %v, want t1 and t3", ids)
 	}

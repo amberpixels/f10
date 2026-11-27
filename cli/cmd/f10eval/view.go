@@ -358,15 +358,13 @@ func relToRoot(root, path string) string {
 	return rel
 }
 
-// plumbingShare is a report's plumbing as "plumbing 23% (41s, $0.31)", its
-// share of the run's duration; empty when the report has none.
+// plumbingShare is a report's plumbing as "plumbing 23% (41s, $0.31)";
+// empty when the report has none.
 func plumbingShare(rep Report) string {
 	p := rep.Plumbing
-	if p == nil || rep.DurationMS <= 0 {
+	if p == nil {
 		return ""
 	}
 
-	share := p.Seconds * 1000 / float64(rep.DurationMS) * 100
-
-	return fmt.Sprintf("plumbing %.0f%% (%.0fs, $%.2f)", share, p.Seconds, p.CostUSD)
+	return fmt.Sprintf("plumbing %.0f%% (%.0fs, $%.2f)", p.Share(), p.Seconds, p.CostUSD)
 }

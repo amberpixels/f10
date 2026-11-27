@@ -28,7 +28,7 @@ Each scenario runs `claude -p --plugin-dir <this checkout>` in a temporary copy 
 - **Permissions.** A driven ship runs verify and commits. Under the default `-permission-mode acceptEdits` those commands may be refused. Choose the mode yourself: the run is a throwaway directory, but the flag is yours to pass.
 - **The agent profile.** Each run starts `claude -p` on one profile (`docs/project-setup.md` → Agents): the ones the scenario's `agents` list names, one run each, else one run on the kind's default; `-agent <profile>` runs every scenario on that one profile instead. The profile's model and effort go on the command line (`--model`, `--effort`), and a profile the kind refuses fails before any spend.
 - **Flags.** `-keep` keeps the temp dir and prints its path, so you can read what the run left. `-repeat N` runs every selected scenario N times on each of its profiles, one run after another, because parallel sessions share the subscription's rate limits and would skew `duration_ms`. `-out <dir>` writes the reports there instead of `evals/reports/<version>/`. A relative path resolves against the repo root. A run refuses an `-out` that already holds reports of a scenario it would run, because a compare reads every report in the directory. `-repeat` above 1 needs `-out`, so its set never lands beside a committed release report.
-- **Output.** Each turn runs with `--output-format stream-json --verbose`, so the runner reads the session as it happens. On a terminal, a block under the finished runs is redrawn every 100ms. Its first line is the running run, with a spinner, its elapsed time, its cost so far, and the skill, step and tool it is on. Every later run follows as `queued`, cut short with a `+N queued` line when the block would not fit the screen. The cost so far is an estimate, shown as `~$0.42`. It comes from each message's token usage and a small price table in `cli/cmd/f10eval/stream.go`. The turn's result then replaces it with claude's own figure, and the report only ever holds that figure. A finished run prints its result line, which ends with the plumbing's share of the run's duration (`plumbing 23% (41s, $0.31)`), and a line per check, with a failed check's detail on its line. A `report` line follows with the `file://` url of the run's page (**Report page**, below). A `steps` line then holds the `just eval show` command, with the report's path relative to the repo root, so it pastes as is. A footer gives the runs passed, the total cost and time, and the url of the report set's index page. When stdout is not a terminal, or `NO_COLOR` is set, the output is plain lines with no escape codes. Each run prints a `started` line, then its result lines.
+- **Output.** Each turn runs with `--output-format stream-json --verbose`, so the runner reads the session as it happens. On a terminal, a block under the finished runs is redrawn every 100ms. Its first line is the running run, with a spinner, its elapsed time, its cost so far, and the skill, step and tool it is on. Every later run follows as `queued`, cut short with a `+N queued` line when the block would not fit the screen. The cost so far is an estimate, shown as `~$0.42`. It comes from each message's token usage and a small price table in `cli/cmd/f10eval/stream.go`. The turn's result then replaces it with claude's own figure, and the report only ever holds that figure. A finished run prints its result line, which ends with the plumbing's share of the run's time (`plumbing 23% (41s, $0.31)`), and a line per check, with a failed check's detail on its line. A `report` line follows with the `file://` url of the run's page (**Report page**, below). A `steps` line then holds the `just eval show` command, with the report's path relative to the repo root, so it pastes as is. A footer gives the runs passed, the total cost and time, and the url of the report set's index page. When stdout is not a terminal, or `NO_COLOR` is set, the output is plain lines with no escape codes. Each run prints a `started` line, then its result lines.
 
 ## Reports
 
@@ -44,7 +44,7 @@ Each report holds:
 - the plugin version and the commit, `-dirty` appended when the tree had uncommitted changes, so the commit never names code that did not run;
 - `run_dir`, the run's folder, relative to the report's directory, so a committed report carries no local path;
 - `run_dir_error`, when writing the folder failed after the checks ran. It leaves `pass` and `error` as the run decided them, because a local copy failing says nothing about the agent.
-- `plumbing: {calls, total_calls, seconds, cost_usd}`, the part of the run spent on f10's own machinery rather than on the task (**Plumbing**, below). A report without a transcript, or from before the field, has none.
+- `plumbing: {calls, total_calls, seconds, cost_usd, run_seconds}`, the part of the run spent on f10's own machinery rather than on the task (**Plumbing**, below). A report without a transcript, or from before the field, has none.
 
 ### Plumbing
 
@@ -56,11 +56,13 @@ A tool call is plumbing when it is one of these:
 
 Every other call is work.
 A Bash call that chains plumbing and work, or runs a pipeline, counts as work, because its time cannot be split.
-So the figure is a lower bound.
+So the call count is a lower bound.
+The seconds and the cost can go either way, because a message whose calls are all plumbing also owns its thinking and text.
 
 Each transcript line owns the time since the line before it and the running cost estimate's growth over that time.
 A model message counts as plumbing when all its calls are, and a tool result counts as plumbing when its call is.
 This way parallel calls are never counted twice.
+The share is `seconds` over `run_seconds`, the transcript's span on the same clock, so a turn killed before its result still counts in both.
 `cost_usd` is the estimate's share, so it leaves out each turn's correction to claude's exact cost.
 The rules live in `cli/cmd/f10eval/plumbing.go`, and a change to them changes every later number, so compare across such a change only against a fresh baseline.
 

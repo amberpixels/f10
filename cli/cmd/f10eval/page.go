@@ -167,6 +167,9 @@ func (p *runPayload) readTranscript(dir string) error {
 
 	_, ids := plumbingOf(events, at)
 	p.Plumbing = slices.Sorted(maps.Keys(ids))
+	if p.Plumbing == nil {
+		p.Plumbing = []string{}
+	}
 
 	return nil
 }

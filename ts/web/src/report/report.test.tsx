@@ -89,7 +89,7 @@ describe("RunPage", () => {
     expect(root.querySelector(".inputs")?.textContent).toContain("never shown to the agent");
     expect(root.querySelectorAll(".panes .pane")).toHaveLength(3);
     expect(root.querySelector(".reply")?.textContent).toContain("prints the greeting in capitals");
-    expect(root.querySelector(".facts .plumbing")?.textContent).toBe("4% of time · 2/9 calls · $0.01");
+    expect(root.querySelector(".facts .plumbing")?.textContent).toBe("19% of time · 2/9 calls · $0.01");
     expect([...root.querySelectorAll(".call.plumbing .name")].map((n) => n.textContent)).toEqual(["Skill", "Skill"]);
 
     const row = [...root.querySelectorAll<HTMLButtonElement>(".call .row")].find(

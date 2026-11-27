@@ -38,7 +38,8 @@
     "calls": 2,
     "total_calls": 9,
     "seconds": 6,
-    "cost_usd": 0.012
+    "cost_usd": 0.012,
+    "run_seconds": 31.5
   },
   "run_dir": "feature-small.opus-high"
 }

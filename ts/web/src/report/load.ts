@@ -101,7 +101,7 @@ export function load(run: RunPayload): Model {
   const turnPrompts = prompts(run.scenario);
   const model: Model = { cwd: "", turns: [], calls: [], reply: "" };
   const byId = new Map<string, Call>();
-  const plumbing = new Set(run.plumbing ?? []);
+  const plumbing = new Set(run.plumbing);
   let turn: Turn | undefined;
   let section: Section | undefined;
 

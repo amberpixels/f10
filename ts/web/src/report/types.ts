@@ -22,6 +22,8 @@ export interface Plumbing {
   total_calls: number;
   seconds: number;
   cost_usd: number;
+  /** The transcript's span, on the same clock as seconds. */
+  run_seconds: number;
 }
 
 export interface Report {

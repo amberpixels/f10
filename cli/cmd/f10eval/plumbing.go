@@ -15,6 +15,18 @@ type Plumbing struct {
 	TotalCalls int     `json:"total_calls"`
 	Seconds    float64 `json:"seconds"`
 	CostUSD    float64 `json:"cost_usd"`
+	// RunSeconds is the transcript's span on the same clock as Seconds, so
+	// the share never mixes it with claude's duration, which drops a killed turn.
+	RunSeconds float64 `json:"run_seconds"`
+}
+
+// Share is the plumbing's percentage of the run's time, 0 when unmeasured.
+func (p Plumbing) Share() float64 {
+	if p.RunSeconds <= 0 {
+		return 0
+	}
+
+	return p.Seconds / p.RunSeconds * 100
 }
 
 // The plumbing rules, which docs/evals.md lists. A command whose first word
@@ -185,6 +197,8 @@ func plumbingOf(events []event, at []int64) (Plumbing, map[string]bool) {
 
 		lastCost, lastAt = cost, at[i]
 	}
+
+	p.RunSeconds = float64(lastAt) / 1000
 
 	return p, ids
 }

@@ -95,7 +95,7 @@ function Header({ report }: { report: Report }) {
 /** plumbingFact is the plumbing's share of the run's time, its calls and its cost. */
 function plumbingFact(report: Report): string {
   const p = report.plumbing!;
-  const share = report.duration_ms > 0 ? Math.round((p.seconds * 1000 * 100) / report.duration_ms) : 0;
+  const share = p.run_seconds > 0 ? Math.round((p.seconds * 100) / p.run_seconds) : 0;
   return `${share}% of time · ${p.calls}/${p.total_calls} calls · ${money(p.cost_usd)}`;
 }
 

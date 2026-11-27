@@ -25,7 +25,7 @@ func TestViewPlain(t *testing.T) {
 	v.begin(0)
 	v.event(event{Type: "result", CostUSD: 1.5})
 	rep := testReport()
-	rep.Plumbing = &Plumbing{Calls: 12, TotalCalls: 40, Seconds: 22.5, CostUSD: 0.31}
+	rep.Plumbing = &Plumbing{Calls: 12, TotalCalls: 40, Seconds: 22.5, CostUSD: 0.31, RunSeconds: 90}
 	v.finish(0, rep, "/repo/evals/reports/x/feature-small.json", "/repo/evals/reports/x/feature-small")
 	v.close("/repo/evals/reports/x")
 
