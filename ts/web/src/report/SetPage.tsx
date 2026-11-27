@@ -50,7 +50,7 @@ export function SetPage({ set }: { set: SetPayload }) {
   );
 }
 
-/** armGroups is the runs under one group per arm, in run order; a set with no arms is one unnamed group. */
+/** armGroups puts the runs in one group per arm, in run order. A set with no arms is one unnamed group. */
 function armGroups(runs: SetRun[]): [string, SetRun[]][] {
   if (!runs.some((r) => r.report.arm)) return [["", runs]];
   const arms = [...new Set(runs.map((r) => r.report.arm ?? ""))];

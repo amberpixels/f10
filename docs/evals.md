@@ -176,7 +176,8 @@ just eval arms -scenario review-planted -repeat 1 -agent opus:medium
 - **Reports** go to `evals/reports/arms/<version>/<scenario>/` unless `-out` names another dir, never beside the release reports. A report's file name carries its arm (`feature-small.raw.opus-high.2.json`). The run refuses a dir that already holds reports of the scenario, as a plain run does. A plain `just eval` and `compare` never run or read arms.
 - **The live view** puts the arm before each run's name (`raw · feature-small #2`), and the set's `index.html` groups the runs under a heading per arm.
 
-A scenario opts in with an `arms` field, written by hand, because what the plain arm was told is the thing being compared, so it must be readable in `scenario.json`:
+A scenario opts in with an `arms` field, written by hand, because what the plain arm was told is the thing being compared.
+So the prompts must be readable in `scenario.json`:
 
 ```json
 "arms": {
@@ -201,7 +202,8 @@ A scenario opts in with an `arms` field, written by hand, because what the plain
 **The table** has a column per arm:
 
 - The arms compare on the checks that judge the result: `verify`, `accept`, `commit`, `planted`, `findings` and `rubric`. The f10-only checks (`plan`, `intent`, `lore`, `history`, `verdict`, `captured`) run on the f10 arm alone and show as `f10 only` in the other columns.
-- The rows are compare's (**Comparing**, above), except that the three plumbing rows fold into one `plumbing share`, the f10 arm's plumbing as a share of its run, as the result line shows it.
+- The rows are compare's (**Comparing**, above), except for the plumbing rows.
+  The three plumbing rows fold into one `plumbing share`, the f10 arm's plumbing as a share of its run, as the result line shows it.
 - `pass` counts the outcome checks alone, on every arm, because a report's own `pass` also needs the f10-only checks, which a plain arm never runs.
 - Each plain column is marked against the f10 column by compare's rules. So `better` in the `raw` column means the raw arm beat f10 on that row.
 - A `warning: not isolated:` line under the header names what any run's `isolation` recorded.

@@ -120,8 +120,8 @@ type Report struct {
 	// It stays apart from Error and Pass, because compare reads those as the
 	// run's outcome and a local copy failing says nothing about the agent.
 	RunDirError string `json:"run_dir_error,omitempty"`
-	// Isolation names the user settings the run loaded despite the
-	// isolation flags, read from its init events; empty when none leaked.
+	// Isolation names the user settings the run loaded despite the isolation
+	// flags, as its init events show them. It is empty when none leaked.
 	Isolation string `json:"isolation,omitempty"`
 }
 
@@ -269,8 +269,8 @@ type planned struct {
 	display job
 }
 
-// planRuns lists every run of a set: per scenario, per arm in the order
-// given, per profile, per repeat. A plain run's one arm is "".
+// planRuns lists every run of a set, looping over scenarios, then arms in
+// the order given, then profiles, then repeats. A plain run's one arm is "".
 func planRuns(
 	scenarios []Scenario,
 	o options,
@@ -992,8 +992,8 @@ func resolveDir(root, dir string) string {
 	return filepath.Join(root, dir)
 }
 
-// A turnCall is what one claude call varies by: its prompt, the session it
-// resumes, the arm's plugin and permission mode, and where plan mode writes.
+// A turnCall holds what changes from one claude call to the next. Its
+// session is the conversation the turn resumes, "" for the first turn.
 type turnCall struct {
 	prompt, session string
 	plain           bool   // a plain arm loads no plugin
