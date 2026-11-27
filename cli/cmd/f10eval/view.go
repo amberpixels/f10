@@ -333,10 +333,21 @@ func (v *view) link(target string) string {
 }
 
 // above prints lines where the block was, then paints the block under them.
+// On a terminal they are cut to its width, because a wrapped row would break
+// the columns it lines up with.
 func (v *view) above(lines ...string) {
 	v.clearBlock()
 
+	width := 0
+	if v.st.rich && v.size != nil {
+		width, _ = v.size(v.w)
+	}
+
 	for _, l := range lines {
+		if width > 0 {
+			l = ansi.Truncate(l, width-1, "…")
+		}
+
 		fmt.Fprintln(v.w, l)
 	}
 

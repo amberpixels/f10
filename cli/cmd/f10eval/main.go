@@ -16,6 +16,7 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -158,10 +159,12 @@ func main() {
 	bindRunFlags(flag.CommandLine, &o, 1, "evals/reports/<version>")
 	flag.Parse()
 
+	ctx := interruptible()
+
 	// arms parses its own flags after the word, because the run flags it
 	// takes would otherwise end at it
 	if flag.Arg(0) == "arms" {
-		if err := armsMain(context.Background(), os.Stdout, o.root, flag.Args()[1:]); err != nil {
+		if err := armsMain(ctx, os.Stdout, o.root, flag.Args()[1:]); err != nil {
 			fmt.Fprintln(os.Stderr, "f10eval arms:", err)
 			os.Exit(1)
 		}
@@ -190,10 +193,24 @@ func main() {
 		os.Exit(2)
 	}
 
-	if err := run(context.Background(), o); err != nil {
+	if err := run(ctx, o); err != nil {
 		fmt.Fprintln(os.Stderr, "f10eval:", err)
 		os.Exit(1)
 	}
+}
+
+// interruptible is cancelled by the first Ctrl+C, which stops the running
+// claude and the set but still prints the end block and its kept paths. A
+// second Ctrl+C kills the process as usual.
+func interruptible() context.Context {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+
+	go func() {
+		<-ctx.Done()
+		stop()
+	}()
+
+	return ctx
 }
 
 // subcommands follow the flags and share -root, so `just eval compare <a> <b>`
@@ -340,6 +357,10 @@ func execute(
 	reps := make([]Report, 0, len(plan))
 
 	for i, r := range plan {
+		if ctx.Err() != nil {
+			break
+		}
+
 		v.begin(i)
 
 		folder := strings.TrimSuffix(r.path, ".json")

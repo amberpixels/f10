@@ -1,6 +1,7 @@
 justfile.local
 /cli/cmd/f10/f10
 /cli/f10
+/cli/cmd/f10eval/f10eval
 # eval run folders and pages: transcripts are large and full of local paths
 /evals/reports/*/*/
 /evals/reports/*/index.html
