@@ -341,9 +341,9 @@ func planRuns(
 	return plan, nil
 }
 
-// execute runs a set's plan into out, with its view, run pages and index,
-// and hands the reports, in plan order, to tail, which when non-nil prints
-// between the view's end block and its footer.
+// execute runs a set's plan into out, with its view, run pages and index.
+// A non-nil tail gets the reports in plan order, and prints between the
+// view's end block and its footer.
 func execute(
 	ctx context.Context, root string, o options, out string, b build, plan []planned, tail func([]Report),
 ) error {

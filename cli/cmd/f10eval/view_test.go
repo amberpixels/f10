@@ -19,8 +19,8 @@ func testReport() Report {
 
 func testJob() job { return job{scenario: "feature-small", profile: "opus:high", checks: 2, turns: 1} }
 
-// Off a terminal the view prints one row per finished run, then the end
-// block with the run's report, steps, failed check and kept path, then the
+// Off a terminal the view prints one row per finished run. The end block
+// follows with the run's report, steps, failed check and kept path, then the
 // footer. Nothing but the row prints before the end block.
 func TestViewPlain(t *testing.T) {
 	t.Parallel()
@@ -155,9 +155,9 @@ func TestViewRowCutAndArm(t *testing.T) {
 	}
 }
 
-// On a terminal the block is the running row, its detail frame (the turn,
-// the last four tool calls, the cost) and the queued rows, and each repaint
-// moves back over the last one.
+// On a terminal the block is the running row, its detail frame and the
+// queued rows. The frame holds the turn, the last four tool calls and the
+// cost, and each repaint moves back over the last block.
 func TestViewFrame(t *testing.T) {
 	t.Parallel()
 
