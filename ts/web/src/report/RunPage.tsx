@@ -71,6 +71,12 @@ function Header({ report }: { report: Report }) {
         </dd>
         <dt>time</dt>
         <dd>{duration(report.duration_ms)}</dd>
+        {report.plumbing && (
+          <>
+            <dt>plumbing</dt>
+            <dd class="plumbing">{plumbingFact(report)}</dd>
+          </>
+        )}
         <dt>version</dt>
         <dd>{report.version}</dd>
         <dt>commit</dt>
@@ -84,6 +90,13 @@ function Header({ report }: { report: Report }) {
       {report.run_dir_error && <p class="note">run folder: {report.run_dir_error}. Parts of this page may be missing.</p>}
     </header>
   );
+}
+
+/** plumbingFact is the plumbing's share of the run's time, its calls and its cost. */
+function plumbingFact(report: Report): string {
+  const p = report.plumbing!;
+  const share = p.run_seconds > 0 ? Math.round((p.seconds * 100) / p.run_seconds) : 0;
+  return `${share}% of time · ${p.calls}/${p.total_calls} calls · ${money(p.cost_usd)}`;
 }
 
 function Checks({ checks }: { checks: Check[] }) {
@@ -240,7 +253,7 @@ function Timeline({
 
 function CallRow({ call, open, current, onClick }: { call: Call; open: boolean; current: boolean; onClick: () => void }) {
   return (
-    <div class={`call${current ? " current" : ""}`}>
+    <div class={`call${current ? " current" : ""}${call.plumbing ? " plumbing" : ""}`}>
       <button type="button" class="row" onClick={onClick} aria-expanded={open}>
         <span class="at">{clock(call.at)}</span>
         <span class="cost">{money(call.cost, call.est)}</span>

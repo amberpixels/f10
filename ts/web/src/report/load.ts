@@ -14,6 +14,8 @@ export interface Call {
   cost: number;
   est: boolean;
   subject: string;
+  /** The runner counts the call as f10 plumbing rather than work on the task. */
+  plumbing: boolean;
   /** The file a file tool names, relative to the run's repo. */
   path?: string;
   /** The file a file tool names lies outside the run's repo. */
@@ -99,6 +101,7 @@ export function load(run: RunPayload): Model {
   const turnPrompts = prompts(run.scenario);
   const model: Model = { cwd: "", turns: [], calls: [], reply: "" };
   const byId = new Map<string, Call>();
+  const plumbing = new Set(run.plumbing);
   let turn: Turn | undefined;
   let section: Section | undefined;
 
@@ -147,6 +150,7 @@ export function load(run: RunPayload): Model {
           cost: run.cost_usd[i] ?? 0,
           est: run.estimated[i] ?? false,
           subject: "",
+          plumbing: plumbing.has(b.id ?? ""),
         };
         Object.assign(call, subjectOf(call, model.cwd));
         model.calls.push(call);

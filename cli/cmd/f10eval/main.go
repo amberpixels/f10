@@ -105,7 +105,10 @@ type Report struct {
 	// cost_usd compares across releases with and without a rubric.
 	GraderCostUSD float64 `json:"grader_cost_usd,omitempty"`
 	DurationMS    int64   `json:"duration_ms"`
-	Error         string  `json:"error,omitempty"`
+	// Plumbing is nil for a run with no transcript and for a report from
+	// before the field, so compare tells "not measured" from zero.
+	Plumbing *Plumbing `json:"plumbing,omitempty"`
+	Error    string    `json:"error,omitempty"`
 	// RunDir is the run's folder, relative to the report's directory, so a
 	// committed report carries no local path.
 	RunDir string `json:"run_dir,omitempty"`
@@ -427,6 +430,9 @@ func runScenario(ctx context.Context, root string, s Scenario, o options, p agen
 
 	if err := folder.close(); err != nil && rep.RunDirError == "" {
 		rep.RunDirError = err.Error()
+	} else if err == nil {
+		// after the close, because only it flushes the transcript
+		rep.Plumbing = folderPlumbing(out.folder)
 	}
 
 	return rep

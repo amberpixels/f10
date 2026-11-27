@@ -35,6 +35,13 @@
     "cost_usd": 1.25,
     "grader_cost_usd": 0.02,
     "duration_ms": 150000,
+    "plumbing": {
+      "calls": 2,
+      "total_calls": 9,
+      "seconds": 6,
+      "cost_usd": 0.012,
+      "run_seconds": 31.5
+    },
     "run_dir": "feature-small.opus-high"
   },
   "scenario": {
@@ -165,6 +172,10 @@
     true,
     true,
     false
+  ],
+  "plumbing": [
+    "t1",
+    "t3"
   ],
   "diff": "diff --git a/NOTES.md b/NOTES.md\nnew file mode 100644\n--- /dev/null\n+++ b/NOTES.md\n@@ -0,0 +1 @@\n+- shout\n",
   "before": {

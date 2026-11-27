@@ -8,6 +8,7 @@ import (
 	"html"
 	"io"
 	"io/fs"
+	"maps"
 	"math"
 	"os"
 	"path/filepath"
@@ -52,13 +53,16 @@ type runPayload struct {
 	// Transcript is transcript.jsonl line for line. Times, CostUSD and
 	// Estimated align with it. The running cost is the live view's rule,
 	// computed here so its price table has one home.
-	Transcript []string            `json:"transcript"`
-	Times      []int64             `json:"times"`
-	CostUSD    []float64           `json:"cost_usd"`
-	Estimated  []bool              `json:"estimated"`
-	Diff       string              `json:"diff"`
-	Before     map[string]pageText `json:"before"`
-	After      map[string]pageText `json:"after"`
+	Transcript []string  `json:"transcript"`
+	Times      []int64   `json:"times"`
+	CostUSD    []float64 `json:"cost_usd"`
+	Estimated  []bool    `json:"estimated"`
+	// Plumbing is the ids of the calls the runner counts as f10 plumbing,
+	// so the page marks them without a copy of the rules.
+	Plumbing []string            `json:"plumbing"`
+	Diff     string              `json:"diff"`
+	Before   map[string]pageText `json:"before"`
+	After    map[string]pageText `json:"after"`
 }
 
 // A pageText is one file of a tree. Skip says why Text is empty: "binary",
@@ -125,6 +129,7 @@ func (p *runPayload) readTranscript(dir string) error {
 	body, err := os.ReadFile(filepath.Join(dir, transcriptFile))
 	if errors.Is(err, fs.ErrNotExist) || len(body) == 0 {
 		p.Transcript, p.Times, p.CostUSD, p.Estimated = []string{}, []int64{}, []float64{}, []bool{}
+		p.Plumbing = []string{}
 
 		return nil
 	}
@@ -136,7 +141,11 @@ func (p *runPayload) readTranscript(dir string) error {
 	ms := strings.Fields(readOptional(filepath.Join(dir, timesFile)))
 	p.Transcript = strings.Split(strings.TrimRight(string(body), "\n"), "\n")
 
-	var prog progress
+	var (
+		prog   progress
+		events []event
+		at     []int64
+	)
 
 	for i, line := range p.Transcript {
 		var t int64
@@ -147,12 +156,19 @@ func (p *runPayload) readTranscript(dir string) error {
 		var e event
 		if json.Unmarshal([]byte(line), &e) == nil {
 			prog.apply(e)
+			events, at = append(events, e), append(at, t)
 		}
 
 		cost, est := prog.CostUSD()
 		p.Times = append(p.Times, t)
 		p.CostUSD = append(p.CostUSD, math.Round(cost*1e4)/1e4)
 		p.Estimated = append(p.Estimated, est)
+	}
+
+	_, ids := plumbingOf(events, at)
+	p.Plumbing = slices.Sorted(maps.Keys(ids))
+	if p.Plumbing == nil {
+		p.Plumbing = []string{}
 	}
 
 	return nil

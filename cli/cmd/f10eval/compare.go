@@ -110,6 +110,9 @@ func metrics(runs []Report, checkNames []string) []metric {
 	rubric := metric{name: "rubric lines passed", higher: true}
 	cost := metric{name: "cost", unit: "$"}
 	dur := metric{name: "duration", unit: "s"}
+	plumbCalls := metric{name: "plumbing calls"}
+	plumbTime := metric{name: "plumbing time", unit: "s"}
+	plumbCost := metric{name: "plumbing cost", unit: "$"}
 
 	byCheck := map[string]*metric{}
 	for _, n := range checkNames {
@@ -125,6 +128,13 @@ func metrics(runs []Report, checkNames []string) []metric {
 		pass.values = append(pass.values, b2f(r.Pass))
 		cost.values = append(cost.values, r.CostUSD)
 		dur.values = append(dur.values, float64(r.DurationMS)/1000)
+
+		// a report from before the field adds no sample, so it prints "-"
+		if p := r.Plumbing; p != nil {
+			plumbCalls.values = append(plumbCalls.values, float64(p.Calls))
+			plumbTime.values = append(plumbTime.values, p.Seconds)
+			plumbCost.values = append(plumbCost.values, p.CostUSD)
+		}
 
 		for _, c := range r.Checks {
 			m := byCheck[c.Name]
@@ -154,7 +164,7 @@ func metrics(runs []Report, checkNames []string) []metric {
 		out = append(out, *byCheck[n])
 	}
 
-	return append(out, found, outside, rubric, cost, dur)
+	return append(out, found, outside, rubric, cost, dur, plumbCalls, plumbTime, plumbCost)
 }
 
 func b2f(b bool) float64 {

@@ -173,6 +173,10 @@ func (v *view) resultLines(j job, rep Report, path, folder string) []string {
 		v.st.dim.Render(j.profile), status, cost,
 		v.st.timer.Render((time.Duration(rep.DurationMS) * time.Millisecond).Round(time.Second).String()))}
 
+	if s := plumbingShare(rep); s != "" {
+		lines[0] += "  " + v.st.dim.Render(s)
+	}
+
 	if rep.Error != "" {
 		lines = append(lines, "    "+v.st.fail.Render("error")+"  "+rep.Error)
 	}
@@ -352,4 +356,15 @@ func relToRoot(root, path string) string {
 	}
 
 	return rel
+}
+
+// plumbingShare is a report's plumbing as "plumbing 23% (41s, $0.31)". It is
+// empty when the report has none.
+func plumbingShare(rep Report) string {
+	p := rep.Plumbing
+	if p == nil {
+		return ""
+	}
+
+	return fmt.Sprintf("plumbing %.0f%% (%.0fs, $%.2f)", p.Share(), p.Seconds, p.CostUSD)
 }

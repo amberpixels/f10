@@ -24,14 +24,16 @@ func TestViewPlain(t *testing.T) {
 	v := newView(&buf, &styles{}, "/repo", []job{{name: "feature-small", profile: "opus:high"}})
 	v.begin(0)
 	v.event(event{Type: "result", CostUSD: 1.5})
-	v.finish(0, testReport(), "/repo/evals/reports/x/feature-small.json", "/repo/evals/reports/x/feature-small")
+	rep := testReport()
+	rep.Plumbing = &Plumbing{Calls: 12, TotalCalls: 40, Seconds: 22.5, CostUSD: 0.31, RunSeconds: 90}
+	v.finish(0, rep, "/repo/evals/reports/x/feature-small.json", "/repo/evals/reports/x/feature-small")
 	v.close("/repo/evals/reports/x")
 
 	out := buf.String()
 
 	for _, want := range []string{
 		"started  feature-small  opus:high",
-		"✗ feature-small  opus:high  FAIL  $1.50 + $0.10 grader  1m30s",
+		"✗ feature-small  opus:high  FAIL  $1.50 + $0.10 grader  1m30s  plumbing 25% (22s, $0.31)",
 		"    ✓ plan\n",
 		`    ✗ accept  go run . -n: want "3"`,
 		"    report  file:///repo/evals/reports/x/feature-small/index.html",
