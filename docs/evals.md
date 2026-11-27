@@ -50,7 +50,7 @@ Each report holds:
 
 A tool call is plumbing when it is one of these:
 
-- a Bash command whose every chained command (split at `;`, `&&`, `||` and newlines, outside quotes) is `f10-load-*.sh`, `f10-state.sh`, `f10 help`, `f10 forward`, `f10 lore` or `f10 trace`. A capture such as `trailers="$(f10 trace trailers ...)"` counts as the command inside it.
+- a Bash command whose every chained command is `f10-load-*.sh`, `f10-state.sh`, `f10 help`, `f10 forward`, `f10 lore` or `f10 trace`. Commands are split at `;`, `&&`, `||` and newlines outside quotes. A capture such as `trailers="$(f10 trace trailers ...)"` counts as the command inside it.
 - a `Read` of a file under a `modes/`, `steps/` or `conventions/` directory outside the run's repo, which is the plugin's prose.
 - a `Skill` call that loads an f10 skill.
 

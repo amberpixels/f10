@@ -275,7 +275,7 @@ button {
   color: var(--muted);
 }
 
-/* f10's own calls recede, so the eye lands on the work */
+/* f10's own calls are muted, so the rows of work stand out */
 .call.plumbing .row {
   color: var(--muted);
 }

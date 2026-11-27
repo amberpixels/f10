@@ -358,7 +358,7 @@ func relToRoot(root, path string) string {
 	return rel
 }
 
-// plumbingShare is a report's plumbing as "plumbing 23% (41s, $0.31)";
+// plumbingShare is a report's plumbing as "plumbing 23% (41s, $0.31)". It is
 // empty when the report has none.
 func plumbingShare(rep Report) string {
 	p := rep.Plumbing

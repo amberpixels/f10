@@ -29,9 +29,9 @@ func (p Plumbing) Share() float64 {
 	return p.Seconds / p.RunSeconds * 100
 }
 
-// The plumbing rules, which docs/evals.md lists. A command whose first word
-// is one of plumbingScripts, or f10 followed by one of plumbingSubcommands,
-// is plumbing; a Bash call is plumbing only when every command it chains is.
+// The plumbing rules, which docs/evals.md lists. A command is plumbing when
+// its first word matches plumbingScripts, or is f10 with a plumbingSubcommands
+// word after it. A Bash call is plumbing only when every command it chains is.
 var (
 	plumbingScripts     = []string{"f10-load-*.sh", "f10-state.sh"}
 	plumbingSubcommands = []string{"help", "forward", "lore", "trace"}
@@ -146,11 +146,10 @@ func plumbingSegment(seg string) bool {
 	return name == "f10" && len(words) > 1 && slices.Contains(plumbingSubcommands, words[1])
 }
 
-// plumbingOf measures a run's plumbing from its events and their arrival
-// times, and returns the plumbing calls' ids. Each event owns the time and
-// estimated cost since the event before it, so parallel calls never count
-// twice. An assistant event is plumbing when its message's calls all are,
-// and a tool result when the call it answers is.
+// plumbingOf measures a run's plumbing and returns the plumbing calls' ids.
+// Each event owns the time and estimated cost since the event before it, so
+// parallel calls never count twice. An assistant event counts when all its
+// message's calls are plumbing, and a tool result when its call is.
 func plumbingOf(events []event, at []int64) (Plumbing, map[string]bool) {
 	var (
 		p     Plumbing
