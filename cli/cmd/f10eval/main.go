@@ -232,7 +232,7 @@ func run(ctx context.Context, o options) error {
 		return err
 	}
 
-	_, err = execute(ctx, root, o, out, b, plan)
+	err = execute(ctx, root, o, out, b, plan, nil)
 
 	return err
 }
@@ -303,17 +303,18 @@ func planRuns(
 					}
 
 					name := s.Name
-					if arm != "" {
-						name = arm + " · " + name
-					}
-
 					if repeat > 0 {
 						name += fmt.Sprintf(" #%d", repeat)
 					}
 
+					turns, _ := s.armTurns()
+
 					plan = append(plan, planned{
 						s: s, p: p, repeat: repeat, path: filepath.Join(out, reportName(s.Name, arm, p, repeat)),
-						display: job{name: name, profile: cmp.Or(p.Short(), "default")},
+						display: job{
+							arm: arm, scenario: name, profile: cmp.Or(p.Short(), "default"),
+							checks: len(s.runChecks()), turns: len(turns),
+						},
 					})
 				}
 			}
@@ -324,8 +325,11 @@ func planRuns(
 }
 
 // execute runs a set's plan into out, with its view, run pages and index,
-// and returns the reports in plan order.
-func execute(ctx context.Context, root string, o options, out string, b build, plan []planned) ([]Report, error) {
+// and hands the reports, in plan order, to tail, which when non-nil prints
+// between the view's end block and its footer.
+func execute(
+	ctx context.Context, root string, o options, out string, b build, plan []planned, tail func([]Report),
+) error {
 	jobs := make([]job, len(plan))
 	for i, r := range plan {
 		jobs[i] = r.display
@@ -343,9 +347,9 @@ func execute(ctx context.Context, root string, o options, out string, b build, p
 		rep.Version, rep.Commit, rep.Repeat = b.version, b.commit, r.repeat
 
 		if err := writeReport(r.path, rep); err != nil {
-			v.close(out)
+			v.end(out, tail, reps)
 
-			return reps, err
+			return err
 		}
 
 		reps = append(reps, rep)
@@ -374,13 +378,13 @@ func execute(ctx context.Context, root string, o options, out string, b build, p
 		v.say("index page: " + err.Error())
 	}
 
-	v.close(out)
+	v.end(out, tail, reps)
 
 	if failed > 0 {
-		return reps, fmt.Errorf("%d of %d runs failed", failed, len(plan))
+		return fmt.Errorf("%d of %d runs failed", failed, len(plan))
 	}
 
-	return reps, nil
+	return nil
 }
 
 // checkRubricField refuses a rubric that cannot grade before any spend, and
@@ -698,16 +702,21 @@ func graderCost(list []Check) float64 {
 	return total
 }
 
+// runChecks is the checks a run grades. A plain arm has none of f10's state,
+// so only its outcomes are checked.
+func (s Scenario) runChecks() []string {
+	if !plainArm(s.arm) {
+		return s.Checks
+	}
+
+	return slices.DeleteFunc(slices.Clone(s.Checks), func(name string) bool { return !outcomeChecks[name] })
+}
+
 func runChecks(ctx context.Context, dir string, s Scenario) ([]Check, bool) {
 	pass := true
 	list := make([]Check, 0, len(s.Checks))
 
-	for _, name := range s.Checks {
-		// a plain arm has none of f10's state, so only outcomes are checked
-		if plainArm(s.arm) && !outcomeChecks[name] {
-			continue
-		}
-
+	for _, name := range s.runChecks() {
 		c := checks[name](ctx, dir, s)
 		list = append(list, c)
 		pass = pass && c.Pass

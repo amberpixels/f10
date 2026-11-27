@@ -287,8 +287,7 @@ func armsMain(ctx context.Context, w io.Writer, root string, args []string) erro
 		return err
 	}
 
-	reps, err := execute(ctx, root, o, out, b, plan)
-	writeArmsTable(w, newStyles(w), reps)
+	err = execute(ctx, root, o, out, b, plan, func(reps []Report) { writeArmsTable(w, newStyles(w), reps) })
 
 	return err
 }
