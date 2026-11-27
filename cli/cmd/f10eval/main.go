@@ -52,7 +52,9 @@ type Scenario struct {
 	Rubric       *Rubric         `json:"rubric"`       // what the rubric check grades, and against which lines
 	Captured     *Captured       `json:"captured"`     // the shape of the tasks a capture run creates
 	WantVerdict  string          `json:"want_verdict"` // the verdict a judge run must reach, else any of the four
+	Arms         *Arms           `json:"arms"`         // the plain prompts `f10eval arms` runs beside the f10 one
 
+	arm   string   // the arm this run is, "" outside `f10eval arms`
 	env   []string // the run's environment, so a check that runs f10 reads the run's state
 	f10   string   // this checkout's bin/f10, the binary the run itself used
 	reply string   // the run's final reply, for the rubric check
@@ -93,6 +95,7 @@ type SeedReview struct {
 // A Report is one scenario's run, as written under evals/reports.
 type Report struct {
 	Scenario string    `json:"scenario"`
+	Arm      string    `json:"arm,omitempty"`   // raw, native or f10 under `f10eval arms`, else none
 	Agent    string    `json:"agent,omitempty"` // the profile the run started on, resolved; "" for the kind's default
 	Version  string    `json:"version"`
 	Commit   string    `json:"commit"`
@@ -105,6 +108,7 @@ type Report struct {
 	// cost_usd compares across releases with and without a rubric.
 	GraderCostUSD float64 `json:"grader_cost_usd,omitempty"`
 	DurationMS    int64   `json:"duration_ms"`
+	Turns         int     `json:"turns,omitempty"` // the agent turns claude counted, over every prompt
 	// Plumbing is nil for a run with no transcript and for a report from
 	// before the field, so compare tells "not measured" from zero.
 	Plumbing *Plumbing `json:"plumbing,omitempty"`
@@ -116,6 +120,9 @@ type Report struct {
 	// It stays apart from Error and Pass, because compare reads those as the
 	// run's outcome and a local copy failing says nothing about the agent.
 	RunDirError string `json:"run_dir_error,omitempty"`
+	// Isolation names the user settings the run loaded despite the
+	// isolation flags, read from its init events; empty when none leaked.
+	Isolation string `json:"isolation,omitempty"`
 }
 
 type options struct {
@@ -129,22 +136,38 @@ type options struct {
 	keep       bool
 }
 
+// bindRunFlags registers the flags a run takes, on the plain command line
+// and on `arms`, which parses its own after the word.
+func bindRunFlags(set *flag.FlagSet, o *options, repeat int, out string) {
+	set.StringVar(&o.only, "scenario", "", "run only this scenario")
+	set.StringVar(&o.permission, "permission-mode", "acceptEdits",
+		"claude's --permission-mode for the run; a driven ship runs commands, which acceptEdits may refuse")
+	set.StringVar(&o.budget, "max-budget-usd", "5",
+		"claude's --max-budget-usd per turn; a scenario with several prompts may spend it on each")
+	set.StringVar(&o.agent, "agent", "",
+		"run every scenario on this agent `profile` (kind:model:effort, or a part), not the ones it lists")
+	set.StringVar(&o.out, "out", "", "write reports to this `dir`, relative to -root (default "+out+")")
+	set.IntVar(&o.repeat, "repeat", repeat, "run every scenario `N` times on each of its profiles")
+	set.BoolVar(&o.keep, "keep", false, "keep each scenario's temp dir and print its path")
+}
+
 func main() {
 	var o options
 
 	flag.StringVar(&o.root, "root", ".", "the f10 checkout: its plugin is loaded and its evals/ run")
-	flag.StringVar(&o.only, "scenario", "", "run only this scenario")
-	flag.StringVar(&o.permission, "permission-mode", "acceptEdits",
-		"claude's --permission-mode for the run; a driven ship runs commands, which acceptEdits may refuse")
-	flag.StringVar(&o.budget, "max-budget-usd", "5",
-		"claude's --max-budget-usd per turn; a scenario with several prompts may spend it on each")
-	flag.StringVar(&o.agent, "agent", "",
-		"run every scenario on this agent `profile` (kind:model:effort, or a part), not the ones it lists")
-	flag.StringVar(&o.out, "out", "",
-		"write reports to this `dir`, relative to -root (default evals/reports/<version>)")
-	flag.IntVar(&o.repeat, "repeat", 1, "run every scenario `N` times on each of its profiles")
-	flag.BoolVar(&o.keep, "keep", false, "keep each scenario's temp dir and print its path")
+	bindRunFlags(flag.CommandLine, &o, 1, "evals/reports/<version>")
 	flag.Parse()
+
+	// arms parses its own flags after the word, because the run flags it
+	// takes would otherwise end at it
+	if flag.Arg(0) == "arms" {
+		if err := armsMain(context.Background(), os.Stdout, o.root, flag.Args()[1:]); err != nil {
+			fmt.Fprintln(os.Stderr, "f10eval arms:", err)
+			os.Exit(1)
+		}
+
+		return
+	}
 
 	// `just eval compare <a> <b>` arrives as `-root .. compare <a> <b>`, so
 	// the subcommand follows the flags and shares -root
@@ -192,66 +215,117 @@ func run(ctx context.Context, o options) error {
 		return err
 	}
 
-	// the plugin's bin/f10 runs its cached build of this checkout, else the
-	// release: build it, so the report's commit is the code that ran
-	f10 := filepath.Join(root, "bin", "f10")
-	if out, err := exec.CommandContext(ctx, f10, "--shim-rebuild").CombinedOutput(); err != nil {
-		return fmt.Errorf("building this checkout's f10: %w: %s", err, lastLine(string(out)))
+	b, err := buildCheckout(ctx, root)
+	if err != nil {
+		return err
 	}
 
-	version, commit := pluginVersion(root), gitOut(ctx, root, "rev-parse", "--short", "HEAD")
-
-	// a run on an uncommitted tree says so, as git describe --dirty does,
-	// since the commit alone would name code that did not run
-	if gitOut(ctx, root, "status", "--porcelain") != "" {
-		commit += "-dirty"
-	}
-
-	out := resolveDir(root, cmp.Or(o.out, filepath.Join("evals", "reports", version)))
+	out := resolveDir(root, cmp.Or(o.out, filepath.Join("evals", "reports", b.version)))
 	if err := checkOut(out, o, scenarios); err != nil {
 		return err
 	}
 
-	type planned struct {
-		s       Scenario
-		p       agentctl.Profile
-		repeat  int
-		path    string
-		display job
-	}
-
 	// every profile resolves before the first run, so a misspelt one fails
 	// before any spend
+	plan, err := planRuns(scenarios, o, out, b.f10, []string{""}, profilesFor)
+	if err != nil {
+		return err
+	}
+
+	_, err = execute(ctx, root, o, out, b, plan)
+
+	return err
+}
+
+// A build is this checkout's f10, built so the reports' commit is the code
+// that ran.
+type build struct{ f10, version, commit string }
+
+func buildCheckout(ctx context.Context, root string) (build, error) {
+	// the plugin's bin/f10 runs its cached build of this checkout, else the
+	// release: build it, so the report's commit is the code that ran
+	f10 := filepath.Join(root, "bin", "f10")
+	if out, err := exec.CommandContext(ctx, f10, "--shim-rebuild").CombinedOutput(); err != nil {
+		return build{}, fmt.Errorf("building this checkout's f10: %w: %s", err, lastLine(string(out)))
+	}
+
+	b := build{f10: f10, version: pluginVersion(root), commit: gitOut(ctx, root, "rev-parse", "--short", "HEAD")}
+
+	// a run on an uncommitted tree says so, as git describe --dirty does,
+	// since the commit alone would name code that did not run
+	if gitOut(ctx, root, "status", "--porcelain") != "" {
+		b.commit += "-dirty"
+	}
+
+	return b, nil
+}
+
+// A planned run is one report a set will hold.
+type planned struct {
+	s       Scenario
+	p       agentctl.Profile
+	repeat  int
+	path    string
+	display job
+}
+
+// planRuns lists every run of a set: per scenario, per arm in the order
+// given, per profile, per repeat. A plain run's one arm is "".
+func planRuns(
+	scenarios []Scenario,
+	o options,
+	out, f10 string,
+	arms []string,
+	profiles func(Scenario, string) ([]agentctl.Profile, error),
+) ([]planned, error) {
 	var plan []planned
 
 	for _, s := range scenarios {
 		s.f10 = f10
 
-		profiles, err := profilesFor(s, o.agent)
+		ps, err := profiles(s, o.agent)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
-		for _, p := range profiles {
-			for n := range o.repeat {
-				repeat := 0
-				if o.repeat > 1 {
-					repeat = n + 1
-				}
+		for _, arm := range arms {
+			if arm == armNative && (s.Arms == nil || s.Arms.Native == nil) {
+				continue
+			}
 
-				name := s.Name
-				if repeat > 0 {
-					name += fmt.Sprintf(" #%d", repeat)
-				}
+			s.arm = arm
 
-				plan = append(plan, planned{
-					s: s, p: p, repeat: repeat, path: filepath.Join(out, reportName(s.Name, p, repeat)),
-					display: job{name: name, profile: cmp.Or(p.Short(), "default")},
-				})
+			for _, p := range ps {
+				for n := range o.repeat {
+					repeat := 0
+					if o.repeat > 1 {
+						repeat = n + 1
+					}
+
+					name := s.Name
+					if arm != "" {
+						name = arm + " · " + name
+					}
+
+					if repeat > 0 {
+						name += fmt.Sprintf(" #%d", repeat)
+					}
+
+					plan = append(plan, planned{
+						s: s, p: p, repeat: repeat, path: filepath.Join(out, reportName(s.Name, arm, p, repeat)),
+						display: job{name: name, profile: cmp.Or(p.Short(), "default")},
+					})
+				}
 			}
 		}
 	}
 
+	return plan, nil
+}
+
+// execute runs a set's plan into out, with its view, run pages and index,
+// and returns the reports in plan order.
+func execute(ctx context.Context, root string, o options, out string, b build, plan []planned) ([]Report, error) {
 	jobs := make([]job, len(plan))
 	for i, r := range plan {
 		jobs[i] = r.display
@@ -259,19 +333,22 @@ func run(ctx context.Context, o options) error {
 
 	v := newView(os.Stdout, newStyles(os.Stdout), root, jobs)
 	failed := 0
+	reps := make([]Report, 0, len(plan))
 
 	for i, r := range plan {
 		v.begin(i)
 
 		folder := strings.TrimSuffix(r.path, ".json")
 		rep := runScenario(ctx, root, r.s, o, r.p, runOut{folder: folder, onTurn: v.turn, onEvent: v.event, say: v.say})
-		rep.Version, rep.Commit, rep.Repeat = version, commit, r.repeat
+		rep.Version, rep.Commit, rep.Repeat = b.version, b.commit, r.repeat
 
 		if err := writeReport(r.path, rep); err != nil {
 			v.close(out)
 
-			return err
+			return reps, err
 		}
+
+		reps = append(reps, rep)
 
 		// the report and the folder are the record, so a page that fails to
 		// write leaves the run standing, and `just eval html` rebuilds it
@@ -300,10 +377,10 @@ func run(ctx context.Context, o options) error {
 	v.close(out)
 
 	if failed > 0 {
-		return fmt.Errorf("%d of %d runs failed", failed, len(plan))
+		return reps, fmt.Errorf("%d of %d runs failed", failed, len(plan))
 	}
 
-	return nil
+	return reps, nil
 }
 
 // checkRubricField refuses a rubric that cannot grade before any spend, and
@@ -330,6 +407,12 @@ func (s Scenario) checkRubricField() error {
 func (s Scenario) checkFields() error {
 	if err := s.checkRubricField(); err != nil {
 		return err
+	}
+
+	if s.Arms != nil {
+		if err := s.Arms.check(); err != nil {
+			return fmt.Errorf("arms: %w", err)
+		}
 	}
 
 	switch {
@@ -404,7 +487,7 @@ func runScenario(ctx context.Context, root string, s Scenario, o options, p agen
 		return runIn(ctx, root, s, o, p, out, nil)
 	}
 
-	rep := Report{Scenario: s.Name, Agent: p.Short(), At: time.Now().UTC()}
+	rep := Report{Scenario: s.Name, Arm: s.arm, Agent: p.Short(), At: time.Now().UTC()}
 
 	// the folder opens before setup, so a run that errors in setup still
 	// keeps its inputs and the cause can be read there
@@ -450,7 +533,7 @@ func runIn(
 	out runOut,
 	folder *runFolder,
 ) Report {
-	rep := Report{Scenario: s.Name, Agent: p.Short(), At: time.Now().UTC()}
+	rep := Report{Scenario: s.Name, Arm: s.arm, Agent: p.Short(), At: time.Now().UTC()}
 
 	scenarios := filepath.Join(root, "evals", "scenarios")
 	fixture := filepath.Join(scenarios, cmp.Or(s.Fixture, s.Name), "repo")
@@ -470,7 +553,7 @@ func runIn(
 
 	dir := filepath.Join(tmp, "repo")
 
-	if err := prepare(ctx, fixture, dir); err != nil {
+	if err := prepare(ctx, fixture, dir, plainArm(s.arm)); err != nil {
 		rep.Error = err.Error()
 
 		return rep
@@ -519,16 +602,33 @@ func runIn(
 	s.env = runEnv(os.Environ(), tmp)
 	tr.begin()
 
-	turns, session := s.turns(), ""
+	turns, modes := s.armTurns()
+	session := ""
+	leaks := &isolationLeaks{plugin: root, plain: plainArm(s.arm)}
+
+	onEvent := func(e event) {
+		leaks.note(e)
+
+		if out.onEvent != nil {
+			out.onEvent(e)
+		}
+	}
 
 	for i, prompt := range turns {
 		if out.onTurn != nil {
 			out.onTurn(prompt)
 		}
 
-		res, err := runTurn(ctx, dir, s.env, claudeArgs(root, o, prompt, p, session), tr, out.onEvent)
+		call := turnCall{
+			prompt: prompt, session: session, plain: plainArm(s.arm),
+			mode: modeAt(modes, i), plans: filepath.Join(tmp, "plans"),
+		}
+
+		res, err := runTurn(ctx, dir, s.env, claudeArgs(root, o, p, call), tr, onEvent)
 		rep.CostUSD += res.CostUSD
 		rep.DurationMS += res.DurationMS
+		rep.Turns += res.NumTurns
+		rep.Isolation = leaks.String()
 		session = res.SessionID
 
 		if err != nil {
@@ -603,6 +703,11 @@ func runChecks(ctx context.Context, dir string, s Scenario) ([]Check, bool) {
 	list := make([]Check, 0, len(s.Checks))
 
 	for _, name := range s.Checks {
+		// a plain arm has none of f10's state, so only outcomes are checked
+		if plainArm(s.arm) && !outcomeChecks[name] {
+			continue
+		}
+
 		c := checks[name](ctx, dir, s)
 		list = append(list, c)
 		pass = pass && c.Pass
@@ -612,27 +717,42 @@ func runChecks(ctx context.Context, dir string, s Scenario) ([]Check, bool) {
 }
 
 // prepare renames the fixture's f10/ to .f10/, since a .f10/ inside this
-// repo would be excluded with f10's own.
-func prepare(ctx context.Context, src, dir string) error {
+// repo would be excluded with f10's own. A plain arm's repo has no f10 at
+// all: its f10/ becomes a committed CLAUDE.md, as a project without f10 has.
+func prepare(ctx context.Context, src, dir string, plain bool) error {
 	if err := os.CopyFS(dir, os.DirFS(src)); err != nil {
 		return err
 	}
 
-	if err := os.Rename(filepath.Join(dir, "f10"), storage.InRepo(dir).Path()); err != nil &&
+	if plain {
+		if err := plainFixture(dir); err != nil {
+			return err
+		}
+	} else if err := os.Rename(filepath.Join(dir, "f10"), storage.InRepo(dir).Path()); err != nil &&
 		!errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
 
-	for _, args := range [][]string{
+	steps := [][]string{
 		{"init", "-q", "-b", "main"},
 		{"config", "user.email", "eval@f10.invalid"},
 		{"config", "user.name", "f10 eval"},
 		{"add", "-A", "--", ".", ":!.f10"},
-		{"commit", "-qm", "initial"},
-	} {
+	}
+
+	// forced, because a user's global gitignore may list CLAUDE.md
+	if _, err := os.Stat(filepath.Join(dir, "CLAUDE.md")); plain && err == nil {
+		steps = append(steps, []string{"add", "-f", "--", "CLAUDE.md"})
+	}
+
+	for _, args := range append(steps, []string{"commit", "-qm", "initial"}) {
 		if out, err := git(ctx, dir, args...).CombinedOutput(); err != nil {
 			return fmt.Errorf("git %s: %w: %s", args[0], err, out)
 		}
+	}
+
+	if plain {
+		return nil
 	}
 
 	return os.WriteFile(filepath.Join(dir, ".git", "info", "exclude"), []byte(".f10/\n"), 0o600)
@@ -804,11 +924,15 @@ func profilesFor(s Scenario, only string) ([]agentctl.Profile, error) {
 	return out, nil
 }
 
-// reportName is the report file for one run. A profile other than the kind's
-// default adds its name with colons as hyphens. A repeat index adds itself, so
-// every run of a set gets its own file.
-func reportName(scenario string, p agentctl.Profile, repeat int) string {
+// reportName is the report file for one run. An arm adds its name, and a
+// profile other than the kind's default adds its name with colons as
+// hyphens. A repeat index adds itself, so every run of a set gets its own file.
+func reportName(scenario, arm string, p agentctl.Profile, repeat int) string {
 	name := scenario
+	if arm != "" {
+		name += "." + arm
+	}
+
 	if !p.IsDefault() {
 		name += "." + strings.ReplaceAll(p.Short(), ":", "-")
 	}
@@ -868,21 +992,45 @@ func resolveDir(root, dir string) string {
 	return filepath.Join(root, dir)
 }
 
+// A turnCall is what one claude call varies by: its prompt, the session it
+// resumes, the arm's plugin and permission mode, and where plan mode writes.
+type turnCall struct {
+	prompt, session string
+	plain           bool   // a plain arm loads no plugin
+	mode            string // the turn's own permission mode, else the run's
+	plans           string // the plan files' dir, so plan mode never writes to the user's home
+}
+
+// isolationArgs keep the user's settings out of every run: user settings
+// (their CLAUDE.md, plugins and hooks) and every MCP server not passed in.
+// Project and local settings stay, so a plain arm's CLAUDE.md loads.
+var isolationArgs = []string{"--setting-sources", "project,local", "--strict-mcp-config"}
+
 // claudeArgs is the command line for one turn: the profile's flags through
 // its kind, beside the prompt mode, the plugin and the budget. A session
 // resumes that conversation, for a scenario's later turns.
-func claudeArgs(root string, o options, prompt string, p agentctl.Profile, session string) []string {
-	args := []string{
-		"-p", "--plugin-dir", root, "--output-format", "stream-json", "--verbose",
-		"--permission-mode", o.permission, "--max-budget-usd", o.budget,
+func claudeArgs(root string, o options, p agentctl.Profile, c turnCall) []string {
+	args := []string{"-p"}
+	if !c.plain {
+		args = append(args, "--plugin-dir", root)
 	}
+
+	args = append(args, "--output-format", "stream-json", "--verbose",
+		"--permission-mode", cmp.Or(c.mode, o.permission), "--max-budget-usd", o.budget)
+	args = append(args, isolationArgs...)
+
+	if c.plans != "" {
+		settings, _ := json.Marshal(map[string]string{"plansDirectory": c.plans})
+		args = append(args, "--settings", string(settings))
+	}
+
 	args = append(args, p.Args()...)
 
-	if session != "" {
-		args = append(args, "--resume", session)
+	if c.session != "" {
+		args = append(args, "--resume", c.session)
 	}
 
-	return append(args, prompt)
+	return append(args, c.prompt)
 }
 
 // droppedEnv is unset for every claude call the runner makes. CLAUDECODE goes

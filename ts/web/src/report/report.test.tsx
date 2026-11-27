@@ -120,5 +120,13 @@ describe("SetPage", () => {
     expect(links).toEqual(["a/index.html"]);
     expect(root.querySelectorAll("tbody tr")).toHaveLength(2);
     expect(root.querySelector(".head p")?.textContent).toBe("1/2 passed");
+    expect(root.querySelectorAll("tr.arm")).toHaveLength(0);
+  });
+
+  it("groups an arms set by arm, the plainest first", () => {
+    const r = (arm: string, file: string) => ({ file, report: { ...run.report, arm, isolation: "user plugins loaded: x" } });
+    const root = mount(<SetPage set={{ name: "x", runs: [r("f10", "c.json"), r("raw", "a.json"), r("native", "b.json")] }} />);
+    expect([...root.querySelectorAll("tr.arm")].map((t) => t.textContent)).toEqual(["raw", "native", "f10"]);
+    expect(root.querySelectorAll(".head .note")).toHaveLength(1);
   });
 });

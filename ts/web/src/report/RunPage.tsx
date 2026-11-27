@@ -60,6 +60,12 @@ function Header({ report }: { report: Report }) {
         {report.repeat ? ` #${report.repeat}` : ""}
       </h1>
       <dl class="facts">
+        {report.arm && (
+          <>
+            <dt>arm</dt>
+            <dd>{report.arm}</dd>
+          </>
+        )}
         <dt>profile</dt>
         <dd>{report.agent || "default"}</dd>
         <dt>result</dt>
@@ -87,6 +93,7 @@ function Header({ report }: { report: Report }) {
         <dd>{report.at}</dd>
       </dl>
       {report.error && <p class="error">error: {report.error}</p>}
+      {report.isolation && <p class="note">not isolated: {report.isolation}</p>}
       {report.run_dir_error && <p class="note">run folder: {report.run_dir_error}. Parts of this page may be missing.</p>}
     </header>
   );

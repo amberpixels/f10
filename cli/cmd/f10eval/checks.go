@@ -156,7 +156,7 @@ func checkCommit(ctx context.Context, dir string, _ Scenario) Check {
 var whereRE = regexp.MustCompile(`^where:\s*(\S+?):(\d+)`)
 
 func checkFindings(_ context.Context, dir string, s Scenario) Check {
-	found, files := findingWheres(dir, s.Task)
+	found, files := findingWheres(dir, s)
 	if len(files) == 0 {
 		return result("findings", []string{"no findings file"})
 	}
@@ -180,7 +180,7 @@ const defaultMaxExtra = 2
 // range, and the findings outside every range stay within max_extra, the
 // scenario's bound on false positives.
 func checkPlanted(_ context.Context, dir string, s Scenario) Check {
-	found, files := findingWheres(dir, s.Task)
+	found, files := findingWheres(dir, s)
 	if len(files) == 0 {
 		c := result("planted", []string{"no findings file"})
 		c.Planted = &PlantedCount{Total: len(s.Planted)}
@@ -236,8 +236,15 @@ type where struct {
 	line        int
 }
 
-func findingWheres(dir, task string) ([]where, []string) {
-	files, _ := filepath.Glob(filepath.Join(storage.InRepo(dir).Reviews(task), "*.md"))
+// findingWheres reads the review's findings files: the task's review rounds,
+// or the one file a plain arm's prompt names.
+func findingWheres(dir string, s Scenario) ([]where, []string) {
+	glob := filepath.Join(storage.InRepo(dir).Reviews(s.Task), "*.md")
+	if plainArm(s.arm) {
+		glob = filepath.Join(dir, plainFindings)
+	}
+
+	files, _ := filepath.Glob(glob)
 
 	var found []where
 

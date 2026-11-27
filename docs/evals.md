@@ -18,11 +18,13 @@ just eval -scenario feature-small -agent opus:medium   # one profile, instead of
 just eval -scenario review-planted -repeat 5 -out evals/reports/base   # five runs, into a set of their own
 just eval compare evals/reports/base evals/reports/cut                 # two sets side by side
 just eval show evals/reports/0.71.0/feature-small.json                 # one run's timeline
+just eval arms -scenario feature-small                                 # plain prompts beside the f10 flow (**Arms**, below)
 ```
 
 Each scenario runs `claude -p --plugin-dir <this checkout>` in a temporary copy of its fixture:
 
-- **This checkout's plugin and binary run.** The runner first builds this checkout into the cache slot `bin/f10` uses (`bin/f10 --shim-rebuild`, as `just install` does), so the hooks, the skills and the lore check run the code the report's commit names, not the release. If the installed f10 plugin is also enabled, both plugins load: disable the installed one for the run, so its skills do not answer instead.
+- **This checkout's plugin and binary run.** The runner first builds this checkout into the cache slot `bin/f10` uses (`bin/f10 --shim-rebuild`, as `just install` does), so the hooks, the skills and the lore check run the code the report's commit names, not the release.
+- **Your own Claude Code settings stay out.** Every `claude` call the run makes passes `--setting-sources project,local --strict-mcp-config`. The first drops the user settings, which hold your `~/.claude/CLAUDE.md`, your installed plugins (an installed f10 among them) and your hooks. The second drops every MCP server, your claude.ai connectors included. Project settings stay, so a fixture's own `CLAUDE.md` loads. `--bare` would drop more, but it signs in only with an API key. Claude Code's built-in plugins still load, and so does the account context the subscription adds, such as your email. Plan mode writes its plan file into the temp dir (`--settings '{"plansDirectory": ...}'`), never into `~/.claude/plans`. Each run reads its init events and records anything that still leaked as the report's `isolation`.
 - **The run cannot reach your own state.** `F10_LEDGER`, `F10_STATE_DIR`, `F10_INBOX_DIR`, `F10_RUN_DIR` and `F10_USER_DIR` point inside the temp dir, so its hooks, badges and asks never reach your ledger, status line or inbox, and its subagents resolve their profiles against the fixture's `agents:` map alone, never your `~/.f10/agents.md`. Two variables are dropped from the environment of every `claude` call the runner makes, the grader's included. `CLAUDECODE` is dropped so a run started from inside a session is not refused as nested. `ANTHROPIC_API_KEY` is dropped so every run uses the logged-in subscription and never bills the API, which means evals need a logged-in `claude`.
 - **Nothing is pushed.** The fixture repo has no `origin`, and its tracker is a local driver that reads `tasks/`.
 - **Permissions.** A driven ship runs verify and commits. Under the default `-permission-mode acceptEdits` those commands may be refused. Choose the mode yourself: the run is a throwaway directory, but the flag is yours to pass.
@@ -45,6 +47,9 @@ Each report holds:
 - `run_dir`, the run's folder, relative to the report's directory, so a committed report carries no local path;
 - `run_dir_error`, when writing the folder failed after the checks ran. It leaves `pass` and `error` as the run decided them, because a local copy failing says nothing about the agent.
 - `plumbing: {calls, total_calls, seconds, cost_usd, run_seconds}`, the part of the run spent on f10's own machinery rather than on the task (**Plumbing**, below). A report without a transcript, or from before the field, has none.
+- `turns`, the agent turns claude counted (`num_turns`), summed over every prompt;
+- `arm`, the arm a run of `just eval arms` was: `raw`, `native` or `f10`. A plain `just eval` writes none;
+- `isolation`, the user plugins or MCP servers the run's init events show it loaded despite the isolation flags. It is absent when nothing leaked.
 
 ### Plumbing
 
@@ -140,27 +145,72 @@ For each group it prints a row per metric, with the baseline and the variant sid
 
 - `errors`: the runs that stopped with an error, as `k/N`. A run that errored in setup returned before its checks ran, so it counts in this row and in no other. A turn error, such as a spent budget, still ran the checks and spent money, so that run counts in every row.
 - `pass` and each `check <name>`: passes as `k/N`.
-- `planted found`, `planted outside`, `rubric lines passed`, `cost`, `duration`, `plumbing calls`, `plumbing time` and `plumbing cost`: the mean, then the min-max range and the sample count (`3.4 [3-4] n=5`).
+- `planted found`, `planted outside`, `rubric lines passed`, `cost`, `duration`, `turns`, `tool calls`, `plumbing calls`, `plumbing time` and `plumbing cost`: the mean, then the min-max range and the sample count (`3.4 [3-4] n=5`).
 
 A row is marked `better` or `worse` only when the difference exceeds the spread across runs:
 
 - A numeric row is marked when the two ranges do not overlap, and each side has at least 2 samples. With 3 to 5 runs, ranges that do not overlap are a claim a reader can check by eye.
 - A `k/N` row is marked when the rates differ by at least two runs of the smaller side, and each side has at least 3 samples. A range cannot mark it, because one pass and one fail already span the whole range. So 5/5 against 2/5 is marked, and 5/5 against 4/5 is not.
 
-Higher is better for passes, planted found and rubric lines. Lower is better for errors, planted outside, cost, duration and the plumbing rows.
-A report from before the `plumbing` field adds no sample, so an old baseline prints `-` in those rows and they are not marked.
+Higher is better for passes, planted found and rubric lines. Lower is better for errors, planted outside, cost, duration, turns, tool calls and the plumbing rows.
+A report from before the `plumbing` or `turns` field adds no sample, so an old baseline prints `-` in those rows and they are not marked.
 `cost` is the run's own spend, without the grader's.
 A group in only one set is listed as not compared.
 The header warns when a group has one run, and when a set holds reports from more than one commit, which usually means two sets were mixed in one directory.
 On a terminal `better` prints green and `worse` red.
 The command exits 0 whatever it finds, because the comparison informs a decision and gates nothing.
+It refuses a set that holds arms reports, because their groups are arms, which `just eval arms` prints side by side.
+
+## Arms
+
+The other evals grade f10 against its own checks, so they cannot say whether f10 does better than plain Claude Code on the same task.
+`just eval arms` runs one scenario up to three ways on one commit and prints the results side by side:
+
+```
+just eval arms -scenario feature-small                       # raw, native and f10, three runs each
+just eval arms -scenario review-planted -repeat 1 -agent opus:medium
+```
+
+- **The arms** run in this order. `raw` is a plain prompt with no f10 plugin. `native` is a plain prompt that uses Claude Code's own commands, and runs only when the scenario defines it. `f10` is the scenario's own prompt.
+- **Flags.** `-scenario` is required. `-repeat` defaults to 3, because one run per arm shows noise, and `-repeat 1` opts out. The arms run on one profile, `-agent` else the scenario's first, because they compare prompts, not models. `-permission-mode`, `-max-budget-usd` and `-keep` work as for a plain run.
+- **Reports** go to `evals/reports/arms/<version>/<scenario>/` unless `-out` names another dir, never beside the release reports. A report's file name carries its arm (`feature-small.raw.opus-high.2.json`). The run refuses a dir that already holds reports of the scenario, as a plain run does. A plain `just eval` and `compare` never run or read arms.
+- **The live view** puts the arm before each run's name (`raw · feature-small #2`), and the set's `index.html` groups the runs under a heading per arm.
+
+A scenario opts in with an `arms` field, written by hand, because what the plain arm was told is the thing being compared, so it must be readable in `scenario.json`:
+
+```json
+"arms": {
+  "raw": {"prompt": "Implement the task in tasks/EV-1.md. Keep just lint and just test green, and commit the change on a new branch."},
+  "native": {
+    "prompts": ["Plan how to implement the task in tasks/EV-1.md. Do not edit any file yet.", "Implement the plan. ..."],
+    "permission_modes": ["plan", ""]
+  }
+}
+```
+
+- `raw` is required, and `native` is optional. Each holds `prompt` or `prompts`, as a scenario does.
+- `permission_modes` gives one mode per turn, from claude's list (`acceptEdits`, `auto`, `bypassPermissions`, `manual`, `dontAsk`, `plan`). An empty entry means the run's `-permission-mode`. So the native arm above plans under `plan` and implements on the resumed session under the run's mode. Under `claude -p`, plan mode has no `ExitPlanMode` to call, so the turn ends with the plan in its reply, which the next turn resumes on.
+- A scenario without the field is refused by name before any spend.
+
+**The plain arms' repo** has no f10 in it:
+
+- The runs pass no `--plugin-dir`, and the repo has no `.f10/`.
+- The fixture's `f10/instructions/project.md` becomes a committed `CLAUDE.md`, because `CLAUDE.md` is what a project without f10 has. The frontmatter and the `Tracker` and `Hosting & PR` sections are dropped, because they bind f10's adapters. The rest, such as the verify commands, is kept.
+- A plain review prompt writes its findings to `findings.md` at the repo root, as blocks whose `where: <file>:<line>` line the `planted` and `findings` checks parse. The f10 arm's findings stay under `.f10/reviews/<task>/`.
+
+**The table** has a column per arm:
+
+- The arms compare on the checks that judge the result: `verify`, `accept`, `commit`, `planted`, `findings` and `rubric`. The f10-only checks (`plan`, `intent`, `lore`, `history`, `verdict`, `captured`) run on the f10 arm alone and show as `f10 only` in the other columns.
+- The rows are compare's (**Comparing**, above), except that the three plumbing rows fold into one `plumbing share`, the f10 arm's plumbing as a share of its run, as the result line shows it.
+- Each plain column is marked against the f10 column by compare's rules. So `better` in the `raw` column means the raw arm beat f10 on that row.
+- A `warning: not isolated:` line under the header names what any run's `isolation` recorded.
 
 ## Scenarios
 
 `evals/scenarios/<name>/` holds:
 
 - `scenario.json`: `task`, `prompt`, the `verify` commands, the `accept` commands with the stdout each must print, the `checks` to run, and the `agents` profiles it runs on (none: one run on the kind's default). It stays outside the fixture, so the run never sees what it is checked against;
-- `repo/`: the fixture. Its `f10/` is copied to `.f10/`, because a `.f10/` inside this repo would be excluded along with f10's own.
+- `repo/`: the fixture. Its `f10/` is copied to `.f10/`, because a `.f10/` inside this repo would be excluded along with f10's own. A plain arm's copy gets a `CLAUDE.md` in its place (**Arms**, above).
 
 A review scenario adds three fields to `scenario.json`:
 
@@ -225,7 +275,7 @@ The checks (`cli/cmd/f10eval/checks.go`):
 | `verify` | every `verify` command exits 0 on the result |
 | `accept` | every `accept` command prints its `want` (verify alone passes on the untouched fixture) |
 | `commit` | the repo has a commit past the fixture's initial one |
-| `findings` | every `where:` in `.f10/reviews/<task>/*.md` names a file that exists and a line it has |
+| `findings` | every `where:` in `.f10/reviews/<task>/*.md` (a plain arm's `findings.md`) names a file that exists and a line it has |
 | `verdict` | each `.f10/verdicts/<task>/*.md` carries one of the four verdicts, and the newest carries `want_verdict` when the scenario names one |
 | `lore` | `f10 lore validate <task>` passes |
 | `history` | the plan has a `## History` section naming every id in `history_cites` |

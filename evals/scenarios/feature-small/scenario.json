@@ -24,5 +24,20 @@
       "run": "go run . --name Ada",
       "want": "Hello, Ada!"
     }
-  ]
+  ],
+  "arms": {
+    "raw": {
+      "prompt": "Implement the task in tasks/EV-1.md. Keep just lint and just test green, and commit the change on a new branch."
+    },
+    "native": {
+      "prompts": [
+        "Plan how to implement the task in tasks/EV-1.md. Do not edit any file yet.",
+        "Implement the plan. Keep just lint and just test green, and commit the change on a new branch."
+      ],
+      "permission_modes": [
+        "plan",
+        ""
+      ]
+    }
+  }
 }

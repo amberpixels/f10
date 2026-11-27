@@ -25,7 +25,7 @@ func capturedRepo(t *testing.T, added map[string]string) string {
 	}
 
 	dir := filepath.Join(t.TempDir(), "repo")
-	if err := prepare(t.Context(), src, dir); err != nil {
+	if err := prepare(t.Context(), src, dir, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -188,7 +188,7 @@ func TestTurnsResume(t *testing.T) {
 
 	def, _, _ := agentctl.Profile{}.Resolve()
 	o := options{permission: "acceptEdits", budget: "5"}
-	args := claudeArgs("/root", o, "b", def, "sess-1")
+	args := claudeArgs("/root", o, def, turnCall{prompt: "b", session: "sess-1"})
 
 	if i := slices.Index(args, "--resume"); i < 0 || args[i+1] != "sess-1" || args[len(args)-1] != "b" {
 		t.Errorf("a later turn resumes its session before the prompt: %q", args)

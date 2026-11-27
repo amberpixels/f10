@@ -28,6 +28,8 @@ export interface Plumbing {
 
 export interface Report {
   scenario: string;
+  /** raw, native or f10 under `just eval arms`. */
+  arm?: string;
   agent?: string;
   version: string;
   commit: string;
@@ -38,10 +40,13 @@ export interface Report {
   cost_usd: number;
   grader_cost_usd?: number;
   duration_ms: number;
+  turns?: number;
   plumbing?: Plumbing;
   error?: string;
   run_dir?: string;
   run_dir_error?: string;
+  /** The user settings the run loaded despite the isolation flags. */
+  isolation?: string;
 }
 
 /** A file of a tree. `skip` says why `text` is absent, and neither is an empty file. */
@@ -81,7 +86,9 @@ export interface SetPayload {
   runs: SetRun[];
 }
 
-export type Payload = { kind: "run"; run: RunPayload } | { kind: "set"; set: SetPayload };
+export type Payload =
+  | { kind: "run"; run: RunPayload }
+  | { kind: "set"; set: SetPayload };
 
 /** The parts of inputs/scenario.json the page shows. */
 export interface Scenario {

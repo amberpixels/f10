@@ -18,10 +18,17 @@ import (
 // event types between releases, so a type it does not know is skipped, never
 // an error.
 type event struct {
-	Type    string        `json:"type"`
-	Subtype string        `json:"subtype"`
-	Parent  *string       `json:"parent_tool_use_id"`
-	Cwd     string        `json:"cwd"` // the init event's
+	Type    string  `json:"type"`
+	Subtype string  `json:"subtype"`
+	Parent  *string `json:"parent_tool_use_id"`
+	Cwd     string  `json:"cwd"` // the init event's
+	Plugins []struct {
+		Name string `json:"name"`
+		Path string `json:"path"`
+	} `json:"plugins"` // the init event's
+	MCPServers []struct {
+		Name string `json:"name"`
+	} `json:"mcp_servers"` // the init event's
 	Message *eventMessage `json:"message"`
 
 	// the result event's fields, the ones --output-format json printed
@@ -30,6 +37,7 @@ type event struct {
 	IsError    bool    `json:"is_error"`
 	Result     string  `json:"result"`
 	SessionID  string  `json:"session_id"`
+	NumTurns   int     `json:"num_turns"`
 }
 
 type eventMessage struct {
@@ -82,6 +90,7 @@ func (e event) tools() []eventBlock {
 func (e event) turnResult() turnResult {
 	return turnResult{
 		CostUSD: e.CostUSD, DurationMS: e.DurationMS, IsError: e.IsError, Result: e.Result, SessionID: e.SessionID,
+		NumTurns: e.NumTurns,
 	}
 }
 
@@ -92,6 +101,7 @@ type turnResult struct {
 	IsError    bool
 	Result     string
 	SessionID  string
+	NumTurns   int
 }
 
 // runTurn runs one claude call, streaming its events into tr and to on as

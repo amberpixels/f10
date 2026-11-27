@@ -268,6 +268,10 @@ func writeRunPage(path string) error {
 	}
 
 	title := p.Report.Scenario
+	if p.Report.Arm != "" {
+		title = p.Report.Arm + " · " + title
+	}
+
 	if p.Report.Agent != "" {
 		title += " (" + p.Report.Agent + ")"
 	}
